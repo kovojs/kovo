@@ -156,6 +156,32 @@ describe('server schemas', () => {
     });
   });
 
+  it('validates open-key records with typed values and nested error paths', async () => {
+    const attributes = s.record(s.number().int().min(1));
+    const parsed = attributes.parse({ priority: '2', stock: 5 });
+    const assertRecordTypes = () => {
+      const _record: Record<string, number> = parsed;
+      // @ts-expect-error s.record(s.number()) values are numbers, not strings.
+      const _strings: Record<string, string> = parsed;
+      void [_record, _strings];
+    };
+
+    expect(parsed).toEqual({ priority: 2, stock: 5 });
+    expect(Object.getPrototypeOf(parsed)).toBe(null);
+    expect(assertRecordTypes).toBeTypeOf('function');
+    await expect(parseSchemaAsync(attributes, { priority: '0' })).rejects.toMatchObject({
+      issues: [{ message: 'Expected number >= 1', path: ['priority'] }],
+    });
+  });
+
+  it('rejects unsafe record keys before validating values', () => {
+    const schema = s.record(s.string());
+    const input = Object.create(null) as Record<string, unknown>;
+    input.__proto__ = 'polluted';
+
+    expect(() => schema.parse(input)).toThrow('s.record(): "__proto__" is reserved');
+  });
+
   it('returns indexed validation paths for array schema errors', async () => {
     const bulkAdd = mutation('cart/bulk-add', {
       input: s.object({
@@ -463,6 +489,27 @@ describe('server schemas', () => {
     await expect(memory.get(parsed.photos[0]?.key ?? '')).resolves.toMatchObject({
       key: parsed.photos[0]?.key,
     });
+  });
+
+  it('stores every value of an s.record(s.file().store()) through the async parser', async () => {
+    const memory = createMemoryStorage();
+    const put = vi.fn<StorageCapability['put']>((key, body, options) =>
+      memory.put(key, body, options),
+    );
+    const schema = s.record(
+      s.file().store({ keyPrefix: 'attachments', storage: { ...memory, put } }),
+    );
+
+    const parsed = await parseSchemaAsync(schema, {
+      invoice: pngFile('invoice.png', 'image/png'),
+      receipt: pngFile('receipt.png', 'image/png'),
+    });
+
+    expect(put).toHaveBeenCalledTimes(2);
+    expect(Object.keys(parsed).sort()).toEqual(['invoice', 'receipt']);
+    expect(parsed.invoice?.key).toMatch(/^attachments\/[0-9a-f-]{36}$/u);
+    expect(parsed.receipt?.key).toMatch(/^attachments\/[0-9a-f-]{36}$/u);
+    expect(parsed.invoice?.key).not.toBe(parsed.receipt?.key);
   });
 
   // M1: the sync `parse` of a storing file schema must refuse to fabricate a result.

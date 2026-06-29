@@ -29,7 +29,7 @@ drops a state/query read aliased through a render-local `const`.
 
 ### A. The static Drizzle read-shape extractor is sqlite-shaped (postgres pg-core types)
 
-- [ ] **Projecting a `pgEnum` column in a query loader fails `kovo build` with KV406 mislabeled as a write site.** (med, framework; found by `pg-data-depth`)
+- [x] **Projecting a `pgEnum` column in a query loader fails `kovo build` with KV406 mislabeled as a write site.** (med, framework; found by `pg-data-depth`)
   - Observed: `status: orders.status` (where `status: orderStatus('status')`, `orderStatus = pgEnum(...)`)
     → `ERROR KV406 … Query projection …status could not be resolved to a Drizzle column or typed sql<T>`.
     The KV406 headline ("write site; manual touches required") is nonsensical for a read projection,
@@ -54,8 +54,9 @@ column is dropped while a control `text()`column resolves to`"string"`.
   - Acceptance: project-mode shape extraction resolves a local `pgEnum()` column to a string/enum
     shape (and/or KV406 stops firing for read projections and uses a read-oriented message naming the
     enum/`sql<string>` remedy).
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/drizzle/src/index.query-shapes.test.ts --testNamePattern "pgEnum and text array|s.record" --reporter=dot` proves local `pgEnum()` projections extract as `status: 'string'`.
 
-- [ ] **Projecting a `jsonb` column (Drizzle default `unknown`) fails query()'s JSON boundary with a misleading "Property 'args' is missing".** (med, framework; found by `pg-data-depth`)
+- [x] **Projecting a `jsonb` column (Drizzle default `unknown`) fails query()'s JSON boundary with a misleading "Property 'args' is missing".** (med, framework; found by `pg-data-depth`)
   - Observed: a query whose result contains a jsonb field typed `unknown` (Drizzle's default) →
     `TS2345 … is not assignable to QueryArgsDeclarationDefinition … Property 'args' is missing`. The
     error blames a missing `args` declaration and never mentions JSON-serializability or jsonb; the
@@ -73,8 +74,9 @@ JsonSerializable<Awaited<Result>>` and the original `unknown` field is not assig
     `unknown`-not-assignable cause; `.$type<…>()` clears it.
   - Acceptance: the diagnostic for a non-serializable/`unknown` query result names the offending
     field and the `.$type<>()` remedy rather than "Property 'args' is missing".
+  - Fixed evidence (2026-06-29): in-memory TypeScript compile of `query('jsonb-unknown', { load: () => ({ attributes: undefined as unknown }), reads: [] })` now reports `QueryJsonBoundaryErrorUseJsonbTypeOrSRecord` and `__kovoQueryJsonBoundary`, with no `args` diagnostic; `pnpm exec vitest run packages/server/src/query-endpoint.test.ts --testNamePattern "bounds query load results" --reporter=dot` passes the `unknown` result type guard.
 
-- [ ] **`text().array()` (text[]) columns are mis-classified as scalar `'string'` by read-shape extraction.** (low, framework; found by `pg-data-depth`)
+- [x] **`text().array()` (text[]) columns are mis-classified as scalar `'string'` by read-shape extraction.** (low, framework; found by `pg-data-depth`)
   - Observed: `text('tags').array().notNull()` is shaped as scalar `'string'`; `.array()` is consulted
     only for nullability, never element-ness, so the §11.1 read-shape disagrees with the real `string[]`.
   - Root cause: `packages/drizzle/src/static/schema.ts:1158-1176` `columnBuilderBaseShape` has no array
@@ -84,8 +86,9 @@ JsonSerializable<Awaited<Result>>` and the original `unknown` field is not assig
     array column typed as a scalar string is a latent soundness gap for any derivation over array
     columns (it did not break the build because a scalar shape is permissive).
   - Acceptance: `.array()` columns extract an array shape; add an array-column extraction test.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/drizzle/src/index.query-shapes.test.ts --testNamePattern "pgEnum and text array|s.record" --reporter=dot` proves `text().array().notNull()` extracts as `tags: ['string']`.
 
-- [ ] **The `s` schema builder cannot express a record/unknown/json shape, so a jsonb column cannot appear in any `input`/`args`/`output`/`error` schema.** (low, framework; found by `pg-data-depth`)
+- [x] **The `s` schema builder cannot express a record/unknown/json shape, so a jsonb column cannot appear in any `input`/`args`/`output`/`error` schema.** (low, framework; found by `pg-data-depth`)
   - Observed: `s` exposes only `array/boolean/file/string/number/secret/object`, and `object` requires
     fixed `Record<string, Schema>` keys. There is no `record`/`unknown`/`json` combinator, so an
     open-keyed jsonb value cannot be declared when a query is forced to carry `output:` (e.g. it also
@@ -98,6 +101,7 @@ JsonSerializable<Awaited<Result>>` and the original `unknown` field is not assig
     `plans/secure-by-construction.md:559`.
   - Acceptance: a validating `s.record(valueSchema)` (open keys, validated values) so jsonb shapes are
     expressible without weakening §6.6 honesty.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/server/src/schema.test.ts packages/drizzle/src/index.query-shapes.test.ts --reporter=dot` proves `s.record(valueSchema)` validates open-key values, rejects unsafe record keys, preserves async stored-file parsing, and extracts as object-shaped JSON for query output schemas.
 
 ### B. The deploy artifact is the other hot spot
 

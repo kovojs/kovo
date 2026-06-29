@@ -140,6 +140,8 @@ describe('query endpoints', () => {
       query('bad-date-query', { load: () => ({ createdAt: new Date() }), reads: [] });
       // @ts-expect-error SPEC §10.2 query values cannot carry functions to the client wire.
       query('bad-function-query', { load: () => ({ format() {} }), reads: [] });
+      // @ts-expect-error SPEC §10.2: unknown values must be typed before reaching the query JSON wire.
+      query('bad-unknown-query', { load: () => ({ attributes: undefined as unknown }), reads: [] });
       // @ts-expect-error SPEC §10.2 secret values cannot enter query JSON.
       query('bad-secret-query', {
         load: () => ({ passwordHash: 'hash-1' as unknown as Secret<string> }),

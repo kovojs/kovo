@@ -822,7 +822,7 @@ function secretAnnotatedColumnShapes(
 
   const baseShape = columnBuilderBaseShape(builder, columnBuilderMode(initializer));
   if (!baseShape) return undefined;
-  return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
+  return columnBuilderApplyChain(baseShape, initializer);
 }
 
 /** @internal */ export function propertyNameText(
@@ -1120,6 +1120,7 @@ function kebabCase(value: string): string {
         const shape = element ? queryShapeFromSchemaExpression(element) : undefined;
         return shape ? [shape] : 'array';
       }
+      if (method === 'record') return 'object';
       if (method === 'object') {
         const fields = node.getArguments()[0];
         if (!fields || !Node.isObjectLiteralExpression(fields)) return 'object';
@@ -1152,7 +1153,7 @@ function kebabCase(value: string): string {
 
   const baseShape = columnBuilderBaseShape(builder, columnBuilderMode(initializer));
   if (!baseShape) return undefined;
-  return columnBuilderIsNonNull(initializer) ? baseShape : nullableShape(baseShape);
+  return columnBuilderApplyChain(baseShape, initializer);
 }
 
 /** @internal */ export function columnBuilderBaseShape(
@@ -1164,6 +1165,7 @@ function kebabCase(value: string): string {
   if (BOOLEAN_COLUMN_BUILDERS.has(builder)) return 'boolean';
   if (NUMBER_COLUMN_BUILDERS.has(builder)) return 'number';
   if (JSON_COLUMN_BUILDERS.has(builder)) return 'object';
+  if (builder === 'pgEnum') return 'string';
   if (
     builder === 'text' ||
     builder === 'varchar' ||
@@ -1255,7 +1257,9 @@ function kebabCase(value: string): string {
   if (!Node.isCallExpression(expression)) return undefined;
 
   const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  if (Node.isIdentifier(callee)) return projectDrizzleCoreIdentifierExportName(callee);
+  if (Node.isIdentifier(callee)) {
+    return projectDrizzleCoreIdentifierExportName(callee) ?? projectLocalPgEnumFactoryName(callee);
+  }
   if (!Node.isPropertyAccessExpression(callee)) return undefined;
 
   const base = unwrappedStaticExpressionNode(callee.getExpression());
@@ -1302,6 +1306,44 @@ function kebabCase(value: string): string {
   const base = unwrappedTsExpression(callee.expression);
   const methods = ts.isCallExpression(base) ? columnBuilderChainMethods(base) : [];
   return [...methods, callee.name.text];
+}
+
+function columnBuilderApplyChain(
+  baseShape: QueryShape,
+  initializer: Node | undefined,
+): QueryShape | undefined {
+  let shape = baseShape;
+  if (
+    initializer &&
+    columnBuilderChainMethods(
+      unwrappedTsExpression(initializer.compilerNode as ts.Expression),
+    ).includes('array')
+  ) {
+    shape = [shape];
+  }
+  return columnBuilderIsNonNull(initializer) ? shape : nullableShape(shape);
+}
+
+function projectLocalPgEnumFactoryName(identifier: Node): string | undefined {
+  if (!Node.isIdentifier(identifier)) return undefined;
+  const symbol = identifier.getSymbol();
+  for (const declaration of symbol?.getDeclarations() ?? []) {
+    if (!Node.isVariableDeclaration(declaration)) continue;
+    const initializer = declaration.getInitializer();
+    if (!initializer || !Node.isCallExpression(initializer)) continue;
+    const callee = unwrappedStaticExpressionNode(initializer.getExpression());
+    if (Node.isIdentifier(callee) && projectDrizzleCoreIdentifierExportName(callee) === 'pgEnum') {
+      return 'pgEnum';
+    }
+    if (
+      Node.isPropertyAccessExpression(callee) &&
+      callee.getName() === 'pgEnum' &&
+      isDrizzleCoreNamespaceMember(callee)
+    ) {
+      return 'pgEnum';
+    }
+  }
+  return undefined;
 }
 
 /** @internal */ export function columnShapesForFile(

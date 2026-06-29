@@ -148,6 +148,77 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('extracts pgEnum and text array column shapes from project-mode selects', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'orders.queries.ts',
+          source: [
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'const orderStatus = pgEnum("order_status", ["open", "closed"]);',
+            'export const orders = pgTable("orders", {',
+            '  id: text("id").primaryKey(),',
+            '  status: orderStatus("status").notNull(),',
+            '  tags: text("tags").array().notNull(),',
+            '}, kovo({ domain: "order", key: "id" }));',
+            '',
+            'export const orderList = query("orders/list", {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({ status: orders.status, tags: orders.tags }).from(orders);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'orders/list',
+        reads: ['order'],
+        shape: {
+          status: 'string',
+          tags: ['string'],
+        },
+        site: 'orders.queries.ts:10',
+      },
+    ]);
+  });
+
+  it('extracts s.record output schemas as object-shaped JSON', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'settings.queries.ts',
+          source: [
+            'export const settings = pgTable("settings", { id: text("id").primaryKey() }, kovo({ domain: "settings", key: "id" }));',
+            '',
+            'export const settingsQuery = query("settings", {',
+            '  output: s.object({ attributes: s.record(s.string()) }),',
+            '  reads: [settings],',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({ attributes: sql<Record<string, string>>`attributes` }).from(settings);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'settings',
+        shape: {
+          attributes: 'object',
+        },
+        reads: ['settings'],
+        site: 'settings.queries.ts:3',
+      },
+    ]);
+  });
+
   it('marks read-only table domains on extracted query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

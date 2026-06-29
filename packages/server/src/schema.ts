@@ -30,6 +30,7 @@ type SchemaMetadata =
   | { kind: 'array'; item: Schema<unknown> }
   | { kind: 'file' }
   | { kind: 'object'; shape: Readonly<Record<string, Schema<unknown>>> }
+  | { kind: 'record'; value: Schema<unknown> }
   | { kind: 'stored-file' };
 
 const schemaMetadata = new WeakMap<Schema<unknown>, SchemaMetadata>();
@@ -209,6 +210,42 @@ export const s = {
     schemaMetadata.set(schema, { kind: 'object', shape });
     return schema;
   },
+  record<Value>(value: Schema<Value>): Schema<Record<string, Value>> {
+    const schema: AsyncSchema<Record<string, Value>> = {
+      parse(input: unknown): Record<string, Value> {
+        const record = recordInput(input);
+        const output = Object.create(null) as Record<string, Value>;
+
+        for (const [key, field] of Object.entries(record)) {
+          assertSafeRecordKey(key);
+          try {
+            output[key] = value.parse(field);
+          } catch (error) {
+            throw validationErrorFrom(error, [key]);
+          }
+        }
+
+        return output;
+      },
+      async parseAsync(input: unknown): Promise<Record<string, Value>> {
+        const record = recordInput(input);
+        const output = Object.create(null) as Record<string, Value>;
+
+        for (const [key, field] of Object.entries(record)) {
+          assertSafeRecordKey(key);
+          try {
+            output[key] = await parseSchemaAsync(value, field, true);
+          } catch (error) {
+            throw validationErrorFrom(error, [key]);
+          }
+        }
+
+        return output;
+      },
+    };
+    schemaMetadata.set(schema, { kind: 'record', value: value as Schema<unknown> });
+    return schema;
+  },
 };
 
 /** @internal Returns top-level mutation input fields that require multipart form encoding. */
@@ -229,6 +266,7 @@ function schemaContainsFile(schema: Schema<unknown>): boolean {
   if (metadata.kind === 'object') {
     return Object.values(metadata.shape).some((fieldSchema) => schemaContainsFile(fieldSchema));
   }
+  if (metadata.kind === 'record') return schemaContainsFile(metadata.value);
   return false;
 }
 
@@ -630,6 +668,14 @@ function assertSafeObjectShape(shape: Record<string, Schema<unknown>>): void {
   }
 }
 
+function assertSafeRecordKey(key: string): void {
+  if (!PROTOTYPE_POLLUTION_KEYS.has(key)) return;
+  throw validationError(
+    `s.record(): "${key}" is reserved by the prototype-pollution input floor (SPEC §6.6).`,
+    [key],
+  );
+}
+
 function readOwnInputField(record: Record<string, unknown>, key: string): unknown {
   // OPP-19 (SPEC §6.6 runtime-DiD): schema decode is shape-bound and must not let inherited
   // properties satisfy declared fields. JSON/form payloads can carry prototype-pollution names, but
@@ -677,6 +723,12 @@ export function formLikeToRecord(input: unknown): Record<string, unknown> {
 
   if (typeof input === 'object' && input !== null) return input as Record<string, unknown>;
   throw validationError('Expected object input');
+}
+
+function recordInput(input: unknown): Record<string, unknown> {
+  const record = formLikeToRecord(input);
+  if (Array.isArray(record)) throw validationError('Expected record input');
+  return record;
 }
 
 function validationError(message: string, path: readonly string[] = []): SchemaValidationError {

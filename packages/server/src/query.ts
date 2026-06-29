@@ -134,7 +134,7 @@ export type QueryInstanceKey<Input> = ((input: Input) => string | undefined) | s
 
 /** A query input schema that also binds component props to query args in app-authored TSX. */
 export type QueryArgsSchema<Input> = Schema<Input> & {
-  <Props extends Record<string, unknown>>(
+  <Props extends Record<string, unknown> = any>(
     mapper: (props: Props) => Input,
   ): QueryArgsBinding<Input, Props>;
 };
@@ -143,23 +143,6 @@ export interface QueryArgsBinding<Input, Props extends Record<string, unknown>> 
   args: (props: Props) => Input;
   query: QueryDefinition<string, unknown, Input, unknown>;
   schema: Schema<Input>;
-}
-
-type BivariantGuard<Request> = {
-  call(request: Request): GuardResult | Promise<GuardResult>;
-}['call'];
-
-interface QueryArgsDeclarationDefinition<Key extends string, Value, Input, Request> {
-  args: Schema<Input>;
-  delta?: readonly QueryDeltaListMeta[];
-  guard?: BivariantGuard<Request>;
-  instanceKey?: QueryInstanceKey<Input>;
-  key?: Key;
-  load?(input: Input, context?: QueryLoadContext<Request>): Promise<Value> | Value;
-  output?: Schema<Value>;
-  read?: QueryReadConfig;
-  reads?: readonly Domain[];
-  version?: ((input: Input, value: Value) => number | string | undefined) | number | string;
 }
 
 type QueryWithArgsBinding<Definition, Input> = Omit<Definition, 'args'> & {
@@ -173,12 +156,33 @@ type QueryWithArgsBinding<Definition, Input> = Omit<Definition, 'args'> & {
  */
 export type QueryDefinitionBoundary<Definition, Shape> =
   Exclude<keyof Definition, keyof Shape> extends never
-    ? Definition extends { load: (...args: any[]) => infer Result }
-      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
-        ? []
-        : [never]
+    ? 'load' extends keyof Definition
+      ? Definition extends { load?: (...args: any[]) => infer Result }
+        ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+          ? []
+          : [__kovoQueryJsonBoundary: QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<Awaited<Result>>]
+        : [__kovoQueryJsonBoundary: QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<unknown>]
       : []
-    : [never];
+    : [__kovoQueryDefinitionBoundary: QueryUnknownDefinitionFieldError<Definition, Shape>];
+
+type QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<Result> = {
+  readonly __kovoQueryJsonBoundary: 'query() load result must be JSON-serializable; annotate Drizzle json/jsonb columns with .$type<...>() or declare output: s.record(...)';
+  readonly result: Result;
+};
+
+type QueryUnknownDefinitionFieldError<Definition, Shape> = {
+  readonly __kovoQueryDefinitionBoundary: 'query() definition contains unsupported field(s)';
+  readonly fields: Exclude<keyof Definition, keyof Shape>;
+};
+
+type PreserveDefinitionInference<Definition> = Definition & {
+  readonly __kovoDefinitionInference?: (definition: Definition) => Definition;
+};
+
+type QueryDefinitionParameterBoundary<Definition, Shape> =
+  QueryDefinitionBoundary<Definition, Shape> extends []
+    ? unknown
+    : QueryDefinitionBoundary<Definition, Shape>[0];
 
 type BivariantQueryGuard = {
   call(request: unknown): GuardResult | Promise<GuardResult>;
@@ -238,32 +242,22 @@ export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue
   version?: ((input: any, value: any) => number | string | undefined) | number | string;
 }
 
+type QueryDeclarationBoundaryShape<Request = unknown> = Omit<
+  QueryDeclarationDefinition<Request, unknown>,
+  'load' | 'output'
+> & {
+  load?: Function;
+  output?: Schema<unknown>;
+};
+
 /** App-scoped query factory. `createApp()` uses this to contextually type query callbacks from configured request providers (SPEC §9.5/§10.2). */
 export interface QueryFactory<Request = unknown> {
   <
-    Input,
-    Value,
     ContextRequest extends Request = Request,
-    const Definition extends QueryArgsDeclarationDefinition<string, Value, Input, ContextRequest> =
-      QueryArgsDeclarationDefinition<string, Value, Input, ContextRequest>,
+    const Definition extends object = QueryDeclarationBoundaryShape<ContextRequest>,
   >(
-    definition: Definition,
-    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
-      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
-        ? []
-        : [never]
-      : []
-  ): QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] };
-  <
-    ContextRequest extends Request = Request,
-    const Definition extends QueryDeclarationDefinition<ContextRequest, any> =
-      QueryDeclarationDefinition<ContextRequest, any>,
-  >(
-    definition: Definition,
-    ...jsonBoundary: QueryDefinitionBoundary<
-      Definition,
-      QueryDeclarationDefinition<ContextRequest, any>
-    >
+    definition: PreserveDefinitionInference<Definition> &
+      QueryDefinitionParameterBoundary<Definition, QueryDeclarationBoundaryShape<ContextRequest>>,
   ): Definition extends { args: Schema<infer Input> }
     ? QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] }
     : Definition & { key: string; reads: readonly Domain[] };
@@ -290,58 +284,27 @@ export interface QueryFactory<Request = unknown> {
  *   reads: [product],
  * });
  */
-export function query<
-  Input,
-  Request,
-  Value,
-  const Definition extends QueryArgsDeclarationDefinition<string, Value, Input, Request>,
->(
-  definition: Definition,
-  ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
-    ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
-      ? []
-      : [never]
-    : []
-): QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] };
-export function query<const Definition extends QueryDeclarationDefinition<any, any>>(
-  definition: Definition,
-  ...jsonBoundary: QueryDefinitionBoundary<Definition, QueryDeclarationDefinition<any, any>>
+export function query<const Definition extends object>(
+  definition: PreserveDefinitionInference<Definition> &
+    QueryDefinitionParameterBoundary<Definition, QueryDeclarationBoundaryShape<any>>,
 ): Definition extends { args: Schema<infer Input> }
   ? QueryWithArgsBinding<Definition, Input> & { key: string; reads: readonly Domain[] }
   : Definition & { key: string; reads: readonly Domain[] };
-export function query<
-  const Key extends string,
-  Input,
-  Request,
-  Value,
-  const Definition extends Omit<QueryArgsDeclarationDefinition<Key, Value, Input, Request>, 'key'>,
->(
+export function query<const Key extends string, const Definition extends object>(
   key: Key,
-  definition: Definition,
-  ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
-    ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
-      ? []
-      : [never]
-    : []
-): QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] };
-export function query<
-  const Key extends string,
-  const Definition extends QueryDeclarationDefinition<any, any>,
->(
-  key: Key,
-  definition: Definition,
-  ...jsonBoundary: QueryDefinitionBoundary<Definition, QueryDeclarationDefinition<any, any>>
+  definition: PreserveDefinitionInference<Definition> &
+    QueryDefinitionParameterBoundary<Definition, QueryDeclarationBoundaryShape<any>>,
 ): Definition extends { args: Schema<infer Input> }
   ? QueryWithArgsBinding<Definition, Input> & { key: Key; reads: readonly Domain[] }
   : Definition & { key: Key; reads: readonly Domain[] };
 export function query(
   keyOrDefinition: string | Omit<RegisteredQueryDefinition, 'key'>,
-  maybeDefinition?: Omit<RegisteredQueryDefinition, 'key'>,
-  ..._jsonBoundary: never[]
+  maybeDefinition?: unknown,
+  ..._jsonBoundary: unknown[]
 ): unknown {
   const [key, definition] =
     typeof keyOrDefinition === 'string'
-      ? [keyOrDefinition, maybeDefinition]
+      ? [keyOrDefinition, maybeDefinition as Omit<RegisteredQueryDefinition, 'key'> | undefined]
       : [UNASSIGNED_DERIVED_QUERY_KEY, keyOrDefinition];
   if (!definition) {
     throw new TypeError('query() requires a definition object.');
@@ -471,12 +434,12 @@ export function drainElevatedQueryFacts(): ElevatedQueryFact[] {
  */
 function queryElevated(
   keyOrDefinition: string | Omit<RegisteredQueryDefinition, 'key'>,
-  maybeDefinition?: Omit<RegisteredQueryDefinition, 'key'>,
-  ..._jsonBoundary: never[]
+  maybeDefinition?: unknown,
+  ..._jsonBoundary: unknown[]
 ): unknown {
   const [key, definition] =
     typeof keyOrDefinition === 'string'
-      ? [keyOrDefinition, maybeDefinition]
+      ? [keyOrDefinition, maybeDefinition as Omit<RegisteredQueryDefinition, 'key'> | undefined]
       : [UNASSIGNED_DERIVED_QUERY_KEY, keyOrDefinition];
   if (!definition) {
     throw new TypeError('query.elevated() requires a definition object.');
@@ -488,26 +451,9 @@ function queryElevated(
 // Attach the audited escape to the `query` factory. Public app authoring exposes only object form;
 // the implementation still accepts key-first generated/internal construction.
 interface QueryElevated {
-  <
-    Input,
-    Request,
-    Value,
-    const Definition extends QueryArgsDeclarationDefinition<string, Value, Input, Request>,
-  >(
-    definition: Definition,
-    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
-      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
-        ? []
-        : [never]
-      : []
-  ): QueryWithArgsBinding<Definition, Input> & {
-    key: string;
-    reads: readonly Domain[];
-    elevated: true;
-  };
-  <const Definition extends QueryDeclarationDefinition<any, any>>(
-    definition: Definition,
-    ...jsonBoundary: QueryDefinitionBoundary<Definition, QueryDeclarationDefinition<any, any>>
+  <const Definition extends object>(
+    definition: PreserveDefinitionInference<Definition> &
+      QueryDefinitionParameterBoundary<Definition, QueryDeclarationBoundaryShape<any>>,
   ): Definition extends { args: Schema<infer Input> }
     ? QueryWithArgsBinding<Definition, Input> & {
         key: string;
@@ -515,32 +461,10 @@ interface QueryElevated {
         elevated: true;
       }
     : Definition & { key: string; reads: readonly Domain[]; elevated: true };
-  <
-    const Key extends string,
-    Input,
-    Request,
-    Value,
-    const Definition extends Omit<
-      QueryArgsDeclarationDefinition<Key, Value, Input, Request>,
-      'key'
-    >,
-  >(
+  <const Key extends string, const Definition extends object>(
     key: Key,
-    definition: Definition,
-    ...jsonBoundary: Definition extends { load: (...args: any[]) => infer Result }
-      ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
-        ? []
-        : [never]
-      : []
-  ): QueryWithArgsBinding<Definition, Input> & {
-    key: Key;
-    reads: readonly Domain[];
-    elevated: true;
-  };
-  <const Key extends string, const Definition extends QueryDeclarationDefinition<any, any>>(
-    key: Key,
-    definition: Definition,
-    ...jsonBoundary: QueryDefinitionBoundary<Definition, QueryDeclarationDefinition<any, any>>
+    definition: PreserveDefinitionInference<Definition> &
+      QueryDefinitionParameterBoundary<Definition, QueryDeclarationBoundaryShape<any>>,
   ): Definition extends { args: Schema<infer Input> }
     ? QueryWithArgsBinding<Definition, Input> & {
         key: Key;
@@ -844,7 +768,7 @@ function queryArgsSchema<Input>(
   schema: Schema<Input>,
   queryDefinition: QueryDefinition<string, unknown, Input, unknown>,
 ): QueryArgsSchema<Input> {
-  const bind = (<Props extends Record<string, unknown>>(
+  const bind = (<Props extends Record<string, unknown> = any>(
     mapper: (props: Props) => Input,
   ): QueryArgsBinding<Input, Props> => ({
     args: mapper,
