@@ -96,10 +96,10 @@ describe('server app shell dispatch table', () => {
         routes: [product],
       }),
     ).toMatchObject({
-      kind: 'route',
-      methodAllowed: true,
-      params: { id: 'p1' },
-      route: product,
+      allowedMethods: ['POST'],
+      endpoint: routeEndpoint,
+      kind: 'endpoint',
+      methodAllowed: false,
     });
 
     expect(
@@ -123,6 +123,28 @@ describe('server app shell dispatch table', () => {
     ).toMatchObject({
       allowedMethods: ['GET', 'HEAD'],
       kind: 'route',
+      methodAllowed: false,
+    });
+  });
+
+  it('records endpoint method mismatch on an existing endpoint path for 405 handling', () => {
+    const status = endpoint('/status', {
+      handler: () => new Response('ok'),
+      method: 'GET',
+      reason: 'endpoint method mismatch fixture',
+      response: rawTextResponse,
+    });
+
+    expect(
+      matchShellDispatch({
+        endpoints: [status],
+        method: 'POST',
+        pathname: '/status',
+      }),
+    ).toMatchObject({
+      allowedMethods: ['GET'],
+      endpoint: status,
+      kind: 'endpoint',
       methodAllowed: false,
     });
   });

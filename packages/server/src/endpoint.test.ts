@@ -345,6 +345,44 @@ describe('server endpoints', () => {
     }
   });
 
+  it('allows honest multi-body response posture declarations', async () => {
+    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
+    try {
+      const negotiated = endpoint('/machine/negotiated', {
+        csrf: false,
+        csrfJustification: 'runtime posture verification test',
+        handler: (request) =>
+          request.headers.get('accept')?.includes('application/json')
+            ? Response.json({ ok: true }, { headers: { 'Cache-Control': 'no-store' } })
+            : new Response('ok', {
+                headers: {
+                  'Cache-Control': 'no-store',
+                  'Content-Type': 'text/plain; charset=utf-8',
+                },
+              }),
+        method: 'GET',
+        reason: 'runtime negotiated response posture test',
+        response: { appOwnedSafety: true, body: ['json', 'text'], cache: 'no-store' },
+      });
+
+      await expect(
+        runEndpoint(
+          negotiated,
+          new Request('https://example.test/machine/negotiated', {
+            headers: { Accept: 'application/json' },
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 200 });
+      await expect(
+        runEndpoint(negotiated, new Request('https://example.test/machine/negotiated')),
+      ).resolves.toMatchObject({ status: 200 });
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
+    }
+  });
+
   it('fails endpoint posture verification for cache, body, and content-type drift', async () => {
     const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
     process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';

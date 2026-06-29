@@ -60,7 +60,7 @@ describe('capability download route: verify-before-read sink', () => {
 
     expect(route.response).toEqual({
       appOwnedSafety: true,
-      body: 'bytes',
+      body: ['bytes', 'text'],
       cache: 'private',
       reservedHeaders: ['X-Content-Type-Options'],
     });
@@ -295,6 +295,30 @@ describe('capability download route: verify-before-read sink', () => {
       new Request(downloadUrl(token, key), { method: 'HEAD' }),
     );
     expect(response.status).toBe(200);
+    expect(await response.text()).toBe('');
+  });
+
+  it('dispatches a mounted signed HEAD request through the app shell', async () => {
+    const key = 'a.pdf';
+    const storage = await storageWith(key, 'A');
+    const app = createApp({
+      endpoints: [createStorageDownloadEndpoint({ secret: SECRET, storage, now: () => 1 })],
+    });
+    const handler = createRequestHandler(app);
+    const { token } = await signCapability(
+      SECRET,
+      { audience: `storage-download:${BASE}`, key, method: 'HEAD' },
+      0,
+    );
+
+    const response = await handler(
+      new Request(downloadUrl(token, key), {
+        method: 'HEAD',
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('Content-Type')).toBe('text/plain');
     expect(await response.text()).toBe('');
   });
 
