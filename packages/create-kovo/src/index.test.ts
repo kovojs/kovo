@@ -227,12 +227,16 @@ describe('create-kovo starter (metadata)', () => {
       "import { getTableConfig } from 'drizzle-orm/pg-core'",
     );
     expect(files.get('src/db.ts')).toContain('process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR');
-    expect(files.get('src/db.ts')).toContain(
-      'const SCHEMA_TABLES = [contacts, user, session, account, verification] as const',
-    );
+    expect(files.get('src/db.ts')).toContain('sortTablesByForeignKeyDependencies([');
     expect(files.get('src/db.ts')).toContain(
       'CREATE TABLE IF NOT EXISTS ${quoteIdent(config.name)}',
     );
+    expect(files.get('src/db.ts')).toContain('ADD COLUMN IF NOT EXISTS');
+    expect(files.get('src/db.ts')).toContain("if (column.columnType === 'PgSerial') return ''");
+    expect(files.get('src/db.ts')).toContain('export type AppDb = PgliteDatabase');
+    expect(files.get('src/db.ts')).toContain('return { db: drizzle({ client }), ready }');
+    expect(files.get('src/db.ts')).not.toContain('PgliteDatabase<typeof schema>');
+    expect(files.get('src/db.ts')).not.toContain('drizzle({ client, schema })');
     expect(files.get('src/db.ts')).toContain('await client.exec(SCHEMA_DDL)');
     expect(files.get('src/db.ts')).not.toContain('void client.exec');
     expect(files.get('src/db.ts')).toContain('export const appDbReady = appDatabase.ready');
@@ -286,6 +290,21 @@ describe('create-kovo starter (metadata)', () => {
         'utf8',
       );
       writeFileSync(
+        join(root, 'src/transaction-bridge.ts'),
+        [
+          'type AppDb = { write(): void };',
+          'type AppRequest = { db: { transaction<T>(callback: (tx: unknown) => Promise<T>): Promise<T> } };',
+          '',
+          'export const mutationDefinition = {',
+          '  transaction(request: AppRequest, run: (request: AppRequest) => Promise<void>) {',
+          '    return request.db.transaction((tx) => run({ ...request, db: tx as unknown as AppDb }));',
+          '  },',
+          '};',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
         join(root, 'src/jsx-prose.tsx'),
         [
           'export function JsxProse() {',
@@ -316,9 +335,18 @@ describe('create-kovo starter (metadata)', () => {
       } catch (error) {
         const stderr = (error as { stderr?: Buffer }).stderr?.toString('utf8') ?? '';
         expect(stderr).not.toContain('import-alias.ts');
+        expect(stderr).not.toContain('transaction-bridge.ts');
         expect(stderr).not.toContain('jsx-prose.tsx');
         expect(stderr).not.toContain('string-prose.ts');
       }
+
+      rmSync(join(root, 'src/unsafe-cast.ts'), { force: true });
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

@@ -786,6 +786,7 @@ function appendMutationHandlerCallbacks(
         resolveWriteTableIdentifier,
         paramSymbolKeys,
         sessionContext,
+        tableExpression.trim(),
       ),
       operation,
       predicateFacts: extractPredicateFactsFromWriteChain(

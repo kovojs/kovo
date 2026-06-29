@@ -1,4 +1,4 @@
-import type { Secret, StorageCapability, StorageObjectInfo } from '@kovojs/core';
+import type { JsonValue, Secret, StorageCapability, StorageObjectInfo } from '@kovojs/core';
 
 import {
   type UnverifiedAcceptance,
@@ -83,7 +83,8 @@ export function isSchemaValidationError(error: unknown): error is SchemaValidati
 
 /**
  * The schema builder. Compose validators with `s.object`, `s.string`,
- * `s.number`, `s.boolean`, `s.array`, and `s.file`; each returns a `Schema`
+ * `s.number`, `s.decimal`, `s.date`, `s.datetime`, `s.json`, `s.boolean`, `s.array`, and `s.file`;
+ * each returns a `Schema`
  * whose `parse` coerces and validates `FormData`-shaped input, so the same
  * schema validates JSON and form submissions (SPEC §6.3).
  *
@@ -151,8 +152,26 @@ export const s = {
       },
     };
   },
+  date(): DateSchema {
+    return new DateSchemaImpl('date');
+  },
+  datetime(): DateSchema {
+    return new DateSchemaImpl('datetime');
+  },
+  decimal(options: DecimalSchemaOptions = {}): DecimalSchema {
+    return new DecimalSchemaImpl(options);
+  },
   file(options: FileSchemaOptions = {}): FileSchema {
     return new FileSchemaImpl(options);
+  },
+  json<Value extends JsonValue = JsonValue>(): Schema<Value> {
+    return {
+      parse(input: unknown): Value {
+        const value = typeof input === 'string' ? parseJsonInput(input) : input;
+        if (!isJsonValue(value)) throw validationError('Expected JSON value');
+        return value as Value;
+      },
+    };
   },
   string(): StringSchema {
     return new StringSchemaImpl();
@@ -373,6 +392,76 @@ export interface NumberSchema extends Schema<number> {
   optional(): Schema<number | undefined>;
 }
 
+/** Decimal schema produced by `s.decimal()`; keeps numeric values as strings for Postgres `numeric`. */
+export interface DecimalSchema extends Schema<string> {
+  default(value: string): DecimalSchema;
+  optional(): Schema<string | undefined>;
+}
+
+export interface DecimalSchemaOptions {
+  /** Maximum number of fractional digits accepted. */
+  scale?: number;
+}
+
+class DecimalSchemaImpl implements DecimalSchema {
+  readonly #defaultValue: string | undefined;
+  readonly #scale: number | undefined;
+
+  constructor(options: DecimalSchemaOptions & { defaultValue?: string } = {}) {
+    this.#defaultValue = options.defaultValue;
+    this.#scale = options.scale;
+  }
+
+  default(value: string): DecimalSchema {
+    const parsed = parseDecimalString(value, this.#scale);
+    return new DecimalSchemaImpl({
+      defaultValue: parsed,
+      ...(this.#scale === undefined ? {} : { scale: this.#scale }),
+    });
+  }
+
+  optional(): Schema<string | undefined> {
+    return optionalSchema(this, isMissingStringInput);
+  }
+
+  parse(input: unknown): string {
+    const value =
+      input === undefined || input === null || input === '' ? this.#defaultValue : input;
+    if (typeof value !== 'string') throw validationError('Expected decimal string');
+    return parseDecimalString(value, this.#scale);
+  }
+}
+
+/** Date/datetime schema produced by `s.date()` or `s.datetime()`; parses form strings to `Date`. */
+export interface DateSchema extends Schema<Date> {
+  default(value: Date | string): DateSchema;
+  optional(): Schema<Date | undefined>;
+}
+
+class DateSchemaImpl implements DateSchema {
+  readonly #defaultValue: Date | undefined;
+  readonly #kind: 'date' | 'datetime';
+
+  constructor(kind: 'date' | 'datetime', defaultValue?: Date) {
+    this.#kind = kind;
+    this.#defaultValue = defaultValue;
+  }
+
+  default(value: Date | string): DateSchema {
+    return new DateSchemaImpl(this.#kind, parseDateInput(value, this.#kind));
+  }
+
+  optional(): Schema<Date | undefined> {
+    return optionalSchema(this, isMissingStringInput);
+  }
+
+  parse(input: unknown): Date {
+    const value =
+      input === undefined || input === null || input === '' ? this.#defaultValue : input;
+    return parseDateInput(value, this.#kind);
+  }
+}
+
 interface NumberSchemaOptions {
   defaultValue?: number;
   integer?: boolean;
@@ -516,6 +605,65 @@ class StringSchemaImpl implements StringSchema {
 
     return input;
   }
+}
+
+function parseDecimalString(input: string, scale: number | undefined): string {
+  const value = input.trim();
+  if (!/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/u.test(value)) {
+    throw validationError('Expected decimal string');
+  }
+  if (scale !== undefined) {
+    const fractional = value.split('.', 2)[1]?.length ?? 0;
+    if (fractional > scale) throw validationError(`Expected decimal with <= ${scale} decimals`);
+  }
+  return value;
+}
+
+function parseDateInput(input: unknown, kind: 'date' | 'datetime'): Date {
+  if (input instanceof Date) {
+    if (Number.isNaN(input.getTime())) throw validationError(`Expected ${kind}`);
+    return input;
+  }
+  if (typeof input !== 'string') throw validationError(`Expected ${kind}`);
+  const value = input.trim();
+  if (kind === 'date' && !/^\d{4}-\d{2}-\d{2}$/u.test(value)) {
+    throw validationError('Expected date');
+  }
+  const date = kind === 'date' ? new Date(`${value}T00:00:00.000Z`) : new Date(value);
+  if (Number.isNaN(date.getTime())) throw validationError(`Expected ${kind}`);
+  if (kind === 'date' && date.toISOString().slice(0, 10) !== value) {
+    throw validationError('Expected date');
+  }
+  return date;
+}
+
+function parseJsonInput(input: string): unknown {
+  try {
+    return JSON.parse(input);
+  } catch {
+    throw validationError('Expected JSON value');
+  }
+}
+
+function isJsonValue(value: unknown): value is JsonValue {
+  if (value === null) return true;
+  switch (typeof value) {
+    case 'boolean':
+    case 'number':
+    case 'string':
+      return Number.isFinite(value as number) || typeof value !== 'number';
+    case 'object':
+      if (Array.isArray(value)) return value.every(isJsonValue);
+      if (!isPlainJsonObject(value)) return false;
+      return Object.values(value as Record<string, unknown>).every(isJsonValue);
+    default:
+      return false;
+  }
+}
+
+function isPlainJsonObject(value: object): boolean {
+  const proto = Object.getPrototypeOf(value);
+  return proto === Object.prototype || proto === null;
 }
 
 class FileSchemaImpl implements FileSchema {

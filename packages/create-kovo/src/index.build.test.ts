@@ -1,5 +1,5 @@
 import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createConnection } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -169,6 +169,78 @@ describe('create-kovo starter (build integration)', () => {
         env: withRepoBinOnPath(),
         stdio: 'pipe',
       });
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('boots Postgres starter DDL with serial columns, reordered foreign keys, and additive drift', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-pg-ddl-'));
+
+    const runDdlProof = (query = ''): void => {
+      writeFileSync(
+        join(root, 'src/ddl-proof.test.ts'),
+        [
+          "import { describe, expect, it } from 'vitest';",
+          "import { sql } from 'drizzle-orm';",
+          "import { appDb, appDbReady } from './db.js';",
+          '',
+          "describe('starter DDL proof', () => {",
+          "  it('boots and exposes the expected schema', async () => {",
+          '    await appDbReady;',
+          query === ''
+            ? '    expect(true).toBe(true);'
+            : `    await appDb.execute(sql\`${query}\`);`,
+          '  });',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      execFileSync(resolveBin('vitest'), ['--run', 'src/ddl-proof.test.ts'], {
+        cwd: root,
+        env: { ...withRepoBinOnPath(), KOVO_DATA_DIR: '.kovo/pglite' },
+        stdio: 'pipe',
+      });
+    };
+
+    try {
+      writeKovoProject(root, { name: 'Postgres Ddl Proof' });
+      linkStarterBuildDependencies(root);
+
+      const schemaPath = join(root, 'src/schema.ts');
+      const originalSchema = readFileSync(schemaPath, 'utf8');
+
+      runDdlProof();
+
+      const schemaWithDrift = originalSchema.replace(
+        "    company: text('company').notNull().default(''),",
+        "    company: text('company').notNull().default(''),\n    nickname: text('nickname'),",
+      );
+      writeFileSync(schemaPath, schemaWithDrift, 'utf8');
+      runDdlProof('select nickname from contacts limit 1');
+
+      const schemaWithSerialAndOwnerFk = originalSchema
+        .replace(
+          "import { boolean, pgTable, text, timestamp } from 'drizzle-orm/pg-core';",
+          "import { boolean, pgTable, serial, text, timestamp } from 'drizzle-orm/pg-core';",
+        )
+        .replace(
+          "    company: text('company').notNull().default(''),",
+          [
+            "    company: text('company').notNull().default(''),",
+            "    ownerId: text('ownerId').references(() => user.id),",
+          ].join('\n'),
+        )
+        .replace(
+          "  id: text('id').primaryKey(),\n  identifier:",
+          "  id: serial('id').primaryKey(),\n  identifier:",
+        );
+      writeFileSync(schemaPath, schemaWithSerialAndOwnerFk, 'utf8');
+      rmSync(join(root, '.kovo/pglite'), { force: true, recursive: true });
+      runDdlProof();
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

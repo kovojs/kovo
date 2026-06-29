@@ -100,6 +100,94 @@ describe('server schemas', () => {
     expect(assertInferredTypes).toBeTypeOf('function');
   });
 
+  it('parses decimal/date/json form fields without lossy handler coercion', async () => {
+    const createInvoice = mutation('invoices/create', {
+      input: s.object({
+        amount: s.decimal({ scale: 2 }),
+        dueDate: s.date(),
+        issuedAt: s.datetime(),
+        metadata: s.json<{ note: string; tags: string[] }>(),
+      }),
+      handler(input) {
+        return {
+          amount: input.amount,
+          dueDate: input.dueDate.toISOString(),
+          issuedAt: input.issuedAt.toISOString(),
+          metadata: input.metadata,
+        };
+      },
+    });
+    const form = new FormData();
+    form.set('amount', '9999999999999999.99');
+    form.set('dueDate', '2026-07-15');
+    form.set('issuedAt', '2026-07-15T12:30:00.000Z');
+    form.set('metadata', '{"note":"hello","tags":["paid"]}');
+
+    await expect(runMutation(createInvoice, form, {})).resolves.toEqual({
+      changes: [],
+      ok: true,
+      rerunQueries: [],
+      value: {
+        amount: '9999999999999999.99',
+        dueDate: '2026-07-15T00:00:00.000Z',
+        issuedAt: '2026-07-15T12:30:00.000Z',
+        metadata: { note: 'hello', tags: ['paid'] },
+      },
+    });
+  });
+
+  it('surfaces decimal/date/json parse failures as typed validation errors', async () => {
+    const createInvoice = mutation('invoices/create-invalid', {
+      input: s.object({
+        amount: s.decimal({ scale: 2 }),
+        dueDate: s.date(),
+        metadata: s.json(),
+      }),
+      handler(input) {
+        return input;
+      },
+    });
+    const form = new FormData();
+    form.set('amount', '12.345');
+    form.set('dueDate', '2026-02-31');
+    form.set('metadata', '{"ok":');
+
+    await expect(runMutation(createInvoice, form, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: {
+          issues: [{ message: 'Expected decimal with <= 2 decimals', path: ['amount'] }],
+        },
+      },
+      ok: false,
+      status: 422,
+    });
+
+    form.set('amount', '12.34');
+    await expect(runMutation(createInvoice, form, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: {
+          issues: [{ message: 'Expected date', path: ['dueDate'] }],
+        },
+      },
+      ok: false,
+      status: 422,
+    });
+
+    form.set('dueDate', '2026-02-28');
+    await expect(runMutation(createInvoice, form, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: {
+          issues: [{ message: 'Expected JSON value', path: ['metadata'] }],
+        },
+      },
+      ok: false,
+      status: 422,
+    });
+  });
+
   it('coerces checkbox booleans and repeated FormData fields through declared schemas', async () => {
     const updatePreferences = mutation('preferences/update', {
       input: s.object({

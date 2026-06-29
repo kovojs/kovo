@@ -2,7 +2,6 @@ import { PGlite } from '@electric-sql/pglite';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 
-import * as schema from './schema.js';
 import { account, contacts, session, user, verification } from './schema.js';
 
 // The app database: Drizzle over an in-process PGlite (real Postgres, compiled to
@@ -14,15 +13,21 @@ import { account, contacts, session, user, verification } from './schema.js';
 // hiding until a later request.
 
 /** The app runtime database. */
-export type AppDb = PgliteDatabase<typeof schema>;
+export type AppDb = PgliteDatabase;
 
 export interface CreatedAppDb {
   db: AppDb;
   ready: Promise<void>;
 }
 
-const SCHEMA_TABLES = [contacts, user, session, account, verification] as const;
-const SCHEMA_DDL = SCHEMA_TABLES.map(createTableDdl).join('\n');
+const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([
+  contacts,
+  user,
+  session,
+  account,
+  verification,
+] as const);
+const SCHEMA_DDL = schemaDdl(SCHEMA_TABLES);
 
 const SEED_CONTACTS =
   'INSERT INTO contacts (id, name, email, company) VALUES ' +
@@ -37,7 +42,7 @@ const DEFAULT_DATA_DIR = '.kovo/pglite';
 export function createAppDb(): CreatedAppDb {
   const client = new PGlite(process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR);
   const ready = initializeAppDb(client);
-  return { db: drizzle({ client, schema }), ready };
+  return { db: drizzle({ client }), ready };
 }
 
 async function initializeAppDb(client: PGlite): Promise<void> {
@@ -50,22 +55,38 @@ type PgTable = Parameters<typeof getTableConfig>[0];
 type PgColumn = PgTableConfig['columns'][number];
 type PgForeignKey = PgTableConfig['foreignKeys'][number];
 
+function schemaDdl(tables: readonly PgTable[]): string {
+  return [
+    ...tables.map(createTableDdl),
+    ...tables.flatMap((table) =>
+      getTableConfig(table).columns.map((column) => addColumnDdl(table, column)),
+    ),
+  ].join('\n');
+}
+
 function createTableDdl(table: PgTable): string {
   const config = getTableConfig(table);
   const definitions = [
-    ...config.columns.map(columnDdl),
+    ...config.columns.map((column) => columnDdl(column, { createTable: true })),
     ...config.foreignKeys.map((foreignKey) => foreignKeyDdl(foreignKey)),
   ];
   return `CREATE TABLE IF NOT EXISTS ${quoteIdent(config.name)} (${definitions.join(', ')});`;
 }
 
-function columnDdl(column: PgColumn): string {
+function addColumnDdl(table: PgTable, column: PgColumn): string {
+  return `ALTER TABLE ${quoteIdent(getTableConfig(table).name)} ADD COLUMN IF NOT EXISTS ${columnDdl(
+    column,
+    { createTable: false },
+  )};`;
+}
+
+function columnDdl(column: PgColumn, options: { createTable: boolean }): string {
   return [
     quoteIdent(column.name),
     columnTypeDdl(column),
-    column.primary ? 'PRIMARY KEY' : '',
+    options.createTable && column.primary ? 'PRIMARY KEY' : '',
     column.notNull ? 'NOT NULL' : '',
-    column.isUnique ? 'UNIQUE' : '',
+    options.createTable && column.isUnique ? 'UNIQUE' : '',
     columnDefaultDdl(column),
   ]
     .filter(Boolean)
@@ -95,6 +116,7 @@ function columnTypeDdl(column: PgColumn): string {
 
 function columnDefaultDdl(column: PgColumn): string {
   if (!column.hasDefault) return '';
+  if (column.columnType === 'PgSerial') return '';
   if (column.columnType === 'PgTimestamp') return 'DEFAULT now()';
   if (typeof column.default === 'boolean') return `DEFAULT ${column.default ? 'true' : 'false'}`;
   if (typeof column.default === 'number') return `DEFAULT ${column.default}`;
@@ -113,6 +135,34 @@ function foreignKeyDdl(foreignKey: PgForeignKey): string {
   return `FOREIGN KEY (${columns}) REFERENCES ${quoteIdent(
     getTableConfig(reference.foreignTable).name,
   )} (${foreignColumns})${onDelete}${onUpdate}`;
+}
+
+function sortTablesByForeignKeyDependencies(tables: readonly PgTable[]): PgTable[] {
+  const pending = new Set<PgTable>(tables);
+  const sorted: PgTable[] = [];
+
+  while (pending.size > 0) {
+    let progressed = false;
+
+    for (const table of pending) {
+      const dependencies = getTableConfig(table).foreignKeys.map(
+        (foreignKey) => foreignKey.reference().foreignTable,
+      );
+      if (dependencies.some((dependency) => dependency !== table && pending.has(dependency))) {
+        continue;
+      }
+      sorted.push(table);
+      pending.delete(table);
+      progressed = true;
+    }
+
+    if (!progressed) {
+      const names = [...pending].map((table) => getTableConfig(table).name).join(', ');
+      throw new Error(`Cannot order Postgres starter tables with cyclic foreign keys: ${names}`);
+    }
+  }
+
+  return sorted;
 }
 
 function quoteIdent(value: string): string {

@@ -8,10 +8,11 @@ import {
 import { pgDatabaseTypes, withPgDatabaseTypes } from './test-helpers.js';
 
 // PgAsyncDatabase surface for write fixtures: `update().set().where()`,
-// `delete().where()`, plus `select().from().where()` for owner reads.
+// `delete().where()`, `insert().values()`, plus `select().from().where()` for owner reads.
 const WRITE_DB_METHODS = [
   'update(table: unknown): { set(value: unknown): { where(value: unknown): Promise<void> } };',
   'delete(table: unknown): { where(value: unknown): Promise<void> };',
+  'insert(table: unknown): { values(value: unknown): Promise<void> };',
   'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
 ];
 
@@ -352,6 +353,73 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
 
     expect(auditScopes(audit)).toEqual([{ domain: 'order', kind: 'write', scope: 'session' }]);
+  });
+
+  it('classifies owner-table inserts from values() owner fields', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes(WRITE_DB_METHODS),
+          {
+            fileName: 'order-inserts.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull(), status: text("status").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              '',
+              'export async function createMine(db: PgAsyncDatabase<any, any>, request: { session: { userId: string } }) {',
+              '  await db.insert(orders).values({ id: "o1", userId: request.session.userId, status: "open" });',
+              '}',
+              '',
+              'export async function createForClient(db: PgAsyncDatabase<any, any>, input: { userId: string }) {',
+              '  await db.insert(orders).values({ id: "o2", userId: input.userId, status: "open" });',
+              '}',
+              '',
+              'export async function createUnknown(db: PgAsyncDatabase<any, any>) {',
+              '  const userId = "u1";',
+              '  await db.insert(orders).values({ id: "o3", userId, status: "open" });',
+              '}',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(
+      audit.scopeAudits
+        .map((a) => ({
+          detail: a.detail,
+          domain: a.domain,
+          kind: a.kind,
+          name: a.name,
+          scope: a.scope,
+        }))
+        .sort((left, right) => left.name.localeCompare(right.name)),
+    ).toEqual([
+      {
+        detail: undefined,
+        domain: 'order',
+        kind: 'write',
+        name: 'createForClient',
+        scope: 'args',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; owner column compared to session:userId',
+        domain: 'order',
+        kind: 'write',
+        name: 'createMine',
+        scope: 'session',
+      },
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        kind: 'write',
+        name: 'createUnknown',
+        scope: 'unknown',
+      },
+    ]);
   });
 
   // OPP-28 write-side DATA proof: the shared predicate normalizer treats only

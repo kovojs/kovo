@@ -83,8 +83,13 @@ export function validatePathInShape(
   if (segments.length === 0) return { exists: true };
 
   if (isArrayQueryShape(current)) {
+    const [head, ...tail] = segments;
+    if (head?.name === 'length') return { exists: tail.length === 0 };
     const itemShape = current[0];
-    return itemShape === undefined ? { exists: false } : validatePathInShape(itemShape, segments);
+    if (itemShape === undefined) return { exists: false };
+    return head && /^\d+$/u.test(head.name)
+      ? validatePathInShape(itemShape, tail)
+      : validatePathInShape(itemShape, segments);
   }
 
   if (!isQueryShapeObject(current)) return { exists: false };
@@ -110,7 +115,14 @@ export function queryShapeAtPath(
 ): QueryShape {
   const current = unwrapQueryShape(shape);
   if (segments.length === 0) return current;
-  if (isArrayQueryShape(current)) return queryShapeAtPath(current[0] ?? 'object', segments);
+  if (isArrayQueryShape(current)) {
+    const [head, ...tail] = segments;
+    if (head?.name === 'length') return tail.length === 0 ? 'number' : 'object';
+    const itemShape = current[0] ?? 'object';
+    return head && /^\d+$/u.test(head.name)
+      ? queryShapeAtPath(itemShape, tail)
+      : queryShapeAtPath(itemShape, segments);
+  }
   if (!isQueryShapeObject(current)) return 'object';
 
   const [head, ...tail] = segments;
@@ -201,7 +213,7 @@ function queryShapeChildPaths(shape: QueryShape): string[] {
   const current = unwrapQueryShape(shape);
   if (isArrayQueryShape(current)) {
     const itemShape = current[0];
-    return itemShape === undefined ? [] : queryShapeChildPaths(itemShape);
+    return itemShape === undefined ? ['length'] : ['length', ...queryShapeChildPaths(itemShape)];
   }
 
   if (!isQueryShapeObject(current)) return [];

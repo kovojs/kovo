@@ -27,6 +27,8 @@ export const CartBadge = component({
       <span data-bind="cart.count">2</span>
       <button data-bind:hidden="cart.empty">Checkout</button>
       <span data-bind="cart.items.productId">p1</span>
+      <span data-bind="cart.items.length">1</span>
+      <span data-bind="cart.items.0.productId">p1</span>
     </cart-badge>
   ),
 });

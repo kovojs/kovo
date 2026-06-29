@@ -3137,6 +3137,7 @@ function objectLiteralStaticPathInputPath(
   resolveIdentifier?: (node: Node) => string | undefined,
   paramSymbolKeys: ReadonlySet<string> = new Set(),
   sessionContext: SessionProvenanceContext = emptySessionProvenanceContext(),
+  writeTableIdentifier?: string,
 ): QueryInstanceKeyComparisons {
   const calls = [
     ...(Node.isCallExpression(chain) ? [chain] : []),
@@ -3144,8 +3145,6 @@ function objectLiteralStaticPathInputPath(
   ];
   const whereCall = calls.find((call) => propertyAccessCallName(call) === 'where');
   const predicate = whereCall?.getArguments()[0];
-  if (!predicate) return { argCandidates: [], instanceKey: [] };
-  const pnf = predicatePnf(predicate);
   const acceptedGuardPrivateKeys = acceptedGuardPrivateKeysDominatingNode(chain);
   const predicateSessionContext =
     acceptedGuardPrivateKeys.length > 0
@@ -3165,6 +3164,28 @@ function objectLiteralStaticPathInputPath(
     return argument?.startsWith('arg:') ? { ...operand, inputKey: argument } : operand;
   };
 
+  const insertValueComparisons = writeTableIdentifier
+    ? insertValuesComparisons(calls, writeTableIdentifier, toOperand)
+    : [];
+  if (!predicate) {
+    return {
+      ...(acceptedGuardPrivateKeys.length > 0 ? { acceptedGuardPrivateKeys } : {}),
+      argCandidates: insertValueComparisons,
+      instanceKey: [],
+      ...(insertValueComparisons.length > 0
+        ? {
+            ownerScopePredicates: [
+              {
+                kind: 'and',
+                nodes: insertValueComparisons.map((comparison) => ({ comparison, kind: 'eq' })),
+              },
+            ],
+          }
+        : {}),
+    };
+  }
+
+  const pnf = predicatePnf(predicate);
   const toComparison = ({ left, right }: EqPredicateConjunct): QueryInstanceKeyComparison => ({
     left: toOperand(left),
     right: toOperand(right),
@@ -3172,10 +3193,75 @@ function objectLiteralStaticPathInputPath(
 
   return {
     ...(acceptedGuardPrivateKeys.length > 0 ? { acceptedGuardPrivateKeys } : {}),
-    argCandidates: pnfAllEqOperandPairs(pnf).map(toComparison),
+    argCandidates: [...pnfAllEqOperandPairs(pnf).map(toComparison), ...insertValueComparisons],
     instanceKey: (pnfExactConjuncts(pnf) ?? []).map(toComparison),
-    ownerScopePredicates: [comparisonPnf(pnf, toComparison)],
+    ownerScopePredicates: [
+      comparisonPnf(pnf, toComparison),
+      ...(insertValueComparisons.length > 0
+        ? [
+            {
+              kind: 'and' as const,
+              nodes: insertValueComparisons.map((comparison) => ({
+                comparison,
+                kind: 'eq' as const,
+              })),
+            },
+          ]
+        : []),
+    ],
   };
+}
+
+function insertValuesComparisons(
+  calls: readonly CallExpression[],
+  tableIdentifier: string,
+  toOperand: (node: Node) => QueryInstanceKeyOperand,
+): QueryInstanceKeyComparison[] {
+  const comparisons: QueryInstanceKeyComparison[] = [];
+
+  for (const call of calls) {
+    if (propertyAccessCallName(call) !== 'values') continue;
+    const values = call.getArguments()[0];
+    if (!values) continue;
+
+    for (const row of insertValueRows(values)) {
+      for (const property of row.getProperties()) {
+        if (Node.isPropertyAssignment(property)) {
+          const key = propertyNameText(property.getNameNode());
+          const initializer = property.getInitializer();
+          if (!key || !initializer) continue;
+          comparisons.push({
+            left: { tableKey: { key, tableIdentifier } },
+            right: toOperand(initializer),
+          });
+          continue;
+        }
+
+        if (Node.isShorthandPropertyAssignment(property)) {
+          const key = propertyNameText(property.getNameNode());
+          if (!key) continue;
+          comparisons.push({
+            left: { tableKey: { key, tableIdentifier } },
+            right: toOperand(property.getNameNode()),
+          });
+        }
+      }
+    }
+  }
+
+  return comparisons;
+}
+
+function insertValueRows(values: Node): ObjectLiteralExpression[] {
+  const expression = unwrappedStaticExpressionNode(values);
+  if (Node.isObjectLiteralExpression(expression)) return [expression];
+  if (!Node.isArrayLiteralExpression(expression)) return [];
+  return expression
+    .getElements()
+    .map((element) => unwrappedStaticExpressionNode(element))
+    .filter((element): element is ObjectLiteralExpression =>
+      Node.isObjectLiteralExpression(element),
+    );
 }
 
 /** @internal */ export function extractParameterizedKeys(

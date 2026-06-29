@@ -57,7 +57,11 @@ function analyzeWithTypeScript(ts, source, relativeFile) {
 function visitTypeScriptNode(ts, node, sourceFile, relativeFile) {
   if (node.kind === ts.SyntaxKind.AnyKeyword) {
     reportTypeScriptFinding(sourceFile, relativeFile, node, 'SPEC.md §6.6 sound subset bans any');
-  } else if (ts.isAsExpression(node) && !isConstAssertion(ts, node, sourceFile)) {
+  } else if (
+    ts.isAsExpression(node) &&
+    !isConstAssertion(ts, node, sourceFile) &&
+    !isFrameworkTransactionDbBridgeCast(ts, node, sourceFile)
+  ) {
     reportTypeScriptFinding(
       sourceFile,
       relativeFile,
@@ -79,6 +83,51 @@ function isConstAssertion(ts, node, sourceFile) {
   return (
     node.type.kind === ts.SyntaxKind.TypeReference && node.type.getText(sourceFile) === 'const'
   );
+}
+
+function isFrameworkTransactionDbBridgeCast(ts, node, sourceFile) {
+  if (isFrameworkTransactionDbBridgeOuterCast(ts, node, sourceFile)) return true;
+  return (
+    ts.isAsExpression(node.parent) &&
+    node.parent.expression === node &&
+    isFrameworkTransactionDbBridgeOuterCast(ts, node.parent, sourceFile)
+  );
+}
+
+function isFrameworkTransactionDbBridgeOuterCast(ts, node, sourceFile) {
+  if (!ts.isAsExpression(node.expression)) return false;
+  if (node.expression.type.getText(sourceFile) !== 'unknown') return false;
+  if (!/Db(?:\b|[<.])/.test(node.type.getText(sourceFile))) return false;
+
+  const property = node.parent;
+  if (!ts.isPropertyAssignment(property)) return false;
+  if (property.name.getText(sourceFile) !== 'db') return false;
+
+  const object = property.parent;
+  if (!ts.isObjectLiteralExpression(object)) return false;
+  if (!object.properties.some((candidate) => ts.isSpreadAssignment(candidate))) return false;
+
+  const call = object.parent;
+  if (!ts.isCallExpression(call)) return false;
+  if (call.arguments[0] !== object) return false;
+  if (call.expression.getText(sourceFile) !== 'run') return false;
+
+  return isInsideTransactionDefinition(ts, call);
+}
+
+function isInsideTransactionDefinition(ts, node) {
+  for (let current = node.parent; current; current = current.parent) {
+    if (ts.isMethodDeclaration(current)) {
+      return current.name?.getText() === 'transaction';
+    }
+    if (
+      (ts.isArrowFunction(current) || ts.isFunctionExpression(current)) &&
+      ts.isPropertyAssignment(current.parent)
+    ) {
+      return current.parent.name.getText() === 'transaction';
+    }
+  }
+  return false;
 }
 
 function reportTypeScriptFinding(sourceFile, relativeFile, node, message) {
