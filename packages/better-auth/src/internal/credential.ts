@@ -8,7 +8,7 @@ import type {
 } from '@kovojs/server';
 
 import type { BetterAuthRoleSession } from '../guards.js';
-import type { BetterAuthCredentialMutationOptions } from '../internal.js';
+import type { BetterAuthCredentialMutationInternalOptions } from '../credential-options.js';
 import type {
   BetterAuthCredentialMutationApi,
   BetterAuthCredentialMutationTouchGraphOptions,
@@ -409,7 +409,7 @@ export function credentialMutationDefinitionOptions<
   Request extends BetterAuthRequestLike,
   GuardedRequest extends Request,
 >(
-  options: BetterAuthCredentialMutationOptions<Key, Request, GuardedRequest>,
+  options: BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
   touches: readonly Domain[],
 ): Pick<
   MutationDefinition<Key, never, never, Request, never, GuardedRequest>,

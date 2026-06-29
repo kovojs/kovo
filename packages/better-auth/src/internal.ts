@@ -1,5 +1,4 @@
-import type { AccessDecision, CsrfValidationOptions, Domain, Guard } from '@kovojs/server';
-import type { MutationRegistry } from '@kovojs/server/internal/execution';
+import type { Domain } from '@kovojs/server';
 import {
   betterAuthAuthDomain,
   betterAuthCredentialMutationErrors,
@@ -120,33 +119,10 @@ export {
   betterAuthPasskeyPluginMetadataImportPaths,
   betterAuthSsoPluginMetadataImportPaths,
 } from './internal/plugin-metadata.js';
-
-/**
- * Options for the credential mutations (`betterAuthSignInEmailMutation`,
- * `betterAuthSignUpEmailMutation`, `betterAuthSignOutMutation`). `csrf` wires
- * in CSRF validation (default-on per SPEC.md §6.6), `guard` runs an authorization/rate-limit
- * guard, `access` declares the KV436 default-deny access decision (SPEC.md §10.2) for a
- * credential mutation that has no `guard` (sign-in/sign-up run before authentication),
- * `defaultRedirectTo` sets the post-mutation redirect target, `key` overrides the
- * mutation key, and `registry`/`transaction` integrate with the app's mutation registry and
- * transaction boundary.
- */
-export interface BetterAuthCredentialMutationOptions<
-  Key extends string,
-  Request extends BetterAuthRequestLike,
-  GuardedRequest extends Request,
-> {
-  access?: AccessDecision;
-  csrf?: CsrfValidationOptions<Request> | false;
-  defaultRedirectTo?: string;
-  guard?: Guard<Request, GuardedRequest>;
-  key?: Key;
-  registry?: MutationRegistry;
-  transaction?: <Result>(
-    request: Request,
-    run: (transactionRequest: GuardedRequest) => Promise<Result>,
-  ) => Promise<Result>;
-}
+export type {
+  BetterAuthCredentialMutationInternalOptions,
+  BetterAuthCredentialMutationOptions,
+} from './credential-options.js';
 
 /** @internal Resolve the Kovo domain a Better Auth table is bridged into, or null when unbridged/exempt. */
 export function betterAuthTableDomain(
