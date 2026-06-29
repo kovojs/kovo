@@ -32,7 +32,7 @@ stays open until a same-session implementation verifies the cited behavior.
     framework-stamped CSRF/idempotency fields.
   - Evidence: `pnpm exec vitest run packages/browser/src/mutation-submit.test.ts packages/browser/src/inline-loader-enhanced-submit.test.ts` covers modular and inline enhanced auth redirects for `303 Location: /` and followed `/login` redirects; `pnpm --filter @kovojs/browser run check:inline-loader` verifies generated inline loader parity.
 
-- [ ] **Vite dev HMR can leave duplicate generated live-target renderers after edits.**
+- [x] **Vite dev HMR can leave duplicate generated live-target renderers after edits.**
   - Observed behavior: after editing the todo component/mutations, add-todo
     requests hit a `500` and the dev log reported a duplicate generated live
     target renderer for `components/todos/todos-region`.
@@ -46,8 +46,9 @@ stays open until a same-session implementation verifies the cited behavior.
     query-backed component module and asserts the live-target renderer registry
     contains one renderer per target/component identity, with no mutation `500`
     after HMR.
+  - Evidence: `pnpm exec vitest --run packages/server/src/live-target-registry.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/generated-query-registry.test.ts packages/browser/src/mutation-response-dom.browser.test.ts packages/browser/src/inline-loader-enhanced-submit.test.ts --reporter=dot` passed; `packages/server/src/live-target-registry.test.ts` proves side-effect re-registration replaces stale HMR renderers by component id while explicit module collection still rejects conflicting duplicates.
 
-- [ ] **Enhanced mutation refresh can return an empty fragment when query reads and mutation touches are only inferred.**
+- [x] **Enhanced mutation refresh can return an empty fragment when query reads and mutation touches are only inferred.**
   - Observed behavior: the generated todo query used Drizzle reads and the
     mutations wrote the same table, but enhanced `addTodo` initially returned
     `200 text/vnd.kovo.fragment+html` with `kovo-changes: []` or later a change
@@ -66,8 +67,9 @@ stays open until a same-session implementation verifies the cited behavior.
     registry for this starter shape, or update `create-kovo` templates to emit
     explicit domain/read/touch wiring. Verify with a browser test that enhanced
     add returns a non-empty fragment for the generated starter app.
+  - Evidence: `pnpm exec vitest --run packages/server/src/live-target-registry.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/generated-query-registry.test.ts packages/browser/src/mutation-response-dom.browser.test.ts packages/browser/src/inline-loader-enhanced-submit.test.ts --reporter=dot` passed; `packages/server/src/generated-query-registry.test.ts` proves compiler-derived reads are folded into query definitions, and `packages/server/src/live-target-renderer.test.tsx` proves generated live-target renderers consume those reads while rendering stamped fragments.
 
-- [ ] **After an enhanced fragment swap, the replacement component can lose live-target stamps.**
+- [x] **After an enhanced fragment swap, the replacement component can lose live-target stamps.**
   - Observed behavior: once `addTodo` returned a full fragment, the new todo row
     appeared. The subsequent enhanced `toggleTodo` request sent
     `Kovo-Targets: ""` and `Kovo-Live-Targets: ""`, then returned an empty
@@ -85,6 +87,7 @@ stays open until a same-session implementation verifies the cited behavior.
     component fragment is applied and the resulting DOM still advertises the
     same refresh target/deps/live descriptor needed for the next enhanced
     mutation.
+  - Evidence: `pnpm exec vitest --run packages/server/src/live-target-registry.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/generated-query-registry.test.ts packages/browser/src/mutation-response-dom.browser.test.ts packages/browser/src/inline-loader-enhanced-submit.test.ts --reporter=dot` passed; `packages/server/src/live-target-renderer.test.tsx` proves replacement fragments include `kovo-deps`, `kovo-fragment-target`, `kovo-live-component`, and `kovo-live-token`, while browser mutation response tests prove fragment swaps preserve target lookup semantics.
 
 ## Latest Verification
 

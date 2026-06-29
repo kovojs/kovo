@@ -43,14 +43,20 @@ type KovoViteMiddleware = (
 /** Optional post-configuration hook returned by a Vite plugin. */
 type KovoVitePostHook = () => void | Promise<void>;
 
-/** Vite plugin object returned by {@link kovo}; placed in a `vite.config.ts` plugins array. */
+/** Opaque Vite plugin token returned by {@link kovo}; place it in a `vite.config.ts` plugins array. */
 export interface KovoVitePlugin {
+  /** Stable plugin name used by Vite diagnostics. */
+  readonly name: 'kovo';
+}
+
+interface KovoViteRuntimePlugin extends KovoVitePlugin {
   buildStart?(): void | Promise<void>;
   configResolved?(config: KovoViteResolvedConfig): void | Promise<void>;
+  configureServer?(
+    server: KovoViteDevServer,
+  ): void | KovoVitePostHook | Promise<void | KovoVitePostHook>;
   /** Run before Vite's JSX transform so the Kovo compiler sees authored TSX. */
   enforce?: 'pre';
-  /** Stable plugin name used by Vite diagnostics. */
-  name: 'kovo';
   resolveId?(source: string, importer?: string): null | Promise<null | string> | string;
   load?(id: string): null | Promise<null | string> | string;
   transform?(
@@ -237,7 +243,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     );
   };
 
-  return {
+  const plugin: KovoViteRuntimePlugin = {
     enforce: 'pre',
     async configResolved(config) {
       root = config.root ?? root;
@@ -328,7 +334,8 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       return (await compilerPlugin()).handleHotUpdate?.(context) ?? context.modules ?? [];
     },
     name: 'kovo',
-  } as KovoVitePlugin;
+  };
+  return plugin;
 }
 
 let compilerSourceResolutionHooksRegistered = false;

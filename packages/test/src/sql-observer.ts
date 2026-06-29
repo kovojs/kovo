@@ -70,27 +70,38 @@ function observeSqlStatement(
   return observed;
 }
 
-/** @internal Record DB-engine writes (cascade/trigger effects) observed by row-count deltas. */
+interface TableObservationSnapshot {
+  count: number;
+  fingerprint: string;
+}
+
+/** @internal Record DB-engine writes (cascade/trigger effects) observed by table snapshots. */
 export async function observeSqlEngineSideEffects(
   target: object,
   statement: string | undefined,
   config: DbVerificationConfig,
   recorder: ObservationRecorder,
   explicitOperations: readonly ObservedDbOperation[],
-  before: ReadonlyMap<string, number>,
+  before: ReadonlyMap<string, TableObservationSnapshot>,
 ): Promise<void> {
   if (!statement || before.size === 0) return;
 
-  const after = await tableCounts(target, Object.keys(config.domainByTable));
+  const after = await tableObservationSnapshots(target, Object.keys(config.domainByTable));
   const explicitWriteTables = new Set(
     explicitOperations
       .filter((operation) => operation.kind === 'write')
       .map((operation) => operation.table),
   );
 
-  for (const [table, beforeCount] of before) {
+  for (const [table, beforeSnapshot] of before) {
     if (explicitWriteTables.has(table)) continue;
-    if (after.get(table) === beforeCount) continue;
+    const afterSnapshot = after.get(table);
+    if (
+      afterSnapshot?.count === beforeSnapshot.count &&
+      afterSnapshot.fingerprint === beforeSnapshot.fingerprint
+    ) {
+      continue;
+    }
 
     recorder.record({
       branch: undefined,
@@ -102,6 +113,31 @@ export async function observeSqlEngineSideEffects(
       table,
     });
   }
+}
+
+/** @internal Snapshot configured table contents when the wrapped DB exposes a raw query handle. */
+export async function tableObservationSnapshots(
+  target: object,
+  tables: readonly string[],
+): Promise<ReadonlyMap<string, TableObservationSnapshot>> {
+  const query = tableCountQuery(target);
+  if (!query) return new Map();
+  const existing = await existingTables(query);
+  if (!existing) return new Map();
+
+  const snapshots = new Map<string, TableObservationSnapshot>();
+  for (const table of tables.filter((name) => existing.has(unqualifiedTableName(name)))) {
+    try {
+      const rows = resultRows(await query(`select * from ${quoteSqlIdentifier(table)}`));
+      snapshots.set(table, {
+        count: rows.length,
+        fingerprint: stableRowsFingerprint(rows),
+      });
+    } catch {
+      // Missing tables or adapter-specific snapshot failures should not block the user's query.
+    }
+  }
+  return snapshots;
 }
 
 /** @internal Snapshot configured table row counts when the wrapped DB exposes a raw query handle. */
@@ -208,6 +244,28 @@ function resultRows(result: unknown): unknown[] {
         Array.isArray((result as { rows?: unknown }).rows)
       ? (result as { rows: unknown[] }).rows
       : [];
+}
+
+function stableRowsFingerprint(rows: readonly unknown[]): string {
+  return JSON.stringify(
+    rows.map((row) => JSON.stringify(stableJsonValue(row))).sort(compareStrings),
+  );
+}
+
+function stableJsonValue(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(stableJsonValue);
+  if (typeof value === 'bigint') return value.toString();
+  if (typeof value !== 'object' || value === null) return value;
+
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>)
+      .sort(([left], [right]) => compareStrings(left, right))
+      .map(([key, entry]) => [key, stableJsonValue(entry)]),
+  );
+}
+
+function compareStrings(left: string, right: string): number {
+  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 function unqualifiedTableName(table: string): string {

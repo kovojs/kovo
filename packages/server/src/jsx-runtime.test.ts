@@ -11,7 +11,7 @@ import * as style from '@kovojs/style';
 import { validateCsrfToken } from './csrf.js';
 import { escapeText, renderHtmlValue } from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
-import { Fragment, jsx, jsxDEV, jsxs, type JsxChild } from './jsx-runtime.js';
+import { createElement, Fragment, jsx, jsxDEV, jsxs, type JsxChild } from './jsx-runtime.js';
 import { mutationFormAttributes } from './mutation.js';
 
 const html = (value: unknown): string => renderHtmlValue(value);
@@ -480,6 +480,15 @@ describe('server jsx runtime', () => {
   it('aliases jsxs and jsxDEV to jsx for static and dev transforms', () => {
     expect(html(jsxs('span', { children: ['a', 'b'] }))).toBe('<span>ab</span>');
     expect(html(jsxDEV('span', { children: 'a' }))).toBe('<span>a</span>');
+  });
+
+  it('supports classic createElement transforms as a compatibility ABI', () => {
+    const Badge = (props: { children?: unknown }) =>
+      createElement('span', { class: 'badge' }, props.children);
+
+    expect(
+      html(createElement('section', { id: 'profile' }, createElement(Badge, null, 'Ada'))),
+    ).toBe('<section id="profile"><span class="badge">Ada</span></section>');
   });
 
   it('escapes plain text children while preserving nested framework HTML', () => {

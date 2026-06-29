@@ -6,7 +6,6 @@ import { asc, eq } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
-import { createLiveTargetAttestation } from '@kovojs/server/internal/wire';
 
 import { buildCrmInteractiveApp } from './interactive-app.js';
 import { crmCsrf } from './mutations.js';
@@ -20,11 +19,8 @@ import { contacts, deals } from './schema.js';
 // db + a demo session, so the mutations' `guards.authed` guard passes.
 
 const contactsTarget = 'contacts-region';
-const contactsComponent = 'components/contacts/contacts-region';
 const pipelineTarget = 'pipeline-region';
-const pipelineComponent = 'components/pipeline/pipeline-region';
 const dealDetailTarget = 'deal-detail-region';
-const dealDetailComponent = 'components/deal-detail/deal-detail-region';
 const demoCsrfRequest = { session: { id: 'demo-session' } };
 const insertedContactId = 'c-11111111-1111-4111-8111-111111111111';
 const duplicateEmailContactId = 'c-22222222-2222-4222-8222-222222222222';
@@ -37,22 +33,13 @@ function withCsrf(fields: Record<string, string>): Record<string, string> {
   return fields;
 }
 
-function liveHeader(
-  target: string,
-  component: string,
-  props: Record<string, unknown> = {},
-): string {
-  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
-  return `${target}#${component}@${token}:${JSON.stringify(props)}`;
-}
-
 async function postForm(
   handler: (request: Request) => Promise<Response>,
   key: string,
   fields: Record<string, string>,
-  targets: string,
-  liveTargets: string,
+  options: { route: string; targets: readonly string[] },
 ): Promise<{ status: number; html: string }> {
+  const headers = await enhancedHeadersForRoute(handler, options.route, options.targets);
   const response = await handler(
     new Request(`http://example.test/_m/${key}`, {
       method: 'POST',
@@ -60,8 +47,8 @@ async function postForm(
         'content-type': 'application/x-www-form-urlencoded',
         'Kovo-Fragment': 'true',
         'Kovo-Idem': `${key}-${Object.values(fields).join('-')}`,
-        'Kovo-Live-Targets': liveTargets,
-        'Kovo-Targets': targets,
+        'Kovo-Live-Targets': headers.liveTargets,
+        'Kovo-Targets': headers.targets,
         Origin: 'http://example.test',
       },
       body: new URLSearchParams({
@@ -71,6 +58,68 @@ async function postForm(
     }),
   );
   return { status: response.status, html: await response.text() };
+}
+
+async function enhancedHeadersForRoute(
+  handler: (request: Request) => Promise<Response>,
+  route: string,
+  targets: readonly string[],
+): Promise<{ liveTargets: string; targets: string }> {
+  const response = await handler(
+    new Request(`http://example.test${route}`, {
+      headers: { Accept: 'text/html' },
+    }),
+  );
+  const html = await response.text();
+  const wanted = new Set(targets);
+  const liveTargets = new Map<string, string>();
+  const targetHeaders = new Set<string>();
+
+  for (const match of html.matchAll(/<[^>]*\bkovo-deps=(?:"[^"]*"|'[^']*')[^>]*>/g)) {
+    const attrs = readTagAttributes(match[0]);
+    const target = attrs['kovo-fragment-target'] ?? attrs.id ?? attrs['kovo-c'];
+    if (!target || !wanted.has(target)) continue;
+    const deps = readDeps(attrs['kovo-deps']);
+    if (deps.length === 0) continue;
+
+    targetHeaders.add(`${target}=${deps.join(' ')}`);
+
+    const component = attrs['kovo-live-component'];
+    const token = attrs['kovo-live-token'];
+    if (!component || !token || liveTargets.has(target)) continue;
+    liveTargets.set(target, `${target}#${component}@${token}:${attrs['kovo-props'] ?? '{}'}`);
+  }
+
+  return {
+    liveTargets: [...liveTargets.values()].join('; '),
+    targets: [...targetHeaders].join('; '),
+  };
+}
+
+function readTagAttributes(tag: string): Record<string, string> {
+  const attrs: Record<string, string> = {};
+  for (const match of tag.matchAll(/\s([A-Za-z_:][\w:.-]*)=(?:"([^"]*)"|'([^']*)')/g)) {
+    const name = match[1];
+    if (!name) continue;
+    attrs[name] = decodeHtmlAttribute(match[2] ?? match[3] ?? '');
+  }
+  return attrs;
+}
+
+function decodeHtmlAttribute(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
+}
+
+function readDeps(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(/[\s,]+/)
+    .map((dep) => dep.trim())
+    .filter(Boolean);
 }
 
 describe('crm interactive app', () => {
@@ -115,8 +164,7 @@ describe('crm interactive app', () => {
         name: 'Edsger Dijkstra',
         email: 'edsger@demo.example.com',
       }),
-      `${contactsTarget}=queries/contact-list-query`,
-      liveHeader(contactsTarget, contactsComponent),
+      { route: '/contacts', targets: [contactsTarget] },
     );
 
     expect(status).toBe(200);
@@ -142,8 +190,7 @@ describe('crm interactive app', () => {
         name: 'Duplicate Contact',
         email: contact.email,
       }),
-      `${contactsTarget}=queries/contact-list-query`,
-      liveHeader(contactsTarget, contactsComponent),
+      { route: '/contacts', targets: [contactsTarget] },
     );
 
     expect(status).toBe(422);
@@ -164,8 +211,7 @@ describe('crm interactive app', () => {
         name: 'Attacker Controlled',
         email: 'attacker-id@demo.example.com',
       }),
-      `${contactsTarget}=queries/contact-list-query`,
-      liveHeader(contactsTarget, contactsComponent),
+      { route: '/contacts', targets: [contactsTarget] },
     );
 
     expect(status).toBe(422);
@@ -188,8 +234,7 @@ describe('crm interactive app', () => {
         stage: 'open',
         amount: '7500',
       }),
-      `${pipelineTarget}=queries/contact-list-query queries/open-deals-query queries/pipeline-by-stage-query`,
-      liveHeader(pipelineTarget, pipelineComponent),
+      { route: '/', targets: [pipelineTarget] },
     );
 
     expect(status).toBe(200);
@@ -222,8 +267,7 @@ describe('crm interactive app', () => {
         stage: 'open',
         amount: '7500',
       }),
-      `${pipelineTarget}=queries/contact-list-query queries/open-deals-query queries/pipeline-by-stage-query`,
-      liveHeader(pipelineTarget, pipelineComponent),
+      { route: '/', targets: [pipelineTarget] },
     );
 
     expect(unownedResult.status).toBe(422);
@@ -237,8 +281,7 @@ describe('crm interactive app', () => {
         stage: 'javascript:alert(1)',
         amount: '7500',
       }),
-      `${pipelineTarget}=queries/contact-list-query queries/open-deals-query queries/pipeline-by-stage-query`,
-      liveHeader(pipelineTarget, pipelineComponent),
+      { route: '/', targets: [pipelineTarget] },
     );
 
     expect(invalidStageResult.status).toBe(422);
@@ -257,8 +300,7 @@ describe('crm interactive app', () => {
         email: 'spoofed-owner@demo.example.com',
         ownerId: 'u2',
       }),
-      `${contactsTarget}=queries/contact-list-query`,
-      liveHeader(contactsTarget, contactsComponent),
+      { route: '/contacts', targets: [contactsTarget] },
     );
 
     expect(status).toBe(200);
@@ -277,8 +319,7 @@ describe('crm interactive app', () => {
       handler,
       'mutations/move-deal',
       withCsrf({ dealId: 'd1', stage: 'proposal' }),
-      `${dealDetailTarget}:d1=queries/activity-list-query queries/contact-list-query queries/deal-list-query`,
-      liveHeader(`${dealDetailTarget}:d1`, dealDetailComponent, { dealId: 'd1' }),
+      { route: '/deals/d1', targets: [`${dealDetailTarget}:d1`] },
     );
 
     expect(status).toBe(200);
@@ -297,8 +338,7 @@ describe('crm interactive app', () => {
       handler,
       'mutations/move-deal',
       withCsrf({ dealId: unowned.id, stage: 'proposal' }),
-      `${dealDetailTarget}:${unowned.id}=queries/activity-list-query queries/contact-list-query queries/deal-list-query`,
-      liveHeader(`${dealDetailTarget}:${unowned.id}`, dealDetailComponent, { dealId: unowned.id }),
+      { route: '/deals/d1', targets: [`${dealDetailTarget}:d1`] },
     );
 
     expect(status).toBe(422);
@@ -317,8 +357,7 @@ describe('crm interactive app', () => {
       handler,
       'mutations/close-deal',
       withCsrf({ dealId: 'd1' }),
-      `${dealDetailTarget}:d1=queries/activity-list-query queries/contact-list-query queries/deal-list-query`,
-      liveHeader(`${dealDetailTarget}:d1`, dealDetailComponent, { dealId: 'd1' }),
+      { route: '/deals/d1', targets: [`${dealDetailTarget}:d1`] },
     );
 
     expect(status).toBe(200);

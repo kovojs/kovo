@@ -19,7 +19,7 @@ pass is filed in `plans/papercuts-14.md`.
 
 ### A. Verification Surface Omissions
 
-- [ ] **Endpoint explain omits route file outcomes returned through
+- [x] **Endpoint explain omits route file outcomes returned through
       `rootedFiles().serve()`.** (med, security/soundness; found by
       `endpoints-files-export`)
   - Observed behavior: `/exports/rooted.txt` returned file bytes through
@@ -49,6 +49,10 @@ pass is filed in `plans/papercuts-14.md`.
     the same file/stream posture rows as direct `respond.file` /
     `respond.stream` route outcomes; coverage includes a public route returning
     `rootedFiles().serve(...)`.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-route-outcomes.test.ts --reporter=dot`
+    passed on 2026-06-29; it proves both graph serialization and
+    `kovo explain --endpoints` include a `route-stream` row for a route
+    returning `rootedFiles().serve(...)`.
 
 ## Refuted / Not Carried Forward
 

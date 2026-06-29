@@ -969,18 +969,96 @@ function sourceRouteOutcomeKinds(
 ): Map<string, 'file' | 'stream'> {
   const outcomes = new Map<string, 'file' | 'stream'>();
   for (const file of files) {
+    const rootedFilesIdentifiers = sourceRootedFilesIdentifiers(file.source);
     for (const match of file.source.matchAll(/route\s*\(\s*(['"`])([^'"`]+)\1/g)) {
       const path = match[2];
       if (path === undefined || outcomes.has(path)) continue;
       const body = routeDeclarationSourceBody(file.source, match.index ?? 0);
-      if (body.includes('respond.stream')) {
-        outcomes.set(path, 'stream');
-      } else if (body.includes('respond.file')) {
-        outcomes.set(path, 'file');
-      }
+      const outcome = routeDeclarationOutcomeKind(body, rootedFilesIdentifiers);
+      if (outcome !== undefined) outcomes.set(path, outcome);
     }
   }
   return outcomes;
+}
+
+function sourceRootedFilesIdentifiers(source: string): Set<string> {
+  const identifiers = new Set<string>();
+  for (const match of source.matchAll(
+    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?rootedFiles\s*\(/g,
+  )) {
+    const identifier = match[1];
+    if (identifier !== undefined) identifiers.add(identifier);
+  }
+  return identifiers;
+}
+
+function routeDeclarationOutcomeKind(
+  body: string,
+  rootedFilesIdentifiers: ReadonlySet<string>,
+): 'file' | 'stream' | undefined {
+  if (body.includes('respond.stream')) return 'stream';
+  if (body.includes('respond.file')) return 'file';
+  if (hasDirectRootedFilesServeCall(body)) return 'stream';
+  for (const identifier of rootedFilesIdentifiers) {
+    if (new RegExp(`\\b${escapeRegExp(identifier)}\\s*\\.\\s*serve\\s*\\(`).test(body)) {
+      return 'stream';
+    }
+  }
+  return undefined;
+}
+
+function hasDirectRootedFilesServeCall(body: string): boolean {
+  for (const match of body.matchAll(/\brootedFiles\s*\(/g)) {
+    const openParen = body.indexOf('(', match.index);
+    if (openParen < 0) continue;
+    const closeParen = sourceClosingParenIndex(body, openParen);
+    if (closeParen === undefined) continue;
+
+    let index = closeParen + 1;
+    while (/\s/.test(body[index] ?? '')) index += 1;
+    while (body[index] === ')') {
+      index += 1;
+      while (/\s/.test(body[index] ?? '')) index += 1;
+    }
+    if (/^\.\s*serve\s*\(/.test(body.slice(index))) return true;
+  }
+  return false;
+}
+
+function sourceClosingParenIndex(source: string, openParen: number): number | undefined {
+  let depth = 0;
+  let quote: '"' | "'" | '`' | undefined;
+  let escaped = false;
+  for (let index = openParen; index < source.length; index += 1) {
+    const char = source[index];
+    if (quote !== undefined) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === quote) {
+        quote = undefined;
+      }
+      continue;
+    }
+
+    if (char === '"' || char === "'" || char === '`') {
+      quote = char;
+      continue;
+    }
+    if (char === '(') {
+      depth += 1;
+      continue;
+    }
+    if (char !== ')') continue;
+    depth -= 1;
+    if (depth === 0) return index;
+  }
+  return undefined;
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function routeDeclarationSourceBody(source: string, start: number): string {
@@ -1681,10 +1759,15 @@ async function bundleKovoServerHandler(
     stylesheetAssets?: KovoBuildStylesheetAssets;
   },
 ): Promise<string> {
-  const [{ lowerStandaloneSourceDerivedRegistryDeclarations }, { build }] = await Promise.all([
-    import('@kovojs/compiler/internal'),
-    import('vite-plus'),
-  ]);
+  const [{ kovoVitePlugin }, { lowerStandaloneSourceDerivedRegistryDeclarations }, { build }] =
+    await Promise.all([
+      import('@kovojs/compiler'),
+      import('@kovojs/compiler/internal'),
+      import('vite-plus'),
+    ]);
+  const kovoPlugin = kovoVitePlugin({
+    include: [kovoBuildAppSourceFilter(appModulePath, process.cwd())],
+  });
   const stylesheetAssets = options.stylesheetAssets ?? emptyKovoBuildStylesheetAssets();
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-build-'));
   const entryPath = join(tempDir, 'entry.mjs');
@@ -1713,11 +1796,18 @@ async function bundleKovoServerHandler(
       },
       configFile: false,
       logLevel: 'silent',
+      oxc: {
+        jsx: {
+          importSource: '@kovojs/server',
+          runtime: 'automatic',
+        },
+      },
       plugins: [
         sourceDerivedRegistryVitePlugin(
           process.cwd(),
           lowerStandaloneSourceDerivedRegistryDeclarations,
         ),
+        kovoPlugin,
         bundledUndiciRuntimeVitePlugin(),
       ],
       resolve: {
@@ -1741,6 +1831,20 @@ async function bundleKovoServerHandler(
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+}
+
+function kovoBuildAppSourceFilter(
+  appModulePath: string,
+  root: string,
+): (fileName: string) => boolean {
+  const appDir = slashPath(relative(root, dirname(appModulePath))).replace(/\/+$/, '');
+  const rootPrefix = `${slashPath(root).replace(/^\/+/, '').replace(/\/+$/, '')}/`;
+  return (fileName) => {
+    const normalized = slashPath(fileName).replace(/^\/+/, '');
+    if (normalized.startsWith(rootPrefix)) return false;
+    if (appDir === '' || appDir === '.') return !normalized.startsWith('..');
+    return normalized === appDir || normalized.startsWith(`${appDir}/`);
+  };
 }
 
 const bundledUndiciRuntimeModuleId = '\0kovo-bundled-undici-runtime';

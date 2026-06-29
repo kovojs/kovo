@@ -8,7 +8,7 @@ import {
 import {
   observeSqlEngineSideEffects,
   observeSqlStatementArgument,
-  tableCounts,
+  tableObservationSnapshots,
 } from './sql-observer.js';
 import {
   assertObservedReadsCovered,
@@ -216,7 +216,10 @@ function wrapSqlHandle<Handle extends object>(
           methodCache,
           () =>
             async (callback: (tx: object) => Promise<unknown>, ...args: unknown[]) => {
-              const before = await tableCounts(target, Object.keys(config.domainByTable));
+              const before = await tableObservationSnapshots(
+                target,
+                Object.keys(config.domainByTable),
+              );
               const start = recorder.observed.length;
               const result = await value.call(
                 target,

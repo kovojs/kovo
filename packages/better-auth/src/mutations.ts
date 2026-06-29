@@ -16,7 +16,10 @@ import {
   setSessionRevocationClearSiteData,
 } from './internal.js';
 import type {
+  BetterAuthCredentialMutationInternalOptions,
   BetterAuthCredentialMutationOptions,
+} from './credential-options.js';
+import type {
   BetterAuthCredentialMutationValue,
   BetterAuthRequestLike,
   BetterAuthSignInEmailLike,
@@ -71,7 +74,7 @@ export function betterAuthSignInEmailMutation<
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
-        options,
+        options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
         betterAuthCredentialMutationTouches.signInEmail,
       ),
       errors: betterAuthCredentialMutationErrors,
@@ -137,7 +140,7 @@ export function betterAuthSignUpEmailMutation<
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
-        options,
+        options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
         betterAuthCredentialMutationTouches.signUpEmail,
       ),
       errors: betterAuthCredentialMutationErrors,
@@ -203,7 +206,10 @@ export function betterAuthSignOutMutation<
 > & { key: Key } {
   return assignBetterAuthMutationKey(
     mutation({
-      ...credentialMutationDefinitionOptions(options, betterAuthCredentialMutationTouches.signOut),
+      ...credentialMutationDefinitionOptions(
+        options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
+        betterAuthCredentialMutationTouches.signOut,
+      ),
       errors: {},
       input: betterAuthSignOutInput,
       redirectTo: (result: { value: BetterAuthCredentialMutationValue<'signed-out'> }) =>

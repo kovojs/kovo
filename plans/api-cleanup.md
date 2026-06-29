@@ -162,7 +162,7 @@ Mark `- [x]` only when this session verifies the cited proving command for the e
 
 ## Phase 8 — Reference truth
 
-- [ ] **Drive `api-ref` from the `publicPackages` manifest (all public packages, not the hand-picked 5); exclude `@internal`; add a STABILITY page** — keep the "undocumented exports flagged, never omitted" principle (`api-ref.mjs:11`), but apply it across the full public surface with `@internal` excluded.
+- [x] **Drive `api-ref` from the `publicPackages` manifest (all public packages, not the hand-picked 5); exclude `@internal`; add a STABILITY page** — keep the "undocumented exports flagged, never omitted" principle (`api-ref.mjs:11`), but apply it across the full public surface with `@internal` excluded.
   - Done = every public package has a generated reference page; `@internal` symbols are excluded (not listed as `*Undocumented.*`); a STABILITY page links the policy.
   - Prove: `node --test site/scripts/api-ref.test.mjs && pnpm run check:build`
   - Evidence (partial, 2026-06-17): `public-packages.json` now classifies `@kovojs/style` as a public
@@ -183,8 +183,8 @@ site/scripts/api-ref.test.mjs packages/server/src/component-render.test.tsx`,
     export (`site-export/v1`, `html=92`, `diagnostics=0`), `pnpm --filter @kovojs/site run
 check:links` passes (`pages=93`, `internal=13492`, `external=190`), `pnpm --filter @kovojs/site
 test` passes (9 files, 44 tests), and `pnpm --filter @kovojs/site exec tsc --noEmit --pretty
-false` passes. The remaining proof gap for closing Phase 8 is the broader root `check:build`
-    command named above.
+false` passes.
+  - Evidence 2026-06-29: `pnpm exec vitest --run scripts/public-packages.test.mjs site/scripts/api-ref.test.mjs --reporter=dot` passed with `api-ref/v1 packages=11 exports=2115 documented=2115`; `pnpm run check:build`, `pnpm run check:api-surface`, and `git diff --check` passed on local `main`.
 
 ---
 
@@ -241,10 +241,13 @@ verifier IR, so do NOT; gate-tightening; 9D browser option-graph + headless mach
 
 - [ ] **`style`: brand `CompiledStyle` opaque** (`engine.ts:22-63`); keep the structural `__rules`/`AtomicRule` shape on `@kovojs/style/internal` for the compiler only. Source-compatible for app authors.
 - [ ] **`style`: drop the `identity`-options public overloads** of `create`/`defineVars`/`createTheme`/`keyframes` (`engine.ts:75`); `StyleIdentityOptions` becomes impl-only.
-- [ ] **`server/vite`: narrow `kovo()`'s return** to an opaque `{ readonly name: 'kovo' }` token (`vite.ts:38,116`); keep the hook interface (`KovoViteResolvedConfig`/`KovoViteHotUpdateContext`) internal.
-- [ ] **`better-auth`: split `BetterAuthCredentialMutationOptions`** (`internal.ts:1100`) — export the narrow public `{csrf,defaultRedirectTo,guard,key}` from `index.ts`; keep `registry`(`MutationRegistry`)/`transaction` on an `@internal` extension the impl uses.
+- [x] **`server/vite`: narrow `kovo()`'s return** to an opaque `{ readonly name: 'kovo' }` token (`vite.ts:38,116`); keep the hook interface (`KovoViteResolvedConfig`/`KovoViteHotUpdateContext`) internal.
+  - Evidence 2026-06-29: `pnpm --filter @kovojs/server exec vitest --run src/vite.test.ts src/api/app.test.ts --reporter=dot`, `pnpm run check`, and `pnpm run check:api-surface` passed; `node scripts/api-surface-gate.mjs --write` ratcheted recursive-publicness from 1751 to 1743.
+- [x] **`better-auth`: split `BetterAuthCredentialMutationOptions`** (`internal.ts:1100`) — export the narrow public `{csrf,defaultRedirectTo,guard,key}` from `index.ts`; keep `registry`(`MutationRegistry`)/`transaction` on an `@internal` extension the impl uses.
+  - Evidence 2026-06-29: `pnpm --filter @kovojs/better-auth exec vitest --run --reporter=dot`, `pnpm run check`, and `pnpm run check:api-surface` passed; `node scripts/api-surface-gate.mjs --write` ratcheted recursive-publicness from 1743 to 1737. Public options also retain `access` for SPEC.md §10.2 pre-auth credential mutations used by create-kovo.
 - [x] **`drizzle`: re-export `KovoFanAnnotation`** from `runtime.ts` (one line; `drizzle-surface.ts:12`).
-- [ ] **`test/harness`: make the options nameable** (`harness.ts:44-49`) — promote `core` `TouchGraph` to the public `index.ts` (already a clean `export` at `core/src/graph.ts:42`); re-export `DbVerificationConfig` + `HarnessMutationOptions` from `./harness`. (Types stay public — this is a fix, not a removal.)
+- [x] **`test/harness`: make the options nameable without promoting internal verifier IR.** `KovoTestTouchGraph`, `KovoTestVerificationConfig`, and `KovoTestExecOptions` are the public names; do not promote core `TouchGraph`, which conflicts with Phase 5's internal verifier-IR decision.
+  - Evidence 2026-06-29: `packages/test/src/harness.ts` exports the public `KovoTest*` option names, `pnpm --filter @kovojs/test exec vitest --run src/harness.test.ts src/mutation-verifier.test.ts src/pglite-harness.test.ts src/sqlite-harness.test.ts --reporter=dot` passed after root `pnpm install` repaired dogfood link-local dependency pollution, and `pnpm run check:api-surface` passed.
 - [x] **`core`: inline `component()`'s generic bound** from the public `ComponentDefinitionInput` (drop the private `ComponentDefinitionShape` from the signature; `index.ts:123,158`).
 - [x] **`server`: replace the 3 `export *`** (`index.ts:57-59`, `api/data|rendering|routing`) with explicit named re-export blocks.
 - [ ] **Tighten the api-surface gate** to fail when a public signature names a non-public type (recursive publicness), so 9B can't regress; split `api-surface-baseline.json` into "to-document" vs "to-remove".
