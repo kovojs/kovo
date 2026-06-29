@@ -594,9 +594,11 @@ function escapeHeaderValue(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 }
 
+const CONTROL_OR_DELETE_RE = new RegExp('[\\x00-\\x1f\\x7f]', 'g');
+
 function contentDispositionFilename(value: string): string {
   const normalized = value
-    .replace(/[\u0000-\u001f\u007f]/g, '_')
+    .replace(CONTROL_OR_DELETE_RE, '_')
     .replace(/[/\\]+/g, '_')
     .trim();
   const safe = normalized.length > 0 ? normalized.slice(0, 255) : 'download';

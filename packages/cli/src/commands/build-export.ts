@@ -1259,7 +1259,7 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
             ? { authJustification: endpoint.auth.justification }
             : {}),
         }),
-    body: endpoint.response.body,
+    body: endpointResponseBodyPosture(endpoint.response.body),
     cache: endpoint.response.cache,
     csrf,
     ...(csrf === 'exempt' ? { csrfJustification: endpoint.csrf?.justification ?? '' } : {}),
@@ -1277,6 +1277,12 @@ function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.En
     surface: 'webhook' in endpoint && endpoint.webhook === true ? 'webhook' : 'endpoint',
     ...endpointWrites(endpoint),
   };
+}
+
+function endpointResponseBodyPosture(
+  body: KovoApp['endpoints'][number]['response']['body'],
+): string {
+  return typeof body === 'string' ? body : body.join(',');
 }
 
 function endpointCheckAuth(auth: KovoApp['endpoints'][number]['auth']): string {
