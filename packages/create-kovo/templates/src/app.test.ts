@@ -28,7 +28,8 @@ describe('starter app', () => {
   });
 
   it('reads seeded contacts through the typed query', async () => {
-    const db = createAppDb();
+    const { db, ready } = createAppDb();
+    await ready;
     const result = await contactsQuery.load(undefined, { db, request: {} });
     expect(result.items.map((contact) => contact.id)).toContain('c1');
   });

@@ -24,7 +24,7 @@ import {
   seedDemoUser,
   type AppRequest,
 } from './auth.js';
-import { appDb } from './db.js';
+import { appDb, appDbReady } from './db.js';
 import { addContact } from './mutations.js';
 import { contactsQuery } from './queries.js';
 import { appTheme } from './theme.js';
@@ -33,7 +33,9 @@ import { appTheme } from './theme.js';
 // by real Better Auth. `kovo({ app: '/src/app.tsx' })` (vite.config.ts) and `kovo
 // build ./src/app.tsx` both load this default export (SPEC.md §9.5).
 
-// Seed the local demo account when the generated .env contains KOVO_DEMO_PASSWORD.
+// Fail fast on schema/seed errors, then seed the local demo account when the
+// generated .env contains KOVO_DEMO_PASSWORD.
+await appDbReady;
 await seedDemoUser();
 
 const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;

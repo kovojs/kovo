@@ -262,7 +262,7 @@ unknown`, reading a typed value from an island input is effectively un-authorabl
 
 ### E. Hand-DDL template fragility (PGlite, no migration tool)
 
-- [ ] **A schema/query column absent from the hand-written `db.ts` DDL passes `kovo build` + `vp check`, then 500s only at query execution (PG 42703).** (low, template; found by `pg-schema-evolution`)
+- [x] **A schema/query column absent from the hand-written `db.ts` DDL passes `kovo build` + `vp check`, then 500s only at query execution (PG 42703).** (low, template; found by `pg-schema-evolution`)
   - Observed: adding `archived: boolean(...)` to a table in `schema.ts` and selecting it in a query,
     but not adding it to `SCHEMA_DDL`, builds green; the drift surfaces only at runtime as
     `DrizzleQueryError`/PG 42703 `column … does not exist`.
@@ -276,8 +276,9 @@ unknown`, reading a typed value from an island input is effectively un-authorabl
     42703 names the column — so low; the durable fix is the template, not a framework SQL differ.)
   - Acceptance: derive DDL from the Drizzle tables (or add a drizzle-kit `generate`/`push` migration
     step) so `schema.ts` is the single source of truth.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.test.ts --reporter=dot` proves the generated Postgres starter derives boot DDL from `getTableConfig()`/`SCHEMA_TABLES` and still type-checks, tests, builds, and serves through the starter integration gates.
 
-- [ ] **`void client.exec(...)` DDL/seed construction swallows DDL errors into `unhandledRejection` and surfaces a misleading "relation does not exist".** (low, template; found by `pg-schema-evolution`)
+- [x] **`void client.exec(...)` DDL/seed construction swallows DDL errors into `unhandledRejection` and surfaces a misleading "relation does not exist".** (low, template; found by `pg-schema-evolution`)
   - Observed: an invalid DDL line does NOT throw at construction; it becomes an unhandled promise
     rejection, and a later query fails with the downstream `relation "<t>" does not exist` rather than
     the true syntax error (which is present in the rejection output / as the error `.cause`).
@@ -290,10 +291,11 @@ unknown`, reading a typed value from an island input is effectively un-authorabl
     surfaced "relation does not exist" hides the real syntax error.
   - Acceptance: `await` the execs (or make `createAppDb` async-and-throwing / run DDL synchronously) so
     a bad DDL fails loudly at construction with the real cause.
+  - Fixed evidence (2026-06-29): `pnpm exec vitest run packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.test.ts --reporter=dot` proves generated `app.tsx` awaits `appDbReady`, generated app tests await `createAppDb().ready`, and the template no longer contains `void client.exec`.
 
 ### F. Expected / known friction (recorded, not filed as a defect)
 
-- [ ] **A new cross-domain JOIN query retroactively requires optimistic coverage on a previously-green, unrelated mutation (KV310).** (low, EXPECTED; found by `pg-schema-evolution`)
+- **A new cross-domain JOIN query retroactively requires optimistic coverage on a previously-green, unrelated mutation (KV310).** (low, EXPECTED; found by `pg-schema-evolution`)
   - Adding a `notes INNER JOIN contacts` query made `addContact` fail `KV310 mutations/add-contact ->
 queries/notes-query`, because the JOIN puts `contact` in the query's read set at domain granularity
     (`summaries.ts:216`; `app-graph.ts:763-769`), so every `contact` write gains an invalidation edge.

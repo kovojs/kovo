@@ -9,6 +9,11 @@ import * as schema from './schema.js';
 /** The app runtime database, typed by the Drizzle schema. */
 export type AppDb = BetterSQLite3Database<typeof schema>;
 
+export interface CreatedAppDb {
+  db: AppDb;
+  ready: Promise<void>;
+}
+
 const SCHEMA_DDL = [
   // App domain.
   "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT '');",
@@ -27,12 +32,14 @@ const SEED_CONTACTS =
   "('c3', 'Alan Turing', 'alan@example.com', 'Bletchley Park');";
 
 /** Create a fresh, seeded app database (DDL + a few demo contacts). */
-export function createAppDb(): AppDb {
+export function createAppDb(): CreatedAppDb {
   const client = new Database(':memory:');
   client.exec(SCHEMA_DDL);
   client.exec(SEED_CONTACTS);
-  return drizzle({ client, schema });
+  return { db: drizzle({ client, schema }), ready: Promise.resolve() };
 }
 
 /** The running app database. The stateless server reads/writes this per request. */
-export const appDb = createAppDb();
+const appDatabase = createAppDb();
+export const appDb = appDatabase.db;
+export const appDbReady = appDatabase.ready;

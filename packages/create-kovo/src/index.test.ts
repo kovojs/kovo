@@ -221,9 +221,22 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('package.json')).not.toContain('"better-sqlite3"');
     expect(packageJson.pnpm).toBeUndefined();
     expect(files.get('src/db.ts')).toContain("import { PGlite } from '@electric-sql/pglite'");
+    expect(files.get('src/db.ts')).toContain(
+      "import { getTableConfig } from 'drizzle-orm/pg-core'",
+    );
     expect(files.get('src/db.ts')).toContain('process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR');
-    expect(files.get('src/db.ts')).toContain('CREATE TABLE IF NOT EXISTS contacts');
+    expect(files.get('src/db.ts')).toContain(
+      'const SCHEMA_TABLES = [contacts, user, session, account, verification] as const',
+    );
+    expect(files.get('src/db.ts')).toContain(
+      'CREATE TABLE IF NOT EXISTS ${quoteIdent(config.name)}',
+    );
+    expect(files.get('src/db.ts')).toContain('await client.exec(SCHEMA_DDL)');
+    expect(files.get('src/db.ts')).not.toContain('void client.exec');
+    expect(files.get('src/db.ts')).toContain('export const appDbReady = appDatabase.ready');
     expect(files.get('src/db.ts')).toContain('ON CONFLICT (id) DO NOTHING');
+    expect(files.get('src/app.tsx')).toContain("import { appDb, appDbReady } from './db.js'");
+    expect(files.get('src/app.tsx')).toContain('await appDbReady');
     expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
     expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
   });
