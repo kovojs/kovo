@@ -62,6 +62,27 @@ So the rule for your serving layer:
   the supported deploy-skew window, with a required minimum of 24 hours. Configuring less, or using a
   platform that cannot retain both artifact classes for that window, is a deploy-skew error.
 
+Declare that retention in `kovo.config.ts` once your deploy pipeline really does it:
+
+```ts
+import { defineConfig, node } from '@kovojs/server/build';
+
+export default defineConfig({
+  preset: node({
+    retention: {
+      hours: 24,
+      immutableClientModules: 'retained',
+      priorTokenQueryReads: 'retained',
+    },
+  }),
+});
+```
+
+Use the same `retention` option with `vercel()` or `cloudflare()` when your platform setup keeps old
+`/c/__v/...` files and prior-token `/_q` reads reachable for the window. Without that declaration,
+`kovo build` fails with `KV417` as soon as the app emits a versioned client island. The build cannot
+infer CDN or object-store retention from the app source.
+
 A CDN or object store in front of `/c/*` makes this nearly free: deploys upload new versions and
 touch nothing else.
 

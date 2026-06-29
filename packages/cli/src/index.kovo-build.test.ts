@@ -1284,13 +1284,13 @@ export async function resetFixture() {
       expect(exitCode, errorOutput).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
 
-      expect(() => neutralClientAsset(outDir, (href) => href === '/assets/styles.css')).toThrow(
-        /Expected neutral client asset/,
-      );
       const routeCss = neutralClientAsset(outDir, (href) =>
         /^\/assets\/routes\/index-[a-f0-9]{8}\.css$/.test(href),
       );
       expect(readFileSync(routeCss.filePath, 'utf8')).toContain('auto-css-card');
+      for (const asset of neutralClientAssets(outDir, (href) => href === '/assets/styles.css')) {
+        expect(readFileSync(asset.filePath, 'utf8')).not.toContain('auto-css-card');
+      }
       const routeDocument = readFileSync(join(outDir, '.kovo/static/index.html'), 'utf8');
       expect(routeDocument).toContain(`data-kovo-critical-href="${routeCss.href}"`);
       expect(routeDocument).toContain(`<link rel="stylesheet" href="${routeCss.href}">`);
@@ -1343,9 +1343,12 @@ export async function resetFixture() {
       expect(readFileSync(homeCss.filePath, 'utf8')).toContain('home-panel');
       expect(readFileSync(loginCss.filePath, 'utf8')).toContain('login-panel');
       expect(readFileSync(homeFragmentCss.filePath, 'utf8')).toContain('home-panel');
-      expect(() => neutralClientAsset(outDir, (href) => href === '/assets/styles.css')).toThrow(
-        /Expected neutral client asset/,
-      );
+      for (const asset of neutralClientAssets(outDir, (href) => href === '/assets/styles.css')) {
+        const cssText = readFileSync(asset.filePath, 'utf8');
+        expect(cssText).not.toContain('home-panel');
+        expect(cssText).not.toContain('login-panel');
+        expect(cssText).not.toContain('shared-card');
+      }
       const baseCssBytes = readFileSync(baseCss.filePath).byteLength;
       const homeCssBytes = readFileSync(homeCss.filePath).byteLength;
       const loginCssBytes = readFileSync(loginCss.filePath).byteLength;
@@ -2331,17 +2334,14 @@ function writeRetentionProofConfig(root: string): void {
     join(root, 'kovo.config.ts'),
     [
       "import { defineConfig, node } from '@kovojs/server/build';",
-      'const base = node();',
       'export default defineConfig({',
-      '  preset: {',
-      "    name: 'node',",
-      '    emit(build, context) {',
-      '      return base.emit?.(build, context);',
+      '  preset: node({',
+      '    retention: {',
+      '      hours: 24,',
+      "      immutableClientModules: 'retained',",
+      "      priorTokenQueryReads: 'retained',",
       '    },',
-      '    inspect() {',
-      '      return [];',
-      '    },',
-      '  },',
+      '  }),',
       '});',
       '',
     ].join('\n'),

@@ -69,11 +69,39 @@ export interface PresetDiagnostic {
 }
 
 /**
+ * Deployment-owned proof that the serving layer satisfies SPEC §14 for long-lived documents.
+ *
+ * Kovo can emit immutable `/c/__v/...` modules and token-tagged reads, but only the deploy layer
+ * can prove prior builds stay reachable across redeploys. The window is configurable upward; SPEC
+ * §14 makes 24 hours the minimum floor.
+ *
+ * @experimental
+ */
+export interface DeploySkewRetentionProof {
+  /** Supported wall-clock deploy-skew window. Must be at least 24 hours. */
+  hours: number;
+  /** Prior immutable `/c/__v/...` client modules remain reachable for the window. */
+  immutableClientModules: 'retained';
+  /** Prior-token `/_q/<key>` reads remain reachable for the window. */
+  priorTokenQueryReads: 'retained';
+}
+
+/**
+ * Shared deploy-skew options accepted by built-in build presets.
+ *
+ * @experimental
+ */
+export interface DeploySkewPresetOptions {
+  /** Serving-layer retention proof for SPEC §14 deploy-skew recovery. */
+  retention?: DeploySkewRetentionProof;
+}
+
+/**
  * Options for the built-in Node/VPS preset.
  *
  * @experimental
  */
-export interface NodePresetOptions {
+export interface NodePresetOptions extends DeploySkewPresetOptions {
   /** Whether the node preset emits a minimal Dockerfile next to `server.mjs`; defaults to true. */
   dockerfile?: boolean;
 }
@@ -83,7 +111,7 @@ export interface NodePresetOptions {
  *
  * @experimental
  */
-export interface VercelPresetOptions {
+export interface VercelPresetOptions extends DeploySkewPresetOptions {
   /** Maximum Vercel Function duration in seconds. */
   maxDuration?: number;
   /** Vercel Function memory in MB. */
@@ -97,7 +125,7 @@ export interface VercelPresetOptions {
  *
  * @experimental
  */
-export interface CloudflarePresetOptions {
+export interface CloudflarePresetOptions extends DeploySkewPresetOptions {
   /** Worker compatibility date; defaults to the first date that supports `nodejs_compat` v2. */
   compatibilityDate?: string;
   /** Generated Worker name in `wrangler.toml`; defaults to `kovo-app`. */
@@ -138,7 +166,7 @@ export function node(options: NodePresetOptions = {}): KovoPreset {
       return emitNodePreset(build, context, options);
     },
     inspect(build, _context) {
-      const diagnostics = clientModuleRetentionDiagnostics(build, 'node');
+      const diagnostics = clientModuleRetentionDiagnostics(build, 'node', options);
       if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
         diagnostics.push({
           code: 'node-missing-handler',
@@ -167,7 +195,7 @@ export function vercel(options: VercelPresetOptions = {}): KovoPreset {
       return emitVercelPreset(build, context, options);
     },
     inspect(build, _context) {
-      const diagnostics = clientModuleRetentionDiagnostics(build, 'vercel');
+      const diagnostics = clientModuleRetentionDiagnostics(build, 'vercel', options);
       if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
         diagnostics.push({
           code: 'vercel-missing-handler',
@@ -195,7 +223,7 @@ export function cloudflare(options: CloudflarePresetOptions = {}): KovoPreset {
       return emitCloudflarePreset(build, context, options);
     },
     async inspect(build, context) {
-      const diagnostics = clientModuleRetentionDiagnostics(build, 'cloudflare');
+      const diagnostics = clientModuleRetentionDiagnostics(build, 'cloudflare', options);
       if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
         diagnostics.push({
           code: 'cloudflare-missing-handler',
@@ -316,19 +344,33 @@ async function copyPresetStaticFiles(build: KovoNeutralBuild, outDir: string): P
 function clientModuleRetentionDiagnostics(
   build: KovoNeutralBuild,
   presetName: string,
+  options: DeploySkewPresetOptions,
 ): PresetDiagnostic[] {
   const retainedClientModules = build.clientModules.filter(
     (module) => !isFrameworkRuntimeClientModule(module),
   );
   if (retainedClientModules.length === 0) return [];
+  if (deploySkewRetentionProofSatisfiesFloor(options.retention)) return [];
 
   return [
     {
       code: 'KV417',
-      message: `The ${presetName} preset cannot prove the SPEC §14 deploy-skew retention floor for immutable /c/__v/... modules and prior-token /_q reads. Configure a serving layer that retains prior build artifacts and query-read support for at least 24 hours, or use a preset/adapter that declares that support.`,
+      message: `The ${presetName} preset cannot prove the SPEC §14 deploy-skew retention floor for immutable /c/__v/... modules and prior-token /_q reads. Configure ${presetName}({ retention: { hours: 24, immutableClientModules: 'retained', priorTokenQueryReads: 'retained' } }) only when the serving layer retains prior build artifacts and query-read support for at least 24 hours, or use a preset/adapter that declares that support.`,
       severity: 'error',
     },
   ];
+}
+
+function deploySkewRetentionProofSatisfiesFloor(
+  retention: DeploySkewRetentionProof | undefined,
+): boolean {
+  return (
+    retention !== undefined &&
+    Number.isFinite(retention.hours) &&
+    retention.hours >= 24 &&
+    retention.immutableClientModules === 'retained' &&
+    retention.priorTokenQueryReads === 'retained'
+  );
 }
 
 function isFrameworkRuntimeClientModule(

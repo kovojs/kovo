@@ -61,5 +61,8 @@ emits a self-contained server under `dist/server` using the preset in
 `kovo.config.ts` (Node by default; uncomment Vercel or Cloudflare). Set
 `KOVO_CSRF_SECRET`/`BETTER_AUTH_SECRET` to strong values in the target
 environment (a fresh `KOVO_CSRF_SECRET` is generated into `.env` at scaffold time
-and is gitignored). The server is stateless; liveness comes from BroadcastChannel
+and is gitignored). If you add client islands, configure the `retention` option in
+`kovo.config.ts` once your deploy keeps prior `/c/__v/...` modules and prior-token
+`/_q` reads available for at least 24 hours; otherwise `build:prod` fails KV417
+instead of shipping a skew-prone artifact. The server is stateless; liveness comes from BroadcastChannel
 plus refetch-on-focus, not a live bus (SPEC.md §9.3).

@@ -37,6 +37,15 @@ describe('server build-time deployment API', () => {
     expect(cloudflare({ compatibilityDate: '2026-06-18', name: 'kovo-test' })).toMatchObject({
       name: 'cloudflare',
     });
+    expect(
+      node({
+        retention: {
+          hours: 24,
+          immutableClientModules: 'retained',
+          priorTokenQueryReads: 'retained',
+        },
+      }),
+    ).toMatchObject({ name: 'node' });
   });
 
   it('writes a deterministic neutral build layout from app-shell build inputs', async () => {
@@ -362,6 +371,44 @@ describe('server build-time deployment API', () => {
       await expect(cloudflare().inspect!(build, { declaredEnv: [] })).resolves.toEqual([
         clientModuleRetentionError('cloudflare'),
       ]);
+
+      // SPEC §14: the serving layer may configure a supported skew window upward, but not below the
+      // 24-hour prior-version floor.
+      const underFloorRetention = {
+        hours: 23,
+        immutableClientModules: 'retained' as const,
+        priorTokenQueryReads: 'retained' as const,
+      };
+      expect(node({ retention: underFloorRetention }).inspect!(build, { declaredEnv: [] })).toEqual(
+        [clientModuleRetentionError('node')],
+      );
+      expect(
+        node({
+          retention: {
+            hours: 24,
+            immutableClientModules: 'retained',
+            priorTokenQueryReads: 'retained',
+          },
+        }).inspect!(build, { declaredEnv: [] }),
+      ).toEqual([]);
+      expect(
+        vercel({
+          retention: {
+            hours: 48,
+            immutableClientModules: 'retained',
+            priorTokenQueryReads: 'retained',
+          },
+        }).inspect!(build, { declaredEnv: [] }),
+      ).toEqual([]);
+      await expect(
+        cloudflare({
+          retention: {
+            hours: 24,
+            immutableClientModules: 'retained',
+            priorTokenQueryReads: 'retained',
+          },
+        }).inspect!(build, { declaredEnv: [] }),
+      ).resolves.toEqual([]);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -1391,7 +1438,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function clientModuleRetentionError(presetName: string) {
   return {
     code: 'KV417',
-    message: `The ${presetName} preset cannot prove the SPEC §14 deploy-skew retention floor for immutable /c/__v/... modules and prior-token /_q reads. Configure a serving layer that retains prior build artifacts and query-read support for at least 24 hours, or use a preset/adapter that declares that support.`,
+    message: `The ${presetName} preset cannot prove the SPEC §14 deploy-skew retention floor for immutable /c/__v/... modules and prior-token /_q reads. Configure ${presetName}({ retention: { hours: 24, immutableClientModules: 'retained', priorTokenQueryReads: 'retained' } }) only when the serving layer retains prior build artifacts and query-read support for at least 24 hours, or use a preset/adapter that declares that support.`,
     severity: 'error',
   };
 }
