@@ -70,6 +70,7 @@ const streaming = (
     <p streamText="assistant:a1" aria-live="polite" />
   </form>
 );
+const uploadInput = <input type="file" accept="application/pdf" name="receipt" />;
 
 // @ts-expect-error SPEC §4.1: component props must be enforced at JSX call sites.
 const missingRequiredProp = <Panel />;
@@ -87,6 +88,7 @@ void ok;
 void interactive;
 void raw;
 void streaming;
+void uploadInput;
 void missingRequiredProp;
 void badChild;
 void badAttribute;

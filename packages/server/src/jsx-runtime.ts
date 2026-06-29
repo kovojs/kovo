@@ -812,6 +812,7 @@ export declare namespace JSX {
     [attribute: `kovo-${string}`]: AttributeValue;
     [attribute: `on:${string}`]: string | undefined;
     action?: AttributeValue;
+    accept?: AttributeValue;
     alt?: AttributeValue;
     acceptCharset?: AttributeValue;
     autocomplete?: AttributeValue;
