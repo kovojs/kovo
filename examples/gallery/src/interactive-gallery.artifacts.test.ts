@@ -4,8 +4,8 @@ import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-  galleryHeadlessUiClientModuleHrefs,
   galleryInteractiveClientModuleHrefs,
+  galleryInteractiveSupportClientModuleHrefs,
 } from './app-shell.js';
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 import {
@@ -138,11 +138,11 @@ describe('compiled interactive gallery demos', () => {
 
       expect(output).toContain('gallery-interactive-export/v1');
       expect(output).toContain('html=1');
-      // One module per demo, plus framework runtime modules and the served headless-ui primitive
-      // modules imported by compiled handlers (SPEC §4.4: resolvable URLs, no import map).
+      // One module per demo, declared route support modules, plus the framework loader runtime
+      // emitted by static export (SPEC §4.4: resolvable URLs, no import map).
       expect(output).toContain(
         `client-modules=${
-          interactiveGalleryDemos.length + galleryHeadlessUiClientModuleHrefs.length + 2
+          interactiveGalleryDemos.length + galleryInteractiveSupportClientModuleHrefs.length + 1
         }`,
       );
       expect(output).toContain(
@@ -157,7 +157,7 @@ describe('compiled interactive gallery demos', () => {
       expect(html).toContain('data-gallery-interactive="meter"');
 
       for (const href of [
-        ...galleryHeadlessUiClientModuleHrefs,
+        ...galleryInteractiveSupportClientModuleHrefs,
         ...galleryInteractiveClientModuleHrefs,
       ]) {
         expect(html).toMatch(
@@ -194,7 +194,20 @@ describe('compiled interactive gallery demos', () => {
         'utf8',
       );
       expect(tabsClient).toContain("from '/c/__v/");
-      expect(tabsClient).toContain("/packages/headless-ui/src/primitives/tabs.js'");
+      expect(tabsClient).toContain("/examples/gallery/src/primitive-actions.js'");
+
+      const primitiveActionsClient = readFileSync(
+        join(
+          distDir,
+          exportedModulePath(
+            galleryInteractiveSupportClientModuleHrefs.find((href) =>
+              href.endsWith('/examples/gallery/src/primitive-actions.js'),
+            ) ?? '',
+          ),
+        ),
+        'utf8',
+      );
+      expect(primitiveActionsClient).toContain('/packages/headless-ui/src/primitives/tabs.js');
     } finally {
       rmSync(distDir, { force: true, recursive: true });
     }

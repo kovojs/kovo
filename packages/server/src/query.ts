@@ -165,21 +165,25 @@ export type QueryDefinitionBoundary<Definition, Shape> =
       : []
     : [__kovoQueryDefinitionBoundary: QueryUnknownDefinitionFieldError<Definition, Shape>];
 
-type QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<Result> = {
+/** Type-level diagnostic payload for a `query()` load result that is not JSON-serializable. */
+export type QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<Result> = {
   readonly __kovoQueryJsonBoundary: 'query() load result must be JSON-serializable; annotate Drizzle json/jsonb columns with .$type<...>() or declare output: s.record(...)';
   readonly result: Result;
 };
 
-type QueryUnknownDefinitionFieldError<Definition, Shape> = {
+/** Type-level diagnostic payload for unsupported no-op fields on `query()` definitions. */
+export type QueryUnknownDefinitionFieldError<Definition, Shape> = {
   readonly __kovoQueryDefinitionBoundary: 'query() definition contains unsupported field(s)';
   readonly fields: Exclude<keyof Definition, keyof Shape>;
 };
 
-type PreserveDefinitionInference<Definition> = Definition & {
+/** Preserve authored object inference while intersecting query boundary guardrails. */
+export type PreserveDefinitionInference<Definition> = Definition & {
   readonly __kovoDefinitionInference?: (definition: Definition) => Definition;
 };
 
-type QueryDefinitionParameterBoundary<Definition, Shape> =
+/** Rest-parameter-compatible guard that turns invalid `query()` definitions into readable errors. */
+export type QueryDefinitionParameterBoundary<Definition, Shape> =
   QueryDefinitionBoundary<Definition, Shape> extends []
     ? unknown
     : QueryDefinitionBoundary<Definition, Shape>[0];
@@ -242,7 +246,8 @@ export interface QueryDeclarationDefinition<Request = unknown, Value = JsonValue
   version?: ((input: any, value: any) => number | string | undefined) | number | string;
 }
 
-type QueryDeclarationBoundaryShape<Request = unknown> = Omit<
+/** Public structural shape used by `query()` and app-scoped query factories for boundary checks. */
+export type QueryDeclarationBoundaryShape<Request = unknown> = Omit<
   QueryDeclarationDefinition<Request, unknown>,
   'load' | 'output'
 > & {

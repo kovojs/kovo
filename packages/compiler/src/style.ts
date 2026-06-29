@@ -315,7 +315,8 @@ function collectStyleEnvironment(
       const frames = styleKeyframesCall(node.initializer, styleImports, localObjects, staticValues);
       if (frames) {
         const result = createKeyframesWithIdentity(frames.frames, {
-          namespace: frames.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
+          namespace:
+            frames.options.namespace ?? derivedKeyframesNamespace(fileName, node.name.text),
           source: frames.options.source ?? fileName,
         });
         staticValues.set(node.name.text, result.name);
@@ -469,6 +470,19 @@ function derivedStyleNamespace(fileName: string, bindingName: string): string {
   if (binding === 'variants') return `${fileNamespace}-variant`;
 
   return binding;
+}
+
+function derivedKeyframesNamespace(fileName: string, bindingName: string): string {
+  const fileBase = fileName
+    .split(/[\\/]/)
+    .filter(Boolean)
+    .at(-1)
+    ?.replace(/\.[cm]?[tj]sx?$/, '');
+  const fileNamespace = fileBase && fileBase.length > 0 ? fileBase : 'keyframes';
+  const binding = toKebabCase(bindingName).replace(/-(keyframes|animation|slide)$/, '');
+  if (binding.length === 0 || binding === fileNamespace) return fileNamespace;
+  if (binding.startsWith(`${fileNamespace}-`)) return binding;
+  return `${fileNamespace}-${binding}`;
 }
 
 function toKebabCase(value: string): string {

@@ -62,13 +62,18 @@ export type {
 export type { MutationFormAttributes } from '../mutation.js';
 export type {
   ElevatedQueryFact,
+  PreserveDefinitionInference,
+  QueryDeclarationBoundaryShape,
   QueryDeclarationDefinition,
   QueryDefinitionBoundary,
+  QueryDefinitionParameterBoundary,
   QueryDefinition,
   QueryInstanceKey,
+  QueryJsonBoundaryErrorUseJsonbTypeOrSRecord,
   QueryLoadContext,
   QueryReadConfig,
   QueryResult,
+  QueryUnknownDefinitionFieldError,
 } from '../query.js';
 
 /**

@@ -41,8 +41,10 @@ const galleryHeadlessUiClientModuleHrefMap = registerHeadlessUiClientModules();
 export const galleryHeadlessUiClientModuleHrefs = Object.freeze([
   ...galleryHeadlessUiClientModuleHrefMap.values(),
 ]);
+const galleryPrimitiveActionsClientModuleHref = registerPrimitiveActionsClientModule();
 export const galleryInteractiveSupportClientModuleHrefs = Object.freeze([
   galleryRuntimeModuleHref,
+  galleryPrimitiveActionsClientModuleHref,
   ...galleryHeadlessUiClientModuleHrefs,
 ]);
 
@@ -161,6 +163,10 @@ function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
   const hrefs = new Map<string, string>();
   const modules: Array<{ modulePath: string; source: string }> = [];
 
+  for (const sourcePath of ['generated.ts', 'primitive-internal.ts']) {
+    modules.push(headlessUiClientModuleSource(sourcePath));
+  }
+
   for (const directory of ['lib', 'primitives']) {
     for (const fileName of readdirSync(
       new URL(`${directory}/`, `file://${headlessUiSourceRoot}`),
@@ -168,17 +174,7 @@ function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
       if (!fileName.endsWith('.ts') || fileName.endsWith('.test.ts')) continue;
 
       const sourcePath = `${directory}/${fileName}`;
-      const modulePath = `/c/packages/headless-ui/src/${sourcePath.replace(/\.ts$/, '.js')}`;
-      const source = readFileSync(new URL(sourcePath, `file://${headlessUiSourceRoot}`), 'utf8');
-      const transpiled = ts.transpileModule(source, {
-        compilerOptions: {
-          importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
-          module: ts.ModuleKind.ES2022,
-          target: ts.ScriptTarget.ES2022,
-        },
-        fileName,
-      }).outputText;
-      modules.push({ modulePath, source: transpiled });
+      modules.push(headlessUiClientModuleSource(sourcePath));
     }
   }
 
@@ -200,12 +196,51 @@ function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
   return hrefs;
 }
 
+function headlessUiClientModuleSource(sourcePath: string): { modulePath: string; source: string } {
+  const modulePath = `/c/packages/headless-ui/src/${sourcePath.replace(/\.ts$/, '.js')}`;
+  const source = readFileSync(new URL(sourcePath, `file://${headlessUiSourceRoot}`), 'utf8');
+  const transpiled = ts.transpileModule(source, {
+    compilerOptions: {
+      importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+      module: ts.ModuleKind.ES2022,
+      target: ts.ScriptTarget.ES2022,
+    },
+    fileName: sourcePath,
+  }).outputText;
+  return { modulePath, source: transpiled };
+}
+
+function registerPrimitiveActionsClientModule(): string {
+  const modulePath = '/c/examples/gallery/src/primitive-actions.js';
+  const rawSource = readFileSync(new URL('./primitive-actions.ts', import.meta.url), 'utf8');
+  const source = rewriteGalleryPrimitiveActionsImports(
+    ts.transpileModule(rawSource, {
+      compilerOptions: {
+        importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+        module: ts.ModuleKind.ES2022,
+        target: ts.ScriptTarget.ES2022,
+      },
+      fileName: 'primitive-actions.ts',
+    }).outputText,
+  );
+
+  return galleryInteractiveClientModules.put({
+    path: modulePath,
+    source,
+    version: createHash('sha256').update(source).digest('hex').slice(0, 8),
+  });
+}
+
 // SPEC.md §4.4: rewrite bare specifiers to served module URLs so the browser can resolve the
 // generated client module graph without an import map.
 function rewriteGalleryClientImports(source: string): string {
   return source
     .replaceAll("from '@kovojs/browser/generated';", `from '${galleryRuntimeModuleHref}';`)
     .replaceAll("from '@kovojs/browser';", `from '${galleryRuntimeModuleHref}';`)
+    .replace(
+      /from (["'])(?:\.\.\/primitive-actions|\.\.\/\.\.\/primitive-actions)\.js\1;/g,
+      `from '${galleryPrimitiveActionsClientModuleHref}';`,
+    )
     .replace(
       /from (["'])@kovojs\/(?:headless-ui|ui)\/([a-z0-9-]+)\1;/g,
       (_match, _quote: string, family: string) => {
@@ -218,6 +253,34 @@ function rewriteGalleryClientImports(source: string): string {
         return `from '${href}';`;
       },
     );
+}
+
+function rewriteGalleryPrimitiveActionsImports(source: string): string {
+  return source
+    .replaceAll(
+      "from '@kovojs/headless-ui/generated';",
+      `from '${headlessUiClientModuleHref('generated')}';`,
+    )
+    .replaceAll(
+      "from '@kovojs/headless-ui/internal/primitive';",
+      `from '${headlessUiClientModuleHref('primitive-internal')}';`,
+    )
+    .replace(
+      /from (["'])@kovojs\/headless-ui\/([a-z0-9-]+)\1;/g,
+      (_match, _quote: string, family: string) => {
+        return `from '${headlessUiClientModuleHref(`primitives/${family}`)}';`;
+      },
+    );
+}
+
+function headlessUiClientModuleHref(sourcePathWithoutExtension: string): string {
+  const href = galleryHeadlessUiClientModuleHrefMap.get(
+    `/c/packages/headless-ui/src/${sourcePathWithoutExtension}.js`,
+  );
+  if (href === undefined) {
+    throw new Error(`Missing gallery headless UI client module for ${sourcePathWithoutExtension}.`);
+  }
+  return href;
 }
 
 function parseGalleryCompiledClientRef(

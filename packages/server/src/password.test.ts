@@ -1,31 +1,39 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+type PasswordModule = typeof import('./password.js');
+
 const argon2Mock = vi.hoisted(() => ({
   verify: vi.fn(),
 }));
 
-vi.mock('@node-rs/argon2', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@node-rs/argon2')>();
-  argon2Mock.verify.mockImplementation(actual.verify);
-
-  return {
-    ...actual,
-    verify: argon2Mock.verify,
-  };
-});
-
-import {
-  PASSWORD_ARGON2ID_DEFAULTS,
-  hashPassword,
-  isArgon2idPasswordDigest,
-  verifyCredential,
-  verifyPassword,
-} from './password.js';
+let passwordApi: PasswordModule;
 
 describe('password primitive: argon2id-only sink', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    vi.resetModules();
+    argon2Mock.verify.mockReset();
+    vi.doMock('@node-rs/argon2', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@node-rs/argon2')>();
+      argon2Mock.verify.mockImplementation(actual.verify);
+
+      return {
+        ...actual,
+        verify: argon2Mock.verify,
+      };
+    });
+    passwordApi = await import('./password.js');
     argon2Mock.verify.mockClear();
   });
+
+  const hashPassword = (...args: Parameters<PasswordModule['hashPassword']>) =>
+    passwordApi.hashPassword(...args);
+  const isArgon2idPasswordDigest = (
+    ...args: Parameters<PasswordModule['isArgon2idPasswordDigest']>
+  ) => passwordApi.isArgon2idPasswordDigest(...args);
+  const verifyCredential = (...args: Parameters<PasswordModule['verifyCredential']>) =>
+    passwordApi.verifyCredential(...args);
+  const verifyPassword = (...args: Parameters<PasswordModule['verifyPassword']>) =>
+    passwordApi.verifyPassword(...args);
 
   it('hashes passwords as argon2id/v=19 PHC digests with Kovo defaults', async () => {
     const digest = await hashPassword('correct horse battery staple');
@@ -77,7 +85,7 @@ describe('password primitive: argon2id-only sink', () => {
   });
 
   it('does not expose legacy algorithm knobs through accepted options', () => {
-    const optionKeys = Object.keys(PASSWORD_ARGON2ID_DEFAULTS);
+    const optionKeys = Object.keys(passwordApi.PASSWORD_ARGON2ID_DEFAULTS);
 
     expect(optionKeys).toEqual(['memoryCost', 'timeCost', 'parallelism', 'outputLen']);
     expect(optionKeys).not.toContain('algorithm');

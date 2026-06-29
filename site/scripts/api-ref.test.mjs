@@ -240,7 +240,9 @@ describe('api-ref generator', () => {
 
   it('normalizes fenced @example blocks so later symbol headings stay headings', () => {
     expect(drizzlePage).toContain('#### `staticSql` {#staticsql}');
-    expect(headlessUiPage).toContain('#### `accordionKeyDown` {#accordionkeydown}');
+    expect(headlessUiPage).toContain(
+      '#### `accordionTriggerAttributes` {#accordiontriggerattributes}',
+    );
     expect(drizzlePage).not.toContain('```ts\n```ts');
     expect(headlessUiPage).not.toContain('```ts\n```ts');
   });

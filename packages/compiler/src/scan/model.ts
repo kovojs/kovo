@@ -88,12 +88,20 @@ export interface JsxExpressionModel {
   containerStart: number;
   end: number;
   expression: string;
+  localConstAliases: readonly LocalConstAliasModel[];
   localNames: readonly string[];
   propertyAccesses: readonly PropertyAccessPathModel[];
   references: readonly string[];
   solePropertyAccessPath?: string;
   start: number;
   temporalReads: readonly TemporalReadModel[];
+}
+
+export interface LocalConstAliasModel {
+  accesses: readonly PropertyAccessPathModel[];
+  expression: string;
+  name: string;
+  start: number;
 }
 
 export interface JsxCommentModel {

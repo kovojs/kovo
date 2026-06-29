@@ -41,7 +41,9 @@ for (const demoName of interactiveDemoNames()) {
   const server = normalizeCompiledServerSource(
     result.loweredSource ?? result.files.find((artifact) => artifact.kind === 'server')?.source,
   );
-  const client = result.files.find((artifact) => artifact.kind === 'client')?.source;
+  const client = normalizeCompiledClientSource(
+    result.files.find((artifact) => artifact.kind === 'client')?.source,
+  );
   if (server === undefined || client === undefined) {
     throw new Error(`${componentFileName} did not emit both server and client artifacts.`);
   }
@@ -58,7 +60,18 @@ function interactiveDemoNames() {
 }
 
 function normalizeCompiledServerSource(source) {
-  return source?.replace(/kovo-state="([^"]+)"/g, (_match, value) => {
-    return `kovo-state='${value.replaceAll('&quot;', '"')}'`;
-  });
+  return normalizeMovedInteractiveArtifact(source)?.replace(
+    /kovo-state="([^"]+)"/g,
+    (_match, value) => {
+      return `kovo-state='${value.replaceAll('&quot;', '"')}'`;
+    },
+  );
+}
+
+function normalizeCompiledClientSource(source) {
+  return normalizeMovedInteractiveArtifact(source);
+}
+
+function normalizeMovedInteractiveArtifact(source) {
+  return source?.replaceAll('../primitive-actions.js', '../../primitive-actions.js');
 }

@@ -132,7 +132,11 @@ export interface ComponentDefinitionInput {
   errorBoundary?: ComponentErrorBoundary;
   /** Force the compiler to keep server and client render output equivalent for this component. */
   isomorphic?: boolean;
+  /** Co-located component CSS scoped by the compiler to this component's host. */
+  css?: string;
   mutations?: Record<string, unknown>;
+  /** Static prop metadata used by generated live-target renderers to serialize component props. */
+  props?: Record<string, unknown>;
   queries?: unknown;
   state?: () => unknown;
   render: (...args: never[]) => ComponentRenderResult;
@@ -211,10 +215,12 @@ export function component<
 }
 
 const COMPONENT_DEFINITION_KEYS = new Set([
+  'css',
   'disableServerRefresh',
   'errorBoundary',
   'isomorphic',
   'mutations',
+  'props',
   'queries',
   'render',
   'state',

@@ -37,11 +37,11 @@ const uiStylesheetPath = path.join(cssDistDir, 'assets/kovo-ui.css');
 const SITE_CSS_MIN_BYTES = 5_000;
 const SITE_CSS_REQUIRED_ATOMS = ['kv-button-', 'kv-switch-', 'kv-dialog-'];
 const SITE_APP_CSS_REQUIRED_ATOMS = [
-  'kv-site-landing-',
-  'kv-site-chrome-',
-  'kv-site-docs-layout-',
-  'kv-site-gallery-',
-  'kv-site-search-dialog-',
+  'kv-landing-',
+  'kv-chrome-',
+  'kv-docs-layout-',
+  'kv-gallery-',
+  'kv-search-',
 ];
 const STAGED_STATIC_EXPORT_PUBLIC_ASSETS = [
   {

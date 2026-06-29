@@ -18,11 +18,11 @@ const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 describe('site export CSS guards', () => {
   const goodSiteCss = `
     :root{--site-token:1}
-    .kv-site-landing-a{}
-    .kv-site-chrome-b{}
-    .kv-site-docs-layout-c{}
-    .kv-site-gallery-d{}
-    .kv-site-search-dialog-e{}
+    .kv-landing-a{}
+    .kv-chrome-b{}
+    .kv-docs-layout-c{}
+    .kv-gallery-d{}
+    .kv-search-e{}
   `.padEnd(12_000, ' ');
 
   it('passes for a healthy global app stylesheet', () => {
@@ -57,8 +57,8 @@ describe('site export CSS guards', () => {
 
   it('validates extracted site app CSS atoms', () => {
     expect(() => assertExtractedSiteAppCss(goodSiteCss)).not.toThrow();
-    expect(() => assertExtractedSiteAppCss('.kv-site-landing-a{}')).toThrow(
-      /kv-site-chrome-, kv-site-docs-layout-, kv-site-gallery-, kv-site-search-dialog-/,
+    expect(() => assertExtractedSiteAppCss('.kv-landing-a{}')).toThrow(
+      /kv-chrome-, kv-docs-layout-, kv-gallery-, kv-search-/,
     );
   });
 

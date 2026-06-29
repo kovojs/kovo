@@ -268,6 +268,7 @@ export function createKovoVitePlugin(
     },
     transform(source: string, id: string) {
       const fileName = viteComponentFileName(id, root);
+      const componentId = viteComponentIdentity(id, root);
       // SPEC §5.2 #3 (fixpoint / idempotency): a lowered live-region server module retains its
       // `component(...)` shape plus compiler-injected ABI imports (`@kovojs/server/internal/escape`,
       // `.../wire`). When two Kovo plugins are configured (e.g. an app's `kovo({ app })` plus an
@@ -276,7 +277,7 @@ export function createKovoVitePlugin(
       // a non-public subpath). The transform is its own fixpoint: an emitted output must never be
       // re-lowered as app source. The registry is process-scoped, so it is shared across plugin
       // instances and cannot be forged from authored source.
-      if (isKovoEmittedServerModuleReentry(fileName, source)) return null;
+      if (isKovoEmittedServerModuleReentry(componentId, source)) return null;
       const standaloneRegistrySource = shouldTransformViteAuthoredSource(fileName, source, options)
         ? lowerStandaloneSourceDerivedRegistryDeclarations({ fileName, source })
         : null;
@@ -301,6 +302,7 @@ export function createKovoVitePlugin(
             cssAssetsByFileName,
             hmrImpacts,
             options,
+            componentId,
             fileName,
             source,
             resolvedResult,
@@ -313,6 +315,7 @@ export function createKovoVitePlugin(
         cssAssetsByFileName,
         hmrImpacts,
         options,
+        componentId,
         fileName,
         source,
         result,
@@ -321,10 +324,11 @@ export function createKovoVitePlugin(
     async handleHotUpdate(context) {
       const source = await context.read();
       const fileName = viteComponentFileName(context.file, root);
+      const componentId = viteComponentIdentity(context.file, root);
       // SPEC §5.2 #3: the authored file changed, so drop its "cleanly compiled" mark — the edit must
       // be compiled fresh (and any newly-added ABI import re-flagged as KV235), not skipped as a
       // stale emitted-output re-entry.
-      forgetKovoCompiledComponent(fileName);
+      forgetKovoCompiledComponent(componentId);
       if (!shouldTransformViteComponentSource(fileName, source, options))
         return context.modules ?? [];
 
@@ -409,6 +413,7 @@ function transformViteCompileResult(
   cssAssetsByFileName: Map<string, readonly ComponentCssAsset[]>,
   hmrImpacts: Map<string, HmrImpactMetadata>,
   options: KovoVitePluginOptions,
+  componentId: string,
   fileName: string,
   source: string,
   result: ViteCompileResult,
@@ -419,7 +424,7 @@ function transformViteCompileResult(
 
   // SPEC §5.2 #3: this authored component compiled cleanly, so a later transform of its emitted
   // output (a second Kovo plugin instance) must be recognized as a re-entry and skipped.
-  rememberKovoCompiledComponent(fileName);
+  rememberKovoCompiledComponent(componentId);
   return {
     code:
       executableViteServerSource(result.files.find((file) => file.kind === 'server')?.source) ??
@@ -889,13 +894,20 @@ function diagnosticSite(diagnostic: CompilerDiagnostic): string {
 }
 
 function viteComponentFileName(id: string, root: string): string {
-  const fileName = id.split(/[?#]/, 1)[0] ?? id;
+  const rawFileName = id.split(/[?#]/, 1)[0] ?? id;
+  const fileName = rawFileName.startsWith('/@fs/') ? rawFileName.slice('/@fs'.length) : rawFileName;
   if (!isAbsolute(fileName)) return slashPath(fileName);
 
   const relativeFileName = relative(root, fileName);
   if (!relativeFileName.startsWith('..')) return slashPath(relativeFileName);
 
   return slashPath(fileName.replace(/^\/+/, ''));
+}
+
+function viteComponentIdentity(id: string, root: string): string {
+  const rawFileName = id.split(/[?#]/, 1)[0] ?? id;
+  const fileName = rawFileName.startsWith('/@fs/') ? rawFileName.slice('/@fs'.length) : rawFileName;
+  return slashPath(isAbsolute(fileName) ? fileName : resolve(root, fileName));
 }
 
 function slashPath(fileName: string): string {

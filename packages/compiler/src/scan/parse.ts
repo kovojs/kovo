@@ -16,6 +16,7 @@ import type {
   JsxElementChildBody,
   JsxElementModel,
   JsxExpressionModel,
+  LocalConstAliasModel,
   ModuleScopeBindingModel,
   ModuleSpecifierModel,
   MutationHandlerModel,
@@ -1585,6 +1586,7 @@ function jsxExpressionModel(
     containerStart: node.getStart(sourceFile),
     end,
     expression: source.slice(start, end).trim(),
+    localConstAliases: localConstAliasModels(sourceFile, source, expression, start),
     localNames: [...new Set([...localIdentifierNames(expression), ...enclosingLocalNames(node)])],
     propertyAccesses: propertyAccessPathModels(sourceFile, expression),
     references: referenceIdentifiers(expression),
@@ -1592,6 +1594,93 @@ function jsxExpressionModel(
     start,
     temporalReads: temporalReadModels(sourceFile, expression),
   };
+}
+
+function localConstAliasModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  expression: ts.Expression,
+  expressionStart: number,
+): readonly LocalConstAliasModel[] {
+  const references = new Set(referenceIdentifiers(expression));
+  if (references.size === 0) return [];
+
+  const body = smallestFunctionBlockContaining(sourceFile, expressionStart);
+  if (!body) return [];
+
+  const aliases: LocalConstAliasModel[] = [];
+  const seen = new Set<string>();
+  const visit = (node: ts.Node): void => {
+    if (node.getStart(sourceFile) >= expressionStart) return;
+    if (node !== body && isFunctionOrClassLike(node)) return;
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      const name = node.name.text;
+      if (references.has(name) && isConstVariableDeclaration(node)) {
+        const accesses = propertyAccessPathModels(sourceFile, node.initializer);
+        if (accesses.length > 0 && !seen.has(name)) {
+          const start = node.initializer.getStart(sourceFile);
+          const end = node.initializer.getEnd();
+          seen.add(name);
+          aliases.push({
+            accesses,
+            expression: source.slice(start, end).trim(),
+            name,
+            start: node.getStart(sourceFile),
+          });
+        }
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(body, visit);
+  return aliases;
+}
+
+function smallestFunctionBlockContaining(
+  sourceFile: ts.SourceFile,
+  position: number,
+): ts.Block | null {
+  let best: ts.Block | null = null;
+  const visit = (node: ts.Node): void => {
+    if (position < node.getStart(sourceFile) || position > node.getEnd()) return;
+    best = functionBlockBody(node) ?? best;
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return best;
+}
+
+function functionBlockBody(node: ts.Node): ts.Block | null {
+  if (
+    !(
+      ts.isArrowFunction(node) ||
+      ts.isConstructorDeclaration(node) ||
+      ts.isFunctionDeclaration(node) ||
+      ts.isFunctionExpression(node) ||
+      ts.isGetAccessorDeclaration(node) ||
+      ts.isMethodDeclaration(node) ||
+      ts.isSetAccessorDeclaration(node)
+    )
+  ) {
+    return null;
+  }
+  return node.body && ts.isBlock(node.body) ? node.body : null;
+}
+
+function isFunctionOrClassLike(node: ts.Node): boolean {
+  return (
+    ts.isArrowFunction(node) ||
+    ts.isClassDeclaration(node) ||
+    ts.isClassExpression(node) ||
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isMethodDeclaration(node)
+  );
+}
+
+function isConstVariableDeclaration(node: ts.VariableDeclaration): boolean {
+  const list = node.parent;
+  return ts.isVariableDeclarationList(list) && (list.flags & ts.NodeFlags.Const) !== 0;
 }
 
 function jsxCommentModel(
