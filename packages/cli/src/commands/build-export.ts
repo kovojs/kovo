@@ -2004,9 +2004,12 @@ function kovoBuildAppSourceFilter(
   const rootPrefix = `${slashPath(root).replace(/^\/+/, '').replace(/\/+$/, '')}/`;
   return (fileName) => {
     const normalized = slashPath(fileName).replace(/^\/+/, '');
-    if (normalized.startsWith(rootPrefix)) return false;
-    if (appDir === '' || appDir === '.') return !normalized.startsWith('..');
-    return normalized === appDir || normalized.startsWith(`${appDir}/`);
+    const projectRelative = normalized.startsWith(rootPrefix)
+      ? normalized.slice(rootPrefix.length)
+      : normalized;
+    if (projectRelative.startsWith('..')) return false;
+    if (appDir === '' || appDir === '.') return true;
+    return projectRelative === appDir || projectRelative.startsWith(`${appDir}/`);
   };
 }
 

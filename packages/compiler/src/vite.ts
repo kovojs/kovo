@@ -247,7 +247,7 @@ export function createKovoVitePlugin(
         res.setHeader('Cross-Origin-Resource-Policy', 'same-origin');
         res.setHeader('Content-Type', 'text/javascript; charset=utf-8');
         res.setHeader('X-Content-Type-Options', 'nosniff');
-        res.end(source);
+        res.end(rewriteDevClientModuleRuntimeImports(source));
       });
     },
     getCssAssetManifest(manifestOptions = {}) {
@@ -364,6 +364,16 @@ export function createKovoVitePlugin(
       return [];
     },
   };
+}
+
+function rewriteDevClientModuleRuntimeImports(source: string): string {
+  // papercuts-super-6 A2: emitted client-island modules are served directly by this middleware,
+  // bypassing Vite's normal import-rewrite transform. Rewrite the compiler-owned runtime barrel to
+  // Vite's resolvable module-id URL so browsers can load the island module without an import map.
+  return source.replaceAll(
+    "from '@kovojs/browser/generated'",
+    "from '/@id/@kovojs/browser/generated'",
+  );
 }
 
 /**

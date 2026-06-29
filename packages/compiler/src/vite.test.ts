@@ -481,6 +481,8 @@ export const RealKv437 = component({
       'Content-Type': 'text/javascript; charset=utf-8',
       'X-Content-Type-Options': 'nosniff',
     });
+    expect(res.body).toContain("from '/@id/@kovojs/browser/generated'");
+    expect(res.body).not.toContain("from '@kovojs/browser/generated'");
     expect(res.body).toContain('export const CartBadge$button_click');
     expect(res.body).toContain('return removeItem(ctx.state, ctx.params.id);');
   });
