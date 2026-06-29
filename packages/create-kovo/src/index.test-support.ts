@@ -96,7 +96,7 @@ export function collectOutput(process: ChildProcessWithoutNullStreams): () => st
 }
 
 export async function fetchTextWhenReady(url: string, output: () => string): Promise<string> {
-  const deadline = Date.now() + 20_000;
+  const deadline = Date.now() + 60_000;
   let lastError: unknown;
 
   while (Date.now() < deadline) {

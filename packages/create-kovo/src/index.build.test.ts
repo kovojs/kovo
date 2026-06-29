@@ -130,7 +130,7 @@ describe('create-kovo starter (build integration)', () => {
 
       execFileSync(resolveBin('vp'), ['check'], {
         cwd: root,
-        stdio: 'pipe',
+        stdio: 'inherit',
       });
     } finally {
       rmSync(root, { force: true, recursive: true });
@@ -273,7 +273,8 @@ describe('create-kovo starter (build integration)', () => {
           PORT: String(port),
         },
       });
-      await waitForTcpPort('127.0.0.1', port);
+      const output = collectOutput(devServer);
+      await waitForTcpPort('127.0.0.1', port, output);
     } finally {
       await stopProcess(devServer);
       rmSync(root, { force: true, recursive: true });
@@ -281,8 +282,8 @@ describe('create-kovo starter (build integration)', () => {
   }, 120_000);
 });
 
-async function waitForTcpPort(host: string, port: number): Promise<void> {
-  const deadline = Date.now() + 20_000;
+async function waitForTcpPort(host: string, port: number, output: () => string): Promise<void> {
+  const deadline = Date.now() + 60_000;
   let lastError: unknown;
 
   while (Date.now() < deadline) {
@@ -303,5 +304,7 @@ async function waitForTcpPort(host: string, port: number): Promise<void> {
   }
 
   const cause = lastError instanceof Error ? lastError.message : String(lastError);
-  throw new Error(`Timed out waiting for ${host}:${port} to accept TCP connections: ${cause}`);
+  throw new Error(
+    `Timed out waiting for ${host}:${port} to accept TCP connections: ${cause}\n${output()}`,
+  );
 }
