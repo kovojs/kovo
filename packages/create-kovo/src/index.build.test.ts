@@ -174,6 +174,134 @@ describe('create-kovo starter (build integration)', () => {
     }
   }, 120_000);
 
+  it('serves non-empty enhanced add-contact truth from the production build artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-add-contact-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod Add Contact Proof' });
+      linkStarterBuildDependencies(root);
+
+      execFileSync('pnpm', ['run', 'build:prod'], {
+        cwd: root,
+        env: withRepoBinOnPath(),
+        stdio: 'pipe',
+      });
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+      const jar = new Map<string, string>();
+
+      await fetchTextWhenReady(`${origin}/login`, output);
+      const loginResponse = await fetch(`${origin}/login`);
+      mergeCookies(jar, loginResponse.headers.getSetCookie());
+      const loginHtml = await loginResponse.text();
+      expect(loginHtml).toContain('Sign in');
+      const loginCsrf = fieldValue(loginHtml, 'csrf');
+      const demoPassword =
+        new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
+          readFileSync(join(root, '.env'), 'utf8'),
+        )?.[1] ?? '';
+      expect(loginCsrf).toBeTruthy();
+      expect(demoPassword).toBeTruthy();
+
+      const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
+        body: new URLSearchParams({
+          csrf: loginCsrf,
+          email: 'demo@example.com',
+          next: '/',
+          password: demoPassword,
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      mergeCookies(jar, signIn.headers.getSetCookie());
+      expect(signIn.status).toBe(303);
+
+      const homeResponse = await fetchTextWhenReady(`${origin}/`, output, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      expect(homeResponse).toContain('3 contacts');
+      const addForm = formHtmlByAction(homeResponse, '/_m/mutations/add-contact');
+      const contactRegion = elementOpeningTagByAttribute(
+        homeResponse,
+        'kovo-fragment-target',
+        'contacts-region',
+      );
+      const target = attributeValue(contactRegion, 'kovo-fragment-target');
+      const deps = attributeValue(contactRegion, 'kovo-deps');
+      const component = attributeValue(contactRegion, 'kovo-live-component');
+      const liveToken = attributeValue(contactRegion, 'kovo-live-token');
+      const props = attributeValue(contactRegion, 'kovo-props') ?? '{}';
+      expect(target).toBe('contacts-region');
+      expect(deps).toBeTruthy();
+      expect(component).toBe('components/contacts/contacts-region');
+      expect(liveToken).toBeTruthy();
+
+      const email = `grace-${Date.now()}@example.com`;
+      const idem = fieldValue(addForm, 'Kovo-Idem');
+      const addContact = await fetch(`${origin}/_m/mutations/add-contact`, {
+        body: new URLSearchParams({
+          company: 'Navy',
+          csrf: fieldValue(addForm, 'csrf'),
+          email,
+          'Kovo-Idem': idem,
+          name: 'Grace Hopper',
+        }),
+        headers: {
+          accept: 'text/vnd.kovo.fragment+html',
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          'Kovo-Form-Target': target,
+          'Kovo-Fragment': 'true',
+          'Kovo-Idem': idem,
+          'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
+          'Kovo-Targets': `${target}=${deps}`,
+          origin,
+        },
+        method: 'POST',
+      });
+      const body = await addContact.text();
+
+      expect(addContact.status).toBe(200);
+      expect(addContact.headers.get('content-type')).toContain('text/vnd.kovo.fragment+html');
+      expect(addContact.headers.get('kovo-changes')).toBe('[{"domain":"model/contact"}]');
+      expect(body).toContain('<kovo-query');
+      expect(body).toContain('<kovo-fragment target="contacts-region"');
+      expect(body).toContain('Grace Hopper');
+      expect(body).toContain(email);
+      expect(body).toContain('4 contacts');
+
+      const updatedHome = await fetch(`${origin}/`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const updatedHtml = await updatedHome.text();
+      expect(updatedHtml).toContain('Grace Hopper');
+      expect(updatedHtml).toContain('4 contacts');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('boots Postgres starter DDL with serial columns, reordered foreign keys, and additive drift', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -379,4 +507,40 @@ async function waitForTcpPort(host: string, port: number, output: () => string):
   throw new Error(
     `Timed out waiting for ${host}:${port} to accept TCP connections: ${cause}\n${output()}`,
   );
+}
+
+function formHtmlByAction(html: string, action: string): string {
+  const escaped = escapeRegExp(action);
+  const match = new RegExp(`<form\\b(?=[^>]*\\baction="${escaped}")[\\s\\S]*?</form>`, 'i').exec(
+    html,
+  );
+  if (!match?.[0]) throw new Error(`Expected form action ${action}.`);
+  return match[0];
+}
+
+function elementOpeningTagByAttribute(html: string, name: string, value: string): string {
+  const escapedName = escapeRegExp(name);
+  const escapedValue = escapeRegExp(value);
+  const match = new RegExp(
+    `<[A-Za-z][A-Za-z0-9:-]*\\b(?=[^>]*\\b${escapedName}="${escapedValue}")[^>]*>`,
+    'i',
+  ).exec(html);
+  if (!match?.[0]) throw new Error(`Expected element with ${name}=${value}.`);
+  return match[0];
+}
+
+function fieldValue(html: string, name: string): string {
+  const value = attributeValue(elementOpeningTagByAttribute(html, 'name', name), 'value');
+  if (value === undefined) throw new Error(`Expected field value for ${name}.`);
+  return value;
+}
+
+function attributeValue(html: string, name: string): string | undefined {
+  const escaped = escapeRegExp(name);
+  const match = new RegExp(`\\b${escaped}="([^"]*)"`).exec(html);
+  return match?.[1];
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

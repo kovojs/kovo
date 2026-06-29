@@ -637,7 +637,9 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
 }
 
 /** @internal */ export function isKovoServerDeclaration(declaration: Node): boolean {
-  if (declaration.getSourceFile().getFilePath().includes('@kovojs/server')) return true;
+  const filePath = declaration.getSourceFile().getFilePath().replaceAll('\\', '/');
+  if (filePath.includes('@kovojs/server')) return true;
+  if (/\/packages\/server\/(?:src|dist)\//.test(filePath)) return true;
 
   const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
   if (importDeclaration?.getModuleSpecifierValue() === '@kovojs/server') return true;

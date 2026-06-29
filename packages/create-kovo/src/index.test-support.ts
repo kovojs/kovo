@@ -95,13 +95,17 @@ export function collectOutput(process: ChildProcessWithoutNullStreams): () => st
   return () => Buffer.concat(chunks).toString('utf8');
 }
 
-export async function fetchTextWhenReady(url: string, output: () => string): Promise<string> {
+export async function fetchTextWhenReady(
+  url: string,
+  output: () => string,
+  init?: RequestInit,
+): Promise<string> {
   const deadline = Date.now() + 60_000;
   let lastError: unknown;
 
   while (Date.now() < deadline) {
     try {
-      const response = await fetch(url);
+      const response = await fetch(url, init);
       const body = await response.text();
       if (response.ok) return body;
       lastError = new Error(`HTTP ${response.status}: ${body}`);
