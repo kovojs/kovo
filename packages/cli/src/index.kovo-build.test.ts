@@ -267,6 +267,7 @@ export function ContactCard(props: { name: string }) {
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
+      writeRetentionProofConfig(root);
       mkdirSync(join(root, 'src/components'), { recursive: true });
       writeFileSync(
         appPath,
@@ -294,15 +295,16 @@ export function ContactCard(props: { name: string }) {
           "import { component } from '@kovojs/core';",
           '',
           'export const CounterIsland = component({',
-          '  render: () => (',
+          '  state: () => ({ count: 0 }),',
+          '  render: (_queries, state) => (',
           '    <button',
           '      data-testid="counter"',
           '      type="button"',
-          '      onClick={(event) => {',
-          "        Object(event).currentTarget.dataset.counterClicked = 'true';",
+          '      onClick={() => {',
+          '        state.count += 1;',
           '      }}',
           '    >',
-          '      Count',
+          '      {state.count}',
           '    </button>',
           '  ),',
           '});',
@@ -315,12 +317,100 @@ export function ContactCard(props: { name: string }) {
         mainAsync(['build', './src/app.tsx', '--out', './dist']),
       );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(exitCode).toBe(1);
-      expect(errorOutput).toContain('cannot ship an authored client island');
-      expect(errorOutput).toContain(
-        'fails closed instead of emitting inert production interactivity',
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+      expect(existsSync(join(outDir, '.kovo/server/handler.mjs'))).toBe(true);
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+
+      try {
+        const document = await fetch(`${origin}/`);
+        const body = await document.text();
+        expect(document.status, body).toBe(200);
+        expect(body).not.toContain('onClick');
+      } finally {
+        await close(server);
+      }
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits production enhanced mutation success chunks for registry-wrapped authored fragments', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-mutation-fragment-'));
+    const appPath = join(root, 'src/app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      mkdirSync(join(root, 'src/components'), { recursive: true });
+      writeFileSync(appPath, registryWrappedFragmentBuildAppSource(), 'utf8');
+      writeFileSync(
+        join(root, 'src/contacts-query.ts'),
+        registryWrappedContactsQuerySource(),
+        'utf8',
       );
-      expect(existsSync(join(outDir, '.kovo/server/handler.mjs'))).toBe(false);
+      writeFileSync(
+        join(root, 'src/components/contacts-region.tsx'),
+        registryWrappedContactsRegionSource(),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './src/app.tsx', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+
+      try {
+        const liveTarget = await textById(
+          origin,
+          '/__test/contacts-live-target',
+          'contacts-live-target',
+        );
+        const mutationResponse = await fetch(`${origin}/_m/contacts/add`, {
+          body: new URLSearchParams(),
+          headers: {
+            'Content-Type': 'application/x-www-form-urlencoded',
+            'Kovo-Fragment': 'true',
+            'Kovo-Live-Targets': liveTarget,
+            'Kovo-Targets': 'contacts-region=contacts',
+            Referer: `${origin}/`,
+          },
+          method: 'POST',
+        });
+        const mutationBody = await mutationResponse.text();
+        expect(mutationResponse.status, mutationBody).toBe(200);
+        expect(mutationBody.length).toBeGreaterThan(0);
+        expect(mutationBody).toContain('<kovo-query name="contacts">{"count":1}</kovo-query>');
+        expect(mutationBody).toContain('<kovo-fragment target="contacts-region">');
+        expect(mutationBody).toContain('<strong data-bind="contacts.count">1</strong>');
+      } finally {
+        await close(server);
+      }
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -1419,6 +1509,14 @@ export async function resetFixture() {
       writeReactJsxRuntimeStub(root);
       writeFileSync(appPath, mutationFragmentStylesheetAppModuleSource(), 'utf8');
       writeSplitStyledComponentClientEntry(root);
+      writeFileSync(
+        join(root, 'src/home-panel.tsx'),
+        styledHostComponentSource('HomePanel', 'home-panel', 'crimson', {
+          queryName: 'home',
+          queryShape: 'runnable',
+        }),
+        'utf8',
+      );
 
       const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
@@ -2084,11 +2182,99 @@ export default createApp({
 `;
 }
 
+function registryWrappedFragmentBuildAppSource(): string {
+  return `
+/** @jsxImportSource @kovojs/server */
+import { createApp, mutation, route, s } from '@kovojs/server';
+import { createLiveTargetAttestation } from '@kovojs/server/internal/wire';
+import { ContactsRegion } from './components/contacts-region.js';
+import { contactDomain, contactsDb, contactsQuery } from './contacts-query.js';
+
+const addContact = mutation('contacts/add', {
+  access: { kind: 'public', reason: 'build fixture mutation' },
+  csrf: false,
+  input: s.object({}),
+  optimistic: { contacts: 'await-fragment' },
+  registry: {
+    queries: [contactsQuery],
+    touches: [contactDomain],
+  },
+  handler() {
+    contactsDb.count += 1;
+    return {};
+  },
+});
+
+function contactsLiveTargetHeader() {
+  const target = 'contacts-region';
+  const component = 'components/contacts-region/contacts-region';
+  const props = {};
+  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
+  return target + '#' + component + '@' + token + ':' + JSON.stringify(props);
+}
+
+export default createApp({
+  mutations: [addContact],
+  queries: [contactsQuery],
+  routes: [
+    route('/', {
+      access: { kind: 'public', reason: 'fragment build fixture' },
+      page: () => <main><ContactsRegion /></main>,
+    }),
+    route('/__test/contacts-live-target', {
+      access: { kind: 'public', reason: 'fragment build fixture' },
+      page: () => <code id="contacts-live-target">{contactsLiveTargetHeader()}</code>,
+    }),
+  ],
+});
+`;
+}
+
+function registryWrappedContactsQuerySource(): string {
+  return `
+import { domain, query, s } from '@kovojs/server';
+
+export const contactDomain = domain('contact');
+export const contactsDb = { count: 0 };
+export const contactsQuery = query('contacts', {
+  access: { kind: 'public', reason: 'build fixture query' },
+  load: () => ({ count: contactsDb.count }),
+  output: s.object({ count: s.number() }),
+  reads: [contactDomain],
+});
+`;
+}
+
+function registryWrappedContactsRegionSource(): string {
+  return `
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { contactsQuery } from '../contacts-query.js';
+
+export const ContactsRegion = component({
+  queries: { contacts: contactsQuery },
+  render: ({ contacts }) => (
+    <section>
+      <strong>{contacts.count}</strong>
+    </section>
+  ),
+});
+`;
+}
+
 async function homePanelLiveTargetHeader(origin: string): Promise<string> {
   const response = await fetch(`${origin}/__test/home-live-target`);
   const html = await response.text();
   const match = /<code id="home-live-target">([^<]+)<\/code>/.exec(html);
   if (!match?.[1]) throw new Error(`Expected test live-target header in ${html.slice(-800)}`);
+  return match[1];
+}
+
+async function textById(origin: string, path: string, id: string): Promise<string> {
+  const response = await fetch(`${origin}${path}`);
+  const html = await response.text();
+  const match = new RegExp(`<[^>]+id="${id}"[^>]*>([^<]+)<\\/[^>]+>`).exec(html);
+  if (!match?.[1]) throw new Error(`Expected #${id} text in ${html.slice(-800)}`);
   return match[1];
 }
 
@@ -2636,12 +2822,26 @@ function styledHostComponentSource(
   name: string,
   host: string,
   color: string,
-  options: { queryName?: string } = {},
+  options: { queryName?: string; queryShape?: 'empty' | 'runnable' } = {},
 ): string {
   return `
 import { component } from '@kovojs/core';
 
-${options.queryName ? `const ${options.queryName}Query = {};\n` : ''}
+${
+  options.queryName && options.queryShape === 'runnable'
+    ? `const ${options.queryName}Query = {
+  key: '${options.queryName}',
+  load: () => ({ ok: true }),
+  reads: [],
+};\n`
+    : ''
+}
+${
+  options.queryName && options.queryShape !== 'runnable'
+    ? `const ${options.queryName}Query = {
+};\n`
+    : ''
+}
 export const ${name} = component({
   ${options.queryName ? `queries: { ${options.queryName}: ${options.queryName}Query },` : ''}
   css: \`
