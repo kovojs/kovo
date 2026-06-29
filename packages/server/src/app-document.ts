@@ -345,9 +345,10 @@ export async function renderAppErrorDocumentResponse(
 function renderConfiguredErrorShellDocumentResponse(
   app: KovoApp,
   request: Request,
-  response: RoutePageResponse,
+  rendered: unknown,
   status: 403 | 404 | 500,
 ): RoutePageResponse {
+  const response = normalizeConfiguredErrorShellResponse(rendered, status);
   // SPEC §9.2/§9.5: configured request-shell error bodies are still framework-owned
   // documents. They therefore receive the same document security/header floor as route
   // documents instead of bypassing CSP/XFO/nosniff/cache defaults.
@@ -385,6 +386,36 @@ function renderConfiguredErrorShellDocumentResponse(
     ),
     status,
   };
+}
+
+function normalizeConfiguredErrorShellResponse(
+  rendered: unknown,
+  status: 403 | 404 | 500,
+): RoutePageResponse {
+  if (isRoutePageResponseLike(rendered)) {
+    return {
+      ...rendered,
+      body: typeof rendered.body === 'string' ? rendered.body : '',
+      headers: rendered.headers ?? {},
+      status,
+    };
+  }
+
+  return {
+    body: renderDefaultRouteValue(rendered),
+    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    status,
+  };
+}
+
+function isRoutePageResponseLike(
+  value: unknown,
+): value is Partial<RoutePageResponse> & Pick<RoutePageResponse, 'body'> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    ('body' in value || 'headers' in value || 'status' in value)
+  );
 }
 
 function stripContentTypeHeader(

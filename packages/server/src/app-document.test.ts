@@ -765,6 +765,39 @@ describe('server app document boundary', () => {
     expect(response.body).not.toContain('data-secret');
   });
 
+  it('renders route guard forbidden failures through a configured plain 403 shell body', async () => {
+    const adminRoute = route('/admin', {
+      guard: guards.role<Request & { session?: { user: { roles: readonly string[] } } }>('admin'),
+      page: () => trustedHtml('<main data-secret>Admin</main>'),
+    });
+    const request = new Request('https://shop.example.test/admin');
+    const app = createApp({
+      errorShells: {
+        // @ts-expect-error Runtime accepts ordinary shell render values; papercuts-14 B tracks the
+        // public type widening separately from this document-path regression.
+        forbidden({ status }) {
+          return `<main data-shell="403">configured:${status}</main>`;
+        },
+      },
+      routes: [adminRoute],
+      sessionProvider: () => ({ user: { roles: ['staff'] } }),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request,
+      route: adminRoute,
+      url: new URL(request.url),
+    });
+
+    expect(response.status).toBe(403);
+    expect(response.body).toContain('<main data-shell="403">configured:403</main>');
+    expect(response.body).toContain('<!doctype html>');
+    expectDocumentSecurityFloor(response.headers);
+    expect(response.body).not.toContain('data-secret');
+  });
+
   it('lets layout boundaries override configured 404 and 403 app shells', async () => {
     const NotFoundLayout = layout({
       boundaries: {
