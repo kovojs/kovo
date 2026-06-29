@@ -1717,15 +1717,12 @@ async function bundleKovoServerHandler(
     stylesheetAssets?: KovoBuildStylesheetAssets;
   },
 ): Promise<string> {
-  const [
-    { kovoVitePlugin },
-    { lowerStandaloneSourceDerivedRegistryDeclarations },
-    { build },
-  ] = await Promise.all([
-    import('@kovojs/compiler'),
-    import('@kovojs/compiler/internal'),
-    import('vite-plus'),
-  ]);
+  const [{ kovoVitePlugin }, { lowerStandaloneSourceDerivedRegistryDeclarations }, { build }] =
+    await Promise.all([
+      import('@kovojs/compiler'),
+      import('@kovojs/compiler/internal'),
+      import('vite-plus'),
+    ]);
   const kovoPlugin = kovoVitePlugin({
     include: [kovoBuildAppSourceFilter(appModulePath, process.cwd())],
   });
@@ -1756,10 +1753,6 @@ async function bundleKovoServerHandler(
         target: 'node22',
       },
       configFile: false,
-      esbuild: {
-        jsx: 'automatic',
-        jsxImportSource: '@kovojs/server',
-      },
       logLevel: 'silent',
       oxc: {
         jsx: {

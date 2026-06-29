@@ -196,12 +196,6 @@ export interface CommerceScenarioEnhancedOptions extends CommerceScenarioRequest
 }
 
 const commerceOrigin = 'https://commerce.test';
-const cartPageTargets = [
-  { queries: 'queries/cart-query', target: 'cart-badge' },
-  { queries: 'queries/product-grid-query', target: 'product-grid' },
-  { queries: 'queries/order-history-query', target: 'order-history' },
-];
-
 export function createCommerceScenarioClient(shell = createCommerceApp()): CommerceScenarioClient {
   const cookies = new Map<string, string>();
 
@@ -309,17 +303,17 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
     options: CommerceScenarioEnhancedOptions = {},
   ): Promise<Response> {
     const cartPage = await get('/cart');
-    const liveTargets = cartPageLiveTargetHeaders(await cartPage.text());
+    const snapshot = cartPageLiveTargetSnapshot(await cartPage.text());
     const targetHeaders =
       options.target === 'form'
         ? enhancedMutationHeaders({
             formTarget: 'product-grid',
-            liveTargets,
-            targets: [{ queries: 'queries/product-grid-query', target: 'product-grid' }],
+            liveTargets: snapshot.liveTargets,
+            targets: snapshot.targets.filter((target) => target.target === 'product-grid'),
           })
         : enhancedMutationHeaders({
-            liveTargets,
-            targets: cartPageTargets,
+            liveTargets: snapshot.liveTargets,
+            targets: snapshot.targets,
           });
     return postForm('/_m/domain/add-to-cart', await addToCartFields(input), {
       ...options,
@@ -362,17 +356,47 @@ export function createCommerceScenarioClient(shell = createCommerceApp()): Comme
   };
 }
 
-function cartPageLiveTargetHeaders(html: string): string[] {
-  const headers: string[] = [];
-  for (const match of html.matchAll(/<[^>]*\bkovo-fragment-target=(?:"[^"]*"|'[^']*')[^>]*>/g)) {
+interface HtmlLiveTargetSnapshot {
+  liveTargets: string[];
+  targets: { queries: string; target: string }[];
+}
+
+function cartPageLiveTargetSnapshot(html: string): HtmlLiveTargetSnapshot {
+  const liveTargets: string[] = [];
+  const targets: { queries: string; target: string }[] = [];
+  for (const match of html.matchAll(/<[^>]*\bkovo-deps=(?:"[^"]*"|'[^']*')[^>]*>/g)) {
     const attrs = readTagAttributes(match[0]);
-    const target = attrs['kovo-fragment-target'];
+    const target = attrs['kovo-fragment-target'] ?? attrs.id ?? attrs['kovo-c'];
+    const queries = readDeps(attrs['kovo-deps']);
+    if (!target || queries.length === 0) continue;
+
+    targets.push({ queries: queries.join(' '), target });
+
     const component = attrs['kovo-live-component'];
     const token = attrs['kovo-live-token'];
     if (!target || !component || !token) continue;
-    headers.push(`${target}#${component}@${token}:${attrs['kovo-props'] ?? '{}'}`);
+    liveTargets.push(`${target}#${component}@${token}:${attrs['kovo-props'] ?? '{}'}`);
   }
-  return headers;
+  return { liveTargets, targets: dedupeTargets(targets) };
+}
+
+function dedupeTargets(
+  targets: { queries: string; target: string }[],
+): { queries: string; target: string }[] {
+  const seen = new Set<string>();
+  return targets.filter((target) => {
+    const key = `${target.target}=${target.queries}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
+function readDeps(value: string | undefined): string[] {
+  return (value ?? '')
+    .split(/[\s,]+/)
+    .map((dep) => dep.trim())
+    .filter(Boolean);
 }
 
 function readTagAttributes(tag: string): Record<string, string> {

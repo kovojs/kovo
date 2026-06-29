@@ -91,6 +91,66 @@ describe('@kovojs/test SQL observer', () => {
     expect(() => verifier.assertCovered()).not.toThrow();
   });
 
+  it('observes update-only engine side effects even when row counts do not change', async () => {
+    const rows: Record<string, Record<string, unknown>[]> = {
+      inventory: [{ product_id: 'p1', refreshed_at: 'v1' }],
+      products: [{ id: 'p1', price: 10 }],
+    };
+    const db = {
+      async query(statement: string): Promise<{ rows: Record<string, unknown>[] }> {
+        if (statement.includes('information_schema.tables')) {
+          return { rows: [{ table_name: 'inventory' }, { table_name: 'products' }] };
+        }
+        const table = /from\s+"([^"]+)"/i.exec(statement)?.[1];
+        return { rows: table ? (rows[table]?.map((row) => ({ ...row })) ?? []) : [] };
+      },
+      async sql(statement: string): Promise<unknown[]> {
+        if (/update\s+products\b/i.test(statement)) {
+          rows.products[0] = { id: 'p1', price: 20 };
+          rows.inventory[0] = { product_id: 'p1', refreshed_at: 'v2' };
+        }
+        return [];
+      },
+    };
+    const verifier = createDbVerifier(
+      {
+        'product.reprice': {
+          touches: [
+            { domain: 'product', keys: null, site: 'product.domain.ts:1', via: 'products' },
+            { domain: 'inventory', keys: null, site: 'product.domain.ts:2', via: 'inventory' },
+          ],
+          unresolved: [],
+        },
+      },
+      { domainByTable: { inventory: 'inventory', products: 'product' } },
+    );
+    const wrapped = verifier.wrap(db);
+
+    await wrapped.sql("update products set price = 20 where id = 'p1'");
+
+    expect(verifier.observed).toEqual([
+      {
+        branch: undefined,
+        domain: 'product',
+        kind: 'write',
+        mutationRead: undefined,
+        rowKey: 'id',
+        sql: "update products set price = 20 where id = 'p1'",
+        table: 'products',
+      },
+      {
+        branch: undefined,
+        domain: 'inventory',
+        kind: 'write',
+        mutationRead: undefined,
+        rowKey: undefined,
+        sql: "update products set price = 20 where id = 'p1'",
+        table: 'inventory',
+      },
+    ]);
+    expect(() => verifier.assertCovered('product.reprice')).not.toThrow();
+  });
+
   it('does not let later CTE aliases hide earlier body table reads', () => {
     const verifier = createDbVerifier(
       {},

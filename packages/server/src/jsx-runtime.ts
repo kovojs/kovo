@@ -228,7 +228,7 @@ export function createElement(
   props: Record<string, unknown> | null,
   ...children: unknown[]
 ): unknown {
-  const normalizedProps: JsxProps = { ...(props ?? {}) };
+  const normalizedProps: JsxProps = { ...props };
   if (children.length === 1) {
     normalizedProps.children = children[0] as JsxChild;
   } else if (children.length > 1) {

@@ -109,13 +109,14 @@
   - Evidence: browser inline-loader commands in Latest Verification passed.
 - [x] Add visible-return refetch tests for default document build-token wiring.
   - Evidence: browser query/refetch command in Latest Verification passed.
-- [ ] Add manifest-enforced accessibility state matrix coverage for every claimed primitive/state in `rules/accessibility-conformance.md`.
-- [ ] Replace Commerce and CRM hand-built enhanced-mutation live-target headers with DOM-derived or browser-observed headers.
-  - Evidence: `examples/commerce/src/app-test-helpers.ts:173`, `examples/commerce/src/app-test-helpers.ts:283`, `examples/crm/src/interactive-app.test.ts:36`.
-- [ ] Strengthen engine-side-effect runtime coverage beyond row-count deltas so update-only trigger effects are independently observable.
-  - Evidence: row-count observation at `packages/test/src/sql-observer.ts:73`, `packages/test/src/sql-observer.ts:91`; static KV413 extraction at `packages/drizzle/src/static.ts:6305`.
-- [ ] Upgrade site example health checks from liveness-only to behavior-level checks where they are used as release confidence.
-  - Evidence: `site/scripts/example-health.mjs:24`.
+- [x] Add manifest-enforced accessibility state matrix coverage for every claimed primitive/state in `rules/accessibility-conformance.md`.
+  - Evidence: `node scripts/materialize-interactive-gallery.mjs && pnpm exec vitest --run --config vitest.browser.config.ts src/interactive-gallery.axe.browser.test.ts src/interactive-gallery.interactions-a.browser.test.ts src/interactive-gallery.interactions-b.browser.test.ts --reporter=dot` in `examples/gallery` passed; `examples/gallery/src/interactive-gallery.artifacts.test.ts` now gates the claimed state demos against `examples/gallery/package.json`.
+- [x] Replace Commerce and CRM hand-built enhanced-mutation live-target headers with DOM-derived or browser-observed headers.
+  - Evidence: `pnpm exec vitest --run examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app.test.ts examples/crm/src/interactive-app.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts --reporter=dot` passed after Commerce and CRM derived enhanced headers from rendered route HTML.
+- [x] Strengthen engine-side-effect runtime coverage beyond row-count deltas so update-only trigger effects are independently observable.
+  - Evidence: `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/pglite-harness.test.ts --reporter=dot` passed; `packages/test/src/sql-observer.test.ts` now covers a same-row-count update side effect on a non-explicit table.
+- [x] Upgrade site example health checks from liveness-only to behavior-level checks where they are used as release confidence.
+  - Evidence: `pnpm exec vitest --run site/scripts/example-health.test.mjs --reporter=dot` passed; `site/scripts/example-health.mjs` now requires route-specific content signals for live examples instead of only non-empty HTML.
 - [x] Add inline-loader keyed island `ctx.signal` cleanup parity coverage.
   - Evidence: AUD-018.
 
