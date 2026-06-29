@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
 import { createHash } from 'node:crypto';
 import {
   existsSync,
@@ -15,6 +15,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
@@ -35,6 +36,8 @@ import {
 } from '../shared.js';
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
+
+const execFileAsync = promisify(execFile);
 
 function isKovoServerHandlerExternalDependency(id: string): boolean {
   return id === '@node-rs/argon2' || id.startsWith('@node-rs/argon2-');
@@ -361,7 +364,14 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     const loadedConfig = await loadKovoBuildConfig(process.cwd());
     const selectedPreset = selectedKovoBuildPreset(options, loadedConfig.config);
     const resolvedAppModulePath = resolve(options.appModulePath);
-    runTypeScriptBuildPreflight(resolvedAppModulePath);
+    // plans/fast-kovo-check3.md: start the independent `tsc --noEmit` preflight subprocess here and
+    // let it overlap the vite app load below AND the kovo-check security preflight, instead of
+    // running it sequentially first (~1.7s cold / ~0.7s warm saved, no correctness change). The
+    // no-op `.catch` prevents an unhandled rejection if the load/check throws before we reach the
+    // fail-closed join below; we still `await typeScriptPreflight` there, so its error is never
+    // swallowed and ZERO artifacts are emitted on any preflight failure.
+    const typeScriptPreflight = runTypeScriptBuildPreflight(resolvedAppModulePath);
+    typeScriptPreflight.catch(() => {});
     // plans/fast-kovo-check2.md (#A dedup): the module/css loads below spin up throwaway vite dev
     // servers purely to evaluate app source so we can derive the build graph and collect CSS. The
     // app's `@kovojs/server` vite plugin would otherwise re-run the whole-project drizzle data-plane
@@ -379,9 +389,24 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
         ]),
       );
     const app = appFromModule(appModule, options.appModulePath);
-    const checkGraph = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
+    // plans/fast-kovo-check3.md: capture the kovo-check security preflight outcome instead of
+    // throwing inline, so the fail-closed join below can surface a tsc type error FIRST (exactly as
+    // the old sequential order did) before re-throwing any check failure. The tsc preflight started
+    // above keeps running concurrently with this check.
+    const checkPreflight = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
       cache: options.cache,
-    });
+    }).then(
+      (graph) => ({ graph, ok: true as const }),
+      (error: unknown) => ({ error, ok: false as const }),
+    );
+    // Fail-closed join BEFORE any artifact-emitting step. `await typeScriptPreflight` first so a
+    // type error surfaces the exact tsc preflight error (tsc-error-first ordering), then re-throw
+    // any captured check-preflight failure. Every artifact-emitting step below
+    // (buildKovoClientManifest, writeKovoNeutralBuild, preset.emit, writeKovoBuildGraphArtifact)
+    // stays strictly after this join, so any preflight failure emits ZERO artifacts.
+    await typeScriptPreflight;
+    if (!checkPreflight.ok) throw checkPreflight.error;
+    const checkGraph = checkPreflight.graph;
     const outDir = resolve(options.outDir);
     const clientBuild = await buildKovoClientManifest(
       join(outDir, '.kovo-client'),
@@ -472,7 +497,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
   }
 }
 
-function runTypeScriptBuildPreflight(appModulePath: string): void {
+async function runTypeScriptBuildPreflight(appModulePath: string): Promise<void> {
   const tsconfigPath = findBuildTsconfig(appModulePath);
   if (tsconfigPath === undefined) return;
 
@@ -497,7 +522,12 @@ function runTypeScriptBuildPreflight(appModulePath: string): void {
   mkdirSync(buildInfoDir, { recursive: true });
 
   try {
-    execFileSync(
+    // Async subprocess so the caller can overlap this independent `tsc --noEmit` preflight with
+    // the vite app load and the kovo-check security preflight (plans/fast-kovo-check3.md). `execFile`
+    // pipes and captures stdout/stderr by default, so a non-zero exit rejects with an error carrying
+    // the same `.stdout`/`.stderr` shape `execFileErrorOutput` reads; the thrown message is
+    // byte-identical to the previous synchronous preflight.
+    await execFileAsync(
       process.execPath,
       [
         tscBin,
@@ -512,7 +542,6 @@ function runTypeScriptBuildPreflight(appModulePath: string): void {
         cwd: projectDir,
         encoding: 'utf8',
         env: process.env,
-        stdio: 'pipe',
       },
     );
   } catch (error) {
