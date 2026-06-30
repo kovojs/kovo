@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
 import {
@@ -26,6 +25,7 @@ import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type { ComponentModuleModel, JsxAttributeModel, SourceSpan } from './scan/parse.js';
 import { parseSourceFile } from './scan/parse.js';
 import { knownQueryNames, queryNameFromPath } from './analyze/query-shapes.js';
+import { ensureTypescriptRuntime } from './ts-api.js';
 import type {
   CompileComponentOptions,
   QueryUpdateCoverageFact,
@@ -33,9 +33,7 @@ import type {
   StateDeriveFact,
 } from './types.js';
 
-const mutableTs = ts as unknown as Record<string, unknown>;
-if (!('ScriptTarget' in mutableTs))
-  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
+ensureTypescriptRuntime(ts);
 
 const styleModuleSpecifier = '@kovojs/style';
 const styleTokensExportName = 'tokens';

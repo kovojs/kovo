@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
 import {
@@ -75,6 +74,7 @@ import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
 import { compilerEmittedSourceProvenanceToken } from './source-provenance.js';
+import { ensureTypescriptRuntime } from './ts-api.js';
 import type {
   CompileComponentOptions,
   CompileResult,
@@ -97,9 +97,7 @@ import {
   queryShapesFromFacts,
 } from './types.js';
 
-const mutableTs = ts as unknown as Record<string, unknown>;
-if (!('ScriptTarget' in mutableTs))
-  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
+ensureTypescriptRuntime(ts);
 
 /**
  * Compile a single authored component module (TSX/JSX source) into its lowered-IR

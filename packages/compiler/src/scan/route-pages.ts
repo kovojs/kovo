@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import { dirname, relative, resolve } from 'node:path';
 import * as ts from 'typescript';
 
@@ -19,11 +18,10 @@ import type {
 } from '../types.js';
 import type { StaticLiteralValue } from './object.js';
 import { applySourceReplacements, replaceExtension, type SourceReplacement } from '../shared.js';
+import { ensureTypescriptRuntime } from '../ts-api.js';
 import { compileArtifactFileNames } from '../types.js';
 
-const mutableTs = ts as unknown as Record<string, unknown>;
-if (!('ScriptTarget' in mutableTs))
-  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
+ensureTypescriptRuntime(ts);
 
 interface CompiledRoutePage {
   fact: RoutePageFact;
