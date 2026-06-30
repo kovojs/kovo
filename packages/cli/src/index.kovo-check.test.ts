@@ -205,9 +205,9 @@ describe('kovo check', () => {
   });
 
   // SPEC §10.2/§6.6: end-to-end default-deny wiring. deriveAppGraph (compiler) classifies
-  // every surface into graph.access; an undecided query/mutation/page/endpoint fails KV436,
-  // while a guarded/public/verified surface passes. The proof is the static graph fact.
-  it('fails kovo check for guardless/decisionless surfaces and passes decided ones (KV436)', async () => {
+  // every surface into graph.access; any query/mutation/page/endpoint/webhook without an
+  // explicit producer-owned access fact fails KV436. The proof is the static graph fact.
+  it('fails kovo check for missing producer-owned access facts and passes decided ones (KV436)', async () => {
     const { deriveAppGraph } = await import('@kovojs/compiler/graph');
 
     const undecided = deriveAppGraph({
@@ -261,6 +261,7 @@ describe('kovo check', () => {
             reason: 'raw sync',
           },
           {
+            access: { kind: 'verified-machine-auth' },
             auth: 'verifier:stripe-signature',
             body: 'raw',
             cache: 'no-store',
@@ -270,9 +271,23 @@ describe('kovo check', () => {
             surface: 'webhook',
           },
         ],
-        mutations: [{ guards: ['authed'], key: 'cart/clear', writes: ['cart'] }],
+        mutations: [
+          {
+            access: { guards: [{ name: 'authed' }], kind: 'guard-chain' },
+            guards: ['authed'],
+            key: 'cart/clear',
+            writes: ['cart'],
+          },
+        ],
         pages: [{ access: { kind: 'public', reason: 'public landing page' }, route: '/secret' }],
-        queries: [{ domains: ['draft'], guards: ['authed'], query: 'drafts' }],
+        queries: [
+          {
+            access: { guards: [{ name: 'authed' }], kind: 'guard-chain' },
+            domains: ['draft'],
+            guards: ['authed'],
+            query: 'drafts',
+          },
+        ],
       },
     });
     const decidedResult = kovoCheck(decided.graph);
@@ -825,21 +840,21 @@ describe('kovo check', () => {
             detail: 'guard=query.guard',
             kind: 'query',
             name: 'adminOrders',
-            source: 'legacy-guard',
+            source: 'access',
           },
           {
             decision: 'guard',
             detail: 'guard=route.guard',
             kind: 'page',
             name: '/admin',
-            source: 'legacy-guard',
+            source: 'access',
           },
           {
             decision: 'guard',
             detail: 'guard=mutation.guard',
             kind: 'mutation',
             name: 'cart/add',
-            source: 'legacy-guard',
+            source: 'access',
           },
           {
             decision: 'public',

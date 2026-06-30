@@ -30,7 +30,7 @@ Priority is based on correctness/security impact first, then maintainability and
     `pnpm run check:api-surface`, and `pnpm run test:integration` passed with fixture app/client
     imports routed through the split `@kovojs/test` harness ABI.
 
-- [ ] **P0.2 - Make access explain facts producer-owned instead of graph-output-derived.**
+- [x] **P0.2 - Make access explain facts producer-owned instead of graph-output-derived.**
   - Current signals: `packages/cli/src/graph-output.ts` still documents `--access` as mixing
     explicit facts with "legacy guard/auth facts", and `accessDecisions()` calls
     `legacyAccessDecisions()` to fabricate endpoint/page/query/mutation access posture.
@@ -43,6 +43,9 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: an access-legacy `rg` check across CLI/core/drizzle/server returns no matches;
     targeted `kovo explain --access` tests cover pages, queries, mutations, endpoints, webhooks,
     public surfaces, guarded surfaces, and missing-fact failures.
+  - Evidence:
+    `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/server/src/access-graph.test.ts packages/core/src/graph.test.ts packages/compiler/src/registry.test.ts`
+    passed; the access legacy `rg` check returned no access-explain matches.
 
 - [x] **P0.3 - Turn lifecycle surface into an enforced policy discriminant.**
   - Current signals: `packages/server/src/response-posture.ts` accepts

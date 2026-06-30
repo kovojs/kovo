@@ -25,7 +25,7 @@ const rawTextResponse = {
 } satisfies EndpointResponsePosture;
 
 describe('app access graph extraction', () => {
-  it('extracts access decisions from assembled app guard and auth posture', () => {
+  it('extracts producer-owned access decisions and missing facts from assembled apps', () => {
     const authed = guards.authed<{ session?: { user?: { id?: string } } }>();
     const guardedQuery = query('cart', { guard: authed, load: () => ({ count: 1 }) });
     const publicQuery = query('catalog', {
@@ -116,26 +116,25 @@ describe('app access graph extraction', () => {
         source: 'access',
       },
       {
-        decision: 'public',
-        detail: 'method=GET path=/healthz mount=exact auth=none',
-        justification: 'read-only health probe',
+        decision: 'missing',
+        detail: 'missing access fact method=GET path=/healthz mount=exact auth=none',
         kind: 'endpoint',
         name: '/healthz',
-        source: 'auth',
-      },
-      {
-        decision: 'guard',
-        detail: 'guard=mutation.guard',
-        kind: 'mutation',
-        name: 'cart/add',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'missing access fact',
+        kind: 'mutation',
+        name: 'cart/add',
+        source: 'access',
+      },
+      {
+        decision: 'missing',
+        detail: 'missing access fact',
         kind: 'mutation',
         name: 'cart/clear',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'guard',
@@ -145,25 +144,25 @@ describe('app access graph extraction', () => {
         source: 'access',
       },
       {
-        decision: 'guard',
-        detail: 'guard=layout.guard',
+        decision: 'missing',
+        detail: 'missing access fact',
         kind: 'page',
         name: '/cart',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'missing access fact',
         kind: 'page',
         name: '/public',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
-        decision: 'guard',
-        detail: 'guard=query.guard',
+        decision: 'missing',
+        detail: 'missing access fact',
         kind: 'query',
         name: 'cart',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'public',
@@ -175,10 +174,10 @@ describe('app access graph extraction', () => {
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'missing access fact',
         kind: 'query',
         name: 'drafts',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'verified',

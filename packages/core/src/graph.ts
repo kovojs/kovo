@@ -116,15 +116,15 @@ export interface AccessExplainFact {
   kind: 'endpoint' | 'mutation' | 'page' | 'query' | 'webhook';
   name: string;
   site?: string;
-  source?: 'access' | 'auth' | 'guard' | 'legacy-guard' | 'webhook';
+  source?: 'access';
 }
 
 /**
- * @internal Structural serialization of a surface's explicit `access:` decision
+ * @internal Structural serialization of a producer-owned `access:` decision
  * (SPEC.md §10.2 default-deny). Mirrors `@kovojs/server`'s `AccessDecision` union
  * without importing it (core cannot depend on server); the static app-graph
  * derivation reads this off each surface fact to classify guarded/public/verified
- * before falling back to a guard/auth posture or KV436 `missing`.
+ * and emits KV436 `missing` when the surface producer failed to provide one.
  */
 export type AccessDecisionFact =
   | { guards: readonly { name: string }[]; kind: 'guard-chain' }
@@ -621,7 +621,7 @@ export interface GraphInputValidationError {
 }
 
 /**
- * @internal The static surface facts the default-deny access derivation classifies
+ * @internal The static surface facts the default-deny access derivation checks
  * (SPEC.md §10.2). The compiler's `deriveAppGraph` passes whatever it has assembled;
  * each list is optional so partial graphs (queries-only, endpoints-only) still derive.
  */
@@ -635,13 +635,14 @@ export interface AccessDerivationInput {
 /**
  * @internal By-construction default-deny classifier (SPEC.md §10.2 / §6.6). Every
  * query/mutation/route-page/endpoint/webhook surface is classified into exactly one
- * `AccessExplainFact`: an explicit `access:` decision (`public`/`verified`/guard-chain)
- * wins; otherwise an existing guard or machine-auth posture counts as a decision;
- * otherwise the surface is `missing` and the KV436 consumer fails `kovo check`.
+ * producer-owned `AccessExplainFact`: an explicit `access:` decision
+ * (`public`/`verified`/guard-chain) wins; otherwise the surface is `missing` and
+ * the KV436 consumer fails `kovo check`.
  *
- * This proves a decision EXISTS, never that it is CORRECT — a no-op `return true`
- * guard satisfies it (KV414 carries IDOR correctness). The proof is the static graph
- * fact, not a TypeScript brand (the compiler runs no type checker, §6.6).
+ * This proves a decision EXISTS, never that it is CORRECT — a no-op guard chain in
+ * an explicit access fact satisfies it (KV414 carries IDOR correctness). The proof
+ * is the static graph fact, not a TypeScript brand (the compiler runs no type checker,
+ * §6.6).
  */
 export function deriveAccessExplainFacts(input: AccessDerivationInput): AccessExplainFact[] {
   return [
@@ -695,43 +696,21 @@ function mutationAccessFact(mutation: MutationExplain): AccessExplainFact {
   const explicit = explicitAccessExplainFact('mutation', mutation.key, mutation.access);
   if (explicit) return explicit;
 
-  const auth = mutation.auth ?? 'none';
-  const hasGuard = (mutation.guards ?? []).length > 0 || auth !== 'none';
-  return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: hasGuard ? `guards=${listFacts(mutation.guards)} auth=${auth}` : 'guard=-',
-    kind: 'mutation',
-    name: mutation.key,
-    source: hasGuard && mutation.auth !== undefined ? 'auth' : 'legacy-guard',
-  };
+  return missingAccessFact('mutation', mutation.key);
 }
 
 function queryAccessFact(query: QueryReadSet): AccessExplainFact {
   const explicit = explicitAccessExplainFact('query', query.query, query.access);
   if (explicit) return explicit;
 
-  const hasGuard = (query.guards ?? []).length > 0;
-  return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: hasGuard ? `guards=${listFacts(query.guards)}` : 'guard=-',
-    kind: 'query',
-    name: query.query,
-    source: 'legacy-guard',
-  };
+  return missingAccessFact('query', query.query);
 }
 
 function pageAccessFact(page: PageExplain): AccessExplainFact {
   const explicit = explicitAccessExplainFact('page', page.route, page.access);
   if (explicit) return explicit;
 
-  const hasGuard = (page.guards ?? []).length > 0;
-  return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: hasGuard ? `guards=${listFacts(page.guards)}` : 'guard=-',
-    kind: 'page',
-    name: page.route,
-    source: 'legacy-guard',
-  };
+  return missingAccessFact('page', page.route);
 }
 
 function endpointAccessFact(endpoint: EndpointExplain): AccessExplainFact {
@@ -754,42 +733,23 @@ function endpointAccessFact(endpoint: EndpointExplain): AccessExplainFact {
     };
   }
 
-  if (endpoint.auth === 'none') {
-    return {
-      decision: 'public',
-      detail,
-      kind,
-      name,
-      source: 'auth',
-      ...(endpoint.csrfJustification === undefined
-        ? {}
-        : { justification: endpoint.csrfJustification }),
-    };
-  }
-
-  if (endpoint.auth?.startsWith('custom:') || endpoint.auth?.startsWith('verifier:')) {
-    return { decision: 'verified', detail, kind, name, source: 'auth' };
-  }
-
-  const hasGuard =
-    hasAuthGuard(endpoint.guards ?? []) ||
-    endpoint.auth === 'authed' ||
-    endpoint.auth?.startsWith('role:') === true;
   return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail,
-    kind,
-    name,
-    source: endpoint.auth === undefined ? 'legacy-guard' : 'auth',
+    ...missingAccessFact(kind, name),
+    detail: `missing access fact ${detail}`,
+    ...(endpoint.csrfJustification === undefined
+      ? {}
+      : { justification: endpoint.csrfJustification }),
   };
 }
 
-function hasAuthGuard(guards: readonly string[]): boolean {
-  return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
-}
-
-function listFacts(values: readonly string[] | undefined): string {
-  return values && values.length > 0 ? values.join(',') : '-';
+function missingAccessFact(kind: AccessExplainFact['kind'], name: string): AccessExplainFact {
+  return {
+    decision: 'missing',
+    detail: 'missing access fact',
+    kind,
+    name,
+    source: 'access',
+  };
 }
 
 function compareAccessExplainFact(left: AccessExplainFact, right: AccessExplainFact): number {

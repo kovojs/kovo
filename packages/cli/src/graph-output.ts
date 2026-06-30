@@ -27,8 +27,6 @@ interface UnguardedAccessFact {
   name: string;
 }
 
-type AccessExplainKind = CoreGraph.AccessExplainFact['kind'];
-
 /** Check family selector accepted by {@link kovoCheck} and `kovo check`. */
 export type KovoCheckFamily =
   | 'all'
@@ -177,9 +175,8 @@ export type KovoExplainOptions =
   | KovoUnscopedExplainOptions;
 
 /**
- * `kovo explain --access` options: emit the Phase 2 access-decision ledger,
- * including explicit `access` facts plus legacy guard/auth facts while the API
- * migration is in progress (plans/secure-by-construction.md Phase 2).
+ * `kovo explain --access` options: emit the producer-owned access-decision
+ * ledger from graph `access` facts (SPEC.md §10.2/§11.3).
  */
 export interface KovoAccessExplainOptions {
   access: true;
@@ -1581,123 +1578,11 @@ function listMutationUpdates(
 }
 
 function accessDecisions(input: CoreGraph.KovoExplainInput): CoreGraph.AccessExplainFact[] {
-  const explicit = explicitAccessDecisions(input);
-  const explicitKeys = new Set(explicit.map(accessKey));
-  const derived = legacyAccessDecisions(input).filter((fact) => !explicitKeys.has(accessKey(fact)));
-  return [...explicit, ...derived].sort(compareAccessExplain);
+  return [...(input.access ?? [])].sort(compareAccessExplain);
 }
 
 function explicitAccessDecisions(input: CoreGraph.KovoCheckInput): CoreGraph.AccessExplainFact[] {
   return [...(input.access ?? [])].sort(compareAccessExplain);
-}
-
-function legacyAccessDecisions(input: CoreGraph.KovoExplainInput): CoreGraph.AccessExplainFact[] {
-  return [
-    ...(input.endpoints ?? []).map(endpointAccessDecision),
-    ...(input.mutations ?? []).map(mutationAccessDecision),
-    ...(input.pages ?? []).map(pageAccessDecision),
-    ...(input.queries ?? []).map(queryAccessDecision),
-  ];
-}
-
-function mutationAccessDecision(mutation: CoreGraph.MutationExplain): CoreGraph.AccessExplainFact {
-  const hasGuard = (mutation.guards ?? []).length > 0;
-  const auth = mutationAuth(mutation);
-  const hasAccess = hasGuard || auth !== 'none';
-
-  return {
-    decision: hasAccess ? 'guard' : 'missing',
-    detail: [
-      `guards=${list(mutation.guards)}`,
-      mutation.auth === undefined ? '' : `auth=${auth}`,
-      `writes=${list(mutation.writes)}`,
-      `invalidates=${list(mutation.invalidates)}`,
-      `manual-invalidates=${list(mutation.manualInvalidates)}`,
-    ]
-      .filter(Boolean)
-      .join(' '),
-    kind: 'mutation',
-    name: mutation.key,
-    source: hasAccess ? (mutation.auth === undefined ? 'legacy-guard' : 'auth') : 'legacy-guard',
-  };
-}
-
-function queryAccessDecision(query: CoreGraph.QueryReadSet): CoreGraph.AccessExplainFact {
-  const hasGuard = (query.guards ?? []).length > 0;
-
-  return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: [`guards=${list(query.guards)}`, `reads=${list(query.domains)}`].join(' '),
-    kind: 'query',
-    name: query.query,
-    source: 'legacy-guard',
-  };
-}
-
-function pageAccessDecision(page: CoreGraph.PageExplain): CoreGraph.AccessExplainFact {
-  const hasGuard = (page.guards ?? []).length > 0;
-
-  return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: [`guards=${list(page.guards)}`, `queries=${list(page.queries)}`].join(' '),
-    kind: 'page',
-    name: page.route,
-    source: 'legacy-guard',
-  };
-}
-
-function endpointAccessDecision(endpoint: CoreGraph.EndpointExplain): CoreGraph.AccessExplainFact {
-  const source = endpoint.auth === undefined ? 'legacy-guard' : 'auth';
-  const kind: AccessExplainKind = endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
-
-  if (endpoint.auth === 'none') {
-    return {
-      decision: 'public',
-      detail: endpointAccessDetail(endpoint),
-      kind,
-      name: endpointName(endpoint),
-      source,
-      ...(endpoint.csrfJustification === undefined
-        ? {}
-        : { justification: endpoint.csrfJustification }),
-    };
-  }
-
-  if (hasEndpointVerifiedAuth(endpoint)) {
-    return {
-      decision: 'verified',
-      detail: endpointAccessDetail(endpoint),
-      kind,
-      name: endpointName(endpoint),
-      source,
-      ...(endpoint.csrfJustification === undefined
-        ? {}
-        : { justification: endpoint.csrfJustification }),
-    };
-  }
-
-  const hasGuard = (endpoint.guards ?? []).length > 0 || hasEndpointAuth(endpoint);
-
-  return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: endpointAccessDetail(endpoint),
-    kind,
-    name: endpointName(endpoint),
-    source,
-    ...(endpoint.csrfJustification === undefined
-      ? {}
-      : { justification: endpoint.csrfJustification }),
-  };
-}
-
-function endpointAccessDetail(endpoint: CoreGraph.EndpointExplain): string {
-  return [
-    `method=${endpoint.method ?? 'ANY'}`,
-    `path=${endpoint.path}`,
-    `mount=${endpoint.mount ?? 'exact'}`,
-    `auth=${endpointAuth(endpoint)}`,
-    `csrf=${endpointCsrf(endpoint)}`,
-  ].join(' ');
 }
 
 function accessLine(access: CoreGraph.AccessExplainFact): string {
@@ -1755,10 +1640,6 @@ function compareAccessExplain(
     (left.site ?? '').localeCompare(right.site ?? '') ||
     left.decision.localeCompare(right.decision)
   );
-}
-
-function accessKey(access: CoreGraph.AccessExplainFact): string {
-  return `${access.kind}\0${access.name}`;
 }
 
 function unguardedAccesses(input: CoreGraph.KovoExplainInput): UnguardedAccessFact[] {
@@ -2028,12 +1909,6 @@ function hasEndpointAuth(endpoint: CoreGraph.EndpointExplain): boolean {
     endpoint.auth.startsWith('role:') ||
     endpoint.auth.startsWith('custom:') ||
     endpoint.auth.startsWith('verifier:')
-  );
-}
-
-function hasEndpointVerifiedAuth(endpoint: CoreGraph.EndpointExplain): boolean {
-  return (
-    endpoint.auth?.startsWith('custom:') === true || endpoint.auth?.startsWith('verifier:') === true
   );
 }
 
