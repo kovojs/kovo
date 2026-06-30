@@ -15,6 +15,7 @@ import {
   type InlineMutationResponseBodyChunks,
 } from './wire-response-scanner.js';
 import { readAttribute, unescapeHtml } from './wire-html.js';
+import { readWireElementAttribute } from './wire-tokenizer.js';
 
 type FragmentSnapshot = {
   html: string;
@@ -90,6 +91,30 @@ describe('wire response scanner', () => {
     ]);
     expect(chunks[0]?.start).toBe(0);
     expect(chunks[0]?.end).toBeGreaterThan(chunks[0]?.start ?? 0);
+  });
+
+  it('carries tokenizer attributes that distinguish valueless from absent', () => {
+    const [chunk] = readElementChunks(
+      '<kovo-query name="cart" delta empty="">{"count":1}</kovo-query>',
+      'kovo-query',
+    );
+
+    expect(readWireElementAttribute(chunk!, 'delta')).toMatchObject({
+      hasValue: false,
+      present: true,
+      value: '',
+    });
+    expect(readWireElementAttribute(chunk!, 'empty')).toMatchObject({
+      hasValue: true,
+      present: true,
+      value: '',
+    });
+    expect(readWireElementAttribute(chunk!, 'missing')).toEqual({
+      hasValue: false,
+      present: false,
+      value: null,
+    });
+    expect(Object.keys(chunk!)).toEqual(['attrs', 'content', 'end', 'start']);
   });
 
   it('shares mutation response element scanning with the inline loader parser root', () => {
