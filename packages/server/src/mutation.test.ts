@@ -695,6 +695,57 @@ describe('server mutation lifecycle', () => {
     expect(calls).toEqual([]);
   });
 
+  it('enforces declared raw-SQL tables inside the default transaction wrapper', async () => {
+    const calls: unknown[] = [];
+    const chunk = (value: string) => ({ value: [value] });
+    const driftedWrite = stampTrustedSql(
+      {
+        queryChunks: [
+          chunk('insert into users (id, role) values ('),
+          'u1',
+          chunk(', '),
+          'admin',
+          chunk(')'),
+        ],
+      },
+      'drifted user transaction write',
+    );
+    const addContact = mutation('contacts/default-tx-raw-drift', {
+      input: s.object({}),
+      registry: {
+        tables: ['contacts'],
+      },
+      handler(_input, request) {
+        return (request as { db: { execute(statement: unknown): unknown } }).db.execute(
+          driftedWrite,
+        );
+      },
+    });
+
+    await expect(
+      runMutation(
+        addContact,
+        {},
+        {},
+        {
+          db: () => ({
+            transaction<Result>(
+              callback: (tx: { execute(statement: unknown): unknown }) => Result,
+            ): Result {
+              return callback({
+                execute(statement: unknown) {
+                  calls.push(statement);
+                  return 'ok';
+                },
+              });
+            },
+          }),
+        },
+      ),
+    ).rejects.toThrow(/KV406/);
+    expect(calls).toEqual([]);
+  });
+
   it('renders mutation query chunks after the configured transaction commits', async () => {
     const state = { committed: 0, pending: 0 };
     const cart = domain('cart');

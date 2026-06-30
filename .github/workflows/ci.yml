@@ -125,8 +125,14 @@ jobs:
         include:
           - shard: scaffold
             file: packages/create-kovo/src/index.build.scaffold.test.ts
-          - shard: prod-artifact
-            file: packages/create-kovo/src/index.build.prod-artifact.test.ts
+          - shard: prod-artifact-contacts
+            file: packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts
+          - shard: prod-artifact-raw-sql
+            file: packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
+          - shard: prod-artifact-security
+            file: packages/create-kovo/src/index.build.prod-artifact.security.test.ts
+          - shard: prod-artifact-transactions
+            file: packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts
           - shard: runtime
             file: packages/create-kovo/src/index.build.runtime.test.ts
     steps:

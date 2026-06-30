@@ -189,6 +189,166 @@ export function addRawSqlOwnerWriteProof(
   writeFileSync(mutationsPath, mutations, 'utf8');
 }
 
+export function addRuntimeMutationSafetyProofs(root: string): void {
+  const schemaPath = join(root, 'src/schema.ts');
+  writeFileSync(
+    schemaPath,
+    readFileSync(schemaPath, 'utf8').replace(
+      ');\n\n// --- Auth infrastructure',
+      [
+        ');',
+        '',
+        "export const txProofs = pgTable('tx_proofs', {",
+        "  id: text('id').primaryKey(),",
+        '});',
+        '',
+        "export const rawRuntimeDrift = pgTable('raw_runtime_drift', {",
+        "  id: text('id').primaryKey(),",
+        "  label: text('label').notNull().default(''),",
+        '});',
+        '',
+        '// --- Auth infrastructure',
+      ].join('\n'),
+    ),
+    'utf8',
+  );
+
+  const dbPath = join(root, 'src/db.ts');
+  const db = readFileSync(dbPath, 'utf8')
+    .replace(
+      "import { account, contacts, session, user, verification } from './schema.js';",
+      [
+        'import {',
+        '  account,',
+        '  contacts,',
+        '  rawRuntimeDrift,',
+        '  session,',
+        '  txProofs,',
+        '  user,',
+        '  verification,',
+        "} from './schema.js';",
+      ].join('\n'),
+    )
+    .replace(
+      'const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([\n  contacts,\n  user,',
+      [
+        'const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([',
+        '  contacts,',
+        '  txProofs,',
+        '  rawRuntimeDrift,',
+        '  user,',
+      ].join('\n'),
+    );
+  writeFileSync(dbPath, db, 'utf8');
+
+  writeFileSync(
+    join(root, 'src/runtime-safety-proofs.ts'),
+    [
+      "import { sql, trustedSql } from '@kovojs/drizzle';",
+      "import { domain, endpoint, mutation, publicAccess, s, type MutationContext } from '@kovojs/server';",
+      '',
+      "import { appDb } from './db.js';",
+      "import { rawRuntimeDrift, txProofs } from './schema.js';",
+      "import type { AppRequest } from './auth.js';",
+      '',
+      'const runtimeTableDriftError = s.object({ message: s.string() });',
+      "const publicProof = publicAccess('public production mutation safety regression proof');",
+      "const txProof = domain('tx_proof');",
+      '',
+      'export const failAfterWrite = mutation({',
+      '  access: publicProof,',
+      '  csrf: false,',
+      '  input: s.object({ id: s.string() }),',
+      '  registry: { touches: [txProof] },',
+      '  async handler(input: { id: string }, request: AppRequest) {',
+      '    await request.db.insert(txProofs).values({ id: input.id });',
+      "    throw new Error('rollback proof');",
+      '  },',
+      '});',
+      '',
+      'export const rawTableDrift = mutation({',
+      '  access: publicProof,',
+      '  csrf: false,',
+      '  errors: { RUNTIME_TABLE_DRIFT: runtimeTableDriftError },',
+      '  input: s.object({ id: s.string(), label: s.string() }),',
+      "  registry: { tables: ['contacts'] },",
+      '  async handler(',
+      '    input: { id: string; label: string },',
+      '    request: AppRequest,',
+      '    context: MutationContext<{ RUNTIME_TABLE_DRIFT: typeof runtimeTableDriftError }>,',
+      '  ) {',
+      '    try {',
+      '      await request.db.execute(',
+      '        trustedSql(',
+      '          sql`insert into raw_runtime_drift (id, label) values (${input.id}, ${input.label})`,',
+      "          { justification: 'audited runtime table-drift proof' },",
+      '        ),',
+      '      );',
+      '    } catch (error) {',
+      "      if (error instanceof Error && error.message.includes('KV406')) {",
+      "        return context.fail('RUNTIME_TABLE_DRIFT', { message: 'KV406' });",
+      '      }',
+      '      throw error;',
+      '    }',
+      "    return { status: 'executed' };",
+      '  },',
+      '});',
+      '',
+      "export const txProofCountEndpoint = endpoint('/api/tx-proof-count', {",
+      "  auth: { justification: 'public transaction rollback proof', kind: 'none' },",
+      '  csrf: false,',
+      "  csrfJustification: 'read-only transaction rollback proof',",
+      '  async handler() {',
+      '    const rows = await appDb.select().from(txProofs);',
+      "    return Response.json({ count: rows.length }, { headers: { 'Cache-Control': 'no-store' } });",
+      '  },',
+      "  method: 'GET',",
+      "  reason: 'read-only transaction rollback proof',",
+      "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+      '});',
+      '',
+      "export const rawRuntimeDriftCountEndpoint = endpoint('/api/raw-runtime-drift-count', {",
+      "  auth: { justification: 'public runtime raw-SQL allowlist proof', kind: 'none' },",
+      '  csrf: false,',
+      "  csrfJustification: 'read-only runtime raw-SQL allowlist proof',",
+      '  async handler() {',
+      '    const rows = await appDb.select().from(rawRuntimeDrift);',
+      "    return Response.json({ count: rows.length }, { headers: { 'Cache-Control': 'no-store' } });",
+      '  },',
+      "  method: 'GET',",
+      "  reason: 'read-only runtime raw-SQL allowlist proof',",
+      "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8')
+    .replace(
+      "import { addContact } from './mutations.js';",
+      [
+        "import { addContact } from './mutations.js';",
+        'import {',
+        '  failAfterWrite,',
+        '  rawRuntimeDriftCountEndpoint,',
+        '  rawTableDrift,',
+        '  txProofCountEndpoint,',
+        "} from './runtime-safety-proofs.js';",
+      ].join('\n'),
+    )
+    .replace(
+      'endpoints: [healthEndpoint],',
+      'endpoints: [healthEndpoint, txProofCountEndpoint, rawRuntimeDriftCountEndpoint],',
+    )
+    .replace(
+      'mutations: [addContact, appSignIn, appSignOut],',
+      'mutations: [addContact, failAfterWrite, rawTableDrift, appSignIn, appSignOut],',
+    );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export function addInternalHtmlImportProof(root: string): void {
   writeFileSync(
     join(root, 'src/raw-helper.ts'),

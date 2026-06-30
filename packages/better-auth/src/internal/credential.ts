@@ -350,6 +350,10 @@ export function credentialMutationDefinitionOptions<
       : options.guard === undefined
         ? contract.defaultAccess
         : undefined;
+  const transaction =
+    options.transaction ??
+    (<Result>(_request: Request, run: (transactionRequest: GuardedRequest) => Promise<Result>) =>
+      run(_request as unknown as GuardedRequest));
 
   return {
     // SPEC.md §10.2: a credential mutation with no `guard` (sign-in/sign-up run
@@ -361,7 +365,9 @@ export function credentialMutationDefinitionOptions<
       ...options.registry,
       touches: mergeDomainTouches(contract.touches, options.registry?.touches),
     },
-    ...(options.transaction === undefined ? {} : { transaction: options.transaction }),
+    // Better Auth credential APIs use the Better Auth Drizzle adapter internally; wrapping that
+    // call in Kovo's default app-db transaction nests the same in-process PGlite connection.
+    transaction,
   };
 }
 

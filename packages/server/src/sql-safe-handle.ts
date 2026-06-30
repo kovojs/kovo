@@ -25,6 +25,8 @@ export interface ManagedSqlWritePolicy {
   touches?: readonly string[];
 }
 
+const managedTransactionQueue = new WeakMap<object, Promise<void>>();
+
 /**
  * Resolve the managed-SQL guard mode (SPEC §10.2/§744). The fail-closed default — in every
  * environment, production included — is `enforce`. Fail-open `KOVO_SQL_GUARD=warn/off` migration
@@ -96,6 +98,12 @@ function wrapDbAdapter(
         );
       }
 
+      if (prop === 'transaction' && typeof value === 'function') {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          guardedTransactionMethod(target, value, mode, proxyCache, methodCache, writePolicy),
+        );
+      }
+
       return typeof value === 'function'
         ? cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target))
         : value;
@@ -121,19 +129,8 @@ function wrapSqlHandle(
       const value = Reflect.get(target, prop, receiver);
 
       if (prop === 'transaction' && typeof value === 'function') {
-        return cachedSqlSafetyMethod(
-          target,
-          prop,
-          value,
-          methodCache,
-          () =>
-            (callback: (tx: object) => unknown, ...args: unknown[]) =>
-              value.call(
-                target,
-                (tx: object) =>
-                  callback(wrapSqlHandle(tx, mode, proxyCache, methodCache, writePolicy)),
-                ...args,
-              ),
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          guardedTransactionMethod(target, value, mode, proxyCache, methodCache, writePolicy),
         );
       }
 
@@ -172,6 +169,59 @@ function guardedSqlMethod(
     assertManagedSqlStatement(statement, mode, writePolicy);
     return value.call(target, statement, ...args);
   };
+}
+
+function guardedTransactionMethod(
+  target: object,
+  value: Function,
+  mode: SqlSafetyMode,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): Function {
+  return (callback: unknown, ...args: unknown[]) => {
+    if (typeof callback !== 'function') return value.call(target, callback, ...args);
+    return runQueuedManagedTransaction(target, () =>
+      value.call(
+        target,
+        (tx: unknown) =>
+          callback(wrapTransactionDb(tx, mode, proxyCache, methodCache, writePolicy)),
+        ...args,
+      ),
+    );
+  };
+}
+
+async function runQueuedManagedTransaction<Result>(
+  target: object,
+  run: () => Promise<Result> | Result,
+): Promise<Result> {
+  const previous = managedTransactionQueue.get(target) ?? Promise.resolve();
+  const current = previous.then(run);
+  const tail = current.then(
+    () => undefined,
+    () => undefined,
+  );
+  managedTransactionQueue.set(target, tail);
+
+  try {
+    return await current;
+  } finally {
+    if (managedTransactionQueue.get(target) === tail) {
+      managedTransactionQueue.delete(target);
+    }
+  }
+}
+
+function wrapTransactionDb(
+  tx: unknown,
+  mode: SqlSafetyMode,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): unknown {
+  if (!isDbAdapterLike(tx)) return tx;
+  return wrapDbAdapter(tx, mode, proxyCache, methodCache, writePolicy);
 }
 
 function guardedPrepareMethod(

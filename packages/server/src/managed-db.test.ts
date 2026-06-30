@@ -51,6 +51,17 @@ function fakeDb(log: string[]) {
       log.push('execute');
       return Promise.resolve(statement);
     },
+    transaction<Result>(
+      callback: (tx: { execute(statement: unknown): Promise<unknown> }) => Result,
+    ) {
+      log.push('transaction');
+      return callback({
+        execute(statement: unknown) {
+          log.push('tx.execute');
+          return Promise.resolve(statement);
+        },
+      });
+    },
   };
 }
 
@@ -122,6 +133,46 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/KV406/);
     expect(log).toEqual(['execute']);
+  });
+
+  it('write mode enforces the raw-SQL table allowlist inside transactions', async () => {
+    const log: string[] = [];
+    const handle = managedDb(fakeDb(log), 'write', {
+      sqlWritePolicy: {
+        tables: ['products'],
+        touches: ['product'],
+      },
+    });
+    type Tx = { execute(statement: unknown): Promise<unknown> };
+    type Transactional = {
+      transaction<Result>(callback: (tx: Tx) => Result): Result;
+    };
+
+    await expect(
+      (handle as Transactional).transaction((tx) =>
+        tx.execute(
+          stampTrustedSql(
+            { text: 'update products set name = $1 where id = $2', values: ['Ada', 'p1'] },
+            'audited product transaction update',
+          ),
+        ),
+      ),
+    ).resolves.toMatchObject({ text: 'update products set name = $1 where id = $2' });
+    expect(log).toEqual(['transaction', 'tx.execute']);
+
+    await expect(
+      Promise.resolve(
+        (handle as Transactional).transaction((tx) =>
+          tx.execute(
+            stampTrustedSql(
+              { text: 'insert into users (id) values ($1)', values: ['u1'] },
+              'drifted user transaction insert',
+            ),
+          ),
+        ),
+      ),
+    ).rejects.toThrow(/KV406/);
+    expect(log).toEqual(['transaction', 'tx.execute', 'transaction']);
   });
 });
 

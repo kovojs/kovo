@@ -254,6 +254,7 @@ export function linkStarterBuildDependencies(root: string): void {
     'better-sqlite3',
     'drizzle-orm',
     'kovo',
+    'pgsql-ast-parser',
     'typescript',
     'vite',
     'vitest',

@@ -1,0 +1,181 @@
+import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { describe, expect, it } from 'vitest';
+
+import { writeKovoProject } from './index.js';
+import {
+  collectOutput,
+  cookieHeader,
+  fetchTextWhenReady,
+  linkStarterBuildDependencies,
+  mergeCookies,
+  reservePort,
+  stopProcess,
+  withRepoBinOnPath,
+} from './index.test-support.js';
+import {
+  addAuthSecretLeakProof,
+  addEscapedAttackerTextProof,
+  addInternalHtmlImportProof,
+  addNoJsFailureProof,
+  attributeValue,
+  buildProductionArtifact,
+  execFileSyncErrorOutput,
+  fieldValue,
+  firstFormHtml,
+} from './index.build.test-support.js';
+
+describe('create-kovo starter (build integration: production security artifacts)', () => {
+  it('blocks starter Better Auth credential projections from the production build artifact', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-auth-secret-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Auth Secret Proof' });
+      linkStarterBuildDependencies(root);
+      addAuthSecretLeakProof(root);
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail with KV435.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV435');
+        expect(output).toContain('Secret query value reaches the client wire');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('blocks internal raw-HTML helper imports from authored .ts modules in production build', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-internal-html-import-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Internal HTML Import Proof' });
+      linkStarterBuildDependencies(root);
+      addInternalHtmlImportProof(root);
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail with KV235.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV235');
+        expect(output).toContain('@kovojs/server/internal/html');
+        expect(output).toContain('raw-helper.ts');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('serves attacker-shaped helper text escaped from the production build artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-escaped-helper-text-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod Escaped Helper Text Proof' });
+      linkStarterBuildDependencies(root);
+      addEscapedAttackerTextProof(root);
+
+      buildProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+
+      const html = await fetchTextWhenReady(`${origin}/xss-escape-proof`, output);
+      expect(html).toContain('data-proof="xss-escape"');
+      expect(html).toContain('&lt;img src=x onerror="alert(1)"&gt;');
+      expect(html).toContain('&lt;b id="xss-probe"&gt;RAW&lt;/b&gt;');
+      expect(html).not.toContain('<img src=x onerror="alert(1)">');
+      expect(html).not.toContain('<b id="xss-probe">RAW</b>');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('serves component-scoped FormError as a real no-JS 422 output from the production artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-form-error-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod FormError Proof' });
+      linkStarterBuildDependencies(root);
+      addNoJsFailureProof(root);
+
+      buildProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+      const jar = new Map<string, string>();
+
+      const page = await fetchTextWhenReady(`${origin}/no-js-failure-proof`, output);
+      const pageResponse = await fetch(`${origin}/no-js-failure-proof`);
+      mergeCookies(jar, pageResponse.headers.getSetCookie());
+      const pageHtml = await pageResponse.text();
+      expect(page).toContain('Blocked title proof');
+      const form = firstFormHtml(pageHtml);
+      const action = attributeValue(form, 'action');
+      expect(action).toBeTruthy();
+
+      const response = await fetch(`${origin}${action}`, {
+        body: new URLSearchParams({
+          csrf: fieldValue(form, 'csrf'),
+          'Kovo-Idem': fieldValue(form, 'Kovo-Idem'),
+          title: '<output>helper</output>',
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      const body = await response.text();
+
+      expect(response.status).toBe(422);
+      expect(body).toContain(
+        '<output role="alert" data-error-code="BLOCKED_TITLE">{"title":"&lt;output&gt;helper&lt;/output&gt;"}</output>',
+      );
+      expect(body).not.toContain('&lt;output role=&quot;alert&quot;');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+});

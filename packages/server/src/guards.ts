@@ -712,9 +712,21 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
         options.sqlWritePolicy === undefined ? {} : { sqlWritePolicy: options.sqlWritePolicy },
       ),
     );
+  } else if (options.sqlWritePolicy !== undefined && requestHasDb(lifecycleRequest)) {
+    lifecycleRequest = requestWithProperty(
+      lifecycleRequest,
+      'db',
+      managedDb(lifecycleRequest.db, options.dbMode ?? 'write', {
+        sqlWritePolicy: options.sqlWritePolicy,
+      }),
+    );
   }
 
   return lifecycleRequest as LifecycleRequest<Request, SessionValue, DbValue>;
+}
+
+function requestHasDb(value: unknown): value is { db: unknown } {
+  return typeof value === 'object' && value !== null && 'db' in value;
 }
 
 export async function renderHttpGuardFailureResponse<Request>(
