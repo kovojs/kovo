@@ -233,7 +233,7 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
     passed, `rg -n "private package" packages/ui/registry.json site/content/guides/components.md`
     returned no matches, and `pnpm run check:api-surface` passed.
 
-- [ ] **P2.2 - Extract reusable output-staging primitives for CLI and site builds.**
+- [x] **P2.2 - Extract reusable output-staging primitives for CLI and site builds.**
   - Current signals: static export, build/export, package publishing, site export, and client-module
     registration code each manage paths, versions, cleanup, and partial writes locally.
   - Refactor shape: introduce a small manifest-backed artifact writer with stable path validation,
@@ -243,3 +243,7 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
     half-written artifacts, and path traversal mistakes in build tooling.
   - Verification: build/export tests, site static export tests, generator check modes, and
     `git diff --check` pass after each adoption step.
+  - Evidence:
+    `pnpm exec vitest --run packages/server/src/output-staging.test.ts packages/server/src/static-export-output.test.ts packages/server/src/vite-build.test.ts scripts/output-staging.test.mjs site/scripts/export-static.test.mjs`
+    passed with shared writer coverage for path confinement, check/dry-run, stale cleanup, and the
+    adopted server/site output paths.

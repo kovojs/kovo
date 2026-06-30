@@ -1,16 +1,5 @@
 import { constants as fsConstants, type Dirent } from 'node:fs';
-import {
-  access,
-  copyFile,
-  lstat,
-  mkdir,
-  mkdtemp,
-  readdir,
-  rename,
-  rm,
-  stat,
-  writeFile,
-} from 'node:fs/promises';
+import { access, lstat, mkdir, readdir, rm, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -28,6 +17,7 @@ import {
   type StaticExportAssetInput,
   type StaticExportClientModuleArtifact,
 } from './static-export-types.js';
+import { writeArtifactOutput, type ArtifactOutputEntry } from './output-staging.js';
 
 /**
  * @internal Static export output planner internal (SPEC.md §9.5). Synthetic root used
@@ -127,7 +117,6 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
   }
 
   await assertStaticExportOutputRoot(plan.root);
-  await assertWritableStaticExportTargets(plan);
   if (plan.writes.length === 0) {
     // C2/SPEC §9.5: even when this export emits nothing, prior route documents must be reconciled so
     // a fully-removed route stops serving stale 200 HTML across rebuilds.
@@ -135,22 +124,30 @@ export async function writeStaticExportOutput(plan: StaticExportOutputPlan): Pro
     return;
   }
 
-  const stagingRoot = await createStaticExportStagingRoot(plan.root);
-  try {
-    await Promise.all(
-      plan.writes.map((write) =>
-        write.write(staticExportStagedTargetPath(plan.root, stagingRoot, write.targetPath)),
-      ),
-    );
-    await commitStaticExportStagedOutput(plan, stagingRoot);
-    // C2/SPEC §9.5: reconcile relative to the rename commit — remove prior route-document artifacts
-    // (mutable `index.html`) the current plan no longer owns. A removed route must not keep serving
-    // stale 200 HTML (stale-page disclosure). Immutable versioned `/c/__v/` modules are RETAINED per
-    // SPEC §14 prior-version retention and never pruned here.
-    await pruneStaleStaticExportRouteDocuments(plan);
-  } finally {
-    await rm(stagingRoot, { force: true, recursive: true });
-  }
+  await writeArtifactOutput(plan.root, plan.writes.map(staticExportArtifactOutputEntry), {
+    cleanup: {
+      enumerate(root) {
+        return enumerateStaticExportRouteDocuments(root, path.join(root, 'c'));
+      },
+    },
+    diagnostics: {
+      root: (root) =>
+        new StaticExportError([
+          staticExportDiagnostic(
+            root,
+            `KV229 static export cannot write output because output root '${root}' is not a directory.`,
+          ),
+        ]),
+      target: (entry, reason) =>
+        new StaticExportError([
+          staticExportDiagnostic(
+            entry.label,
+            `KV229 static export cannot write ${entry.kind ?? 'artifact'} '${entry.label}' because ${reason}.`,
+          ),
+        ]),
+    },
+    stagingPrefix: '.kovo-static-export-',
+  });
 }
 
 /**
@@ -247,7 +244,7 @@ function staticExportPlannedWrite(
     const artifact = plan.artifacts[target.itemIndex]!;
     return {
       ...target,
-      write: async (writePath) => writeTextStaticExportFile(artifact.body, writePath),
+      content: artifact.body,
     };
   }
 
@@ -255,7 +252,7 @@ function staticExportPlannedWrite(
     const artifact = plan.clientModules[target.itemIndex]!;
     return {
       ...target,
-      write: async (writePath) => writeTextStaticExportFile(artifact.body, writePath),
+      content: artifact.body,
     };
   }
 
@@ -267,15 +264,14 @@ function staticExportPlannedWrite(
   if (target.itemKind === 'header-sidecar') {
     return {
       ...target,
-      write: async (writePath) =>
-        writeTextStaticExportFile(buildNetlifyHeadersSidecar(plan), writePath),
+      content: buildNetlifyHeadersSidecar(plan),
     };
   }
 
   const artifact = plan.assets[target.itemIndex]!;
   return {
     ...target,
-    write: async (writePath) => copyStaticExportAsset(artifact.source, writePath),
+    sourcePath: artifact.source,
   };
 }
 
@@ -417,29 +413,24 @@ async function assertReadableStaticExportAssetSource(
   }
 }
 
-async function writeTextStaticExportFile(body: string, targetPath: string): Promise<void> {
-  await mkdir(path.dirname(targetPath), { recursive: true });
-  await writeFile(targetPath, body, 'utf8');
-}
-
-async function copyStaticExportAsset(source: string, targetPath: string): Promise<void> {
-  await mkdir(path.dirname(targetPath), { recursive: true });
-  await copyFile(source, targetPath);
-}
-
 interface StaticExportPlannedWrite extends StaticExportOutputTarget {
   diagnosticPath: string;
   itemKind: StaticExportOutputPlanItemKind;
   kind: string;
   targetPath: string;
-  write(writePath: string): Promise<void>;
+  content?: string;
+  sourcePath?: string;
 }
 
-async function assertWritableStaticExportTargets(plan: StaticExportOutputPlan): Promise<void> {
-  for (const write of plan.writes) {
-    await ensureStaticExportTargetParentDirectories(plan.root, write);
-    await assertStaticExportTargetIsNotDirectory(write);
-  }
+function staticExportArtifactOutputEntry(write: StaticExportPlannedWrite): ArtifactOutputEntry {
+  const entry: ArtifactOutputEntry = {
+    kind: write.kind,
+    label: write.diagnosticPath,
+    targetPath: write.targetPath,
+  };
+  if (write.content !== undefined) entry.content = write.content;
+  if (write.sourcePath !== undefined) entry.sourcePath = write.sourcePath;
+  return entry;
 }
 
 async function assertStaticExportOutputRoot(root: string): Promise<void> {
@@ -459,91 +450,6 @@ async function assertStaticExportOutputRoot(root: string): Promise<void> {
       `KV229 static export cannot write output because output root '${root}' is not a directory.`,
     ),
   ]);
-}
-
-async function ensureStaticExportTargetParentDirectories(
-  root: string,
-  write: StaticExportPlannedWrite,
-): Promise<void> {
-  const relativeDirectory = path.relative(root, path.dirname(write.targetPath));
-  const segments = relativeDirectory === '' ? [] : relativeDirectory.split(path.sep);
-  let current = root;
-
-  for (const segment of segments) {
-    current = path.join(current, segment);
-
-    let parentStat: Awaited<ReturnType<typeof lstat>>;
-    try {
-      parentStat = await lstat(current);
-    } catch {
-      await mkdir(current);
-      parentStat = await lstat(current);
-    }
-
-    if (parentStat.isSymbolicLink()) {
-      throw new StaticExportError([
-        staticExportDiagnostic(
-          write.diagnosticPath,
-          `KV229 static export cannot write ${write.kind} '${write.diagnosticPath}' because output parent '${current}' is a symbolic link.`,
-        ),
-      ]);
-    }
-
-    if (!parentStat.isDirectory()) {
-      throw new StaticExportError([
-        staticExportDiagnostic(
-          write.diagnosticPath,
-          `KV229 static export cannot write ${write.kind} '${write.diagnosticPath}' because output parent '${current}' is not a directory.`,
-        ),
-      ]);
-    }
-  }
-}
-
-async function assertStaticExportTargetIsNotDirectory(
-  write: StaticExportPlannedWrite,
-): Promise<void> {
-  let targetStat: Awaited<ReturnType<typeof lstat>>;
-  try {
-    targetStat = await lstat(write.targetPath);
-  } catch {
-    return;
-  }
-
-  if (!targetStat.isDirectory()) return;
-
-  throw new StaticExportError([
-    staticExportDiagnostic(
-      write.diagnosticPath,
-      `KV229 static export cannot write ${write.kind} '${write.diagnosticPath}' because target '${write.targetPath}' is a directory.`,
-    ),
-  ]);
-}
-
-async function createStaticExportStagingRoot(root: string): Promise<string> {
-  await mkdir(path.dirname(root), { recursive: true });
-  return await mkdtemp(path.join(path.dirname(root), '.kovo-static-export-'));
-}
-
-function staticExportStagedTargetPath(
-  root: string,
-  stagingRoot: string,
-  targetPath: string,
-): string {
-  return path.join(stagingRoot, path.relative(root, targetPath));
-}
-
-async function commitStaticExportStagedOutput(
-  plan: StaticExportOutputPlan,
-  stagingRoot: string,
-): Promise<void> {
-  for (const write of plan.writes) {
-    const stagedPath = staticExportStagedTargetPath(plan.root, stagingRoot, write.targetPath);
-    await assertStaticExportOutputRoot(plan.root);
-    await ensureStaticExportTargetParentDirectories(plan.root, write);
-    await assertStaticExportTargetIsNotDirectory(write);
-    await rename(stagedPath, write.targetPath);
-  }
 }
 
 function staticExportAssetHeaders(asset: StaticExportAssetInput): Record<string, string> {
