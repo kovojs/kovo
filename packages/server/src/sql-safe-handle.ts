@@ -25,7 +25,16 @@ export interface ManagedSqlWritePolicy {
   touches?: readonly string[];
 }
 
+export const kovoAsyncMutationTransaction = Symbol('kovo.async-mutation-transaction');
+
+export type AsyncMutationTransactionCapableDb = {
+  [kovoAsyncMutationTransaction]?<Result>(
+    callback: (transactionDb: unknown) => Promise<Result>,
+  ): Promise<Result>;
+};
+
 const managedTransactionQueue = new WeakMap<object, Promise<void>>();
+let sqliteSavepointId = 0;
 
 /**
  * Resolve the managed-SQL guard mode (SPEC §10.2/§744). The fail-closed default — in every
@@ -70,6 +79,16 @@ function wrapDbAdapter(
 
   const proxy = new Proxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
+      if (prop === kovoAsyncMutationTransaction) {
+        if (!sqliteTransactionClient(target)) return undefined;
+        return <Result>(callback: (transactionDb: unknown) => Promise<Result>) =>
+          runSqliteAsyncTransaction(
+            target,
+            wrapTransactionDb(target, mode, proxyCache, methodCache, writePolicy),
+            callback,
+          );
+      }
+
       const value = Reflect.get(target, prop, receiver);
 
       if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
@@ -181,6 +200,14 @@ function guardedTransactionMethod(
 ): Function {
   return (callback: unknown, ...args: unknown[]) => {
     if (typeof callback !== 'function') return value.call(target, callback, ...args);
+    if (args.length === 0) {
+      const sqlite = runSqliteAsyncTransaction(
+        target,
+        wrapTransactionDb(target, mode, proxyCache, methodCache, writePolicy),
+        (tx) => Promise.resolve(callback(tx)),
+      );
+      if (sqlite) return sqlite;
+    }
     return runQueuedManagedTransaction(target, () =>
       value.call(
         target,
@@ -190,6 +217,76 @@ function guardedTransactionMethod(
       ),
     );
   };
+}
+
+type SqliteTransactionClient = {
+  exec(statement: string): unknown;
+  readonly inTransaction?: boolean;
+};
+
+export function runSqliteAsyncTransaction<Result>(
+  db: unknown,
+  transactionDb: unknown,
+  callback: (transactionDb: unknown) => Promise<Result>,
+): Promise<Result> | undefined {
+  const client = sqliteTransactionClient(db);
+  if (!client) return undefined;
+
+  const queueTarget = (typeof db === 'object' && db !== null ? db : client) as object;
+  return runQueuedManagedTransaction(queueTarget, () =>
+    runSqliteTransactionControl(client, () => callback(transactionDb)),
+  );
+}
+
+export function canRunSqliteAsyncTransaction(db: unknown): boolean {
+  return sqliteTransactionClient(db) !== undefined;
+}
+
+function sqliteTransactionClient(db: unknown): SqliteTransactionClient | undefined {
+  if (!isRecord(db)) return undefined;
+
+  if (isSqliteTransactionClient(db)) return db;
+
+  const client = db.$client;
+  return isSqliteTransactionClient(client) ? client : undefined;
+}
+
+function isSqliteTransactionClient(value: unknown): value is SqliteTransactionClient {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.exec === 'function' &&
+    typeof value.transaction === 'function' &&
+    typeof value.prepare === 'function' &&
+    'inTransaction' in value
+  );
+}
+
+async function runSqliteTransactionControl<Result>(
+  client: SqliteTransactionClient,
+  callback: () => Promise<Result>,
+): Promise<Result> {
+  // SPEC §10.3: better-sqlite3 transactions are synchronous, but mutation handlers may be async.
+  // Keep the transaction open across the awaited handler with framework-owned control statements.
+  const nested = client.inTransaction === true;
+  const savepoint = nested ? `kovo_mutation_${++sqliteSavepointId}` : undefined;
+
+  client.exec(savepoint === undefined ? 'BEGIN' : `SAVEPOINT ${savepoint}`);
+  try {
+    const result = await callback();
+    client.exec(savepoint === undefined ? 'COMMIT' : `RELEASE ${savepoint}`);
+    return result;
+  } catch (error) {
+    try {
+      client.exec(savepoint === undefined ? 'ROLLBACK' : `ROLLBACK TO ${savepoint}`);
+      if (savepoint !== undefined) client.exec(`RELEASE ${savepoint}`);
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        'Kovo SQLite mutation transaction rollback failed after a handler error (SPEC §10.3).',
+      );
+    }
+    throw error;
+  }
 }
 
 async function runQueuedManagedTransaction<Result>(
@@ -211,6 +308,10 @@ async function runQueuedManagedTransaction<Result>(
       managedTransactionQueue.delete(target);
     }
   }
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function wrapTransactionDb(

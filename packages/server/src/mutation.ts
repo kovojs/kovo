@@ -82,6 +82,12 @@ import {
   selectMutationResponseTargets,
 } from './mutation/targets.js';
 import { mutationWithRuntimeRegistryFacts, type RuntimeRegistryFacts } from './registry-facts.js';
+import {
+  canRunSqliteAsyncTransaction,
+  kovoAsyncMutationTransaction,
+  runSqliteAsyncTransaction,
+  type AsyncMutationTransactionCapableDb,
+} from './sql-safe-handle.js';
 import type {
   MutationContext,
   MutationDefinition,
@@ -528,6 +534,13 @@ async function runInDefaultTransaction<Request, GuardedRequest, Value>(
 
   // SPEC §10.3: default mutation handlers receive a transaction-scoped db when the
   // request db can open one, so handler/DB errors roll back the framework-owned lifecycle.
+  const runAsyncTransaction = asyncMutationTransaction(db);
+  if (runAsyncTransaction) {
+    return runAsyncTransaction((transactionDb) =>
+      runHandler(requestWithTransactionDb(lifecycleRequest, transactionDb) as GuardedRequest),
+    );
+  }
+
   return db.transaction((transactionDb) =>
     runHandler(requestWithTransactionDb(lifecycleRequest, transactionDb) as GuardedRequest),
   );
@@ -538,6 +551,24 @@ function transactionCapableRequestDb(request: unknown): TransactionCapableReques
   const db = request.db;
   if (!isRecord(db) || typeof db.transaction !== 'function') return undefined;
   return db as TransactionCapableRequestDb;
+}
+
+function asyncMutationTransaction(
+  db: TransactionCapableRequestDb,
+):
+  | (<Result>(callback: (transactionDb: unknown) => Promise<Result>) => Promise<Result>)
+  | undefined {
+  const managed = (db as AsyncMutationTransactionCapableDb)[kovoAsyncMutationTransaction];
+  if (typeof managed === 'function') return managed.bind(db);
+
+  if (!canRunSqliteAsyncTransaction(db)) return undefined;
+  return <Result>(callback: (transactionDb: unknown) => Promise<Result>) => {
+    const result = runSqliteAsyncTransaction(db, db, callback);
+    if (result === undefined) {
+      throw new Error('Kovo SQLite mutation transaction adapter disappeared during execution.');
+    }
+    return result;
+  };
 }
 
 function requestWithTransactionDb(request: unknown, transactionDb: unknown): unknown {
