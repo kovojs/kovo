@@ -11,7 +11,7 @@ works end-to-end (the earlier `bugz-16`/super-8 B2 report was a WIP-tree artifac
 
 **Meta-theme — the raw-SQL escape hatch is a trap: the safe form is unusable, and the unsafe
 form is ungated.** Kovo's own `sql`/`staticSql`/`sql.identifier` constructors return brand-only
-types that erase Drizzle's `SQL` type and lack a `<T>` parameter, so they fit *no* Drizzle sink —
+types that erase Drizzle's `SQL` type and lack a `<T>` parameter, so they fit _no_ Drizzle sink —
 including `db.execute()` (§B). That pushes authors onto drizzle-native `sql` + `db.execute(...)` —
 which the static analyzer classifies as `UNCLASSIFIED`, so a raw-SQL write contributes no
 write/owner facts and the KV414 (IDOR) / KV438 (mass-assignment) gates silently pass (escalated to
@@ -55,8 +55,8 @@ fingerprint → silent lost-update; B3 — the scaffold ships Better Auth creden
   - Root cause: `packages/drizzle/src/runtime.ts:85-90` declares `SqlTag` returning bare brand interfaces (`KovoParameterizedSql`/`KovoStaticSql`/`KovoSqlIdentifier`/`KovoSqlKeyword`, `:43-83` — each only `{ readonly __kovoSqlBrand?… }`), with no `SQL<T>` shape and no type parameter, so they satisfy no Drizzle method signature.
   - Why it matters: SPEC §10.2 lists Kovo `sql`/`staticSql` as the ordinary accepted forms on managed handles, and KV422 pushes authors onto them — but they fit nowhere in the Drizzle API surface. The practical consequence is the security half: authors fall back to drizzle-native `sql` + `db.execute(...)`, which is the **ungated** path (`bugz-20` B1). The framework's safe escape being unusable is what makes the unsafe one attractive.
   - Repro evidence: `t3-sql-surface` — `tsc --noEmit` on a probe importing `sql` from `@kovojs/drizzle` → `TS2558` and sink type errors. Source: `runtime.ts:43-90`.
-  - Acceptance: Kovo's `sql`/`staticSql` constructors return a Drizzle-`SQL<T>`-compatible (branded) type usable in Drizzle sinks including `db.execute`, with a working `<T>` parameter. Prove with a `tsc` fixture: `db.execute(sql\`…\`)` and `.where(sql\`…\`)` type-check with Kovo's `sql`. SPEC §10.2. (Pairs with `bugz-20` B1: fixing this is the prerequisite for steering authors onto a gated raw-SQL path.)
-  - Evidence: `pnpm exec vitest run packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/raw-sql-static.test.ts packages/drizzle/src/index.writes-receivers.test.ts`; prod-artifact raw-SQL gates include `db.execute(sql\`...\`)` and `trustedSql(...)`.
+  - Acceptance: Kovo's `sql`/`staticSql` constructors return a Drizzle-`SQL<T>`-compatible (branded) type usable in Drizzle sinks including `db.execute`, with a working `<T>` parameter. Prove with a `tsc` fixture: ``db.execute(sql`…`)`` and ``.where(sql`…`)`` type-check with Kovo's `sql`. SPEC §10.2. (Pairs with `bugz-20` B1: fixing this is the prerequisite for steering authors onto a gated raw-SQL path.)
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/runtime-surface.test.ts packages/drizzle/src/raw-sql-static.test.ts packages/drizzle/src/index.writes-receivers.test.ts`; prod-artifact raw-SQL gates include ``db.execute(sql`...`)`` and `trustedSql(...)`.
 
 ### C. The production build is non-hermetic and non-deterministic
 
@@ -79,7 +79,7 @@ fingerprint → silent lost-update; B3 — the scaffold ships Better Auth creden
 ### D. Routing / head metadata
 
 - [x] **D1 — SPEC §6.4's typed `meta: ({ params }, queries) => RouteMeta` callback is neither type-checkable nor wired: `route().meta` accepts only a static object or a query-only `{ queries, resolve }` factory, so a param-dependent document title is inexpressible.** (med, framework; found by `t5-nested-routing`)
-  - Observed behavior: `route('/contacts/:id', { params: s.object({ id: s.string() }), meta: ({ params }) => ({ title: \`Contact ${params.id}\` }) })` → `TS2322: Type '({ params }) => {…}' is not assignable to …`. A per-entity document title (the obvious use of a dynamic-segment route) cannot be authored.
+  - Observed behavior: ``route('/contacts/:id', { params: s.object({ id: s.string() }), meta: ({ params }) => ({ title: `Contact ${params.id}` }) })`` → `TS2322: Type '({ params }) => {…}' is not assignable to …`. A per-entity document title (the obvious use of a dynamic-segment route) cannot be authored.
   - Root cause: `RouteMetaSource = RouteMeta | RouteMetaFactory` (`packages/server/src/hints.ts:39`); `PageHintOptions.meta` is `RouteMetaSource | readonly RouteMetaSource[]` (`:111`); the factory form is query-only (`{ queries, resolve }`), with no `({ params }) => …` signature — so the SPEC §6.4 param-dependent callback type-errors and is unwired.
   - Why it matters: SPEC §6.4 presents `meta: ({ params }, queries) => ({…}) // typed, fed by queries` as a flagship part of typed routing; per-entity titles/OG tags are a baseline need for any detail route, and the documented shape doesn't compile.
   - Repro evidence: `t5-nested-routing` — the `meta` callback above fails `tsc`. Source: `hints.ts:39,111`.

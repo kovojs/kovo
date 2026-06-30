@@ -124,35 +124,36 @@ sql.raw = <T = unknown>(value: string) => {
 
 sql.identifier = <T = unknown>(value: string, options: { allow?: readonly string[] } = {}) => {
   const identifier = validateSqlIdentifier(value, options.allow);
-  const factory = (drizzleSql as unknown as { identifier?: (value: string) => object }).identifier;
+  const factory = (
+    drizzleSql as unknown as { identifier?: <TResult = unknown>(value: string) => SQL<TResult> }
+  ).identifier;
   const statement =
     typeof factory === 'function'
-      ? factory(identifier)
-      : drizzleSql.raw(quoteSqlIdentifier(identifier));
-  return stampSqlIdentifier(statement) as KovoSqlIdentifier<T>;
+      ? factory<T>(identifier)
+      : (drizzleSql.raw(quoteSqlIdentifier(identifier)) as SQL<T>);
+  return stampSqlIdentifier(statement);
 };
 
 sql.allow = <T = unknown>(value: string, allow: readonly string[]) => {
   const fragment = validateSqlAllow(value, allow);
-  return stampSqlKeyword(drizzleSql.raw(fragment)) as KovoSqlKeyword<T>;
+  return stampSqlKeyword(drizzleSql.raw(fragment) as SQL<T>);
 };
 
 sql.join = <T = unknown>(parts: readonly unknown[], separator: unknown = drizzleSql.raw(', ')) => {
   const factory = (
-    drizzleSql as unknown as { join?: (parts: unknown[], separator?: unknown) => object }
+    drizzleSql as unknown as {
+      join?: <TResult = unknown>(parts: unknown[], separator?: unknown) => SQL<TResult>;
+    }
   ).join;
   const statement =
     typeof factory === 'function'
-      ? factory([...parts], separator)
-      : drizzleSql`${parts.reduce<unknown[]>((items, part, index) => {
+      ? factory<T>([...parts], separator)
+      : drizzleSql<T>`${parts.reduce<unknown[]>((items, part, index) => {
           if (index > 0) items.push(separator);
           items.push(part);
           return items;
         }, [])}`;
-  return stampParameterizedSql(
-    statement,
-    mergeSqlSafetyMetadata([...parts, separator]),
-  ) as KovoParameterizedSql<T>;
+  return stampParameterizedSql(statement, mergeSqlSafetyMetadata([...parts, separator]));
 };
 
 /**
@@ -173,15 +174,14 @@ export function staticSql<T = unknown>(
  * Audited raw-SQL escape hatch. This is the only Kovo brand that may execute a statement
  * containing `sql.raw(...)` chunks on managed DB handles.
  */
-export function trustedSql<T extends object>(
+export function trustedSql<TResult = unknown, T extends SQL<TResult> = SQL<TResult>>(
   statement: T,
   options: { justification: string },
-): T & KovoTrustedSql<T extends SQL<infer TResult> ? TResult : unknown> {
+): T & KovoTrustedSql<TResult> {
   if (!options.justification.trim()) {
     throw new Error('trustedSql requires a non-empty justification.');
   }
-  return stampTrustedSql(statement, options.justification) as T &
-    KovoTrustedSql<T extends SQL<infer TResult> ? TResult : unknown>;
+  return stampTrustedSql(statement, options.justification);
 }
 
 function quoteSqlIdentifier(identifier: string): string {

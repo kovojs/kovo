@@ -76,15 +76,15 @@ export function stampTrustedSql<T extends object>(value: T, justification: strin
 }
 
 /** @internal */
-export function stampSqlIdentifier<T extends object>(value: T): T & SqlIdentifier {
+export function stampSqlIdentifier<T extends object>(value: T): T & StaticSqlText & SqlIdentifier {
   blessSql('sql-identifier', value);
-  return stampStaticSql(value) as T & SqlIdentifier;
+  return stampStaticSql(value) as T & StaticSqlText & SqlIdentifier;
 }
 
 /** @internal */
-export function stampSqlKeyword<T extends object>(value: T): T & SqlKeyword {
+export function stampSqlKeyword<T extends object>(value: T): T & StaticSqlText & SqlKeyword {
   blessSql('sql-keyword', value);
-  return stampStaticSql(value) as T & SqlKeyword;
+  return stampStaticSql(value) as T & StaticSqlText & SqlKeyword;
 }
 
 /** @internal */

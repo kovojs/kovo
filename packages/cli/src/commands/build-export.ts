@@ -20,6 +20,10 @@ import { promisify } from 'node:util';
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import {
+  mergeQueryShapeFactSets,
+  outputSchemaQueryShapeFactsFromSource,
+} from '@kovojs/compiler/internal';
 import type {
   lowerStandaloneSourceDerivedRegistryDeclarations,
   QueryShapeFact,
@@ -761,6 +765,10 @@ async function staticBuildCheckGraph(
           staticDrizzleBuildFacts(files, options),
           componentQueryConsumers(files),
         ]);
+  const queryShapeFacts = mergeQueryShapeFactSets(
+    drizzleFacts.queryShapeFacts,
+    outputSchemaBuildQueryShapeFacts(files),
+  );
   const queryReadSets = app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries));
   const routeOutcomeFacts = routeFileStreamEndpointFacts(app.routes, files);
 
@@ -788,8 +796,14 @@ async function staticBuildCheckGraph(
       pages: app.routes.map(routeCheckFact),
       queries: queryReadSets,
     },
-    queryShapeFacts: drizzleFacts.queryShapeFacts,
+    queryShapeFacts,
   };
+}
+
+function outputSchemaBuildQueryShapeFacts(
+  files: readonly BuildCheckSourceFile[],
+): readonly QueryShapeFact[] {
+  return files.flatMap((file) => outputSchemaQueryShapeFactsFromSource(file.fileName, file.source));
 }
 
 async function componentQueryConsumers(

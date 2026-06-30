@@ -26,6 +26,8 @@ import { createApp, route } from '@kovojs/server';
 import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
+import { installEgressFloorSync } from '../../server/src/egress-bootstrap.js';
+
 import { main, mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
@@ -571,34 +573,36 @@ export default createApp({
         createKovoNodeServer(): Server;
       };
       const server = serverModule.createKovoNodeServer();
-      const origin = await listen(server);
+      await withEnv({ KOVO_LIVE_TARGET_SECRET: 'kovo-build-test-live-target-secret' }, async () => {
+        const origin = await listen(server);
 
-      try {
-        const liveTarget = await textById(
-          origin,
-          '/__test/contacts-live-target',
-          'contacts-live-target',
-        );
-        const mutationResponse = await fetch(`${origin}/_m/contacts/add`, {
-          body: new URLSearchParams(),
-          headers: {
-            'Content-Type': 'application/x-www-form-urlencoded',
-            'Kovo-Fragment': 'true',
-            'Kovo-Live-Targets': liveTarget,
-            'Kovo-Targets': 'contacts-region=contacts',
-            Referer: `${origin}/`,
-          },
-          method: 'POST',
-        });
-        const mutationBody = await mutationResponse.text();
-        expect(mutationResponse.status, mutationBody).toBe(200);
-        expect(mutationBody.length).toBeGreaterThan(0);
-        expect(mutationBody).toContain('<kovo-query name="contacts">{"count":1}</kovo-query>');
-        expect(mutationBody).toContain('<kovo-fragment target="contacts-region">');
-        expect(mutationBody).toContain('<strong data-bind="contacts.count">1</strong>');
-      } finally {
-        await close(server);
-      }
+        try {
+          const liveTarget = await textById(
+            origin,
+            '/__test/contacts-live-target',
+            'contacts-live-target',
+          );
+          const mutationResponse = await fetch(`${origin}/_m/contacts/add`, {
+            body: new URLSearchParams(),
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+              'Kovo-Fragment': 'true',
+              'Kovo-Live-Targets': liveTarget,
+              'Kovo-Targets': 'contacts-region=contacts',
+              Referer: `${origin}/`,
+            },
+            method: 'POST',
+          });
+          const mutationBody = await mutationResponse.text();
+          expect(mutationResponse.status, mutationBody).toBe(200);
+          expect(mutationBody.length).toBeGreaterThan(0);
+          expect(mutationBody).toContain('<kovo-query name="contacts">{"count":1}</kovo-query>');
+          expect(mutationBody).toContain('<kovo-fragment target="contacts-region">');
+          expect(mutationBody).toContain('<strong data-bind="contacts.count">1</strong>');
+        } finally {
+          await close(server);
+        }
+      });
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -1733,48 +1737,50 @@ export async function resetFixture() {
         createKovoNodeServer(): Server;
       };
       const server = serverModule.createKovoNodeServer();
-      const origin = await listen(server);
+      await withEnv({ KOVO_LIVE_TARGET_SECRET: 'kovo-build-test-live-target-secret' }, async () => {
+        const origin = await listen(server);
 
-      try {
-        const homePanelLiveTarget = await homePanelLiveTargetHeader(origin);
-        const loginMutationResponse = await fetch(`${origin}/_m/home/touch`, {
-          body: new URLSearchParams(),
-          headers: {
-            'Kovo-Fragment': 'true',
-            'Kovo-Live-Targets': homePanelLiveTarget,
-            'Kovo-Targets': 'home-panel=home',
-            Referer: `${origin}/login`,
-          },
-          method: 'POST',
-        });
-        const loginMutationBody = await loginMutationResponse.text();
-        expect(loginMutationResponse.status, loginMutationBody).toBe(200);
-        expect(loginMutationBody).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
-        expect(loginMutationBody).toContain(`<link rel="stylesheet" href="${loginCss.href}">`);
-        expect(loginMutationBody).toContain(
-          `<link rel="stylesheet" href="${homeFragmentCss.href}">`,
-        );
-        expect(loginMutationBody).not.toContain(homeCss.href);
+        try {
+          const homePanelLiveTarget = await homePanelLiveTargetHeader(origin);
+          const loginMutationResponse = await fetch(`${origin}/_m/home/touch`, {
+            body: new URLSearchParams(),
+            headers: {
+              'Kovo-Fragment': 'true',
+              'Kovo-Live-Targets': homePanelLiveTarget,
+              'Kovo-Targets': 'home-panel=home',
+              Referer: `${origin}/login`,
+            },
+            method: 'POST',
+          });
+          const loginMutationBody = await loginMutationResponse.text();
+          expect(loginMutationResponse.status, loginMutationBody).toBe(200);
+          expect(loginMutationBody).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
+          expect(loginMutationBody).toContain(`<link rel="stylesheet" href="${loginCss.href}">`);
+          expect(loginMutationBody).toContain(
+            `<link rel="stylesheet" href="${homeFragmentCss.href}">`,
+          );
+          expect(loginMutationBody).not.toContain(homeCss.href);
 
-        const homeMutationResponse = await fetch(`${origin}/_m/home/touch`, {
-          body: new URLSearchParams(),
-          headers: {
-            'Kovo-Fragment': 'true',
-            'Kovo-Live-Targets': homePanelLiveTarget,
-            'Kovo-Targets': 'home-panel=home',
-            Referer: `${origin}/`,
-          },
-          method: 'POST',
-        });
-        const homeMutationBody = await homeMutationResponse.text();
-        expect(homeMutationResponse.status, homeMutationBody).toBe(200);
-        expect(homeMutationBody).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
-        expect(homeMutationBody).toContain(`<link rel="stylesheet" href="${homeCss.href}">`);
-        expect(homeMutationBody).not.toContain(homeFragmentCss.href);
-        expect(homeMutationBody).not.toContain(loginCss.href);
-      } finally {
-        await close(server);
-      }
+          const homeMutationResponse = await fetch(`${origin}/_m/home/touch`, {
+            body: new URLSearchParams(),
+            headers: {
+              'Kovo-Fragment': 'true',
+              'Kovo-Live-Targets': homePanelLiveTarget,
+              'Kovo-Targets': 'home-panel=home',
+              Referer: `${origin}/`,
+            },
+            method: 'POST',
+          });
+          const homeMutationBody = await homeMutationResponse.text();
+          expect(homeMutationResponse.status, homeMutationBody).toBe(200);
+          expect(homeMutationBody).toContain(`<link rel="stylesheet" href="${baseCss.href}">`);
+          expect(homeMutationBody).toContain(`<link rel="stylesheet" href="${homeCss.href}">`);
+          expect(homeMutationBody).not.toContain(homeFragmentCss.href);
+          expect(homeMutationBody).not.toContain(loginCss.href);
+        } finally {
+          await close(server);
+        }
+      });
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -2480,7 +2486,7 @@ import { contactsQuery } from '../contacts-query.js';
 
 export const ContactsRegion = component({
   queries: { contacts: contactsQuery },
-  render: ({ contacts }) => (
+  render: ({ contacts }: { contacts: { count: number } }) => (
     <section>
       <strong>{contacts.count}</strong>
     </section>
@@ -3328,7 +3334,9 @@ async function listen(server: Server): Promise<string> {
     throw new Error('Expected kovo build test server to listen on an ephemeral port.');
   }
 
-  return `http://127.0.0.1:${address.port}`;
+  const origin = `http://127.0.0.1:${address.port}`;
+  installEgressFloorSync({ allowInternal: [`127.0.0.1:${address.port}`] }, () => {});
+  return origin;
 }
 
 async function close(server: Server): Promise<void> {

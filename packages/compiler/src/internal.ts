@@ -99,6 +99,10 @@ export {
   queryShapeTypeExpression,
   queryShapesFromFacts,
 } from './types.js';
+export {
+  mergeQueryShapeFactSets,
+  outputSchemaQueryShapeFactsFromSource,
+} from './query-shape-source.js';
 export { collectMinifierReservedNames } from './compile.js';
 export { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 export type {

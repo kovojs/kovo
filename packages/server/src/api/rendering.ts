@@ -41,6 +41,7 @@ export type {
   I18nCatalog,
   PageHintOptions,
   RouteMeta,
+  RouteMetaCallback,
   RouteMetaFactory,
   RouteMetaSource,
   RoutePrefetch,
