@@ -16,6 +16,7 @@ import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
+import type { TaskDefinition, TaskFactory } from './task.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 
@@ -53,6 +54,8 @@ export interface AppAuthoringContext<AppRequest> {
   mutation: MutationFactory<AppRequest>;
   /** Define a route whose `guard`/`page` callbacks see the app lifecycle request. */
   route: RouteFactory<AppRequest>;
+  /** Define a durable task registry entry (SPEC §9.6). */
+  task: TaskFactory;
 }
 
 export type AppAuthoringDeclarations<Declaration, AppRequest> =
@@ -244,6 +247,8 @@ export interface CreateAppOptions<
   sessionProvider?: SessionProvider<RawRequest, SessionValue>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
   stylesheets?: readonly (string | StylesheetAsset)[];
+  /** Durable task declarations available to `request.schedule(...)` (SPEC §9.6). */
+  tasks?: AppAuthoringDeclarations<AppTaskDeclaration, AppRequest>;
 }
 
 /**
@@ -287,6 +292,8 @@ export interface KovoApp<
   sessionProvider?: SessionProvider<any, any>;
   /** App-wide stylesheets inherited by route documents (SPEC §13.1). */
   stylesheets: readonly (string | StylesheetAsset)[];
+  /** Durable task registry drained by the node JobRunner (SPEC §9.6). */
+  tasks: readonly AppTaskDeclaration[];
 }
 
 /** Web-standard request handler returned by `createRequestHandler()` (SPEC §9.5). */
@@ -296,6 +303,9 @@ export interface AppMutationDeclaration<_AppRequest = unknown> {
   key: string;
   [field: string]: any;
 }
+
+/** Task declaration shape accepted by `createApp({ tasks })` and stored on `KovoApp` (SPEC §9.6). */
+export type AppTaskDeclaration<_AppRequest = unknown> = TaskDefinition<string, any, any>;
 
 /**
  * Runtime context passed to mutation response resolvers when the request shell

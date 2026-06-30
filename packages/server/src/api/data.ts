@@ -22,8 +22,10 @@ export type { JsonSerializable } from '../json-boundary.js';
 export { errorBoundary, queue, stream, write } from '../mutation.js';
 import { mutation as mutationImplementation } from '../mutation.js';
 import { query as queryImplementation } from '../query.js';
+import { task as taskImplementation } from '../task.js';
 import type { MutationFactory } from '../mutation.js';
 import type { QueryFactory } from '../query.js';
+import type { TaskFactory } from '../task.js';
 
 /**
  * Declare a typed write using source-derived registry identity (SPEC §4.1/§10.3).
@@ -86,6 +88,23 @@ export type {
  */
 export const query = queryImplementation as unknown as QueryFactory;
 export { drainElevatedQueryFacts } from '../query.js';
+/**
+ * Declare a durable background function whose serialized jobs are enqueued by
+ * `request.schedule(...)` and drained by the node JobRunner (SPEC §9.6).
+ */
+export const task = taskImplementation as unknown as TaskFactory;
+export type {
+  TaskDefinition,
+  TaskFactory,
+  TaskHandle,
+  TaskInput,
+  TaskRunnableMutation,
+  TaskRunnableMutationInput,
+  TaskRunnableQuery,
+  TaskRunnableQueryInput,
+  TaskRunContext,
+  TaskScheduleOptions,
+} from '../task.js';
 // SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle. `Reader<Db>`
 // is the read-only loader-handle type mirror; `KovoReadonlyHandleError` is the fail-closed runtime
 // throw a `query()` loader's write verb raises.

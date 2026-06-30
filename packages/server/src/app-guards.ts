@@ -27,6 +27,7 @@ export function isKovoApp(value: unknown): value is KovoApp {
     isAppRequestLimits(value.requestLimits) &&
     isOptionalFunction(value.sessionProvider) &&
     isStylesheets(value.stylesheets) &&
+    isTaskDeclarations(value.tasks) &&
     isOptionalCsrfOptions(value.csrf)
   );
 }
@@ -232,6 +233,22 @@ function isQueryDeclarations(value: unknown): value is KovoApp['queries'] {
           typeof query.version === 'number' ||
           typeof query.version === 'string' ||
           typeof query.version === 'function'),
+    )
+  );
+}
+
+function isTaskDeclarations(value: unknown): value is KovoApp['tasks'] {
+  return (
+    Array.isArray(value) &&
+    value.every(
+      (task) =>
+        isRecord(task) &&
+        typeof task.key === 'string' &&
+        isSchemaLike(task.input) &&
+        typeof task.run === 'function' &&
+        (task.retry === undefined || isRecord(task.retry)) &&
+        (task.timeoutMs === undefined || typeof task.timeoutMs === 'number') &&
+        (task.maxGenerations === undefined || typeof task.maxGenerations === 'number'),
     )
   );
 }

@@ -8,6 +8,7 @@ import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.j
 import { mutation } from './mutation.js';
 import { query } from './query.js';
 import { layout, route } from './route.js';
+import { task } from './task.js';
 import { runtimeRegistryFacts } from './registry-facts.js';
 import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
 import { resolveBootMode, validateAppEnv } from './env.js';
@@ -33,6 +34,7 @@ export type {
   AppRequestRateLimitOptions,
   AppRouteDeclaration,
   AppRouteRenderContext,
+  AppTaskDeclaration,
   CreateAppOptions,
   ErrorShellRenderer,
   KovoApp,
@@ -50,6 +52,7 @@ import type {
   AppMutationDeclaration,
   AppQueryDeclaration,
   AppRouteDeclaration,
+  AppTaskDeclaration,
   CreateAppOptions,
   KovoApp,
   RequestHandler,
@@ -119,6 +122,12 @@ export function createApp<
   });
   const queries = runtimeFacts.queries;
   const mutations = runtimeFacts.mutations;
+  const tasks = assertUniqueTaskKeys(
+    resolveAppAuthoringDeclarations<AppTaskDeclaration<AppRequest>, AppRequest>(
+      options.tasks,
+      authoringContext,
+    ),
+  );
   const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
   ensureKovoLoaderRuntimeClientModule(clientModules);
 
@@ -143,6 +152,7 @@ export function createApp<
     ...(options.onError === undefined ? {} : { onError: options.onError }),
     ...(options.renderRoute === undefined ? {} : { renderRoute: options.renderRoute }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
+    tasks,
   };
 }
 
@@ -276,6 +286,30 @@ function assertUniqueMutationKeys<Mutation extends AppMutationDeclaration<any>>(
   return mutations;
 }
 
+function assertUniqueTaskKeys<Task extends AppTaskDeclaration>(
+  tasks: readonly Task[],
+): readonly Task[] {
+  const seen = new Set<string>();
+  for (const taskDeclaration of tasks) {
+    if (typeof taskDeclaration.key !== 'string' || taskDeclaration.key.length === 0) {
+      throw new Error(
+        'createApp() received a task without a derived key. ' +
+          'task({ input, run }) requires compiler-emitted source-derived key metadata or an ' +
+          'explicit task("key", ...) key (SPEC §9.6).',
+      );
+    }
+    if (seen.has(taskDeclaration.key)) {
+      throw new Error(
+        `createApp() received two tasks with the same key "${taskDeclaration.key}". ` +
+          'Task keys address one durable background handler for request.schedule() and the ' +
+          'JobRunner (SPEC §9.6); a duplicate key makes dispatch ambiguous.',
+      );
+    }
+    seen.add(taskDeclaration.key);
+  }
+  return tasks;
+}
+
 /**
  * Turn a `KovoApp` into a `(request: Request) => Response` handler that dispatches
  * to routes, queries, mutations, and endpoints. Requires an app built by
@@ -300,6 +334,7 @@ function appAuthoringContext<AppRequest>(): AppAuthoringContext<AppRequest> {
     mutation: mutation as unknown as AppAuthoringContext<AppRequest>['mutation'],
     query: query as unknown as AppAuthoringContext<AppRequest>['query'],
     route: route as AppAuthoringContext<AppRequest>['route'],
+    task: task as AppAuthoringContext<AppRequest>['task'],
   };
 }
 
