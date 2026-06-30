@@ -1,3 +1,7 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle-fixtures.js';
@@ -8,8 +12,39 @@ import {
   readInlineMutationResponseBodyChunks,
   readMutationResponseBodyCore,
   readMutationResponseElementChunks,
+  type InlineMutationResponseBodyChunks,
 } from './wire-response-scanner.js';
 import { readAttribute, unescapeHtml } from './wire-html.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
+
+function bodySnapshot(chunks: InlineMutationResponseBodyChunks): {
+  fragments: FragmentSnapshot[];
+  queries: InlineMutationResponseBodyChunks['queries'];
+  texts?: InlineMutationResponseBodyChunks['texts'];
+} {
+  return {
+    ...chunks,
+    fragments: fragmentSnapshots(chunks.fragments),
+  };
+}
 
 describe('wire response scanner', () => {
   it('keeps low-level HTML scanner helpers behind the chunk-reader surface', async () => {
@@ -103,13 +138,15 @@ describe('wire response scanner', () => {
     // SPEC.md §4.4/§9.1: inline enhanced responses dispatch raw query chunks
     // for modular JSON decoding while fragment apply consumes canonical chunks.
     expect(
-      readInlineMutationResponseBodyChunks(
-        [
-          '<kovo-query name="cart" key="cart&gt;1">{&quot;count&quot;:1}</kovo-query>',
-          '<kovo-query>{"ignored":true}</kovo-query>',
-          '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
-          '<kovo-fragment target="cart-list" mode="append"><li>p1</li></kovo-fragment>',
-        ].join(''),
+      bodySnapshot(
+        readInlineMutationResponseBodyChunks(
+          [
+            '<kovo-query name="cart" key="cart&gt;1">{&quot;count&quot;:1}</kovo-query>',
+            '<kovo-query>{"ignored":true}</kovo-query>',
+            '<kovo-fragment target="cart-badge"><cart-badge>1</cart-badge></kovo-fragment>',
+            '<kovo-fragment target="cart-list" mode="append"><li>p1</li></kovo-fragment>',
+          ].join(''),
+        ),
       ),
     ).toEqual({
       fragments: [
@@ -147,22 +184,26 @@ describe('wire response scanner', () => {
 
     const core = readMutationResponseBodyCore(body);
 
-    expect(core).toEqual({
+    expect(bodySnapshot(core)).toEqual({
       fragments: [{ html: '<cart-badge>1</cart-badge>', target: 'cart-badge' }],
       queries: [
-        {
-          attrs: ' name="cart"',
-          content: '{"count":1}',
-          end: expect.any(Number),
-          start: expect.any(Number),
-        },
+        [
+          {
+            attrs: ' name="cart"',
+            content: '{"count":1}',
+            end: expect.any(Number),
+            start: expect.any(Number),
+          },
+        ][0],
       ],
     });
     // The inline reader is a thin wrapper over the same core, so its output is
     // structurally identical to the core called without malformed callbacks.
-    expect(readInlineMutationResponseBodyChunks(body)).toEqual(core);
-    expect(core.fragments).toEqual(
-      readFragmentChunksFromElements(readMutationResponseElementChunks(body).fragments),
+    expect(bodySnapshot(readInlineMutationResponseBodyChunks(body))).toEqual(bodySnapshot(core));
+    expect(fragmentSnapshots(core.fragments)).toEqual(
+      fragmentSnapshots(
+        readFragmentChunksFromElements(readMutationResponseElementChunks(body).fragments),
+      ),
     );
   });
 
@@ -202,15 +243,17 @@ describe('wire response scanner', () => {
 
     // SPEC.md §4.4/§9.1: the extracted inline parser and modular mutation-body
     // parser share the scanner-owned fragment projection after element scanning.
-    expect(readFragmentChunksFromElements(elements)).toEqual([
+    expect(fragmentSnapshots(readFragmentChunksFromElements(elements))).toEqual([
       { html: '<cart-badge>1</cart-badge>', target: 'cart>badge' },
       { html: '<li>p1</li>', mode: 'append', target: 'cart-list' },
     ]);
-    expect(readInlineMutationResponseBodyChunks(body).fragments).toEqual(
-      readMutationResponseBodyChunks(body).fragments,
+    expect(fragmentSnapshots(readInlineMutationResponseBodyChunks(body).fragments)).toEqual(
+      fragmentSnapshots(readMutationResponseBodyChunks(body).fragments),
     );
-    expect(readMutationResponseBodyChunks(body).fragments).toEqual(
-      readFragmentChunksFromElements(readMutationResponseElementChunks(body).fragments),
+    expect(fragmentSnapshots(readMutationResponseBodyChunks(body).fragments)).toEqual(
+      fragmentSnapshots(
+        readFragmentChunksFromElements(readMutationResponseElementChunks(body).fragments),
+      ),
     );
   });
 
@@ -246,7 +289,7 @@ describe('wire response scanner', () => {
     const inline = readInlineMutationResponseBodyChunks(fixture.runtime.body);
 
     expect(modular.queries.map((query) => query.name)).toEqual(['cart', 'product']);
-    expect(modular.fragments).toEqual([
+    expect(fragmentSnapshots(modular.fragments)).toEqual([
       {
         html: fixture.runtime.fragmentHtml,
         mode: 'append',
@@ -254,6 +297,6 @@ describe('wire response scanner', () => {
       },
     ]);
     expect(inline.queries.map((query) => query.attrs)).toEqual([' name="cart"', ' name="product"']);
-    expect(inline.fragments).toEqual(modular.fragments);
+    expect(fragmentSnapshots(inline.fragments)).toEqual(fragmentSnapshots(modular.fragments));
   });
 });

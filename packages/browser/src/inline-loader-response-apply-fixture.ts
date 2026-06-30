@@ -1,9 +1,15 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
+
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import { createQueryStore } from './client.js';
 import type { InlineSourceInstall } from './inline-loader-test-utils.js';
 import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
 import { applyInlineQueryEventToRuntime } from './query-events.js';
 import type { InlineQueryEvent } from './query-events.js';
+import type { HtmlResponseFragmentApplyTarget } from './response-fragment-apply.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 import { readInlineMutationResponseBodyChunks } from './wire-response-scanner.js';
 import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle-fixtures.js';
@@ -11,6 +17,25 @@ import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle
 interface InlineResponseApplyAssertions {
   expect: typeof import('vitest').expect;
   vi: { fn: <T extends (...args: never[]) => unknown>(implementation?: T) => T };
+}
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
 }
 
 export async function expectInlineResponseApplyParity(
@@ -298,7 +323,10 @@ export async function expectInlineResponseApplyParity(
     expect(inlineTargets.get('cart-badge')?.html).toBe(modularTargets.get('cart-badge')?.html);
     expect(inlineTargets.get('cart-list')?.html).toBe(modularTargets.get('cart-list')?.html);
     expect(inlineTargets.get('cart-summary')?.html).toBe(modularTargets.get('cart-summary')?.html);
-    expect(modularResult).toEqual({
+    expect({
+      ...modularResult,
+      fragments: fragmentSnapshots(modularResult.fragments),
+    }).toEqual({
       appliedFragments: ['cart-badge', 'cart-list', 'cart-summary'],
       fragments: [
         {
@@ -409,7 +437,10 @@ export function expectInlineOracleResponseApplyContract(
       readInlineMutationResponseBodyChunks(fixture.runtime.body),
       {
         findFragmentTarget(target) {
-          return inlineTargets.get(target) ?? null;
+          return (
+            (inlineTargets.get(target) as unknown as HtmlResponseFragmentApplyTarget | undefined) ??
+            null
+          );
         },
       },
     );

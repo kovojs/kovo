@@ -328,6 +328,7 @@ export interface GeneratedRuntimeModule {
   derive?: unknown;
   handler?: unknown;
   installKovoLoader?: (options: unknown) => unknown;
+  runQueryUpdatePlan?: unknown;
   [name: string]: unknown;
 }
 
@@ -655,7 +656,8 @@ const rewriteGeneratedRuntimeImports = (
           imported === 'DomMorphTarget' ||
           imported === 'handler' ||
           imported === 'installKovoLoader' ||
-          imported === 'kovoEscapeHtml'
+          imported === 'kovoEscapeHtml' ||
+          imported === 'runQueryUpdatePlan'
         );
       });
       if (runtimeBindings.length === 0) return _match;

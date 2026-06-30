@@ -333,7 +333,7 @@ test brittleness, and distribution confusion.
   - Evidence: `node packages/ui/scripts/build-registry.mjs` reports generated artifacts up to date, and `pnpm exec vitest --run packages/ui/src/manifest-generation.test.ts packages/ui/src/copy-in.test.ts packages/ui/src/headless-subpath-parity.test.ts examples/gallery/src/component-catalog.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts examples/gallery/src/interactive-gallery.compile.test.ts` passes with the shared primitive/component manifest driving UI registry, headless generated handlers, and gallery fixtures.
   - Rules: `rules/api-surface.md`.
 
-- [ ] **P1.9 - Build cross-package oracle fixtures for compiler/browser/runtime/data contracts.**
+- [x] **P1.9 - Build cross-package oracle fixtures for compiler/browser/runtime/data contracts.**
   - Affected: `packages/compiler/src/test-support.ts`,
     `packages/compiler/src/diagnostic-coverage-matrix.data.ts`,
     `packages/browser/src/inline-loader-response-apply-fixture.ts`,
@@ -352,6 +352,7 @@ test brittleness, and distribution confusion.
   - Verification: new `compiler-browser-contract.test.ts`-style suite; fixture package tests; Drizzle and
     Better Auth pin suites; existing compiler conformance, render-equivalence, inline-loader parity, and
     browser DOM tests.
+  - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/oracle-fixtures.test.ts packages/conformance-fixtures/src/compiler-browser-contract.test.ts packages/conformance-fixtures/src/package-exports.test.ts packages/browser/src/inline-loader-response-apply-runtime.test.ts packages/browser/src/wire-response-scanner.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/render-equivalence-boundary.test.ts`, `pnpm --filter @kovojs/conformance-drizzle-pin test -- src/index.oracle-fixtures.test.ts`, and `pnpm --filter @kovojs/conformance-better-auth-pin test -- src/index.oracle-fixtures.test.ts` pass with the shared oracle fixture exercised through compiler output, modular browser runtime, inline-loader response apply, Drizzle pin, and Better Auth pin coverage.
   - SPEC: sections 1.3, 4.4, 4.8, 5.2, 9.1, 10, 11.1, 11.2.
 
 ## P2 - Public Surface, Distribution, And Test Harness Hygiene

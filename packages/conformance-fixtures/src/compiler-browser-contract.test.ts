@@ -3,6 +3,7 @@ import {
   derive,
   kovoEscapeHtml,
   kovoStyleProperty,
+  runQueryUpdatePlan,
 } from '@kovojs/browser/generated';
 import { createQueryStore } from '@kovojs/browser/client';
 import { createDbVerifier } from '@kovojs/test/internal/verifier';
@@ -70,6 +71,7 @@ describe('compiler/browser oracle contract', () => {
         derive,
         kovoEscapeHtml,
         kovoStyleProperty,
+        runQueryUpdatePlan,
       },
     });
     const queryPlans = clientExports[fixture.component.queryPlanExportName] as Record<
