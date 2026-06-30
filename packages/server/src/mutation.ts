@@ -12,12 +12,7 @@ import {
   verifyCsrfRequestOriginFloor,
   type CsrfValidationOptions,
 } from './csrf.js';
-import {
-  invalidate,
-  mutationRegistryChangeRecords,
-  type ChangeRecord,
-  type MutationTouchSite,
-} from './change-record.js';
+import { invalidate, mutationRegistryChangeRecords, type ChangeRecord } from './change-record.js';
 import { reportServerError } from './diagnostics.js';
 import {
   escapeAttribute,
@@ -36,11 +31,8 @@ import {
   type ResolvedGuardFailure,
 } from './guards.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
-import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
-import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { renderFragmentWireHtml } from './wire-html.js';
-import type { RegisteredQueryDefinition } from './query.js';
 import type { JsonSerializable } from './json-boundary.js';
 import {
   appendResponseHeader,
@@ -88,11 +80,11 @@ import {
   renderQueryChunks,
   selectMutationResponseTargets,
 } from './mutation/targets.js';
+import { mutationWithRuntimeRegistryFacts, type RuntimeRegistryFacts } from './registry-facts.js';
 import type {
   MutationContext,
   MutationDefinition,
   MutationFail,
-  MutationRegistry,
   MutationResult,
   MutationSuccess,
   RunMutationOptions,
@@ -723,7 +715,7 @@ async function renderSuccessfulMutationWireResponse<
     liveTargetDescriptors: wireRequest.liveTargetDescriptors ?? [],
     liveTargetRenderers: wireRequest.liveTargetRenderers ?? [],
     liveTargets: wireRequest.liveTargets,
-    queryDefinitions: definition.registry?.queries ?? [],
+    registryFacts: mutationRuntimeRegistryFacts(definition, wireRequest.liveTargetRenderers ?? []),
     rerunQueries: result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
     targets: wireRequest.targets ?? [],
   });
@@ -870,7 +862,10 @@ export async function renderMutationEndpointResponse<
 ): Promise<MutationEndpointResponse> {
   const liveTargetRenderers =
     endpointRequest.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers<Request>();
-  const endpointDefinition = mutationWithGeneratedRegistryFacts(definition, liveTargetRenderers);
+  const endpointDefinition = mutationWithRuntimeRegistryFacts(definition, {
+    liveTargetRenderers,
+    queries: [],
+  });
   const wireRequest = mutationWireRequestFromHeaders({
     ...endpointRequest,
     liveTargetRenderers,
@@ -938,7 +933,7 @@ function noJsReplayStoreFromMutationStore(
   };
 }
 
-function mutationWithGeneratedRegistryFacts<
+function mutationRuntimeRegistryFacts<
   const Key extends string,
   InputSchema extends Schema<unknown>,
   Errors extends Record<string, Schema<unknown>>,
@@ -948,41 +943,10 @@ function mutationWithGeneratedRegistryFacts<
 >(
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   renderers: readonly LiveTargetRenderer<Request>[],
-): MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest> {
-  const queries = renderers.flatMap((renderer) => renderer.queryDefinitions ?? []);
-  const inferredTouches = registeredGeneratedMutationTouches(definition.key);
-  if (queries.length === 0 && inferredTouches.length === 0) return definition;
-
+): RuntimeRegistryFacts<Request> {
   return {
-    ...definition,
-    registry: mergeMutationRegistryFacts(definition.registry, { inferredTouches, queries }),
-  };
-}
-
-function mergeMutationRegistryFacts(
-  registry: MutationRegistry | undefined,
-  facts: {
-    inferredTouches: readonly MutationTouchSite[];
-    queries: readonly RegisteredQueryDefinition[];
-  },
-): MutationRegistry {
-  const queriesByKey = new Map<string, RegisteredQueryDefinition>();
-
-  for (const queryDefinition of registry?.queries ?? []) {
-    const generatedQueryDefinition = queryWithGeneratedReads(queryDefinition);
-    queriesByKey.set(generatedQueryDefinition.key, generatedQueryDefinition);
-  }
-  for (const queryDefinition of facts.queries) {
-    const generatedQueryDefinition = queryWithGeneratedReads(queryDefinition);
-    if (!queriesByKey.has(generatedQueryDefinition.key)) {
-      queriesByKey.set(generatedQueryDefinition.key, generatedQueryDefinition);
-    }
-  }
-
-  return {
-    ...registry,
-    ...(facts.inferredTouches.length === 0 ? {} : { inferredTouches: facts.inferredTouches }),
-    queries: [...queriesByKey.values()],
+    liveTargetRenderers: renderers,
+    queries: (definition.registry?.queries ?? []) as RuntimeRegistryFacts<Request>['queries'],
   };
 }
 
