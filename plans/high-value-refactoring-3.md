@@ -201,7 +201,7 @@ invariant.
     side effects.
   - Evidence: `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts` passed on 2026-06-30 with SQLite count/fingerprint side-effect coverage and existing PGlite observer coverage.
 
-- [ ] **P2.5 - Make compiler diagnostic coverage producer-owned.**
+- [x] **P2.5 - Make compiler diagnostic coverage producer-owned.**
   - Current signals: `packages/compiler/src/diagnostic-coverage-matrix.data.ts` is a large
     hand-maintained matrix separate from validator modules, `diagnosticDefinitions`, and
     `spec-coverage-map.ts`.
@@ -210,4 +210,4 @@ invariant.
     SPEC citation, positive fixture, and negative fixture.
   - Risk reduced: new compiler diagnostics cannot ship without teaching coverage or clear module
     ownership.
-  - Verification: `pnpm exec vitest --run packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/spec-coverage-map.test.ts packages/compiler/src/compiler-conformance.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/diagnostic-coverage-matrix.test.ts packages/compiler/src/spec-coverage-map.test.ts packages/compiler/src/compiler-conformance.test.ts`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check` passed on 2026-06-30.
