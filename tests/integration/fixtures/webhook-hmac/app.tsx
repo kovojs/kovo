@@ -65,6 +65,7 @@ const stripeLite = webhook('/webhooks/stripe-lite', {
     scheme: 'stripe-lite:v1:hmac-sha256',
     secret: 'whsec_integration',
   }),
+  writes: [invoiceDomain],
 });
 
 export default defineFixture({

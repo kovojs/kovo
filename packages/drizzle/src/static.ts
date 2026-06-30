@@ -1845,7 +1845,9 @@ function extractTouchGraphFromPreparedFiles(
       );
       const visibleUnresolved =
         rawTables.length > 0
-          ? unresolved.filter((site) => site.operation !== 'execute')
+          ? unresolved.filter(
+              (site) => !declaredRawTableCoversUnresolved(site.operation, rawTables),
+            )
           : unresolved;
       if (
         reads.length > 0 ||
@@ -2237,6 +2239,23 @@ function mergedRawTables(
   right: readonly string[] | undefined,
 ): string[] {
   return [...new Set([...(left ?? []), ...(right ?? [])])];
+}
+
+const KOVO_DURABLE_TASK_QUEUE_TABLE = '_kovo_jobs';
+const KOVO_DURABLE_TASK_QUEUE_OPERATIONS = new Set(['cancel', 'schedule']);
+
+function declaredRawTableCoversUnresolved(
+  operation: string,
+  rawTables: readonly string[],
+): boolean {
+  if (operation === 'execute') return true;
+  // SPEC §9.6: request.schedule()/cancel() persist durable queue rows in the
+  // framework-owned _kovo_jobs store; a registry table declaration keeps that
+  // write auditable without treating the request container as opaque Drizzle.
+  return (
+    rawTables.includes(KOVO_DURABLE_TASK_QUEUE_TABLE) &&
+    KOVO_DURABLE_TASK_QUEUE_OPERATIONS.has(operation)
+  );
 }
 
 function mergedRawWriteSqlTrust(

@@ -59,6 +59,7 @@ export default defineFixture({
         scheme: 'stripe-lite:v1:hmac-sha256',
         secret: 'whsec_integration',
       }),
+      writes: [invoiceDomain],
     });
 
     return createApp({ endpoints: [idempotentWebhook] });

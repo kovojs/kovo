@@ -114,6 +114,83 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
     });
   });
 
+  it('keeps undeclared durable task scheduler writes visible as KV406', () => {
+    const graph = extractTouchGraphFromProject(
+      withPgDatabaseTypes({
+        files: [
+          {
+            fileName: 'mutations.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'type TaskRequest = { db: PgAsyncDatabase<any, any>; schedule(task: unknown, args: unknown): Promise<{ id: string }>; cancel(handle: { id: string }): Promise<boolean> };',
+              '',
+              'export const scheduleProof = mutation({',
+              '  async handler(input: { proofId: string }, request: TaskRequest) {',
+              '    const handle = await request.schedule("proof", input);',
+              '    await request.cancel(handle);',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(graph).toEqual({
+      'mutations/schedule-proof': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'KV406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'mutations.ts:7',
+          },
+          {
+            code: 'KV406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'mutations.ts:8',
+          },
+        ],
+      },
+    });
+  });
+
+  it('uses a declared durable task queue table for request.schedule and cancel', () => {
+    const graph = extractTouchGraphFromProject(
+      withPgDatabaseTypes({
+        files: [
+          {
+            fileName: 'mutations.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'type TaskRequest = { db: PgAsyncDatabase<any, any>; schedule(task: unknown, args: unknown): Promise<{ id: string }>; cancel(handle: { id: string }): Promise<boolean> };',
+              '',
+              'export const scheduleProof = mutation({',
+              '  registry: { tables: ["_kovo_jobs"] },',
+              '  async handler(input: { proofId: string }, request: TaskRequest) {',
+              '    const handle = await request.schedule("proof", input);',
+              '    await request.cancel(handle);',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(graph).toEqual({
+      'mutations/schedule-proof': {
+        reads: [],
+        tables: ['_kovo_jobs'],
+        touches: [],
+        unresolved: [],
+      },
+    });
+  });
+
   it('fails closed with a write-scope audit for declared owner-table raw writes', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({

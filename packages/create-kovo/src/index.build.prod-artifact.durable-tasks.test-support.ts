@@ -164,7 +164,7 @@ export function addDurableTaskProofs(root: string): void {
       '    proofId: s.string(),',
       '    mode: s.string(),',
       '  }),',
-      "  registry: { tables: ['task_proofs'], touches: [taskProof] },",
+      "  registry: { tables: ['task_proofs', '_kovo_jobs'], touches: [taskProof] },",
       '  async handler(input: { proofId: string; mode: string }, request: AppRequest & TaskSchedulingRequest) {',
       "    if (input.mode === 'throw') {",
       '      await request.schedule(recordDurableTask, { proofId: input.proofId });',

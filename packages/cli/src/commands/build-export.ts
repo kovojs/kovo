@@ -1977,9 +1977,6 @@ async function bundleKovoServerHandler(
       define: {
         'process.env.NODE_ENV': JSON.stringify('production'),
       },
-      esbuild: {
-        jsxDev: false,
-      },
       logLevel: 'silent',
       mode: 'production',
       oxc: {
