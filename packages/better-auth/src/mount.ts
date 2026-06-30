@@ -1,6 +1,12 @@
 import { endpoint } from '@kovojs/server';
-import type { EndpointAuthDeclaration, EndpointDeclaration, EndpointMethod } from '@kovojs/server';
+import type {
+  AccessDecision,
+  EndpointAuthDeclaration,
+  EndpointDeclaration,
+  EndpointMethod,
+} from '@kovojs/server';
 
+import { betterAuthMountOperationContract } from './internal/contracts.js';
 import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js';
 
 /**
@@ -10,6 +16,7 @@ import type { BetterAuthMountHandler, BetterAuthMountLike } from './internal.js'
  * `mount` for the SPEC.md §6.6 rationale).
  */
 export interface BetterAuthMountOptions<Method extends EndpointMethod = EndpointMethod> {
+  access?: AccessDecision;
   auth?: EndpointAuthDeclaration;
   csrfJustification?: string;
   method: Method;
@@ -41,18 +48,23 @@ export function mount<
   options: BetterAuthMountOptions<Method>,
 ): EndpointDeclaration<Path, Method, 'prefix'> {
   const handler = typeof auth === 'function' ? auth : auth.handler;
+  const endpointAuth = options.auth ?? betterAuthMountOperationContract.auth;
 
   return endpoint(path, {
-    auth: options.auth ?? { kind: 'custom', name: 'better-auth' },
+    ...(options.access === undefined && options.auth !== undefined
+      ? {}
+      : { access: options.access ?? betterAuthMountOperationContract.access }),
+    auth: endpointAuth,
     csrf: false,
-    csrfJustification: options.csrfJustification ?? 'better-auth browser redirect protocol handler',
+    csrfJustification:
+      options.csrfJustification ?? betterAuthMountOperationContract.csrf.justification,
     handler(request) {
       return handler(request);
     },
     method: options.method,
     mount: 'prefix',
-    mountJustification: 'better-auth owns provider callback subpaths under this mount',
-    reason: 'better-auth provider redirect and callback mount',
-    response: { appOwnedSafety: true, body: 'redirect', cache: 'no-store' },
+    mountJustification: betterAuthMountOperationContract.mountJustification,
+    reason: betterAuthMountOperationContract.reason,
+    response: betterAuthMountOperationContract.response,
   });
 }

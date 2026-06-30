@@ -1,5 +1,5 @@
-import { domain, s } from '@kovojs/server';
-import type { Domain } from '@kovojs/server';
+import { domain, publicAccess, s } from '@kovojs/server';
+import type { AccessDecision, EndpointAuthDeclaration } from '@kovojs/server';
 
 import type { BetterAuthSessionPayload } from '../session.js';
 
@@ -261,11 +261,63 @@ export type BetterAuthTable =
 /** @internal Kovo domain a Better Auth table is bridged into for touch-graph verification. */
 export type BetterAuthTouchDomain = 'auth' | 'organization' | 'user';
 
-/** @internal A declared `{ domain, table }` touch for a Better Auth credential write. */
-export interface BetterAuthDeclaredTableTouch {
-  domain: BetterAuthTouchDomain;
+/** @internal A table touch named by a Better Auth operation contract before schema-bridge resolution. */
+export interface BetterAuthOperationTableTouch {
   table: string;
 }
+
+/** @internal A derived `{ domain, table }` touch after schema-bridge resolution. */
+export interface BetterAuthDeclaredTableTouch extends BetterAuthOperationTableTouch {
+  domain: BetterAuthTouchDomain;
+}
+
+/** @internal Single source of truth for one Better Auth credential operation. */
+export interface BetterAuthOperationContract<Api extends BetterAuthCredentialMutationApi> {
+  /**
+   * Default audit access decision to apply when the caller did not provide `access`
+   * or a guard. See SPEC.md §10.2/KV436.
+   */
+  access?: AccessDecision;
+  api: Api;
+  /** Default source-derived mutation key used when callers do not override `key`. */
+  defaultKey: string;
+  /** Credential mutations are browser forms and keep SPEC.md §6.6 default-on CSRF. */
+  csrf: 'checked';
+  /** Better Auth tables the operation may write, resolved through the schema bridge. */
+  tableTouches: readonly BetterAuthOperationTableTouch[];
+}
+
+/** @internal Single source of truth for the Better Auth prefix mount audit posture. */
+export interface BetterAuthMountOperationContract {
+  access: AccessDecision;
+  api: 'mount';
+  auth: EndpointAuthDeclaration;
+  csrf: {
+    exempt: true;
+    justification: string;
+  };
+  mountJustification: string;
+  reason: string;
+  response: {
+    appOwnedSafety: true;
+    body: 'redirect';
+    cache: 'no-store';
+  };
+}
+
+/** @internal Single Better Auth operation contract for the raw provider/callback mount. */
+export const betterAuthMountOperationContract = {
+  access: publicAccess('better-auth provider redirect protocol handled by Better Auth state'),
+  api: 'mount',
+  auth: { kind: 'custom', name: 'better-auth' },
+  csrf: {
+    exempt: true,
+    justification: 'better-auth browser redirect protocol handler',
+  },
+  mountJustification: 'better-auth owns provider callback subpaths under this mount',
+  reason: 'better-auth provider redirect and callback mount',
+  response: { appOwnedSafety: true, body: 'redirect', cache: 'no-store' },
+} as const satisfies BetterAuthMountOperationContract;
 
 /** @internal Schema-bridge annotation mapping a Better Auth table to a Kovo domain/key. */
 export interface BetterAuthSchemaBridgeDomainAnnotation {
@@ -303,10 +355,9 @@ export interface BetterAuthSchemaBridgeValidation {
 
 /** @internal Options for `validateBetterAuthSchemaBridge`: bridge extensions and declared touches. */
 export interface BetterAuthSchemaBridgeValidationOptions {
-  credentialMutationDeclaredTableTouches?: Partial<
-    Record<BetterAuthCredentialMutationApi, readonly BetterAuthDeclaredTableTouch[]>
+  credentialMutationTableTouches?: Partial<
+    Record<BetterAuthCredentialMutationApi, readonly BetterAuthOperationTableTouch[]>
   >;
-  credentialMutationTouches?: Partial<Record<BetterAuthCredentialMutationApi, readonly Domain[]>>;
   schemaBridge?: BetterAuthSchemaBridgeExtensions;
 }
 
@@ -404,10 +455,11 @@ export interface BetterAuthDbVerificationConfig {
 /** @internal Options for `createBetterAuthCredentialMutationTouchGraph`. */
 export interface BetterAuthCredentialMutationTouchGraphOptions {
   apis?: readonly BetterAuthCredentialMutationApi[];
-  credentialMutationDeclaredTableTouches?: Partial<
-    Record<BetterAuthCredentialMutationApi, readonly BetterAuthDeclaredTableTouch[]>
+  credentialMutationTableTouches?: Partial<
+    Record<BetterAuthCredentialMutationApi, readonly BetterAuthOperationTableTouch[]>
   >;
   keys?: Partial<Record<BetterAuthCredentialMutationApi, string>>;
+  schemaBridge?: BetterAuthSchemaBridgeExtensions;
 }
 
 /** @internal Options for `annotateBetterAuthSchemaSource`. */

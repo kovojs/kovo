@@ -1,8 +1,9 @@
-import type { Domain } from '@kovojs/server';
+import { publicAccess, type Domain } from '@kovojs/server';
 import {
   betterAuthAuthDomain,
   betterAuthCredentialMutationErrors,
   betterAuthCredentialMutationApis,
+  betterAuthMountOperationContract,
   betterAuthOrganizationDomain,
   betterAuthRequiredCoreTables,
   betterAuthSchemaBridge,
@@ -20,6 +21,8 @@ import {
   type BetterAuthGeneratedSchemaTableDegradation,
   type BetterAuthGeneratedSchemaTableDegradationReason,
   type BetterAuthOAuthProviderSuccessorMetadataDegradation,
+  type BetterAuthOperationContract,
+  type BetterAuthOperationTableTouch,
   type BetterAuthPluginTableDegradation,
   type BetterAuthRequestLike,
   type BetterAuthResponseLike,
@@ -47,7 +50,7 @@ import {
 } from './internal/contracts.js';
 import {
   activeOrganization,
-  credentialMutationDefinitionOptions,
+  credentialMutationDefinitionOptions as credentialMutationDefinitionOptionsForContract,
   forwardBetterAuthSetCookie,
   getBetterAuthSetCookie,
   isBetterAuthCredentialFailureError,
@@ -64,6 +67,7 @@ import {
   type BetterAuthOrganizationRequest,
   type BetterAuthOrganizationSession,
 } from './internal/credential.js';
+import type { BetterAuthCredentialMutationInternalOptions } from './credential-options.js';
 import { betterAuthOAuthProviderSuccessorImportPaths } from './internal/plugin-metadata.js';
 
 // The package's 13 public symbols are authored in the honestly-named source files
@@ -86,6 +90,7 @@ export {
   betterAuthAuthDomain,
   betterAuthCredentialMutationApis,
   betterAuthCredentialMutationErrors,
+  betterAuthMountOperationContract,
   betterAuthOrganizationDomain,
   betterAuthRequiredCoreTables,
   betterAuthSchemaBridge,
@@ -96,7 +101,6 @@ export {
 } from './internal/contracts.js';
 export {
   activeOrganization,
-  credentialMutationDefinitionOptions,
   forwardBetterAuthSetCookie,
   getBetterAuthSetCookie,
   isBetterAuthCredentialFailureError,
@@ -139,36 +143,140 @@ export function betterAuthTableDomain(
   return 'domain' in bridge ? bridge.domain : null;
 }
 
-/** @internal Declared table touches per Better Auth credential API, used to build verifier facts. */
-// Archived D5 auth plan B1/B6: better-auth writes are library-internal, so the blessed
-// wrappers carry declared table/domain touches until the P9 observed-write
-// harness can verify observed ⊆ declared at runtime.
-export const betterAuthCredentialMutationDeclaredTableTouches = {
-  signInEmail: [{ domain: 'auth', table: 'session' }],
-  signOut: [{ domain: 'auth', table: 'session' }],
-  signUpEmail: [
-    { domain: 'user', table: 'user' },
-    { domain: 'auth', table: 'account' },
-    { domain: 'auth', table: 'session' },
-  ],
-} as const satisfies Record<
-  BetterAuthCredentialMutationApi,
-  readonly BetterAuthDeclaredTableTouch[]
->;
+/**
+ * @internal Single Better Auth operation contract per credential API.
+ *
+ * SPEC.md §6.6/§10.1/§10.2/§11.2: Better Auth owns the SQL, so the adapter names the
+ * operation once here and derives registry domains, touch-graph rows, verifier table
+ * coverage, and default access facts from the schema bridge.
+ */
+export const betterAuthCredentialOperationContracts = {
+  signInEmail: {
+    access: publicAccess('better-auth email sign-in credential form'),
+    api: 'signInEmail',
+    csrf: 'checked',
+    defaultKey: 'auth/sign-in',
+    tableTouches: [{ table: 'session' }],
+  },
+  signOut: {
+    access: publicAccess('better-auth current-browser credential revocation form'),
+    api: 'signOut',
+    csrf: 'checked',
+    defaultKey: 'auth/sign-out',
+    tableTouches: [{ table: 'session' }],
+  },
+  signUpEmail: {
+    access: publicAccess('better-auth email sign-up credential form'),
+    api: 'signUpEmail',
+    csrf: 'checked',
+    defaultKey: 'auth/sign-up',
+    tableTouches: [{ table: 'user' }, { table: 'account' }, { table: 'session' }],
+  },
+} as const satisfies {
+  [Api in BetterAuthCredentialMutationApi]: BetterAuthOperationContract<Api>;
+};
 
-/** @internal Default Kovo domain touches per Better Auth credential API. */
-export const betterAuthCredentialMutationTouches = {
-  signInEmail: [betterAuthAuthDomain],
-  signOut: [betterAuthAuthDomain],
-  signUpEmail: [betterAuthUserDomain, betterAuthAuthDomain],
-} as const satisfies Record<BetterAuthCredentialMutationApi, readonly Domain[]>;
+/** @internal Derived `{ domain, table }` touches per Better Auth credential API. */
+export const betterAuthCredentialMutationDeclaredTableTouches =
+  deriveBetterAuthCredentialDeclaredTableTouches();
 
-/** @internal Default mutation keys per Better Auth credential API. */
-export const betterAuthCredentialMutationDefaultKeys = {
-  signInEmail: 'auth/sign-in',
-  signOut: 'auth/sign-out',
-  signUpEmail: 'auth/sign-up',
-} as const satisfies Record<BetterAuthCredentialMutationApi, string>;
+/** @internal Default Kovo domain touches per Better Auth credential API, derived from contracts. */
+export const betterAuthCredentialMutationTouches = deriveBetterAuthCredentialMutationTouches();
+
+/** @internal Default mutation keys per Better Auth credential API, derived from contracts. */
+export const betterAuthCredentialMutationDefaultKeys = Object.fromEntries(
+  betterAuthCredentialMutationApis.map((api) => [
+    api,
+    betterAuthCredentialOperationContracts[api].defaultKey,
+  ]),
+) as Record<BetterAuthCredentialMutationApi, string>;
+
+function betterAuthDomainHandle(domain: BetterAuthTouchDomain): Domain {
+  if (domain === 'auth') return betterAuthAuthDomain;
+  if (domain === 'organization') return betterAuthOrganizationDomain;
+  return betterAuthUserDomain;
+}
+
+function betterAuthOperationTableTouches(
+  api: BetterAuthCredentialMutationApi,
+  overrides?: Partial<
+    Record<BetterAuthCredentialMutationApi, readonly BetterAuthOperationTableTouch[]>
+  >,
+): readonly BetterAuthOperationTableTouch[] {
+  return overrides?.[api] ?? betterAuthCredentialOperationContracts[api].tableTouches;
+}
+
+function deriveBetterAuthDeclaredTableTouches(
+  api: BetterAuthCredentialMutationApi,
+  options: {
+    credentialMutationTableTouches?: Partial<
+      Record<BetterAuthCredentialMutationApi, readonly BetterAuthOperationTableTouch[]>
+    >;
+    schemaBridge?: BetterAuthSchemaBridgeExtensions;
+  } = {},
+): BetterAuthDeclaredTableTouch[] {
+  const schemaBridge = createBetterAuthSchemaBridge(options.schemaBridge);
+  return betterAuthOperationTableTouches(api, options.credentialMutationTableTouches)
+    .map((touch): BetterAuthDeclaredTableTouch | undefined => {
+      const bridge = betterAuthSchemaBridgeAnnotation(touch.table, schemaBridge);
+      if (bridge === undefined || !('domain' in bridge)) return undefined;
+      return { domain: bridge.domain, table: touch.table };
+    })
+    .filter((touch): touch is BetterAuthDeclaredTableTouch => touch !== undefined);
+}
+
+function deriveBetterAuthCredentialDeclaredTableTouches(
+  options: {
+    credentialMutationTableTouches?: Partial<
+      Record<BetterAuthCredentialMutationApi, readonly BetterAuthOperationTableTouch[]>
+    >;
+    schemaBridge?: BetterAuthSchemaBridgeExtensions;
+  } = {},
+): Record<BetterAuthCredentialMutationApi, readonly BetterAuthDeclaredTableTouch[]> {
+  const result = {} as Record<
+    BetterAuthCredentialMutationApi,
+    readonly BetterAuthDeclaredTableTouch[]
+  >;
+  for (const api of betterAuthCredentialMutationApis) {
+    result[api] = deriveBetterAuthDeclaredTableTouches(api, options);
+  }
+  return result;
+}
+
+function deriveBetterAuthCredentialMutationTouches(
+  options: {
+    credentialMutationTableTouches?: Partial<
+      Record<BetterAuthCredentialMutationApi, readonly BetterAuthOperationTableTouch[]>
+    >;
+    schemaBridge?: BetterAuthSchemaBridgeExtensions;
+  } = {},
+): Record<BetterAuthCredentialMutationApi, readonly Domain[]> {
+  const result = {} as Record<BetterAuthCredentialMutationApi, readonly Domain[]>;
+  for (const api of betterAuthCredentialMutationApis) {
+    const domains = new Map<BetterAuthTouchDomain, Domain>();
+    for (const touch of deriveBetterAuthDeclaredTableTouches(api, options)) {
+      if (!domains.has(touch.domain))
+        domains.set(touch.domain, betterAuthDomainHandle(touch.domain));
+    }
+    result[api] = [...domains.values()];
+  }
+  return result;
+}
+
+/** @internal Shared mutation definition facts for a Better Auth credential operation. */
+export function credentialMutationDefinitionOptions<
+  Key extends string,
+  Request extends BetterAuthRequestLike,
+  GuardedRequest extends Request,
+>(
+  api: BetterAuthCredentialMutationApi,
+  options: BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
+) {
+  return credentialMutationDefinitionOptionsForContract(options, {
+    defaultAccess: betterAuthCredentialOperationContracts[api].access,
+    touches: betterAuthCredentialMutationTouches[api],
+  });
+}
 
 /** @internal Pre-built credential-mutation touch graph consumed by the P9 verifier. */
 // Archived D5 auth plan B1 / SPEC.md §11.2: declared Better Auth table touches are
@@ -246,20 +354,25 @@ export function createBetterAuthCredentialMutationTouchGraph(
   const keyOverrides = isBetterAuthCredentialMutationTouchGraphOptions(options)
     ? (options.keys ?? {})
     : options;
-  const declaredTableTouches = isBetterAuthCredentialMutationTouchGraphOptions(options)
-    ? options.credentialMutationDeclaredTableTouches
+  const tableTouches = isBetterAuthCredentialMutationTouchGraphOptions(options)
+    ? options.credentialMutationTableTouches
+    : undefined;
+  const schemaBridge = isBetterAuthCredentialMutationTouchGraphOptions(options)
+    ? options.schemaBridge
     : undefined;
   const apis = isBetterAuthCredentialMutationTouchGraphOptions(options)
     ? (options.apis ?? betterAuthCredentialMutationApis)
     : betterAuthCredentialMutationApis;
+  const derivationOptions = {
+    ...(tableTouches === undefined ? {} : { credentialMutationTableTouches: tableTouches }),
+    ...(schemaBridge === undefined ? {} : { schemaBridge }),
+  };
 
   return Object.fromEntries(
     apis.map((api) => [
       keyOverrides[api] ?? betterAuthCredentialMutationDefaultKeys[api],
       {
-        touches: (
-          declaredTableTouches?.[api] ?? betterAuthCredentialMutationDeclaredTableTouches[api]
-        ).map((touch) => ({
+        touches: deriveBetterAuthDeclaredTableTouches(api, derivationOptions).map((touch) => ({
           domain: touch.domain,
           // Better Auth owns the SQL; the P9 bridge verifies domain/table coverage
           // without pretending row-key predicates are available at this boundary.
@@ -589,12 +702,9 @@ function declaredTableTouchMismatches(
 
   for (const api of betterAuthCredentialMutationApis) {
     const touches =
-      options.credentialMutationDeclaredTableTouches?.[api] ??
-      betterAuthCredentialMutationDeclaredTableTouches[api];
-    const mutationTouchDomains = (
-      options.credentialMutationTouches?.[api] ?? betterAuthCredentialMutationTouches[api]
-    ).map((touch) => touch.key);
-    const declaredTouchDomains = touches.map((touch) => touch.domain);
+      options.credentialMutationTableTouches?.[api] ??
+      betterAuthCredentialOperationContracts[api].tableTouches;
+    const declaredTouchDomains: BetterAuthTouchDomain[] = [];
 
     for (const touch of touches) {
       if (!tableNames.has(touch.table)) {
@@ -618,12 +728,21 @@ function declaredTableTouchMismatches(
         continue;
       }
 
-      if (bridge.domain !== touch.domain) {
+      declaredTouchDomains.push(bridge.domain);
+      const legacyDomain = (touch as Partial<BetterAuthDeclaredTableTouch>).domain;
+      if (legacyDomain !== undefined && bridge.domain !== legacyDomain) {
         mismatches.push(
-          `${api}.${touch.table} declares ${touch.domain} but schema bridge maps ${bridge.domain}`,
+          `${api}.${touch.table} declares ${legacyDomain} but schema bridge maps ${bridge.domain}`,
         );
       }
     }
+
+    const mutationTouchDomains = deriveBetterAuthCredentialMutationTouches({
+      ...(options.credentialMutationTableTouches === undefined
+        ? {}
+        : { credentialMutationTableTouches: options.credentialMutationTableTouches }),
+      ...(options.schemaBridge === undefined ? {} : { schemaBridge: options.schemaBridge }),
+    })[api].map((touch) => touch.key);
 
     if (!sameSortedValues(declaredTouchDomains, mutationTouchDomains)) {
       mismatches.push(

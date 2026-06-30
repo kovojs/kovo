@@ -135,6 +135,10 @@ describe('browser redirect protocol mount', () => {
       cache: 'no-store',
     });
     expect(authEndpoint.auth).toEqual({ kind: 'custom', name: 'better-auth' });
+    expect(authEndpoint.access).toEqual({
+      kind: 'public',
+      reason: 'better-auth provider redirect protocol handled by Better Auth state',
+    });
     expect(authEndpoint.csrf).toEqual({
       exempt: true,
       justification: 'better-auth browser redirect protocol handler',

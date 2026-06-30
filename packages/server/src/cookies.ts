@@ -151,6 +151,14 @@ export function validateRawSetCookie(value: string): string {
   return value;
 }
 
+/** @internal Posture for a raw upstream `Set-Cookie` value forwarded by framework-owned adapters. */
+export interface ForwardSetCookiePosture {
+  /** Credential class whose floor should be applied to the forwarded cookie. */
+  class?: CookieClass;
+  /** Audit-only source label for the internal caller that owns the upstream cookie. */
+  source: 'better-auth-credential' | 'csrf' | 'legacy-normalize' | 'session-provider';
+}
+
 /**
  * Whether the runtime reports a production environment via `NODE_ENV`. This is one — but no longer
  * the SOLE — trigger for the credential `Secure` floor (SPEC §6.6/§9.1): an explicit force
@@ -357,9 +365,16 @@ export function serializeCookie(name: string, value: string, options: CookieOpti
  * floor (SPEC §6.6/§9.1).
  */
 interface ParsedSetCookie {
-  attributes: Map<string, string | true>;
+  attributes: ParsedSetCookieAttribute[];
+  byName: Map<string, ParsedSetCookieAttribute>;
   name: string;
   value: string;
+}
+
+interface ParsedSetCookieAttribute {
+  lowerName: string;
+  name: string;
+  value?: string;
 }
 
 function parseSetCookieHeader(raw: string): ParsedSetCookie | undefined {
@@ -372,55 +387,46 @@ function parseSetCookieHeader(raw: string): ParsedSetCookie | undefined {
   const value = first.slice(eq + 1).trim();
   if (name === '') return undefined;
 
-  const attributes = new Map<string, string | true>();
+  const attributes: ParsedSetCookieAttribute[] = [];
+  const byName = new Map<string, ParsedSetCookieAttribute>();
   for (const segment of segments.slice(1)) {
     const trimmed = segment.trim();
     if (trimmed === '') continue;
     const attrEq = trimmed.indexOf('=');
-    if (attrEq < 0) {
-      attributes.set(trimmed.toLowerCase(), true);
-    } else {
-      attributes.set(
-        trimmed.slice(0, attrEq).trim().toLowerCase(),
-        trimmed.slice(attrEq + 1).trim(),
-      );
-    }
+    const attribute =
+      attrEq < 0
+        ? { lowerName: trimmed.toLowerCase(), name: trimmed }
+        : {
+            lowerName: trimmed.slice(0, attrEq).trim().toLowerCase(),
+            name: trimmed.slice(0, attrEq).trim(),
+            value: trimmed.slice(attrEq + 1).trim(),
+          };
+    if (attribute.name === '') continue;
+    attributes.push(attribute);
+    byName.set(attribute.lowerName, attribute);
   }
-  return { attributes, name, value };
+  return { attributes, byName, name, value };
 }
 
 /**
- * Normalize a forwarded better-auth (or other upstream) raw `Set-Cookie` header through the
- * class-derived floor (SPEC §6.6/§9.1, part-3 I1). Preserves the upstream attributes — including
- * `Partitioned` and `Priority` — and re-emits the cookie with the `session`/`auth` floor applied so a
- * forwarded credential cookie can never land below the floor. The cookie value is already
- * percent-encoded by the upstream emitter, so it is round-tripped verbatim (re-encoding would
- * double-encode it).
- *
- * SF-WIRE(forward-sink): the forwarded Set-Cookie sink (`onSessionSetCookie`/`onCsrfSetCookie` →
- * `appendResponseHeader(..., 'Set-Cookie', cookie)`) lives in `app-document.ts` (another wire). Route
- * forwarded session/auth cookies through this helper there.
- *
- * @param raw - The upstream `Set-Cookie` header value.
- * @param cookieClass - The class to floor the forwarded cookie at (default `'session'`).
+ * @internal Normalize a raw upstream `Set-Cookie` header through Kovo's cookie floor.
+ * Preserves the upstream name/value and attributes while adding the credential floor
+ * required by SPEC.md §6.6/§9.1.1. This is the only raw forwarding sink framework-owned
+ * adapters should use; app-authored cookies still go through `serializeCookie`.
  */
-export function normalizeForwardedSetCookie(
-  raw: string,
-  cookieClass: CookieClass = 'session',
-): string {
+export function forwardSetCookie(raw: string, posture: ForwardSetCookiePosture): string {
   assertNoHeaderControlCharacters(raw, 'Set-Cookie');
   const parsed = parseSetCookieHeader(raw);
-  if (parsed === undefined) return raw;
+  if (parsed === undefined) throw new Error('forwardSetCookie requires a name=value Set-Cookie');
+  assertCookieName(parsed.name);
 
-  const { attributes } = parsed;
-  const sameSiteRaw = attributes.get('samesite');
-  const sameSite =
-    typeof sameSiteRaw === 'string'
-      ? (sameSiteRaw.toLowerCase() as 'lax' | 'none' | 'strict')
-      : undefined;
+  const cookieClass = posture.class ?? 'session';
+  const { byName } = parsed;
+  const sameSiteRaw = byName.get('samesite')?.value;
+  const sameSite = forwardedSameSite(sameSiteRaw);
 
-  const upstreamHttpOnly = attributes.has('httponly');
-  const upstreamSecure = attributes.has('secure');
+  const upstreamHttpOnly = byName.has('httponly');
+  const upstreamSecure = byName.has('secure');
 
   // Re-derive the effective floor. An upstream cookie that already omits HttpOnly/Secure/SameSite is
   // brought UP to the floor; we never downgrade a forwarded credential cookie, so no `unsafe` escape
@@ -434,22 +440,71 @@ export function normalizeForwardedSetCookie(
 
   const parts = [`${parsed.name}=${parsed.value}`];
   // Re-emit preserved attributes in a stable order, applying the floor for HttpOnly/Secure/SameSite.
-  if (attributes.has('max-age')) parts.push(`Max-Age=${attributes.get('max-age') as string}`);
-  if (attributes.has('domain')) parts.push(`Domain=${attributes.get('domain') as string}`);
-  const path = (attributes.get('path') as string | undefined) ?? '/';
+  appendForwardedAttribute(parts, byName.get('max-age'), 'Max-Age');
+  appendForwardedAttribute(parts, byName.get('domain'), 'Domain');
+  const path = byName.get('path')?.value ?? '/';
   parts.push(`Path=${path}`);
-  if (attributes.has('expires')) parts.push(`Expires=${attributes.get('expires') as string}`);
+  appendForwardedAttribute(parts, byName.get('expires'), 'Expires');
   if (floorHttpOnly) parts.push('HttpOnly');
   if (floorSecure) parts.push('Secure');
   const effectiveSameSite = sameSite ?? (isCredentialClass(cookieClass) ? 'lax' : undefined);
   if (effectiveSameSite !== undefined) {
     parts.push(`SameSite=${{ lax: 'Lax', none: 'None', strict: 'Strict' }[effectiveSameSite]}`);
   }
-  // Preserve Priority and Partitioned exactly as upstream set them (part-3 I1).
-  if (attributes.has('priority')) parts.push(`Priority=${attributes.get('priority') as string}`);
-  if (attributes.has('partitioned')) parts.push('Partitioned');
+  appendUnknownForwardedAttributes(parts, parsed.attributes);
+  // Preserve Priority and Partitioned after the floor-controlled security attributes (part-3 I1).
+  appendForwardedAttribute(parts, byName.get('priority'), 'Priority');
+  if (byName.has('partitioned')) parts.push('Partitioned');
 
   return parts.join('; ');
+}
+
+function forwardedSameSite(value: string | undefined): 'lax' | 'none' | 'strict' | undefined {
+  const normalized = value?.toLowerCase();
+  if (normalized === 'lax' || normalized === 'none' || normalized === 'strict') {
+    return normalized;
+  }
+  return undefined;
+}
+
+export function normalizeForwardedSetCookie(
+  raw: string,
+  cookieClass: CookieClass = 'session',
+): string {
+  return forwardSetCookie(raw, { class: cookieClass, source: 'legacy-normalize' });
+}
+
+function appendForwardedAttribute(
+  parts: string[],
+  attribute: ParsedSetCookieAttribute | undefined,
+  name: string,
+): void {
+  if (attribute?.value === undefined) return;
+  parts.push(`${name}=${attribute.value}`);
+}
+
+const floorControlledForwardedAttributes = new Set([
+  'domain',
+  'expires',
+  'httponly',
+  'max-age',
+  'partitioned',
+  'path',
+  'priority',
+  'samesite',
+  'secure',
+]);
+
+function appendUnknownForwardedAttributes(
+  parts: string[],
+  attributes: readonly ParsedSetCookieAttribute[],
+): void {
+  for (const attribute of attributes) {
+    if (floorControlledForwardedAttributes.has(attribute.lowerName)) continue;
+    parts.push(
+      attribute.value === undefined ? attribute.name : `${attribute.name}=${attribute.value}`,
+    );
+  }
 }
 
 function assertCookieName(value: string): void {
