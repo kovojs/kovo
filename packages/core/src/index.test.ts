@@ -357,23 +357,27 @@ describe('core authoring APIs', () => {
     } satisfies { code: 'OUT_OF_STOCK'; payload: { availableQuantity: number } };
 
     expect(
-      FieldError({
-        class: 'error',
-        failure: validation,
-        id: 'quantity-error',
-        name: 'quantity',
-      }),
+      String(
+        FieldError({
+          class: 'error',
+          failure: validation,
+          id: 'quantity-error',
+          name: 'quantity',
+        }),
+      ),
     ).toBe(
       '<output role="alert" id="quantity-error" class="error" data-error-code="VALIDATION">Expected number &gt;= 1</output>',
     );
     expect(FieldError({ failure: validation, name: 'productId' })).toBe('');
     expect(FormError({ failure: validation })).toBe('');
     expect(
-      FormError({
-        code: 'OUT_OF_STOCK',
-        failure: coded,
-        message: (failure: typeof coded) => `Only ${failure.payload.availableQuantity} left.`,
-      }),
+      String(
+        FormError({
+          code: 'OUT_OF_STOCK',
+          failure: coded,
+          message: (failure: typeof coded) => `Only ${failure.payload.availableQuantity} left.`,
+        }),
+      ),
     ).toBe('<output role="alert" data-error-code="OUT_OF_STOCK">Only 2 left.</output>');
   });
 
@@ -388,16 +392,18 @@ describe('core authoring APIs', () => {
       payload: { title: payload },
     };
 
-    expect(FieldError({ failure: validation, name: 'title' })).toBe(
+    expect(String(FieldError({ failure: validation, name: 'title' }))).toBe(
       '<output role="alert" data-error-code="VALIDATION">&lt;img src=x onerror=alert(1)&gt;</output>',
     );
     expect(
-      FormError({
-        code: 'DUPLICATE_TITLE',
-        failure: duplicate,
-        message: (failure: typeof duplicate) =>
-          `A question titled "${failure.payload.title}" exists.`,
-      }),
+      String(
+        FormError({
+          code: 'DUPLICATE_TITLE',
+          failure: duplicate,
+          message: (failure: typeof duplicate) =>
+            `A question titled "${failure.payload.title}" exists.`,
+        }),
+      ),
     ).toBe(
       '<output role="alert" data-error-code="DUPLICATE_TITLE">A question titled "&lt;img src=x onerror=alert(1)&gt;" exists.</output>',
     );

@@ -20,6 +20,7 @@ import {
 } from './csrf.js';
 import {
   escapeAttribute,
+  isRenderedHtml,
   renderedHtml,
   type RenderedHtml,
   safeRuntimeAttribute,
@@ -420,7 +421,8 @@ function renderFormChildrenContent(
 
 function renderMutationFormHelper(kind: MutationFormHelperKind, props: JsxProps): RenderedHtml {
   if (props.failure !== undefined) {
-    return renderedHtml(renderMutationFormHelperNow(kind, props, props.failure));
+    const rendered = renderMutationFormHelperNow(kind, props, props.failure);
+    return isRenderedHtml(rendered) ? rendered : renderedHtml(rendered);
   }
 
   const registry = mutationFormHelperRegistry();
@@ -461,7 +463,7 @@ function renderMutationFormHelperNow(
   kind: MutationFormHelperKind,
   props: JsxProps,
   failure: unknown,
-): string {
+): RenderedHtml | string {
   const helperProps = { ...props, failure };
   return kind === 'field'
     ? FieldError(helperProps as FieldErrorProps)

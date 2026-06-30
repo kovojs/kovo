@@ -88,6 +88,16 @@ export type ComponentRenderResult =
 /** Escaped text/message content used by explicit text-oriented helpers. */
 export type ComponentTextResult = ComponentRenderResult | string;
 
+const kovoRenderedHtml = Symbol.for('kovo.renderedHtml');
+
+interface FrameworkRenderedHtml {
+  readonly [kovoRenderedHtml]: true;
+  readonly html: string;
+  [Symbol.toPrimitive](): string;
+  toJSON(): string;
+  toString(): string;
+}
+
 /** Props accepted by the server-bound `<ErrorBoundary />` render fallback helper. */
 export interface ErrorBoundaryProps {
   children?: ComponentRenderResult;
@@ -1020,7 +1030,7 @@ function renderFailureOutput<Failure>(
   message: unknown,
 ): string {
   const attrs = failureOutputAttributes(props, failure);
-  return `<output${attrs}>${escapeHtmlText(String(message))}</output>`;
+  return frameworkRenderedHtml(`<output${attrs}>${escapeHtmlText(String(message))}</output>`);
 }
 
 function failureOutputAttributes<Failure>(
@@ -1045,4 +1055,21 @@ function escapeHtmlAttribute(value: string): string {
 
 function escapeHtmlText(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
+function frameworkRenderedHtml(html: string): string {
+  const rendered: FrameworkRenderedHtml = {
+    [kovoRenderedHtml]: true,
+    html,
+    [Symbol.toPrimitive]() {
+      return html;
+    },
+    toJSON() {
+      return html;
+    },
+    toString() {
+      return html;
+    },
+  };
+  return rendered as unknown as string;
 }

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component, form } from '@kovojs/core';
+import { component, FieldError, form, FormError } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -8,6 +8,7 @@ import {
   renderComponentMutationFailure,
 } from './component-render.js';
 import type { MutationFail } from './mutation.js';
+import { renderServerRenderable } from './renderable.js';
 
 describe('renderComponent', () => {
   it('passes SPEC §4.5 render-time children and named slots to component render', () => {
@@ -63,6 +64,72 @@ describe('renderComponent', () => {
     expect(
       renderComponentMutationFailure(AddToCartForm, {}, failure, { formName: 'addToCart' }),
     ).toBe('<form aria-invalid="true"><output role="alert">Only 2 left.</output></form>');
+  });
+
+  it('renders component-scoped FormError and FieldError as real no-JS 422 output elements', async () => {
+    const saveQuestion = form<
+      'question/save',
+      { title: string },
+      { code: 'BLOCKED_TITLE'; payload: { title: string } }
+    >('question/save');
+    const QuestionForm = component({
+      mutations: { saveQuestion },
+      render: (_queries, _state, { forms }) => (
+        <form>
+          <input name="title" value={forms.saveQuestion.submitted?.title ?? ''} />
+          <FieldError failure={forms.saveQuestion.failure} name="title" />
+          <FormError
+            code="BLOCKED_TITLE"
+            failure={forms.saveQuestion.failure}
+            message={(failure: { payload: { title: string } }) =>
+              `Blocked title: ${failure.payload.title}`
+            }
+          />
+        </form>
+      ),
+    });
+    const validation: MutationFail<
+      'VALIDATION',
+      { issues: { message: string; path: string[] }[] }
+    > = {
+      error: {
+        code: 'VALIDATION',
+        payload: {
+          issues: [{ message: '<img src=x onerror=alert(1)>', path: ['title'] }],
+        },
+      },
+      ok: false,
+      status: 422,
+    };
+    const blocked: MutationFail<'BLOCKED_TITLE', { title: string }> = {
+      error: { code: 'BLOCKED_TITLE', payload: { title: '<output>helper</output>' } },
+      ok: false,
+      status: 422,
+    };
+
+    const validationHtml = renderComponentMutationFailure(QuestionForm, {}, validation, {
+      formName: 'saveQuestion',
+      submitted: { title: 'bad' },
+    });
+    expect(validationHtml).toContain(
+      '<output role="alert" data-error-code="VALIDATION">&lt;img src=x onerror=alert(1)&gt;</output>',
+    );
+    expect(validationHtml).not.toContain('&lt;output role=&quot;alert&quot;');
+
+    const blockedHtml = renderComponentMutationFailure(QuestionForm, {}, blocked, {
+      formName: 'saveQuestion',
+      submitted: { title: 'blocked launch' },
+    });
+    expect(blockedHtml).toContain(
+      '<output role="alert" data-error-code="BLOCKED_TITLE">Blocked title: &lt;output&gt;helper&lt;/output&gt;</output>',
+    );
+    expect(blockedHtml).not.toContain('&lt;output role=&quot;alert&quot;');
+
+    await expect(
+      Promise.resolve(
+        renderServerRenderable('<output role="alert" data-error-code="BLOCKED_TITLE">x</output>'),
+      ),
+    ).resolves.toBe('&lt;output role="alert" data-error-code="BLOCKED_TITLE"&gt;x&lt;/output&gt;');
   });
 
   it('normalizes schema validation failures into field-scoped component form state', () => {
