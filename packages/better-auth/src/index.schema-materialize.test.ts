@@ -749,6 +749,72 @@ describe('schema.ts materialization', () => {
     );
   });
 
+  it('is idempotent when schema.ts already imports kovo through an alias', () => {
+    const metadata = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const first = annotateBetterAuthSchemaSource(
+      [
+        "import { kovo as annotateKovo } from '@kovojs/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const account = pgTable('account', {});",
+      ].join('\n'),
+      metadata,
+    );
+    const second = annotateBetterAuthSchemaSource(first.source, metadata);
+
+    // SPEC.md §10.1 / §11.2: schema materialization is an auditable generated
+    // bridge, so rerunning it must not duplicate imports or annotations.
+    expect(first.importNote).toEqual({
+      hasRequiredImport: true,
+      insertedImport: false,
+      localName: 'annotateKovo',
+      shouldAddRequiredImport: false,
+      suggestedImport: "import { kovo as annotateKovo } from '@kovojs/drizzle';",
+    });
+    expect(first.source).toContain(
+      "export const account = pgTable('account', {}, annotateKovo({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+    );
+    expect(second.source).toBe(first.source);
+    expect(second.annotatedTables).toEqual([]);
+    expect(second.alreadyAnnotatedTables).toEqual(['account']);
+  });
+
+  it('avoids local import collisions when adding the kovo schema annotation import', () => {
+    const metadata = {
+      account: authTable(['userId']),
+      session: authTable(['userId']),
+      user: authTable(),
+      verification: authTable(),
+    };
+    const result = annotateBetterAuthSchemaSource(
+      [
+        "import { domain as kovo } from '@kovojs/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const account = pgTable('account', {});",
+      ].join('\n'),
+      metadata,
+    );
+
+    expect(result.importNote).toEqual({
+      hasRequiredImport: false,
+      insertedImport: true,
+      localName: 'kovoSchema',
+      shouldAddRequiredImport: false,
+      suggestedImport: "import { kovo as kovoSchema } from '@kovojs/drizzle';",
+    });
+    expect(result.source).toBe(
+      [
+        "import { domain as kovo, kovo as kovoSchema } from '@kovojs/drizzle';",
+        "import { pgTable } from 'drizzle-orm/pg-core';",
+        "export const account = pgTable('account', {}, kovoSchema({ domain: 'auth', key: 'userId', secret: ['password', 'accessToken', 'refreshToken', 'idToken'] }));",
+      ].join('\n'),
+    );
+  });
+
   it('infers aliased and namespace Drizzle table factories when annotating schema.ts', () => {
     const metadata = {
       account: authTable(['userId']),
@@ -917,6 +983,51 @@ describe('schema.ts materialization', () => {
         "  identifier: text('identifier').notNull(),\n" +
         "  value: text('value').notNull(),\n" +
         '}, kovo({ exempt: true }));',
+    );
+  });
+
+  it('generates bridged plugin-table SQLite declarations from the shared field mapping', () => {
+    const result = generateBetterAuthSchemaSource(
+      {
+        account: authTable(['userId']),
+        passkeyCredential: {
+          fields: {
+            createdAt: { required: true, type: 'date' },
+            userId: { fieldName: 'user_id', required: true, type: 'string' },
+            verified: { required: true, type: 'boolean' },
+          },
+          modelName: 'auth_passkey_credentials',
+        },
+        session: authTable(['userId']),
+        user: authTable(),
+        verification: authTable(),
+      },
+      {
+        dialect: 'sqlite',
+        schemaBridge: {
+          passkeyCredential: { domain: 'auth', key: 'userId' },
+        },
+      },
+    );
+
+    expect(result.validation.ok).toBe(true);
+    expect(result.unsupportedPluginTables).toEqual([]);
+    expect(result.generatedTables).toContainEqual({
+      exportName: 'passkeyCredential',
+      physicalTable: 'auth_passkey_credentials',
+      table: 'passkeyCredential',
+    });
+    expect(result.requiredImports).toEqual([
+      "import { kovo } from '@kovojs/drizzle';",
+      "import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';",
+    ]);
+    expect(result.source).toContain(
+      "export const passkeyCredential = sqliteTable('auth_passkey_credentials', {\n" +
+        "  id: text('id').primaryKey(),\n" +
+        "  createdAt: text('createdAt').notNull(),\n" +
+        "  userId: text('user_id').notNull(),\n" +
+        "  verified: integer('verified', { mode: 'boolean' }).notNull(),\n" +
+        "}, kovo({ domain: 'auth', key: 'userId' }));",
     );
   });
 
