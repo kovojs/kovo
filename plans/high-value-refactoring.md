@@ -349,7 +349,7 @@ test brittleness, and distribution confusion.
 
 ## P2 - Public Surface, Distribution, And Test Harness Hygiene
 
-- [ ] **P2.1 - Make `create-kovo` starter tests prove published package shape.**
+- [x] **P2.1 - Make `create-kovo` starter tests prove published package shape.**
   - Affected: `packages/create-kovo/src/index.test-support.ts`,
     `packages/create-kovo/src/index.build.test.ts`, `scripts/link-local-kovo.mjs`,
     publish/package scripts.
@@ -361,6 +361,7 @@ test brittleness, and distribution confusion.
   - Risk reduced: false-green scaffold coverage that bypasses actual distribution shape.
   - Verification: packed-install smoke per supported dialect, production build/run smoke, and one
     `vp check` lane through the shared harness.
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.scaffold.test.ts packages/create-kovo/src/index.test.ts packages/cli/src/index.kovo-add.test.ts packages/compiler/src/vite-config.test.ts scripts/package-exports.test.mjs` and `node scripts/build-publish.mjs` pass with packed starter smokes and publish target verification.
   - SPEC/rules: `SPEC.md` sections 1.3 and 5.2 rules 8-9; `rules/api-surface.md`.
 
 - [x] **P2.2 - Generate CLI and `create-kovo` reference docs from structured schemas.**

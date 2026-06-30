@@ -21,11 +21,13 @@ export interface VendoredUiComponent {
 }
 
 interface UiPackageManifest {
-  exports?: Record<string, string>;
+  exports?: Record<string, UiPackageExportTarget>;
   kovo?: { vendoredSource?: boolean; vendoredSourceHashes?: Record<string, string> };
   name?: string;
   version?: string;
 }
+
+type UiPackageExportTarget = string | Record<string, string>;
 
 const catalogModuleDir = dirname(realpathSync(fileURLToPath(import.meta.url)));
 const catalogRequire = createRequire(import.meta.url);
@@ -103,12 +105,24 @@ function uiPackageComponentEntries(manifest: UiPackageManifest): readonly [strin
     .flatMap(([subpath, target]): [string, string][] => {
       if (subpath === '.' || !subpath.startsWith('./')) return [];
       const name = subpath.slice(2);
-      if (!isAddComponentFileName(name) || target !== `./src/${name}.tsx`) {
-        throw new Error(`@kovojs/ui export ${subpath} must point at ./src/${name}.tsx`);
+      const sourceTarget = uiPackageSourceTarget(name, target);
+      if (!isAddComponentFileName(name) || sourceTarget !== `./src/${name}.tsx`) {
+        throw new Error(
+          `@kovojs/ui export ${subpath} must map to vendored source ./src/${name}.tsx`,
+        );
       }
-      return [[name, join(uiPackageRoot, target)]];
+      return [[name, join(uiPackageRoot, sourceTarget)]];
     })
     .sort(([left], [right]) => left.localeCompare(right));
+}
+
+function uiPackageSourceTarget(name: string, target: UiPackageExportTarget): string | undefined {
+  if (typeof target === 'string') return target;
+  if (typeof target.source === 'string') return target.source;
+  if (target.default === `./dist/${name}.mjs`) {
+    return `./src/${name}.tsx`;
+  }
+  return undefined;
 }
 
 function readVendoredComponent(name: string, sourcePath: string): VendoredUiComponent {
@@ -729,7 +743,7 @@ function isUiPackageManifest(value: unknown): value is UiPackageManifest {
     (value.version === undefined || typeof value.version === 'string') &&
     (exportsValue === undefined ||
       (isRecord(exportsValue) &&
-        Object.values(exportsValue).every((entry) => typeof entry === 'string'))) &&
+        Object.values(exportsValue).every((entry) => isUiPackageExportTarget(entry)))) &&
     (kovoValue === undefined ||
       (isRecord(kovoValue) &&
         (kovoValue.vendoredSource === undefined || typeof kovoValue.vendoredSource === 'boolean') &&
@@ -738,6 +752,13 @@ function isUiPackageManifest(value: unknown): value is UiPackageManifest {
             Object.values(kovoValue.vendoredSourceHashes).every(
               (entry) => typeof entry === 'string',
             )))))
+  );
+}
+
+function isUiPackageExportTarget(value: unknown): value is UiPackageExportTarget {
+  return (
+    typeof value === 'string' ||
+    (isRecord(value) && Object.values(value).every((entry) => typeof entry === 'string'))
   );
 }
 

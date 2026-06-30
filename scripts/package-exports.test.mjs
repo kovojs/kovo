@@ -102,4 +102,39 @@ describe('package export resolver', () => {
       ],
     });
   });
+
+  it('includes non-exported package-owned publish entries in the publish proof set', () => {
+    expect(
+      derivePublishPlan({
+        exports: {
+          '.': './src/index.ts',
+        },
+        kovo: {
+          publishExtraEntries: ['./src/compile.ts'],
+        },
+      }),
+    ).toEqual({
+      entries: ['src/compile.ts', 'src/index.ts'],
+      publishConfig: {
+        exports: {
+          '.': {
+            types: './dist/index.d.mts',
+            default: './dist/index.mjs',
+          },
+        },
+      },
+      targetFiles: ['dist/compile.d.mts', 'dist/compile.mjs', 'dist/index.d.mts', 'dist/index.mjs'],
+    });
+
+    expect(() =>
+      derivePublishPlan({
+        exports: {
+          '.': './src/index.ts',
+        },
+        kovo: {
+          publishExtraEntries: ['./dist/compile.mjs'],
+        },
+      }),
+    ).toThrow('kovo.publishExtraEntries target does not target ./src');
+  });
 });
