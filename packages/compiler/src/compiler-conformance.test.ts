@@ -87,6 +87,7 @@ describe('compiler conformance corpus', () => {
               "name": "components/reference-shell/reference-shell",
               "queries": [
                 "account",
+                "accountQuery",
               ],
             },
           ],
@@ -132,6 +133,8 @@ describe('compiler conformance corpus', () => {
               "name": "components/cart-badge/cart-badge",
               "queries": [
                 "cart",
+                "cartQuery",
+                "queries/cart-query",
               ],
               "styleRules": [
                 {
@@ -305,6 +308,8 @@ describe('compiler conformance corpus', () => {
               "name": "components/order-history/order-history",
               "queries": [
                 "orderHistory",
+                "orderHistoryQuery",
+                "queries/order-history-query",
               ],
               "styleRules": [
                 {
@@ -495,6 +500,8 @@ describe('compiler conformance corpus', () => {
               "name": "components/product-grid/product-grid",
               "queries": [
                 "productGrid",
+                "productGridQuery",
+                "queries/product-grid-query",
               ],
               "styleRules": [
                 {
@@ -818,6 +825,8 @@ describe('compiler conformance corpus', () => {
               "name": "components/product-grid/guest-product-grid",
               "queries": [
                 "productGrid",
+                "productGridQuery",
+                "queries/product-grid-query",
               ],
             },
           ],
@@ -864,6 +873,7 @@ describe('compiler conformance corpus', () => {
               "name": "conformance/generated/cart-badge/cart-badge",
               "queries": [
                 "cart",
+                "cartQuery",
               ],
             },
           ],
