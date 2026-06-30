@@ -15,7 +15,7 @@ import {
   type ResolvedGuardFailure,
   type UnauthenticatedHandler,
 } from './guards.js';
-import type { PageHintOptions } from './hints.js';
+import type { PageHintOptions, RouteMetaSource } from './hints.js';
 import type { SignUrlContext } from './capability-route.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import type { CsrfValidationOptions } from './csrf.js';
@@ -210,11 +210,14 @@ export interface RouteDefinition<
     GuardedRequest,
     Page
   >,
-> extends PageHintOptions {
+> extends Omit<PageHintOptions, 'meta'> {
   access?: AccessDecision;
   boundaries?: RouteBoundaries<Request, Page>;
   guard?: Guard<Request, GuardedRequest>;
   layout?: LayoutDeclaration<any, any, any, RouteRegionResults<Regions>>;
+  meta?:
+    | RouteMetaSource<RouteRequest<Path, ParamsSchema, SearchSchema>>
+    | readonly RouteMetaSource<RouteRequest<Path, ParamsSchema, SearchSchema>>[];
   onUnauthenticated?: UnauthenticatedHandler<Request>;
   page?: (
     context: RouteRequest<Path, ParamsSchema, SearchSchema>,

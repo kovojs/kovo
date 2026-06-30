@@ -35,8 +35,17 @@ export interface RouteMetaFactory {
   resolve(values: Record<string, unknown>): RouteMeta;
 }
 
-/** A route's `meta`: either a static {@link RouteMeta} or a query-driven {@link RouteMetaFactory}. */
-export type RouteMetaSource = RouteMeta | RouteMetaFactory;
+/** Param/search-aware route metadata callback (SPEC §6.4). */
+export type RouteMetaCallback<
+  Context = unknown,
+  Queries extends Readonly<Record<string, unknown>> = Readonly<Record<string, unknown>>,
+> = (context: Context, queries: Queries) => RouteMeta;
+
+/** A route's `meta`: static, query-driven, or route-context-driven metadata. */
+export type RouteMetaSource<Context = unknown> =
+  | RouteMeta
+  | RouteMetaFactory
+  | RouteMetaCallback<Context>;
 
 /**
  * A localization message catalog inlined into the document for a locale. Serialized
@@ -105,10 +114,10 @@ export interface StylesheetManifestEntry extends StylesheetAsset {
  * this stylesheet-delivery shape.
  */
 // SPEC section 13.1: page, mutation fragment, and deferred fragment renders share stylesheet delivery.
-export interface PageHintOptions {
+export interface PageHintOptions<MetaContext = unknown> {
   bootstrapScript?: string;
   i18n?: I18nCatalog | readonly I18nCatalog[];
-  meta?: RouteMetaSource | readonly RouteMetaSource[];
+  meta?: RouteMetaSource<MetaContext> | readonly RouteMetaSource<MetaContext>[];
   modulepreloads?: readonly string[];
   prefetch?: RoutePrefetch;
   /**
@@ -124,8 +133,9 @@ export interface PageHintOptions {
 }
 
 /** @internal */
-export interface PageHintRenderContext {
+export interface PageHintRenderContext<MetaContext = unknown> {
   queries?: Record<string, unknown>;
+  route?: MetaContext;
 }
 
 /** @internal */
@@ -754,6 +764,7 @@ function resolveRouteMeta(
   source: RouteMetaSource,
   context: PageHintRenderContext,
 ): RouteMeta | undefined {
+  if (isRouteMetaCallback(source)) return source(context.route, context.queries ?? {});
   if (!isRouteMetaFactory(source)) return source;
 
   const queries = context.queries ?? {};
@@ -770,7 +781,11 @@ function resolveRouteMeta(
 }
 
 function isRouteMetaFactory(source: RouteMetaSource): source is RouteMetaFactory {
-  return typeof (source as RouteMetaFactory).resolve === 'function';
+  return typeof source === 'object' && typeof (source as RouteMetaFactory).resolve === 'function';
+}
+
+function isRouteMetaCallback(source: RouteMetaSource): source is RouteMetaCallback {
+  return typeof source === 'function';
 }
 
 function renderI18nCatalogs(i18nInput: PageHintOptions['i18n']): InlineHtmlWithCsp[] {

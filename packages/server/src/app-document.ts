@@ -26,6 +26,7 @@ import {
 import type { ForbiddenRenderer } from './guards.js';
 import {
   renderRoutePageResponse,
+  parseRouteRequest,
   routeHasBoundary,
   type RouteJsxContextOptions,
   type RouteDeclaration,
@@ -116,6 +117,12 @@ export async function renderAppRouteDocumentResponse({
       ...(app.sessionProvider === undefined ? {} : { sessionProvider: app.sessionProvider }),
     },
   );
+  let metaContext: ReturnType<typeof parseRouteRequest> | undefined;
+  try {
+    metaContext = parseRouteRequest(route, routeInput);
+  } catch {
+    metaContext = undefined;
+  }
 
   const withRefreshCookies = (response: RoutePageResponse): RoutePageResponse => {
     // Forwarded better-auth/session Set-Cookie strings are routed through the cookie floor
@@ -195,6 +202,7 @@ export async function renderAppRouteDocumentResponse({
       ...(app.document.csp === undefined ? {} : { csp: app.document.csp }),
       ...(app.document.structured === undefined ? {} : { document: app.document.structured }),
       hints: mergeAppRouteHints(app, route),
+      ...(metaContext === undefined ? {} : { metaContext }),
       ...(app.document.lang === undefined ? {} : { lang: app.document.lang }),
       loaderRuntimeHref,
       reportingOrigin: new URL(request.url).origin,
@@ -440,7 +448,7 @@ function renderDefaultRouteValue(value: unknown): string {
   return renderHtmlValue(value);
 }
 
-function mergeAppRouteHints(app: KovoApp, route: AnyRouteDeclaration): PageHintOptions {
+function mergeAppRouteHints(app: KovoApp, route: AnyRouteDeclaration): PageHintOptions<any> {
   const stylesheets = [...app.stylesheets, ...(route.stylesheets ?? [])];
   return {
     ...route,
