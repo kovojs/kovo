@@ -1,4 +1,5 @@
-// Generated handler ABI for compiler-emitted client modules. App-authored source must not import this subpath.
+// Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.
+// Handler ABI for compiler-emitted client modules. App-authored source must not import this subpath.
 export { accordionKeyDown, accordionTriggerClick } from './primitives/accordion.js';
 export {
   alertDialogActionClick,
@@ -13,8 +14,8 @@ export {
   autocompleteOptionClick,
 } from './primitives/autocomplete.js';
 export { avatarImageError, avatarImageLoad } from './primitives/avatar.js';
-export { checkboxGroupItemClick, checkboxGroupKeyDown } from './primitives/checkbox-group.js';
 export { checkboxTriggerClick } from './primitives/checkbox.js';
+export { checkboxGroupItemClick, checkboxGroupKeyDown } from './primitives/checkbox-group.js';
 export { collapsibleTriggerClick } from './primitives/collapsible.js';
 export { comboboxInput, comboboxKeyDown, comboboxOptionClick } from './primitives/combobox.js';
 export {
@@ -114,8 +115,8 @@ export {
   toastEscapeKeyDown,
   toastViewportKeyDown,
 } from './primitives/toast.js';
-export { toggleGroupItemClick, toggleGroupKeyDown } from './primitives/toggle-group.js';
 export { toggleTriggerClick } from './primitives/toggle.js';
+export { toggleGroupItemClick, toggleGroupKeyDown } from './primitives/toggle-group.js';
 export { toolbarKeyDown } from './primitives/toolbar.js';
 export {
   tooltipEscapeKeyDown,

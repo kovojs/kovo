@@ -1,35 +1,414 @@
 #!/usr/bin/env node
-// Generates packages/ui/registry.json — the shadcn-style copy-in manifest.
+// Checks or writes the generated UI/headless/gallery manifest artifacts.
 //
-// Phase 7 of plans/api-cleanup.md: @kovojs/ui is `private: true`. External apps
-// do NOT install it; they copy a component's source into their own app (e.g.
-// src/components/ui/) — "you own the code". The copied .tsx imports only PUBLIC,
-// versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork),
-// @kovojs/core (component()), and optionally @kovojs/server (escape helpers). This manifest is
-// the data a future `kovo add <component>` would consume to copy a component and
-// its sibling dependencies, and it pins the public dependency surface each
-// component needs so the boundary cannot silently drift.
-//
-// A static, checked-in registry.json is the source of truth; this script
-// regenerates it from the component sources so the two stay in sync. Run:
+// The manifest in primitive-component-manifest.mjs owns the ordered component catalog,
+// interactive browser fixture list, and headless primitive handler ABI groups. This
+// script derives the residual copy-in metadata from source and keeps every checked-in
+// registry surface round-trip checked:
 //   node packages/ui/scripts/build-registry.mjs            # check (default)
-//   node packages/ui/scripts/build-registry.mjs --write    # rewrite registry.json
+//   node packages/ui/scripts/build-registry.mjs --write    # rewrite generated artifacts
 
-import { readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { primitiveComponentManifest } from './primitive-component-manifest.mjs';
+
 const pkgRoot = fileURLToPath(new URL('../', import.meta.url));
-const srcDir = path.join(pkgRoot, 'src');
-const registryPath = path.join(pkgRoot, 'registry.json');
+const repoRoot = path.resolve(pkgRoot, '../..');
+const uiSrcDir = path.join(pkgRoot, 'src');
+const headlessRoot = path.join(repoRoot, 'packages/headless-ui');
+const galleryRoot = path.join(repoRoot, 'examples/gallery');
+
+const generatedSourceComment =
+  '// Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.';
+
+const paths = {
+  galleryBrowserFixtureManifest: path.join(
+    galleryRoot,
+    'src',
+    'interactive-gallery.browser-manifest.ts',
+  ),
+  galleryComponentCatalog: path.join(galleryRoot, 'src', 'component-catalog.ts'),
+  galleryComponentManifest: path.join(galleryRoot, 'src', 'gallery-component-manifest.ts'),
+  galleryPrimitiveActions: path.join(galleryRoot, 'src', 'primitive-actions.ts'),
+  headlessGenerated: path.join(headlessRoot, 'src', 'generated.ts'),
+  uiRegistry: path.join(pkgRoot, 'registry.json'),
+};
+
+const allowedArgs = new Set(['--write']);
+const unknownArg = process.argv.slice(2).find((arg) => !allowedArgs.has(arg));
+if (unknownArg) {
+  console.error(`Unknown option ${unknownArg}`);
+  process.exit(2);
+}
+
+const writeMode = process.argv.includes('--write');
+const manifestComponents = componentManifestEntries();
+const generatedTargets = [
+  {
+    compare: 'json',
+    label: 'packages/ui/registry.json',
+    path: paths.uiRegistry,
+    source: generateUiRegistryJson(),
+  },
+  {
+    compare: 'text',
+    label: 'packages/headless-ui/src/generated.ts',
+    path: paths.headlessGenerated,
+    source: generateHeadlessGeneratedTs(),
+  },
+  {
+    compare: 'text',
+    label: 'examples/gallery/src/primitive-actions.ts',
+    path: paths.galleryPrimitiveActions,
+    source: generateGalleryPrimitiveActionsTs(),
+  },
+  {
+    compare: 'text',
+    label: 'examples/gallery/src/gallery-component-manifest.ts',
+    path: paths.galleryComponentManifest,
+    source: generateGalleryComponentManifestTs(),
+  },
+  {
+    compare: 'text',
+    label: 'examples/gallery/src/component-catalog.ts',
+    path: paths.galleryComponentCatalog,
+    source: generateGalleryComponentCatalogTs(),
+  },
+  {
+    compare: 'text',
+    label: 'examples/gallery/src/interactive-gallery.browser-manifest.ts',
+    path: paths.galleryBrowserFixtureManifest,
+    source: generateGalleryBrowserFixtureManifestTs(),
+  },
+];
+
+const validationFindings = validateManifestDrift();
+const targetFindings = [];
+
+for (const target of generatedTargets) {
+  if (writeMode) {
+    writeFileSync(target.path, target.source);
+    console.log(`Wrote ${target.label}.`);
+  } else if (!targetMatchesFile(target)) {
+    targetFindings.push(`${target.label} is out of date`);
+  }
+}
+
+if (validationFindings.length || targetFindings.length) {
+  console.error('primitive/component manifest findings:');
+  for (const finding of [...validationFindings, ...targetFindings]) {
+    console.error(`  - ${finding}`);
+  }
+  if (!writeMode && targetFindings.length) {
+    console.error('Run: node packages/ui/scripts/build-registry.mjs --write');
+  }
+  process.exit(validationFindings.length ? 2 : 1);
+}
+
+if (!writeMode) {
+  console.log(
+    `ui/headless/gallery manifest artifacts are up to date (${manifestComponents.length} components, ${primitiveComponentManifest.headlessPrimitives.length} headless primitives).`,
+  );
+}
 
 /** Deterministic string sort (explicit comparator for the repo lint rule). */
-const sorted = (values) => [...values].sort((a, b) => a.localeCompare(b));
+function sorted(values) {
+  return [...values].sort((a, b) => a.localeCompare(b));
+}
 
-// The set of @kovojs packages a copied component is allowed to import. Each must
-// be a PUBLIC, versioned package (or `component` from core) — never a
-// @kovojs/ui-internal module. The smoke test (src/copy-in.test.ts) enforces that
-// a copied component typechecks against exactly these.
+function componentManifestEntries() {
+  return primitiveComponentManifest.components.map((entry) => ({
+    ...entry,
+    demoFunction: `${pascalCase(entry.component)}Demo`,
+    path: `/components/${entry.component}`,
+    visualFixture: `${entry.component}.html.txt`,
+  }));
+}
+
+function generateUiRegistryJson() {
+  const components = [];
+  const findings = [];
+  const manifestNames = new Set(manifestComponents.map((entry) => entry.component));
+  const sourceComponentNames = new Set(uiSourceComponentNames());
+
+  for (const name of sorted(sourceComponentNames)) {
+    if (!manifestNames.has(name)) {
+      findings.push(`${name}.tsx exists in @kovojs/ui but is missing from the manifest`);
+    }
+  }
+
+  for (const entry of manifestComponents) {
+    const name = entry.component;
+    const file = `${name}.tsx`;
+    if (!sourceComponentNames.has(name)) {
+      findings.push(`${file} is declared in the manifest but missing from @kovojs/ui`);
+      continue;
+    }
+
+    const source = readFileSync(path.join(uiSrcDir, file), 'utf8');
+    const imports = parseImports(source);
+    const exportedComponents = parseExportedComponents(source);
+    const exportedLeafNames = new Set(exportedComponents.map(bindingToLeafName));
+
+    const headlessUiSymbols = new Set();
+    const styleSymbols = new Set();
+    const serverSymbols = new Set();
+    const coreSymbols = new Set();
+    const iconsSymbols = new Set();
+    const uiComponents = new Set();
+    const otherDeps = new Set();
+
+    for (const { module, symbols } of imports) {
+      if (module === '@kovojs/headless-ui' || module.startsWith('@kovojs/headless-ui/')) {
+        symbols.forEach((symbol) => headlessUiSymbols.add(symbol));
+      } else if (module === '@kovojs/style') {
+        if (symbols.length > 0) {
+          symbols.forEach((symbol) => styleSymbols.add(symbol));
+        } else {
+          styleSymbols.add('*');
+        }
+      } else if (module === '@kovojs/server') {
+        symbols.forEach((symbol) => serverSymbols.add(symbol));
+      } else if (module === '@kovojs/core') {
+        symbols.forEach((symbol) => coreSymbols.add(symbol));
+      } else if (module === '@kovojs/icons' || module.startsWith('@kovojs/icons/')) {
+        symbols.forEach((symbol) => iconsSymbols.add(symbol));
+      } else if (module === '@kovojs/ui' || module.startsWith('@kovojs/ui/')) {
+        findings.push(`${file}: imports @kovojs/ui itself (${module}) - not copy-in safe`);
+        otherDeps.add(module);
+      } else if (module.startsWith('./') || module.startsWith('../')) {
+        uiComponents.add(module.replace(/^\.\//, '').replace(/\.(tsx|ts|js)$/, ''));
+      } else if (module.startsWith('@kovojs/')) {
+        if (!PUBLIC_KOVO_DEPS.has(module)) {
+          findings.push(`${file}: imports non-allowlisted @kovojs package ${module}`);
+          otherDeps.add(module);
+        }
+      }
+    }
+
+    if (!exportedComponents.length) {
+      findings.push(`${file}: does not export any component({ ... }) definitions`);
+    } else if (!exportedLeafNames.has(name)) {
+      findings.push(
+        `${file}: registry name "${name}" is not derived from an exported component binding (${sorted(
+          exportedComponents,
+        ).join(', ')})`,
+      );
+    }
+
+    components.push({
+      name,
+      title: exportedComponents[0] ?? pascalCase(name),
+      files: [`src/${file}`],
+      exports: exportedComponents,
+      dependencies: {
+        '@kovojs/headless-ui': sorted(headlessUiSymbols),
+        ...(styleSymbols.size ? { '@kovojs/style': sorted(styleSymbols) } : {}),
+        ...(coreSymbols.size ? { '@kovojs/core': sorted(coreSymbols) } : {}),
+        ...(serverSymbols.size ? { '@kovojs/server': sorted(serverSymbols) } : {}),
+        ...(iconsSymbols.size ? { '@kovojs/icons': sorted(iconsSymbols) } : {}),
+        ...(otherDeps.size ? { other: sorted(otherDeps) } : {}),
+      },
+      uiComponents: sorted(uiComponents),
+    });
+  }
+
+  if (findings.length) {
+    throw new Error(`Unable to generate packages/ui/registry.json:\n${findings.join('\n')}`);
+  }
+
+  return `${JSON.stringify(
+    {
+      $comment:
+        'shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. Component membership/order comes from packages/ui/scripts/primitive-component-manifest.mjs; dependency metadata is derived from source. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.',
+      registryDependencies: [
+        '@kovojs/headless-ui',
+        '@kovojs/style',
+        '@kovojs/core',
+        '@kovojs/server',
+        '@kovojs/icons',
+      ],
+      components,
+    },
+    null,
+    2,
+  )}\n`;
+}
+
+function generateHeadlessGeneratedTs() {
+  const groups = primitiveComponentManifest.headlessPrimitives
+    .filter((primitive) => primitive.handlers.length > 0)
+    .map((primitive) =>
+      formatNamedExport(primitive.handlers, `./primitives/${primitive.subpath}.js`),
+    );
+
+  return [
+    generatedSourceComment,
+    '// Handler ABI for compiler-emitted client modules. App-authored source must not import this subpath.',
+    ...groups,
+    '',
+  ].join('\n');
+}
+
+function generateGalleryPrimitiveActionsTs() {
+  return [
+    generatedSourceComment,
+    '// Gallery-local L1 interaction adapter for compiled demos.',
+    "export * from '@kovojs/headless-ui/generated';",
+    "export * from '@kovojs/headless-ui/internal/primitive';",
+    ...primitiveComponentManifest.headlessPrimitives.map(
+      (primitive) => `export * from '@kovojs/headless-ui/${primitive.subpath}';`,
+    ),
+    '',
+  ].join('\n');
+}
+
+function generateGalleryComponentManifestTs() {
+  return [
+    generatedSourceComment,
+    '',
+    'export const galleryComponentEntries = Object.freeze([',
+    manifestComponents.map(formatGalleryComponentEntry).join('\n'),
+    '] as const);',
+    '',
+    "export type GalleryComponent = (typeof galleryComponentEntries)[number]['component'];",
+    "export type GalleryComponentPath = (typeof galleryComponentEntries)[number]['path'];",
+    '',
+  ].join('\n');
+}
+
+function generateGalleryComponentCatalogTs() {
+  return [
+    generatedSourceComment,
+    '',
+    "import { galleryComponentEntries, type GalleryComponent } from './gallery-component-manifest.js';",
+    '',
+    'export interface GalleryComponentEntry {',
+    '  component: GalleryComponent;',
+    '  summary: string;',
+    '  title: string;',
+    '}',
+    '',
+    'export const galleryComponentCatalog: readonly GalleryComponentEntry[] = Object.freeze(',
+    '  galleryComponentEntries.map(({ component, summary, title }) => ({ component, summary, title })),',
+    ');',
+    '',
+  ].join('\n');
+}
+
+function generateGalleryBrowserFixtureManifestTs() {
+  const imports = manifestComponents.map(
+    (entry) =>
+      `import ${staticFixtureVariable(entry.component)} from './visual-fixtures/${entry.visualFixture}?raw';`,
+  );
+  const pathUnion = manifestComponents.map((entry) => `  | '${entry.path}'`);
+  const htmlEntries = manifestComponents.map(
+    (entry) => `  '${entry.path}': ${staticFixtureVariable(entry.component)},`,
+  );
+  const interactiveEntries = primitiveComponentManifest.interactiveDemos.map(
+    (demo) => `  '${demo}',`,
+  );
+
+  return [
+    generatedSourceComment,
+    ...imports,
+    '',
+    'export type StaticVisualFixturePath =',
+    ...pathUnion.map((line, index) => (index === pathUnion.length - 1 ? `${line};` : line)),
+    '',
+    'export const staticVisualFixtureHtml: Record<StaticVisualFixturePath, string> = {',
+    ...htmlEntries,
+    '};',
+    '',
+    'export const interactiveClientModuleNames = [',
+    ...interactiveEntries,
+    '] as const;',
+    '',
+  ].join('\n');
+}
+
+function validateManifestDrift() {
+  const findings = [];
+
+  addDuplicateFindings(
+    findings,
+    'component manifest entries',
+    primitiveComponentManifest.components.map((entry) => entry.component),
+  );
+  addDuplicateFindings(
+    findings,
+    'headless primitive manifest entries',
+    primitiveComponentManifest.headlessPrimitives.map((entry) => entry.subpath),
+  );
+  addDuplicateFindings(findings, 'interactive demos', primitiveComponentManifest.interactiveDemos);
+
+  const headlessExportSubpaths = Object.keys(
+    JSON.parse(readFileSync(path.join(headlessRoot, 'package.json'), 'utf8')).exports,
+  )
+    .filter(
+      (subpath) =>
+        subpath.startsWith('./') &&
+        !['./generated', './internal', './internal/primitive', './types'].includes(subpath),
+    )
+    .map((subpath) => subpath.slice(2));
+  addSetDrift(
+    findings,
+    'headless package public primitive subpaths',
+    primitiveComponentManifest.headlessPrimitives.map((entry) => entry.subpath),
+    headlessExportSubpaths,
+  );
+
+  const packageJson = JSON.parse(readFileSync(path.join(galleryRoot, 'package.json'), 'utf8'));
+  addSetDrift(
+    findings,
+    'examples/gallery package.json interactiveGallery.compiledDemos',
+    primitiveComponentManifest.interactiveDemos,
+    (packageJson.kovo?.interactiveGallery?.compiledDemos ?? []).map(String),
+  );
+
+  addSetDrift(
+    findings,
+    'gallery interactive demo source files',
+    primitiveComponentManifest.interactiveDemos,
+    readdirSync(path.join(galleryRoot, 'src', 'interactive'))
+      .filter((fileName) => fileName.endsWith('-demo.tsx'))
+      .map((fileName) => fileName.replace(/\.tsx$/, ''))
+      .sort((a, b) => a.localeCompare(b)),
+  );
+
+  addSetDrift(
+    findings,
+    'gallery static visual fixture files',
+    manifestComponents.map((entry) => entry.visualFixture),
+    readdirSync(path.join(galleryRoot, 'src', 'visual-fixtures'))
+      .filter((fileName) => fileName.endsWith('.html.txt'))
+      .sort((a, b) => a.localeCompare(b)),
+  );
+
+  for (const primitive of primitiveComponentManifest.headlessPrimitives) {
+    const primitivePath = path.join(headlessRoot, 'src', 'primitives', `${primitive.subpath}.ts`);
+    if (!existsSync(primitivePath)) {
+      findings.push(`${primitive.subpath}: headless primitive source file is missing`);
+      continue;
+    }
+
+    const sourceHandlers = primitiveHandlerExportsFromSource(
+      `packages/headless-ui/src/primitives/${primitive.subpath}.ts`,
+      readFileSync(primitivePath, 'utf8'),
+    );
+    addSetDrift(
+      findings,
+      `${primitive.subpath}: @kovoPrimitiveHandler exports`,
+      primitive.handlers,
+      sourceHandlers,
+    );
+  }
+
+  return findings;
+}
+
 const PUBLIC_KOVO_DEPS = new Set([
   '@kovojs/core',
   '@kovojs/headless-ui',
@@ -38,7 +417,7 @@ const PUBLIC_KOVO_DEPS = new Set([
   '@kovojs/style',
 ]);
 
-/** Parse every `import … from '<mod>'` statement, returning { module, symbols[] }. */
+/** Parse every `import ... from '<mod>'` statement, returning { module, symbols[] }. */
 function parseImports(source) {
   const results = [];
   const re = /^\s*import\s+(?:type\s+)?([^;]*?)\s+from\s+'([^']+)';/gm;
@@ -71,7 +450,7 @@ function bindingToLeafName(binding) {
     .toLowerCase();
 }
 
-/** Exported `component({ … })` definitions in a component file. */
+/** Exported `component({ ... })` definitions in a component file. */
 function parseExportedComponents(source) {
   const re = /export const (\w+) = component\s*\(\s*\{/g;
   const names = [];
@@ -80,129 +459,122 @@ function parseExportedComponents(source) {
   return names;
 }
 
-const files = sorted(
-  readdirSync(srcDir).filter(
-    (f) => f.endsWith('.tsx') && !f.includes('.test.') && f !== 'index.tsx',
-  ),
-);
+function primitiveHandlerExportsFromSource(fileName, source) {
+  const names = [];
+  const re =
+    /\/\*\*[\s\S]*?@kovoPrimitiveHandler[\s\S]*?\*\/\s*export\s+(?:function\s+(\w+)|const\s+(\w+)\s*=)/g;
+  let match;
 
-const components = [];
-const findings = [];
-
-for (const file of files) {
-  const name = file.replace(/\.tsx$/, '');
-  const source = readFileSync(path.join(srcDir, file), 'utf8');
-  const imports = parseImports(source);
-  const exportedComponents = parseExportedComponents(source);
-  const exportedLeafNames = new Set(exportedComponents.map(bindingToLeafName));
-
-  const headlessUiSymbols = new Set();
-  const styleSymbols = new Set();
-  const serverSymbols = new Set();
-  const coreSymbols = new Set();
-  const iconsSymbols = new Set();
-  const uiComponents = new Set(); // sibling ui components copied alongside this one
-  const otherDeps = new Set();
-
-  for (const { module, symbols } of imports) {
-    if (module === '@kovojs/headless-ui' || module.startsWith('@kovojs/headless-ui/')) {
-      symbols.forEach((s) => headlessUiSymbols.add(s));
-    } else if (module === '@kovojs/style') {
-      if (symbols.length > 0) {
-        symbols.forEach((s) => styleSymbols.add(s));
-      } else {
-        styleSymbols.add('*');
-      }
-    } else if (module === '@kovojs/server') symbols.forEach((s) => serverSymbols.add(s));
-    else if (module === '@kovojs/core') symbols.forEach((s) => coreSymbols.add(s));
-    else if (module === '@kovojs/icons' || module.startsWith('@kovojs/icons/')) {
-      symbols.forEach((s) => iconsSymbols.add(s));
-    } else if (module === '@kovojs/ui' || module.startsWith('@kovojs/ui/')) {
-      findings.push(`${file}: imports @kovojs/ui itself (${module}) — not copy-in safe`);
-      otherDeps.add(module);
-    } else if (module.startsWith('./') || module.startsWith('../')) {
-      // Relative import = sibling ui component to copy alongside.
-      uiComponents.add(module.replace(/^\.\//, '').replace(/\.(tsx|ts|js)$/, ''));
-    } else if (module.startsWith('@kovojs/')) {
-      // Any @kovojs import outside the public allowlist is a real finding: a
-      // copied component would not resolve it from the public packages alone.
-      if (!PUBLIC_KOVO_DEPS.has(module)) {
-        findings.push(`${file}: imports non-allowlisted @kovojs package ${module}`);
-        otherDeps.add(module);
-      }
-    }
-    // Non-@kovojs (e.g. type-only TS lib) imports are not tracked here.
+  while ((match = re.exec(source)) !== null) {
+    const name = match[1] ?? match[2];
+    if (name) names.push(name);
   }
 
-  if (!exportedComponents.length) {
-    findings.push(`${file}: does not export any component({ ... }) definitions`);
-  } else if (!exportedLeafNames.has(name)) {
-    findings.push(
-      `${file}: registry name "${name}" is not derived from an exported component binding (${sorted(
-        exportedComponents,
-      ).join(', ')})`,
-    );
+  if (source.includes('@kovoPrimitiveHandler') && names.length === 0) {
+    throw new Error(`Unable to parse @kovoPrimitiveHandler exports from ${fileName}`);
   }
-
-  components.push({
-    name,
-    title: exportedComponents[0] ?? name,
-    files: [`src/${file}`],
-    exports: exportedComponents,
-    dependencies: {
-      '@kovojs/headless-ui': sorted(headlessUiSymbols),
-      ...(styleSymbols.size ? { '@kovojs/style': sorted(styleSymbols) } : {}),
-      ...(coreSymbols.size ? { '@kovojs/core': sorted(coreSymbols) } : {}),
-      ...(serverSymbols.size ? { '@kovojs/server': sorted(serverSymbols) } : {}),
-      ...(iconsSymbols.size ? { '@kovojs/icons': sorted(iconsSymbols) } : {}),
-      ...(otherDeps.size ? { other: sorted(otherDeps) } : {}),
-    },
-    uiComponents: sorted(uiComponents),
-  });
+  return names;
 }
 
-const registry = {
-  $comment:
-    'shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.',
-  registryDependencies: [
-    '@kovojs/headless-ui',
-    '@kovojs/style',
-    '@kovojs/core',
-    '@kovojs/server',
-    '@kovojs/icons',
-  ],
-  components,
-};
-
-const serialized = `${JSON.stringify(registry, null, 2)}\n`;
-
-if (findings.length) {
-  console.error('registry findings (component imports a non-public symbol):');
-  for (const f of findings) console.error(`  - ${f}`);
+function uiSourceComponentNames() {
+  return readdirSync(uiSrcDir)
+    .filter((fileName) => fileName.endsWith('.tsx'))
+    .filter((fileName) => !fileName.includes('.test.') && fileName !== 'index.tsx')
+    .map((fileName) => fileName.replace(/\.tsx$/, ''));
 }
 
-if (process.argv.includes('--write')) {
-  writeFileSync(registryPath, serialized);
-  console.log(`Wrote ${registryPath} (${components.length} components).`);
-} else {
-  // Compare by semantic content, not bytes: the checked-in registry.json is
-  // normalized by `vp check` (the repo formatter), so its whitespace differs
-  // from JSON.stringify output. Drift in the data (a new/changed component or
-  // dependency) still fails; pure reformatting does not.
+function targetMatchesFile(target) {
   let current = '';
   try {
-    current = readFileSync(registryPath, 'utf8');
+    current = readFileSync(target.path, 'utf8');
   } catch {
-    current = '';
+    return false;
   }
-  const sameContent = current && JSON.stringify(JSON.parse(current)) === JSON.stringify(registry);
-  if (!sameContent) {
-    console.error(
-      'registry.json is out of date. Run: node packages/ui/scripts/build-registry.mjs --write (then `vp check --fix`)',
-    );
-    process.exit(1);
+
+  if (target.compare === 'json') {
+    try {
+      return JSON.stringify(JSON.parse(current)) === JSON.stringify(JSON.parse(target.source));
+    } catch {
+      return false;
+    }
   }
-  console.log(`registry.json is up to date (${components.length} components).`);
+
+  return current === target.source;
 }
 
-if (findings.length) process.exit(2);
+function formatNamedExport(names, moduleSpecifier) {
+  const oneLine = `export { ${names.join(', ')} } from '${moduleSpecifier}';`;
+  if (oneLine.length <= 100) return oneLine;
+
+  return [`export {`, ...names.map((name) => `  ${name},`), `} from '${moduleSpecifier}';`].join(
+    '\n',
+  );
+}
+
+function formatGalleryComponentEntry(entry) {
+  return [
+    '  {',
+    formatObjectStringProperty('component', entry.component),
+    formatObjectStringProperty('demoFunction', entry.demoFunction),
+    formatObjectStringProperty('path', entry.path),
+    formatObjectStringProperty('summary', entry.summary),
+    formatObjectStringProperty('title', entry.title),
+    formatObjectStringProperty('visualFixture', entry.visualFixture),
+    '  },',
+  ].join('\n');
+}
+
+function formatObjectStringProperty(name, value) {
+  const literal = tsString(value);
+  const line = `    ${name}: ${literal},`;
+  if (line.length <= 100) return line;
+
+  return `    ${name}:\n      ${literal},`;
+}
+
+function staticFixtureVariable(component) {
+  return `${camelCase(component)}StaticRouteHtml`;
+}
+
+function pascalCase(value) {
+  return value
+    .split('-')
+    .map((part) => `${part[0]?.toUpperCase() ?? ''}${part.slice(1)}`)
+    .join('');
+}
+
+function camelCase(value) {
+  const pascal = pascalCase(value);
+  return `${pascal[0]?.toLowerCase() ?? ''}${pascal.slice(1)}`;
+}
+
+function tsString(value) {
+  if (value.includes("'") && !value.includes('"')) {
+    return `"${value.replaceAll('\\', '\\\\').replaceAll('"', '\\"')}"`;
+  }
+
+  return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
+function addDuplicateFindings(findings, label, values) {
+  for (const value of values) {
+    if (values.indexOf(value) !== values.lastIndexOf(value)) {
+      findings.push(`${label} contains duplicate "${value}"`);
+    }
+  }
+}
+
+function addSetDrift(findings, label, expected, actual) {
+  const sortedExpected = sorted(expected);
+  const sortedActual = sorted(actual);
+  if (sameArray(sortedExpected, sortedActual)) return;
+  findings.push(
+    `${label} drifted. expected=${JSON.stringify(sortedExpected)} actual=${JSON.stringify(
+      sortedActual,
+    )}`,
+  );
+}
+
+function sameArray(left, right) {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
