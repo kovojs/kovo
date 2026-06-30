@@ -385,7 +385,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm exec vitest --run scripts/generated-artifacts.test.mjs scripts/no-committed-generated.test.mjs scripts/prod-emit-check.test.mjs scripts/import-boundary.test.mjs`, `pnpm run check:no-committed-generated`, and `vp run build` pass with the shared generated-artifact policy manifest.
   - SPEC/rules: `SPEC.md` sections 1.3 and 5.2 rules 3, 7, 8; `rules/compiler-hard-rules.md`.
 
-- [ ] **P2.4 - Narrow devtool and headless public seams.**
+- [x] **P2.4 - Narrow devtool and headless public seams.**
   - Affected: `packages/devtool/src/index.mjs`, `packages/devtool/package.json`,
     `packages/headless-ui/src/types.ts`, `packages/headless-ui/package.json`,
     `public-packages.json`, `site/content/guides/components.md`.
@@ -400,6 +400,7 @@ test brittleness, and distribution confusion.
     support cost for low-signal generic types.
   - Verification: plain-Node import smoke for devtool subpaths, dependency-boundary assertion, repo
     import search, `pnpm run check:api-surface`, and API ref diffs.
+  - Evidence: `pnpm exec vitest --run packages/devtool/src/dependency-boundary.test.mjs packages/headless-ui/src/types-boundary.test.ts packages/devtool/src/render.test.mjs --reporter=verbose`, `pnpm run check:api-surface`, and exact `rg "@kovojs/headless-ui/types"` import search pass after narrowing the public seams.
   - Rules: `rules/api-surface.md`.
 
 - [ ] **P2.5 - Make `@kovojs/ui` family metadata and distribution mode explicit.**
