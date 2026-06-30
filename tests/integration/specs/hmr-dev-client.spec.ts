@@ -783,11 +783,12 @@ function hmrSourceAppShell(options: { routeVersion?: string } = {}): string {
   const routeVersion = options.routeVersion ?? '';
   return `
 import { createApp, route } from '@kovojs/server';
+import { renderComponent } from '@kovojs/server/internal/html';
 
 import { HmrSourceCard } from './hmr-card';
 
 function renderCard() {
-  return HmrSourceCard.definition.render();
+  return renderComponent(HmrSourceCard, {});
 }
 
 const renderer = {
