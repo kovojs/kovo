@@ -1898,6 +1898,7 @@
           "./internal/integration",
           "./internal/integration/define",
           "./internal/integration/fixture-abi",
+          "./internal/integration/fixture-browser-abi",
           "./internal/integration/optimistic-client",
           "./internal/harness-operations",
           "./internal/html-wire",

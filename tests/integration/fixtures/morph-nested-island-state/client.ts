@@ -4,8 +4,8 @@ import {
   type MorphRoot,
   type TargetCollectorRoot,
 } from '@kovojs/browser/client';
-import { DomMorphRoot, keyedDomMorph } from '@kovojs/test/internal/integration/fixture-abi';
-import { submitEnhancedMutation } from '@kovojs/test/internal/integration/fixture-abi';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/test/internal/integration/fixture-browser-abi';
+import { submitEnhancedMutation } from '@kovojs/test/internal/integration/fixture-browser-abi';
 
 declare global {
   interface Window {

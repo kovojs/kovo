@@ -18,7 +18,11 @@ import { createServer as createViteServer } from 'vite';
 
 import { isFixtureDescriptor } from './define-fixture.js';
 import { kovoFixtureCompilerPlugin } from './fixture-compiler-plugin.js';
-import { createFixtureInstance, type FixtureInstance } from './fixture-instance.js';
+import {
+  createFixtureInstance,
+  type FixtureInstance,
+  type FixtureRequestHandlerFactory,
+} from './fixture-instance.js';
 
 /** A booted fixture server: its `origin`, the live `db`, a per-test `reset`, and `close`. */
 export interface BootedFixture {
@@ -83,7 +87,10 @@ export async function bootFixture(
 
   let instance: FixtureInstance;
   try {
-    const module = await vite.ssrLoadModule(entry);
+    const [module, serverModule] = await Promise.all([
+      vite.ssrLoadModule(entry),
+      vite.ssrLoadModule('@kovojs/server'),
+    ]);
     const descriptor = (module as { default?: unknown }).default;
     if (!isFixtureDescriptor(descriptor)) {
       const exportedKeys = JSON.stringify(Object.keys(module));
@@ -96,7 +103,8 @@ export async function bootFixture(
         `Fixture entry ${entry} must \`export default defineFixture(...)\` (exports: ${exportedKeys}).${hint}`,
       );
     }
-    instance = await createFixtureInstance(descriptor);
+    const createRequestHandler = fixtureRequestHandlerFactory(serverModule);
+    instance = await createFixtureInstance(descriptor, createRequestHandler);
   } catch (error) {
     await vite.close();
     throw error;
@@ -133,6 +141,17 @@ export async function bootFixture(
     },
     reset: () => instance.reset(),
   };
+}
+
+function fixtureRequestHandlerFactory(serverModule: unknown): FixtureRequestHandlerFactory {
+  const createRequestHandler = (serverModule as { createRequestHandler?: unknown })
+    .createRequestHandler;
+  if (typeof createRequestHandler !== 'function') {
+    throw new TypeError(
+      'Fixture server could not load @kovojs/server.createRequestHandler from the fixture SSR graph.',
+    );
+  }
+  return createRequestHandler as FixtureRequestHandlerFactory;
 }
 
 async function tryServeBuiltAsset(

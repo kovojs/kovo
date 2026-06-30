@@ -8,7 +8,7 @@ Priority is based on correctness/security impact first, then maintainability and
 
 ## P0 - Correctness and Security Invariants
 
-- [ ] **P0.1 - Finish the integration fixture public-boundary migration.**
+- [x] **P0.1 - Finish the integration fixture public-boundary migration.**
   - Current signals: `tests/integration-import-boundary.meta.test.ts` still carries
     `EXPECTED_ALLOWED_INTERNAL_IMPORTS = 51`, `LEGACY_FIXTURE_IMPORT_RULES`, and only four
     migrated fixture files. Many integration fixtures still import `@kovojs/*/internal` or
@@ -25,6 +25,10 @@ Priority is based on correctness/security impact first, then maintainability and
     with zero legacy fixture imports, the migrated fixture list removed, and only explicit
     spec-level allowlist entries counted. Run the focused integration fixtures touched by the
     migration, then the integration shard or `vp run integration` if the touched set is broad.
+  - Evidence:
+    `pnpm exec vitest --run tests/integration-import-boundary.meta.test.ts`,
+    `pnpm run check:api-surface`, and `pnpm run test:integration` passed with fixture app/client
+    imports routed through the split `@kovojs/test` harness ABI.
 
 - [ ] **P0.2 - Make access explain facts producer-owned instead of graph-output-derived.**
   - Current signals: `packages/cli/src/graph-output.ts` still documents `--access` as mixing

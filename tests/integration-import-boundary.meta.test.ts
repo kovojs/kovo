@@ -11,6 +11,7 @@ const HARNESS_IMPORTS = new Set([
   '@kovojs/test/internal/integration',
   '@kovojs/test/internal/integration/define',
   '@kovojs/test/internal/integration/fixture-abi',
+  '@kovojs/test/internal/integration/fixture-browser-abi',
   '@kovojs/test/internal/integration/optimistic-client',
 ]);
 

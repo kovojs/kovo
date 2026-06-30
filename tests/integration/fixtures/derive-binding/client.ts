@@ -1,5 +1,5 @@
 import { createQueryStore, type InlineQueryEvent } from '@kovojs/browser/client';
-import { applyInlineQueryEventToRuntime } from '@kovojs/test/internal/integration/fixture-abi';
+import { applyInlineQueryEventToRuntime } from '@kovojs/test/internal/integration/fixture-browser-abi';
 
 declare global {
   interface Window {

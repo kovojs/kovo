@@ -1,5 +1,5 @@
 import { createQueryStore, type CompiledQueryUpdatePlans } from '@kovojs/browser/client';
-import { installInlineQueryEventHydration } from '@kovojs/test/internal/integration/fixture-abi';
+import { installInlineQueryEventHydration } from '@kovojs/test/internal/integration/fixture-browser-abi';
 
 interface CartItem {
   id: string;
