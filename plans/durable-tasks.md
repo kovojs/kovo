@@ -191,11 +191,13 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
 
 ## Implementation checklist (phased)
 
-- [ ] **Phase 0 (prerequisite — `bugz-21` B3).** Default `mutation({ handler })` runs in a
+- [x] **Phase 0 (prerequisite — `bugz-21` B3).** Default `mutation({ handler })` runs in a
       framework-opened transaction with a **Tx-typed db** that rolls back on throw, per SPEC §10.3:1174;
       external I/O in a mutation handler becomes a type/gate error. Lands independently; this plan builds
       on it. Acceptance: an end-to-end prod-artifact test where a handler that writes then throws leaves
       the DB unchanged (per the close-out rule — artifact layer, not a unit proxy).
+      Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts`
+      passes, proving a production artifact write-then-throw mutation leaves the DB unchanged.
 - [ ] **Phase 1 — `task()` + `request.schedule()` + Postgres queue + node-preset runner (MVP).**
       Add the `task()` registry primitive (typed `input`, `run(args, ctx)` with the decided composition
       `ctx` — `runQuery`/`runMutation`/`schedule`/`fetch`/`storage`, no raw db); `request.schedule(task,

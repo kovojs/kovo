@@ -1001,6 +1001,43 @@ production builds and static export artifacts. Dev refresh endpoints are likewis
 must reuse existing app-shell render, query, live-target renderer, and fragment-wire code; production
 `createRequestHandler()` never exposes HMR endpoints.
 
+### 9.6 Durable tasks and scheduling
+
+`task()` is the durable background-function primitive for non-transactional side effects. A task is a
+typed registry entry with an `input` schema and a `run(args, ctx)` body; no opaque closures cross the
+boundary. Task code may perform external I/O, but task DB writes must go through `ctx.runMutation(...)`
+and reads through `ctx.runQuery(...)`, so every data change still reuses the audited mutation/query
+surfaces (§10.2, §10.3). A task context may schedule more tasks, use external `fetch`/storage/secrets
+capabilities, and receive a stable job id for external idempotency keys; it does not receive the
+caller mutation's transactional `db`.
+
+`request.schedule(task, args, opts?)` is the only built-in way for a mutation handler to arrange
+post-commit work. Scheduling writes a durable job row in the same transaction as the mutation's data:
+commit means the job is ready to run, rollback means the job was never enqueued. The scheduled args
+are validated by the task's `input` schema and serialized data, not captured process state.
+`opts.afterMs` / `opts.at` set `run_at`; `opts.key` gives a logical pending-job identity. The default
+keyed behavior is debounce: a ready job with the same key has its `run_at` and args replaced by the
+latest schedule. `coalesce: 'throttle'` keeps the earliest ready job and its first args. A running or
+already-finished job is never mutated; re-scheduling creates a new ready job. `request.schedule`
+returns a typed handle, and `request.cancel(handle)` transactionally cancels a still-ready job and
+returns whether cancellation happened.
+
+The default node `JobRunner` drains the queue from Postgres with `FOR UPDATE SKIP LOCKED`, leases,
+retry/backoff, and dead-letter rows. Multiple nodes may run the same drainer; row locks make claims
+disjoint. A lease reaper returns expired `running` jobs to `ready`, so delivery is at-least-once.
+Exactly-once effects are obtained by idempotency: Kovo derives a stable idempotency key per scheduled
+job and exposes the job id as the key a task passes to non-idempotent external APIs. A retry must not
+double-charge, double-send, or otherwise commit an effect without an idempotency key.
+
+Every preset that supports `task()` MUST declare a `JobRunner` capability. The node preset's
+in-process runner is on by default; a runner-only mode may drain jobs without serving HTTP. A preset
+with no runner capability MUST fail closed at build time when `task()`/`schedule()` is used, with an
+actionable diagnostic; it must never silently enqueue work that no deployed artifact can run. Runner
+capacity is bounded by the DB pool, per-task concurrency, priority lanes, and task timeouts/leases.
+Delayed self-reschedule carries a lineage generation counter with a conservative default ceiling and
+a delay floor, so polling/saga loops are explicit and runaway loops dead-letter instead of hammering
+the database.
+
 ---
 
 ## 10. Data Plane
