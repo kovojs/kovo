@@ -18,6 +18,7 @@ import { route } from './route.js';
 import { cloudflare, node, vercel } from './build.js';
 import { stylesheet } from './hints.js';
 import { writeKovoNeutralBuild } from './neutral-build.js';
+import { query } from './query.js';
 import { s } from './schema.js';
 import { task } from './api/data.js';
 
@@ -1483,6 +1484,98 @@ export default async function handler(request) {
         },
       );
       await expect(dynamicWorkerResponse.text()).resolves.toBe('dynamic:/dynamic');
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('serves public assets from dynamic node production artifacts', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-dynamic-public-assets-'));
+
+    try {
+      const distDir = join(root, 'dist');
+      await mkdir(join(distDir, '.vite'), { recursive: true });
+      await mkdir(join(distDir, 'assets'), { recursive: true });
+      await writeFile(join(distDir, 'logo.svg'), '<svg viewBox="0 0 1 1"></svg>');
+      await writeFile(join(distDir, 'assets/client.js'), 'export const client = true;');
+      await writeFile(
+        join(distDir, '.vite/manifest.json'),
+        JSON.stringify({
+          'src/client.ts': {
+            file: 'assets/client.js',
+          },
+        }),
+      );
+
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          queries: [
+            query('asset-proof', {
+              load: () => ({ ok: true }),
+              reads: [],
+            }),
+          ],
+          routes: [
+            route('/asset-proof', {
+              page() {
+                return renderedHtml('<main><img src="/logo.svg" alt=""></main>');
+              },
+            }),
+          ],
+        }),
+        manifestFile: join(distDir, '.vite/manifest.json'),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+export default async function handler(request) {
+  const url = new URL(request.url);
+  if (url.pathname === '/asset-proof') {
+    return new Response('<main><img src="/logo.svg" alt=""></main>', {
+      headers: { 'content-type': 'text/html; charset=utf-8' },
+    });
+  }
+  return new Response('dynamic:' + url.pathname, {
+    headers: { 'content-type': 'text/plain; charset=utf-8' },
+  });
+}
+`,
+      });
+
+      expect(build.staticOutput).toBeUndefined();
+      await expect(readFile(join(root, '.kovo/public/logo.svg'), 'utf8')).resolves.toBe(
+        '<svg viewBox="0 0 1 1"></svg>',
+      );
+
+      const nodeOutDir = join(root, 'node-dynamic');
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+      await expect(readFile(join(nodeOutDir, 'static/logo.svg'), 'utf8')).resolves.toBe(
+        '<svg viewBox="0 0 1 1"></svg>',
+      );
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+      try {
+        const pageResponse = await fetch(`${baseUrl}/asset-proof`);
+        await expect(pageResponse.text()).resolves.toContain('<img src="/logo.svg"');
+
+        const assetResponse = await fetch(`${baseUrl}/logo.svg`);
+        expect(assetResponse.status).toBe(200);
+        expect(assetResponse.headers.get('content-type')).toBe('image/svg+xml');
+        await expect(assetResponse.text()).resolves.toBe('<svg viewBox="0 0 1 1"></svg>');
+      } finally {
+        await close(server);
+      }
     } finally {
       await rm(root, { force: true, recursive: true });
     }

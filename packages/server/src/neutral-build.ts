@@ -1,4 +1,4 @@
-import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { KovoApp } from './app-types.js';
@@ -71,6 +71,8 @@ export interface KovoNeutralBuild {
   metaPath: string;
   /** Absolute path to the neutral build root. */
   outDir: string;
+  /** Public-root assets copied from Vite output for dynamic preset serving. */
+  publicAssetDir?: string;
   /** Per-route Vite hints merged into the built app shell. */
   routeHints: readonly KovoAppShellRouteBuildHints[];
   /** Absolute path to the neutral routes JSON file. */
@@ -187,6 +189,7 @@ export async function writeKovoNeutralBuild(
     manifestDistDir,
     outDir,
   });
+  const publicAssetDir = await writeNeutralPublicAssets(manifestDistDir, path.join(outDir, 'public'));
   if (staticOutput !== undefined) {
     await materializeNeutralStylesheetAssets({
       app: buildWithRegisteredClientModules.app,
@@ -203,6 +206,7 @@ export async function writeKovoNeutralBuild(
     manifestPath,
     metaPath,
     outDir,
+    ...(publicAssetDir === undefined ? {} : { publicAssetDir }),
     routeHints: buildWithRegisteredClientModules.routeHints,
     routesPath,
     serverDir,
@@ -379,6 +383,59 @@ async function copyNeutralStaticAssets(
     await mkdir(path.dirname(outputPath), { recursive: true });
     await copyFile(viteDistSourcePath(manifestDistDir, asset.file), outputPath);
   }
+}
+
+async function writeNeutralPublicAssets(
+  manifestDistDir: string | undefined,
+  outDir: string,
+): Promise<string | undefined> {
+  if (manifestDistDir === undefined) return undefined;
+
+  await rm(outDir, { force: true, recursive: true });
+  const copied = await copyNeutralPublicAssetEntries(manifestDistDir, outDir, '');
+  if (!copied) return undefined;
+  return outDir;
+}
+
+async function copyNeutralPublicAssetEntries(
+  sourceRoot: string,
+  outRoot: string,
+  relativeDir: string,
+): Promise<boolean> {
+  const sourceDir = path.join(sourceRoot, relativeDir);
+  const entries = await readdir(sourceDir, { withFileTypes: true }).catch((error) => {
+    if (isNodeError(error) && error.code === 'ENOENT') return [];
+    throw error;
+  });
+  let copied = false;
+
+  for (const entry of entries) {
+    const relativePath = path.join(relativeDir, entry.name);
+    if (skipNeutralPublicAsset(relativePath, entry)) continue;
+
+    const sourcePath = path.join(sourceRoot, relativePath);
+    const outputPath = neutralClientOutputPath(outRoot, relativePath);
+    if (entry.isDirectory()) {
+      copied = (await copyNeutralPublicAssetEntries(sourceRoot, outRoot, relativePath)) || copied;
+      continue;
+    }
+    if (!entry.isFile()) continue;
+
+    await mkdir(path.dirname(outputPath), { recursive: true });
+    await copyFile(sourcePath, outputPath);
+    copied = true;
+  }
+
+  return copied;
+}
+
+function skipNeutralPublicAsset(relativePath: string, entry: { name: string }): boolean {
+  const normalized = relativePath.replaceAll(path.sep, '/');
+  if (normalized === '.vite' || normalized.startsWith('.vite/')) return true;
+  if (normalized === 'assets' || normalized.startsWith('assets/')) return true;
+  if (normalized === 'c' || normalized.startsWith('c/')) return true;
+  if (normalized === 'index.html') return true;
+  return entry.name === '.DS_Store';
 }
 
 interface MaterializeNeutralStylesheetAssetsOptions {

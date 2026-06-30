@@ -304,6 +304,9 @@ async function emitNodePreset(
   const outDir = resolvedFileSystemPath(context.outDir);
   await mkdir(outDir, { recursive: true });
   await cp(build.clientDir, path.join(outDir, 'client'), { recursive: true });
+  if (build.publicAssetDir !== undefined) {
+    await cp(build.publicAssetDir, path.join(outDir, 'static'), { recursive: true });
+  }
   if (build.staticOutput !== undefined) {
     await cp(build.staticOutput.dir, path.join(outDir, 'static'), { recursive: true });
   }
@@ -387,6 +390,9 @@ async function emitCloudflarePreset(
 }
 
 async function copyPresetStaticFiles(build: KovoNeutralBuild, outDir: string): Promise<void> {
+  if (build.publicAssetDir !== undefined) {
+    await cp(build.publicAssetDir, outDir, { recursive: true });
+  }
   if (build.staticOutput !== undefined) {
     await cp(build.staticOutput.dir, outDir, { recursive: true });
   }
