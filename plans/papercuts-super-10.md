@@ -52,12 +52,13 @@ errors with no logging (§D).
 
 ### C. Write ergonomics
 
-- [ ] **C1 — KV438 does not see per-element `serverValue()` inside a bulk `insert().values([…])` array: a bulk insert of server-generated ids is blocked unless you wrap the WHOLE array, which over-broadly blesses every column of every row.** (med, framework; found by `t6-transactions`)
+- [x] **C1 — KV438 does not see per-element `serverValue()` inside a bulk `insert().values([…])` array: a bulk insert of server-generated ids is blocked unless you wrap the WHOLE array, which over-broadly blesses every column of every row.** (med, framework; found by `t6-transactions`)
   - Observed behavior: a bulk `db.insert(contacts).values([{ id: serverValue(...), … }, …])` fails `build:prod` with `KV438 WRITE … column=id via=values provenance=unknown` — the per-element `serverValue()` provenance is not recognized; the only way to pass is to bless the entire `.values([...])` argument, which then over-broadly governs every column of every row.
   - Root cause: `packages/drizzle/src/static/derivation.ts:1374` `massAssignmentFactsForPayload` routes a non-`ObjectLiteral` `.values()` argument (an array literal) to `spreadMassAssignmentFacts` (`:1477`), which governs the whole spread rather than descending into each element's `serverValue()` provenance.
   - Why it matters: bulk inserts with server-generated ids/timestamps are a normal pattern; the author is forced to choose between a build error and an over-broad blanket bless that defeats the point of per-column mass-assignment governance.
   - Repro evidence: `t6-transactions` probe — bulk `insert().values([{id: serverValue()}])` → KV438; wrapping the whole array passes but over-governs. Source: `derivation.ts:1374,1477`.
   - Acceptance: KV438 descends into each element of a `.values([...])` array literal and honors per-element `serverValue()` provenance. SPEC §10.3:1215.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.mass-assignment.test.ts` passes with positive bulk-array `serverValue()` coverage and negative unsafe governed-field coverage.
 
 ### D. Observability
 
