@@ -1,15 +1,23 @@
-import {
-  parse,
-  type DeleteStatement,
-  type InsertStatement,
-  type QName,
-  type Statement,
-  type TruncateTableStatement,
-  type UpdateStatement,
-  type WithRecursiveStatement,
-  type WithStatement,
-  type WithStatementBinding,
+import { createRequire } from 'node:module';
+import type {
+  DeleteStatement,
+  InsertStatement,
+  QName,
+  Statement,
+  TruncateTableStatement,
+  UpdateStatement,
+  WithRecursiveStatement,
+  WithStatement,
+  WithStatementBinding,
 } from 'pgsql-ast-parser';
+
+const require = createRequire(import.meta.url);
+let pgsqlAstParser: typeof import('pgsql-ast-parser') | undefined;
+
+function sqlParser(): typeof import('pgsql-ast-parser') {
+  pgsqlAstParser ??= require('pgsql-ast-parser') as typeof import('pgsql-ast-parser');
+  return pgsqlAstParser;
+}
 
 /** Runtime SQL parser configuration for production write-table enforcement. */
 export interface ParseSqlWriteTablesOptions {
@@ -23,7 +31,11 @@ export function parseSqlWriteTables(
 ): string[] {
   const sql = options.dialect === 'sqlite' ? normalizeSqlitePlaceholders(statement) : statement;
   return [
-    ...new Set(parse(sql).flatMap((parsed) => writeTablesForStatement(parsed, new Set()))),
+    ...new Set(
+      sqlParser()
+        .parse(sql)
+        .flatMap((parsed) => writeTablesForStatement(parsed, new Set())),
+    ),
   ].sort();
 }
 
