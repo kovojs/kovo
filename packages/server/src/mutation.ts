@@ -53,7 +53,6 @@ import {
   type MutationEndpointResponse,
   type MutationWireRequest,
   type MutationWireResponse,
-  type NoJsMutationReplayReservation,
   type NoJsMutationReplayStore,
   type NoJsMutationRequest,
   type NoJsMutationResponse,
@@ -139,6 +138,204 @@ export type {
 } from './mutation/streaming.js';
 export { invalidate } from './change-record.js';
 export type { ChangeRecord, InvalidateOptions, MutationTouchSite } from './change-record.js';
+
+type MutationLifecycleReplayReservation<Response> = {
+  abort?(): void;
+  commit(response: Response): void;
+};
+
+type MutationLifecycleReplayPolicy<Response> = {
+  read(): Promise<Response | undefined> | Response | undefined;
+  reserve():
+    | Promise<
+        | { kind: 'conflict' }
+        | { kind: 'disabled' }
+        | { kind: 'replayed'; response: Response }
+        | { kind: 'reserved'; reservation: MutationLifecycleReplayReservation<Response> }
+        | { kind: 'unavailable' }
+        | { kind: 'unreserved' }
+      >
+    | { kind: 'conflict' }
+    | { kind: 'disabled' }
+    | { kind: 'replayed'; response: Response }
+    | { kind: 'reserved'; reservation: MutationLifecycleReplayReservation<Response> }
+    | { kind: 'unavailable' }
+    | { kind: 'unreserved' };
+};
+
+type MutationLifecycleOutcome<Value, Input, ReplayResponse> =
+  | { kind: 'csrf-failure'; failure: MutationFail<'CSRF', Record<string, never>> }
+  | { kind: 'validation-failure'; failure: MutationFail<'VALIDATION', ValidationFailurePayload> }
+  | {
+      failure: MutationFail;
+      guardFailure: ResolvedGuardFailure;
+      kind: 'guard-failure';
+      lifecycleRequest: unknown;
+    }
+  | { kind: 'replay-conflict' }
+  | { kind: 'replay-unavailable' }
+  | { kind: 'replayed'; response: ReplayResponse }
+  | {
+      error: unknown;
+      kind: 'handler-error';
+      reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
+    }
+  | {
+      kind: 'mutation-failure';
+      reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
+      result: MutationFail;
+    }
+  | {
+      kind: 'success';
+      reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
+      result: MutationSuccess<Value, Input>;
+    };
+
+type ExecuteMutationLifecycleOptions<Request, ReplayResponse> = RunMutationOptions<Request> & {
+  catchHandlerErrors?: boolean;
+  replay?: MutationLifecycleReplayPolicy<ReplayResponse>;
+};
+
+/**
+ * Internal mutation lifecycle state machine shared by enhanced, no-JS, and direct
+ * mutation execution. It owns the normative SPEC §6.6/§9.1/§10.3 order:
+ * CSRF → schema parse → arg-aware guard → replay reserve/read → handler.
+ */
+async function executeMutationLifecycle<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request = Request,
+  ReplayResponse = never,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  rawInput: unknown,
+  request: Request,
+  options: ExecuteMutationLifecycleOptions<Request, ReplayResponse> = {},
+): Promise<MutationLifecycleOutcome<Value, InferSchema<InputSchema>, ReplayResponse>> {
+  const csrf = mutationCsrfOptions(definition, options.csrf);
+  if (
+    csrf === undefined ||
+    (csrf !== false && !validateCsrfToken(rawInput, request, csrf, { audience: definition.key }))
+  ) {
+    return {
+      failure: { error: { code: 'CSRF', payload: {} }, ok: false, status: 422 },
+      kind: 'csrf-failure',
+    };
+  }
+
+  // SPEC §10.3: parse/coerce before guards so arg-aware guards inspect the same validated input
+  // later handed to the handler, and before replay so cached responses cannot bypass revocation.
+  const inputResult = options.preParsedInput
+    ? { ok: true as const, value: options.preParsedInput.value as InferSchema<InputSchema> }
+    : await parseMutationInput(definition.input, rawInput);
+  if (!inputResult.ok) return { failure: inputResult.failure, kind: 'validation-failure' };
+
+  const input = inputResult.value as InferSchema<InputSchema>;
+  const lifecycleOptions = {
+    ...options,
+    guardResolved: true,
+    preParsedInput: { value: input },
+  } satisfies RunMutationOptions<Request>;
+  const lifecycleRequest = withGuardArgs(await resolveLifecycleRequest(request, options), input);
+
+  if (!options.guardResolved) {
+    const guardFailure = await runGuard(definition.guard, lifecycleRequest);
+    if (guardFailure) {
+      const status = mutationGuardFailureStatus(guardFailure);
+      return {
+        failure: {
+          error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
+          ok: false,
+          ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
+          status,
+        },
+        guardFailure,
+        kind: 'guard-failure',
+        lifecycleRequest,
+      };
+    }
+  }
+
+  if (options.replay) {
+    let replayed: ReplayResponse | undefined;
+    try {
+      replayed = await options.replay.read();
+    } catch (error) {
+      if (error instanceof MutationReplayConflictError) return { kind: 'replay-conflict' };
+      throw error;
+    }
+    if (replayed) return { kind: 'replayed', response: replayed };
+
+    let reservationResult: Awaited<
+      ReturnType<MutationLifecycleReplayPolicy<ReplayResponse>['reserve']>
+    >;
+    try {
+      reservationResult = await options.replay.reserve();
+    } catch (error) {
+      if (error instanceof MutationReplayConflictError) return { kind: 'replay-conflict' };
+      throw error;
+    }
+    if (reservationResult.kind === 'conflict') return { kind: 'replay-conflict' };
+    if (reservationResult.kind === 'replayed') {
+      return { kind: 'replayed', response: reservationResult.response };
+    }
+    if (reservationResult.kind === 'unavailable') return { kind: 'replay-unavailable' };
+
+    const reservation =
+      reservationResult.kind === 'reserved' ? reservationResult.reservation : undefined;
+    return runMutationLifecycleHandler(definition, rawInput, request, lifecycleOptions, {
+      catchHandlerErrors: options.catchHandlerErrors,
+      reservation,
+    });
+  }
+
+  return runMutationLifecycleHandler(definition, rawInput, request, lifecycleOptions, {
+    catchHandlerErrors: options.catchHandlerErrors,
+    reservation: undefined,
+  });
+}
+
+async function runMutationLifecycleHandler<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request,
+  ReplayResponse,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  rawInput: unknown,
+  request: Request,
+  options: RunMutationOptions<Request>,
+  state: {
+    catchHandlerErrors: boolean | undefined;
+    reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
+  },
+): Promise<MutationLifecycleOutcome<Value, InferSchema<InputSchema>, ReplayResponse>> {
+  let result: MutationResult<Value, InferSchema<InputSchema>>;
+  try {
+    result = await runMutation(definition, rawInput, request, options);
+  } catch (error) {
+    state.reservation?.abort?.();
+    if (!state.catchHandlerErrors) throw error;
+    return { error, kind: 'handler-error', reservation: state.reservation };
+  }
+
+  if (!result.ok) {
+    if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
+      // Validation, transient rate-limit, and KV429 stale-version outcomes are retryable with
+      // corrected/fresh state; never store them as idempotent replay responses (SPEC §9.1/§10.3).
+      state.reservation?.abort?.();
+    }
+    return { kind: 'mutation-failure', reservation: state.reservation, result };
+  }
+
+  return { kind: 'success', reservation: state.reservation, result };
+}
 
 /**
  * Execute a mutation against raw input and a request, returning a typed result
@@ -340,13 +537,36 @@ export async function renderMutationResponse<
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
   const csrf = mutationCsrfOptions(definition, wireRequest.csrf);
-  if (
-    csrf === undefined ||
-    (csrf !== false &&
-      !validateCsrfToken(wireRequest.rawInput, wireRequest.request, csrf, {
-        audience: definition.key,
-      }))
-  ) {
+  const lifecycle = await executeMutationLifecycle<
+    Key,
+    InputSchema,
+    Errors,
+    Request,
+    Value,
+    GuardedRequest,
+    BufferedMutationWireResponse
+  >(definition, wireRequest.rawInput, wireRequest.request, {
+    ...runMutationOptions(wireRequest.csrf, wireRequest),
+    catchHandlerErrors: true,
+    replay: {
+      read: () =>
+        readMutationReplay(
+          mutationReplayContext(csrf ?? false, {
+            ...wireRequest,
+            mutationKey: definition.key,
+          }),
+        ),
+      reserve: () =>
+        reserveMutationReplayBeforeRun(
+          mutationReplayContext(csrf ?? false, {
+            ...wireRequest,
+            mutationKey: definition.key,
+          }),
+        ),
+    },
+  });
+
+  if (lifecycle.kind === 'csrf-failure') {
     const reauthResponse = await staleSessionEnhancedCsrfReauthResponse(
       definition,
       csrf,
@@ -354,113 +574,45 @@ export async function renderMutationResponse<
     );
     if (reauthResponse) return reauthResponse;
     return {
-      body: await renderFailureFragment(
-        {
-          error: { code: 'CSRF', payload: {} },
-          ok: false,
-          status: 422,
-        },
-        wireRequest,
-      ),
+      body: await renderFailureFragment(lifecycle.failure, wireRequest),
       headers: mutationWireResponseHeaders(wireRequest),
       status: 422,
     };
   }
 
-  // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §10.3 lifecycle (parse → guard):
-  // parse+coerce the input BEFORE the guard chain so the pre-replay arg-aware guard (`guards.owns`)
-  // sees the validated `req.args` and can deny a foreign-key request before any replay re-serve
-  // ("a replay never re-serves a private response after ... ownership lost"). A parse failure is the
-  // §9.2 VALIDATION fragment (422); validation failures are non-replayable, so we return before any
-  // reservation. The parsed value is reused by `runMutation` via `preParsedInput` (no re-parse).
-  const wireInputResult = await parseMutationInput(definition.input, wireRequest.rawInput);
-  if (!wireInputResult.ok) {
+  if (lifecycle.kind === 'validation-failure') {
     return {
-      body: await renderFailureFragment(wireInputResult.failure, wireRequest),
+      body: await renderFailureFragment(lifecycle.failure, wireRequest),
       headers: mutationWireResponseHeaders(wireRequest),
       status: 422,
     };
   }
 
-  // A1 (SPEC §10.3:1061): evaluate the session-bound guard chain against the
-  // *current* principal BEFORE checking the replay store. A replay hit must not
-  // bypass authorization — the cached response was produced for an authorized
-  // principal; if that principal's role has since been revoked (or ownership lost,
-  // §10.3), we must reject. Order: CSRF (above) → parse → lifecycle/guard (arg-aware)
-  // → replay reserve/lookup → handler.
-  const lifecycleRequestForGuard = withGuardArgs(
-    await resolveLifecycleRequest(
-      wireRequest.request,
-      runMutationOptions(wireRequest.csrf, wireRequest),
-    ),
-    wireInputResult.value,
-  );
-  const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
-  if (guardFailure) {
+  if (lifecycle.kind === 'guard-failure') {
     const reauthResponse = enhancedMutationReauthResponse(
-      guardFailure,
-      lifecycleRequestForGuard,
+      lifecycle.guardFailure,
+      lifecycle.lifecycleRequest as Request,
       wireRequest.currentUrl === undefined ? {} : { currentUrl: wireRequest.currentUrl },
     );
     if (reauthResponse) return reauthResponse;
-    const status = mutationGuardFailureStatus(guardFailure);
     return {
-      body: await renderFailureFragment(
-        {
-          error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
-          ok: false,
-          ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
-          status,
-        },
-        wireRequest,
-      ),
+      body: await renderFailureFragment(lifecycle.failure, wireRequest),
       // A1: a rate-limit (or other retry-able) guard failure carries Retry-After; preserve it on the
       // pre-replay guard-failure response (the old runMutation path added it via retryAfterHeaders).
-      headers: { ...mutationWireResponseHeaders(wireRequest), ...retryAfterHeaders(guardFailure) },
-      status,
+      headers: {
+        ...mutationWireResponseHeaders(wireRequest),
+        ...retryAfterHeaders(lifecycle.guardFailure),
+      },
+      status: lifecycle.failure.status,
     };
   }
 
-  // Security finding M4: reserve the replay record BEFORE running the handler
-  // (mirroring the webhook get→reserve→run order) so concurrent Kovo-Idem
-  // duplicates coalesce onto one handler execution. The replay scope folds in the
-  // mutation key (see mutationReplayContext) so the reservation is per-(session,
-  // mutation, idem).
-  const replay = mutationReplayContext(csrf, {
-    ...wireRequest,
-    mutationKey: definition.key,
-  });
-  let replayed: BufferedMutationWireResponse | undefined;
-  try {
-    replayed = await readMutationReplay(replay);
-  } catch (error) {
-    if (error instanceof MutationReplayConflictError)
-      return renderReplayConflictFragment(wireRequest);
-    throw error;
-  }
-  if (replayed) return replayed;
+  if (lifecycle.kind === 'replay-conflict') return renderReplayConflictFragment(wireRequest);
+  if (lifecycle.kind === 'replayed') return lifecycle.response;
+  if (lifecycle.kind === 'replay-unavailable') return renderReplayUnavailableFragment(wireRequest);
 
-  const reservationResult = await reserveMutationReplayBeforeRun(replay);
-  if (reservationResult.kind === 'conflict') return renderReplayConflictFragment(wireRequest);
-  if (reservationResult.kind === 'replayed') return reservationResult.response;
-  if (reservationResult.kind === 'unavailable') return renderReplayUnavailableFragment(wireRequest);
-  const reservation =
-    reservationResult.kind === 'reserved' ? reservationResult.reservation : undefined;
-
-  let result: MutationResult<Value, InferSchema<InputSchema>>;
-  try {
-    result = await runMutation(definition, wireRequest.rawInput, wireRequest.request, {
-      ...runMutationOptions(wireRequest.csrf, wireRequest),
-      guardResolved: true,
-      // Reuse the value parsed for the pre-replay arg-aware guard (SPEC §10.3:1155-1157) instead of
-      // re-parsing; the guard already ran against this same coerced input.
-      preParsedInput: { value: wireInputResult.value },
-    });
-  } catch (error) {
-    // The handler threw before producing a result; release the reservation so a
-    // retry can run, then surface the server-error fragment (never replayed).
-    reservation?.abort?.();
-    reportServerError(wireRequest.onError, error, {
+  if (lifecycle.kind === 'handler-error') {
+    reportServerError(wireRequest.onError, lifecycle.error, {
       mutationKey: definition.key,
       operation: 'mutation-handler',
       request: wireRequest.request,
@@ -469,15 +621,9 @@ export async function renderMutationResponse<
     return mutationServerErrorResponse(wireRequest);
   }
 
-  if (!result.ok) {
+  if (lifecycle.kind === 'mutation-failure') {
+    const result = lifecycle.result;
     if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
-      // Pure schema validation failures, transient 429 rate-limits, and KV429 stale-version
-      // 409 conflicts are not replayable (SPEC §9.1.1:904, A5 / SPEC §10.3/§11.1 KV429):
-      // abandon the reservation so a corrected retry or a post-refetch retry runs fresh.
-      // The stale-version 409 (STALE_VERSION) is a live-data conflict — the client must
-      // refetch the fresh version and retry; replaying a stale conflict response would
-      // permanently block future retries for the same idem token.
-      reservation?.abort?.();
       return {
         body: await renderFailureFragment(result, wireRequest),
         headers: {
@@ -488,7 +634,7 @@ export async function renderMutationResponse<
       };
     }
 
-    return commitReservedMutationReplay(reservation, async () => ({
+    return commitReservedMutationReplay(lifecycle.reservation, async () => ({
       body: await renderFailureFragment(result, wireRequest),
       headers: {
         ...mutationWireResponseHeaders(wireRequest),
@@ -498,6 +644,7 @@ export async function renderMutationResponse<
     }));
   }
 
+  const { reservation, result } = lifecycle;
   const renderInput = mutationResponseInput(result, wireRequest.rawInput);
   let finalResponse: BufferedMutationWireResponse;
   try {
@@ -856,218 +1003,73 @@ export async function renderNoJsMutationResponse<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   noJsRequest: NoJsMutationRequest<Request, Value>,
 ): Promise<NoJsMutationResponse> {
-  // A2 (SPEC §10.3:1063): derive the idem from the hidden `Kovo-Idem` form field
-  // (emitted by SRV-OUTPUT) or from the explicit `idem` option; also accept it from
-  // the raw input object for callers that pre-parse form bodies.
   const csrf = mutationCsrfOptions(definition, noJsRequest.csrf);
-
-  // G2 (SPEC §6.6:735): validate CSRF FIRST — before the guard lifecycle and before any
-  // replay reservation — mirroring the wire path (renderMutationResponse). Otherwise a
-  // CSRF-invalid POST would still run a stateful `guards.rateLimit` (exhausting the
-  // victim's budget) and occupy a replay slot. The inner `runMutation` CSRF check below
-  // remains as defense-in-depth. Renders the failure through the same 422 page path as a
-  // handler-returned CSRF failure so no-JS clients see a consistent response.
-  if (
-    csrf === undefined ||
-    (csrf !== false &&
-      !validateCsrfToken(noJsRequest.rawInput, noJsRequest.request, csrf, {
-        audience: definition.key,
-      }))
-  ) {
-    const reauthResponse = await staleSessionNoJsCsrfReauthResponse(definition, csrf, noJsRequest);
-    if (reauthResponse) return reauthResponse;
-    const failure: MutationFail = {
-      error: { code: 'CSRF', payload: {} },
-      ok: false,
-      status: 422,
-    };
-    const body = noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
-      : renderDefaultFailurePage(failure);
-    return {
-      body,
-      headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
-      status: 422,
-    };
-  }
-
   // A2 (SPEC §10.3:1063/1151): derive the idem from the hidden `Kovo-Idem` form field. A real no-JS
   // POST arrives as `FormData` (or a pre-parsed record), so the field must be READ via
   // `formLikeToRecord` (which materializes FormData entries) — the `in` operator never sees FormData
   // entries and silently disabled this floor for every real submit. The explicit `idem` option wins
   // for callers that supply it directly (tests / pre-resolved tokens).
   const idem = noJsRequest.idem ?? readNoJsIdemField(noJsRequest.rawInput);
-
-  // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §10.3 lifecycle (parse → guard):
-  // parse+coerce the input BEFORE the guard chain so the pre-replay arg-aware guard (`guards.owns`)
-  // sees the validated `req.args`. A parse failure is the §9.2 VALIDATION page (422), returned before
-  // any replay reservation (validation failures are non-replayable). The parsed value is reused by
-  // `runMutation` via `preParsedInput` (no re-parse).
-  const noJsInputResult = await parseMutationInput(definition.input, noJsRequest.rawInput);
-  if (!noJsInputResult.ok) {
-    const body = noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(noJsInputResult.failure, noJsRequest.rawInput)
-      : renderDefaultFailurePage(noJsInputResult.failure);
-    return {
-      body,
-      headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
-      status: 422,
-    };
-  }
-
-  // A1 (SPEC §10.3:1061) + A2: guard runs before replay check in the no-JS path too.
-  // guardResolved: the no-JS guard chain is evaluated once below (A1) before the replay lookup, so
-  // runMutation must not re-run it (would double-execute a stateful rateLimit guard). The flag is
-  // inert for resolveLifecycleRequest. `preParsedInput` hands runMutation the value parsed above.
-  const lifecycleOpts = {
-    ...runMutationOptions(noJsRequest.csrf, noJsRequest),
-    guardResolved: true,
-    preParsedInput: { value: noJsInputResult.value },
-  };
-  const lifecycleRequestForGuard = withGuardArgs(
-    await resolveLifecycleRequest(noJsRequest.request, lifecycleOpts),
-    noJsInputResult.value,
-  );
-  const guardFailure = await runGuard(definition.guard, lifecycleRequestForGuard);
-  if (guardFailure) {
-    const reauthResponse = noJsMutationReauthResponse(
-      guardFailure,
-      lifecycleRequestForGuard,
-      noJsRequest.currentUrl === undefined ? {} : { currentUrl: noJsRequest.currentUrl },
-    );
-    if (reauthResponse) return reauthResponse;
-    const status = mutationGuardFailureStatus(guardFailure);
-    const body = noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(
-          {
-            error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
-            ok: false,
-            status,
-          },
-          noJsRequest.rawInput,
-        )
-      : renderDefaultFailurePage({
-          error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
-          ok: false,
-          status,
-        });
-    return {
-      body,
-      headers: stampNoJsMutationFailureHeaders({
-        'Content-Type': 'text/html; charset=utf-8',
-        ...retryAfterHeaders(guardFailure),
-      }),
-      status,
-    };
-  }
-
-  // A2 + GAP4-2: derive the replay scope and run reserve/replay lifecycle.
-  // For `csrf:false` mutations with no session, use the mutation key as the scope
-  // so a stable Kovo-Idem still dedups duplicate external POSTs (SPEC §10.3:1062-1066).
   const noJsScope = noJsReplayScopeFor(csrf, definition.key, noJsRequest.request);
   const requestFingerprint =
     noJsRequest.requestFingerprint ?? canonicalRequestFingerprint(noJsRequest.rawInput);
+  const replay =
+    idem && noJsRequest.replayStore
+      ? ({
+          read: () => noJsRequest.replayStore?.get(noJsScope, idem, requestFingerprint),
+          async reserve() {
+            let reservation = noJsRequest.replayStore?.reserve(noJsScope, idem, requestFingerprint);
+            if (reservation) return { kind: 'reserved' as const, reservation };
 
-  if (idem && noJsRequest.replayStore) {
-    let replayed: NoJsMutationResponse | undefined;
-    try {
-      replayed = await noJsRequest.replayStore.get(noJsScope, idem, requestFingerprint);
-    } catch (error) {
-      if (error instanceof MutationReplayConflictError)
-        return renderNoJsReplayConflictPage(noJsRequest);
-      throw error;
-    }
-    if (replayed) return replayed;
+            const pending = await noJsRequest.replayStore?.get(noJsScope, idem, requestFingerprint);
+            if (pending) return { kind: 'replayed' as const, response: pending };
 
-    let reservation: NoJsMutationReplayReservation | undefined;
-    try {
-      reservation = noJsRequest.replayStore.reserve(noJsScope, idem, requestFingerprint);
-    } catch (error) {
-      if (error instanceof MutationReplayConflictError)
-        return renderNoJsReplayConflictPage(noJsRequest);
-      throw error;
-    }
-    if (!reservation) {
-      let pending: NoJsMutationResponse | undefined;
-      try {
-        pending = await noJsRequest.replayStore.get(noJsScope, idem, requestFingerprint);
-      } catch (error) {
-        if (error instanceof MutationReplayConflictError)
-          return renderNoJsReplayConflictPage(noJsRequest);
-        throw error;
-      }
-      if (pending) return pending;
-      try {
-        reservation = noJsRequest.replayStore.reserve(noJsScope, idem, requestFingerprint);
-      } catch (error) {
-        if (error instanceof MutationReplayConflictError)
-          return renderNoJsReplayConflictPage(noJsRequest);
-        throw error;
-      }
-      if (!reservation) return renderNoJsReplayUnavailablePage(noJsRequest);
-    }
+            reservation = noJsRequest.replayStore?.reserve(noJsScope, idem, requestFingerprint);
+            return reservation
+              ? { kind: 'reserved' as const, reservation }
+              : { kind: 'unavailable' as const };
+          },
+        } satisfies MutationLifecycleReplayPolicy<NoJsMutationResponse>)
+      : undefined;
+  const lifecycle = await executeMutationLifecycle<
+    Key,
+    InputSchema,
+    Errors,
+    Request,
+    Value,
+    GuardedRequest,
+    NoJsMutationResponse
+  >(definition, noJsRequest.rawInput, noJsRequest.request, {
+    ...runMutationOptions(noJsRequest.csrf, noJsRequest),
+    catchHandlerErrors: true,
+    ...(replay === undefined ? {} : { replay }),
+  });
 
-    let result: MutationResult<Value>;
-    try {
-      result = await runMutation(
-        definition,
-        noJsRequest.rawInput,
-        noJsRequest.request,
-        lifecycleOpts,
-      );
-    } catch (error) {
-      reservation?.abort?.();
-      reportServerError(noJsRequest.onError, error, {
-        mutationKey: definition.key,
-        operation: 'no-js-mutation-handler',
-        request: noJsRequest.request,
-      });
-      return noJsMutationServerErrorResponse();
-    }
-
-    if (!result.ok) {
-      reservation?.abort?.();
-      const body = noJsRequest.renderFailurePage
-        ? await noJsRequest.renderFailurePage(result, noJsRequest.rawInput)
-        : renderDefaultFailurePage(result);
-      return {
-        body,
-        headers: stampNoJsMutationFailureHeaders({
-          'Content-Type': 'text/html; charset=utf-8',
-          ...retryAfterHeaders(result),
-        }),
-        status: result.status,
-      };
-    }
-
-    const successResponse: NoJsMutationResponse = blessRedirectResponse({
-      body: '',
-      headers: mergeMutationResponseHeaders(
-        {
-          'Cache-Control': 'no-store',
-          Location: redirectLocationHeader(
-            mutationRedirectLocation(noJsRequest.redirectTo, result),
-          ),
-        },
-        result.responseHeaders,
-      ),
-      status: 303,
-    });
-    reservation?.commit(successResponse);
-    return successResponse;
+  if (lifecycle.kind === 'csrf-failure') {
+    const reauthResponse = await staleSessionNoJsCsrfReauthResponse(definition, csrf, noJsRequest);
+    if (reauthResponse) return reauthResponse;
+    return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
   }
 
-  // No replay store or idem — plain path (no dedup protection).
-  let result: MutationResult<Value>;
-  try {
-    result = await runMutation(
-      definition,
-      noJsRequest.rawInput,
-      noJsRequest.request,
-      lifecycleOpts,
+  if (lifecycle.kind === 'validation-failure') {
+    return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
+  }
+
+  if (lifecycle.kind === 'guard-failure') {
+    const reauthResponse = noJsMutationReauthResponse(
+      lifecycle.guardFailure,
+      lifecycle.lifecycleRequest as Request,
+      noJsRequest.currentUrl === undefined ? {} : { currentUrl: noJsRequest.currentUrl },
     );
-  } catch (error) {
-    reportServerError(noJsRequest.onError, error, {
+    if (reauthResponse) return reauthResponse;
+    return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
+  }
+
+  if (lifecycle.kind === 'replay-conflict') return renderNoJsReplayConflictPage(noJsRequest);
+  if (lifecycle.kind === 'replayed') return lifecycle.response;
+  if (lifecycle.kind === 'replay-unavailable') return renderNoJsReplayUnavailablePage(noJsRequest);
+  if (lifecycle.kind === 'handler-error') {
+    reportServerError(noJsRequest.onError, lifecycle.error, {
       mutationKey: definition.key,
       operation: 'no-js-mutation-handler',
       request: noJsRequest.request,
@@ -1075,32 +1077,44 @@ export async function renderNoJsMutationResponse<
     return noJsMutationServerErrorResponse();
   }
 
-  if (!result.ok) {
-    const body = noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(result, noJsRequest.rawInput)
-      : renderDefaultFailurePage(result);
-
-    return {
-      body,
-      headers: stampNoJsMutationFailureHeaders({
-        'Content-Type': 'text/html; charset=utf-8',
-        ...retryAfterHeaders(result),
-      }),
-      status: result.status,
-    };
+  if (lifecycle.kind === 'mutation-failure') {
+    lifecycle.reservation?.abort?.();
+    return renderNoJsMutationFailureResponse(lifecycle.result, noJsRequest);
   }
 
-  return blessRedirectResponse({
+  const successResponse = blessRedirectResponse({
     body: '',
     headers: mergeMutationResponseHeaders(
       {
         'Cache-Control': 'no-store',
-        Location: redirectLocationHeader(mutationRedirectLocation(noJsRequest.redirectTo, result)),
+        Location: redirectLocationHeader(
+          mutationRedirectLocation(noJsRequest.redirectTo, lifecycle.result),
+        ),
       },
-      result.responseHeaders,
+      lifecycle.result.responseHeaders,
     ),
     status: 303 as const,
   });
+  lifecycle.reservation?.commit(successResponse);
+  return successResponse;
+}
+
+async function renderNoJsMutationFailureResponse<Request, Value>(
+  failure: MutationFail,
+  noJsRequest: NoJsMutationRequest<Request, Value>,
+): Promise<NoJsMutationResponse> {
+  const body = noJsRequest.renderFailurePage
+    ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
+    : renderDefaultFailurePage(failure);
+
+  return {
+    body,
+    headers: stampNoJsMutationFailureHeaders({
+      'Content-Type': 'text/html; charset=utf-8',
+      ...retryAfterHeaders(failure),
+    }),
+    status: failure.status,
+  };
 }
 
 /**

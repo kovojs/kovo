@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { domain } from './domain.js';
 import {
@@ -7,7 +7,12 @@ import {
 } from './generated-mutation-registry.js';
 import { guards } from './guards.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
-import { renderMutationEndpointResponse as renderMutationEndpointResponseBase } from './mutation.js';
+import {
+  mutation as defineMutation,
+  renderMutationEndpointResponse as renderMutationEndpointResponseBase,
+  runMutation,
+  StaleVersionError,
+} from './mutation.js';
 import { query } from './query.js';
 import { s, type Schema } from './schema.js';
 import { cartBadgeFragmentHtml, testMutation as mutation } from './test-fixtures.js';
@@ -40,6 +45,139 @@ function attestedLiveTargetHeader(
 }
 
 describe('server mutation endpoint routing', () => {
+  it.each([
+    {
+      define: () =>
+        defineMutation('lifecycle/invalid-csrf', {
+          input: s.object({ value: s.string() }),
+          handler(input) {
+            return input;
+          },
+        }),
+      direct: { ok: false, status: 422, code: 'CSRF' },
+      enhanced: { status: 422, text: 'CSRF' },
+      name: 'invalid CSRF',
+      noJs: { status: 422, text: 'CSRF' },
+      rawInput: { value: 'ok' },
+    },
+    {
+      define: () =>
+        mutation('lifecycle/invalid-body', {
+          csrf: false,
+          input: s.object({ value: s.string() }),
+          handler(input) {
+            return input;
+          },
+        }),
+      direct: { ok: false, status: 422, code: 'VALIDATION' },
+      enhanced: { status: 422, text: 'Expected string' },
+      name: 'invalid schema body',
+      noJs: { status: 422, text: 'Expected string' },
+      rawInput: {},
+    },
+    {
+      define: () =>
+        mutation('lifecycle/rate-limit', {
+          csrf: false,
+          guard: guards.rateLimit({ max: 0, per: 'global', windowMs: 2_000 }),
+          input: s.object({ value: s.string() }),
+          handler(input) {
+            return input;
+          },
+        }),
+      direct: { ok: false, status: 429, code: 'RATE_LIMITED' },
+      enhanced: { status: 429, text: 'RATE_LIMITED' },
+      name: 'rate limit',
+      noJs: { status: 429, text: 'RATE_LIMITED' },
+      rawInput: { value: 'ok' },
+    },
+    {
+      define: () =>
+        mutation('lifecycle/stale-version', {
+          csrf: false,
+          input: s.object({ value: s.string() }),
+          handler() {
+            throw new StaleVersionError();
+          },
+        }),
+      direct: { ok: false, status: 409, code: 'STALE_VERSION' },
+      enhanced: { status: 409, text: 'STALE_VERSION' },
+      name: 'stale version',
+      noJs: { status: 409, text: 'STALE_VERSION' },
+      rawInput: { value: 'ok' },
+    },
+  ])(
+    'maps $name through the shared lifecycle for enhanced/no-JS/direct paths',
+    async (scenario) => {
+      const enhanced = await renderMutationEndpointResponse(scenario.define(), {
+        headers: { 'Kovo-Fragment': 'true' },
+        rawInput: scenario.rawInput,
+        redirectTo: '/done',
+        request: {},
+      });
+      expect(enhanced.status).toBe(scenario.enhanced.status);
+      expect(enhanced.body).toContain(scenario.enhanced.text);
+
+      const noJs = await renderMutationEndpointResponse(scenario.define(), {
+        headers: {},
+        rawInput: scenario.rawInput,
+        redirectTo: '/done',
+        request: {},
+      });
+      expect(noJs.status).toBe(scenario.noJs.status);
+      expect(noJs.body).toContain(scenario.noJs.text);
+
+      const direct = await runMutation(scenario.define(), scenario.rawInput, {});
+      expect(direct.ok).toBe(scenario.direct.ok);
+      expect(direct.status).toBe(scenario.direct.status);
+      expect(direct.ok ? undefined : direct.error.code).toBe(scenario.direct.code);
+    },
+  );
+
+  it.each([
+    {
+      headers: { 'Kovo-Fragment': 'true' },
+      name: 'enhanced',
+      operation: 'mutation-handler',
+      status: 500,
+    },
+    {
+      headers: {},
+      name: 'no-JS',
+      operation: 'no-js-mutation-handler',
+      status: 500,
+    },
+  ])('maps handler throws through the shared lifecycle for $name responses', async (scenario) => {
+    const thrown = new Error(`handler failed:${scenario.name}`);
+    const onError = vi.fn();
+    const fails = mutation(`lifecycle/handler-throw-${scenario.name}`, {
+      csrf: false,
+      input: s.object({ value: s.string() }),
+      handler() {
+        throw thrown;
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(fails, {
+      headers: scenario.headers,
+      onError,
+      rawInput: { value: 'ok' },
+      redirectTo: '/done',
+      request: {},
+    });
+
+    expect(response.status).toBe(scenario.status);
+    expect(onError).toHaveBeenCalledWith(
+      thrown,
+      expect.objectContaining({
+        mutationKey: fails.key,
+        operation: scenario.operation,
+        request: {},
+      }),
+    );
+    await expect(runMutation(fails, { value: 'ok' }, {})).rejects.toBe(thrown);
+  });
+
   it('routes mutation endpoints without Kovo-Fragment through the no-JS POST redirect', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),

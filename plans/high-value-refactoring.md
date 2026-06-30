@@ -21,7 +21,7 @@ test brittleness, and distribution confusion.
 
 ## P0 - Security And Freshness Source Of Truth
 
-- [ ] **P0.1 - Unify mutation execution into a single lifecycle state machine.**
+- [x] **P0.1 - Unify mutation execution into a single lifecycle state machine.**
   - Affected: `packages/server/src/mutation.ts`,
     `packages/server/src/app-mutation-request.ts`, `packages/server/src/mutation/*`.
   - Why high value: CSRF validation, body parsing, arg-aware guards, replay reservation,
@@ -38,6 +38,7 @@ test brittleness, and distribution confusion.
     CSRF, invalid body, guard revocation after replay, stale token, rate limit, handler throw, render
     throw, streaming success/error; run `packages/server/src/mutation*.test.ts`,
     `packages/server/src/app-mutation-request.test.ts`, and replay tests.
+  - Evidence: `pnpm exec vitest --run packages/server/src/mutation*.test.ts packages/server/src/app-mutation-request.test.ts` passes with `executeMutationLifecycle()` mapping typed outcomes across enhanced, no-JS, and direct mutation paths.
   - SPEC: sections 6.3, 6.6, 9.1, 10.3, 11.1.
 
 - [ ] **P0.2 - Centralize request lifecycle and response posture finalization.**
