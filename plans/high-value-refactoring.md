@@ -363,7 +363,7 @@ test brittleness, and distribution confusion.
     `vp check` lane through the shared harness.
   - SPEC/rules: `SPEC.md` sections 1.3 and 5.2 rules 8-9; `rules/api-surface.md`.
 
-- [ ] **P2.2 - Generate CLI and `create-kovo` reference docs from structured schemas.**
+- [x] **P2.2 - Generate CLI and `create-kovo` reference docs from structured schemas.**
   - Affected: `packages/create-kovo/src/index.ts`,
     `site/scripts/create-kovo-ref.mjs`, `site/scripts/cli-ref.mjs`.
   - Why high value: reference docs currently duplicate option/command behavior and rewrite markdown by
@@ -373,6 +373,7 @@ test brittleness, and distribution confusion.
   - Risk reduced: stale command docs, stale option tables, and fragile generated-doc transforms.
   - Verification: docs/sidebar snapshots and drift tests asserting `--help` output and rendered docs are
     derived from the same schema.
+  - Evidence: `pnpm exec vitest --run site/scripts/create-kovo-ref.test.mjs site/scripts/cli-ref.test.mjs packages/create-kovo/src/index.test.ts packages/cli/src/commands-manifest.test.ts` passes with `create-kovo` help/docs rendered from `CREATE_KOVO_REFERENCE` and CLI docs rendered from structured command/frontmatter metadata.
   - SPEC/rules: `SPEC.md` section 11.4; `rules/api-surface.md`; `rules/docs-style.md`.
 
 - [x] **P2.3 - Centralize generated-artifact policy into one manifest-backed gate.**
