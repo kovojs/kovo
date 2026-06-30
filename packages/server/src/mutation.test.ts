@@ -39,6 +39,43 @@ declare module '@kovojs/core' {
 }
 
 describe('server mutation lifecycle', () => {
+  function createTransactionalListDb() {
+    const state = {
+      commits: 0,
+      rollbacks: 0,
+      rows: [] as string[],
+    };
+
+    const handle = (rows: string[]) => ({
+      get commits() {
+        return state.commits;
+      },
+      insert(id: string) {
+        rows.push(id);
+      },
+      get rollbacks() {
+        return state.rollbacks;
+      },
+      get rows() {
+        return rows;
+      },
+      async transaction<Result>(callback: (tx: ReturnType<typeof handle>) => Promise<Result>) {
+        const transactionRows = [...state.rows];
+        try {
+          const result = await callback(handle(transactionRows));
+          state.rows.splice(0, state.rows.length, ...transactionRows);
+          state.commits += 1;
+          return result;
+        } catch (error) {
+          state.rollbacks += 1;
+          throw error;
+        }
+      },
+    });
+
+    return handle(state.rows);
+  }
+
   it('types inline optimistic transforms from mutation key and input schema', () => {
     const addContact = mutation('contacts/add', {
       input: s.object({ id: s.string(), name: s.string() }),
@@ -341,11 +378,40 @@ describe('server mutation lifecycle', () => {
       },
     });
 
-    await expect(runMutation(transactional, { productId: 'p1' }, {})).resolves.toMatchObject({
+    await expect(
+      runMutation(
+        transactional,
+        { productId: 'p1' },
+        {
+          db: {
+            transaction() {
+              events.push('default-transaction');
+              throw new Error('explicit transaction should win');
+            },
+          },
+        },
+      ),
+    ).resolves.toMatchObject({
       ok: true,
       value: 'p1',
     });
     expect(events).toEqual(['guard', 'begin', 'handler:tx', 'commit']);
+  });
+
+  it('rolls back default framework transactions when handlers throw after writing', async () => {
+    const db = createTransactionalListDb();
+    const addContact = mutation('contacts/add', {
+      input: s.object({ id: s.string() }),
+      handler(input, request: { db: ReturnType<typeof createTransactionalListDb> }) {
+        request.db.insert(input.id);
+        throw new Error('boom');
+      },
+    });
+
+    await expect(runMutation(addContact, { id: 'partial-A' }, { db })).rejects.toThrow('boom');
+    expect(db.rows).toEqual([]);
+    expect(db.commits).toBe(0);
+    expect(db.rollbacks).toBe(1);
   });
 
   it('types transaction callbacks with the mutation request shape', async () => {

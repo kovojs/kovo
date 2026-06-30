@@ -194,6 +194,12 @@ type ExecuteMutationLifecycleOptions<Request, ReplayResponse> = RunMutationOptio
   replay?: MutationLifecycleReplayPolicy<ReplayResponse>;
 };
 
+type TransactionCapableRequestDb = {
+  transaction<Result>(
+    callback: (transactionDb: unknown) => Promise<Result> | Result,
+  ): Promise<Result> | Result;
+};
+
 /**
  * Internal mutation lifecycle state machine shared by enhanced, no-JS, and direct
  * mutation execution. It owns the normative SPEC §6.6/§9.1/§10.3 order:
@@ -462,7 +468,7 @@ export async function runMutation<
   try {
     value = definition.transaction
       ? await definition.transaction(lifecycleRequest, runHandler)
-      : await runHandler(guardedRequest);
+      : await runInDefaultTransaction(lifecycleRequest, runHandler, guardedRequest);
   } catch (error) {
     if (error instanceof MutationRollback) return error.failure;
     // KV429 (SPEC §10.3/§11.1): a StaleVersionError thrown from the handler (or its
@@ -491,6 +497,33 @@ export async function runMutation<
     },
     input,
   );
+}
+
+async function runInDefaultTransaction<Request, GuardedRequest, Value>(
+  lifecycleRequest: Request,
+  runHandler: (handlerRequest: GuardedRequest) => Promise<Value>,
+  guardedRequest: GuardedRequest,
+): Promise<Value> {
+  const db = transactionCapableRequestDb(lifecycleRequest);
+  if (!db) return runHandler(guardedRequest);
+
+  // SPEC §10.3: default mutation handlers receive a transaction-scoped db when the
+  // request db can open one, so handler/DB errors roll back the framework-owned lifecycle.
+  return db.transaction((transactionDb) =>
+    runHandler(requestWithTransactionDb(lifecycleRequest, transactionDb) as GuardedRequest),
+  );
+}
+
+function transactionCapableRequestDb(request: unknown): TransactionCapableRequestDb | undefined {
+  if (!isRecord(request)) return undefined;
+  const db = request.db;
+  if (!isRecord(db) || typeof db.transaction !== 'function') return undefined;
+  return db as TransactionCapableRequestDb;
+}
+
+function requestWithTransactionDb(request: unknown, transactionDb: unknown): unknown {
+  if (!isRecord(request)) return request;
+  return { ...request, db: transactionDb };
 }
 
 function mutationSuccess<Value, Input>(
@@ -1156,6 +1189,10 @@ function isMutationFail(value: unknown): value is MutationFail {
     value.ok === false &&
     'error' in value
   );
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function mutationRedirectLocation<Value>(
