@@ -1,6 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
-import { isRenderedHtml, renderedHtml, type RenderedHtml } from '@kovojs/server/internal/html';
+import { renderRouteHtml, trustedHtml } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
@@ -63,9 +63,13 @@ export interface TableCellProps {
 }
 
 type MaybePromise<Value> = Promise<Value> | Value;
+type TableRenderedHtml = ReturnType<typeof trustedHtml>;
+
+const tableRenderedHtmlValues = new WeakSet<object>();
 
 function escapeHtml(value: unknown): string {
-  if (isRenderedHtml(value)) return value.html;
+  if (isTableRenderedHtml(value)) return String(value);
+  if (typeof value === 'object' && value !== null) return renderRouteHtml(value);
   const text = tableTextValue(value);
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }
@@ -99,6 +103,16 @@ function isPromiseLike(value: unknown): value is PromiseLike<unknown> {
     'then' in value &&
     typeof (value as { then?: unknown }).then === 'function'
   );
+}
+
+function tableRenderedHtml(html: string): TableRenderedHtml {
+  const rendered = trustedHtml(html, 'ui table primitive composition');
+  tableRenderedHtmlValues.add(rendered);
+  return rendered;
+}
+
+function isTableRenderedHtml(value: unknown): value is TableRenderedHtml {
+  return typeof value === 'object' && value !== null && tableRenderedHtmlValues.has(value);
 }
 
 function escapeAttribute(value: string): string {
@@ -182,7 +196,7 @@ export const Table = component({
         : `<caption${tableAttributes(captionAttrs)}>${escapeHtml(props.caption)}</caption>`;
 
     return withTableChildren(props.children, (children) =>
-      renderedHtml(
+      tableRenderedHtml(
         `<div${tableAttributes(wrapperAttrs)}><table${tableAttributes(tableAttrs)}>${caption}${children}</table></div>`,
       ),
     );
@@ -281,8 +295,8 @@ export const TableCell = component({
 
 function withTableChildren(
   value: unknown,
-  render: (children: string) => RenderedHtml,
-): MaybePromise<RenderedHtml> {
+  render: (children: string) => TableRenderedHtml,
+): MaybePromise<TableRenderedHtml> {
   const children = renderTableChildren(value);
   return isPromiseLike(children) ? children.then(render) : render(children);
 }
@@ -291,7 +305,7 @@ function tablePartWithChildren(
   tag: 'tbody' | 'td' | 'th' | 'thead' | 'tr',
   attributes: TablePartAttributes,
   children: unknown,
-): MaybePromise<RenderedHtml> {
+): MaybePromise<TableRenderedHtml> {
   return withTableChildren(children, (renderedChildren) =>
     tablePart(tag, attributes, renderedChildren),
   );
@@ -301,11 +315,11 @@ function tablePart(
   tag: 'tbody' | 'td' | 'th' | 'thead' | 'tr',
   attributes: TablePartAttributes,
   children: string,
-): RenderedHtml {
+): TableRenderedHtml {
   // SPEC.md §5.2 keeps vendored styled components as app-authored TSX source. These table
-  // parts still emit semantic HTML, while avoiding isolated JSX <tr>/<td> bodies
-  // that the compiler correctly rejects when compiled without their table parent.
-  return renderedHtml(`<${tag}${tableAttributes(attributes)}>${children}</${tag}>`);
+  // primitives still compose trusted table subtrees, but only from values this module minted, so
+  // a structural object or global symbol cannot smuggle raw HTML into the vendored component.
+  return tableRenderedHtml(`<${tag}${tableAttributes(attributes)}>${children}</${tag}>`);
 }
 
 function tableAttributes(attributes: TablePartAttributes | Record<string, unknown>): string {

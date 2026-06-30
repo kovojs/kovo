@@ -33,20 +33,20 @@ describe('kovo route outcome graph facts', () => {
       writeFileSync(
         appPath,
         `
-import { createApp, publicAccess, respond, route } from '@kovojs/server';
+import { createApp, publicAccess, respond as response, route } from '@kovojs/server';
 
 export default createApp({
   routes: [
     route('/download/report.txt', {
       access: publicAccess('public report download'),
-      page: () => respond.file('report', {
+      page: () => response.file('report', {
         contentType: 'text/plain; charset=utf-8',
         filename: 'report.txt',
       }),
     }),
     route('/stream/events.ndjson', {
       access: publicAccess('public event stream'),
-      page: () => respond.stream('event: ready\\n\\n', {
+      page: () => response.stream('event: ready\\n\\n', {
         contentType: 'application/x-ndjson',
       }),
     }),
@@ -114,9 +114,10 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp, publicAccess, rootedFiles, route } from '@kovojs/server';
+import { createApp, publicAccess, rootedFiles as openRoot, route } from '@kovojs/server';
 
-const docs = await rootedFiles(${JSON.stringify(docsRoot)});
+const makeDocsRoot = openRoot;
+const docs = await makeDocsRoot(${JSON.stringify(docsRoot)});
 
 export default createApp({
   routes: [

@@ -54,6 +54,22 @@ import { tabsKeyDown as keyDown, tabsTriggerClick } from '@kovojs/headless-ui/ta
     ]);
   });
 
+  it('recognizes imported and local aliases for component factory calls', () => {
+    const source = `
+import { component as defineComponent } from '@kovojs/core';
+
+const defineRegion = defineComponent;
+
+export const CartBadge = defineRegion({
+  render: () => <cart-badge>Cart</cart-badge>,
+});
+`;
+
+    expect(parseComponentModule('cart-badge.tsx', source).components).toEqual([
+      expect.objectContaining({ localName: 'CartBadge' }),
+    ]);
+  });
+
   it('records trimmed JSX child bodies with original source offsets', () => {
     const source = `
 export const ChildSlot = component({

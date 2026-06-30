@@ -1027,11 +1027,13 @@ export const contactsQuery = query({
       writeFileSync(
         join(root, 'src/components/contacts.tsx'),
         `
-import { component } from '@kovojs/core';
+import { component as defineComponent } from '@kovojs/core';
 
 import { contactsQuery } from '../queries.js';
 
-export const ContactsRegion = component({
+const defineRegion = defineComponent;
+
+export const ContactsRegion = defineRegion({
   queries: { contacts: contactsQuery },
   render: ({ contacts }) => <main>{contacts.items.length}</main>,
 });

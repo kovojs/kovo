@@ -40,6 +40,11 @@ export type * from './model.js';
 
 ensureTypescriptRuntime(ts);
 
+interface ComponentFactoryBindings {
+  readonly names: ReadonlySet<string>;
+  readonly namespaceNames: ReadonlySet<string>;
+}
+
 /**
  * @internal FN7 (plans/compiler-refactoring.md): the canonical source parse. The scanner uses it,
  * and it is shared with the other compiler phases that must read app source (StyleX extraction and
@@ -93,6 +98,7 @@ export function parseDiagnosticsForSourceFile(
  */
 export function parseComponentModule(fileName: string, source: string): ComponentModuleModel {
   const sourceFile = parseSourceFile(fileName, source);
+  const componentFactories = componentFactoryBindings(sourceFile);
   const calls: CallExpressionModel[] = [];
   const components: ComponentModel[] = [];
   const jsxComments: JsxCommentModel[] = [];
@@ -120,6 +126,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
         { end: node.name.getEnd(), start: node.name.getStart(sourceFile) },
         node.parent.parent.getEnd(),
         node.initializer,
+        componentFactories,
       );
       if (model) components.push(model);
     }
@@ -295,6 +302,61 @@ function isExportedVariable(node: ts.VariableDeclaration): boolean {
 
 function hasExportModifier(node: ts.FunctionDeclaration | ts.VariableStatement): boolean {
   return hasModifier(node, ts.SyntaxKind.ExportKeyword);
+}
+
+function componentFactoryBindings(sourceFile: ts.SourceFile): ComponentFactoryBindings {
+  const names = new Set(['component']);
+  const namespaceNames = new Set<string>();
+  const bindings = { names, namespaceNames };
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+    if (statement.moduleSpecifier.text !== '@kovojs/core') continue;
+
+    const namedBindings = statement.importClause?.namedBindings;
+    if (!namedBindings) continue;
+    if (ts.isNamespaceImport(namedBindings)) {
+      namespaceNames.add(namedBindings.name.text);
+      continue;
+    }
+    if (!ts.isNamedImports(namedBindings)) continue;
+    for (const element of namedBindings.elements) {
+      const importedName = element.propertyName?.text ?? element.name.text;
+      if (importedName === 'component') names.add(element.name.text);
+    }
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const statement of sourceFile.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
+        if (!isComponentFactoryReference(declaration.initializer, bindings)) continue;
+        if (names.has(declaration.name.text)) continue;
+        names.add(declaration.name.text);
+        changed = true;
+      }
+    }
+  }
+
+  return bindings;
+}
+
+function isComponentFactoryReference(
+  expression: ts.Expression,
+  bindings: ComponentFactoryBindings,
+): boolean {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isIdentifier(unwrapped)) return bindings.names.has(unwrapped.text);
+  return (
+    ts.isPropertyAccessExpression(unwrapped) &&
+    unwrapped.name.text === 'component' &&
+    ts.isIdentifier(unwrapped.expression) &&
+    bindings.namespaceNames.has(unwrapped.expression.text)
+  );
 }
 
 function isExportedRenderSourceFunction(node: ts.Node): node is ts.FunctionDeclaration {
@@ -752,10 +814,10 @@ function componentModelFromInitializer(
   localNameSpan: SourceSpan,
   declarationEnd: number,
   initializer: ts.Expression | undefined,
+  componentFactories: ComponentFactoryBindings,
 ): ComponentModel | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
-  if (!ts.isIdentifier(initializer.expression) || initializer.expression.text !== 'component')
-    return null;
+  if (!isComponentFactoryReference(initializer.expression, componentFactories)) return null;
 
   const [optionsArg] = initializer.arguments;
   if (!optionsArg || !ts.isObjectLiteralExpression(optionsArg)) return null;

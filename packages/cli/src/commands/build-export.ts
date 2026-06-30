@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import type { CompileResult, CompileRouteModuleResult } from '@kovojs/compiler';
 import type {
   lowerStandaloneSourceDerivedRegistryDeclarations,
   QueryShapeFact,
@@ -615,9 +616,18 @@ async function runKovoBuildCheckPreflight(
 }
 
 interface KovoBuildCheckArtifacts {
+  components?: readonly SourceComponentGraphFacts[];
   graph: CoreGraph.KovoCheckInput;
   queryShapeFacts: readonly QueryShapeFact[];
+  routePages?: readonly SourceRoutePageFacts[];
 }
+
+type SourceComponentGraphFacts = Pick<
+  CompileResult,
+  'componentGraphFacts' | 'publishToClientFacts' | 'taskGraphFacts'
+>;
+
+type SourceRoutePageFacts = Pick<CompileRouteModuleResult, 'routePageFacts'>;
 
 function writeKovoBuildGraphArtifact(
   neutralBuild: KovoNeutralBuild,
@@ -719,10 +729,12 @@ async function buildCheckGraph(
   const staticArtifacts = await staticBuildCheckGraph(app, appModulePath, options);
   const graph = staticArtifacts.graph;
   const result = deriveAppGraph({
+    ...(staticArtifacts.components === undefined ? {} : { components: staticArtifacts.components }),
     graph: {
       ...graph,
       access: accessFactsFromApp(app),
     },
+    ...(staticArtifacts.routePages === undefined ? {} : { routePages: staticArtifacts.routePages }),
   });
   if (result.diagnostics.length > 0) {
     return {
@@ -757,7 +769,11 @@ async function staticBuildCheckGraph(
     files.length === 0
       ? [
           emptyStaticDataPlaneBuildFacts(),
-          { components: [] as CoreGraph.ComponentExplain[], tasks: [] as CoreGraph.TaskExplain[] },
+          {
+            components: [] as SourceComponentGraphFacts[],
+            routeOutcomes: new Map<string, 'file' | 'stream'>(),
+            routePages: [] as SourceRoutePageFacts[],
+          },
         ]
       : await Promise.all([
           staticDataPlaneBuildFacts(files, { cache: options.cache }),
@@ -768,9 +784,13 @@ async function staticBuildCheckGraph(
     drizzleFacts,
   ) as readonly QueryShapeFact[];
   const queryReadSets = app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries));
-  const routeOutcomeFacts = routeFileStreamEndpointFacts(app.routes, files);
+  const routeOutcomeFacts = routeFileStreamEndpointFacts(
+    app.routes,
+    sourceGraphFacts.routeOutcomes,
+  );
 
   return {
+    components: sourceGraphFacts.components,
     graph: {
       ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
       ...(drizzleFacts.sqlSafetyDiagnostics.length === 0
@@ -787,10 +807,6 @@ async function staticBuildCheckGraph(
         ? {}
         : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
       ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
-      ...(sourceGraphFacts.components.length === 0
-        ? {}
-        : { components: sourceGraphFacts.components }),
-      ...(sourceGraphFacts.tasks.length === 0 ? {} : { tasks: sourceGraphFacts.tasks }),
       endpoints: [...app.endpoints.map(endpointCheckFact), ...routeOutcomeFacts],
       mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
       optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
@@ -798,92 +814,50 @@ async function staticBuildCheckGraph(
       queries: queryReadSets,
     },
     queryShapeFacts,
+    routePages: sourceGraphFacts.routePages,
   };
 }
 
-async function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Promise<{
-  components: CoreGraph.ComponentExplain[];
-  tasks: CoreGraph.TaskExplain[];
-}> {
-  const {
-    allComponentOptionObjectEntries,
-    deriveRegistryIdentity,
-    parseComponentModule,
-    queryExpressionFromBinding,
-  } = await import('@kovojs/compiler/internal');
-  const components: CoreGraph.ComponentExplain[] = [];
-  const tasks: CoreGraph.TaskExplain[] = [];
+interface SourceGraphFacts {
+  components: SourceComponentGraphFacts[];
+  routeOutcomes: Map<string, 'file' | 'stream'>;
+  routePages: SourceRoutePageFacts[];
+}
+
+async function sourceGraphFactsFromFiles(
+  files: readonly BuildCheckSourceFile[],
+): Promise<SourceGraphFacts> {
+  const { compileComponentModule, compileRouteModule } = await import('@kovojs/compiler');
+  const components: SourceComponentGraphFacts[] = [];
+  const routeOutcomes = new Map<string, 'file' | 'stream'>();
+  const routePages: SourceRoutePageFacts[] = [];
 
   for (const file of files) {
-    const model = parseComponentModule(file.fileName, file.source);
+    const component = compileComponentModule({
+      fileName: file.fileName,
+      source: file.source,
+      sourceProvenance: 'app',
+    });
+    if (
+      component.componentGraphFacts.length > 0 ||
+      component.publishToClientFacts.length > 0 ||
+      component.taskGraphFacts.length > 0
+    ) {
+      components.push(component);
+    }
 
-    if (file.source.includes('component(') && file.source.includes('queries')) {
-      const queries = allComponentOptionObjectEntries(model, 'queries').flatMap((entry) => {
-        const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
-        return uniqueSorted(
-          [
-            entry.key,
-            ...(queryExpression
-              ? [
-                  queryExpression,
-                  derivedImportedQueryKey(
-                    file.fileName,
-                    model.namedImports,
-                    queryExpression,
-                    deriveRegistryIdentity,
-                  ),
-                ]
-              : []),
-          ].filter(isString),
-        );
-      });
-
-      if (queries.length > 0) {
-        for (const component of model.components) {
-          if (!component.localName) continue;
-          components.push({
-            name: deriveRegistryIdentity(file.fileName, component.localName).key,
-            queries: uniqueSorted(queries),
-          });
+    const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
+    if (routePage.routePageFacts.length > 0) {
+      routePages.push(routePage);
+      for (const fact of routePage.routePageFacts) {
+        if (fact.outcome !== undefined && !routeOutcomes.has(fact.route)) {
+          routeOutcomes.set(fact.route, fact.outcome.kind);
         }
       }
     }
-
-    for (const task of model.taskRunHandlers) {
-      tasks.push({
-        ...(task.cron === undefined ? {} : { cron: task.cron }),
-        key: task.key,
-        ...(task.runMutationEdges.length === 0 ? {} : { runMutations: task.runMutationEdges }),
-        ...(task.runQueryEdges.length === 0 ? {} : { runQueries: task.runQueryEdges }),
-        ...(task.scheduleEdges.length === 0 ? {} : { schedules: task.scheduleEdges }),
-      });
-    }
   }
 
-  return { components, tasks };
-}
-
-function derivedImportedQueryKey(
-  fileName: string,
-  imports: readonly { importedName: string; localName: string; moduleSpecifier: string }[],
-  queryExpression: string,
-  deriveRegistryIdentity: (fileName: string, exportedBinding: string) => { key: string },
-): string | undefined {
-  const namedImport = imports.find(
-    (entry) => entry.localName === queryExpression && entry.moduleSpecifier.startsWith('.'),
-  );
-  if (!namedImport) return undefined;
-
-  return deriveRegistryIdentity(
-    resolveImportedSourceFileName(fileName, namedImport.moduleSpecifier),
-    namedImport.importedName,
-  ).key;
-}
-
-function resolveImportedSourceFileName(fileName: string, moduleSpecifier: string): string {
-  const normalized = join(dirname(fileName), moduleSpecifier).split(/[\\/]/).join('/');
-  if (/\.[cm]?[jt]sx?$/.test(normalized)) return normalized;
-  return normalized.replace(/\.js$/, '.ts');
+  return { components, routeOutcomes, routePages };
 }
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
@@ -1024,9 +998,8 @@ function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain
 
 function routeFileStreamEndpointFacts(
   routes: readonly KovoApp['routes'][number][],
-  files: readonly BuildCheckSourceFile[],
+  outcomeByPath: ReadonlyMap<string, 'file' | 'stream'>,
 ): CoreGraph.EndpointExplain[] {
-  const outcomeByPath = sourceRouteOutcomeKinds(files);
   return routes.flatMap((route) => {
     const outcome = outcomeByPath.get(route.path);
     if (outcome === undefined) return [];
@@ -1056,136 +1029,6 @@ function routeFileStreamEndpointFact(
     reason: `route respond.${outcome} outcome`,
     surface: outcome === 'file' ? 'route-file' : 'route-stream',
   };
-}
-
-function sourceRouteOutcomeKinds(
-  files: readonly BuildCheckSourceFile[],
-): Map<string, 'file' | 'stream'> {
-  const outcomes = new Map<string, 'file' | 'stream'>();
-  for (const file of files) {
-    const rootedFilesIdentifiers = sourceRootedFilesIdentifiers(file.source);
-    for (const match of file.source.matchAll(/route\s*\(\s*(['"`])([^'"`]+)\1/g)) {
-      const path = match[2];
-      if (path === undefined || outcomes.has(path)) continue;
-      const body = routeDeclarationSourceBody(file.source, match.index ?? 0);
-      const outcome = routeDeclarationOutcomeKind(body, rootedFilesIdentifiers);
-      if (outcome !== undefined) outcomes.set(path, outcome);
-    }
-  }
-  return outcomes;
-}
-
-function sourceRootedFilesIdentifiers(source: string): Set<string> {
-  const identifiers = new Set<string>();
-  for (const match of source.matchAll(
-    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?rootedFiles\s*\(/g,
-  )) {
-    const identifier = match[1];
-    if (identifier !== undefined) identifiers.add(identifier);
-  }
-  return identifiers;
-}
-
-function routeDeclarationOutcomeKind(
-  body: string,
-  rootedFilesIdentifiers: ReadonlySet<string>,
-): 'file' | 'stream' | undefined {
-  if (body.includes('respond.stream')) return 'stream';
-  if (body.includes('respond.file')) return 'file';
-  if (hasDirectRootedFilesServeCall(body)) return 'stream';
-  for (const identifier of rootedFilesIdentifiers) {
-    if (new RegExp(`\\b${escapeRegExp(identifier)}\\s*\\.\\s*serve\\s*\\(`).test(body)) {
-      return 'stream';
-    }
-  }
-  return undefined;
-}
-
-function hasDirectRootedFilesServeCall(body: string): boolean {
-  for (const match of body.matchAll(/\brootedFiles\s*\(/g)) {
-    const openParen = body.indexOf('(', match.index);
-    if (openParen < 0) continue;
-    const closeParen = sourceClosingParenIndex(body, openParen);
-    if (closeParen === undefined) continue;
-
-    let index = closeParen + 1;
-    while (/\s/.test(body[index] ?? '')) index += 1;
-    while (body[index] === ')') {
-      index += 1;
-      while (/\s/.test(body[index] ?? '')) index += 1;
-    }
-    if (/^\.\s*serve\s*\(/.test(body.slice(index))) return true;
-  }
-  return false;
-}
-
-function sourceClosingParenIndex(source: string, openParen: number): number | undefined {
-  let depth = 0;
-  let quote: '"' | "'" | '`' | undefined;
-  let escaped = false;
-  for (let index = openParen; index < source.length; index += 1) {
-    const char = source[index];
-    if (quote !== undefined) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === quote) {
-        quote = undefined;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'" || char === '`') {
-      quote = char;
-      continue;
-    }
-    if (char === '(') {
-      depth += 1;
-      continue;
-    }
-    if (char !== ')') continue;
-    depth -= 1;
-    if (depth === 0) return index;
-  }
-  return undefined;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function routeDeclarationSourceBody(source: string, start: number): string {
-  let depth = 0;
-  let quote: '"' | "'" | '`' | undefined;
-  let escaped = false;
-  for (let index = start; index < source.length; index += 1) {
-    const char = source[index];
-    if (quote !== undefined) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === quote) {
-        quote = undefined;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'" || char === '`') {
-      quote = char;
-      continue;
-    }
-    if (char === '(') {
-      depth += 1;
-      continue;
-    }
-    if (char !== ')') continue;
-    depth -= 1;
-    if (depth === 0) return source.slice(start, index + 1);
-  }
-
-  return source.slice(start);
 }
 
 function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {

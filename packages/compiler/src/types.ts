@@ -270,8 +270,14 @@ export interface RoutePageFact {
   guards?: readonly string[];
   layouts?: readonly RoutePageLayoutFact[];
   navigationSegments?: readonly RouteNavigationSegmentFact[];
+  outcome?: RoutePageOutcomeFact;
   regions?: readonly RouteRegionFact[];
   route: string;
+}
+
+/** Response outcome facts derived from a route page body for build graph endpoint coverage. */
+export interface RoutePageOutcomeFact {
+  kind: 'file' | 'stream';
 }
 
 /** CSS reachability facts derived from a JSX-authored route page. */

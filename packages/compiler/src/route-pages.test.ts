@@ -88,6 +88,33 @@ export const home = route('/', {
     );
   });
 
+  it('records route response outcome facts through framework aliases', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { respond as response, rootedFiles as openRoot, route } from '@kovojs/server';
+
+const makeRoot = openRoot;
+const docs = await makeRoot('/docs');
+
+export const report = route('/report.txt', {
+  page: () => response.file('report'),
+});
+
+export const docsRoute = route('/docs/readme.txt', {
+  page: () => docs.serve('readme.txt'),
+});
+`,
+    });
+
+    expect(
+      result.routePageFacts.map((fact) => ({ outcome: fact.outcome, route: fact.route })),
+    ).toEqual([
+      { outcome: { kind: 'file' }, route: '/report.txt' },
+      { outcome: { kind: 'stream' }, route: '/docs/readme.txt' },
+    ]);
+  });
+
   it('records compiler-derived layout chains for JSX-authored route pages', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',

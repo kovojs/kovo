@@ -1,22 +1,24 @@
+import { dirname, join } from 'node:path';
+
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { deriveAccessExplainFacts } from '@kovojs/core/internal/graph';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
 import { factHash } from './fact-hash.js';
+import { deriveRegistryIdentity } from './registry-identities.js';
 import {
   componentOptionObjectEntries,
   componentOptionObjectEntriesFor,
-  componentOptionObjectKeys,
-  componentOptionObjectKeysFor,
   componentDeclaresMutableLocalState,
   componentHasInferredFragmentTarget,
   firstComponentModel,
   type ComponentModel,
   type ComponentModuleModel,
+  type NamedImportModel,
   type ObjectLiteralEntry,
 } from './scan/parse.js';
-import { queryBindingFromExpression } from './scan/query-binding.js';
+import { queryBindingFromExpression, queryExpressionFromBinding } from './scan/query-binding.js';
 import type {
   CompileAppGraphOptions,
   CompileAppGraphResult,
@@ -305,7 +307,7 @@ export function findLiveTargetFacts(
       identityProps: componentPropNames(component),
       propsType: fragmentTargetPropsType(component),
       queryBindings: componentQueryBindingFacts(component),
-      queries: componentQueryNames(component),
+      queries: componentQueryBindingNames(component),
       target: registryComponentName,
       targetBase: domName,
     },
@@ -326,8 +328,11 @@ export function componentGraphFact(
   exportName?: string,
   mutationForms: readonly CoreGraph.MutationFormExplain[] = [],
   component: ComponentModel | null = firstComponentModel(model),
+  sourceFileName?: string,
 ): ComponentGraphFact {
-  const queries = component ? componentQueryNames(component) : componentQueryNamesForModule(model);
+  const queries = component
+    ? componentQueryNames(component, model, sourceFileName)
+    : componentQueryNamesForModule(model, sourceFileName);
   const clocks = component
     ? componentClockExplainFacts(component)
     : componentClockExplainFactsForModule(model);
@@ -789,12 +794,77 @@ function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function componentQueryNamesForModule(model: ComponentModuleModel): string[] {
-  return componentOptionObjectKeys(model, 'queries');
+function componentQueryNamesForModule(
+  model: ComponentModuleModel,
+  sourceFileName?: string,
+): string[] {
+  return componentQueryNameFacts(
+    componentOptionObjectEntries(model, 'queries'),
+    model,
+    sourceFileName,
+  );
 }
 
-function componentQueryNames(component: ComponentModel): string[] {
-  return componentOptionObjectKeysFor(component, 'queries');
+function componentQueryNames(
+  component: ComponentModel,
+  model?: ComponentModuleModel,
+  sourceFileName?: string,
+): string[] {
+  return componentQueryNameFacts(
+    componentOptionObjectEntriesFor(component, 'queries'),
+    model,
+    sourceFileName,
+  );
+}
+
+function componentQueryNameFacts(
+  entries: readonly ObjectLiteralEntry[],
+  model: ComponentModuleModel | undefined,
+  sourceFileName: string | undefined,
+): string[] {
+  return uniqueSorted(
+    entries.flatMap((entry) => {
+      const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
+      return [
+        entry.key,
+        ...(queryExpression
+          ? [
+              queryExpression,
+              derivedImportedQueryKey(sourceFileName, model?.namedImports ?? [], queryExpression),
+            ]
+          : []),
+      ].filter(isString);
+    }),
+  );
+}
+
+function derivedImportedQueryKey(
+  fileName: string | undefined,
+  imports: readonly NamedImportModel[],
+  queryExpression: string,
+): string | undefined {
+  if (!fileName) return undefined;
+  const namedImport = imports.find(
+    (entry) => entry.localName === queryExpression && entry.moduleSpecifier.startsWith('.'),
+  );
+  if (!namedImport) return undefined;
+
+  return deriveRegistryIdentity(
+    resolveImportedSourceFileName(fileName, namedImport.moduleSpecifier),
+    namedImport.importedName,
+  ).key;
+}
+
+function resolveImportedSourceFileName(fileName: string, moduleSpecifier: string): string {
+  return join(dirname(fileName), moduleSpecifier).split(/[\\/]/).join('/');
+}
+
+function isString(value: unknown): value is string {
+  return typeof value === 'string';
+}
+
+function componentQueryBindingNames(component: ComponentModel): string[] {
+  return componentOptionObjectEntriesFor(component, 'queries').map((entry) => entry.key);
 }
 
 function componentPropNames(component: ComponentModel): string[] {

@@ -111,7 +111,7 @@ invariant.
     drift between inline and modular loader paths.
   - Evidence: `pnpm exec vitest --run packages/browser/src/wire-response-scanner.test.ts packages/browser/src/wire-parser.test.ts packages/browser/src/inline-loader-parser-parity.test.ts packages/browser/src/apply-deferred-stream.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/query-visible-return-ledger.test.ts packages/browser/src/query-visible-return-refetch.test.ts packages/browser/src/clock-tick-bus.test.ts packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-derived.test.ts packages/browser/src/optimism-rebase.test.ts packages/browser/src/optimism-typing.test.ts packages/browser/src/inline-loader-build.test.ts`, `pnpm --filter @kovojs/browser run check:inline-loader`, and `git diff --check` passed on 2026-06-30.
 
-- [ ] **P1.3 - Move CLI build graph extraction off source string probes.**
+- [x] **P1.3 - Move CLI build graph extraction off source string probes.**
   - Current signals: `packages/cli/src/commands/build-export.ts` still guards graph extraction with
     `source.includes('component(')` / `source.includes('queries')`, guesses import extensions, and
     scans route file/stream facts from route source bodies with regexes.
@@ -120,8 +120,7 @@ invariant.
     those facts rather than re-reading source.
   - Risk reduced: build graph, explain output, and static export stop missing facts because of
     formatting, aliases, wrapper helpers, comments, or import-extension variants.
-  - Verification: add aliases/wrapper fixtures for components, route file/stream returns, and route
-    queries. Run `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-route-outcomes.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/app-graph.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/registry.test.ts packages/cli/src/index.kovo-route-outcomes.test.ts packages/cli/src/index.kovo-build.test.ts packages/ui/src/xss-escaping.test.tsx packages/ui/src/index.markup.test.tsx packages/ui/src/table.stylex.test.tsx` passed on 2026-06-30 with component factory alias, route outcome alias/rootedFiles wrapper, compiler route-outcome fact, and UI vendored-table trust-boundary coverage; `rg "source\\.includes\\('component\\('|source\\.includes\\(\"component\\(|sourceRouteOutcome|routeDeclarationOutcomeKind|routeDeclarationSourceBody|sourceRootedFilesIdentifiers|parseComponentModule|allComponentOptionObjectEntries|queryExpressionFromBinding|deriveRegistryIdentity" packages/cli/src/commands/build-export.ts` found no old graph-extraction probes.
 
 - [x] **P1.4 - Require Drizzle diagnostic construction through a source-site builder.**
   - Current signals: `packages/drizzle/src/static.ts`, `packages/drizzle/src/static/query-shapes.ts`,
