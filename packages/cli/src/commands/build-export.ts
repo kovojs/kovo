@@ -2236,9 +2236,17 @@ async function bundleKovoServerHandler(
         target: 'node22',
       },
       configFile: false,
+      define: {
+        'process.env.NODE_ENV': JSON.stringify('production'),
+      },
+      esbuild: {
+        jsxDev: false,
+      },
       logLevel: 'silent',
+      mode: 'production',
       oxc: {
         jsx: {
+          development: false,
           importSource: '@kovojs/server',
           runtime: 'automatic',
         },
@@ -2265,7 +2273,9 @@ async function bundleKovoServerHandler(
       ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
     });
 
-    const source = await readFile(join(outDir, 'handler.mjs'), 'utf8');
+    const source = stableKovoServerHandlerSource(
+      await readFile(join(outDir, 'handler.mjs'), 'utf8'),
+    );
     assertNoUnloweredKovoClientIslandHooks(source);
     return {
       clientModules: kovoPlugin.getClientModules?.() ?? [],
@@ -2274,6 +2284,13 @@ async function bundleKovoServerHandler(
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+}
+
+function stableKovoServerHandlerSource(source: string): string {
+  return source
+    .split('\n')
+    .filter((line) => !/^\/\/#(?:end)?region(?:\s|$)/.test(line))
+    .join('\n');
 }
 
 function kovoBuildLoweringVitePlugin<T extends { enforce?: unknown }>(
