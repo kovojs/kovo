@@ -53,7 +53,9 @@ import {
   parseDiagnosticsForSourceFile,
   parseSourceFile,
   firstComponentModel,
+  componentHasInferredFragmentTarget,
   componentOptionObjectEntries,
+  type ComponentModel,
   type ComponentModuleModel,
   type ObjectLiteralEntry,
 } from './scan/parse.js';
@@ -125,6 +127,10 @@ export function compileComponentModule(rawOptions: CompileComponentOptions): Com
 }
 
 type ComponentNames = ReturnType<typeof deriveComponentNames>;
+interface ModuleComponentNameFact {
+  readonly component: ComponentModel | null;
+  readonly names: ComponentNames;
+}
 type ClientCaptureAnalysis = ReturnType<typeof analyzeClientCaptures>;
 type MutationFormFacts = ReturnType<typeof mutationFormExplainFacts>;
 
@@ -378,7 +384,9 @@ function emitRegistryCssPhase(
   client: EmitClientPhaseResult,
 ): EmitRegistryCssPhaseResult {
   const fileNames = compileArtifactFileNames(parsed.options.fileName);
-  const componentCssSource = emitCssModule(parsed.componentNames.domName, lowered.model);
+  const componentNameFacts = componentNameFactsForModel(parsed.options.fileName, lowered.model);
+  const primaryComponentNames = componentNameFacts[0]?.names ?? parsed.componentNames;
+  const componentCssSource = emitCssModule(primaryComponentNames.domName, lowered.model);
   const styleCssSource = lowered.lowering.styleExtraction.css
     ? `${cssIrHeader}\n${lowered.lowering.styleExtraction.css}`
     : null;
@@ -386,16 +394,18 @@ function emitRegistryCssPhase(
     componentCssSource && styleCssSource
       ? dedupeCss([componentCssSource, styleCssSource])
       : (componentCssSource ?? styleCssSource ?? '');
-  const fragmentTargetFacts = findFragmentTargetFacts(
-    parsed.componentNames.registryKey,
-    lowered.model,
+  const fragmentTargetFacts = componentNameFacts.flatMap((fact) =>
+    findFragmentTargetFacts(fact.names.registryKey, lowered.model, fact.component),
   );
   const fragmentTargets = fragmentTargetFacts.map((fact) => fact.target);
-  const liveTargetFacts = findLiveTargetFacts(
-    parsed.componentNames.domName,
-    parsed.componentNames.registryKey,
-    lowered.model,
-    validated.updateCoverage,
+  const liveTargetFacts = componentNameFacts.flatMap((fact) =>
+    findLiveTargetFacts(
+      fact.names.domName,
+      fact.names.registryKey,
+      lowered.model,
+      validated.updateCoverage,
+      fact.component,
+    ),
   );
   const mutationForms = mutationFormExplainFacts(lowered.model, {
     fileName: parsed.options.fileName,
@@ -404,23 +414,26 @@ function emitRegistryCssPhase(
       : {}),
     source: lowered.source,
   });
-  const componentGraphFacts = [
+  const componentGraphFacts = componentNameFacts.map((fact, index) =>
     componentGraphFact(
-      parsed.componentNames.registryKey,
-      parsed.componentNames.domName,
+      fact.names.registryKey,
+      fact.names.domName,
       lowered.model,
-      fragmentTargets,
-      lowered.lowering.styleExtraction.ruleUsages,
-      firstComponentModel(parsed.originalModel)?.localName,
-      mutationForms,
+      fact.component && componentHasInferredFragmentTarget(fact.component)
+        ? [fact.names.registryKey]
+        : [],
+      index === 0 ? lowered.lowering.styleExtraction.ruleUsages : [],
+      fact.component?.localName,
+      index === 0 ? mutationForms : [],
+      fact.component,
     ),
-  ];
+  );
   const cssAssets = cssSource
     ? [
         {
           ...componentCssAssetForFile(
             fileNames.css,
-            parsed.componentNames.domName,
+            primaryComponentNames.domName,
             fragmentTargets,
             {},
             cssSource,
@@ -445,7 +458,8 @@ function emitRegistryCssPhase(
       clientFileName: fileNames.client,
       cssAssets,
       componentName: parsed.componentName,
-      domComponentName: parsed.componentNames.domName,
+      componentRegistryNames: componentNameFacts.map((fact) => fact.names.registryKey),
+      domComponentName: primaryComponentNames.domName,
       fragmentTargetFacts,
       handlers: client.versionedHandlers,
       liveTargetFacts,
@@ -455,7 +469,7 @@ function emitRegistryCssPhase(
         : {}),
       queryUpdatePlans: validated.queryUpdatePlans,
       ...(parsed.options.registryFacts ? { registryFacts: parsed.options.registryFacts } : {}),
-      registryComponentName: parsed.componentNames.registryKey,
+      registryComponentName: primaryComponentNames.registryKey,
       viewTransitions: lowered.lowering.structuralLowering.viewTransitionStamps,
     }),
   };
@@ -468,14 +482,27 @@ function emitServerPhase(
   client: EmitClientPhaseResult,
   registryCss: EmitRegistryCssPhaseResult,
 ): EmitServerPhaseResult {
+  const componentNameFacts = componentNameFactsForModel(parsed.options.fileName, lowered.model);
+  const primaryComponentNames = componentNameFacts[0]?.names ?? parsed.componentNames;
   const serverRender = serverRenderLowering(
     client.versionedHandlers,
     lowered.model,
-    parsed.componentNames.domName,
+    primaryComponentNames.domName,
     {
       clientHref: client.clientHref,
+      componentStampTargets: componentNameFacts.flatMap((fact) =>
+        fact.component
+          ? [
+              {
+                component: fact.component,
+                domComponentName: fact.names.domName,
+                registryComponentName: fact.names.registryKey,
+              },
+            ]
+          : [],
+      ),
       fileName: parsed.options.fileName,
-      registryComponentName: parsed.componentNames.registryKey,
+      registryComponentName: primaryComponentNames.registryKey,
       ...(parsed.compileOptions.registryFacts
         ? { registryFacts: parsed.compileOptions.registryFacts }
         : {}),
@@ -484,7 +511,7 @@ function emitServerPhase(
   );
   const serverRenderReplacements = [
     ...serverRender.replacements,
-    ...componentDescriptorNameAssignments(lowered.model, parsed.componentNames.registryKey),
+    ...componentDescriptorNameAssignments(lowered.model, componentNameFacts),
     ...derivedMutationKeyAssignments(lowered.model, parsed.options.fileName),
     ...derivedQueryKeyAssignments(lowered.model, parsed.options.fileName, lowered.source),
     ...versionStateDeriveReferences(client.stateDeriveReferences),
@@ -500,6 +527,10 @@ function emitServerPhase(
   const serverRenderedSource = removeUnreferencedNamedImports(
     appendLiveTargetRendererExports({
       componentExpression: parsed.componentName,
+      componentExpressionForFact: (fact) =>
+        componentNameFacts.find(
+          (componentFact) => componentFact.names.registryKey === fact.component,
+        )?.component?.localName ?? parsed.componentName,
       liveTargetFacts: registryCss.liveTargetFacts,
       source: insertDerivedQueryKeyImport(patchedServerSource, lowered.model),
     }),
@@ -925,20 +956,41 @@ function clockEntryIsRenderOnce(entry: Pick<ObjectLiteralEntry, 'objectEntries'>
   );
 }
 
+function componentNameFactsForModel(
+  fileName: string,
+  model: ComponentModuleModel,
+): ModuleComponentNameFact[] {
+  if (model.components.length === 0) {
+    return [{ component: null, names: deriveComponentNames(fileName, null) }];
+  }
+
+  return model.components.map((component) => ({
+    component,
+    names: deriveComponentNames(fileName, component),
+  }));
+}
+
 function componentDescriptorNameAssignments(
   model: ComponentModuleModel,
-  registryComponentName: string,
+  componentNameFacts: readonly ModuleComponentNameFact[],
 ): SourceReplacement[] {
-  const component = firstComponentModel(model);
-  if (!component?.localName) return [];
+  const factsByComponent = new Map<ComponentModel, ModuleComponentNameFact>();
+  for (const fact of componentNameFacts) {
+    if (fact.component) factsByComponent.set(fact.component, fact);
+  }
 
-  return [
-    {
-      end: component.declarationEnd,
-      replacement: `\n${component.localName}.name = ${JSON.stringify(registryComponentName)};`,
-      start: component.declarationEnd,
-    },
-  ];
+  return model.components.flatMap((component) => {
+    const registryComponentName = factsByComponent.get(component)?.names.registryKey;
+    if (!component.localName || registryComponentName === undefined) return [];
+
+    return [
+      {
+        end: component.declarationEnd,
+        replacement: `\n${component.localName}.name = ${JSON.stringify(registryComponentName)};`,
+        start: component.declarationEnd,
+      },
+    ];
+  });
 }
 
 function derivedMutationKeyAssignments(

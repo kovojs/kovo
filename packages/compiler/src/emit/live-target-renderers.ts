@@ -15,6 +15,7 @@ const liveTargetWireImports = [
 
 export interface EmitLiveTargetRendererExportsOptions {
   componentExpression: string;
+  componentExpressionForFact?: (fact: LiveTargetFact) => string;
   liveTargetFacts: readonly LiveTargetFact[];
   source: string;
 }
@@ -26,7 +27,12 @@ export function appendLiveTargetRendererExports(
 
   const sourceWithImport = insertLiveTargetRendererImport(options.source);
   const exports = options.liveTargetFacts
-    .map((fact) => liveTargetRendererExport(options.componentExpression, fact))
+    .map((fact) =>
+      liveTargetRendererExport(
+        options.componentExpressionForFact?.(fact) ?? options.componentExpression,
+        fact,
+      ),
+    )
     .join('\n\n');
 
   return `${sourceWithImport.trimEnd()}\n\n${exports}\n`;

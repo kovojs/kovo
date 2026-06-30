@@ -305,6 +305,13 @@ export function firstComponentModel(model: ComponentModuleModel): ComponentModel
   return model.components[0] ?? null;
 }
 
+export function componentOptionStaticValueFor(
+  component: ComponentModel,
+  propertyName: string,
+): StaticLiteralValue | undefined {
+  return component.options.find((option) => option.key === propertyName)?.staticValue;
+}
+
 export function inferComponentName(fileName: string, model: ComponentModuleModel): string {
   const component = firstComponentModel(model);
   if (component?.localName) return component.localName;
@@ -325,8 +332,8 @@ export function componentOptionStaticValue(
   model: ComponentModuleModel,
   propertyName: string,
 ): StaticLiteralValue | undefined {
-  return firstComponentModel(model)?.options.find((option) => option.key === propertyName)
-    ?.staticValue;
+  const component = firstComponentModel(model);
+  return component ? componentOptionStaticValueFor(component, propertyName) : undefined;
 }
 
 export function componentOptionStaticTemplateValue(
@@ -341,9 +348,16 @@ export function componentOptionObjectEntries(
   model: ComponentModuleModel,
   propertyName: string,
 ): ObjectLiteralEntry[] {
+  const component = firstComponentModel(model);
+  return component ? componentOptionObjectEntriesFor(component, propertyName) : [];
+}
+
+export function componentOptionObjectEntriesFor(
+  component: ComponentModel,
+  propertyName: string,
+): ObjectLiteralEntry[] {
   return [
-    ...(firstComponentModel(model)?.options.find((option) => option.key === propertyName)
-      ?.objectEntries ?? []),
+    ...(component.options.find((option) => option.key === propertyName)?.objectEntries ?? []),
   ];
 }
 
@@ -366,6 +380,13 @@ export function componentOptionObjectKeys(
   propertyName: string,
 ): string[] {
   return componentOptionObjectEntries(model, propertyName).map((entry) => entry.key);
+}
+
+export function componentOptionObjectKeysFor(
+  component: ComponentModel,
+  propertyName: string,
+): string[] {
+  return componentOptionObjectEntriesFor(component, propertyName).map((entry) => entry.key);
 }
 
 export function allComponentOptionObjectKeys(
@@ -398,7 +419,15 @@ export function componentRenderHost(model: ComponentModuleModel): RenderHostMode
 }
 
 export function componentRenderHostElement(model: ComponentModuleModel): JsxElementModel | null {
-  const host = componentRenderHost(model);
+  const component = firstComponentModel(model);
+  return component ? componentRenderHostElementFor(model, component) : null;
+}
+
+export function componentRenderHostElementFor(
+  model: ComponentModuleModel,
+  component: ComponentModel,
+): JsxElementModel | null {
+  const host = component.renderHost ?? null;
   if (!host) return null;
 
   return (
@@ -448,8 +477,7 @@ export function componentFragmentTargetNames(model: ComponentModuleModel): strin
 }
 
 export function componentHasInferredServerRefreshTarget(model: ComponentModuleModel): boolean {
-  const component = firstComponentModel(model);
-  return component ? componentHasInferredFragmentTarget(component) : false;
+  return model.components.some(componentHasInferredFragmentTarget);
 }
 
 export function jsxElements(model: ComponentModuleModel): JsxElementModel[] {

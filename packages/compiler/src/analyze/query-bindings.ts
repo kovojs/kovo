@@ -38,7 +38,11 @@ export function dataBindAttributes(model: ComponentModuleModel): DataBindAttribu
         attribute.value !== undefined &&
         attribute.value !== '',
     )
-    .map((attribute) => dataBindAttributeFact(attribute.name, attribute.value ?? ''));
+    .map((attribute) => ({
+      ...dataBindAttributeFact(attribute.name, attribute.value ?? ''),
+      end: attribute.end,
+      start: attribute.start,
+    }));
 }
 
 export function dataBindOutputContextFact(binding: DataBindAttribute): GeneratedOutputWriteFact {

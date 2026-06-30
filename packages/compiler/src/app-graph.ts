@@ -6,9 +6,13 @@ import type { CompilerDiagnostic } from './diagnostics.js';
 import { factHash } from './fact-hash.js';
 import {
   componentOptionObjectEntries,
+  componentOptionObjectEntriesFor,
   componentOptionObjectKeys,
+  componentOptionObjectKeysFor,
   componentDeclaresMutableLocalState,
-  componentHasInferredServerRefreshTarget,
+  componentHasInferredFragmentTarget,
+  firstComponentModel,
+  type ComponentModel,
   type ComponentModuleModel,
   type ObjectLiteralEntry,
 } from './scan/parse.js';
@@ -216,12 +220,13 @@ function compareCapabilityFacts(
 export function findFragmentTargetFacts(
   registryComponentName: string,
   model: ComponentModuleModel,
+  component: ComponentModel | null = firstComponentModel(model),
 ): FragmentTargetFact[] {
-  if (!componentHasInferredServerRefreshTarget(model)) return [];
+  if (!component || !componentHasInferredFragmentTarget(component)) return [];
 
   return [
     {
-      propsType: fragmentTargetPropsType(model),
+      propsType: fragmentTargetPropsType(component),
       target: registryComponentName,
     },
   ];
@@ -237,17 +242,18 @@ export function findLiveTargetFacts(
   registryComponentName: string,
   model: ComponentModuleModel,
   updateCoverage: readonly QueryUpdateCoverageFact[] = [],
+  component: ComponentModel | null = firstComponentModel(model),
 ): LiveTargetFact[] {
-  if (!componentHasInferredServerRefreshTarget(model)) return [];
+  if (!component || !componentHasInferredFragmentTarget(component)) return [];
 
   return [
     {
       component: registryComponentName,
-      coverage: liveTargetCoverageFacts(updateCoverage),
-      identityProps: componentPropNames(model),
-      propsType: fragmentTargetPropsType(model),
-      queryBindings: componentQueryBindingFacts(model),
-      queries: componentQueryNames(model),
+      coverage: liveTargetCoverageFacts(updateCoverage, component),
+      identityProps: componentPropNames(component),
+      propsType: fragmentTargetPropsType(component),
+      queryBindings: componentQueryBindingFacts(component),
+      queries: componentQueryNames(component),
       target: registryComponentName,
       targetBase: domName,
     },
@@ -267,9 +273,12 @@ export function componentGraphFact(
   styleRuleUsages: readonly StyleRuleUsage[] = [],
   exportName?: string,
   mutationForms: readonly CoreGraph.MutationFormExplain[] = [],
+  component: ComponentModel | null = firstComponentModel(model),
 ): ComponentGraphFact {
-  const queries = componentQueryNames(model);
-  const clocks = componentClockExplainFacts(model);
+  const queries = component ? componentQueryNames(component) : componentQueryNamesForModule(model);
+  const clocks = component
+    ? componentClockExplainFacts(component)
+    : componentClockExplainFactsForModule(model);
 
   return {
     ...(clocks.length === 0 ? {} : { clocks }),
@@ -277,7 +286,13 @@ export function componentGraphFact(
     ...(exportName === undefined ? {} : { exportName }),
     ...(fragmentTargets.length === 0 ? {} : { fragments: fragmentTargets }),
     ...(mutationForms.length === 0 ? {} : { mutationForms }),
-    ...(firstComponentDeclaresMutableLocalState(model) ? { mutableLocalState: true } : {}),
+    ...(component
+      ? componentDeclaresMutableLocalState(component, model)
+        ? { mutableLocalState: true }
+        : {}
+      : firstComponentDeclaresMutableLocalState(model)
+        ? { mutableLocalState: true }
+        : {}),
     name: componentName,
     ...(queries.length === 0 ? {} : { queries }),
     ...(styleRuleUsages.length === 0
@@ -292,8 +307,16 @@ export function componentGraphFact(
   };
 }
 
-function componentClockExplainFacts(model: ComponentModuleModel): CoreGraph.ClockExplain[] {
+function componentClockExplainFactsForModule(
+  model: ComponentModuleModel,
+): CoreGraph.ClockExplain[] {
   return componentOptionObjectEntries(model, 'clocks').flatMap((entry) =>
+    entry.value ? [{ cadence: clockCadenceSummary(entry), name: entry.key }] : [],
+  );
+}
+
+function componentClockExplainFacts(component: ComponentModel): CoreGraph.ClockExplain[] {
+  return componentOptionObjectEntriesFor(component, 'clocks').flatMap((entry) =>
     entry.value ? [{ cadence: clockCadenceSummary(entry), name: entry.key }] : [],
   );
 }
@@ -714,16 +737,20 @@ function uniqueSorted(values: readonly string[]): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
-function componentQueryNames(model: ComponentModuleModel): string[] {
+function componentQueryNamesForModule(model: ComponentModuleModel): string[] {
   return componentOptionObjectKeys(model, 'queries');
 }
 
-function componentPropNames(model: ComponentModuleModel): string[] {
-  return componentOptionObjectEntries(model, 'props').map((entry) => entry.key);
+function componentQueryNames(component: ComponentModel): string[] {
+  return componentOptionObjectKeysFor(component, 'queries');
 }
 
-function componentQueryBindingFacts(model: ComponentModuleModel): LiveTargetQueryBindingFact[] {
-  return componentOptionObjectEntries(model, 'queries').map((entry) => {
+function componentPropNames(component: ComponentModel): string[] {
+  return componentOptionObjectEntriesFor(component, 'props').map((entry) => entry.key);
+}
+
+function componentQueryBindingFacts(component: ComponentModel): LiveTargetQueryBindingFact[] {
+  return componentOptionObjectEntriesFor(component, 'queries').map((entry) => {
     const parsed = entry.value ? queryBindingFromExpression(entry.value) : null;
     return {
       name: entry.key,
@@ -732,8 +759,8 @@ function componentQueryBindingFacts(model: ComponentModuleModel): LiveTargetQuer
   });
 }
 
-function fragmentTargetPropsType(model: ComponentModuleModel): string {
-  const props = componentOptionObjectEntries(model, 'props').map((entry) => ({
+function fragmentTargetPropsType(component: ComponentModel): string {
+  const props = componentOptionObjectEntriesFor(component, 'props').map((entry) => ({
     key: entry.key,
     type: entry.staticConstructorType ?? 'unknown',
   }));
@@ -745,12 +772,17 @@ function fragmentTargetPropsType(model: ComponentModuleModel): string {
 
 function liveTargetCoverageFacts(
   coverage: readonly QueryUpdateCoverageFact[],
+  component: ComponentModel,
 ): LiveTargetCoverageFact[] {
-  return coverage.map((fact) => ({
-    position: fact.position,
-    query: fact.query,
-    status: fact.status,
-  }));
+  return coverage
+    .filter(
+      (fact) => component.localName === undefined || fact.componentName === component.localName,
+    )
+    .map((fact) => ({
+      position: fact.position,
+      query: fact.query,
+      status: fact.status,
+    }));
 }
 
 function deriveInvalidationFactsFromGraph(

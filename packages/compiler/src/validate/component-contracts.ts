@@ -11,8 +11,7 @@ import {
   componentHasInferredFragmentTarget,
   componentOptionObjectKeys,
   componentOptionStaticValue,
-  componentHasInferredServerRefreshTarget,
-  componentRenderHostElement,
+  componentRenderHostElementFor,
   componentRenderInputModels,
   componentRenderSlots,
   componentStateReturnObjectModel,
@@ -118,29 +117,31 @@ export function validateHandAuthoredFragmentTargetStamp(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  if (!componentHasInferredServerRefreshTarget(model)) return [];
+  return model.components.flatMap((component) => {
+    if (!componentHasInferredFragmentTarget(component)) return [];
 
-  const host = componentRenderHostElement(model);
-  const attribute = host?.attributes.find((item) => item.name === 'kovo-fragment-target');
-  if (!attribute) return [];
+    const host = componentRenderHostElementFor(model, component);
+    const attribute = host?.attributes.find((item) => item.name === 'kovo-fragment-target');
+    if (!attribute) return [];
 
-  return [
-    {
-      ...diagnostics.at('KV223', {
-        start: attribute.start,
-        length: attribute.end - attribute.start,
-      }),
-      help: [
-        'Would lower to: the same kovo-fragment-target hook the compiler derives for a query-backed component root.',
-        'Blocked reason: the stamp is redundant in app-authored TSX because the compiler can derive the live server-refresh target from queries and component identity.',
-        'Fixes: remove the hand-written kovo-fragment-target attribute, keep declared queries as the source of truth, or set disableServerRefresh: true if the component should not be live-refreshable.',
-        'SPEC §4.8 permits residual stamps for emitted IR fixpoint validation, but app TSX should not hand-author derivable runtime hooks.',
-        'Escape: emitted compiler artifacts may retain kovo-fragment-target for the runtime Kovo-Targets wire.',
-      ].join('\n'),
-      message:
-        'Redundant hand-written fragment target stamp in sugar; the compiler derives it. kovo-fragment-target',
-    },
-  ];
+    return [
+      {
+        ...diagnostics.at('KV223', {
+          start: attribute.start,
+          length: attribute.end - attribute.start,
+        }),
+        help: [
+          'Would lower to: the same kovo-fragment-target hook the compiler derives for a query-backed component root.',
+          'Blocked reason: the stamp is redundant in app-authored TSX because the compiler can derive the live server-refresh target from queries and component identity.',
+          'Fixes: remove the hand-written kovo-fragment-target attribute, keep declared queries as the source of truth, or set disableServerRefresh: true if the component should not be live-refreshable.',
+          'SPEC §4.8 permits residual stamps for emitted IR fixpoint validation, but app TSX should not hand-author derivable runtime hooks.',
+          'Escape: emitted compiler artifacts may retain kovo-fragment-target for the runtime Kovo-Targets wire.',
+        ].join('\n'),
+        message:
+          'Redundant hand-written fragment target stamp in sugar; the compiler derives it. kovo-fragment-target',
+      },
+    ];
+  });
 }
 
 export function validateFragmentTargetInputs(

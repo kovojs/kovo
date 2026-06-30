@@ -6,11 +6,12 @@ import {
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
 import {
-  componentHasInferredServerRefreshTarget,
-  componentOptionObjectEntries,
+  componentHasInferredFragmentTarget,
+  componentOptionObjectEntriesFor,
   componentRenderHost,
   componentRenderHostElement,
-  componentStateReturnObjectModel,
+  componentRenderHostElementFor,
+  type ComponentModel,
   type ObjectLiteralEntry,
   type ComponentModuleModel,
   type JsxAttributeModel,
@@ -60,6 +61,12 @@ export interface ServerRenderStampWriteFact {
     | 'host state stamp';
 }
 
+export interface ServerRenderComponentStampTarget {
+  component: ComponentModel;
+  domComponentName: string;
+  registryComponentName: string;
+}
+
 export function emitServerModule(renderedSource: string): EmittedServerModule {
   return {
     executableSource: renderSourceModule(renderedSource, ''),
@@ -73,6 +80,7 @@ export function serverRenderLowering(
   domComponentName: string,
   options?: {
     clientHref?: string;
+    componentStampTargets?: readonly ServerRenderComponentStampTarget[];
     fileName: string;
     registryComponentName?: string;
     registryFacts?: RegistryFacts;
@@ -88,6 +96,7 @@ function serverRenderPatches(
   domComponentName: string,
   options?: {
     clientHref?: string;
+    componentStampTargets?: readonly ServerRenderComponentStampTarget[];
     fileName: string;
     registryComponentName?: string;
     registryFacts?: RegistryFacts;
@@ -137,24 +146,25 @@ function serverRenderPatches(
 
   if (host) {
     const hostElement = componentRenderHostElement(model);
-    if (!hostElement) return { diagnostics, outputContexts, replacements: patches, stampWrites };
+    if (hostElement) {
+      patches.push(
+        ...hostHandlers
+          .filter((handler) => !chainedHandlers.has(handler))
+          .map(handlerSourceReplacement),
+      );
+      outputContexts.push(
+        ...hostHandlers
+          .filter((handler) => !chainedHandlers.has(handler))
+          .flatMap((handler) => handlerOutputContexts(handler)),
+      );
+    }
+  }
 
-    patches.push(
-      ...hostHandlers
-        .filter((handler) => !chainedHandlers.has(handler))
-        .map(handlerSourceReplacement),
-    );
-    outputContexts.push(
-      ...hostHandlers
-        .filter((handler) => !chainedHandlers.has(handler))
-        .flatMap((handler) => handlerOutputContexts(handler)),
-    );
-    const hostStamps = renderHostStampWrites(
-      model,
-      hostElement,
-      domComponentName,
-      options?.registryComponentName ?? domComponentName,
-    );
+  for (const target of serverRenderComponentStampTargets(model, domComponentName, options)) {
+    const hostElement = componentRenderHostElementFor(model, target.component);
+    if (!hostElement) continue;
+
+    const hostStamps = renderHostStampWrites(target.component, hostElement, target);
     stampWrites.push(...hostStamps.writes);
     patches.push(...renderHostStampPatches(hostElement, hostStamps.writes));
     outputContexts.push(...renderHostStampOutputContexts(hostStamps.writes));
@@ -163,6 +173,29 @@ function serverRenderPatches(
   }
 
   return { diagnostics, outputContexts, replacements: patches, stampWrites };
+}
+
+function serverRenderComponentStampTargets(
+  model: ComponentModuleModel,
+  domComponentName: string,
+  options:
+    | {
+        componentStampTargets?: readonly ServerRenderComponentStampTarget[];
+        registryComponentName?: string;
+      }
+    | undefined,
+): readonly ServerRenderComponentStampTarget[] {
+  if (options?.componentStampTargets) return options.componentStampTargets;
+
+  const component = model.components[0];
+  if (!component) return [];
+  return [
+    {
+      component,
+      domComponentName,
+      registryComponentName: options?.registryComponentName ?? domComponentName,
+    },
+  ];
 }
 
 function executionTriggerRenderLowering(
@@ -371,21 +404,24 @@ function renderHostStampOutputContexts(
 }
 
 function renderHostStampWrites(
-  model: ComponentModuleModel,
+  component: ComponentModel,
   hostElement: JsxElementModel,
-  domComponentName: string,
-  registryComponentName: string,
+  target: Pick<ServerRenderComponentStampTarget, 'domComponentName' | 'registryComponentName'>,
 ): {
   conflicts: readonly HostStampConflict[];
   writes: readonly ServerRenderStampWriteFact[];
 } {
   const conflicts: HostStampConflict[] = [];
   const writes: ServerRenderStampWriteFact[] = [];
-  const componentIdentity = componentIdentityStamp(hostElement, domComponentName);
-  const declaredQueryDeps = declaredQueryDepsStamp(model, hostElement);
-  const fragmentTarget = inferredFragmentTargetStamp(model, hostElement, domComponentName);
-  const liveComponent = liveComponentStamp(model, registryComponentName);
-  const stateJson = staticStateJson(model);
+  const componentIdentity = componentIdentityStamp(hostElement, target.domComponentName);
+  const declaredQueryDeps = declaredQueryDepsStamp(component, hostElement);
+  const fragmentTarget = inferredFragmentTargetStamp(
+    component,
+    hostElement,
+    target.domComponentName,
+  );
+  const liveComponent = liveComponentStamp(component, target.registryComponentName);
+  const stateJson = staticStateJson(component);
 
   if (componentIdentity) {
     if (componentIdentity.mode === 'replace') {
@@ -443,10 +479,10 @@ function renderHostStampWrites(
 }
 
 function liveComponentStamp(
-  model: ComponentModuleModel,
+  component: ComponentModel,
   registryComponentName: string,
 ): ServerRenderStampWriteFact | null {
-  if (!componentHasInferredServerRefreshTarget(model)) return null;
+  if (!componentHasInferredFragmentTarget(component)) return null;
 
   return {
     attr: 'kovo-live-component',
@@ -457,11 +493,11 @@ function liveComponentStamp(
 }
 
 function inferredFragmentTargetStamp(
-  model: ComponentModuleModel,
+  component: ComponentModel,
   hostElement: JsxElementModel,
   domComponentName: string,
 ): ServerRenderStampWriteFact | null {
-  if (!componentHasInferredServerRefreshTarget(model)) return null;
+  if (!componentHasInferredFragmentTarget(component)) return null;
 
   const existing = hostElement.attributes.find(
     (attribute) => attribute.name === 'kovo-fragment-target',
@@ -509,10 +545,10 @@ function componentIdentityStamp(
 }
 
 function declaredQueryDepsStamp(
-  model: ComponentModuleModel,
+  component: ComponentModel,
   hostElement: JsxElementModel,
 ): ServerRenderStampWriteFact | null {
-  const deps = componentQueryDependencyTokens(model);
+  const deps = componentQueryDependencyTokens(component);
   if (deps.length === 0) return null;
 
   const existing = hostElement.attributes.find((attribute) => attribute.name === 'kovo-deps');
@@ -535,8 +571,8 @@ type QueryDependencyToken =
   | { kind?: 'literal'; value: string }
   | { fallback: string; kind: 'expression'; value: string };
 
-function componentQueryDependencyTokens(model: ComponentModuleModel): QueryDependencyToken[] {
-  return componentOptionObjectEntries(model, 'queries').map((entry) => {
+function componentQueryDependencyTokens(component: ComponentModel): QueryDependencyToken[] {
+  return componentOptionObjectEntriesFor(component, 'queries').map((entry) => {
     const expression = queryKeyExpressionForBinding(entry);
     return expression
       ? { fallback: entry.key, kind: 'expression', value: expression }
@@ -577,8 +613,8 @@ function renderQueryDependencyExpressionElement(dep: QueryDependencyToken): stri
   return dep.kind === 'expression' ? `(${dep.value})` : JSON.stringify(dep.value);
 }
 
-function staticStateJson(model: ComponentModuleModel): string | null {
-  const stateObject = componentStateReturnObjectModel(model);
+function staticStateJson(component: ComponentModel): string | null {
+  const stateObject = component.stateReturnObject ?? null;
   return stateObject?.staticValue ? JSON.stringify(stateObject.staticValue) : null;
 }
 
