@@ -330,6 +330,118 @@ export function ContactCard(props: { name: string }) {
     }
   });
 
+  it('emits production JSX in server handler bundles regardless of ambient NODE_ENV', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-prod-jsx-handler-'));
+    const appPath = join(root, 'src/app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeReactJsxRuntimeStub(root);
+      writeFileSync(
+        appPath,
+        `
+/** @jsxImportSource @kovojs/server */
+import { createApp, publicAccess, route } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/jsx', {
+      access: publicAccess('production JSX handler fixture'),
+      page: () => <main>Production JSX</main>,
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        withEnv({ NODE_ENV: 'development' }, () =>
+          mainAsync(['build', './src/app.tsx', '--out', './dist']),
+        ),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const handlerSource = readFileSync(join(outDir, '.kovo/server/handler.mjs'), 'utf8');
+      expect(handlerSource).not.toContain('jsxDEV');
+      expect(handlerSource).not.toContain('_jsxFileName');
+      expect(handlerSource).not.toContain(root);
+      expect(handlerSource).not.toContain(root.replaceAll('\\', '/'));
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('emits byte-identical server handler bundles for repeated identical builds', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-stable-handler-'));
+    const appPath = join(root, 'src/app.tsx');
+    const firstOutDir = join(root, 'dist-a');
+    const secondOutDir = join(root, 'dist-b');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(
+        appPath,
+        `
+/** @jsxImportSource @kovojs/server */
+import { createApp, publicAccess, route } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/stable', {
+      access: publicAccess('stable handler fixture'),
+      page: () => <main>Stable handler</main>,
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+
+      const firstExitCode = await withCwd(root, () =>
+        mainAsync(['build', './src/app.tsx', '--out', './dist-a']),
+      );
+      const firstErrorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(firstExitCode, firstErrorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      stdout.mockClear();
+      stderr.mockClear();
+      const secondExitCode = await withCwd(root, () =>
+        mainAsync(['build', './src/app.tsx', '--out', './dist-b']),
+      );
+      const secondErrorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(secondExitCode, secondErrorOutput).toBe(0);
+      expect(stderr).not.toHaveBeenCalled();
+
+      const firstHandler = readFileSync(join(firstOutDir, '.kovo/server/handler.mjs'));
+      const secondHandler = readFileSync(join(secondOutDir, '.kovo/server/handler.mjs'));
+      expect(Buffer.compare(firstHandler, secondHandler)).toBe(0);
+      expect(firstHandler.toString('utf8')).not.toMatch(/^\/\/#(?:end)?region(?:\s|$)/m);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('lowers authored client islands during kovo build before deploy-skew retention inspection', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-client-island-'));
     const appPath = join(root, 'src/app.tsx');
