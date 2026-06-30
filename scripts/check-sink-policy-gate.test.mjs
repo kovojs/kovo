@@ -1457,6 +1457,19 @@ describe('sink-policy gate', () => {
         `,
       ),
     ).toEqual([]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/server/src/sql-safe-handle.ts',
+        `
+          function assertManagedSqlStatement(statement: unknown): void {
+            const validation = validateManagedSqlStatement(statement);
+            if (validation.ok) return assertSqlWriteTablesAllowed(statement, writePolicy);
+            throw new Error(validation.message);
+          }
+        `,
+      ),
+    ).toEqual([]);
   });
 
   it('flags SQL-safety invariant drift toward warn or pass-through', () => {

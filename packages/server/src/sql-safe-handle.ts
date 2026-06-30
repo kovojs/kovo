@@ -274,8 +274,8 @@ function assertManagedSqlStatement(
 ): void {
   void mode;
   const validation = validateManagedSqlStatement(statement);
-  if (!validation.ok) throw new Error(validation.message);
-  assertSqlWriteTablesAllowed(statement, writePolicy);
+  if (validation.ok) return assertSqlWriteTablesAllowed(statement, writePolicy);
+  throw new Error(validation.message);
 }
 
 function assertSqlWriteTablesAllowed(

@@ -462,11 +462,14 @@ export function sqlSafetyInvariantFindings(filePath, text) {
     if (!/\bvalidateManagedSqlStatement\s*\(\s*statement\s*\)/.test(source)) {
       findings.push(`${filePath}: managed DB handle must validate statements through KV422 floor`);
     }
-    if (
-      !/\bif\s*\(\s*validation\s*\.\s*ok\s*\)\s*return\s*;[\s\S]{0,120}\bthrow\s+new\s+Error\s*\(\s*validation\s*\.\s*message\s*\)/.test(
+    const returnsOnValidThenThrows =
+      /\bif\s*\(\s*validation\s*\.\s*ok\s*\)\s*return\s*;[\s\S]{0,120}\bthrow\s+new\s+Error\s*\(\s*validation\s*\.\s*message\s*\)/.test(
         source,
-      )
-    ) {
+      ) ||
+      /\bif\s*\(\s*validation\s*\.\s*ok\s*\)\s*return\s+assert[A-Za-z0-9_]*\s*\([^;]*\)\s*;[\s\S]{0,160}\bthrow\s+new\s+Error\s*\(\s*validation\s*\.\s*message\s*\)/.test(
+        source,
+      );
+    if (!returnsOnValidThenThrows) {
       findings.push(`${filePath}: managed DB handle must throw on failed SQL validation`);
     }
   }
