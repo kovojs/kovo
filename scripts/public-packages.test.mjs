@@ -4,6 +4,7 @@ import path from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
+  declaredPackageExportSubpaths,
   generatedEntrySubpaths,
   internalEntrySubpaths,
   documentedPackages,
@@ -116,7 +117,7 @@ describe('public-packages manifest', () => {
   it('declares each public package export subpath in exactly one boundary tier', () => {
     for (const pkg of publicPackages()) {
       const pkgJson = packageJson(pkg.dir);
-      const exportedSubpaths = Object.keys(pkgJson.exports ?? {}).sort();
+      const exportedSubpaths = declaredPackageExportSubpaths(pkgJson).sort();
       const publicSubpaths = publicEntrySubpaths(pkg);
       const generatedSubpaths = generatedEntrySubpaths(pkg);
       const internalSubpaths = internalEntrySubpaths(pkg);
