@@ -2,6 +2,8 @@ import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+export { declaredPackageExportSubpaths } from './package-exports.mjs';
+
 /**
  * Loader + helpers for `public-packages.json`, the single source of truth for the
  * public/internal package boundary (plan `plans/api-boudnary.md` Phase 1; see

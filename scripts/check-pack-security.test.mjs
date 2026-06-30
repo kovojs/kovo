@@ -24,6 +24,7 @@ function validateFixture(files, overrides = {}) {
     },
     packageName: overrides.packageName ?? '@kovojs/example',
     readTextFile: (rel) => text.get(rel),
+    allowedSourceFiles: overrides.allowedSourceFiles ?? [],
     targetFiles: overrides.targetFiles ?? ['dist/index.d.mts', 'dist/index.mjs'],
   });
 }
@@ -65,6 +66,30 @@ describe('pack-security gate', () => {
     );
 
     expect(findings).toEqual([]);
+  });
+
+  it('allows explicitly modeled UI copy-in source files but rejects adjacent source leaks', () => {
+    const findings = validateFixture(
+      [
+        { path: 'package.json', text: '{}' },
+        { path: 'dist/index.mjs', text: 'export {};' },
+        { path: 'dist/index.d.mts', text: 'export {};' },
+        { path: 'src/button.tsx', text: 'export const Button = null;' },
+        { path: 'src/secret.tsx', text: 'export const secret = true;' },
+      ],
+      {
+        allowedSourceFiles: ['src/button.tsx'],
+        packageName: '@kovojs/ui',
+      },
+    );
+
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('unexpected top-level tarball file src/secret.tsx'),
+        expect.stringContaining('unexpected source file src/secret.tsx'),
+      ]),
+    );
+    expect(findings.some((finding) => finding.includes('src/button.tsx'))).toBe(false);
   });
 
   it('rejects declaration and source maps that expose absolute local paths', () => {
@@ -153,6 +178,28 @@ describe('pack-security gate', () => {
         expect.stringContaining('packed manifest target missing from tarball: dist/bin.mjs'),
       ]),
     );
+  });
+
+  it('treats wildcard manifest targets as present when matching packed files exist', () => {
+    const findings = validateFixture(
+      [
+        { path: 'package.json', text: '{}' },
+        { path: 'dist/index.mjs', text: 'export {};' },
+        { path: 'dist/index.d.mts', text: 'export {};' },
+        { path: 'dist/check.mjs', text: 'export {};' },
+        { path: 'dist/check.d.mts', text: 'export {};' },
+      ],
+      {
+        manifest: {
+          exports: {
+            '.': { default: './dist/index.mjs', types: './dist/index.d.mts' },
+            './*': { default: './dist/*.mjs', types: './dist/*.d.mts' },
+          },
+        },
+      },
+    );
+
+    expect(findings).toEqual([]);
   });
 
   it('collects nested export and bin manifest targets', () => {

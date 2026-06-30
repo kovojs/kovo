@@ -55,7 +55,7 @@ Priority is based on correctness/security impact first, then maintainability and
     posture, and response finalization prove the per-surface capability set; add a regression test
     that a future unused `surface` field fails.
 
-- [ ] **P0.4 - Replace structured-document global brands with module-private sentinels.**
+- [x] **P0.4 - Replace structured-document global brands with module-private sentinels.**
   - Current signals: `packages/server/src/document-structured.ts` defines
     `documentConfigBrand` and `documentNodeBrand` with `Symbol.for(...) as any`, which makes the
     brand globally forgeable and bypasses the type-level security guidance in `AGENTS.md`.
@@ -67,8 +67,11 @@ Priority is based on correctness/security impact first, then maintainability and
     `HtmlAttrs`, and `BodyAttrs` still compose, while objects branded with
     `Symbol.for('kovo.document.config')` or `Symbol.for('kovo.document.node')` are rejected. A
     document-brand `rg` check under `packages/server/src` returns no matches.
+  - Evidence: `pnpm exec vitest --run packages/server/src/document.test.ts` passed, and
+    `rg "Symbol\\.for\\('kovo\\.document\\.(config|node)'\\)|documentConfigBrand|documentNodeBrand" packages/server/src -g '!*.test.ts'`
+    returned no production matches.
 
-- [ ] **P0.5 - Centralize generated semantic attributes and close the `data-bind-list` drift.**
+- [x] **P0.5 - Centralize generated semantic attributes and close the `data-bind-list` drift.**
   - Current signals: `packages/test/src/integration/semantic-snapshot.ts` keeps
     `KOVO_SEMANTIC_ATTRS`, `packages/compiler/src/emit/render-equivalence.ts` keeps a private
     `isGeneratedOnlyRenderAttribute()` predicate, and `tests/snapshot-allowlist.meta.test.ts`
@@ -82,6 +85,10 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: focused snapshot-allowlist and render-equivalence tests pass with no
     known-exception list for `data-bind-list`, and targeted semantic snapshot tests still keep
     intended app-visible attributes.
+  - Evidence:
+    `pnpm exec vitest --run packages/test/src/integration/semantic-snapshot.test.ts tests/snapshot-allowlist.meta.test.ts packages/compiler/src/render-equivalence-boundary.test.ts`
+    passed, and `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t render-equivalence`
+    passed.
 
 - [ ] **P0.6 - Type mutation replay and response mapping by delivery mode.**
   - Current signals: `packages/server/src/mutation.ts` now has a lifecycle runner, but
@@ -115,7 +122,7 @@ Priority is based on correctness/security impact first, then maintainability and
     gallery rewrite `rg` check returns no `legacyGeneratedBindingAliases`,
     `@kovojs/browser/generated`, or `headless-ui/internal/primitive` rewrite dependencies.
 
-- [ ] **P1.2 - Centralize TypeScript compiler API compatibility shims.**
+- [x] **P1.2 - Centralize TypeScript compiler API compatibility shims.**
   - Current signals: `packages/compiler/src` repeats `const mutableTs = ts as unknown as
 Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderers.ts`, and
     several scanner modules.
@@ -127,8 +134,11 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
     copied into every scanner/emitter.
   - Verification: compiler scanner/lowering/style tests pass; a compiler `mutableTs` `rg` check
     returns no matches outside the adapter.
+  - Evidence:
+    `pnpm exec vitest --run packages/compiler/src/ts-api.test.ts packages/compiler/src/scan/mutation-inputs.test.ts packages/compiler/src/scan/optimistic-inline.test.ts packages/compiler/src/scan/query-binding.test.ts packages/compiler/src/scan/route-pages.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/style.test.ts packages/compiler/src/compile.test.ts packages/compiler/src/emit/live-target-renderers.test.ts`
+    passed, and `rg -n "mutableTs" packages/compiler/src -g '!ts-api.ts'` returned no matches.
 
-- [ ] **P1.3 - Move `@kovojs/icons` export and pack-input metadata behind generator-owned commands.**
+- [x] **P1.3 - Move `@kovojs/icons` export and pack-input metadata behind generator-owned commands.**
   - Current signals: `packages/icons/package.json` is 8,723 lines, with thousands of generated
     `exports` entries and an enormous literal `build:dist` command listing every icon source.
     `scripts/build-icons.mjs` already derives icon names from `lucide-static`, but the pack command
@@ -142,6 +152,11 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
   - Verification: `pnpm --filter @kovojs/icons run build:icons -- --check`, the icon generation
     test, `pnpm --filter @kovojs/icons run build:dist`, `pnpm run check:api-surface`, and pack
     security checks pass with a compact `packages/icons/package.json`.
+  - Evidence:
+    `pnpm --filter @kovojs/icons run build:icons -- --check`,
+    `pnpm --filter @kovojs/icons exec vitest run src/icons.test.ts`,
+    `pnpm --filter @kovojs/icons run build:dist`, `pnpm run check:api-surface`, and
+    `pnpm run check:pack-security` passed.
 
 - [ ] **P1.4 - Share data-plane static-analysis resolution between Vite dev and CLI build/export.**
   - Current signals: `packages/server/src/vite.ts` and `packages/cli/src/commands/build-export.ts`
@@ -173,7 +188,7 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
 
 ## P2 - Cleanup After the Core Slices
 
-- [ ] **P2.1 - Collapse stale UI registry distribution copy into the manifest generator.**
+- [x] **P2.1 - Collapse stale UI registry distribution copy into the manifest generator.**
   - Current signals: `packages/ui/registry.json` and `packages/ui/scripts/build-registry.mjs`
     still describe `@kovojs/ui` as a "private package" in generated comments, while the registry
     now declares `distributionMode: "package-and-copy-in"` and docs describe both modes.
@@ -185,6 +200,10 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
   - Verification: `node packages/ui/scripts/build-registry.mjs`, `packages/ui/src/copy-in.test.ts`,
     and component guide/API surface checks pass with no "private package" wording in generated UI
     registry metadata.
+  - Evidence: `node packages/ui/scripts/build-registry.mjs` passed,
+    `pnpm exec vitest --run packages/ui/src/copy-in.test.ts packages/ui/src/manifest-generation.test.ts`
+    passed, `rg -n "private package" packages/ui/registry.json site/content/guides/components.md`
+    returned no matches, and `pnpm run check:api-surface` passed.
 
 - [ ] **P2.2 - Extract reusable output-staging primitives for CLI and site builds.**
   - Current signals: static export, build/export, package publishing, site export, and client-module

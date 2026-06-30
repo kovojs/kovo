@@ -14,6 +14,7 @@ import os from 'node:os';
 import path from 'node:path';
 
 import { derivePublishPlan } from './build-publish.mjs';
+import { normalizePackageExports, resolveSourceExportTarget } from './package-exports.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 
 export const packSecuritySnapshotPath = path.join(repoRoot, 'scripts', 'pack-security.files.json');
@@ -34,7 +35,7 @@ const forbiddenPathSegments = new Set([
 const sourceFilePattern = /\.(?:[cm]?ts|tsx|jsx)$/;
 const declarationPattern = /\.d\.(?:[cm]?ts|ts)$/;
 const sourcemapPattern = /\.map$/;
-const textFilePattern = /\.(?:json|mjs|cjs|js|d\.[cm]?ts|map|md|txt|css)$/;
+const textFilePattern = /\.(?:json|mjs|cjs|js|[cm]?ts|tsx|jsx|d\.[cm]?ts|map|md|txt|css)$/;
 const secretPatterns = [
   { label: 'private key block', pattern: /-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----/ },
   { label: 'AWS access key id', pattern: /\bAKIA[0-9A-Z]{16}\b/ },
@@ -96,12 +97,20 @@ export function validateFirstPartyScopeRegistryPolicy({
   return findings;
 }
 
-export function validatePackedPackage({ files, manifest, packageName, readTextFile, targetFiles }) {
+export function validatePackedPackage({
+  allowedSourceFiles = [],
+  files,
+  manifest,
+  packageName,
+  readTextFile,
+  targetFiles,
+}) {
   const findings = [];
   const fileSet = new Set(files.map((file) => file.path));
+  const allowedSourceFileSet = new Set(allowedSourceFiles);
 
   for (const target of targetFiles) {
-    if (!fileSet.has(target)) {
+    if (!packedTargetExists(target, files, fileSet)) {
       findings.push(`${packageName}: publish target missing from tarball: ${target}`);
     }
   }
@@ -121,11 +130,23 @@ export function validatePackedPackage({ files, manifest, packageName, readTextFi
       findings.push(`${packageName}: tarball includes ${forbiddenSegment} path ${rel}`);
     }
 
-    if (!rel.startsWith('dist/') && !allowedTopLevelFiles.has(rel) && !starterTemplate) {
+    const allowedSource = allowedSourceFileSet.has(rel);
+
+    if (
+      !rel.startsWith('dist/') &&
+      !allowedTopLevelFiles.has(rel) &&
+      !starterTemplate &&
+      !allowedSource
+    ) {
       findings.push(`${packageName}: unexpected top-level tarball file ${rel}`);
     }
 
-    if (sourceFilePattern.test(rel) && !declarationPattern.test(rel) && !starterTemplate) {
+    if (
+      sourceFilePattern.test(rel) &&
+      !declarationPattern.test(rel) &&
+      !starterTemplate &&
+      !allowedSource
+    ) {
       findings.push(`${packageName}: unexpected source file ${rel}`);
     }
 
@@ -159,7 +180,7 @@ export function validatePackedPackage({ files, manifest, packageName, readTextFi
 
   const manifestTargets = collectManifestTargets(manifest);
   for (const target of manifestTargets) {
-    if (!fileSet.has(target)) {
+    if (!packedTargetExists(target, files, fileSet)) {
       findings.push(`${packageName}: packed manifest target missing from tarball: ${target}`);
     }
   }
@@ -202,6 +223,41 @@ function collectBinTargets(value, targets) {
 
 function stripLeadingDot(target) {
   return target.replace(/^\.\//, '');
+}
+
+function packedTargetExists(target, files, fileSet) {
+  if (!target.includes('*')) return fileSet.has(target);
+  const pattern = wildcardTargetPattern(target);
+  return files.some((file) => pattern.test(file.path));
+}
+
+function wildcardTargetPattern(target) {
+  const escaped = target.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replaceAll('*', '[^/]+');
+  return new RegExp(`^${escaped}$`);
+}
+
+function allowedPublishedSourceFiles(pkgJson) {
+  if (pkgJson.name !== '@kovojs/ui') return [];
+
+  const files = new Set();
+  for (const [subpath, target] of Object.entries(normalizePackageExports(pkgJson.exports))) {
+    if (subpath === '.' || !subpath.startsWith('./')) continue;
+    const sourceTarget = resolveSourceExportTarget(target);
+    if (sourceTarget === null) continue;
+    const sourceFile = sourceTarget.replace(/^\.\//, '');
+    if (/^src\/[^/]+\.tsx$/.test(sourceFile)) files.add(sourceFile);
+  }
+
+  for (const helper of [
+    'src/navigation-types.ts',
+    'src/pass-through.ts',
+    'src/safe-url.ts',
+    'src/theme.ts',
+  ]) {
+    files.add(helper);
+  }
+
+  return [...files].sort(compareStrings);
 }
 
 function validateSourceMap(packageName, rel, text) {
@@ -445,6 +501,7 @@ function main() {
       const files = readTarball(tarballPath, tempDir);
       const manifest = readPackedManifest(files, pkg.name);
       const packageFindings = validatePackedPackage({
+        allowedSourceFiles: allowedPublishedSourceFiles(pkgJson),
         files,
         manifest,
         packageName: pkg.name,
