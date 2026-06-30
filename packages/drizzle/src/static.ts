@@ -1689,13 +1689,22 @@ function extractTouchGraphFromPreparedFiles(
         writes: [],
       };
       const rawTables = [...(rawTablesByDomainWrite.get(fn.name) ?? [])];
-      if (reads.length > 0 || writes.length > 0 || unresolved.length > 0 || rawTables.length > 0) {
+      const visibleUnresolved =
+        rawTables.length > 0
+          ? unresolved.filter((site) => site.operation !== 'execute')
+          : unresolved;
+      if (
+        reads.length > 0 ||
+        writes.length > 0 ||
+        visibleUnresolved.length > 0 ||
+        rawTables.length > 0
+      ) {
         const graphSummary = graphSummaries.get(fn.name) ?? {
           reads: [],
           unresolved: [],
           writes: [],
         };
-        mergeSummary(graphSummary, { rawTables, reads, unresolved, writes });
+        mergeSummary(graphSummary, { rawTables, reads, unresolved: visibleUnresolved, writes });
         graphSummaries.set(fn.name, graphSummary);
         graph[fn.name] = createTouchGraphEntry(graphSummary);
       }
@@ -1869,9 +1878,19 @@ function extractTouchGraphFromPreparedFiles(
 
   for (const file of contextFiles) {
     const fileTables = tablesForFile(file, sourceContext);
+    const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
+    const rawWriteTrustByDomainWrite = rawWriteSqlTrustByDomainWriteCallback(file);
     for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
       if (fn.summaryOnly) continue;
       facts.push(...writeScopeFactsForFunction(fn, fileTables));
+      facts.push(
+        ...rawWriteScopeFactsForFunction(
+          fn,
+          fileTables,
+          rawTablesByDomainWrite.get(fn.name) ?? [],
+          rawWriteTrustByDomainWrite.get(fn.name),
+        ),
+      );
     }
   }
 
@@ -1923,6 +1942,116 @@ function writeScopeFactsForFunction(
   }
 
   return facts;
+}
+
+function rawWriteScopeFactsForFunction(
+  fn: ExtractedFunction,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  rawTables: readonly string[],
+  trust: RawWriteSqlTrust | undefined,
+): WriteScopeFact[] {
+  if (rawTables.length === 0 || !trust?.hasExecute || trust.trusted) return [];
+
+  const domains = new Set<string>();
+  for (const table of extractedTablesForRawNames(tables, rawTables)) {
+    if (isDomainExtractedTableAnnotation(table.annotation)) {
+      domains.add(extractedDomainKey(table.annotation.domain));
+    }
+  }
+  if (domains.size === 0) return [];
+
+  return [
+    {
+      argScopedWrites: [],
+      name: fn.name,
+      reads: [...domains].sort(),
+      sessionAnchoredWrites: [],
+      site: trust.site ?? '',
+    },
+  ];
+}
+
+interface RawWriteSqlTrust {
+  hasExecute: boolean;
+  site?: string;
+  trusted: boolean;
+}
+
+function rawWriteSqlTrustByDomainWriteCallback(
+  file: SourceFileInput,
+): ReadonlyMap<string, RawWriteSqlTrust> {
+  return withParsedSourceFile(file, (sourceFile) => {
+    const trustByWrite = new Map<string, RawWriteSqlTrust>();
+
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const domainName = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!Node.isIdentifier(domainName) || !initializer) continue;
+      const domainCall = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isCallExpression(domainCall)) continue;
+      const expression = domainCall.getExpression();
+      if (!isKovoServerCalleeExpression(expression, 'domain')) continue;
+
+      const domainObject = domainWriteObject(domainCall.getArguments()[0]);
+      if (!domainObject.body) continue;
+
+      for (const property of domainWriteProperties(domainObject.body)) {
+        if (rawTablesFromWriteInitializer(property.initializer).length === 0) continue;
+        const callback = writeActionCallbackFunction(property.initializer);
+        if (!callback) continue;
+        const trust = rawExecuteTrustForCallback(callback, file);
+        if (trust.hasExecute) {
+          trustByWrite.set(`${domainName.getText()}.${property.memberName}`, trust);
+        }
+      }
+    }
+
+    return trustByWrite;
+  });
+}
+
+function rawExecuteTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {
+  const executeCalls = callback
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .filter((call) => directDrizzleReceiverCallSurface(call)?.name === 'execute');
+  const firstUntrusted = executeCalls.find((call) => !isTrustedSqlArgument(call));
+  const siteCall = firstUntrusted ?? executeCalls[0];
+
+  return {
+    hasExecute: executeCalls.length > 0,
+    ...(siteCall
+      ? { site: `${file.fileName}:${lineForIndex(file.source, siteCall.getStart())}` }
+      : {}),
+    trusted: executeCalls.length > 0 && !firstUntrusted,
+  };
+}
+
+function isTrustedSqlArgument(call: CallExpression): boolean {
+  const argument = call.getArguments()[0];
+  if (!argument) return false;
+  const expression = unwrappedStaticExpressionNode(argument);
+  if (!Node.isCallExpression(expression)) return false;
+  const callee = expression.getExpression();
+  return Node.isIdentifier(callee)
+    ? callee.getText() === 'trustedSql'
+    : staticAccessName(callee) === 'trustedSql';
+}
+
+function extractedTablesForRawNames(
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  rawTables: readonly string[],
+): ExtractedTable[] {
+  const rawNames = new Set(rawTables);
+  const found = new Map<string, ExtractedTable>();
+
+  for (const entries of tables.values()) {
+    for (const table of entries) {
+      if (!rawNames.has(table.annotation.name)) continue;
+      found.set(JSON.stringify(table.annotation), table);
+    }
+  }
+
+  return [...found.values()];
 }
 
 function ownerDomainsFromProject(options: TouchGraphProjectOptions): OwnerDomainFact[] {
