@@ -1,7 +1,9 @@
+import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
+
 import { readAttribute, tagClose } from './wire-html.js';
 
 export interface FragmentChunk {
-  html: string;
+  html: RenderedFragmentHtml;
   // SPEC §9.3: append (END) and prepend (START, load-older) are the explicit
   // ordered-insert vocabularies; absent ⇒ replace (DOM-morph the target whole).
   mode?: 'append' | 'prepend' | 'replace';
@@ -107,9 +109,21 @@ function readFragmentElementChunk(
   // the default replace path.
   const mode = readAttribute(chunk.attrs, 'mode');
   return {
-    html: chunk.content,
+    html: createRenderedFragmentHtml(chunk.content),
     ...(mode === 'append' || mode === 'prepend' ? { mode: mode as 'append' | 'prepend' } : {}),
     target,
+  };
+}
+
+function createRenderedFragmentHtml(html: string) {
+  return {
+    html,
+    toJSON() {
+      return html;
+    },
+    toString() {
+      return html;
+    },
   };
 }
 

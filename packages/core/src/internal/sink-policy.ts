@@ -1,9 +1,48 @@
-import {
-  hasUnsafeUrlScheme,
-  isUrlAttributeName,
-  SAFE_URL_SCHEMES,
-  URL_ATTRIBUTE_NAMES,
-} from './security-url.js';
+/**
+ * @internal URL sink facts for server render, browser runtime writes, and compiler
+ * output-context classification (SPEC.md §4.8, §5.2 rule 10).
+ */
+export const URL_ATTRIBUTE_NAMES = [
+  'href',
+  'src',
+  'action',
+  'formaction',
+  'poster',
+  'background',
+  'cite',
+  'data',
+  'ping',
+  'xlink:href',
+] as const;
+
+/** @internal URL schemes accepted by Kovo server/client URL sinks (SPEC.md §4.8). */
+export const SAFE_URL_SCHEMES = ['http', 'https', 'mailto', 'tel', 'ftp'] as const;
+
+const urlAttributeNames = new Set<string>(URL_ATTRIBUTE_NAMES);
+const safeUrlSchemes = new Set<string>(SAFE_URL_SCHEMES);
+
+/** @internal True when an HTML attribute is URL-bearing and needs scheme checks. */
+export function isUrlAttributeName(name: string): boolean {
+  return urlAttributeNames.has(name.toLowerCase());
+}
+
+/**
+ * Returns true when the URL string carries an unsafe scheme. Strips control
+ * characters <= U+0020 before extracting the scheme so `java\nscript:` is caught.
+ */
+export function hasUnsafeUrlScheme(value: string): boolean {
+  const normalized = Array.from(value)
+    .filter((character) => {
+      const codePoint = character.codePointAt(0) ?? 0;
+      return codePoint > 0x20;
+    })
+    .join('')
+    .toLowerCase();
+  const match = /^([a-z][a-z0-9+.-]*):/.exec(normalized);
+  if (!match) return false;
+
+  return !safeUrlSchemes.has(match[1] ?? '');
+}
 
 /**
  * @internal Framework-owned sink witness kinds that may use the shared Blessed<Sink> substrate.
@@ -18,6 +57,7 @@ export const FRAMEWORK_BLESSED_SINK_KINDS = [
   'parameterized-sql',
   'rooted-file-serve',
   'server:command-exec-file',
+  'server:fragment-html',
   'server:redirect-location',
   'sql-identifier',
   'sql-keyword',
@@ -38,6 +78,20 @@ export type FrameworkBlessedSinkKind = (typeof FRAMEWORK_BLESSED_SINK_KINDS)[num
 export type Blessed<Sink extends string> = {
   readonly __kovoBlessedSink?: Sink;
 };
+
+/** @internal Server-side fragment HTML accepted by privileged wire emitters. */
+export interface FragmentHtml extends Blessed<'server:fragment-html'> {
+  readonly html: string;
+  toJSON(): string;
+  toString(): string;
+}
+
+/** @internal Browser-decoded fragment HTML accepted by privileged DOM apply sinks. */
+export interface RenderedFragmentHtml extends Blessed<'browser:response-fragment-html'> {
+  readonly html: string;
+  toJSON(): string;
+  toString(): string;
+}
 
 /** @internal Runtime sink family used by server render and browser update backstops. */
 export type RuntimeSinkFamily =
@@ -122,6 +176,42 @@ export function isBlessedSink<Sink extends string>(
   );
 }
 
+/**
+ * @internal Mint server-side fragment HTML for audited generated/rendered/trusted paths only.
+ *
+ * SPEC.md §§2, 4.8, 5.2 rule 10, 6.6, 9.1: this brand is an author-time guardrail and
+ * internal capability, not the XSS proof. Runtime renderers still own contextual escaping and
+ * fragment apply sanitizers still own fail-closed DOM adoption.
+ */
+export function createFragmentHtml(html: string): FragmentHtml {
+  return blessSink('server:fragment-html', fragmentHtmlObject(html));
+}
+
+/** @internal True for server-side fragment HTML minted by {@link createFragmentHtml}. */
+export function isFragmentHtml(value: unknown): value is FragmentHtml {
+  return isBlessedSink('server:fragment-html', value);
+}
+
+/** @internal Unwrap server-side fragment HTML for the wire emitter. */
+export function fragmentHtmlContent(value: FragmentHtml): string {
+  return value.html;
+}
+
+/** @internal Mint browser-decoded fragment HTML before it reaches DOM raw-HTML sinks. */
+export function createRenderedFragmentHtml(html: string): RenderedFragmentHtml {
+  return blessSink('browser:response-fragment-html', fragmentHtmlObject(html));
+}
+
+/** @internal True for browser-side fragment HTML minted by {@link createRenderedFragmentHtml}. */
+export function isRenderedFragmentHtml(value: unknown): value is RenderedFragmentHtml {
+  return isBlessedSink('browser:response-fragment-html', value);
+}
+
+/** @internal Unwrap browser-side fragment HTML for the framework DOM adapter. */
+export function renderedFragmentHtmlContent(value: RenderedFragmentHtml): string {
+  return value.html;
+}
+
 /** @internal Install a test/dev hook for blocked runtime sink events. */
 export function setRuntimeSinkSecurityEventHandler(
   handler: RuntimeSinkSecurityEventHandler | undefined,
@@ -184,6 +274,13 @@ export function runtimeSinkFamilyForAttribute(name: string): RuntimeSinkFamily {
   if (isSrcsetAttributeName(name)) return 'srcset';
   if (isUrlAttributeName(name)) return 'url';
   return 'attribute';
+}
+
+/**
+ * @internal Compiler-facing contextual output classification shared with runtime sinks.
+ */
+export function contextualOutputSinkFamilyForAttribute(name: string): RuntimeSinkFamily {
+  return runtimeSinkFamilyForAttribute(name);
 }
 
 /**
@@ -377,6 +474,22 @@ function redactedPreview(value: string): string {
   return `<redacted:${value.length}>`;
 }
 
+function fragmentHtmlObject(html: string): {
+  readonly html: string;
+  toJSON(): string;
+  toString(): string;
+} {
+  return {
+    html,
+    toJSON() {
+      return html;
+    },
+    toString() {
+      return html;
+    },
+  };
+}
+
 function isDevelopmentOrTestRuntime(): boolean {
   const mode = runtimeMode();
   return mode === 'development' || mode === 'test';
@@ -385,5 +498,3 @@ function isDevelopmentOrTestRuntime(): boolean {
 function runtimeMode(): string | undefined {
   return typeof process === 'undefined' ? undefined : process.env?.NODE_ENV;
 }
-
-export { SAFE_URL_SCHEMES, URL_ATTRIBUTE_NAMES };

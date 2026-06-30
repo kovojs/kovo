@@ -1,6 +1,7 @@
 import type { JsonValue } from '@kovojs/core';
 import { buildQueryDelta, queryDeltaIsSmaller } from '@kovojs/core/internal/query-delta';
 import { changeRecordTouchesQueryInstance, type ChangeRecord } from '../change-record.js';
+import { generatedFragmentHtmlValue } from '../html.js';
 import {
   readQueryInstanceKey,
   readQueryVersion,
@@ -192,7 +193,7 @@ export async function renderFragmentChunks(
     try {
       chunks.push(
         renderFragmentWireHtml({
-          html: await renderer.render(input),
+          html: generatedFragmentHtmlValue(await renderer.render(input)),
           mode: renderer.mode,
           stylesheets: renderer.stylesheets,
           target: renderer.target,
@@ -205,7 +206,7 @@ export async function renderFragmentChunks(
       chunks.push(
         renderFragmentWireHtml({
           errorBoundary: renderer.target,
-          html: await renderer.errorBoundary.render(error, input),
+          html: generatedFragmentHtmlValue(await renderer.errorBoundary.render(error, input)),
           stylesheets: renderer.stylesheets,
           target,
         }),
@@ -232,15 +233,16 @@ export async function renderLiveTargetChunks<Request>(
     if (!renderer) continue;
 
     try {
+      const html = await renderer.render({
+        ...(csrf === undefined ? {} : { csrf }),
+        input,
+        props: target.props,
+        request,
+        target: target.target,
+      });
       chunks.push(
         renderFragmentWireHtml({
-          html: await renderer.render({
-            ...(csrf === undefined ? {} : { csrf }),
-            input,
-            props: target.props,
-            request,
-            target: target.target,
-          }),
+          html: generatedFragmentHtmlValue(html),
           stylesheets: renderer.stylesheets,
           target: target.target,
         }),
@@ -252,7 +254,7 @@ export async function renderLiveTargetChunks<Request>(
       chunks.push(
         renderFragmentWireHtml({
           errorBoundary: target.target,
-          html: await renderer.errorBoundary.render(error, input),
+          html: generatedFragmentHtmlValue(await renderer.errorBoundary.render(error, input)),
           stylesheets: renderer.stylesheets,
           target: boundaryTarget,
         }),
