@@ -1,6 +1,12 @@
 import { runMutation } from './mutation.js';
 import type { TaskScheduler } from './mutation/definition.js';
 import { runQuery } from './query.js';
+import {
+  PostgresRecurringTaskOccurrenceStore,
+  createRecurringTaskMaterializer,
+  ensureRecurringTaskSchema,
+  type RecurringTaskMaterializer,
+} from './task-cron.js';
 import { createDurableTaskRunner, type DurableTaskRunner } from './task-runner.js';
 import {
   PostgresDurableTaskQueue,
@@ -10,6 +16,8 @@ import {
 } from './task-queue.js';
 import type { KovoApp } from './app-types.js';
 import type { TaskHandle, TaskScheduleOptions } from './task.js';
+
+const TASK_CRON_POLL_INTERVAL_MS = 30_000;
 
 export interface AppTaskRuntime {
   readonly scheduler: TaskScheduler;
@@ -41,6 +49,8 @@ export function appTaskScheduler(app: KovoApp): TaskScheduler | undefined {
 }
 
 class DefaultAppTaskRuntime implements AppTaskRuntime {
+  private cronMaterializer: RecurringTaskMaterializer | undefined;
+  private cronTimer: ReturnType<typeof setTimeout> | undefined;
   private runner: DurableTaskRunner | undefined;
   private rootStore: DurableTaskQueueStore | undefined;
   private startPromise: Promise<void> | undefined;
@@ -66,9 +76,17 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
 
   private async start(request: Request): Promise<void> {
     const db = await this.resolveRootDb(request);
-    const store = new PostgresDurableTaskQueue(createDurableTaskSqlExecutor(db));
-    await ensureDurableTaskSchema(createDurableTaskSqlExecutor(db));
+    const executor = createDurableTaskSqlExecutor(db);
+    const store = new PostgresDurableTaskQueue(executor);
+    await ensureDurableTaskSchema(executor);
+    await ensureRecurringTaskSchema(executor);
     this.rootStore = store;
+    this.cronMaterializer = createRecurringTaskMaterializer({
+      occurrenceStore: new PostgresRecurringTaskOccurrenceStore(executor),
+      store,
+      tasks: this.app.tasks,
+    });
+    await this.materializeRecurringTasks();
     this.runner = createDurableTaskRunner({
       hooks: {
         runMutation: async (definition, input) => {
@@ -132,6 +150,24 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
       tasks: this.app.tasks,
     });
     this.runner.start();
+    this.scheduleCronTick();
+  }
+
+  private scheduleCronTick(): void {
+    if (this.cronMaterializer === undefined || this.cronTimer !== undefined) return;
+    this.cronTimer = setTimeout(() => {
+      this.cronTimer = undefined;
+      void this.materializeRecurringTasks()
+        .catch(() => {
+          // Runner ticks must survive transient DB errors; the next tick retries materialization.
+        })
+        .finally(() => this.scheduleCronTick());
+    }, TASK_CRON_POLL_INTERVAL_MS);
+    (this.cronTimer as { unref?: () => void }).unref?.();
+  }
+
+  private async materializeRecurringTasks(): Promise<void> {
+    await this.cronMaterializer?.materializeDue();
   }
 
   private async resolveRootDb(request: Request): Promise<unknown> {

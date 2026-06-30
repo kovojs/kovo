@@ -19,6 +19,12 @@ export const KOVO_TASK_CRON_OCCURRENCES_TABLE_SQL: readonly DurableTaskSqlStatem
   },
 ];
 
+export async function ensureRecurringTaskSchema(executor: DurableTaskSqlExecutor): Promise<void> {
+  for (const statement of KOVO_TASK_CRON_OCCURRENCES_TABLE_SQL) {
+    await executor.execute(statement);
+  }
+}
+
 export interface RecurringTaskMaterializeOptions {
   readonly backfillLimit?: number;
   readonly now?: Date;
