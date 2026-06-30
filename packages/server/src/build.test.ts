@@ -57,6 +57,7 @@ describe('server build-time deployment API', () => {
       await mkdir(join(distDir, 'assets'), { recursive: true });
       await writeFile(join(distDir, 'assets/cart.css'), '.cart { color: green; }');
       await writeFile(join(distDir, 'assets/cart.js'), 'export const asset = true;');
+      await writeFile(join(distDir, 'logo.svg'), '<svg viewBox="0 0 1 1"></svg>');
       await writeFile(
         join(distDir, '.vite/manifest.json'),
         JSON.stringify({
@@ -74,7 +75,7 @@ describe('server build-time deployment API', () => {
             route('/cart', {
               page() {
                 return renderedHtml(
-                  '<main>Cart <button on:click="/c/__v/cart-v1/cart.client.js#Cart$click">Click</button></main>',
+                  '<main>Cart <img src="/logo.svg" alt=""> <button on:click="/c/__v/cart-v1/cart.client.js#Cart$click">Click</button></main>',
                 );
               },
             }),
@@ -110,11 +111,14 @@ describe('server build-time deployment API', () => {
         'export default async function handler() { return new Response("ok"); }\n',
       );
       await expect(readFile(join(outDir, 'static/cart/index.html'), 'utf8')).resolves.toContain(
-        'Cart <button',
+        '<img src="/logo.svg"',
       );
       await expect(
         readFile(join(outDir, 'static/c/__v/cart-v1/cart.client.js'), 'utf8'),
       ).resolves.toBe('export const cart = true;');
+      await expect(readFile(join(outDir, 'static/logo.svg'), 'utf8')).resolves.toBe(
+        '<svg viewBox="0 0 1 1"></svg>',
+      );
       await expect(readFile(join(outDir, 'static/assets/cart.css'), 'utf8')).resolves.toBe(
         '.cart { color: green; }',
       );
@@ -249,14 +253,95 @@ describe('server build-time deployment API', () => {
         '.route-card{color:teal}\n',
       );
 
-      const staticStyles = await readFile(join(outDir, 'static/assets/styles.css'), 'utf8');
-      expect(staticStyles).toBe(builtStyles);
       await expect(readFile(join(outDir, 'static/assets/route.css'), 'utf8')).resolves.toBe(
         '.route-shell{display:grid}\n',
       );
       await expect(readFile(join(outDir, 'static/assets/routes/index.css'), 'utf8')).resolves.toBe(
         '.route-card{color:teal}\n',
       );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('materializes local stylesheet source files declared by an app module', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-local-css-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(join(srcDir, 'local.css'), '.local-source { color: teal; }\n', 'utf8');
+      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
+      const appModule = join(srcDir, 'app.mjs');
+      await writeFile(
+        appModule,
+        [
+          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          'export const app = createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      stylesheets: [stylesheet('./local.css')],",
+          "      page: () => trustedHtml('<main class=\"local-source\">Home</main>'),",
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const { app } = (await import(`${pathToFileURL(appModule).href}?t=${Date.now()}`)) as {
+        app: ReturnType<typeof createApp>;
+      };
+      const outDir = join(root, 'dist', '.kovo');
+
+      await writeKovoNeutralBuild({ app, outDir });
+
+      await expect(readFile(join(outDir, 'client/assets/local.css'), 'utf8')).resolves.toBe(
+        '.local-source { color: teal; }\n',
+      );
+      await expect(readFile(join(outDir, 'static/assets/local.css'), 'utf8')).resolves.toBe(
+        '.local-source { color: teal; }\n',
+      );
+      await expect(readFile(join(outDir, 'static/index.html'), 'utf8')).resolves.toContain(
+        'href="/assets/local.css"',
+      );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails neutral builds before shipping missing local stylesheet links', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-missing-css-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      await mkdir(srcDir, { recursive: true });
+      const serverEntry = pathToFileURL(join(process.cwd(), 'packages/server/src/index.ts')).href;
+      const appModule = join(srcDir, 'app.mjs');
+      await writeFile(
+        appModule,
+        [
+          `import { createApp, route, stylesheet, trustedHtml } from ${JSON.stringify(serverEntry)};`,
+          'export const app = createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      stylesheets: [stylesheet('./missing.css')],",
+          "      page: () => trustedHtml('<main>Home</main>'),",
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const { app } = (await import(`${pathToFileURL(appModule).href}?t=${Date.now()}`)) as {
+        app: ReturnType<typeof createApp>;
+      };
+
+      await expect(writeKovoNeutralBuild({ app, outDir: join(root, 'dist', '.kovo') })).rejects
+        .toThrow(
+          "KV229 neutral build cannot materialize stylesheet '/assets/missing.css' from local source",
+        );
     } finally {
       await rm(root, { force: true, recursive: true });
     }

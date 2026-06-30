@@ -465,6 +465,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
       manifestFile: clientBuild.manifestFile,
       outDir: join(outDir, '.kovo'),
       serverHandlerSource: serverHandlerBuild.source,
+      stylesheetSourceRoot: dirname(resolvedAppModulePath),
     });
     writeKovoBuildGraphArtifact(neutralBuild, checkGraph);
     const preset =

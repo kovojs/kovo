@@ -785,27 +785,33 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
 
   const pathname = staticPathname(nodeRequest);
   if (pathname === undefined) return false;
-  const staticAsset = pathname.startsWith('/c/') || pathname.startsWith('/assets/');
-  const immutableAsset = staticAsset && isImmutableStaticAssetPath(pathname);
-  const filePath = staticAsset ? staticFilePath(clientRoot, pathname) : routeDocumentPath(pathname);
+  const clientAsset = pathname.startsWith('/c/') || pathname.startsWith('/assets/');
+  const immutableAsset = clientAsset && isImmutableStaticAssetPath(pathname);
+  let filePath = clientAsset ? staticFilePath(clientRoot, pathname) : routeDocumentPath(pathname);
+  let publicAsset = false;
 
   if (filePath === undefined) {
-    if (!staticAsset) return false;
+    if (!clientAsset) return false;
     nodeResponse.writeHead(403, staticErrorHeaders());
     nodeResponse.end('Forbidden');
     return true;
   }
 
-  const fileStat = await stat(filePath).catch(() => undefined);
+  let fileStat = await stat(filePath).catch(() => undefined);
+  if (!clientAsset && (fileStat === undefined || !fileStat.isFile())) {
+    filePath = publicStaticFilePath(pathname);
+    publicAsset = filePath !== undefined;
+    fileStat = filePath === undefined ? undefined : await stat(filePath).catch(() => undefined);
+  }
   if (fileStat === undefined || !fileStat.isFile()) {
-    if (!staticAsset) return false;
+    if (!clientAsset) return false;
     nodeResponse.writeHead(404, staticErrorHeaders());
     nodeResponse.end('Not Found');
     return true;
   }
 
   nodeResponse.writeHead(200, {
-    ...(staticAsset
+    ...(clientAsset || publicAsset
       ? immutableAsset
         ? immutableStaticHeaders
         : revalidatingAssetHeaders
@@ -839,6 +845,18 @@ function staticPathname(nodeRequest) {
 function routeDocumentPath(pathname) {
   const cleanPathname = pathname.endsWith('/') ? pathname : pathname + '/';
   return staticFilePath(staticRoot, cleanPathname + 'index.html');
+}
+
+function publicStaticFilePath(pathname) {
+  if (
+    pathname === '/_headers' ||
+    pathname === '/kovo-static-manifest.json' ||
+    pathname.endsWith('/') ||
+    pathname.endsWith('/index.html')
+  ) {
+    return undefined;
+  }
+  return staticFilePath(staticRoot, pathname);
 }
 
 function staticFilePath(root, pathname) {

@@ -114,6 +114,7 @@ async function documentPublicAssetInputs(options: {
   for (const hrefPath of [...referencedPaths].sort()) {
     if (existingPaths.has(hrefPath) || documentPaths.has(hrefPath)) continue;
     if (hrefPath.startsWith('/c/')) continue;
+    if (isBuildOwnedStylesheetHref(hrefPath)) continue;
 
     const source = staticExportPublicAssetSource(root, base, hrefPath);
     if ((await readableFileExists(source)) === false) {
@@ -132,6 +133,10 @@ async function documentPublicAssetInputs(options: {
 
   if (diagnostics.length > 0) throw new StaticExportError(diagnostics);
   return publicAssets;
+}
+
+function isBuildOwnedStylesheetHref(hrefPath: string): boolean {
+  return hrefPath.startsWith('/assets/') && path.posix.extname(hrefPath) === '.css';
 }
 
 function documentReferencedStaticAssetPaths(

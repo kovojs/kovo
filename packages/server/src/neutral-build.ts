@@ -1,9 +1,9 @@
-import { copyFile, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
+import { copyFile, mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import * as path from 'node:path';
 
 import type { KovoApp } from './app-types.js';
 import { versionedClientModuleHref, type VersionedClientModuleInput } from './client-modules.js';
-import type { StylesheetAsset } from './hints.js';
+import { stylesheetSourceFile, stylesheetSourcePath, type StylesheetAsset } from './hints.js';
 import { exportStaticApp } from './static-export.js';
 import type { StaticExportAssetInput } from './static-export-types.js';
 import type { StaticExportDiagnostic } from './static-export-diagnostics.js';
@@ -51,6 +51,8 @@ export interface WriteKovoNeutralBuildOptions {
   routeEntryMap?: KovoAppShellRouteEntryMap;
   /** Optional pre-bundled handler source to write to `server/handler.mjs`. */
   serverHandlerSource?: string;
+  /** App module directory fallback for local `stylesheet('./file.css')` declarations. */
+  stylesheetSourceRoot?: string | URL;
 }
 
 /**
@@ -119,6 +121,10 @@ export async function writeKovoNeutralBuild(
   const serverDir = path.join(outDir, 'server');
   const manifestFilePath =
     options.manifestFile === undefined ? undefined : resolvedFileSystemPath(options.manifestFile);
+  const stylesheetSourceRoot =
+    options.stylesheetSourceRoot === undefined
+      ? undefined
+      : resolvedFileSystemPath(options.stylesheetSourceRoot);
   const manifestDistDir =
     manifestFilePath === undefined ? undefined : path.dirname(path.dirname(manifestFilePath));
   const registeredClientModules = registeredClientModuleBuildArtifacts(
@@ -164,6 +170,7 @@ export async function writeKovoNeutralBuild(
     buildStylesheetCss: options.buildStylesheetCss ?? [],
     manifestDistDir,
     rootDir: clientDir,
+    stylesheetSourceRoot,
   });
 
   const manifestPath = path.join(outDir, 'manifest.json');
@@ -172,6 +179,7 @@ export async function writeKovoNeutralBuild(
   const staticOutput = await writeNeutralStaticOutput({
     app: buildWithRegisteredClientModules.app,
     assets: buildWithRegisteredClientModules.assets,
+    base: options.base,
     manifestDistDir,
     outDir,
   });
@@ -182,6 +190,7 @@ export async function writeKovoNeutralBuild(
       buildStylesheetCss: options.buildStylesheetCss ?? [],
       manifestDistDir,
       rootDir: staticOutput.dir,
+      stylesheetSourceRoot,
     });
   }
   const neutral: KovoNeutralBuild = {
@@ -242,6 +251,7 @@ function registeredClientModuleBuildArtifacts(
 interface NeutralStaticOutputOptions {
   app: KovoApp;
   assets: readonly KovoNeutralBuild['staticAssets'][number][];
+  base: string | undefined;
   manifestDistDir: string | undefined;
   outDir: string;
 }
@@ -249,6 +259,7 @@ interface NeutralStaticOutputOptions {
 async function writeNeutralStaticOutput({
   app,
   assets,
+  base,
   manifestDistDir,
   outDir,
 }: NeutralStaticOutputOptions): Promise<KovoNeutralBuild['staticOutput'] | undefined> {
@@ -263,7 +274,11 @@ async function writeNeutralStaticOutput({
     const result = await exportStaticApp(app, {
       ...(manifestDistDir === undefined
         ? {}
-        : { assets: neutralStaticExportAssets(assets, manifestDistDir) }),
+        : {
+            assets: neutralStaticExportAssets(assets, manifestDistDir),
+            ...(base === undefined ? {} : { publicAssetBase: base }),
+            publicAssetRoot: manifestDistDir,
+          }),
       onNonExportable: 'skip',
       outDir: staticDir,
     });
@@ -365,6 +380,7 @@ interface MaterializeNeutralStylesheetAssetsOptions {
   buildStylesheetCss: readonly { css: string; href: string }[];
   manifestDistDir: string | undefined;
   rootDir: string;
+  stylesheetSourceRoot: string | undefined;
 }
 
 async function materializeNeutralStylesheetAssets({
@@ -373,9 +389,11 @@ async function materializeNeutralStylesheetAssets({
   buildStylesheetCss,
   manifestDistDir,
   rootDir,
+  stylesheetSourceRoot,
 }: MaterializeNeutralStylesheetAssetsOptions): Promise<void> {
   const cssByPath = stylesheetCssByPath(app, assets, buildStylesheetCss);
   const viteCssBySourceFile = sourceFileByStylesheetAssetPath(assets);
+  const localCssByPath = stylesheetSourceByPath(app, stylesheetSourceRoot);
 
   for (const [assetPath, cssChunks] of cssByPath) {
     const outputPath = neutralClientOutputPath(rootDir, assetPath);
@@ -391,7 +409,12 @@ async function materializeNeutralStylesheetAssets({
       viteSourceFile === undefined || manifestDistDir === undefined
         ? ''
         : await readExistingStylesheet(viteDistSourcePath(manifestDistDir, viteSourceFile));
-    const mergedCss = dedupeCssChunks([...cssChunks, viteCss]).join('\n');
+    const localSourceFile = localCssByPath.get(assetPath);
+    const localCss =
+      viteCss || cssChunks.length > 0 || localSourceFile === undefined
+        ? ''
+        : await readRequiredStylesheet(localSourceFile, assetPath);
+    const mergedCss = dedupeCssChunks([...cssChunks, localCss, viteCss]).join('\n');
     if (!mergedCss) continue;
 
     await mkdir(path.dirname(outputPath), { recursive: true });
@@ -439,6 +462,42 @@ function stylesheetCssByPath(
   }
 
   return cssByPath;
+}
+
+function stylesheetSourceByPath(
+  app: KovoApp,
+  stylesheetSourceRoot: string | undefined,
+): Map<string, string> {
+  const sources = new Map<string, string>();
+  for (const asset of app.stylesheets) addStylesheetSource(sources, asset, stylesheetSourceRoot);
+  for (const route of app.routes) {
+    for (const asset of route.stylesheets ?? []) {
+      addStylesheetSource(sources, asset, stylesheetSourceRoot);
+    }
+  }
+  return sources;
+}
+
+function addStylesheetSource(
+  sources: Map<string, string>,
+  asset: string | StylesheetAsset,
+  stylesheetSourceRoot: string | undefined,
+): void {
+  if (typeof asset === 'string') return;
+
+  const assetPath = localStylesheetAssetPath(asset.href);
+  const sourceFile = stylesheetSourceFile(asset) ?? stylesheetSourceFileFromRoot(asset, stylesheetSourceRoot);
+  if (!assetPath || sourceFile === undefined) return;
+  if (!sources.has(assetPath)) sources.set(assetPath, sourceFile);
+}
+
+function stylesheetSourceFileFromRoot(
+  asset: StylesheetAsset,
+  stylesheetSourceRoot: string | undefined,
+): string | undefined {
+  const sourcePath = stylesheetSourcePath(asset);
+  if (sourcePath === undefined || stylesheetSourceRoot === undefined) return undefined;
+  return path.resolve(stylesheetSourceRoot, sourcePath);
 }
 
 function buildStylesheetCssHref(
@@ -497,6 +556,19 @@ async function readExistingStylesheet(fileName: string): Promise<string> {
   } catch (error) {
     if (isNodeError(error) && error.code === 'ENOENT') return '';
     throw error;
+  }
+}
+
+async function readRequiredStylesheet(fileName: string, assetPath: string): Promise<string> {
+  try {
+    const sourceStat = await stat(fileName);
+    if (!sourceStat.isFile()) throw new Error('not a file');
+    return await readFile(fileName, 'utf8');
+  } catch (error) {
+    throw new Error(
+      `KV229 neutral build cannot materialize stylesheet '${assetPath}' from local source '${fileName}'. SPEC §9.5 static export writes referenced static assets with route documents.`,
+      { cause: error },
+    );
   }
 }
 

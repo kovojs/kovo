@@ -114,6 +114,84 @@ describe('kovo build', () => {
     }
   });
 
+  it('serves referenced public assets and local stylesheet declarations from node static output', async () => {
+    const root = mkdtempSync(join(process.cwd(), '.tmp-kovo-build-static-assets-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      mkdirSync(join(root, 'public'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeFileSync(
+        appPath,
+        `
+import { createApp, publicAccess, route, stylesheet } from '@kovojs/server';
+import { trustedHtml } from '@kovojs/browser';
+
+export default createApp({
+  stylesheets: [stylesheet('./local.css')],
+  routes: [
+    route('/', {
+      access: publicAccess('static asset fixture'),
+      page: () => trustedHtml('<main><img src="/logo.svg" alt="Logo"></main>'),
+    }),
+  ],
+});
+`,
+        'utf8',
+      );
+      writeFileSync(join(root, 'local.css'), '.local-proof { color: rgb(1 2 3); }\n', 'utf8');
+      writeFileSync(join(root, 'public/logo.svg'), '<svg viewBox="0 0 1 1"></svg>\n', 'utf8');
+      writeClientEntry(root);
+      writeRetentionProofConfig(root);
+
+      const exitCode = await withCwd(root, () =>
+        withEnv({ VERCEL: '1' }, () => mainAsync(['build', './app.mjs', '--out', './dist'])),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+
+      try {
+        const document = await fetch(`${origin}/`);
+        const html = await document.text();
+        expect(document.status).toBe(200);
+        expect(html).toContain('<link rel="stylesheet" href="/assets/local.css">');
+        expect(html).toContain('<img src="/logo.svg" alt="Logo">');
+
+        const stylesheetResponse = await fetch(`${origin}/assets/local.css`);
+        expect(stylesheetResponse.status).toBe(200);
+        expect(stylesheetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
+        await expect(stylesheetResponse.text()).resolves.toBe(
+          '.local-proof { color: rgb(1 2 3); }\n',
+        );
+
+        const publicAssetResponse = await fetch(`${origin}/logo.svg`);
+        expect(publicAssetResponse.status).toBe(200);
+        await expect(publicAssetResponse.text()).resolves.toBe(
+          '<svg viewBox="0 0 1 1"></svg>\n',
+        );
+      } finally {
+        await close(server);
+      }
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('loads TypeScript app modules through the build-time Vite SSR path', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-ts-app-'));
     const appPath = join(root, 'app.ts');

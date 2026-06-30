@@ -17,19 +17,21 @@ refuted by dev/prod evidence.
 
 ### A. Static Assets And Stylesheets
 
-- [ ] **A1 — Node production static output omits `public/` assets referenced by route HTML.** (med, framework; found by `t4-export-defer-navigation`, verified independently)
+- [x] **A1 — Node production static output omits `public/` assets referenced by route HTML.** (med, framework; found by `t4-export-defer-navigation`, verified independently)
   - Observed behavior: `kovo build ./src/t4-static-app.tsx --preset node` emits static HTML referencing `/kovo-t4-mark.svg` and `/t4-note.txt`, but the node artifact serves both as 404 while explicit manifest-backed `kovo export` copies them.
   - Root cause: neutral static output calls `exportStaticApp` with manifest-derived assets but without `publicAssetRoot`, so document public-asset discovery is disabled (`packages/server/src/neutral-build.ts`, `packages/server/src/static-export.ts`).
   - Why it matters: a green production build can ship broken image/download links for valid `public/` assets that work in dev and manifest-backed export.
   - Repro evidence: verifier build under `/Users/mini/kovo-dogfood-exhaustive-20260629-182057/t4-export-defer-navigation` served `/static-assets` as 200, `/assets/styles.css` as 200, but `/kovo-t4-mark.svg` and `/t4-note.txt` as 404; explicit manifest-backed export wrote both public assets.
   - Acceptance: node preset static output includes referenced public assets, with a prod-artifact test proving served route HTML links resolve to 200 files.
+  - Evidence: `pnpm exec vitest run packages/server/src/build.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/vite-static-export-options.test.ts packages/cli/src/index.kovo-build.test.ts --run --reporter=dot` proves the node artifact serves document-referenced `public/logo.svg` from copied static output.
 
-- [ ] **A2 — `stylesheet('./file.css')` can emit a missing production/export asset.** (med, framework; found by `t4-export-defer-navigation`, verified independently)
+- [x] **A2 — `stylesheet('./file.css')` can emit a missing production/export asset.** (med, framework; found by `t4-export-defer-navigation`, verified independently)
   - Observed behavior: declaring `stylesheet('./local.css')` emits `/assets/local.css` in production/export HTML, but `kovo build` does not write the file unless Vite separately includes that source; the node server returns 404.
   - Root cause: `stylesheet(source)` derives an href but does not retain the source path, and neutral stylesheet materialization only writes critical CSS, build-owned CSS, or Vite manifest CSS (`packages/server/src/hints.ts`, `packages/server/src/neutral-build.ts`).
   - Why it matters: the API accepts a local stylesheet path and creates a valid-looking link, but app authors get an unstyled production artifact unless they know to wire the file into Vite.
   - Repro evidence: verifier copy with `src/local.css` and `stylesheet('./local.css')` built green; static HTML and `_headers` referenced `/assets/local.css`, but `dist/.kovo/static/assets/local.css` and `dist/server/static/assets/local.css` were absent; production `/assets/local.css` returned 404.
   - Acceptance: local stylesheet sources are copied/materialized or fail loudly; a production build regression proves `/assets/<file>.css` exists and is served.
+  - Evidence: `pnpm exec vitest run packages/server/src/build.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/vite-static-export-options.test.ts packages/cli/src/index.kovo-build.test.ts --run --reporter=dot` proves local `stylesheet('./local.css')` materializes into neutral static/client output and serves as `/assets/local.css` from the node artifact.
 
 ### B. Endpoint And Capability Ergonomics
 
