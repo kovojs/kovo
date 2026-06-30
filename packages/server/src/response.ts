@@ -587,11 +587,17 @@ function escapeHeaderValue(value: string): string {
   return value.replaceAll('\\', '\\\\').replaceAll('"', '\\"');
 }
 
-const CONTROL_OR_DELETE_RE = new RegExp('[\\x00-\\x1f\\x7f]', 'g');
+function replaceControlOrDelete(value: string): string {
+  let result = '';
+  for (let i = 0; i < value.length; i += 1) {
+    const code = value.charCodeAt(i);
+    result += code <= 0x1f || code === 0x7f ? '_' : value[i];
+  }
+  return result;
+}
 
 function contentDispositionFilename(value: string): string {
-  const normalized = value
-    .replace(CONTROL_OR_DELETE_RE, '_')
+  const normalized = replaceControlOrDelete(value)
     .replace(/[/\\]+/g, '_')
     .trim();
   const safe = normalized.length > 0 ? normalized.slice(0, 255) : 'download';
