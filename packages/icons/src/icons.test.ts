@@ -1,13 +1,18 @@
 import { execFileSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
+import {
+  GENERATED_ARTIFACT_GENERATORS,
+  generatedArtifactGeneratorCheckCommand,
+} from '../../../scripts/generated-artifacts.mjs';
 import * as style from '@kovojs/style';
 import { ArrowRight } from './arrow-right.js';
 import { iconRootAttrs } from './icon-base.js';
-const generator = fileURLToPath(new URL('../../../scripts/build-icons.mjs', import.meta.url));
 describe('@kovojs/icons generation', () => {
   it('committed icons match a fresh generation (deterministic)', () => {
-    const out = execFileSync('node', [generator, '--check'], { encoding: 'utf8' });
+    const [command, ...args] = generatedArtifactGeneratorCheckCommand(
+      GENERATED_ARTIFACT_GENERATORS.icons,
+    );
+    const out = execFileSync(command, args, { encoding: 'utf8' });
     expect(out).toContain('up to date');
   });
 });

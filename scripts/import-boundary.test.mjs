@@ -68,12 +68,24 @@ const ignored = "import('@kovojs/core/internal/string-literal')";
     expect(nonPublicKovoImportTier('@kovojs/browser/generated')).toBe('generated');
     expect(nonPublicKovoImportTier('@kovojs/cli/internal')).toBe('internal');
     expect(nonPublicKovoImportTier('@kovojs/core')).toBeNull();
-    expect(appLocalGeneratedImportTier('./generated/app.kovo-route.js')).toBe(
-      'app-local-generated',
-    );
-    expect(appLocalGeneratedImportTier('../generated/optimistic/cart-add.js')).toBe(
-      'app-local-generated',
-    );
+    expect(
+      appLocalGeneratedImportTier('./generated/app.kovo-route.js', 'examples/demo/src/app.ts'),
+    ).toBe('app-local-generated');
+    expect(
+      appLocalGeneratedImportTier(
+        './generated/optimistic/cart-add.js',
+        'site/tutorial/steps/01/src/app.tsx',
+      ),
+    ).toBe('app-local-generated');
+    expect(
+      appLocalGeneratedImportTier(
+        './generated/app.kovo-route.js',
+        'packages/create-kovo/templates/src/app.tsx',
+      ),
+    ).toBeNull();
+    expect(
+      appLocalGeneratedImportTier('../graph.json', 'packages/create-kovo/templates/src/app.tsx'),
+    ).toBe('app-local-generated');
     expect(appLocalGeneratedImportTier('./components/cart.js')).toBeNull();
   });
 

@@ -2,7 +2,10 @@ import { describe, expect, it } from 'vitest';
 
 import {
   GENERATED_ARTIFACT_CATEGORIES,
+  GENERATED_ARTIFACT_GENERATORS,
   generatedArtifactCategoriesForPath,
+  generatedArtifactGeneratorCheckCommand,
+  generatedArtifactPoliciesForGenerator,
   generatedArtifactPathspecs,
   validateGeneratedEmitContract,
 } from './generated-artifacts.mjs';
@@ -14,31 +17,51 @@ describe('generated-artifacts policy manifest', () => {
     const cases = [
       {
         path: 'examples/commerce/src/generated/graph.json',
-        categories: [C.mustNotCommit],
+        categories: [C.appLocalGeneratedOutput, C.mustNotCommit],
       },
       {
         path: 'site/src/generated/kovo-ui.css',
-        categories: [C.mustNotCommit],
+        categories: [C.appLocalGeneratedOutput, C.mustNotCommit],
       },
       {
         path: 'site/tutorial/steps/02-islands/src/generated/product-actions.tsx',
-        categories: [C.mustNotCommit],
+        categories: [C.appLocalGeneratedOutput, C.mustNotCommit],
       },
       {
         path: 'packages/create-kovo/templates/graph.json',
-        categories: [C.mustNotCommit],
+        categories: [C.appLocalGeneratedOutput, C.mustNotCommit],
+      },
+      {
+        path: 'packages/icons/src/arrow-right.tsx',
+        categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
+      },
+      {
+        path: 'packages/icons/package.json',
+        categories: [C.generatedPackageMetadata, C.mustMatchGenerator],
+      },
+      {
+        path: 'public-packages.json',
+        categories: [C.generatedPackageMetadata, C.mustMatchGenerator],
+      },
+      {
+        path: 'packages/headless-ui/src/generated.ts',
+        categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
+      },
+      {
+        path: 'packages/ui/registry.json',
+        categories: [C.generatedPackageMetadata, C.mustMatchGenerator],
       },
       {
         path: 'routes/products/product-card.server.js',
-        categories: [C.mustBeReadable, C.mustMatchEmitContract],
+        categories: [C.frameworkGeneratedSource, C.mustBeReadable, C.mustMatchEmitContract],
       },
       {
         path: 'routes/products/product-card.client.js',
-        categories: [C.mustBeReadable, C.mustMatchEmitContract],
+        categories: [C.frameworkGeneratedSource, C.mustBeReadable, C.mustMatchEmitContract],
       },
       {
         path: 'generated/registries.d.ts',
-        categories: [C.mustBeReadable, C.mustMatchEmitContract],
+        categories: [C.generatedPackageMetadata, C.mustBeReadable, C.mustMatchEmitContract],
       },
       {
         path: '.deepsec/examples/commerce/src/generated/graph.json',
@@ -62,6 +85,32 @@ describe('generated-artifacts policy manifest', () => {
       'site/tutorial/steps/*/src/generated/**',
       'packages/create-kovo/templates/graph.json',
     ]);
+  });
+
+  it('routes committed generated framework artifacts to their generator checks', () => {
+    expect(
+      generatedArtifactPoliciesForGenerator(GENERATED_ARTIFACT_GENERATORS.icons).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(['icon-generated-components', 'icon-generated-package-metadata']);
+    expect(generatedArtifactGeneratorCheckCommand(GENERATED_ARTIFACT_GENERATORS.icons)).toEqual([
+      'pnpm',
+      '--filter',
+      '@kovojs/icons',
+      'run',
+      'build:icons',
+      '--',
+      '--check',
+    ]);
+
+    expect(
+      generatedArtifactPoliciesForGenerator(GENERATED_ARTIFACT_GENERATORS.uiRegistry).map(
+        (entry) => entry.id,
+      ),
+    ).toEqual(['headless-ui-generated-source', 'ui-generated-registry']);
+    expect(
+      generatedArtifactGeneratorCheckCommand(GENERATED_ARTIFACT_GENERATORS.uiRegistry),
+    ).toEqual(['node', 'packages/ui/scripts/build-registry.mjs']);
   });
 
   it('validates readable generated emit artifacts against the shared contract', () => {

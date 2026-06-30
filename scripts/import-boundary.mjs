@@ -5,6 +5,12 @@ import { fileURLToPath } from 'node:url';
 
 import ts from 'typescript';
 
+import {
+  GENERATED_ARTIFACT_CATEGORIES,
+  generatedArtifactCategoriesForPath,
+  isGeneratedArtifactPathInCategory,
+} from './generated-artifacts.mjs';
+
 const appFacingRoots = [
   'examples',
   'packages/create-kovo/templates',
@@ -54,7 +60,7 @@ export async function collectImportBoundaryViolations({
     if (isGeneratedArtifact(relativePath, source)) continue;
 
     for (const specifier of new Set(importSpecifiers(source, { fileName: relativePath }))) {
-      const tier = importBoundaryTier(specifier);
+      const tier = importBoundaryTier(specifier, relativePath);
       if (tier === null) continue;
       if (tier === 'internal' && isTestFile(relativePath)) continue;
       const allowKey = `${relativePath} -> ${specifier}`;
@@ -103,12 +109,19 @@ export function nonPublicKovoImportTier(specifier) {
   return null;
 }
 
-export function appLocalGeneratedImportTier(specifier) {
-  return /^\.{1,2}\/(?:.*\/)?generated\//.test(specifier) ? 'app-local-generated' : null;
+export function appLocalGeneratedImportTier(specifier, importerPath = null) {
+  const resolvedPath = appLocalGeneratedImportPath(specifier, importerPath);
+  if (!resolvedPath) return null;
+  return isGeneratedArtifactPathInCategory(
+    resolvedPath,
+    GENERATED_ARTIFACT_CATEGORIES.appLocalGeneratedOutput,
+  )
+    ? 'app-local-generated'
+    : null;
 }
 
-function importBoundaryTier(specifier) {
-  return nonPublicKovoImportTier(specifier) ?? appLocalGeneratedImportTier(specifier);
+function importBoundaryTier(specifier, importerPath) {
+  return nonPublicKovoImportTier(specifier) ?? appLocalGeneratedImportTier(specifier, importerPath);
 }
 
 function allowedImportBoundaryException(
@@ -226,7 +239,14 @@ function isTestFile(relativePath) {
 }
 
 function isGeneratedArtifact(relativePath, source) {
-  if (relativePath.includes('/generated/')) return true;
+  const categories = generatedArtifactCategoriesForPath(relativePath);
+  if (
+    categories.includes(GENERATED_ARTIFACT_CATEGORIES.appLocalGeneratedOutput) ||
+    categories.includes(GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource) ||
+    categories.includes(GENERATED_ARTIFACT_CATEGORIES.generatedPackageMetadata)
+  ) {
+    return true;
+  }
   return (
     source.startsWith('// @kovojs-ir') ||
     source.startsWith('/* @kovojs-ir */') ||
@@ -256,6 +276,11 @@ function repoRootFromScript() {
 
 function slash(value) {
   return value.split(path.sep).join('/');
+}
+
+function appLocalGeneratedImportPath(specifier, importerPath) {
+  if (!importerPath || !specifier.startsWith('.')) return null;
+  return slash(path.posix.normalize(path.posix.join(path.posix.dirname(importerPath), specifier)));
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
