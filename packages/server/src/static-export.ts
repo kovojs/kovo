@@ -48,7 +48,11 @@ export async function exportStaticApp(
     ...(options.onNonExportable === undefined ? {} : { onNonExportable: options.onNonExportable }),
     ...(options.origin === undefined ? {} : { origin: options.origin }),
   });
-  const assetInputs = await staticExportAssetsWithDocumentPublicAssets(options, replay.artifacts);
+  const assetInputs = await staticExportAssetsWithDocumentPublicAssets(
+    app,
+    options,
+    replay.artifacts,
+  );
   const assets = staticExportAssetArtifacts(assetInputs);
   const artifacts = await applyStaticExportSubresourceIntegrity({
     artifacts: replay.artifacts,
@@ -76,6 +80,7 @@ export async function exportStaticApp(
 }
 
 async function staticExportAssetsWithDocumentPublicAssets(
+  app: KovoApp,
   options: StaticExportOptions,
   artifacts: StaticExportResult['artifacts'],
 ): Promise<NonNullable<StaticExportOptions['assets']>> {
@@ -83,6 +88,7 @@ async function staticExportAssetsWithDocumentPublicAssets(
   if (options.publicAssetRoot === undefined) return configuredAssets;
 
   const publicAssets = await documentPublicAssetInputs({
+    app,
     artifacts,
     base: options.publicAssetBase,
     configuredAssets,
@@ -94,6 +100,7 @@ async function staticExportAssetsWithDocumentPublicAssets(
 }
 
 async function documentPublicAssetInputs(options: {
+  app: KovoApp;
   artifacts: StaticExportResult['artifacts'];
   base: string | undefined;
   configuredAssets: readonly NonNullable<StaticExportOptions['assets']>[number][];
@@ -101,6 +108,7 @@ async function documentPublicAssetInputs(options: {
 }): Promise<NonNullable<StaticExportOptions['assets']>> {
   const root = staticExportPublicAssetRoot(options.root);
   const base = normalizedStaticExportPublicAssetBase(options.base);
+  const buildOwnedStylesheetHrefSet = buildOwnedStylesheetHrefs(options.app, base);
   const existingPaths = new Set(options.configuredAssets.map((asset) => asset.path));
   const documentPaths = new Set(options.artifacts.map((artifact) => artifact.path));
   const publicAssets: StaticExportAssetInput[] = [];
@@ -114,6 +122,7 @@ async function documentPublicAssetInputs(options: {
   for (const hrefPath of [...referencedPaths].sort()) {
     if (existingPaths.has(hrefPath) || documentPaths.has(hrefPath)) continue;
     if (hrefPath.startsWith('/c/')) continue;
+    if (buildOwnedStylesheetHrefSet.has(hrefPath)) continue;
 
     const source = staticExportPublicAssetSource(root, base, hrefPath);
     if ((await readableFileExists(source)) === false) {
@@ -132,6 +141,30 @@ async function documentPublicAssetInputs(options: {
 
   if (diagnostics.length > 0) throw new StaticExportError(diagnostics);
   return publicAssets;
+}
+
+function buildOwnedStylesheetHrefs(app: KovoApp, base: string): ReadonlySet<string> {
+  const hrefs = new Set<string>();
+  for (const stylesheet of app.stylesheets) addBuildOwnedStylesheetHref(hrefs, stylesheet, base);
+  for (const route of app.routes) {
+    for (const stylesheet of route.stylesheets ?? []) {
+      addBuildOwnedStylesheetHref(hrefs, stylesheet, base);
+    }
+  }
+  return hrefs;
+}
+
+function addBuildOwnedStylesheetHref(
+  hrefs: Set<string>,
+  stylesheet: KovoApp['stylesheets'][number],
+  base: string,
+): void {
+  if (typeof stylesheet === 'string') return;
+
+  const hrefPath = staticExportPublicHrefPath(stylesheet.href, base, 'https://kovo.local/');
+  if (hrefPath !== undefined && path.posix.extname(hrefPath) === '.css') {
+    hrefs.add(hrefPath);
+  }
 }
 
 function documentReferencedStaticAssetPaths(
