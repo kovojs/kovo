@@ -1,3 +1,4 @@
+/** Parsed attribute metadata for raw Kovo wire elements (SPEC §9.4). */
 export interface WireAttribute {
   end: number;
   hasValue: boolean;

@@ -17,6 +17,7 @@
           "./internal/document-protocol",
           "./internal/fragment-target",
           "./internal/graph",
+          "./internal/json",
           "./internal/module-ref",
           "./internal/package-prefix",
           "./internal/query-delta",

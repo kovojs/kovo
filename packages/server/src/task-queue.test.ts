@@ -277,6 +277,43 @@ describe('durable task queue store (SPEC §9.6)', () => {
     expect(statements[1]!.values).toHaveLength(6);
   });
 
+  it('canonicalizes durable task args before Postgres storage', async () => {
+    const statements: DurableTaskSqlStatement[] = [];
+    const store = new PostgresDurableTaskQueue({
+      async execute(statement) {
+        statements.push(statement);
+        return { rows: [{ id: statement.values[0] }] };
+      },
+    });
+
+    await store.enqueue({
+      args: { z: 1, a: { y: 2, x: 1 } },
+      task: 'email.send',
+    });
+
+    expect(statements[0]!.values[2]).toBe('{"a":{"x":1,"y":2},"z":1}');
+  });
+
+  it('rejects lossy durable task args before queue storage', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const cases: readonly [unknown, string][] = [
+      [{ id: undefined }, 'JSON value at args.id must not be undefined'],
+      [{ id: 1n }, 'JSON value at args.id must not be a bigint'],
+      [
+        { at: new Date('2026-06-30T00:00:00.000Z') },
+        'JSON value at args.at must be a plain JSON object',
+      ],
+      [
+        { count: Number.POSITIVE_INFINITY },
+        'JSON value at args.count must be a finite JSON number',
+      ],
+    ];
+
+    for (const [args, message] of cases) {
+      await expect(store.enqueue({ args, task: 'bad' })).rejects.toThrow(message);
+    }
+  });
+
   it('adapts a root Postgres-compatible client query(text, values)', async () => {
     const calls: unknown[][] = [];
     const executor = createDurableTaskSqlExecutor({

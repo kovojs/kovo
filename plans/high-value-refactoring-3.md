@@ -150,7 +150,7 @@ invariant.
     or future security headers.
   - Evidence: `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/build.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-headers.test.ts packages/server/src/vite-static-export-result.test.ts` passed on 2026-06-30, covering the shared static host header policy manifest across build and static export emitters.
 
-- [ ] **P1.6 - Make JSON clone/assert/size semantics canonical.**
+- [x] **P1.6 - Make JSON clone/assert/size semantics canonical.**
   - Current signals: `packages/core/src/json-clone.ts` has proxy-safe clone logic, while
     `packages/server/src/task-queue.ts` still clones via `JSON.parse(JSON.stringify(...))` and
     `packages/core/src/query-delta.ts` measures size with raw `JSON.stringify`.
@@ -159,7 +159,7 @@ invariant.
     optimistic values, and test harnesses use the shared utility.
   - Risk reduced: durable task args, query deltas, and optimistic state stop disagreeing on Date,
     bigint, `undefined`, proxies, and serialization failures.
-  - Verification: `pnpm exec vitest --run packages/core/src/json-clone.test.ts packages/core/src/internal/wire-json.test.ts packages/core/src/query-delta.test.ts packages/server/src/task-queue.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/core/src/json-clone.test.ts packages/core/src/internal/wire-json.test.ts packages/core/src/query-delta.test.ts packages/server/src/task-queue.test.ts`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check` passed on 2026-06-30.
 
 ## P2 - Maintainability and Gate Quality
 

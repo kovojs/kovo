@@ -515,11 +515,11 @@ function generateHeadlessPackageJson() {
   const packageJson = JSON.parse(readFileSync(paths.headlessPackageJson, 'utf8'));
   packageJson.exports = generateHeadlessDevelopmentExports();
   packageJson.publishConfig = {
-    ...(packageJson.publishConfig ?? {}),
+    ...packageJson.publishConfig,
     exports: generateHeadlessPublishExports(),
   };
   packageJson.scripts = {
-    ...(packageJson.scripts ?? {}),
+    ...packageJson.scripts,
     'build:dist': generateHeadlessPackCommand(),
   };
   return `${JSON.stringify(packageJson, null, 2)}\n`;
@@ -528,10 +528,7 @@ function generateHeadlessPackageJson() {
 function generateHeadlessDevelopmentExports() {
   return {
     ...Object.fromEntries(
-      headlessPrimitiveSubpaths.map((subpath) => [
-        `./${subpath}`,
-        `./src/public/${subpath}.ts`,
-      ]),
+      headlessPrimitiveSubpaths.map((subpath) => [`./${subpath}`, `./src/public/${subpath}.ts`]),
     ),
     './types': './src/types.ts',
     './generated': './src/generated.ts',
@@ -923,8 +920,7 @@ function primitiveExportDeclarations(fileName, subpath, source) {
     declarations.set(name, {
       fullDeclarationSource,
       isImplementationOnly,
-      isPublic:
-        jsdoc?.includes(`@kovojs/headless-ui/${subpath}`) === true && !isImplementationOnly,
+      isPublic: jsdoc?.includes(`@kovojs/headless-ui/${subpath}`) === true && !isImplementationOnly,
       kind,
       name,
       publicSignatureSource: publicSignatureSource(kind, fullDeclarationSource),

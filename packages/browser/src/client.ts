@@ -101,3 +101,4 @@ export type {
   QueryRefetchResponse,
 } from './query-refetch.js';
 export type { QueryChunk, QueryElementChunkLike, QueryScriptChunkLike } from './wire-parser.js';
+export type { WireAttribute } from './wire-tokenizer.js';

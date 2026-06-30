@@ -1,3 +1,4 @@
+import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
 import type { TaskHandle } from './task.js';
 
 /** Persisted durable-task job states visible through the SPEC §9.6 status surface. */
@@ -203,7 +204,9 @@ function statusRecord(
     runAt: copyDate(job.runAt),
     createdAt: copyDate(job.createdAt),
     updatedAt: copyDate(job.updatedAt),
-    ...(options?.includeArgs === true ? { args: cloneJson(job.args) } : {}),
+    ...(options?.includeArgs === true
+      ? { args: assertAndCloneJsonValue(job.args, { root: 'args' }) }
+      : {}),
     ...(job.key === undefined ? {} : { key: job.key }),
     ...(job.lastError === undefined ? {} : { lastError: job.lastError }),
     ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
@@ -247,7 +250,7 @@ function copyJob(job: DurableTaskStatusJob): DurableTaskStatusJob {
   return {
     id: job.id,
     task: job.task,
-    args: cloneJson(job.args),
+    args: assertAndCloneJsonValue(job.args, { root: 'args' }),
     runAt: copyDate(job.runAt),
     status: job.status,
     attempts: job.attempts,
@@ -293,8 +296,4 @@ function dateFrom(value: Date | string): Date {
 
 function copyDate(value: Date): Date {
   return new Date(value.getTime());
-}
-
-function cloneJson(value: unknown): unknown {
-  return JSON.parse(JSON.stringify(value)) as unknown;
 }
