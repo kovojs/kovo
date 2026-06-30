@@ -1,3 +1,7 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore } from './client.js';
@@ -8,6 +12,46 @@ import {
   FakeQueryBindingElement,
   FakeQueryPlanElement,
 } from './runtime-test-fakes.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
+
+function deferredSnapshot<
+  Result extends {
+    chunks: readonly { fragments: readonly { html: RenderedFragmentHtml; target: string }[] }[];
+    fragments: readonly { html: RenderedFragmentHtml; target: string }[];
+  },
+>(
+  result: Result,
+): Omit<Result, 'chunks' | 'fragments'> & {
+  chunks: Array<Omit<Result['chunks'][number], 'fragments'> & { fragments: FragmentSnapshot[] }>;
+  fragments: FragmentSnapshot[];
+} {
+  return {
+    ...result,
+    chunks: result.chunks.map((chunk) => ({
+      ...chunk,
+      fragments: fragmentSnapshots(chunk.fragments),
+    })),
+    fragments: fragmentSnapshots(result.fragments),
+  };
+}
 
 describe('deferred stream response apply', () => {
   it('applies deferred stream response query truth before fragment morphs', () => {
@@ -157,7 +201,7 @@ describe('deferred stream response apply', () => {
       'recommendations-plan:{"items":[{"id":"p2"}]}',
       'morph:<section>Recommendations ready</section>:1 review:1:{"recommendations":{"items":[{"id":"p2"}]},"reviews":{"items":[{"id":"r1"}]}}',
     ]);
-    expect(result).toEqual({
+    expect(deferredSnapshot(result)).toEqual({
       appliedFragments: ['reviews:p1', 'recommendations:p1'],
       chunks: [
         {
@@ -217,7 +261,7 @@ describe('deferred stream response apply', () => {
 
     expect(applied.queries).toEqual(['cart']);
     expect(applied.appliedFragments).toEqual(['cart-badge']);
-    expect(applied.chunks).toEqual([
+    expect(deferredSnapshot(applied).chunks).toEqual([
       {
         appliedFragments: [],
         fragments: [],

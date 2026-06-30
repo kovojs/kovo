@@ -1,3 +1,8 @@
+import {
+  createRenderedFragmentHtml,
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,6 +14,38 @@ import { createQueryStore } from './client.js';
 import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
 import { applyStreamTextChunks, StreamTextBuffer, type StreamTextRoot } from './stream-text.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentHtml(html: string): RenderedFragmentHtml {
+  return createRenderedFragmentHtml(html);
+}
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
+
+function applySnapshot<
+  Result extends { fragments: readonly { html: RenderedFragmentHtml; target: string }[] },
+>(result: Result): Omit<Result, 'fragments'> & { fragments: FragmentSnapshot[] } {
+  return {
+    ...result,
+    fragments: fragmentSnapshots(result.fragments),
+  };
+}
 
 describe('decoded mutation response apply', () => {
   it('applies mutation response query chunks and returns fragment chunks for morphing', () => {
@@ -26,7 +63,7 @@ describe('decoded mutation response apply', () => {
 
     expect(store.get('cart')).toEqual({ count: 3 });
     expect(plan).toHaveBeenCalledWith({ count: 3 });
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }],
       queries: ['cart'],
     });
@@ -68,7 +105,7 @@ describe('decoded mutation response apply', () => {
 
     const applied = applyMutationResponseChunksToRuntime(
       {
-        fragments: [{ html: '<cart-badge>11</cart-badge>', target: 'cart-badge' }],
+        fragments: [{ html: fragmentHtml('<cart-badge>11</cart-badge>'), target: 'cart-badge' }],
         queries: [{ name: 'cart', value: { count: 1 } }],
       },
       {
@@ -85,7 +122,7 @@ describe('decoded mutation response apply', () => {
     // SPEC.md §9.1/§9.4: transport-specific parsers hand decoded query and
     // fragment chunks to one runtime apply path for store writes, update plans,
     // and morphing.
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       appliedFragments: ['cart-badge'],
       fragments: [{ html: '<cart-badge>11</cart-badge>', target: 'cart-badge' }],
       queries: ['cart'],
@@ -142,7 +179,7 @@ describe('decoded mutation response apply', () => {
       store,
     });
 
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<cart-badge>8</cart-badge>', target: 'cart-badge' }],
       queries: ['cart'],
     });
@@ -173,7 +210,7 @@ describe('decoded mutation response apply', () => {
       store,
     });
 
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<cart-badge>9</cart-badge>', target: 'cart-badge' }],
       queries: ['cart'],
     });
@@ -209,7 +246,7 @@ describe('decoded mutation response apply', () => {
     // apply primitive as hydration and typed reads, so a bad hook reports
     // through the runtime error seam without forking fragment apply.
     expect(onError).toHaveBeenCalledWith(hookError);
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       appliedFragments: ['cart-badge'],
       fragments: [{ html: '<cart-badge>2</cart-badge>', target: 'cart-badge' }],
       queries: ['cart'],
@@ -297,7 +334,7 @@ describe('decoded mutation response apply', () => {
     );
     expect(streamTarget.textContent).toBe('Hello');
     expect(store.get('chat')).toEqual({ count: 1 });
-    expect(applied.fragments).toEqual([
+    expect(fragmentSnapshots(applied.fragments)).toEqual([
       {
         html: '<article data-stream-text="assistant:a1"></article>',
         mode: 'append',

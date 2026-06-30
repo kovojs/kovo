@@ -1,8 +1,40 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import { createQueryStore } from './client.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
+
+function applySnapshot<
+  Result extends { fragments: readonly { html: RenderedFragmentHtml; target: string }[] },
+>(result: Result): Omit<Result, 'fragments'> & { fragments: FragmentSnapshot[] } {
+  return {
+    ...result,
+    fragments: fragmentSnapshots(result.fragments),
+  };
+}
 
 describe('parsed mutation response wire apply', () => {
   it('reports keyed query chunks with their canonical typed-read key', () => {
@@ -22,7 +54,7 @@ describe('parsed mutation response wire apply', () => {
     expect(store.get('product', 'p1')).toEqual({ stock: 4 });
     expect(store.get('product')).toBeUndefined();
     expect(plan).toHaveBeenCalledWith({ stock: 4 });
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       fragments: [],
       queries: ['product:p1'],
     });
@@ -52,7 +84,7 @@ describe('parsed mutation response wire apply', () => {
     });
 
     expect(store.get('cart', 'cart:c1')).toEqual({ count: 4 });
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<li>p1</li>', mode: 'append', target: 'cart-list' }],
       queries: ['cart:c1'],
     });
@@ -70,7 +102,7 @@ describe('parsed mutation response wire apply', () => {
     // SPEC.md §9.4: keyed query chunks must hydrate the same instance key that
     // inline DOM parsing exposes from the wire attribute.
     expect(store.get('product', 'product>p1')).toEqual({ stock: 7 });
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       fragments: [],
       queries: ['product:product>p1'],
     });
@@ -92,7 +124,7 @@ describe('parsed mutation response wire apply', () => {
       { onError, store },
     );
 
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       fragments: [],
       queries: ['inventory'],
     });
@@ -118,7 +150,7 @@ describe('parsed mutation response wire apply', () => {
 
     expect(store.get('cart')).toBeUndefined();
     expect(store.get('inventory')).toEqual({ available: true });
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       fragments: [{ html: '<cart-badge>Ready</cart-badge>', target: 'cart-badge' }],
       queries: ['inventory'],
     });
@@ -135,7 +167,7 @@ describe('parsed mutation response wire apply', () => {
       store,
     });
 
-    expect(applied).toEqual({
+    expect(applySnapshot(applied)).toEqual({
       fragments: [
         {
           html: '<cart-badge><span>1</span><kovo-fragment target="nested"><span>nested</span></kovo-fragment></cart-badge>',

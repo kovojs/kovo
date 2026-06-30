@@ -1,3 +1,7 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -7,6 +11,34 @@ import {
   readQueryElementChunk,
   readQueryScriptChunks,
 } from './wire-parser.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
+
+function mutationBodySnapshot(
+  body: ReturnType<typeof readMutationResponseBodyChunks>,
+): ReturnType<typeof readMutationResponseBodyChunks> & { fragments: FragmentSnapshot[] } {
+  return {
+    ...body,
+    fragments: fragmentSnapshots(body.fragments),
+  };
+}
 
 // @ts-expect-error SPEC.md §4.4/§9.1: fragment chunk ownership lives with the shared response scanner.
 // eslint-disable-next-line no-unused-vars -- compile-time compatibility surface removal assertion only.
@@ -194,14 +226,16 @@ describe('wire parser HTML entity handling', () => {
     // SPEC.md §9.1: enhanced mutation responses use kovo-query plus kovo-fragment
     // wire chunks, and all runtime apply paths consume the same decoded body.
     expect(
-      readMutationResponseBodyChunks(
-        [
-          '<kovo-query name="cart">{</kovo-query>',
-          '<kovo-query name="inventory" key="inventory:p1">{"available":true}</kovo-query>',
-          '<kovo-fragment target="inventory" mode="append"><li>p1</li></kovo-fragment>',
-          '<kovo-fragment target="stale"><li>stale</li>',
-        ].join('\n'),
-        onError,
+      mutationBodySnapshot(
+        readMutationResponseBodyChunks(
+          [
+            '<kovo-query name="cart">{</kovo-query>',
+            '<kovo-query name="inventory" key="inventory:p1">{"available":true}</kovo-query>',
+            '<kovo-fragment target="inventory" mode="append"><li>p1</li></kovo-fragment>',
+            '<kovo-fragment target="stale"><li>stale</li>',
+          ].join('\n'),
+          onError,
+        ),
       ),
     ).toEqual({
       fragments: [{ html: '<li>p1</li>', mode: 'append', target: 'inventory' }],
@@ -256,7 +290,7 @@ describe('wire parser HTML entity handling', () => {
           '--kovo-boundary--\r\n',
         ].join(''),
         'kovo-boundary',
-      ).map((chunk) => readMutationResponseBodyChunks(chunk)),
+      ).map((chunk) => mutationBodySnapshot(readMutationResponseBodyChunks(chunk))),
     ).toEqual([
       {
         fragments: [],
@@ -296,13 +330,15 @@ describe('wire parser HTML entity handling', () => {
     const onError = vi.fn();
 
     expect(
-      readMutationResponseBodyChunks(
-        [
-          '<kovo-fragment target="cart-badge"><cart-badge>3</cart-badge></kovo-fragment>',
-          '<kovo-fragment target="cart-list"><li>stale</li>',
-        ].join('\n'),
-        onError,
-      ).fragments,
+      fragmentSnapshots(
+        readMutationResponseBodyChunks(
+          [
+            '<kovo-fragment target="cart-badge"><cart-badge>3</cart-badge></kovo-fragment>',
+            '<kovo-fragment target="cart-list"><li>stale</li>',
+          ].join('\n'),
+          onError,
+        ).fragments,
+      ),
     ).toEqual([{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain(
@@ -319,7 +355,7 @@ describe('wire parser HTML entity handling', () => {
 
     // SPEC.md §9.1: response apply and fragment-only readers consume the same
     // decoded fragment shape so target filtering and modes cannot drift.
-    expect(readMutationResponseBodyChunks(body).fragments).toEqual([
+    expect(fragmentSnapshots(readMutationResponseBodyChunks(body).fragments)).toEqual([
       { html: '<li>new</li>', mode: 'append', target: 'cart-list' },
       { html: '<span>$7</span>', target: 'cart-total' },
     ]);
@@ -397,12 +433,14 @@ describe('wire parser HTML entity handling', () => {
 
   it('parses checkpoint kovo-text chunks beside query and fragment chunks', () => {
     expect(
-      readMutationResponseBodyChunks(
-        [
-          '<kovo-fragment target="messages" mode="append"><article></article></kovo-fragment>',
-          '<kovo-text target="assistant:a1" mode="checkpoint">server text so far</kovo-text>',
-          '<kovo-query name="chat">{"count":1}</kovo-query>',
-        ].join(''),
+      mutationBodySnapshot(
+        readMutationResponseBodyChunks(
+          [
+            '<kovo-fragment target="messages" mode="append"><article></article></kovo-fragment>',
+            '<kovo-text target="assistant:a1" mode="checkpoint">server text so far</kovo-text>',
+            '<kovo-query name="chat">{"count":1}</kovo-query>',
+          ].join(''),
+        ),
       ),
     ).toEqual({
       fragments: [{ html: '<article></article>', mode: 'append', target: 'messages' }],

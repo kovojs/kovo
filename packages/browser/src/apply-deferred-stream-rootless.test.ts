@@ -1,7 +1,51 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyDeferredStreamResponseToRuntime } from './apply-deferred-stream.js';
 import { createQueryStore } from './query-store.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
+
+function deferredSnapshot<
+  Result extends {
+    chunks: readonly { fragments: readonly { html: RenderedFragmentHtml; target: string }[] }[];
+    fragments: readonly { html: RenderedFragmentHtml; target: string }[];
+  },
+>(
+  result: Result,
+): Omit<Result, 'chunks' | 'fragments'> & {
+  chunks: Array<Omit<Result['chunks'][number], 'fragments'> & { fragments: FragmentSnapshot[] }>;
+  fragments: FragmentSnapshot[];
+} {
+  return {
+    ...result,
+    chunks: result.chunks.map((chunk) => ({
+      ...chunk,
+      fragments: fragmentSnapshots(chunk.fragments),
+    })),
+    fragments: fragmentSnapshots(result.fragments),
+  };
+}
 
 describe('rootless deferred stream runtime apply', () => {
   it('keeps the split deferred module on the mutation runtime parser', () => {
@@ -28,7 +72,7 @@ describe('rootless deferred stream runtime apply', () => {
       store,
     });
 
-    expect(applied).toEqual({
+    expect(deferredSnapshot(applied)).toEqual({
       chunks: [
         {
           fragments: [{ html: '<section>ready</section>', target: 'inventory' }],
@@ -84,7 +128,7 @@ describe('rootless deferred stream runtime apply', () => {
       store,
     });
 
-    expect(applied).toEqual({
+    expect(deferredSnapshot(applied)).toEqual({
       chunks: [
         {
           fragments: [{ html: '<span>badge</span>', target: 'cart-badge' }],

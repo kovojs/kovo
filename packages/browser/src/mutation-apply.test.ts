@@ -1,3 +1,7 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -7,6 +11,34 @@ import {
 import type { FetchedEnhancedMutation } from './mutation-fetch.js';
 import { createQueryStore } from './query-store.js';
 import { FakeMorphRoot, FakeMorphTarget, FakeQueryBindingElement } from './runtime-test-fakes.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
+
+function mutationApplySnapshot<
+  Result extends { fragments: readonly { html: RenderedFragmentHtml; target: string }[] },
+>(result: Result): Omit<Result, 'fragments'> & { fragments: FragmentSnapshot[] } {
+  return {
+    ...result,
+    fragments: fragmentSnapshots(result.fragments),
+  };
+}
 
 function fetchedMutation(
   body: string,
@@ -60,7 +92,7 @@ describe('enhanced mutation response apply orchestration', () => {
     // returned fragments through the same runtime body path before sync fanout.
     expect(store.get('cart')).toEqual({ count: 2 });
     expect(root.targets.get('cart-badge')?.html).toBe('<span>2</span>');
-    expect(applied).toEqual({
+    expect(mutationApplySnapshot(applied)).toEqual({
       appliedFragments: ['cart-badge'],
       changes: [{ domain: 'cart', keys: ['cart:1'] }],
       fragments: [{ html: '<span>2</span>', target: 'cart-badge' }],

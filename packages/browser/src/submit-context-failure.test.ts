@@ -1,9 +1,32 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 import { form, type FormFailure, type Route } from '@kovojs/core';
 
 import { createQueryStore } from './client.js';
 import { createSubmitContext } from './submit-context.js';
 import { FakeMorphRoot } from './runtime-test-fakes.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
 
 declare module '@kovojs/core' {
   interface RouteRegistry {
@@ -51,7 +74,7 @@ describe('submit context failure parsing', () => {
       code: 'OUT_OF_STOCK',
       payload: { availableQuantity: 0 },
     });
-    expect(result.fragments).toEqual([
+    expect(fragmentSnapshots(result.fragments)).toEqual([
       {
         html: '<output role="alert" data-error-code="OUT_OF_STOCK">{"availableQuantity":0}</output>',
         target: 'error',

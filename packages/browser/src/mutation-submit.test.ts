@@ -1,3 +1,7 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createQueryStore, type EnhancedMutationFetchOptions } from './client.js';
@@ -12,6 +16,34 @@ import {
   FakeQueryBindingElement,
   FakeQueryPlanElement,
 } from './runtime-test-fakes.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
+
+function mutationSubmitSnapshot<
+  Result extends { fragments: readonly { html: RenderedFragmentHtml; target: string }[] },
+>(result: Result): Omit<Result, 'fragments'> & { fragments: FragmentSnapshot[] } {
+  return {
+    ...result,
+    fragments: fragmentSnapshots(result.fragments),
+  };
+}
 
 describe('enhanced mutation submit', () => {
   it.each([
@@ -362,7 +394,7 @@ describe('enhanced mutation submit', () => {
       keepalive: true,
       method: 'POST',
     });
-    expect(result).toEqual({
+    expect(mutationSubmitSnapshot(result)).toEqual({
       appliedFragments: ['cart-badge', 'recommendations'],
       fragments: [
         { html: '<cart-badge>1</cart-badge>', target: 'cart-badge' },
