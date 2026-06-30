@@ -17,6 +17,19 @@ const queryReceiverTypes = pgDatabaseTypes([
   'update(table: unknown): { set(value: unknown): Promise<void> };',
 ]);
 
+const kovoServerQueryTypes = {
+  fileName: 'kovo-server-query-types.d.ts',
+  source: [
+    'declare module "@kovojs/server" {',
+    '  export type Reader<Db> = Db;',
+    '  export interface QueryLoadContext<Request = unknown, Db = unknown> {',
+    '    db?: Reader<Db>;',
+    '    request: Request;',
+    '  }',
+    '}',
+  ].join('\n'),
+};
+
 describe('@kovojs/drizzle touch graph helpers', () => {
   it('does not fabricate project query facts from untyped shorthand query-loader receivers', () => {
     const facts = extractQueryFactsFromProject({
@@ -957,6 +970,130 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('keeps inline context.db query-loader reads in the owner-scope audit', () => {
+    const files = [
+      kovoServerQueryTypes,
+      queryReceiverTypes,
+      {
+        fileName: 'note.queries.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { QueryLoadContext } from "@kovojs/server";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'type AppDb = PgAsyncDatabase<any, any>;',
+          'type AppQueryLoadContext = QueryLoadContext<{ session?: { userId: string } | null }, AppDb>;',
+          '',
+          'export const notes = pgTable("notes", {',
+          '  id: text("id").primaryKey(),',
+          '  userId: text("user_id").notNull(),',
+          '  title: text("title").notNull(),',
+          '}, kovo({ domain: "note", key: (t) => t.id, owner: (t) => t.userId }));',
+          '',
+          'export const noteQuery = query("note/inline-context-db", {',
+          '  load(input: { id: string }, context: AppQueryLoadContext) {',
+          '    const db = context.db;',
+          '    return db.select({ id: notes.id, title: notes.title }).from(notes).where(eq(notes.id, input.id));',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    const facts = extractQueryFactsFromProject({ files });
+    expect(facts).toEqual([
+      {
+        hasClientArgPredicate: true,
+        instanceKey: {
+          domain: 'note',
+          key: 'arg:id',
+        },
+        query: 'note/inline-context-db',
+        reads: ['note'],
+        shape: {
+          id: 'string',
+          title: 'string',
+        },
+        site: 'note.queries.ts:14',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+
+    const ownerAudit = extractOwnerAuditFromProject({ files });
+    expect(ownerAudit.scopeAudits).toEqual([
+      {
+        domain: 'note',
+        key: 'arg:id',
+        kind: 'query',
+        name: 'note/inline-context-db',
+        scope: 'args',
+        site: 'note.queries.ts:14',
+      },
+    ]);
+  });
+
+  it('keeps context non-null assertion query-loader reads in the owner-scope audit', () => {
+    const files = [
+      kovoServerQueryTypes,
+      queryReceiverTypes,
+      {
+        fileName: 'note.queries.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { QueryLoadContext } from "@kovojs/server";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'type AppDb = PgAsyncDatabase<any, any>;',
+          'type AppQueryLoadContext = QueryLoadContext<{ session?: { userId: string } | null }, AppDb>;',
+          '',
+          'export const notes = pgTable("notes", {',
+          '  id: text("id").primaryKey(),',
+          '  userId: text("user_id").notNull(),',
+          '  title: text("title").notNull(),',
+          '}, kovo({ domain: "note", key: (t) => t.id, owner: (t) => t.userId }));',
+          '',
+          'export const noteQuery = query("note/non-null-context-db", {',
+          '  load(input: { id: string }, context?: AppQueryLoadContext) {',
+          '    const db = context!.db!;',
+          '    return db.select({ id: notes.id, title: notes.title }).from(notes).where(eq(notes.id, input.id));',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    const facts = extractQueryFactsFromProject({ files });
+    expect(facts).toEqual([
+      {
+        hasClientArgPredicate: true,
+        instanceKey: {
+          domain: 'note',
+          key: 'arg:id',
+        },
+        query: 'note/non-null-context-db',
+        reads: ['note'],
+        shape: {
+          id: 'string',
+          title: 'string',
+        },
+        site: 'note.queries.ts:14',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+
+    const ownerAudit = extractOwnerAuditFromProject({ files });
+    expect(ownerAudit.scopeAudits).toEqual([
+      {
+        domain: 'note',
+        key: 'arg:id',
+        kind: 'query',
+        name: 'note/non-null-context-db',
+        scope: 'args',
+        site: 'note.queries.ts:14',
+      },
+    ]);
   });
 
   it('does not promote local Reader aliases to query-loader receiver proof', () => {

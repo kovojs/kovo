@@ -283,6 +283,13 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
 /** @internal */ export function isDrizzleDatabaseType(type: MorphType): boolean {
   // SPEC §11.1: project receiver proof comes from ts-morph type identity. Avoid source-text
   // membership checks that can promote arbitrary aliases like `NotPgDatabase`.
+  if (type.isUnion()) {
+    const candidates = type.getUnionTypes().filter((part) => !isNullishType(part));
+    return (
+      candidates.length > 0 && candidates.every((candidate) => isDrizzleDatabaseType(candidate))
+    );
+  }
+
   if (isKovoReaderOfDrizzleDatabaseType(type)) return true;
 
   return (
@@ -296,6 +303,14 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
 /** @internal */ export function isKovoReaderOfDrizzleDatabaseType(type: MorphType): boolean {
   // SPEC §9.4/§11.1: Kovo threads query loaders a `Reader<Db>` handle at `context.db`; it is the
   // read-only mirror of the same framework-owned Drizzle database and remains valid read proof.
+  if (type.isUnion()) {
+    const candidates = type.getUnionTypes().filter((part) => !isNullishType(part));
+    return (
+      candidates.length > 0 &&
+      candidates.every((candidate) => isKovoReaderOfDrizzleDatabaseType(candidate))
+    );
+  }
+
   const alias = type.getAliasSymbol();
   if (alias?.getName() !== 'Reader') return false;
   const declarations = alias.getDeclarations();
@@ -307,6 +322,15 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
   }
 
   return type.getAliasTypeArguments().some((argument) => isDrizzleDatabaseType(argument));
+}
+
+function isNullishType(type: MorphType): boolean {
+  const flags = type.compilerType.flags;
+  return (
+    (flags & ts.TypeFlags.Null) !== 0 ||
+    (flags & ts.TypeFlags.Undefined) !== 0 ||
+    (flags & ts.TypeFlags.Void) !== 0
+  );
 }
 
 /** @internal */ export function drizzleDatabaseTypeNames(
