@@ -78,6 +78,84 @@ describe('server mutation lifecycle', () => {
     return handle(state.rows);
   }
 
+  function createBetterSqliteStyleListDb() {
+    const state = {
+      commits: 0,
+      nativeTransactionCalls: 0,
+      rollbacks: 0,
+      rows: [] as string[],
+      transactionRows: undefined as string[] | undefined,
+    };
+
+    const insert = (id: string) => {
+      (state.transactionRows ?? state.rows).push(id);
+    };
+
+    const client = {
+      exec(statement: string) {
+        if (statement === 'BEGIN') {
+          if (state.transactionRows !== undefined) throw new Error('nested begin');
+          state.transactionRows = [...state.rows];
+          return;
+        }
+        if (statement === 'COMMIT') {
+          if (state.transactionRows === undefined) throw new Error('commit without transaction');
+          state.rows.splice(0, state.rows.length, ...state.transactionRows);
+          state.transactionRows = undefined;
+          state.commits += 1;
+          return;
+        }
+        if (statement === 'ROLLBACK') {
+          if (state.transactionRows === undefined) throw new Error('rollback without transaction');
+          state.transactionRows = undefined;
+          state.rollbacks += 1;
+          return;
+        }
+        throw new Error(`unexpected SQLite transaction control: ${statement}`);
+      },
+      get inTransaction() {
+        return state.transactionRows !== undefined;
+      },
+      prepare() {
+        return {};
+      },
+      transaction<Result>(callback: (tx: { insert(id: string): void }) => Result): Result {
+        state.nativeTransactionCalls += 1;
+        const transactionRows = [...state.rows];
+        try {
+          const result = callback({ insert: (id) => transactionRows.push(id) });
+          if (result && typeof (result as { then?: unknown }).then === 'function') {
+            throw new TypeError('Transaction function cannot return a promise');
+          }
+          state.rows.splice(0, state.rows.length, ...transactionRows);
+          state.commits += 1;
+          return result;
+        } catch (error) {
+          state.rollbacks += 1;
+          throw error;
+        }
+      },
+    };
+
+    return {
+      $client: client,
+      get commits() {
+        return state.commits;
+      },
+      insert,
+      get nativeTransactionCalls() {
+        return state.nativeTransactionCalls;
+      },
+      get rollbacks() {
+        return state.rollbacks;
+      },
+      get rows() {
+        return state.rows;
+      },
+      transaction: client.transaction,
+    };
+  }
+
   function createTransactionalTaskDb() {
     const state = {
       commits: 0,
@@ -467,6 +545,49 @@ describe('server mutation lifecycle', () => {
     expect(db.rows).toEqual([]);
     expect(db.commits).toBe(0);
     expect(db.rollbacks).toBe(1);
+  });
+
+  it('runs async default mutation handlers on better-sqlite3-style transaction adapters', async () => {
+    const db = createBetterSqliteStyleListDb();
+    const addContact = mutation('contacts/sqlite-add', {
+      input: s.object({ id: s.string() }),
+      async handler(input, request: { db: ReturnType<typeof createBetterSqliteStyleListDb> }) {
+        request.db.insert(input.id);
+        await Promise.resolve();
+        return input.id;
+      },
+    });
+
+    await expect(
+      runMutation(addContact, { id: 'async-sqlite-A' }, {}, { db: () => db }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'async-sqlite-A',
+    });
+    expect(db.rows).toEqual(['async-sqlite-A']);
+    expect(db.commits).toBe(1);
+    expect(db.rollbacks).toBe(0);
+    expect(db.nativeTransactionCalls).toBe(0);
+  });
+
+  it('rolls back better-sqlite3-style default transactions when async handlers throw', async () => {
+    const db = createBetterSqliteStyleListDb();
+    const addContact = mutation('contacts/sqlite-rollback', {
+      input: s.object({ id: s.string() }),
+      async handler(input, request: { db: ReturnType<typeof createBetterSqliteStyleListDb> }) {
+        request.db.insert(input.id);
+        await Promise.resolve();
+        throw new Error('boom');
+      },
+    });
+
+    await expect(
+      runMutation(addContact, { id: 'partial-sqlite-A' }, {}, { db: () => db }),
+    ).rejects.toThrow('boom');
+    expect(db.rows).toEqual([]);
+    expect(db.commits).toBe(0);
+    expect(db.rollbacks).toBe(1);
+    expect(db.nativeTransactionCalls).toBe(0);
   });
 
   it('schedules durable tasks through the transaction-scoped mutation request', async () => {
