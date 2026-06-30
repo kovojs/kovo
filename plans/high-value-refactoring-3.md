@@ -187,7 +187,7 @@ invariant.
     `--flag=value` handling, aliases, and default options.
   - Verification: `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-export.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts` plus `pnpm run check:api-surface`.
 
-- [ ] **P2.3 - Replace site search `innerHTML` rendering with DOM construction and URL validation.**
+- [x] **P2.3 - Replace site search `innerHTML` rendering with DOM construction and URL validation.**
   - Current signals: `site/src/client/search.js` fetches `search-index.json`, escapes text with a local
     helper, interpolates result rows as strings, and assigns `innerHTML`.
   - Refactor shape: build rows with `document.createElement`, `textContent`, `setAttribute`, and a
@@ -195,10 +195,9 @@ invariant.
     serializers that have contextual escaping tests.
   - Risk reduced: docs search cannot become an XSS or unsafe-navigation sink if generated index
     content or escaping context changes.
-  - Verification: malicious title/section/url fixtures cover text, attribute, and href contexts. Run
-    `pnpm --filter @kovojs/site test` and `pnpm --filter @kovojs/site run smoke:navigation`.
+  - Evidence: `pnpm --filter @kovojs/site exec vitest --run src/client/search.test.ts` passed on 2026-06-30 with malicious title/section/url fixtures covering text, attribute, and href contexts.
 
-- [ ] **P2.4 - Make SQL side-effect observation dialect-aware in the test harness.**
+- [x] **P2.4 - Make SQL side-effect observation dialect-aware in the test harness.**
   - Current signals: `packages/test/src/sql-observer.ts` receives `sqlDialect`, but table discovery
     probes Postgres `information_schema.tables`; SQLite harness tests pass `sqlDialect: 'sqlite'`.
   - Refactor shape: make table discovery and identifier quoting dialect-aware for PGlite/Postgres and
@@ -206,7 +205,7 @@ invariant.
     promise detection or adapter methods.
   - Risk reduced: SQLite/raw-handle tests cannot silently lose verifier count/fingerprint coverage for
     side effects.
-  - Verification: add SQLite count/fingerprint side-effect tests and run `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/test/src/sql-observer.test.ts packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts` passed on 2026-06-30 with SQLite count/fingerprint side-effect coverage and existing PGlite observer coverage.
 
 - [ ] **P2.5 - Make compiler diagnostic coverage producer-owned.**
   - Current signals: `packages/compiler/src/diagnostic-coverage-matrix.data.ts` is a large

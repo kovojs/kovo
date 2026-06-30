@@ -90,4 +90,104 @@ describe('@kovojs/test SQLite harness integration', () => {
       db.close();
     }
   });
+
+  it('verifies SQLite trigger count side effects against the static touch graph', async () => {
+    const deleteProduct = mutation('product/delete', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      async handler(input, request: { db: Pick<SqliteTestDb, 'exec'> }) {
+        await request.db.exec(`delete from products where id = '${input.productId}'`);
+        return input.productId;
+      },
+    });
+    const db = createSqliteTestDb();
+
+    try {
+      db.exec('create table products (id text primary key)');
+      db.exec('create table cart_items (product_id text not null)');
+      db.exec(`
+        create trigger delete_cart_items
+        after delete on products
+        begin
+          delete from cart_items where product_id = old.id;
+        end
+      `);
+      db.exec("insert into products (id) values ('p1')");
+      db.exec("insert into cart_items (product_id) values ('p1')");
+      const harness = createKovoTestHarness({
+        db,
+        touchGraph: {
+          'product.delete': {
+            touches: [
+              { domain: 'product', keys: 'sql:id', site: 'product.domain.ts:1', via: 'products' },
+            ],
+            unresolved: [],
+          },
+        },
+        verification: {
+          domainByTable: {
+            cart_items: 'cart',
+            products: 'product',
+          },
+          sqlDialect: 'sqlite',
+        },
+      });
+
+      await expect(harness.exec(deleteProduct, { productId: 'p1' })).rejects.toThrow(
+        expectedDiagnostic('KV402', 'cart'),
+      );
+    } finally {
+      db.close();
+    }
+  });
+
+  it('verifies SQLite trigger fingerprint side effects when row counts do not change', async () => {
+    const repriceProduct = mutation('product/reprice', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      async handler(input, request: { db: Pick<SqliteTestDb, 'exec'> }) {
+        await request.db.exec(`update products set price = 20 where id = '${input.productId}'`);
+        return input.productId;
+      },
+    });
+    const db = createSqliteTestDb();
+
+    try {
+      db.exec('create table products (id text primary key, price integer not null)');
+      db.exec('create table inventory (product_id text primary key, refreshed_at text not null)');
+      db.exec(`
+        create trigger refresh_inventory
+        after update on products
+        begin
+          update inventory set refreshed_at = 'v2' where product_id = new.id;
+        end
+      `);
+      db.exec("insert into products (id, price) values ('p1', 10)");
+      db.exec("insert into inventory (product_id, refreshed_at) values ('p1', 'v1')");
+      const harness = createKovoTestHarness({
+        db,
+        touchGraph: {
+          'product.reprice': {
+            touches: [
+              { domain: 'product', keys: 'sql:id', site: 'product.domain.ts:1', via: 'products' },
+            ],
+            unresolved: [],
+          },
+        },
+        verification: {
+          domainByTable: {
+            inventory: 'inventory',
+            products: 'product',
+          },
+          sqlDialect: 'sqlite',
+        },
+      });
+
+      await expect(harness.exec(repriceProduct, { productId: 'p1' })).rejects.toThrow(
+        expectedDiagnostic('KV402', 'inventory'),
+      );
+    } finally {
+      db.close();
+    }
+  });
 });
