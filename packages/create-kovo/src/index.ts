@@ -51,39 +51,138 @@ export interface WriteKovoProjectOptions extends Partial<CreateKovoOptions> {
 /** Usage line emitted by the `create-kovo` bin and consumed by the docs generator. */
 export const CREATE_KOVO_USAGE = 'create-kovo <target-directory> [options]';
 
-export const CREATE_KOVO_HELP = [
-  'create-kovo',
-  '',
-  'Create a new Kovo application.',
-  '',
-  'Usage',
-  `  ${CREATE_KOVO_USAGE}`,
-  '',
-  'Options',
-  '  --name <name>               Package name for package.json.',
-  '                              Default: normalized target directory name.',
-  '',
-  '  --dialect <postgres|sqlite> Database scaffold to generate.',
-  '                              Default: postgres.',
-  '',
-  '  --postgres                  Alias for --dialect postgres.',
-  '  --sqlite                    Alias for --dialect sqlite.',
-  '  --disable-git               Do not initialize a Git repository.',
-  '',
-  '  -h, --help                  Show this help.',
-  '',
-  'Examples',
-  '  create-kovo my-app',
-  '  create-kovo my-app --name acme-todos',
-  '  create-kovo my-app --dialect sqlite',
-  '',
-  'Defaults',
-  '  target-directory            Required.',
-  '  name                        basename(target-directory), normalized for npm.',
-  '  dialect                     postgres.',
-  `  package manager             ${rootPackageManager()}.`,
-  '',
-].join('\n');
+interface CreateKovoReferenceOption {
+  defaultText?: string;
+  description: string;
+  docsDescription?: string;
+  flag: string;
+}
+
+interface CreateKovoReferenceDefault {
+  label: string;
+  value: string;
+}
+
+interface CreateKovoReferenceSection {
+  anchor: string;
+  body: readonly string[];
+  title: string;
+}
+
+interface CreateKovoReferenceSchema {
+  defaults: readonly CreateKovoReferenceDefault[];
+  description: string;
+  examples: readonly string[];
+  options: readonly CreateKovoReferenceOption[];
+  sections: readonly CreateKovoReferenceSection[];
+  title: string;
+  usage: string;
+}
+
+export const CREATE_KOVO_REFERENCE = {
+  title: 'create-kovo',
+  description: 'Create a new Kovo application.',
+  usage: CREATE_KOVO_USAGE,
+  options: [
+    {
+      flag: '--name <name>',
+      description: 'Package name for package.json.',
+      defaultText: 'normalized target directory name.',
+      docsDescription:
+        'Override the generated `package.json` name. Names are normalized to lowercase npm-compatible words and dashes.',
+    },
+    {
+      flag: '--dialect <postgres|sqlite>',
+      description: 'Database scaffold to generate.',
+      defaultText: 'postgres.',
+      docsDescription: 'Select the database starter. Defaults to `postgres`.',
+    },
+    {
+      flag: '--postgres',
+      description: 'Alias for --dialect postgres.',
+      docsDescription: 'Alias for `--dialect postgres`.',
+    },
+    {
+      flag: '--sqlite',
+      description: 'Alias for --dialect sqlite.',
+      docsDescription: 'Alias for `--dialect sqlite`.',
+    },
+    {
+      flag: '--disable-git',
+      description: 'Do not initialize a Git repository.',
+      docsDescription:
+        'Skip Git repository initialization. By default, `create-kovo` runs `git init` unless the target is already inside a Git or Mercurial repository.',
+    },
+    {
+      flag: '-h, --help',
+      description: 'Show this help.',
+      docsDescription: 'Print usage and exit without writing files.',
+    },
+  ],
+  examples: [
+    'create-kovo my-app',
+    'create-kovo my-app --name acme-todos',
+    'create-kovo my-app --dialect sqlite',
+  ],
+  defaults: [
+    { label: 'target-directory', value: 'Required.' },
+    { label: 'name', value: 'basename(target-directory), normalized for npm.' },
+    { label: 'dialect', value: 'postgres.' },
+    { label: 'package manager', value: `${rootPackageManager()}.` },
+  ],
+  sections: [
+    {
+      title: 'Generated project',
+      anchor: 'generated-project',
+      body: [
+        'The scaffold writes the application source, Vite+/Kovo config, test files, README, CI workflow, and database-specific schema/auth/database files for the selected dialect. It also writes `.env`, `.env.example`, and `.gitignore`. By default, it initializes a Git repository after writing files; pass `--disable-git` to skip that step. If the target already sits under a Git or Mercurial repository, `create-kovo` leaves version control to the parent repository.',
+        'The `.env` file contains a per-project random `KOVO_CSRF_SECRET`; `.env` is gitignored, while `.env.example` keeps the deployment placeholder visible. The starter auth module fails closed when the secret is missing or still set to the placeholder.',
+      ],
+    },
+    {
+      title: 'Write safety',
+      anchor: 'write-safety',
+      body: [
+        'The command resolves every template destination under the target root before writing and rejects path traversal. Existing non-empty directories and non-directory targets fail before any scaffold file is written.',
+      ],
+    },
+  ],
+} as const satisfies CreateKovoReferenceSchema;
+
+export function renderCreateKovoHelp(reference = CREATE_KOVO_REFERENCE): string {
+  const optionWidth = Math.max(...reference.options.map((option) => option.flag.length));
+  const defaultWidth = Math.max(27, ...reference.defaults.map((item) => item.label.length));
+  const lines = [
+    reference.title,
+    '',
+    reference.description,
+    '',
+    'Usage',
+    `  ${reference.usage}`,
+    '',
+    'Options',
+  ];
+
+  for (const option of reference.options) {
+    lines.push(`  ${option.flag.padEnd(optionWidth)} ${option.description}`);
+    if ('defaultText' in option && option.defaultText) {
+      lines.push(`  ${''.padEnd(optionWidth)} Default: ${option.defaultText}`);
+    }
+    lines.push('');
+  }
+
+  lines.push('Examples');
+  for (const example of reference.examples) lines.push(`  ${example}`);
+  lines.push('', 'Defaults');
+  for (const item of reference.defaults) {
+    lines.push(`  ${item.label.padEnd(defaultWidth)} ${item.value}`);
+  }
+  lines.push('');
+
+  return lines.join('\n');
+}
+
+export const CREATE_KOVO_HELP = renderCreateKovoHelp();
 
 const templateRoot = new URL('../templates/', import.meta.url);
 interface TemplateFile {

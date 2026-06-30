@@ -69,10 +69,20 @@ describe('cli-ref generator', () => {
     const commandNames = COMMANDS_MANIFEST.map((entry) => entry.name);
 
     expect(result.commands).toEqual(commandNames);
+    expect(page).toContain('title: "@kovojs/cli"');
+    expect(page).toContain('## Commands');
     expect(page).toContain(formatNoArgsMessage().trimEnd());
     for (const name of commandNames) {
       expect(page).toContain(`### kovo ${name}`);
     }
+    for (const entry of COMMANDS_MANIFEST) {
+      const usageLines = Array.isArray(entry.usage) ? entry.usage : [entry.usage];
+      for (const line of usageLines) expect(page).toContain(line);
+      for (const example of entry.examples ?? []) expect(page).toContain(example);
+    }
+    expect(page).toContain('## Programmatic API');
+    expect(page).toContain('### Functions');
+    expect(page).toContain('#### `kovoCheck`');
     expect(sidebar.subpaths[0].categories[0].symbols.map((symbol) => symbol.name)).toEqual(
       commandNames.map((name) => `kovo ${name}`),
     );
