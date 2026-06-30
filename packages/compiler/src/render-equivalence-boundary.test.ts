@@ -6,7 +6,10 @@ import { describe, expect, it } from 'vitest';
 
 import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle-fixtures.js';
 import { compileComponentModule } from './index.js';
-import { authoredStaticTextEquivalenceCheck } from './emit/render-equivalence.js';
+import {
+  authoredStaticTextEquivalenceCheck,
+  semanticRenderEquivalenceCheck,
+} from './emit/render-equivalence.js';
 import { parseComponentModule } from './scan/parse.js';
 
 const compilerSrcDir = dirname(fileURLToPath(import.meta.url));
@@ -151,5 +154,39 @@ export const X = component({ queries: { q: {} }, render: ({ q }) => (<p>Hello <s
     expect(result.diagnostics).toEqual([]);
     expect(result.renderEquivalenceChecks).toHaveLength(1);
     expect(result.renderEquivalenceChecks[0]?.ok).toBe(true);
+  });
+});
+
+describe('render-equivalence generated semantic attributes', () => {
+  it('ignores generated data-bind-list stamps in semantic render comparisons', () => {
+    const source = `
+import { component } from '@kovojs/core';
+
+export const CartList = component({
+  render: () => (
+    <ul data-bind-list="cart.items" kovo-key="id">
+      <li>Milk</li>
+    </ul>
+  ),
+});
+`;
+    const executableSource = [
+      'function renderSource() {',
+      '  return `',
+      source.replace(' data-bind-list="cart.items"', ''),
+      '  `;',
+      '}',
+    ].join('\n');
+    const check = semanticRenderEquivalenceCheck(
+      'components/cart-list.server.js',
+      parseComponentModule('components/cart-list.tsx', source),
+      executableSource,
+    );
+
+    expect(check).toMatchObject({
+      actual: '<ul><li>Milk</li></ul>',
+      expected: '<ul><li>Milk</li></ul>',
+      ok: true,
+    });
   });
 });
