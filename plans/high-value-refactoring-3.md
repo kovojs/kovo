@@ -92,7 +92,7 @@ invariant.
 
 ## P1 - Cross-Package Drift and Large Runtime Extraction
 
-- [ ] **P1.1 - Replace browser wire regex parsers with one typed wire-element tokenizer.**
+- [x] **P1.1 - Replace browser wire regex parsers with one typed wire-element tokenizer.**
   - Current signals: `packages/browser/src/wire-response-scanner.ts` parses wire chunks with tag/close
     regexes, while `packages/browser/src/wire-parser.ts` carries separate attribute logic because
     existing `readAttribute()` cannot distinguish valueless from absent attributes.
@@ -101,9 +101,9 @@ invariant.
     code and inline-loader extraction while preserving bundle-size budgets.
   - Risk reduced: streamed/deferred chunks, nested fragments, malformed tags, boolean attributes such
     as `delta`, and quoted/entity variants parse consistently in inline and modular runtimes.
-  - Verification: `pnpm exec vitest --run packages/browser/src/wire-response-scanner.test.ts packages/browser/src/wire-parser.test.ts packages/browser/src/inline-loader-parser-parity.test.ts packages/browser/src/apply-deferred-stream.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/browser/src/wire-response-scanner.test.ts packages/browser/src/wire-parser.test.ts packages/browser/src/inline-loader-parser-parity.test.ts packages/browser/src/apply-deferred-stream.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/query-visible-return-ledger.test.ts packages/browser/src/query-visible-return-refetch.test.ts packages/browser/src/clock-tick-bus.test.ts packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-derived.test.ts packages/browser/src/optimism-rebase.test.ts packages/browser/src/optimism-typing.test.ts packages/browser/src/inline-loader-build.test.ts`, `pnpm --filter @kovojs/browser run check:inline-loader`, and `git diff --check` passed on 2026-06-30.
 
-- [ ] **P1.2 - Extract enhanced navigation and page-lifecycle recovery from the inline-loader string.**
+- [x] **P1.2 - Extract enhanced navigation and page-lifecycle recovery from the inline-loader string.**
   - Current signals: `packages/browser/src/inline-loader-build.ts` still contains large readable
     implementations for enhanced navigation, `visibilitychange`/`pageshow` recovery, bfcache
     session reload, view transitions, scroll/focus restoration, and live query refresh. Modular
@@ -114,7 +114,7 @@ invariant.
     application and wire parsing are extracted.
   - Risk reduced: navigation and stale-data recovery fixes land in typed, reviewable code and cannot
     drift between inline and modular loader paths.
-  - Verification: `pnpm exec vitest --run packages/browser/src/inline-loader-navigation.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/query-visible-return.test.ts packages/browser/src/clock-tick-bus.test.ts packages/browser/src/optimism.test.ts packages/browser/src/inline-loader-build.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/browser/src/wire-response-scanner.test.ts packages/browser/src/wire-parser.test.ts packages/browser/src/inline-loader-parser-parity.test.ts packages/browser/src/apply-deferred-stream.test.ts packages/browser/src/inline-loader-response-apply.browser.test.ts packages/browser/src/inline-loader-navigation.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/query-visible-return-ledger.test.ts packages/browser/src/query-visible-return-refetch.test.ts packages/browser/src/clock-tick-bus.test.ts packages/browser/src/optimism-apply.test.ts packages/browser/src/optimism-derived.test.ts packages/browser/src/optimism-rebase.test.ts packages/browser/src/optimism-typing.test.ts packages/browser/src/inline-loader-build.test.ts`, `pnpm --filter @kovojs/browser run check:inline-loader`, and `git diff --check` passed on 2026-06-30.
 
 - [ ] **P1.3 - Move CLI build graph extraction off source string probes.**
   - Current signals: `packages/cli/src/commands/build-export.ts` still guards graph extraction with

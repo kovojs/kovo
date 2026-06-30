@@ -1,6 +1,7 @@
 import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
 
-import { readAttribute, tagClose } from './wire-html.js';
+import { readAttribute } from './wire-html.js';
+import { readWireElementTokens, type WireAttribute } from './wire-tokenizer.js';
 
 export interface FragmentChunk {
   html: RenderedFragmentHtml;
@@ -35,6 +36,7 @@ export interface ReadMutationResponseElementChunksOptions {
 }
 
 export interface ElementChunk {
+  attributes?: readonly WireAttribute[];
   attrs: string;
   content: string;
   end: number;
@@ -173,77 +175,20 @@ export function readElementChunks(
   options: ReadElementChunksOptions = {},
 ): ElementChunk[] {
   const chunks: ElementChunk[] = [];
-  const tag = new RegExp('</?' + escapeRegExp(tagName) + '\\b', 'gi');
-  let offset = 0;
-
-  while (offset < body.length) {
-    tag.lastIndex = offset;
-    const match = tag.exec(body);
-    if (!match) break;
-    if (match[0].startsWith('</')) {
-      offset = match.index + match[0].length;
-      continue;
-    }
-
-    const openingEnd = tagClose(body, match.index + match[0].length);
-    if (openingEnd === undefined) {
-      options.onMalformed?.('missing opening tag close');
-      break;
-    }
-
-    const end = matchingElementEnd(body, tagName, match.index, openingEnd, options.nested ?? false);
-    if (!end) {
-      options.onMalformed?.('missing closing tag');
-      break;
-    }
-
-    chunks.push({
-      attrs: body.slice(match.index + match[0].length, openingEnd),
-      content: body.slice(openingEnd + 1, end.closeStart),
-      end: end.end,
-      start: match.index,
+  for (const token of readWireElementTokens(body, tagName, options)) {
+    const chunk: ElementChunk = {
+      attrs: token.attrs,
+      content: token.content,
+      end: token.end,
+      start: token.start,
+    };
+    Object.defineProperty(chunk, 'attributes', {
+      configurable: true,
+      enumerable: false,
+      value: token.attributes,
     });
-    offset = end.end;
+    chunks.push(chunk);
   }
 
   return chunks;
-}
-
-function matchingElementEnd(
-  body: string,
-  tagName: string,
-  start: number,
-  openingEnd: number,
-  nested: boolean,
-): { closeStart: number; end: number } | null {
-  if (!nested) {
-    const closingTag = new RegExp('</' + escapeRegExp(tagName) + '\\s*>', 'gi');
-    closingTag.lastIndex = openingEnd + 1;
-    const match = closingTag.exec(body);
-    return match ? { closeStart: match.index, end: match.index + match[0].length } : null;
-  }
-
-  const elementTag = new RegExp('</?' + escapeRegExp(tagName) + '\\b', 'gi');
-  elementTag.lastIndex = start;
-  let depth = 0;
-
-  for (let match = elementTag.exec(body); match; match = elementTag.exec(body)) {
-    const close = tagClose(body, match.index + match[0].length);
-    if (close === undefined) return null;
-
-    if (match[0].startsWith('</')) {
-      depth -= 1;
-      if (depth === 0) return { closeStart: match.index, end: close + 1 };
-    } else if (!/\/\s*>$/.test(body.slice(match.index, close + 1))) {
-      depth += 1;
-    }
-
-    elementTag.lastIndex = close + 1;
-  }
-
-  return null;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
