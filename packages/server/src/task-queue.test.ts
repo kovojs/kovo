@@ -202,8 +202,9 @@ describe('durable task queue store (SPEC §9.6)', () => {
       },
     });
 
-    await expect(executor.execute({ text: 'insert into _kovo_jobs values ($1)', values: ['id'] }))
-      .resolves.toEqual({ rows: [{ ok: true }] });
+    await expect(
+      executor.execute({ text: 'insert into _kovo_jobs values ($1)', values: ['id'] }),
+    ).resolves.toEqual({ rows: [{ ok: true }] });
     expect(sessionCalls).toEqual([['insert into _kovo_jobs values ($1)', ['id']]]);
     expect(topLevelCalls).toEqual([]);
   });

@@ -564,7 +564,9 @@ function liveTargetAttestationPayload<Request>(
   },
 ): string {
   const principal =
-    options.csrf === false ? 'anonymous' : (options.csrf?.sessionId(options.request) ?? 'anonymous');
+    options.csrf === false
+      ? 'anonymous'
+      : (options.csrf?.sessionId(options.request) ?? 'anonymous');
   return canonicalJson({
     component: descriptor.component,
     principal,

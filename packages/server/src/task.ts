@@ -47,8 +47,9 @@ export type TaskRunnableMutationInput<Mutation> =
   Mutation extends TaskRunnableMutation<infer Input> ? Input : never;
 
 /** Input type accepted by `TaskRunContext.runQuery(...)` for a query-like definition. */
-export type TaskRunnableQueryInput<Query> =
-  Query extends { args: Schema<infer Input> } ? Input : undefined;
+export type TaskRunnableQueryInput<Query> = Query extends { args: Schema<infer Input> }
+  ? Input
+  : undefined;
 
 /** Context available to durable task bodies (SPEC §9.6: composition only, no raw db). */
 export interface TaskRunContext {
@@ -109,7 +110,11 @@ export interface TaskFactory {
 export function task<InputSchema extends Schema<unknown>, Value = unknown>(
   definition: Omit<TaskDefinition<string, InputSchema, Value>, 'key'>,
 ): TaskDefinition<string, InputSchema, Value>;
-export function task<const Key extends string, InputSchema extends Schema<unknown>, Value = unknown>(
+export function task<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Value = unknown,
+>(
   key: Key,
   definition: Omit<TaskDefinition<Key, InputSchema, Value>, 'key'>,
 ): TaskDefinition<Key, InputSchema, Value>;

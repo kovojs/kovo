@@ -14,13 +14,7 @@ import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
 import type { JsonSerializable } from '../json-boundary.js';
-import type {
-  TaskDefinition,
-  TaskHandle,
-  TaskInput,
-  TaskScheduleOptions,
-  TaskSchedulingRequest,
-} from '../task.js';
+import type { TaskDefinition, TaskHandle, TaskInput, TaskScheduleOptions } from '../task.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
 
 /**
@@ -287,7 +281,7 @@ export interface MutationDefinition<
   guard?: Guard<Request, GuardedRequest>;
   handler: (
     input: InferSchema<InputSchema>,
-    request: GuardedRequest & TaskSchedulingRequest,
+    request: GuardedRequest,
     context: MutationContext<Errors>,
   ) => Promise<Value | MutationFail> | Value | MutationFail;
   input: InputSchema;

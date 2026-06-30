@@ -500,22 +500,13 @@ export function addDurableTaskProofs(root: string): void {
         "} from './durable-task-proofs.js';",
       ].join('\n'),
     )
-    .replace(
-      'endpoints: [healthEndpoint],',
-      'endpoints: [healthEndpoint, taskProofCountEndpoint],',
-    )
+    .replace('endpoints: [healthEndpoint],', 'endpoints: [healthEndpoint, taskProofCountEndpoint],')
     .replace(
       'mutations: [addContact, appSignIn, appSignOut],',
       'mutations: [addContact, recordTaskEffect, scheduleTaskProof, appSignIn, appSignOut],',
     )
-    .replace(
-      'stylesheets: options.stylesheets ?? [],',
-      'stylesheets: options.stylesheets ?? [],',
-    )
-    .replace(
-      'routes: [',
-      'tasks: [recordDurableTask],\n  routes: [',
-    );
+    .replace('stylesheets: options.stylesheets ?? [],', 'stylesheets: options.stylesheets ?? [],')
+    .replace('routes: [', 'tasks: [recordDurableTask],\n  routes: [');
   writeFileSync(appPath, app, 'utf8');
 }
 

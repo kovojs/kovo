@@ -461,8 +461,7 @@ interface SqlClientLike {
 
 function isSqlClientLike(value: unknown): value is SqlClientLike {
   return (
-    isRecord(value) &&
-    (typeof value.query === 'function' || typeof value.execute === 'function')
+    isRecord(value) && (typeof value.query === 'function' || typeof value.execute === 'function')
   );
 }
 

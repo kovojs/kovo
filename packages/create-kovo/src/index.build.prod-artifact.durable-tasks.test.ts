@@ -14,10 +14,7 @@ import {
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
-import {
-  addDurableTaskProofs,
-  buildProductionArtifact,
-} from './index.build.test-support.js';
+import { addDurableTaskProofs, buildProductionArtifact } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production durable task artifacts)', () => {
   it('runs durable scheduled tasks from the production build artifact', async () => {

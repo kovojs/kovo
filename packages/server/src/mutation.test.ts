@@ -492,19 +492,24 @@ describe('server mutation lifecycle', () => {
     });
 
     await expect(
-      runMutation(checkout, { orderId: 'o1' }, { db }, {
-        taskScheduler: {
-          schedule(request, definition, args) {
-            const db = (request as { db: ReturnType<typeof createTransactionalTaskDb> }).db;
-            schedulerRequests.push(db.transactionScoped);
-            db.enqueueJob({ args, task: definition.key });
-            return { id: 'job-1', task: definition.key };
-          },
-          cancel() {
-            return false;
+      runMutation(
+        checkout,
+        { orderId: 'o1' },
+        { db },
+        {
+          taskScheduler: {
+            schedule(request, definition, args) {
+              const db = (request as { db: ReturnType<typeof createTransactionalTaskDb> }).db;
+              schedulerRequests.push(db.transactionScoped);
+              db.enqueueJob({ args, task: definition.key });
+              return { id: 'job-1', task: definition.key };
+            },
+            cancel() {
+              return false;
+            },
           },
         },
-      }),
+      ),
     ).resolves.toMatchObject({
       ok: true,
       value: 'receipt/send',
@@ -532,17 +537,22 @@ describe('server mutation lifecycle', () => {
     });
 
     await expect(
-      runMutation(checkout, { orderId: 'o1' }, {}, {
-        taskScheduler: {
-          schedule(_request, _definition, args) {
-            calls.push(args);
-            return { id: 'job-1', task: 'receipt/send-invalid' };
-          },
-          cancel() {
-            return false;
+      runMutation(
+        checkout,
+        { orderId: 'o1' },
+        {},
+        {
+          taskScheduler: {
+            schedule(_request, _definition, args) {
+              calls.push(args);
+              return { id: 'job-1', task: 'receipt/send-invalid' };
+            },
+            cancel() {
+              return false;
+            },
           },
         },
-      }),
+      ),
     ).rejects.toThrow('Expected string');
     expect(calls).toEqual([]);
   });
@@ -568,20 +578,25 @@ describe('server mutation lifecycle', () => {
     });
 
     await expect(
-      runMutation(checkout, { orderId: 'o1' }, { db }, {
-        taskScheduler: {
-          schedule(request, definition, args) {
-            (request as { db: ReturnType<typeof createTransactionalTaskDb> }).db.enqueueJob({
-              args,
-              task: definition.key,
-            });
-            return { id: 'job-1', task: definition.key };
-          },
-          cancel() {
-            return false;
+      runMutation(
+        checkout,
+        { orderId: 'o1' },
+        { db },
+        {
+          taskScheduler: {
+            schedule(request, definition, args) {
+              (request as { db: ReturnType<typeof createTransactionalTaskDb> }).db.enqueueJob({
+                args,
+                task: definition.key,
+              });
+              return { id: 'job-1', task: definition.key };
+            },
+            cancel() {
+              return false;
+            },
           },
         },
-      }),
+      ),
     ).rejects.toThrow('boom');
     expect(db.rows).toEqual([]);
     expect(db.jobs).toEqual([]);
@@ -619,17 +634,22 @@ describe('server mutation lifecycle', () => {
     });
 
     await expect(
-      runMutation(cancelReceipt, {}, { marker: 'request-1' }, {
-        taskScheduler: {
-          schedule() {
-            throw new Error('not used');
-          },
-          cancel(request, taskHandle) {
-            calls.push({ marker: (request as { marker: string }).marker, taskHandle });
-            return true;
+      runMutation(
+        cancelReceipt,
+        {},
+        { marker: 'request-1' },
+        {
+          taskScheduler: {
+            schedule() {
+              throw new Error('not used');
+            },
+            cancel(request, taskHandle) {
+              calls.push({ marker: (request as { marker: string }).marker, taskHandle });
+              return true;
+            },
           },
         },
-      }),
+      ),
     ).resolves.toMatchObject({
       ok: true,
       value: true,

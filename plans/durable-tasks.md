@@ -201,7 +201,7 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
 - [x] **Phase 1 — `task()` + `request.schedule()` + Postgres queue + node-preset runner (MVP).**
       Added the `task()` registry primitive (typed `input`, `run(args, ctx)` with composition-only
       `ctx`: `runQuery`/`runMutation`/`schedule`/`fetch`, no raw db); `request.schedule(task, args,
-      { afterMs?, at?, key? })` writes a `_kovo_jobs` row in the mutation tx and returns a typed
+{ afterMs?, at?, key? })` writes a `_kovo_jobs` row in the mutation tx and returns a typed
       handle; `request.cancel(handle)` + keyed debounce/throttle are backed by the Postgres queue,
       SKIP-LOCKED claim loop, lease reaper, and `run_at` scheduling. `ctx.storage` remains deferred
       under the storage open question below.
