@@ -1,6 +1,9 @@
 import { normalizePathname } from './match.js';
-import { collectStaticExportServerEndpointRefs } from './static-export-document-refs.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
+import {
+  scanStaticExportDocumentProtocol,
+  type StaticExportDocumentProtocol,
+} from './static-export-protocol.js';
 import { replayStaticExportRequest } from './static-export-request.js';
 import type { StaticExportReplayContext } from './static-export-replay-context.js';
 import { readStaticExportReplayedResponse } from './static-export-response.js';
@@ -23,7 +26,8 @@ export async function replayStaticExportRouteDocumentArtifact({
     routePath,
   });
   const { body } = replayed;
-  assertStaticExportRouteDocumentL0L1({ body, origin: context.origin, routePath });
+  const protocol = scanStaticExportDocumentProtocol(body, context.origin);
+  assertStaticExportRouteDocumentL0L1({ protocol, routePath });
 
   return {
     ...replayed,
@@ -37,19 +41,17 @@ export function staticExportRouteDocumentArtifactPath(pathname: string): string 
 }
 
 interface StaticExportRouteDocumentL0L1Options {
-  body: string;
-  origin: string;
+  protocol: StaticExportDocumentProtocol;
   routePath: string;
 }
 
 function assertStaticExportRouteDocumentL0L1({
-  body,
-  origin,
+  protocol,
   routePath,
 }: StaticExportRouteDocumentL0L1Options): void {
   // `routePath` here is the concrete replay target; stamp it as the concrete-path discriminator so
   // SPEC §9.5 `skip` suppresses only this exact target and not its valid param siblings.
-  const diagnostics = collectStaticExportServerEndpointRefs(body, origin).map((ref) =>
+  const diagnostics = protocol.endpointRefs.map((ref) =>
     staticExportDiagnostic(
       routePath,
       `KV229 static export cannot export route '${routePath}' because document attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
