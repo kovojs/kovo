@@ -94,7 +94,7 @@ Priority is based on correctness/security impact first, then maintainability and
     passed, and `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t render-equivalence`
     passed.
 
-- [ ] **P0.6 - Type mutation replay and response mapping by delivery mode.**
+- [x] **P0.6 - Type mutation replay and response mapping by delivery mode.**
   - Current signals: `packages/server/src/mutation.ts` now has a lifecycle runner, but
     `noJsReplayStoreFromMutationStore()` still bridges enhanced and no-JS replay stores with
     `as unknown as`, and response rendering still has mode-specific mapping spread around the file.
@@ -108,6 +108,11 @@ Priority is based on correctness/security impact first, then maintainability and
     no-JS success redirect, no-JS validation failure, duplicate submit, and render-error paths;
     `rg "as unknown as.*Mutation|noJsReplayStoreFromMutationStore" packages/server/src/mutation.ts`
     confirms the unsafe adapter is gone.
+  - Evidence:
+    `pnpm exec vitest --run packages/server/src/mutation*.test.ts packages/server/src/app-mutation-request.test.ts`
+    passed, and
+    `rg -n "as unknown as.*Mutation|noJsReplayStoreFromMutationStore" packages/server/src/mutation.ts; test $? -eq 1`
+    passed with no matches.
 
 ## P1 - Shared Maintainability and Drift Removal
 

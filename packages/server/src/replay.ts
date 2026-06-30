@@ -4,7 +4,7 @@ import { formLikeToRecord } from './schema.js';
 export type MutationReplayResponse = ServerResponseBase<
   string,
   ResponseHeaders,
-  200 | 401 | 403 | 409 | 422 | 429 | 500
+  200 | 303 | 401 | 403 | 409 | 422 | 429 | 500
 >;
 
 /**

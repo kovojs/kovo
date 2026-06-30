@@ -77,7 +77,7 @@ export interface MutationWireRequest<
     failure: MutationFail,
     rawInput: unknown,
   ) => AwaitableGeneratedFragmentRenderable;
-  replayStore?: MutationReplayStore<BufferedMutationWireResponse>;
+  replayStore?: MutationReplayStore<MutationEndpointReplayResponse>;
   requestFingerprint?: string;
   rawInput: unknown;
   request: Request;
@@ -190,7 +190,7 @@ export interface MutationWireRequestOptions<
     failure: MutationFail,
     rawInput: unknown,
   ) => AwaitableGeneratedFragmentRenderable;
-  replayStore?: MutationReplayStore<BufferedMutationWireResponse>;
+  replayStore?: MutationReplayStore<MutationEndpointReplayResponse>;
   request: Request;
   /** @internal Transaction-scoped durable task scheduler for request.schedule/cancel (SPEC §9.6). */
   taskScheduler?: TaskScheduler;
@@ -256,6 +256,9 @@ export interface NoJsMutationResponse extends ServerResponseBase<
   303 | 403 | 409 | 422 | 429 | 500
 > {}
 
+/** @internal Replay-cacheable response shapes for the two mutation endpoint delivery modes. */
+export type MutationEndpointReplayResponse = BufferedMutationWireResponse | NoJsMutationResponse;
+
 /**
  * @internal Replay store for no-JS form submissions (A2, SPEC §10.3:1063).
  * Typed separately from the enhanced path's `MutationReplayStore` to accommodate
@@ -266,7 +269,10 @@ export interface NoJsMutationReplayStore {
     scope: string,
     idem: string,
     fingerprint?: string,
-  ): Promise<NoJsMutationResponse | undefined> | NoJsMutationResponse | undefined;
+  ):
+    | Promise<MutationEndpointReplayResponse | undefined>
+    | MutationEndpointReplayResponse
+    | undefined;
   reserve(
     scope: string,
     idem: string,
@@ -277,7 +283,7 @@ export interface NoJsMutationReplayStore {
 /** @internal Reservation handle for a no-JS replay record. */
 export interface NoJsMutationReplayReservation {
   abort?(): void;
-  commit(response: NoJsMutationResponse): void;
+  commit(response: MutationEndpointReplayResponse): void;
 }
 
 /**
