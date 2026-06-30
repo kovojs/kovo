@@ -1648,6 +1648,7 @@ function extractTouchGraphFromPreparedFiles(
     const fileTables = tablesForFile(file, sourceContext);
     const functions = functionsForFile(file);
     const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
+    const rawTablesByMutation = rawTablesByMutationHandler(file);
     const summaries = functionTouchSummariesForFile(
       file,
       functions,
@@ -1688,7 +1689,10 @@ function extractTouchGraphFromPreparedFiles(
         unresolved: [],
         writes: [],
       };
-      const rawTables = [...(rawTablesByDomainWrite.get(fn.name) ?? [])];
+      const rawTables = mergedRawTables(
+        rawTablesByDomainWrite.get(fn.name),
+        rawTablesByMutation.get(fn.name),
+      );
       const visibleUnresolved =
         rawTables.length > 0
           ? unresolved.filter((site) => site.operation !== 'execute')
@@ -1879,18 +1883,21 @@ function extractTouchGraphFromPreparedFiles(
   for (const file of contextFiles) {
     const fileTables = tablesForFile(file, sourceContext);
     const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
+    const rawTablesByMutation = rawTablesByMutationHandler(file);
     const rawWriteTrustByDomainWrite = rawWriteSqlTrustByDomainWriteCallback(file);
+    const rawWriteTrustByMutation = rawWriteSqlTrustByMutationHandler(file);
     for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
       if (fn.summaryOnly) continue;
-      facts.push(...writeScopeFactsForFunction(fn, fileTables));
-      facts.push(
-        ...rawWriteScopeFactsForFunction(
-          fn,
-          fileTables,
-          rawTablesByDomainWrite.get(fn.name) ?? [],
-          rawWriteTrustByDomainWrite.get(fn.name),
-        ),
+      const rawTables = mergedRawTables(
+        rawTablesByDomainWrite.get(fn.name),
+        rawTablesByMutation.get(fn.name),
       );
+      const rawWriteTrust = mergedRawWriteSqlTrust(
+        rawWriteTrustByDomainWrite.get(fn.name),
+        rawWriteTrustByMutation.get(fn.name),
+      );
+      facts.push(...writeScopeFactsForFunction(fn, fileTables));
+      facts.push(...rawWriteScopeFactsForFunction(fn, fileTables, rawTables, rawWriteTrust));
     }
   }
 
@@ -2008,6 +2015,124 @@ function rawWriteSqlTrustByDomainWriteCallback(
 
     return trustByWrite;
   });
+}
+
+function rawTablesByMutationHandler(file: SourceFileInput): ReadonlyMap<string, readonly string[]> {
+  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
+    const rawTables = new Map<string, string[]>();
+
+    forEachMutationConfig(sourceFile, (key, config) => {
+      const tables = rawTablesFromMutationRegistry(config);
+      if (tables.length > 0) rawTables.set(key, tables);
+    });
+
+    return rawTables;
+  });
+}
+
+function rawWriteSqlTrustByMutationHandler(
+  file: SourceFileInput,
+): ReadonlyMap<string, RawWriteSqlTrust> {
+  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
+    const trustByMutation = new Map<string, RawWriteSqlTrust>();
+
+    forEachMutationConfig(sourceFile, (key, config) => {
+      if (rawTablesFromMutationRegistry(config).length === 0) return;
+      const callback = mutationHandlerCallback(config);
+      if (!callback) return;
+      const trust = rawExecuteTrustForCallback(callback, file);
+      if (trust.hasExecute) trustByMutation.set(key, trust);
+    });
+
+    return trustByMutation;
+  });
+}
+
+function projectSourceFileInput(file: SourceFileInput): SourceFileInput {
+  const fileName = projectSourceFileName(file.fileName);
+  return fileName === file.fileName ? file : { ...file, fileName };
+}
+
+function forEachMutationConfig(
+  sourceFile: SourceFile,
+  visit: (key: string, config: ObjectLiteralExpression) => void,
+): void {
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const call = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(call)) continue;
+    const mutation = staticMutationDeclarationFromCall(declaration, call);
+    if (!mutation || !Node.isObjectLiteralExpression(mutation.bodyArgument)) continue;
+    visit(mutation.key, mutation.bodyArgument);
+  }
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)) continue;
+    if (!isKovoServerCalleeExpression(call.getExpression(), 'mutation')) continue;
+
+    const [keyArgument, configArgument] = call.getArguments();
+    if (
+      !(
+        (Node.isStringLiteral(keyArgument) || Node.isNoSubstitutionTemplateLiteral(keyArgument)) &&
+        Node.isObjectLiteralExpression(configArgument)
+      )
+    ) {
+      continue;
+    }
+
+    visit(keyArgument.getLiteralText(), configArgument);
+  }
+}
+
+function rawTablesFromMutationRegistry(config: ObjectLiteralExpression): string[] {
+  const registry = objectPropertyInitializer(config, 'registry');
+  if (!registry) return [];
+  const registryObject = unwrappedStaticExpressionNode(registry);
+  if (!Node.isObjectLiteralExpression(registryObject)) return [];
+  return stringArrayPropertyFromObject(registryObject, 'tables');
+}
+
+function mutationHandlerCallback(config: ObjectLiteralExpression): Node | undefined {
+  for (const property of config.getProperties()) {
+    if (Node.isMethodDeclaration(property)) {
+      if (propertyNameText(property.getNameNode()) === 'handler') return property;
+      continue;
+    }
+
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== 'handler') continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) continue;
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
+      return expression;
+    }
+  }
+
+  return undefined;
+}
+
+function mergedRawTables(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+): string[] {
+  return [...new Set([...(left ?? []), ...(right ?? [])])];
+}
+
+function mergedRawWriteSqlTrust(
+  left: RawWriteSqlTrust | undefined,
+  right: RawWriteSqlTrust | undefined,
+): RawWriteSqlTrust | undefined {
+  if (!left) return right;
+  if (!right) return left;
+
+  return {
+    hasExecute: left.hasExecute || right.hasExecute,
+    ...(left.site || right.site ? { site: left.site ?? right.site } : {}),
+    trusted: (!left.hasExecute || left.trusted) && (!right.hasExecute || right.trusted),
+  };
 }
 
 function rawExecuteTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {

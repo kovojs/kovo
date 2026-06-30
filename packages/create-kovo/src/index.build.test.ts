@@ -433,6 +433,69 @@ describe('create-kovo starter (build integration)', () => {
     }
   }, 120_000);
 
+  it('blocks raw owner-table db.execute writes from the production build artifact', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-raw-sql-write-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Raw SQL Write Proof' });
+      linkStarterBuildDependencies(root);
+      addRawSqlOwnerWriteProof(root);
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail for raw owner-table write.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV414');
+        expect(output).toContain('WRITE');
+        expect(output).toContain('domain=raw-owner');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('blocks undeclared raw db.execute writes from the production build artifact', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-raw-sql-undeclared-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Raw SQL Undeclared Proof' });
+      linkStarterBuildDependencies(root);
+      addRawSqlOwnerWriteProof(root, { declareTables: false });
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail for undeclared raw write.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV406');
+        expect(output).toContain('mutations.ts');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('accepts trusted raw owner-table db.execute writes from the production build artifact', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-raw-sql-trusted-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Raw SQL Trusted Proof' });
+      linkStarterBuildDependencies(root);
+      addRawSqlOwnerWriteProof(root, { trusted: true });
+
+      buildProductionArtifact(root);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('serves component-scoped FormError as a real no-JS 422 output from the production artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -825,6 +888,79 @@ function buildProductionArtifact(root: string): void {
     env: withRepoBinOnPath(),
     stdio: 'pipe',
   });
+}
+
+function addRawSqlOwnerWriteProof(
+  root: string,
+  options: { declareTables?: boolean; trusted?: boolean } = {},
+): void {
+  const declareTables = options.declareTables !== false;
+  const schemaPath = join(root, 'src/schema.ts');
+  writeFileSync(
+    schemaPath,
+    readFileSync(schemaPath, 'utf8').replace(
+      ');\n\n// --- Auth infrastructure',
+      [
+        ');',
+        '',
+        'export const rawOwners = pgTable(',
+        "  'raw_owners',",
+        '  {',
+        "    id: text('id').primaryKey(),",
+        "    userId: text('userId').notNull(),",
+        "    label: text('label').notNull().default(''),",
+        '  },',
+        "  kovo({ domain: 'raw-owner', key: 'id', owner: 'userId' }),",
+        ');',
+        '',
+        '// --- Auth infrastructure',
+      ].join('\n'),
+    ),
+    'utf8',
+  );
+
+  const mutationsPath = join(root, 'src/mutations.ts');
+  const mutations = readFileSync(mutationsPath, 'utf8')
+    .replace(
+      "import { guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';",
+      [
+        options.trusted
+          ? "import { sql, trustedSql } from '@kovojs/drizzle';"
+          : "import { sql } from '@kovojs/drizzle';",
+        "import { domain, guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';",
+      ].join('\n'),
+    )
+    .replace(
+      'const duplicateEmailError = s.object({ email: s.string() });',
+      [
+        'const duplicateEmailError = s.object({ email: s.string() });',
+        "const rawOwner = domain('raw-owner');",
+      ].join('\n'),
+    )
+    .replace(
+      'registry: { touches: [contact] },',
+      declareTables
+        ? "registry: { touches: [contact, rawOwner], tables: ['raw_owners'] },"
+        : 'registry: { touches: [contact, rawOwner] },',
+    )
+    .replace(
+      [
+        '    await db',
+        '      .insert(contacts)',
+        "      .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });",
+      ].join('\n'),
+      [
+        '    await db.execute(',
+        options.trusted
+          ? "      trustedSql(sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`, { justification: 'reviewed owner predicate' }),"
+          : "      sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`,",
+        '    );',
+        '    await db',
+        '      .insert(contacts)',
+        "      .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });",
+      ].join('\n'),
+    );
+  writeFileSync(mutationsPath, mutations, 'utf8');
 }
 
 function addAuthSecretLeakProof(root: string): void {

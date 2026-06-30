@@ -41,6 +41,13 @@ export type { CasConflict, CasResult, CasSuccess, DrizzleUpdateResult } from './
  * Produced by {@link sql}; scalar interpolations are bound parameters rather than SQL text.
  */
 export interface KovoParameterizedSql<T = unknown> extends SQL<T> {
+  /**
+   * Version-tolerant Drizzle `SQLWrapper` bridge. Apps may resolve a different
+   * Drizzle minor than this package's dev dependency; returning `any` keeps the
+   * wrapper structurally accepted by those sinks while runtime still returns the
+   * concrete Drizzle SQL object produced below.
+   */
+  getSQL(): any;
   readonly __kovoSqlBrand?: 'parameterized';
 }
 
@@ -50,6 +57,8 @@ export interface KovoParameterizedSql<T = unknown> extends SQL<T> {
  * Produced by {@link staticSql}, {@link sql.identifier}, and {@link sql.allow}.
  */
 export interface KovoStaticSql<T = unknown> extends SQL<T> {
+  /** See {@link KovoParameterizedSql.getSQL}. */
+  getSQL(): any;
   readonly __kovoSqlBrand?: 'static';
 }
 
@@ -60,6 +69,8 @@ export interface KovoStaticSql<T = unknown> extends SQL<T> {
  * source-visible justification.
  */
 export interface KovoTrustedSql<T = unknown> extends SQL<T> {
+  /** See {@link KovoParameterizedSql.getSQL}. */
+  getSQL(): any;
   readonly __kovoSqlBrand?: 'trusted';
 }
 

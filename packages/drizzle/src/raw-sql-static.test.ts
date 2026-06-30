@@ -76,6 +76,43 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
     });
   });
 
+  it('keeps undeclared mutation raw db.execute writes visible as KV406', () => {
+    const graph = extractTouchGraphFromProject(
+      withPgDatabaseTypes({
+        files: [
+          RAW_EXECUTE_DB,
+          {
+            fileName: 'mutations.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const addContact = mutation({',
+              '  async handler(input: { id: string }, request: { db: PgAsyncDatabase<any, any> }) {',
+              '    const db = request.db;',
+              '    await db.execute(sql`update raw_owners set label = ${"x"} where id = ${input.id}`);',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(graph).toEqual({
+      'mutations/add-contact': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'KV406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            site: 'mutations.ts:6',
+          },
+        ],
+      },
+    });
+  });
+
   it('fails closed with a write-scope audit for declared owner-table raw writes', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({
@@ -136,5 +173,42 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
 
     expect(audit.ownerDomains).toEqual([{ domain: 'order', owner: 'userId' }]);
     expect(audit.scopeAudits).toEqual([]);
+  });
+
+  it('fails closed for mutation registry raw writes against owner tables', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          RAW_EXECUTE_DB,
+          {
+            fileName: 'mutations.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const rawOwners = pgTable("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "raw-owner", key: "id", owner: "userId" }));',
+              '',
+              'export const addContact = mutation({',
+              '  registry: { tables: ["raw_owners"] },',
+              '  async handler(input: { id: string }, request: { db: PgAsyncDatabase<any, any> }) {',
+              '    const db = request.db;',
+              '    await db.execute(sql`update raw_owners set label = ${"x"} where id = ${input.id}`);',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.ownerDomains).toEqual([{ domain: 'raw-owner', owner: 'userId' }]);
+    expect(audit.scopeAudits).toEqual([
+      expect.objectContaining({
+        domain: 'raw-owner',
+        kind: 'write',
+        name: 'mutations/add-contact',
+        scope: 'unknown',
+        site: 'mutations.ts:9',
+      }),
+    ]);
   });
 });

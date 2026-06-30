@@ -316,8 +316,11 @@ function viteManifestOptions(base: string | undefined): KovoAppShellViteManifest
   return base === undefined ? {} : { base };
 }
 
-function mergePageHints(base: PageHintOptions, extra: PageHintOptions): PageHintOptions {
-  const merged: PageHintOptions = { ...base };
+function mergePageHints<MetaContext>(
+  base: PageHintOptions<MetaContext>,
+  extra: PageHintOptions,
+): PageHintOptions<MetaContext> {
+  const merged: PageHintOptions<MetaContext> = { ...base };
   const modulepreloads = [...(base.modulepreloads ?? []), ...(extra.modulepreloads ?? [])];
   const stylesheets = [...(base.stylesheets ?? []), ...(extra.stylesheets ?? [])];
 
@@ -326,7 +329,8 @@ function mergePageHints(base: PageHintOptions, extra: PageHintOptions): PageHint
 
   if (extra.bootstrapScript !== undefined) merged.bootstrapScript = extra.bootstrapScript;
   if (extra.i18n !== undefined) merged.i18n = extra.i18n;
-  if (extra.meta !== undefined) merged.meta = extra.meta;
+  if (extra.meta !== undefined)
+    merged.meta = extra.meta as NonNullable<PageHintOptions<MetaContext>['meta']>;
   if (extra.prefetch !== undefined) merged.prefetch = extra.prefetch;
   if (extra.prerenderUrls !== undefined) merged.prerenderUrls = extra.prerenderUrls;
 
