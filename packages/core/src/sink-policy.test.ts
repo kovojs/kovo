@@ -2,10 +2,16 @@ import { describe, expect, it } from 'vitest';
 
 import {
   blessSink,
+  createFragmentHtml,
+  createRenderedFragmentHtml,
   decideRuntimeAttributeWrite,
+  fragmentHtmlContent,
   hasUnsafeCssText,
   hasUnsafeCssUrl,
   isBlessedSink,
+  isFragmentHtml,
+  isRenderedFragmentHtml,
+  renderedFragmentHtmlContent,
   sanitizeRuntimeSrcset,
   SRCSET_ATTRIBUTE_NAMES,
   runtimeSinkFamilyForAttribute,
@@ -32,6 +38,20 @@ describe('shared Blessed<Sink> witness substrate (SPEC §6.6)', () => {
     expect(isBlessedSink('copy-source', copied)).toBe(false);
     expect(isBlessedSink('copy-source', forged)).toBe(false);
     expect(isBlessedSink('copy-source', null)).toBe(false);
+  });
+
+  it('brands server and browser fragment HTML capabilities without structural forgery', () => {
+    const serverFragment = createFragmentHtml('<section>server</section>');
+    const browserFragment = createRenderedFragmentHtml('<section>browser</section>');
+
+    expect(isFragmentHtml(serverFragment)).toBe(true);
+    expect(fragmentHtmlContent(serverFragment)).toBe('<section>server</section>');
+    expect(isRenderedFragmentHtml(browserFragment)).toBe(true);
+    expect(renderedFragmentHtmlContent(browserFragment)).toBe('<section>browser</section>');
+    expect(isFragmentHtml({ ...serverFragment })).toBe(false);
+    expect(isRenderedFragmentHtml({ ...browserFragment })).toBe(false);
+    expect(isFragmentHtml(browserFragment)).toBe(false);
+    expect(isRenderedFragmentHtml(serverFragment)).toBe(false);
   });
 });
 

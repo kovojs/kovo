@@ -1,3 +1,5 @@
+import type { RenderedFragmentHtml } from '@kovojs/core/internal/sink-policy';
+
 import type { FragmentChunk } from './wire-response-scanner.js';
 
 // SF-WIRE (secure-framework Tier 3, Trusted Types — WIRED): the `p` and `d` helpers
@@ -57,16 +59,20 @@ function trustedHtml(h: string): string {
   return p ? (p.createHTML(h) as unknown as string) : h;
 }
 
+function renderedFragmentHtmlContent(value: { readonly html: string }): string {
+  return value.html;
+}
+
 export interface ResponseFragmentApplyOptions<Target> {
-  appendFragment(target: Target, html: string): void;
+  appendFragment(target: Target, html: RenderedFragmentHtml): void;
   findFragmentTarget(target: string): Target | null | undefined;
   /**
    * Insert prepended keyed rows at the START of the target with the §9.3
    * scroll-anchor guarantee (SPEC §9.3/§13.2). Optional: callers that omit it
    * (e.g. plain-object fragment harnesses) fall back to {@link appendFragment}.
    */
-  prependFragment?(target: Target, html: string): void;
-  replaceFragment(target: Target, html: string): void;
+  prependFragment?(target: Target, html: RenderedFragmentHtml): void;
+  replaceFragment(target: Target, html: RenderedFragmentHtml): void;
 }
 
 export interface HtmlResponseFragmentApplyTarget extends Element {}
@@ -136,7 +142,7 @@ export function p(
       // under the strict CSP's `require-trusted-types-for 'script'`, and g() still neutralizes
       // dangerous attributes/URLs on the inserted children (SPEC §4.4/§9.1/§6.6).
       const t = document.createElement('template');
-      t.innerHTML = trustedHtml(x.html);
+      t.innerHTML = trustedHtml(renderedFragmentHtmlContent(x.html));
       for (const n of t.content.children) g(n);
       if (x.mode === 'prepend') {
         // SPEC §9.3/§13.2: insert keyed rows at the START, deduped by kovo-key (a
@@ -171,9 +177,9 @@ export function p(
   return a;
 }
 
-function d(e: HtmlResponseFragmentApplyTarget, h: string): void {
+function d(e: HtmlResponseFragmentApplyTarget, h: RenderedFragmentHtml): void {
   const t = document.createElement('template');
-  t.innerHTML = trustedHtml(h);
+  t.innerHTML = trustedHtml(renderedFragmentHtmlContent(h));
   const n = firstMorphElement(t.content);
   const s = e.contains(document.activeElement) ? document.activeElement : null;
   const q: HTMLElement[] = [];

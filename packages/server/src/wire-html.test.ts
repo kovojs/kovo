@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { generatedFragmentHtml } from './html.js';
 import {
   renderDoneWireHtml,
   renderFragmentWireHtml,
@@ -42,6 +43,16 @@ describe('renderQueryWireHtml', () => {
 });
 
 describe('server wire html emitters', () => {
+  it('types fragment wire html as an internal capability, not a raw string', () => {
+    expect(() =>
+      renderFragmentWireHtml({
+        // @ts-expect-error SPEC.md §9.1 fragment wire sinks require branded FragmentHtml.
+        html: '<section>raw</section>',
+        target: 'raw',
+      }),
+    ).toBeTypeOf('function');
+  });
+
   it('renders initial query scripts for document-load hydration', () => {
     expect(
       renderQueryScript({
@@ -61,7 +72,7 @@ describe('server wire html emitters', () => {
     expect(
       renderFragmentWireHtml({
         errorBoundary: 'error&panel',
-        html: '<section data-ready="true">Ready</section>',
+        html: generatedFragmentHtml('<section data-ready="true">Ready</section>'),
         mode: 'append',
         priority: '5&up',
         target: 'cart&badge',
@@ -74,7 +85,7 @@ describe('server wire html emitters', () => {
   it('prepends stylesheet links inside fragment wire payloads', () => {
     expect(
       renderFragmentWireHtml({
-        html: '<cart-drawer>Ready</cart-drawer>',
+        html: generatedFragmentHtml('<cart-drawer>Ready</cart-drawer>'),
         stylesheets: [
           '/assets/cart-drawer.css',
           { href: '/assets/theme.css?mode=screen&print=1' },
@@ -90,7 +101,7 @@ describe('server wire html emitters', () => {
   it('emits mode="prepend" for the SPEC §9.3 load-older insert vocabulary', () => {
     expect(
       renderFragmentWireHtml({
-        html: '<article kovo-key="m1">Older</article>',
+        html: generatedFragmentHtml('<article kovo-key="m1">Older</article>'),
         mode: 'prepend',
         target: 'chat-log',
       }),
@@ -102,7 +113,7 @@ describe('server wire html emitters', () => {
   it('omits replace mode because it is the default fragment wire behavior', () => {
     expect(
       renderFragmentWireHtml({
-        html: '<main>Updated</main>',
+        html: generatedFragmentHtml('<main>Updated</main>'),
         mode: 'replace',
         target: 'content',
       }),

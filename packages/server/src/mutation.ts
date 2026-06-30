@@ -19,7 +19,13 @@ import {
   type MutationTouchSite,
 } from './change-record.js';
 import { reportServerError } from './diagnostics.js';
-import { escapeAttribute, escapeHtml } from './html.js';
+import {
+  escapeAttribute,
+  escapeHtml,
+  generatedFragmentHtml,
+  generatedFragmentHtmlValue,
+  type FragmentHtml,
+} from './html.js';
 import {
   explainGuard,
   guardFailureIsUnauthenticated,
@@ -806,7 +812,9 @@ function renderReplayConflictFragment<Request>(
 ): BufferedMutationWireResponse {
   return {
     body: renderFragmentWireHtml({
-      html: '<output role="alert" data-error-code="IDEMPOTENCY_CONFLICT">Conflict</output>',
+      html: generatedFragmentHtml(
+        '<output role="alert" data-error-code="IDEMPOTENCY_CONFLICT">Conflict</output>',
+      ),
       target: mutationFailureTarget(wireRequest),
     }),
     headers: mutationWireResponseHeaders(wireRequest),
@@ -1355,7 +1363,7 @@ async function renderFailureFragment<Request>(
     : await renderDefaultFailureFragment(failure, wireRequest, target);
 
   return renderFragmentWireHtml({
-    html,
+    html: generatedFragmentHtmlValue(html),
     stylesheets: wireRequest.failureStylesheets,
     target,
   });
@@ -1365,7 +1373,7 @@ async function renderDefaultFailureFragment<Request>(
   failure: MutationFail,
   wireRequest: MutationWireRequest<Request>,
   target: string,
-): Promise<string> {
+): Promise<FragmentHtml | string> {
   const descriptor = wireRequest.liveTargetDescriptors?.find((entry) => entry.target === target);
   const renderer =
     descriptor === undefined
@@ -1394,7 +1402,9 @@ function renderMutationRenderErrorFragment<Request>(
   const target = mutationFailureTarget(wireRequest);
 
   return renderFragmentWireHtml({
-    html: '<output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output>',
+    html: generatedFragmentHtml(
+      '<output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output>',
+    ),
     target,
   });
 }
@@ -1405,7 +1415,9 @@ function renderMutationServerErrorFragment<Request>(
   const target = mutationFailureTarget(wireRequest);
 
   return renderFragmentWireHtml({
-    html: '<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output>',
+    html: generatedFragmentHtml(
+      '<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output>',
+    ),
     stylesheets: wireRequest.failureStylesheets,
     target,
   });
