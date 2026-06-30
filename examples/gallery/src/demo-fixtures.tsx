@@ -143,58 +143,19 @@ import {
   NavigationMenuTrigger,
   NavigationMenuViewport,
 } from '@kovojs/ui/navigation-menu';
+import {
+  galleryComponentEntries,
+  type GalleryComponent,
+  type GalleryComponentPath,
+} from './gallery-component-manifest.js';
 
-export type GalleryComponent =
-  | 'accordion'
-  | 'alert'
-  | 'alert-dialog'
-  | 'autocomplete'
-  | 'avatar'
-  | 'badge'
-  | 'breadcrumb'
-  | 'button'
-  | 'card'
-  | 'checkbox'
-  | 'checkbox-group'
-  | 'collapsible'
-  | 'combobox'
-  | 'command'
-  | 'context-menu'
-  | 'dialog'
-  | 'disclosure'
-  | 'drawer'
-  | 'dropdown-menu'
-  | 'field'
-  | 'hover-card'
-  | 'kbd'
-  | 'menubar'
-  | 'meter'
-  | 'navigation-menu'
-  | 'number-field'
-  | 'otp-field'
-  | 'popover'
-  | 'progress'
-  | 'radio-group'
-  | 'scroll-area'
-  | 'select'
-  | 'separator'
-  | 'sheet'
-  | 'skeleton'
-  | 'slider'
-  | 'switch'
-  | 'table'
-  | 'tabs'
-  | 'toast'
-  | 'toggle'
-  | 'toggle-group'
-  | 'toolbar'
-  | 'tooltip';
+export type { GalleryComponent } from './gallery-component-manifest.js';
 
 export type GalleryPrimitive = GalleryComponent;
 
 export interface GalleryRoute {
   component: GalleryComponent;
-  path: `/components/${GalleryComponent}`;
+  path: GalleryComponentPath;
   render(): string;
   title: string;
 }
@@ -206,272 +167,61 @@ export interface GalleryFixture {
   title: string;
 }
 
-export const galleryRoutes: readonly GalleryRoute[] = Object.freeze([
-  {
-    component: 'accordion',
-    path: '/components/accordion',
-    render: () => AccordionDemo(),
-    title: 'Accordion',
-  },
-  {
-    component: 'alert',
-    path: '/components/alert',
-    render: () => AlertDemo(),
-    title: 'Alert',
-  },
-  {
-    component: 'alert-dialog',
-    path: '/components/alert-dialog',
-    render: () => AlertDialogDemo(),
-    title: 'Alert Dialog',
-  },
-  {
-    component: 'autocomplete',
-    path: '/components/autocomplete',
-    render: () => AutocompleteDemo(),
-    title: 'Autocomplete',
-  },
-  {
-    component: 'avatar',
-    path: '/components/avatar',
-    render: () => AvatarDemo(),
-    title: 'Avatar',
-  },
-  {
-    component: 'badge',
-    path: '/components/badge',
-    render: () => BadgeDemo(),
-    title: 'Badge',
-  },
-  {
-    component: 'breadcrumb',
-    path: '/components/breadcrumb',
-    render: () => BreadcrumbDemo(),
-    title: 'Breadcrumb',
-  },
-  {
-    component: 'button',
-    path: '/components/button',
-    render: () => ButtonDemo(),
-    title: 'Button',
-  },
-  {
-    component: 'card',
-    path: '/components/card',
-    render: () => CardDemo(),
-    title: 'Card',
-  },
-  {
-    component: 'checkbox',
-    path: '/components/checkbox',
-    render: () => CheckboxDemo(),
-    title: 'Checkbox',
-  },
-  {
-    component: 'checkbox-group',
-    path: '/components/checkbox-group',
-    render: () => CheckboxGroupDemo(),
-    title: 'Checkbox Group',
-  },
-  {
-    component: 'collapsible',
-    path: '/components/collapsible',
-    render: () => CollapsibleDemo(),
-    title: 'Collapsible',
-  },
-  {
-    component: 'combobox',
-    path: '/components/combobox',
-    render: () => ComboboxDemo(),
-    title: 'Combobox',
-  },
-  {
-    component: 'command',
-    path: '/components/command',
-    render: () => CommandDemo(),
-    title: 'Command',
-  },
-  {
-    component: 'context-menu',
-    path: '/components/context-menu',
-    render: () => ContextMenuDemo(),
-    title: 'Context Menu',
-  },
-  {
-    component: 'dialog',
-    path: '/components/dialog',
-    render: () => DialogDemo(),
-    title: 'Dialog',
-  },
-  {
-    component: 'disclosure',
-    path: '/components/disclosure',
-    render: () => DisclosureDemo(),
-    title: 'Disclosure',
-  },
-  {
-    component: 'drawer',
-    path: '/components/drawer',
-    render: () => DrawerDemo(),
-    title: 'Drawer',
-  },
-  {
-    component: 'dropdown-menu',
-    path: '/components/dropdown-menu',
-    render: () => DropdownMenuDemo(),
-    title: 'Dropdown Menu',
-  },
-  {
-    component: 'field',
-    path: '/components/field',
-    render: () => FieldDemo(),
-    title: 'Field',
-  },
-  {
-    component: 'hover-card',
-    path: '/components/hover-card',
-    render: () => HoverCardDemo(),
-    title: 'Hover Card',
-  },
-  {
-    component: 'kbd',
-    path: '/components/kbd',
-    render: () => KbdDemo(),
-    title: 'Kbd',
-  },
-  {
-    component: 'menubar',
-    path: '/components/menubar',
-    render: () => MenubarDemo(),
-    title: 'Menubar',
-  },
-  {
-    component: 'meter',
-    path: '/components/meter',
-    render: () => MeterDemo(),
-    title: 'Meter',
-  },
-  {
-    component: 'navigation-menu',
-    path: '/components/navigation-menu',
-    render: () => NavigationMenuDemo(),
-    title: 'Navigation Menu',
-  },
-  {
-    component: 'number-field',
-    path: '/components/number-field',
-    render: () => NumberFieldDemo(),
-    title: 'Number Field',
-  },
-  {
-    component: 'otp-field',
-    path: '/components/otp-field',
-    render: () => OtpFieldDemo(),
-    title: 'OTP Field',
-  },
-  {
-    component: 'popover',
-    path: '/components/popover',
-    render: () => PopoverDemo(),
-    title: 'Popover',
-  },
-  {
-    component: 'progress',
-    path: '/components/progress',
-    render: () => ProgressDemo(),
-    title: 'Progress',
-  },
-  {
-    component: 'radio-group',
-    path: '/components/radio-group',
-    render: () => RadioGroupDemo(),
-    title: 'Radio Group',
-  },
-  {
-    component: 'scroll-area',
-    path: '/components/scroll-area',
-    render: () => ScrollAreaDemo(),
-    title: 'Scroll Area',
-  },
-  {
-    component: 'select',
-    path: '/components/select',
-    render: () => SelectDemo(),
-    title: 'Select',
-  },
-  {
-    component: 'separator',
-    path: '/components/separator',
-    render: () => SeparatorDemo(),
-    title: 'Separator',
-  },
-  {
-    component: 'sheet',
-    path: '/components/sheet',
-    render: () => SheetDemo(),
-    title: 'Sheet',
-  },
-  {
-    component: 'skeleton',
-    path: '/components/skeleton',
-    render: () => SkeletonDemo(),
-    title: 'Skeleton',
-  },
-  {
-    component: 'slider',
-    path: '/components/slider',
-    render: () => SliderDemo(),
-    title: 'Slider',
-  },
-  {
-    component: 'switch',
-    path: '/components/switch',
-    render: () => SwitchDemo(),
-    title: 'Switch',
-  },
-  {
-    component: 'table',
-    path: '/components/table',
-    render: () => TableDemo(),
-    title: 'Table',
-  },
-  {
-    component: 'tabs',
-    path: '/components/tabs',
-    render: () => TabsDemo(),
-    title: 'Tabs',
-  },
-  {
-    component: 'toast',
-    path: '/components/toast',
-    render: () => ToastDemo(),
-    title: 'Toast',
-  },
-  {
-    component: 'toggle',
-    path: '/components/toggle',
-    render: () => ToggleDemo(),
-    title: 'Toggle',
-  },
-  {
-    component: 'toggle-group',
-    path: '/components/toggle-group',
-    render: () => ToggleGroupDemo(),
-    title: 'Toggle Group',
-  },
-  {
-    component: 'toolbar',
-    path: '/components/toolbar',
-    render: () => ToolbarDemo(),
-    title: 'Toolbar',
-  },
-  {
-    component: 'tooltip',
-    path: '/components/tooltip',
-    render: () => TooltipDemo(),
-    title: 'Tooltip',
-  },
-]);
+const galleryDemoRenderers = {
+  accordion: () => AccordionDemo(),
+  alert: () => AlertDemo(),
+  'alert-dialog': () => AlertDialogDemo(),
+  autocomplete: () => AutocompleteDemo(),
+  avatar: () => AvatarDemo(),
+  badge: () => BadgeDemo(),
+  breadcrumb: () => BreadcrumbDemo(),
+  button: () => ButtonDemo(),
+  card: () => CardDemo(),
+  checkbox: () => CheckboxDemo(),
+  'checkbox-group': () => CheckboxGroupDemo(),
+  collapsible: () => CollapsibleDemo(),
+  combobox: () => ComboboxDemo(),
+  command: () => CommandDemo(),
+  'context-menu': () => ContextMenuDemo(),
+  dialog: () => DialogDemo(),
+  disclosure: () => DisclosureDemo(),
+  drawer: () => DrawerDemo(),
+  'dropdown-menu': () => DropdownMenuDemo(),
+  field: () => FieldDemo(),
+  'hover-card': () => HoverCardDemo(),
+  kbd: () => KbdDemo(),
+  menubar: () => MenubarDemo(),
+  meter: () => MeterDemo(),
+  'navigation-menu': () => NavigationMenuDemo(),
+  'number-field': () => NumberFieldDemo(),
+  'otp-field': () => OtpFieldDemo(),
+  popover: () => PopoverDemo(),
+  progress: () => ProgressDemo(),
+  'radio-group': () => RadioGroupDemo(),
+  'scroll-area': () => ScrollAreaDemo(),
+  select: () => SelectDemo(),
+  separator: () => SeparatorDemo(),
+  sheet: () => SheetDemo(),
+  skeleton: () => SkeletonDemo(),
+  slider: () => SliderDemo(),
+  switch: () => SwitchDemo(),
+  table: () => TableDemo(),
+  tabs: () => TabsDemo(),
+  toast: () => ToastDemo(),
+  toggle: () => ToggleDemo(),
+  'toggle-group': () => ToggleGroupDemo(),
+  toolbar: () => ToolbarDemo(),
+  tooltip: () => TooltipDemo(),
+} satisfies Record<GalleryComponent, () => string>;
+
+export const galleryRoutes: readonly GalleryRoute[] = Object.freeze(
+  galleryComponentEntries.map(({ component, path, title }) => ({
+    component,
+    path,
+    render: galleryDemoRenderers[component],
+    title,
+  })),
+);
 
 export function galleryFixtures(): readonly GalleryFixture[] {
   return galleryRoutes.map((route) => ({

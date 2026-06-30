@@ -8,53 +8,11 @@ import {
   renderGalleryRoute,
   type GalleryRoute,
 } from './demo-fixtures.js';
+import { galleryComponentEntries } from './gallery-component-manifest.js';
 
-const expectedRoutes = [
-  '/components/accordion',
-  '/components/alert',
-  '/components/alert-dialog',
-  '/components/autocomplete',
-  '/components/avatar',
-  '/components/badge',
-  '/components/breadcrumb',
-  '/components/button',
-  '/components/card',
-  '/components/checkbox',
-  '/components/checkbox-group',
-  '/components/collapsible',
-  '/components/combobox',
-  '/components/command',
-  '/components/context-menu',
-  '/components/dialog',
-  '/components/disclosure',
-  '/components/drawer',
-  '/components/dropdown-menu',
-  '/components/field',
-  '/components/hover-card',
-  '/components/kbd',
-  '/components/menubar',
-  '/components/meter',
-  '/components/navigation-menu',
-  '/components/number-field',
-  '/components/otp-field',
-  '/components/popover',
-  '/components/progress',
-  '/components/radio-group',
-  '/components/scroll-area',
-  '/components/select',
-  '/components/separator',
-  '/components/sheet',
-  '/components/skeleton',
-  '/components/slider',
-  '/components/switch',
-  '/components/table',
-  '/components/tabs',
-  '/components/toast',
-  '/components/toggle',
-  '/components/toggle-group',
-  '/components/toolbar',
-  '/components/tooltip',
-] as const satisfies readonly GalleryRoute['path'][];
+const expectedRoutes = galleryComponentEntries.map(
+  (entry) => entry.path,
+) as readonly GalleryRoute['path'][];
 
 describe('gallery demo fixtures', () => {
   it('renders one route fixture for each covered demo component', () => {

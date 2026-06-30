@@ -307,7 +307,7 @@ test brittleness, and distribution confusion.
     command surfaces.
   - SPEC: section 4.6.
 
-- [ ] **P1.8 - Replace UI/headless/gallery/copy-in registries with one generated manifest.**
+- [x] **P1.8 - Replace UI/headless/gallery/copy-in registries with one generated manifest.**
   - Affected: `packages/headless-ui/src/generated.ts`,
     `packages/ui/scripts/build-registry.mjs`, `packages/ui/registry.json`,
     `examples/gallery/src/primitive-actions.ts`, `examples/gallery/src/demo-fixtures.tsx`,
@@ -322,6 +322,7 @@ test brittleness, and distribution confusion.
     behavior.
   - Verification: generator round-trip tests, existing parity tests, fixture-count assertions, gallery
     artifact tests, and `packages/ui/src/copy-in.test.ts`.
+  - Evidence: `node packages/ui/scripts/build-registry.mjs` reports generated artifacts up to date, and `pnpm exec vitest --run packages/ui/src/manifest-generation.test.ts packages/ui/src/copy-in.test.ts packages/ui/src/headless-subpath-parity.test.ts examples/gallery/src/component-catalog.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts examples/gallery/src/interactive-gallery.compile.test.ts` passes with the shared primitive/component manifest driving UI registry, headless generated handlers, and gallery fixtures.
   - Rules: `rules/api-surface.md`.
 
 - [ ] **P1.9 - Build cross-package oracle fixtures for compiler/browser/runtime/data contracts.**

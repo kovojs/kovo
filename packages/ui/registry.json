@@ -1,5 +1,5 @@
 {
-  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
+  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. Component membership/order comes from packages/ui/scripts/primitive-component-manifest.mjs; dependency metadata is derived from source. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
   "registryDependencies": [
     "@kovojs/headless-ui",
     "@kovojs/style",
@@ -35,6 +35,18 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
+      "name": "alert",
+      "title": "Alert",
+      "files": ["src/alert.tsx"],
+      "exports": ["Alert"],
+      "dependencies": {
+        "@kovojs/headless-ui": [],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": ["theme"]
+    },
+    {
       "name": "alert-dialog",
       "title": "AlertDialog",
       "files": ["src/alert-dialog.tsx"],
@@ -63,18 +75,6 @@
         "@kovojs/icons": ["X"]
       },
       "uiComponents": ["pass-through", "theme"]
-    },
-    {
-      "name": "alert",
-      "title": "Alert",
-      "files": ["src/alert.tsx"],
-      "exports": ["Alert"],
-      "dependencies": {
-        "@kovojs/headless-ui": [],
-        "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
-      },
-      "uiComponents": ["theme"]
     },
     {
       "name": "autocomplete",
@@ -168,6 +168,18 @@
       "uiComponents": ["theme"]
     },
     {
+      "name": "checkbox",
+      "title": "Checkbox",
+      "files": ["src/checkbox.tsx"],
+      "exports": ["Checkbox"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["CheckboxCheckedState", "checkboxRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": ["pass-through", "theme"]
+    },
+    {
       "name": "checkbox-group",
       "title": "CheckboxGroup",
       "files": ["src/checkbox-group.tsx"],
@@ -189,18 +201,6 @@
         "@kovojs/core": ["component"]
       },
       "uiComponents": ["navigation-types", "pass-through", "theme"]
-    },
-    {
-      "name": "checkbox",
-      "title": "Checkbox",
-      "files": ["src/checkbox.tsx"],
-      "exports": ["Checkbox"],
-      "dependencies": {
-        "@kovojs/headless-ui": ["CheckboxCheckedState", "checkboxRootAttributes"],
-        "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
-      },
-      "uiComponents": ["pass-through", "theme"]
     },
     {
       "name": "collapsible",
@@ -810,6 +810,18 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "name": "toggle",
+      "title": "Toggle",
+      "files": ["src/toggle.tsx"],
+      "exports": ["Toggle"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["toggleRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": ["pass-through", "theme"]
+    },
+    {
       "name": "toggle-group",
       "title": "ToggleGroup",
       "files": ["src/toggle-group.tsx"],
@@ -827,18 +839,6 @@
         "@kovojs/core": ["component"]
       },
       "uiComponents": ["navigation-types", "pass-through", "theme"]
-    },
-    {
-      "name": "toggle",
-      "title": "Toggle",
-      "files": ["src/toggle.tsx"],
-      "exports": ["Toggle"],
-      "dependencies": {
-        "@kovojs/headless-ui": ["toggleRootAttributes"],
-        "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
-      },
-      "uiComponents": ["pass-through", "theme"]
     },
     {
       "name": "toolbar",
