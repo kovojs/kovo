@@ -175,7 +175,7 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
     `pnpm --filter @kovojs/icons run build:dist`, `pnpm run check:api-surface`, and
     `pnpm run check:pack-security` passed.
 
-- [ ] **P1.4 - Share data-plane static-analysis resolution between Vite dev and CLI build/export.**
+- [x] **P1.4 - Share data-plane static-analysis resolution between Vite dev and CLI build/export.**
   - Current signals: `packages/server/src/vite.ts` and `packages/cli/src/commands/build-export.ts`
     both resolve `@kovojs/drizzle/internal/static`, both handle query-shape facts, and both use a
     `Symbol.for('kovo.build.queryShapeFacts')` global handoff.
@@ -188,6 +188,10 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
   - Verification: focused Vite data-plane diagnostic tests, `kovo check` tests, and build/export
     tests pass; a data-plane resolver `rg` check shows Vite and build/export call sites routed
     through the shared adapter.
+  - Evidence:
+    Focused `vite-data-plane-gate`, `vite-diagnostics`, `kovo-build`, `kovo-check`, and
+    `kovo-export` filters passed; `pnpm run check:api-surface`, `pnpm run check:publish`, and the
+    data-plane duplicate resolver/global-bridge `rg` check passed.
 
 - [x] **P1.5 - Create a manifest-backed generated-attribute and generated-artifact policy layer.**
   - Current signals: `scripts/generated-artifacts.mjs` only models app-local generated artifacts

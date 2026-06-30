@@ -1812,6 +1812,7 @@
           "./internal/app-shell-vite",
           "./internal/client-modules",
           "./internal/csrf",
+          "./internal/data-plane-static-analysis",
           "./internal/escape",
           "./internal/execution",
           "./internal/html",
