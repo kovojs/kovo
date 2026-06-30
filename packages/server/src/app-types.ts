@@ -10,9 +10,9 @@ import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpo
 import type { DbProvider, LifecycleRequest, SessionProvider } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFactory, MutationFail, MutationSuccess } from './mutation.js';
-import type { FragmentHtml } from './html.js';
 import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryFactory } from './query.js';
+import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
@@ -327,7 +327,7 @@ export interface AppMutationResponseOptions {
   renderFailureFragment?: (
     failure: MutationFail,
     rawInput: unknown,
-  ) => FragmentHtml | string | Promise<FragmentHtml | string>;
+  ) => AwaitableGeneratedFragmentRenderable;
   renderFailurePage?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
 }
 

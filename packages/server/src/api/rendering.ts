@@ -8,6 +8,12 @@ export { cspSha256, renderContentSecurityPolicy } from '../csp.js';
 export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
 export { Defer } from '../deferred-region.js';
 export type { DeferProps, RegionPriority, ServerRenderable } from '../deferred-region.js';
+export type {
+  AwaitableGeneratedFragmentRenderable,
+  GeneratedFragmentRenderable,
+  ServerFragmentRenderable,
+  ServerRenderedHtml,
+} from '../renderable.js';
 export {
   BodyAttrs,
   BodyEnd,

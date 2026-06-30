@@ -5,6 +5,24 @@ import { escapeTextWithRenderedHtml, isRenderedHtml, type RenderedHtml } from '.
 
 type MaybePromise<Value> = Promise<Value> | Value;
 
+/** Framework-rendered HTML object accepted by fragment sinks without naming internal brands. */
+export interface ServerRenderedHtml {
+  readonly html: string;
+  toJSON?(): string;
+  toString(): string;
+}
+
+/** HTML-capable value accepted by app-facing fragment APIs. Plain strings belong in text sinks. */
+export type ServerFragmentRenderable = ServerRenderedHtml | TrustedHtml;
+
+/** Generated/audited fragment value accepted by framework-owned fragment renderers. */
+export type GeneratedFragmentRenderable = ServerFragmentRenderable | string;
+
+/** Awaitable generated/audited fragment value accepted by framework-owned fragment renderers. */
+export type AwaitableGeneratedFragmentRenderable =
+  | GeneratedFragmentRenderable
+  | Promise<GeneratedFragmentRenderable>;
+
 /** @internal server JSX child/renderable surface shared by the runtime and framework primitives. */
 export type InternalServerRenderable =
   | InternalServerRenderable[]

@@ -1,8 +1,9 @@
 import { randomBytes } from 'node:crypto';
 
 import { cspHashAttribute, cspSha256, type CspInlineMetadata } from './csp.js';
-import { generatedFragmentHtmlValue, type FragmentHtml } from './html.js';
+import { generatedFragmentHtmlValue } from './html.js';
 import type { StylesheetAsset } from './hints.js';
+import type { GeneratedFragmentRenderable } from './renderable.js';
 import type { ServerResponseBase } from './response.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 
@@ -18,7 +19,7 @@ export type DeferredPriority = 'high' | 'normal' | 'low' | 'visible' | number;
 
 /** A fragment payload carried by a deferred route-region stream. */
 export interface DeferredFragmentChunk {
-  html: FragmentHtml | string;
+  html: GeneratedFragmentRenderable;
   mode?: 'append' | 'replace';
   priority?: DeferredPriority;
   stylesheets?: readonly (string | StylesheetAsset)[];

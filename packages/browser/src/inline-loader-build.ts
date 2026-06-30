@@ -900,7 +900,8 @@ function installInlineKovoLoader(im) {
       if (x.mode === 'append') continue;
       const e = ft(x.target);
       if (e) for (const y of qa(e, '[kovo-c]')) {
-        if (x.html.includes('kovo-c="' + y.getAttribute('kovo-c') + '"') && (!y.getAttribute('kovo-key') && !y.getAttribute('id') || x.html.includes('kovo-key="' + y.getAttribute('kovo-key') + '"') || x.html.includes('id="' + y.getAttribute('id') + '"'))) continue;
+        const html = renderedFragmentHtmlContent(x.html);
+        if (html.includes('kovo-c="' + y.getAttribute('kovo-c') + '"') && (!y.getAttribute('kovo-key') && !y.getAttribute('id') || html.includes('kovo-key="' + y.getAttribute('kovo-key') + '"') || html.includes('id="' + y.getAttribute('id') + '"'))) continue;
         y.a?.abort();
       }
     }

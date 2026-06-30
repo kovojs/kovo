@@ -1,3 +1,5 @@
+import { renderedFragmentHtmlContent } from '@kovojs/core/internal/sink-policy';
+
 import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handler-context.js';
 import type { IslandSignalScope } from './handler-context.js';
 import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
@@ -172,12 +174,15 @@ export function applyFragments(
   islandSignalScope: IslandSignalScope = defaultIslandSignalScope,
 ): string[] {
   return applyResponseFragments<MorphTarget>(fragments, {
-    appendFragment: (target, html) => appendFragment(target, html, morph),
+    appendFragment: (target, html) =>
+      appendFragment(target, renderedFragmentHtmlContent(html), morph),
     findFragmentTarget: (target) => root.findFragmentTarget(target),
-    prependFragment: (target, html) => prependFragment(target, html, morph),
+    prependFragment: (target, html) =>
+      prependFragment(target, renderedFragmentHtmlContent(html), morph),
     replaceFragment(target, html) {
-      abortRemovedIslandSignals(target.readHtml?.() ?? '', html, islandSignalScope);
-      morph(target, html);
+      const content = renderedFragmentHtmlContent(html);
+      abortRemovedIslandSignals(target.readHtml?.() ?? '', content, islandSignalScope);
+      morph(target, content);
     },
   });
 }

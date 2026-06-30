@@ -24,7 +24,6 @@ import {
   escapeHtml,
   generatedFragmentHtml,
   generatedFragmentHtmlValue,
-  type FragmentHtml,
 } from './html.js';
 import {
   explainGuard,
@@ -63,6 +62,7 @@ import {
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from './mutation-wire.js';
+import type { GeneratedFragmentRenderable } from './renderable.js';
 import {
   commitReservedMutationReplay,
   canonicalRequestFingerprint,
@@ -1373,7 +1373,7 @@ async function renderDefaultFailureFragment<Request>(
   failure: MutationFail,
   wireRequest: MutationWireRequest<Request>,
   target: string,
-): Promise<FragmentHtml | string> {
+): Promise<GeneratedFragmentRenderable> {
   const descriptor = wireRequest.liveTargetDescriptors?.find((entry) => entry.target === target);
   const renderer =
     descriptor === undefined

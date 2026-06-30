@@ -92,9 +92,16 @@ export function generatedFragmentHtml(html: string): FragmentHtml {
   return createFragmentHtml(html);
 }
 
-/** @internal Accept an already-branded fragment or mint one from an audited generated string. */
-export function generatedFragmentHtmlValue(value: FragmentHtml | string): FragmentHtml {
-  return isFragmentHtml(value) ? value : generatedFragmentHtml(value);
+/** @internal Accept an already-branded/generated/trusted value and mint fragment wire HTML. */
+export function generatedFragmentHtmlValue(value: unknown): FragmentHtml {
+  if (isFragmentHtml(value)) return value;
+  if (isRenderedHtml(value)) return createFragmentHtml(value.html);
+  if (typeof value === 'object' && value !== null) {
+    const trusted = kovoTrustedHtmlContent(value);
+    if (trusted !== '') return createFragmentHtml(trusted);
+  }
+  if (typeof value === 'string') return generatedFragmentHtml(value);
+  return generatedFragmentHtml('');
 }
 
 /** @internal Unwrap server fragment HTML at the final wire emitter. */
