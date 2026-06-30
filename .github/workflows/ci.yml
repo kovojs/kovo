@@ -127,8 +127,12 @@ jobs:
             file: packages/create-kovo/src/index.build.scaffold.test.ts
           - shard: prod-artifact-contacts
             file: packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts
-          - shard: prod-artifact-durable-tasks
-            file: packages/create-kovo/src/index.build.prod-artifact.durable-tasks.test.ts
+          - shard: prod-artifact-assets
+            file: packages/create-kovo/src/index.build.prod-artifact.assets.test.ts
+          - shard: prod-artifact-durable-tasks-lifecycle
+            file: packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts
+          - shard: prod-artifact-durable-tasks-retries
+            file: packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts
           - shard: prod-artifact-raw-sql
             file: packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
           - shard: prod-artifact-security
