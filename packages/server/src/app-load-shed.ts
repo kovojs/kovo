@@ -72,6 +72,7 @@ const DEFAULT_QUERY_PER_IP_RATE: ResolvedAppRateLimitOptions = Object.freeze({
   maxKeys: DEFAULT_MAX_RATE_KEYS,
   windowMs: DEFAULT_WINDOW_MS,
 });
+const requestPeerAddressProperty = '__kovoPeerAddress';
 
 const rateStates = new WeakMap<KovoApp, AppRateState>();
 
@@ -215,7 +216,7 @@ function rateLimitFailure(
 ): RateLimitDecision | undefined {
   const state = appRateState(app);
   const limits = app.requestLimits;
-  const ip = resolveRequestClientIp(app, request) ?? 'unknown';
+  const ip = resolveRequestClientIp(app, request);
   const scoped = surfaceRateLimits(limits, surface);
   const checks: Array<{
     id: string;
@@ -224,10 +225,12 @@ function rateLimitFailure(
     scope: RateBucketScope;
   }> = [
     { id: 'all:global', key: 'global', limit: limits.global, scope: 'global' },
-    { id: 'all:per-ip', key: ip || 'unknown', limit: limits.perIp, scope: 'perIp' },
     { id: `${surface}:global`, key: 'global', limit: scoped.global, scope: 'global' },
-    { id: `${surface}:per-ip`, key: ip || 'unknown', limit: scoped.perIp, scope: 'perIp' },
   ];
+  if (ip !== undefined) {
+    checks.push({ id: 'all:per-ip', key: ip, limit: limits.perIp, scope: 'perIp' });
+    checks.push({ id: `${surface}:per-ip`, key: ip, limit: scoped.perIp, scope: 'perIp' });
+  }
 
   for (const check of checks) {
     if (check.limit === false) continue;
@@ -448,9 +451,18 @@ function countedBody(
 export function resolveRequestClientIp(app: KovoApp, request: Request): string | undefined {
   const limits = app.requestLimits;
   const ip =
-    limits.clientIp?.(request) ?? requestClientIp(request, { trustedProxy: limits.trustedProxy });
+    limits.clientIp?.(request) ??
+    requestClientIp(request, { trustedProxy: limits.trustedProxy }) ??
+    requestPeerAddress(request);
   const trimmed = ip?.trim();
   return trimmed === undefined || trimmed === '' ? undefined : trimmed;
+}
+
+function requestPeerAddress(request: Request): string | undefined {
+  const value = (request as Request & { [requestPeerAddressProperty]?: unknown })[
+    requestPeerAddressProperty
+  ];
+  return typeof value === 'string' ? value : undefined;
 }
 
 function requestClientIp(request: Request, options: { trustedProxy: boolean }): string | undefined {

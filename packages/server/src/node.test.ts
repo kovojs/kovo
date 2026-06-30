@@ -8,6 +8,7 @@ import type {
 } from 'node:http';
 import { connect as http2Connect, createServer as createHttp2Server } from 'node:http2';
 import type { AddressInfo, Socket } from 'node:net';
+import { Readable } from 'node:stream';
 import { brotliDecompressSync, gunzipSync } from 'node:zlib';
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
@@ -54,6 +55,38 @@ describe('server node adapter', () => {
     expect(nodeRequestToWebRequest(request, { trustedProxy: true }).url).toBe(
       'https://app.example/account',
     );
+  });
+
+  it('threads the socket peer address into default pre-dispatch per-IP limiting', async () => {
+    const cartQuery = query('cart/node-peer-rate-limit', {
+      load: () => ({ ok: true }),
+      reads: [],
+    });
+    const handler = createRequestHandler(
+      createApp({
+        queries: [cartQuery],
+        requestLimits: {
+          global: false,
+          maxBodyBytes: false,
+          mutations: { global: false, perIp: false },
+          perIp: false,
+          queries: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+        },
+      }),
+    );
+    const makeRequest = (remoteAddress: string) => {
+      const request = Object.assign(Readable.from([]) as IncomingMessage, {
+        headers: { host: 'app.example' },
+        method: 'GET',
+        socket: Object.assign(new EventEmitter() as Socket, { remoteAddress }),
+        url: '/_q/cart/node-peer-rate-limit',
+      });
+      return nodeRequestToWebRequest(request);
+    };
+
+    expect((await handler(makeRequest('203.0.113.10'))).status).toBe(200);
+    expect((await handler(makeRequest('203.0.113.11'))).status).toBe(200);
+    expect((await handler(makeRequest('203.0.113.10'))).status).toBe(429);
   });
 
   it('serves web-standard handlers through node:http with request bodies and early hints', async () => {

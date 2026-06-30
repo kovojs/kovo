@@ -648,6 +648,8 @@ export default async function handler(request) {
       expect(nodeServer).toContain("nodeHeaders['set-cookie'] = setCookies");
       expect(nodeServer).toContain('nodeResponse.destroy()');
       expect(nodeServer).toContain('signal: controller.signal');
+      expect(nodeServer).toContain('nodeRequest.socket?.remoteAddress?.trim()');
+      expect(nodeServer).toContain("'__kovoPeerAddress'");
 
       const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
         createKovoNodeServer(): Server;
@@ -859,6 +861,8 @@ export default async function handler(request) {
       expect(vercelFunction).toContain("nodeHeaders['set-cookie'] = setCookies");
       expect(vercelFunction).toContain('nodeResponse.destroy()');
       expect(vercelFunction).toContain('signal: controller.signal');
+      expect(vercelFunction).toContain('nodeRequest.socket?.remoteAddress?.trim()');
+      expect(vercelFunction).toContain("'__kovoPeerAddress'");
       await expect(
         readJson(join(vercelOutDir, 'functions/kovo.func/.vc-config.json')),
       ).resolves.toEqual({
