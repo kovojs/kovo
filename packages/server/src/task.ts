@@ -1,4 +1,5 @@
 import type { InferSchema, Schema } from './schema.js';
+import { validateCronExpression } from './task-cron.js';
 
 const UNASSIGNED_DERIVED_TASK_KEY = '\0kovo:unassigned-task-key';
 
@@ -144,6 +145,7 @@ export function task(
   }
   assertKnownTaskDefinitionKeys(definition);
   assertTaskCronOptions(definition);
+  assertTaskRetryOptions(definition);
   return { ...definition, key };
 }
 
@@ -202,5 +204,27 @@ function assertTaskCronOptions(definition: Omit<TaskDefinition<any, any, any>, '
   }
   if (definition.cronArgs !== undefined && definition.cron === undefined) {
     throw new TypeError('task({ cronArgs }) requires task({ cron }).');
+  }
+  if (definition.cron !== undefined) {
+    validateCronExpression(definition.cron);
+    try {
+      definition.input.parse(definition.cronArgs ?? {});
+    } catch (error) {
+      const cause = error instanceof Error ? ` ${error.message}` : '';
+      throw new TypeError(
+        `task({ cronArgs }) must satisfy the task input schema for recurring task "${definition.cron}".${cause}`,
+      );
+    }
+  }
+}
+
+function assertTaskRetryOptions(definition: Omit<TaskDefinition<any, any, any>, 'key'>): void {
+  if (definition.retry === undefined) return;
+  const { backoff, maxAttempts } = definition.retry;
+  if (backoff !== undefined && backoff !== 'exponential' && backoff !== 'linear') {
+    throw new TypeError("task({ retry.backoff }) must be 'exponential' or 'linear'.");
+  }
+  if (maxAttempts === undefined || !Number.isFinite(maxAttempts) || maxAttempts < 1) {
+    throw new TypeError('task({ retry.maxAttempts }) must be a positive finite number.');
   }
 }

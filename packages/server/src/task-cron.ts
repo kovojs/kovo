@@ -193,8 +193,14 @@ interface CronSchedule {
   readonly minute: ReadonlySet<number>;
   readonly hour: ReadonlySet<number>;
   readonly dayOfMonth: ReadonlySet<number>;
+  readonly dayOfMonthUnrestricted: boolean;
   readonly month: ReadonlySet<number>;
   readonly dayOfWeek: ReadonlySet<number>;
+  readonly dayOfWeekUnrestricted: boolean;
+}
+
+export function validateCronExpression(expression: string): void {
+  parseCronExpression(expression);
 }
 
 function parseCronExpression(expression: string): CronSchedule {
@@ -208,8 +214,10 @@ function parseCronExpression(expression: string): CronSchedule {
     minute: parseCronField(fields[0]!, 0, 59, 'minute'),
     hour: parseCronField(fields[1]!, 0, 23, 'hour'),
     dayOfMonth: parseCronField(fields[2]!, 1, 31, 'day of month'),
+    dayOfMonthUnrestricted: isUnrestrictedCronField(fields[2]!, 1, 31, 'day of month'),
     month: parseCronField(fields[3]!, 1, 12, 'month'),
     dayOfWeek: parseCronField(fields[4]!, 0, 7, 'day of week'),
+    dayOfWeekUnrestricted: isUnrestrictedCronField(fields[4]!, 0, 7, 'day of week'),
   };
 }
 
@@ -232,7 +240,7 @@ function parseCronField(
         ? [min, max]
         : rangePart.includes('-')
           ? rangePart.split('-').map((value) => integer(value, label))
-          : [integer(rangePart, label), integer(rangePart, label)];
+          : [integer(rangePart, label), stepPart === undefined ? integer(rangePart, label) : max];
     if (start === undefined || end === undefined || start < min || end > max || start > end) {
       throw invalidCronField(field, label);
     }
@@ -260,12 +268,22 @@ function previousOccurrence(schedule: CronSchedule, now: Date): Date | undefined
 }
 
 function matchesCron(schedule: CronSchedule, value: Date): boolean {
+  const dayOfMonthMatches = schedule.dayOfMonth.has(value.getUTCDate());
+  const dayOfWeekMatches = schedule.dayOfWeek.has(value.getUTCDay());
+  const dayMatches =
+    schedule.dayOfMonthUnrestricted && schedule.dayOfWeekUnrestricted
+      ? true
+      : schedule.dayOfMonthUnrestricted
+        ? dayOfWeekMatches
+        : schedule.dayOfWeekUnrestricted
+          ? dayOfMonthMatches
+          : dayOfMonthMatches || dayOfWeekMatches;
+
   return (
     schedule.minute.has(value.getUTCMinutes()) &&
     schedule.hour.has(value.getUTCHours()) &&
-    schedule.dayOfMonth.has(value.getUTCDate()) &&
     schedule.month.has(value.getUTCMonth() + 1) &&
-    schedule.dayOfWeek.has(value.getUTCDay())
+    dayMatches
   );
 }
 
@@ -302,6 +320,12 @@ function integer(value: string, label: string): number {
 
 function invalidCronField(field: string, label: string): TypeError {
   return new TypeError(`Invalid cron ${label} field "${field}".`);
+}
+
+function isUnrestrictedCronField(field: string, min: number, max: number, label: string): boolean {
+  const values = parseCronField(field, min, max, label);
+  const normalizedMax = label === 'day of week' ? 6 : max;
+  return values.size === normalizedMax - min + 1;
 }
 
 function sqlStatement(text: string, values: readonly unknown[]): DurableTaskSqlStatement {
