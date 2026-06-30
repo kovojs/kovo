@@ -722,7 +722,15 @@ function createLeaseToken(): string {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  try {
+    const json = JSON.stringify(error);
+    if (typeof json === 'string') return json;
+  } catch (_jsonError) {
+    void _jsonError;
+  }
+  return String(error);
 }
 
 function normalizePriority(value: number | undefined): number {

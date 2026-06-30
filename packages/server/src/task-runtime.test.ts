@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from 'vitest';
+import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
+import { route } from './route.js';
 import { s } from './schema.js';
 import { task } from './task.js';
 import { createAppTaskRuntime } from './task-runtime.js';
@@ -119,6 +121,91 @@ describe('durable task runtime (SPEC §9.6)', () => {
     }
   });
 
+  it('uses the runner-backed ctx.schedule path for lineage and self-reschedule backstops', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-30T10:00:00.000Z'));
+      const enqueues: DurableTaskSqlStatement[] = [];
+      let claimed = false;
+      let loop!: ReturnType<typeof task>;
+      const db = {
+        async query(text: string, values: readonly unknown[]) {
+          if (text === 'select now() as now') {
+            return { rows: [{ now: '2026-06-30T10:00:00.000Z' }] };
+          }
+          if (text.includes('with claimed as')) {
+            if (claimed) return { rows: [] };
+            claimed = true;
+            return {
+              rows: [
+                {
+                  args: {},
+                  attempts: 1,
+                  created_at: '2026-06-30T10:00:00.000Z',
+                  generation: 0,
+                  id: 'job_parent',
+                  last_error: null,
+                  lease_owner: values[2],
+                  lease_token: values[4],
+                  leased_until: '2026-06-30T10:00:30.000Z',
+                  lineage: 'lineage_parent',
+                  logical_key: null,
+                  priority: 0,
+                  run_at: '2026-06-30T10:00:00.000Z',
+                  status: 'running',
+                  task_key: 'loop.runtime',
+                  updated_at: '2026-06-30T10:00:00.000Z',
+                },
+              ],
+            };
+          }
+          if (text.includes('insert into _kovo_jobs')) {
+            enqueues.push({ text, values });
+            return { rows: [{ id: values[0] }] };
+          }
+          return { rowCount: text.includes("set status = 'succeeded'") ? 1 : 0, rows: [] };
+        },
+      };
+      loop = task('loop.runtime', {
+        input: s.object({}),
+        run: (_args, ctx) => ctx.schedule(loop, {}, { afterMs: 1 }),
+      });
+      const app = createApp({ db: () => db, tasks: [loop] });
+
+      await createAppTaskRuntime(app)?.ensureStarted(new Request('http://localhost/request'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(enqueues).toHaveLength(1);
+      expect(enqueues[0]!.values[1]).toBe('loop.runtime');
+      expect(enqueues[0]!.values[4]).toEqual(new Date('2026-06-30T10:00:01.000Z'));
+      expect(enqueues[0]!.values[6]).toBe('lineage_parent');
+      expect(enqueues[0]!.values[7]).toBe(1);
+      expect(enqueues[0]!.values[9]).toBe('ready');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('rejects request.schedule for tasks outside createApp({ tasks })', async () => {
+    const registered = task('registered.runtime', {
+      input: s.object({}),
+      run() {},
+    });
+    const unregistered = task('unregistered.runtime', {
+      input: s.object({}),
+      run() {},
+    });
+    const app = createApp({
+      db: () => ({}),
+      tasks: [registered],
+    });
+    const runtime = createAppTaskRuntime(app);
+
+    await expect(
+      runtime?.scheduler.schedule({ db: {} }, unregistered, {}, undefined),
+    ).rejects.toThrow('No durable task is registered for key "unregistered.runtime".');
+  });
+
   it('routes startup failures through app onError and the configured error shell', async () => {
     const onError = vi.fn();
     const startupTask = task('startup.fail', {
@@ -151,5 +238,41 @@ describe('durable task runtime (SPEC §9.6)', () => {
         url: '/needs-startup',
       },
     );
+  });
+
+  it('retries task runtime startup after a transient failure instead of caching rejection', async () => {
+    let calls = 0;
+    const startupTask = task('startup.retry', {
+      input: s.object({}),
+      run() {},
+    });
+    const db = {
+      async query(text: string) {
+        calls += 1;
+        if (calls === 1) throw new Error('temporary db outage');
+        if (text === 'select now() as now') {
+          return { rows: [{ now: '2026-06-30T10:00:00.000Z' }] };
+        }
+        return { rows: [] };
+      },
+    };
+    const app = createApp({
+      db: () => db,
+      routes: [
+        route('/', {
+          page() {
+            return trustedHtml('<main>ok</main>');
+          },
+        }),
+      ],
+      tasks: [startupTask],
+    });
+    const handler = createRequestHandler(app);
+
+    await expect(handler(new Request('http://localhost/'))).resolves.toMatchObject({ status: 500 });
+    const response = await handler(new Request('http://localhost/'));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain('ok');
   });
 });
