@@ -172,6 +172,34 @@ describe('server static export replay response boundary', () => {
     });
   });
 
+  it('allows server-only protocol examples inside inert templates', async () => {
+    await expect(
+      readStaticExportReplayedResponse({
+        kind: 'route-document',
+        response: new Response(
+          [
+            '<!doctype html><main>',
+            '<template>',
+            '<form action="/_m/example"><button>Example</button></form>',
+            '<kovo-fragment target="docs">Example</kovo-fragment>',
+            '--kovo-boundary',
+            '</template>',
+            '<p>Docs page</p>',
+            '</main>',
+          ].join(''),
+          {
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            status: 200,
+          },
+        ),
+        routePath: '/docs/templates',
+      }),
+    ).resolves.toMatchObject({
+      body: expect.stringContaining('--kovo-boundary'),
+      status: 200,
+    });
+  });
+
   it('reports concrete deferred route markers instead of an opaque route 500', async () => {
     await expect(
       readStaticExportReplayedResponse({

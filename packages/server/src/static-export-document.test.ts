@@ -149,6 +149,8 @@ describe('server static export document boundary', () => {
           '<style>.demo::before { content: \'<a href="/_q/style">\'; }</style>',
           '<textarea><a href="/_q/textarea">example</a></textarea>',
           '<title><a href="/_q/title">example</a></title>',
+          '<template><form action="/_m/template/add"><button on:click="/c/template.client.js?v=1#open">Template</button></form></template>',
+          '<pre><form action="/_m/pre/add"><button on:click="/c/pre.client.js?v=1#open">Pre</button></form></pre>',
           '<button on:click="/c/real.client.js?v=2#Real$open">Open</button>',
           '</main>',
         ].join(''),

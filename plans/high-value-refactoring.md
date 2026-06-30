@@ -200,7 +200,7 @@ test brittleness, and distribution confusion.
     no-JS failure rerender, and query endpoint paths.
   - SPEC: sections 1.2, 4.1, 6.1, 9.1, 10.2, 10.3.
 
-- [ ] **P1.3 - Replace static-export string scans with parsed protocol extraction.**
+- [x] **P1.3 - Replace static-export string scans with parsed protocol extraction.**
   - Affected: `packages/server/src/static-export-document.ts`,
     `packages/server/src/static-export-response.ts`,
     `packages/server/src/static-export-route-plan.ts`, related static export diagnostics.
@@ -215,6 +215,7 @@ test brittleness, and distribution confusion.
   - Verification: fixture corpus for quoted/unquoted attrs, entities, uppercase tags, `<template>`,
     `<pre>`, mutation forms, client modules, deferred fragments, endpoint refs, and malicious encoded
     paths; rerun static export test suites.
+  - Evidence: `pnpm exec vitest --run packages/server/src/static-export-protocol.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-client-module-refs.test.ts packages/server/src/static-export-endpoints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-replay.test.ts` passes with parsed static-export protocol facts.
   - SPEC: sections 9.1, 9.5, KV229.
 
 - [x] **P1.4 - Replace Better Auth schema string surgery with structured codegen.**
