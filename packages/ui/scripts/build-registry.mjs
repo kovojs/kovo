@@ -20,6 +20,10 @@ const uiSrcDir = path.join(pkgRoot, 'src');
 const headlessRoot = path.join(repoRoot, 'packages/headless-ui');
 const galleryRoot = path.join(repoRoot, 'examples/gallery');
 const publicPackagesPath = path.join(repoRoot, 'public-packages.json');
+const componentsGuidePath = path.join(repoRoot, 'site', 'content', 'guides', 'components.md');
+
+const registryGuideStartMarker = '<!-- GENERATED:ui-registry-copy:start -->';
+const registryGuideEndMarker = '<!-- GENERATED:ui-registry-copy:end -->';
 
 const generatedSourceComment =
   '// Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.';
@@ -35,6 +39,7 @@ const paths = {
   galleryPrimitiveActions: path.join(galleryRoot, 'src', 'primitive-actions.ts'),
   headlessGenerated: path.join(headlessRoot, 'src', 'generated.ts'),
   uiRegistry: path.join(pkgRoot, 'registry.json'),
+  componentsGuide: componentsGuidePath,
 };
 
 const allowedArgs = new Set(['--write']);
@@ -47,12 +52,19 @@ if (unknownArg) {
 const writeMode = process.argv.includes('--write');
 const manifestComponents = componentManifestEntries();
 const uiDistributionMode = uiPackageDistributionMode();
+const generatedUiRegistry = generateUiRegistry();
 const generatedTargets = [
   {
     compare: 'json',
     label: 'packages/ui/registry.json',
     path: paths.uiRegistry,
-    source: generateUiRegistryJson(),
+    source: `${JSON.stringify(generatedUiRegistry, null, 2)}\n`,
+  },
+  {
+    compare: 'text',
+    label: 'site/content/guides/components.md',
+    path: paths.componentsGuide,
+    source: generateComponentsGuide(),
   },
   {
     compare: 'text',
@@ -238,23 +250,121 @@ function generateUiRegistryJson() {
     throw new Error(`Unable to generate packages/ui/registry.json:\n${findings.join('\n')}`);
   }
 
-  return `${JSON.stringify(
-    {
-      $comment:
-        'shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. Component membership/order comes from packages/ui/scripts/primitive-component-manifest.mjs; dependency metadata is derived from source. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.',
-      distributionMode: uiDistributionMode,
-      registryDependencies: [
-        '@kovojs/headless-ui',
-        '@kovojs/style',
-        '@kovojs/core',
-        '@kovojs/server',
-        '@kovojs/icons',
-      ],
+  const registryDependencies = orderedPublicPackageNames(
+    new Set(
+      components.flatMap((component) =>
+        Object.keys(component.dependencies).filter((dependency) => dependency !== 'other'),
+      ),
+    ),
+  );
+
+  return {
+    $comment: uiRegistryComment({
       components,
-    },
-    null,
-    2,
-  )}\n`;
+      registryDependencies,
+    }),
+    distributionMode: uiDistributionMode,
+    registryDependencies,
+    components,
+  };
+}
+
+function generateUiRegistry() {
+  return generateUiRegistryJson();
+}
+
+function generateComponentsGuide() {
+  const current = readFileSync(paths.componentsGuide, 'utf8');
+  return replaceMarkedSection(
+    current,
+    registryGuideStartMarker,
+    registryGuideEndMarker,
+    uiRegistryGuideSnippet({
+      components: generatedUiRegistry.components,
+      registryDependencies: generatedUiRegistry.registryDependencies,
+    }),
+  );
+}
+
+function uiRegistryComment({ components, registryDependencies }) {
+  return [
+    `Generated copy-in registry for @kovojs/ui. public-packages.json declares distributionMode "${uiDistributionMode}", so apps can install versioned @kovojs/ui/<component> subpaths or copy component TSX into app-owned source with kovo add.`,
+    `registryDependencies lists the public packages copied source may import: ${formatPackageList(registryDependencies)}.`,
+    `dependencies records the exact imported symbols per package, uiComponents lists sibling files to copy, and family metadata records manifest-owned ids, parts, slots, and state for ${countCopyInSensitiveFamilies(components)} copy-in-sensitive component families across ${components.length} components.`,
+    'Regenerate with `node packages/ui/scripts/build-registry.mjs --write`.',
+  ].join(' ');
+}
+
+function uiRegistryGuideSnippet({ components, registryDependencies }) {
+  return [
+    'The package ships a machine-readable manifest, `packages/ui/registry.json`, listing every component:',
+    'its source file(s), exported symbols, and the exact public package symbols it imports (plus any',
+    'sibling files to copy alongside it). `public-packages.json` declares `@kovojs/ui` distribution',
+    `mode as \`${uiDistributionMode}\`, so the generated registry records both the package-managed and copy-in`,
+    `paths from the same source of truth. The current registry spans ${components.length} components,`,
+    `tracks family metadata for ${countCopyInSensitiveFamilies(components)} copy-in-sensitive wrappers, and`,
+    `limits copied source imports to ${formatPackageList(registryDependencies)}. This is the data`,
+    '`kovo add <component>` consumes to copy a component and its dependencies into your app. It is',
+    'also enforced: a copy-in smoke test typechecks representative components against the public',
+    'packages alone, so a component cannot start depending on a non-public symbol without the build',
+    'catching it.',
+  ].join('\n');
+}
+
+function formatPackageList(packageNames) {
+  if (packageNames.length === 1) {
+    return `\`${packageNames[0]}\``;
+  }
+  if (packageNames.length === 2) {
+    return `\`${packageNames[0]}\` and \`${packageNames[1]}\``;
+  }
+  return `${packageNames
+    .slice(0, -1)
+    .map((name) => `\`${name}\``)
+    .join(', ')}, and \`${packageNames.at(-1)}\``;
+}
+
+function countCopyInSensitiveFamilies(components) {
+  return components.filter((component) =>
+    Object.values(component.family).some((entries) => entries.length > 0),
+  ).length;
+}
+
+function orderedPublicPackageNames(packageNames) {
+  const manifest = JSON.parse(readFileSync(publicPackagesPath, 'utf8'));
+  const packages = manifest.packages ?? [];
+  const ordered = [];
+  for (const entry of packages) {
+    if (!packageNames.has(entry.name)) {
+      continue;
+    }
+    if (entry.visibility !== 'public') {
+      throw new Error(
+        `UI registry dependency ${entry.name} must be public in public-packages.json`,
+      );
+    }
+    ordered.push(entry.name);
+    packageNames.delete(entry.name);
+  }
+  if (packageNames.size > 0) {
+    throw new Error(
+      `UI registry dependency metadata missing from public-packages.json: ${sorted(packageNames).join(', ')}`,
+    );
+  }
+  return ordered;
+}
+
+function replaceMarkedSection(source, startMarker, endMarker, replacement) {
+  const startIndex = source.indexOf(startMarker);
+  const endIndex = source.indexOf(endMarker);
+  if (startIndex === -1 || endIndex === -1 || endIndex < startIndex) {
+    throw new Error(
+      `Unable to update ${path.relative(repoRoot, paths.componentsGuide)}: missing ${startMarker}/${endMarker} markers`,
+    );
+  }
+  const before = source.slice(0, startIndex + startMarker.length);
+  const after = source.slice(endIndex);
+  return `${before}\n\n${replacement}\n\n${after}`;
 }
 
 function generateHeadlessGeneratedTs() {

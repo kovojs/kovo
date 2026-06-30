@@ -234,7 +234,13 @@ describe('@kovojs/ui copy-in model', () => {
 
   it('keeps the components guide aligned with the explicit UI distribution mode', () => {
     const guide = readFileSync(componentsGuidePath, 'utf8');
+    const registry = JSON.parse(readFileSync(join(pkgRoot, 'registry.json'), 'utf8')) as {
+      $comment: string;
+      distributionMode: string;
+    };
 
-    expect(guide).toContain('package-and-copy-in');
+    expect(guide).toContain(registry.distributionMode);
+    expect(guide).not.toContain('private package');
+    expect(registry.$comment).not.toContain('private package');
   });
 });

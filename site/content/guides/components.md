@@ -230,14 +230,21 @@ StyleX objects, the public package owns correctness.
 
 ### The registry
 
+<!-- GENERATED:ui-registry-copy:start -->
+
 The package ships a machine-readable manifest, `packages/ui/registry.json`, listing every component:
-its source file(s), the symbols it exports, and the exact public package symbols it imports (plus
-any sibling components to copy alongside it). The registry also records the package's explicit
-`distributionMode` (`package-and-copy-in`) and per-family metadata for copy-in-sensitive wrappers
-such as slots, state inputs, ids, and parts. This is the data `kovo add <component>` consumes to
-copy a component and its dependencies into your app. It is also enforced: a copy-in smoke test
-typechecks a representative component against the public packages alone, so a component can never
-start depending on a non-public symbol without the build catching it.
+its source file(s), exported symbols, and the exact public package symbols it imports (plus any
+sibling files to copy alongside it). `public-packages.json` declares `@kovojs/ui` distribution
+mode as `package-and-copy-in`, so the generated registry records both the package-managed and copy-in
+paths from the same source of truth. The current registry spans 44 components,
+tracks family metadata for 3 copy-in-sensitive wrappers, and
+limits copied source imports to `@kovojs/core`, `@kovojs/icons`, `@kovojs/headless-ui`, and `@kovojs/style`. This is the data
+`kovo add <component>` consumes to copy a component and its dependencies into your app. It is
+also enforced: a copy-in smoke test typechecks representative components against the public
+packages alone, so a component cannot start depending on a non-public symbol without the build
+catching it.
+
+<!-- GENERATED:ui-registry-copy:end -->
 
 ## Choosing a mode
 
