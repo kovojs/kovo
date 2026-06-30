@@ -41,6 +41,17 @@ describe('compiler HMR impact facts', () => {
     });
   });
 
+  it('classifies style-derived query-plan edits from typed fact hashes', () => {
+    const previous = compile(styleToggleSource({ condition: 'cart.count > 0' })).hmrImpact;
+    const next = compile(styleToggleSource({ condition: 'cart.ready' })).hmrImpact;
+
+    expect(previous?.queryUpdatePlanHash).not.toBe(next?.queryUpdatePlanHash);
+    expect(classifyHmrImpact(previous, next)).toEqual({
+      impact: 'routeRefresh',
+      reasons: ['query-plan'],
+    });
+  });
+
   it('classifies compiler errors as diagnostic HMR impact', () => {
     const previous = compile(hmrSource()).hmrImpact;
     const next = withDiagnostic(previous, 'KV201');
@@ -114,6 +125,25 @@ import { removeItem } from './actions';
 
 export const ActionButton = component({
   render: () => <button onClick={removeItem}>Run</button>,
+});
+`;
+}
+
+function styleToggleSource({ condition }: { condition: string }): string {
+  return `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const buttonStates = style.create({
+  empty: { color: 'gray' },
+  ready: { color: 'green' },
+});
+
+export const CartButton = component({
+  queries: { cart: true },
+  render: ({ cart }) => (
+    <button style={${condition} ? buttonStates.ready : buttonStates.empty}>Cart</button>
+  ),
 });
 `;
 }

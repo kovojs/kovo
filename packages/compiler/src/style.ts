@@ -155,6 +155,11 @@ interface StyleClassVariant {
   readonly styles: readonly CompiledStyle[];
 }
 
+interface StyleConditionFactCursor {
+  readonly facts: NonNullable<JsxAttributeModel['expressionConditionalFacts']>;
+  index: number;
+}
+
 /**
  * @internal Extracts Kovo-owned StyleX atoms from a component module and lowers
  * static JSX `style` props to authorable `class`/`data-style-src` IR, satisfying
@@ -1118,7 +1123,10 @@ function dynamicStyleAttributeLowering(
 ): DynamicStyleLowering | null {
   if (!attribute.expression) return null;
 
-  const variants = styleClassVariants(expression, bindings);
+  const variants = styleClassVariants(expression, bindings, {
+    facts: attribute.expressionConditionalFacts ?? [],
+    index: 0,
+  });
   if (!variants) return null;
   const classExpression = classExpressionForVariants(variants);
   if (!classExpression) return null;
@@ -1220,9 +1228,10 @@ function dynamicStyleAttributeLowering(
 function styleClassVariants(
   expression: ts.Expression,
   bindings: ReadonlyMap<string, StyleBinding>,
+  conditionFacts: StyleConditionFactCursor,
 ): StyleClassVariant[] | null {
   if (ts.isParenthesizedExpression(expression)) {
-    return styleClassVariants(expression.expression, bindings);
+    return styleClassVariants(expression.expression, bindings, conditionFacts);
   }
 
   if (ts.isPropertyAccessExpression(expression) && ts.isIdentifier(expression.expression)) {
@@ -1238,9 +1247,11 @@ function styleClassVariants(
   }
 
   if (ts.isConditionalExpression(expression)) {
-    const condition = expression.condition.getText();
-    const whenTrue = styleClassVariants(expression.whenTrue, bindings);
-    const whenFalse = styleClassVariants(expression.whenFalse, bindings);
+    const condition = conditionFacts.facts[conditionFacts.index]?.condition;
+    conditionFacts.index += 1;
+    if (!condition) return null;
+    const whenTrue = styleClassVariants(expression.whenTrue, bindings, conditionFacts);
+    const whenFalse = styleClassVariants(expression.whenFalse, bindings, conditionFacts);
     if (!whenTrue || !whenFalse) return null;
     return [
       ...whenTrue.map((variant) => ({
@@ -1257,7 +1268,7 @@ function styleClassVariants(
   if (ts.isArrayLiteralExpression(expression)) {
     let variants: StyleClassVariant[] = [{ conditions: [], styles: [] }];
     for (const element of expression.elements) {
-      const itemVariants = styleClassVariants(element, bindings);
+      const itemVariants = styleClassVariants(element, bindings, conditionFacts);
       if (!itemVariants) return null;
       variants = variants.flatMap((left) =>
         itemVariants.map((right) => ({

@@ -166,7 +166,7 @@ test brittleness, and distribution confusion.
 
 ## P1 - Cross-Package Contract Drift And Generation
 
-- [ ] **P1.1 - Add a typed compiler fact ledger and finish post-parse typed-fact cleanup.**
+- [x] **P1.1 - Add a typed compiler fact ledger and finish post-parse typed-fact cleanup.**
   - Affected: `packages/compiler/src/lowering-pipeline.ts`,
     `packages/compiler/src/model-pipeline.ts`, `packages/compiler/src/compile-result.ts`,
     `packages/compiler/src/app-graph.ts`, `packages/compiler/src/style.ts`,
@@ -184,6 +184,7 @@ test brittleness, and distribution confusion.
   - Verification: `packages/compiler/src/lowering-pipeline.test.ts`,
     `packages/compiler/src/hmr-impact.test.ts`, `packages/compiler/src/cache-identity.test.ts`,
     style tests, app graph/registry tests, compiler conformance, golden output, and fact-hash snapshots.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/compile-fact-ledger.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/hmr-impact.test.ts packages/compiler/src/cache-identity.test.ts packages/compiler/src/style.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities.test.ts packages/compiler/src/output-context-facts.test.ts packages/compiler/src/package-styles.test.ts packages/conformance-fixtures/src/source-fixtures.test.ts` passes with typed compiler fact-ledger snapshots and the widened post-parse source-string guard.
   - SPEC: sections 1.3, 5.2 rule 10, 9.1, 11.3.
 
 - [ ] **P1.2 - Normalize runtime generated registry facts once.**

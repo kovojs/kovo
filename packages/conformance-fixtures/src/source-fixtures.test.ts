@@ -17,6 +17,7 @@ import {
   projectFileSources,
   projectJsonFile,
   projectPackageManifestFacts,
+  postParseSourceStringProjectFact,
   projectQueryBehaviorFacts,
   projectQueryDiagnosticFacts,
   projectSourceLineFacts,
@@ -183,6 +184,35 @@ describe('@kovojs/test source fixture seam', () => {
           manifest: {},
         },
       ]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('includes StyleX extraction in the post-parse source-string guard', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-test-post-parse-style-'));
+    try {
+      await mkdir(join(root, 'packages/compiler/src'), { recursive: true });
+      await writeFile(
+        join(root, 'packages/compiler/src/style.ts'),
+        [
+          'export function lower(node: { getText(): string }) {',
+          '  return node.getText() === "state";',
+          '}',
+          '',
+        ].join('\n'),
+      );
+
+      await expect(postParseSourceStringProjectFact({ rootPath: root, ts })).resolves.toEqual({
+        checkedFileCount: 1,
+        clean: false,
+        violations: [
+          expect.objectContaining({
+            fileName: 'packages/compiler/src/style.ts',
+            label: 'post-parse getText() re-derives raw source',
+          }),
+        ],
+      });
     } finally {
       await rm(root, { force: true, recursive: true });
     }
