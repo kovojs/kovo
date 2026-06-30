@@ -30,7 +30,7 @@ invariant.
     `Symbol.for('kovo.renderedHtml')` outside the owning module and no structural
     `__kovoTrustedHtml` guards outside tests.
 
-- [ ] **P0.2 - Make data-plane static analysis fail closed on missing aggregate ABI or analyzer crashes.**
+- [x] **P0.2 - Make data-plane static analysis fail closed on missing aggregate ABI or analyzer crashes.**
   - Current signals: `packages/server/src/internal/data-plane-static-analysis.ts` still treats
     `extractStaticBuildAnalysisFactsFromProject` as optional and falls back to recomposing older
     analyzer entrypoints. `staticDataPlaneBuildFacts()` catches analyzer failures and returns empty
@@ -42,8 +42,7 @@ invariant.
   - Risk reduced: `kovo check`, Vite dev teaching diagnostics, and build/export cannot silently skip
     owner audits, mass-assignment, SQL safety, TOCTOU, query-write reachability, or newer data-plane
     diagnostics because the analyzer was old or crashed.
-  - Verification: failing-analyzer fixtures prove non-empty blocking diagnostics; no-source fixtures
-    still return empty facts. Run `pnpm exec vitest --run packages/server/src/vite-data-plane-gate.test.ts packages/server/src/internal/data-plane-static-analysis.test.ts packages/drizzle/src/static-analysis-context.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/vite-data-plane-gate.test.ts packages/server/src/internal/data-plane-static-analysis.test.ts packages/drizzle/src/static-analysis-context.test.ts` passed on 2026-06-30, covering failing analyzer diagnostics, missing aggregate ABI, invalid aggregate output, and no-source empty facts.
 
 - [ ] **P0.3 - Replace build/export process-global side channels with scoped build context.**
   - Current signals: `packages/cli/src/commands/build-export.ts` toggles
