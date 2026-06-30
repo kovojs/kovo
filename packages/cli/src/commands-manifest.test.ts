@@ -121,12 +121,14 @@ describe('commands manifest', () => {
     expect(MCP_USAGE).toBe('usage: kovo mcp');
     expect(UPDATE_DOCS_USAGE).toBe('usage: kovo update-docs');
     expect(EXPLAIN_USAGE_LINE).toContain(
-      'kovo explain component|mutation|query|page|context <target>',
+      'kovo explain component|mutation|query|page|context|task <target>',
     );
     expect(EXPLAIN_USAGE).toContain('       kovo explain --capabilities [graph.json]');
     expect(EXPLAIN_USAGE).toContain('       kovo explain --cookies [graph.json]');
+    expect(EXPLAIN_USAGE).toContain('       kovo explain --tasks [graph.json]');
     expect(EXPLAIN_USAGE_LINE).toContain('kovo explain --capabilities [graph.json]');
     expect(EXPLAIN_USAGE_LINE).toContain('kovo explain --cookies [graph.json]');
+    expect(EXPLAIN_USAGE_LINE).toContain('kovo explain --tasks [graph.json]');
   });
 
   it('each manifest usage is consistent with the bin imports', () => {

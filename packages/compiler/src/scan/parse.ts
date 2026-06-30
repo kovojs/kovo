@@ -30,6 +30,7 @@ import type {
   SourceSpan,
   StateReturnObjectModel,
   StringRenderModel,
+  TaskRunHandlerModel,
   TemporalReadModel,
   ZeroArgArrowCallArgumentKind,
   ZeroArgArrowModel,
@@ -102,6 +103,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const mutationHandlers: MutationHandlerModel[] = [];
   const namedImports: NamedImportModel[] = [];
   const renderSourceReturns: StringRenderModel[] = [];
+  const taskRunHandlers: TaskRunHandlerModel[] = [];
   const moduleScopeObjectEntries = moduleScopeObjectEntryModels(sourceFile, source);
 
   const visit = (node: ts.Node): void => {
@@ -137,6 +139,9 @@ export function parseComponentModule(fileName: string, source: string): Componen
       if (ts.isIdentifier(node.expression) && node.expression.text === 'mutation') {
         mutationHandlers.push(...mutationHandlerModels(sourceFile, source, node));
       }
+      if (ts.isIdentifier(node.expression) && node.expression.text === 'task') {
+        taskRunHandlers.push(...taskRunHandlerModels(sourceFile, source, node));
+      }
     }
     if (isExportedRenderSourceFunction(node)) {
       renderSourceReturns.push(
@@ -161,6 +166,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
     namedImports,
     renderSourceReturns,
     sourceFile,
+    taskRunHandlers,
   };
   // FN7: keep the scanner's SourceFile non-enumerable so post-parse phases (StyleX extraction)
   // reuse it rather than re-parsing the component, while the model stays a serializable fact bag.
@@ -515,6 +521,10 @@ export function jsxComments(model: ComponentModuleModel): JsxCommentModel[] {
 
 export function mutationHandlers(model: ComponentModuleModel): MutationHandlerModel[] {
   return [...model.mutationHandlers];
+}
+
+export function taskRunHandlers(model: ComponentModuleModel): TaskRunHandlerModel[] {
+  return [...model.taskRunHandlers];
 }
 
 function stringLiteralArrayValuesFromExpression(expression: ts.Expression): string[] | null {
@@ -1043,6 +1053,104 @@ function mutationHandlerModels(
       },
     ];
   });
+}
+
+function taskRunHandlerModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  call: ts.CallExpression,
+): TaskRunHandlerModel[] {
+  const definition = taskDefinitionObject(call);
+  if (!definition) return [];
+
+  const key = taskKey(sourceFile, call);
+  const cron = staticStringObjectProperty(definition, 'cron');
+
+  return definition.properties.flatMap((property) => {
+    const bodyModel = runBodyModel(sourceFile, source, property);
+    if (!bodyModel) return [];
+
+    return [
+      {
+        ...bodyModel,
+        ...(cron === undefined ? {} : { cron }),
+        key,
+        runMutationEdges: taskCompositionEdges(bodyModel, 'runMutation'),
+        runQueryEdges: taskCompositionEdges(bodyModel, 'runQuery'),
+        scheduleEdges: taskCompositionEdges(bodyModel, 'schedule'),
+      },
+    ];
+  });
+}
+
+function taskDefinitionObject(call: ts.CallExpression): ts.ObjectLiteralExpression | null {
+  const definition = call.arguments.length >= 2 ? call.arguments[1] : call.arguments[0];
+  return definition && ts.isObjectLiteralExpression(definition) ? definition : null;
+}
+
+function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
+  const [first] = call.arguments;
+  if (first && ts.isStringLiteralLike(first)) return first.text;
+
+  const exported = exportedConstInitializerName(call);
+  if ('exportedConstName' in exported) return exported.exportedConstName;
+  return sourceFile.fileName;
+}
+
+function runBodyModel(
+  sourceFile: ts.SourceFile,
+  source: string,
+  property: ts.ObjectLiteralElementLike,
+): MutationHandlerModel | null {
+  if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === 'run') {
+    if (!property.body) return null;
+    return functionBodyModel(sourceFile, source, property.body, property.parameters);
+  }
+
+  if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== 'run') return null;
+
+  const initializer = property.initializer;
+  if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) return null;
+
+  return functionBodyModel(sourceFile, source, initializer.body, initializer.parameters);
+}
+
+function functionBodyModel(
+  sourceFile: ts.SourceFile,
+  source: string,
+  body: ts.ConciseBody,
+  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+): MutationHandlerModel {
+  return {
+    body: source.slice(body.getStart(sourceFile), body.getEnd()),
+    bodyEnd: body.getEnd(),
+    bodyPropertyAccesses: propertyAccessPathModels(sourceFile, body),
+    bodyStart: body.getStart(sourceFile),
+    paramNames: parameters.map((param) => parameterName(param.name)),
+    params: parameters.map((param) => source.slice(param.getStart(sourceFile), param.getEnd())),
+    paramSpans: parameters.map((param) => ({
+      end: param.getEnd(),
+      start: param.getStart(sourceFile),
+    })),
+  };
+}
+
+function staticStringObjectProperty(
+  object: ts.ObjectLiteralExpression,
+  propertyName: string,
+): string | undefined {
+  const initializer = componentPropertyInitializer(object, propertyName);
+  return initializer && ts.isStringLiteralLike(initializer) ? initializer.text : undefined;
+}
+
+function taskCompositionEdges(handler: MutationHandlerModel, method: string): string[] {
+  return [
+    ...new Set(
+      handler.bodyPropertyAccesses
+        .filter((access) => access.terminalName === method)
+        .map((access) => access.path),
+    ),
+  ].sort();
 }
 
 function parameterName(name: ts.BindingName): string | undefined {

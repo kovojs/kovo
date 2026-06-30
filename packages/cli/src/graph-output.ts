@@ -154,7 +154,7 @@ function isNodeErrorCode(error: unknown, code: string): boolean {
  * The kind of graph subject a targeted `kovo explain` describes — a component,
  * request context, mutation, query, or page (SPEC.md §5.3).
  */
-export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query';
+export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query' | 'task';
 
 /**
  * Options selecting which `kovo explain` view `kovoExplain` produces: a targeted
@@ -169,6 +169,7 @@ export type KovoExplainOptions =
   | KovoEndpointExplainOptions
   | KovoRevealedExplainOptions
   | KovoSourcesSinksExplainOptions
+  | KovoTasksExplainOptions
   | KovoTargetExplainOptions
   | { trust: true }
   | KovoUnguardedExplainOptions
@@ -216,6 +217,14 @@ export interface KovoRevealedExplainOptions {
  */
 export interface KovoSourcesSinksExplainOptions {
   sourcesSinks: true;
+}
+
+/**
+ * `kovo explain --tasks` options: emit durable task nodes plus statically discovered composition
+ * edges from task bodies (SPEC §9.6 and §11.4).
+ */
+export interface KovoTasksExplainOptions {
+  tasks: true;
 }
 
 /**
@@ -375,6 +384,18 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
   }
 
   if ('sourcesSinks' in options) return sourcesSinksExplainResult(explainOutputVersion);
+
+  if ('tasks' in options) {
+    const tasks = sortedTasks(graph.tasks ?? []);
+    lines.push('TASKS');
+
+    for (const task of tasks) {
+      lines.push(taskSummaryLine(task));
+    }
+
+    lines.push(`SUMMARY total=${tasks.length}`);
+    return ok(lines);
+  }
 
   if ('trust' in options) {
     const escapes = [...(graph.trustEscapes ?? [])].sort(compareTrustEscape);
@@ -580,6 +601,18 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
       lines.push(optimisticSummary(coverages));
     }
 
+    return ok(lines);
+  }
+
+  if (options.kind === 'task') {
+    const task = graph.tasks?.find((item) => item.key === options.target);
+    if (!task) return notFound(options);
+
+    lines.push(`TASK ${task.key}`);
+    lines.push(`cron: ${task.cron ?? '-'}`);
+    lines.push(`run-mutations: ${list(task.runMutations)}`);
+    lines.push(`run-queries: ${list(task.runQueries)}`);
+    lines.push(`schedules: ${list(task.schedules)}`);
     return ok(lines);
   }
 
@@ -1036,6 +1069,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--optimistic',
     '--revealed',
     '--sources-sinks',
+    '--tasks',
     '--trust',
     '--unguarded',
     '--unscoped',
@@ -1050,6 +1084,7 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
     '--endpoints',
     '--revealed',
     '--sources-sinks',
+    '--tasks',
     '--trust',
     '--unguarded',
     '--unscoped',
@@ -1077,6 +1112,18 @@ export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult
       return explainUsage();
     }
     return { inputPath: undefined, ok: true, options: { sourcesSinks: true } };
+  }
+
+  if (flags.has('--tasks')) {
+    if (
+      flags.has('--fail-on-findings') ||
+      flags.has('--layouts') ||
+      flags.has('--optimistic') ||
+      positional.length > 1
+    ) {
+      return explainUsage();
+    }
+    return { inputPath: positional[0], ok: true, options: { tasks: true } };
   }
 
   if (flags.has('--endpoints')) {
@@ -1417,6 +1464,20 @@ function notFound(options: KovoTargetExplainOptions): KovoCheckResult {
 
 function list(values: readonly string[] | undefined): string {
   return values && values.length > 0 ? values.join(',') : '-';
+}
+
+function sortedTasks(tasks: readonly CoreGraph.TaskExplain[]): CoreGraph.TaskExplain[] {
+  return [...tasks].sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function taskSummaryLine(task: CoreGraph.TaskExplain): string {
+  return [
+    `TASK ${task.key}`,
+    `cron=${task.cron ?? '-'}`,
+    `runMutations=${list(task.runMutations)}`,
+    `runQueries=${list(task.runQueries)}`,
+    `schedules=${list(task.schedules)}`,
+  ].join(' ');
 }
 
 function sqlSafetyFactsForTarget(

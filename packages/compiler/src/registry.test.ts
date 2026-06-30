@@ -1258,6 +1258,32 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('preserves durable task facts when deriving the app graph', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        tasks: [
+          {
+            cron: '0 2 * * *',
+            key: 'email/send-receipt',
+            runMutations: ['order/mark-sent'],
+            runQueries: ['order/by-id'],
+            schedules: ['email/send-receipt'],
+          },
+        ],
+      },
+    });
+
+    expect(derived.graph.tasks).toEqual([
+      {
+        cron: '0 2 * * *',
+        key: 'email/send-receipt',
+        runMutations: ['order/mark-sent'],
+        runQueries: ['order/by-id'],
+        schedules: ['email/send-receipt'],
+      },
+    ]);
+  });
+
   it('derives page access facts from compiled JSX route pages', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',
