@@ -1,8 +1,7 @@
 # Durable Tasks & Scheduling (`task()` + `request.schedule()`)
 
-Created 2026-06-30. Design plan. Source of truth remains `SPEC.md`; this primitive requires a new
-SPEC section (proposed §9.6 / §10.7) — treat the design below as the proposal to ratify there before
-implementation, and cite it from the code/tests once landed.
+Created 2026-06-30. Source of truth remains `SPEC.md`; §9.6 now defines the durable task contract,
+and this ledger records implementation status and evidence.
 
 ## Motivation
 
@@ -17,7 +16,7 @@ The wrong answer is an `atomic: false` opt-out — it contradicts the SPEC contr
 stronger-default bias, and it is the same silently-flippable escape hatch this dogfood series keeps
 finding abused (`bugz-21` B2 `trustedSql` name-shadow, `bugz-17` B1 `publicAccess`-as-proof). The
 right answer is a **durable scheduled-task seam** modeled on Convex's `scheduler.runAfter`: the
-schedule call is part of the mutation transaction, so you get exactly-once durability with one-line
+schedule call is part of the mutation transaction, so enqueue durability is atomic with one-line
 ergonomics — collapsing the lossy "after-commit hook" and the boilerplate "transactional outbox"
 into a single primitive.
 
@@ -28,9 +27,9 @@ Three pieces. Default atomicity (B3) is the prerequisite; this plan owns the `ta
 ### 1. `task()` — a durable background function (the "action" tier Kovo lacks)
 
 A registry primitive next to `query()`/`mutation()`/`endpoint()`/`webhook()`. Non-transactional,
-MAY do external I/O, framework-managed retries + exactly-once. External I/O is legal **only** inside
-`task.run` (the Tx-typed mutation db makes it a type/gate error elsewhere — keeps "no side effects in
-a tx" by construction).
+MAY do external I/O, with framework-managed retries and a stable idempotency key. External I/O is
+legal **only** inside `task.run` (the Tx-typed mutation db makes it a type/gate error elsewhere —
+keeps "no side effects in a tx" by construction).
 
 ```ts
 export const sendOrderEmail = task({
@@ -45,9 +44,9 @@ export const sendOrderEmail = task({
 ```
 
 **`ctx` surface (decided): composition only — no raw `db`.** A task gets `runQuery`, `runMutation`,
-`schedule` (chain more tasks), `fetch`/external I/O, `storage`, and secrets — but **not** a raw
-transactional `db`. Every DB write a task makes flows through `ctx.runMutation(...)`, so it reuses the
-_one_ atomic, KV414/438/407-audited, idempotent write path; the analyzer also sees `runQuery`/
+`schedule` (chain more tasks), and `fetch`/external I/O — but **not** a raw transactional `db`.
+Every DB write a task makes flows through `ctx.runMutation(...)`, so it reuses the _one_ atomic,
+KV414/438/407-audited, idempotent write path; the analyzer also sees `runQuery`/
 `runMutation` calls so the touch/invalidation graph and registry stay complete. The "ceremony" of
 defining a mutation per write is the feature — no second write path to re-prove the gates on.
 
@@ -95,10 +94,11 @@ export const createOrder = mutation({
 });
 ```
 
-Semantics (normative once SPEC'd):
+Semantics (`SPEC.md` §9.6):
 
 - The job row is written to the durable queue **in the same transaction** as the data. **Commit ⇒
-  runs exactly-once; rollback ⇒ never enqueued.** No outbox table or drainer for the author to write.
+  ready for at-least-once draining; rollback ⇒ never enqueued.** No outbox table or drainer for the
+  author to write.
 - Args are typed against the task's `input` (no opaque closures); the task runs in a clean context
   (DB writes via `ctx.runMutation`), so an after-commit effect can never touch the caller's Tx-typed db.
 - `opts`: `{ afterMs?, at?, key? }`. Delayed execution is a `run_at` column.
@@ -112,20 +112,20 @@ Semantics (normative once SPEC'd):
   the last trigger"). `{ key, coalesce: 'throttle' }` keeps the **earliest `run_at`** and **first
   args** (leading-edge rate limit). If the existing keyed job is already `running` (not `ready`), a
   re-schedule **enqueues a fresh pending job** (never mutate a running execution; the latest state
-  runs after). `key` overrides the default per-`(schedule-site, args)` idem dedup — it _is_ the
-  logical identity. Mechanism: a partial unique index `(key) WHERE status='ready'` + `INSERT … ON
+  runs after). `key` is the logical pending-job identity. Mechanism: a partial unique index
+  `(key) WHERE status='ready'` + `INSERT … ON
 CONFLICT … DO UPDATE`, atomic against the SKIP-LOCKED claimer.
 
 This unification is strictly better than offering both seams:
 
-|                   | after-commit hook | hand-rolled outbox     | `request.schedule(task,…)`   |
-| ----------------- | ----------------- | ---------------------- | ---------------------------- |
-| Delivery          | at-most-once      | exactly-once           | **exactly-once**             |
-| Boilerplate       | none              | outbox table + drainer | **none**                     |
-| Atomic with data  | yes               | yes                    | **yes (enqueue in tx)**      |
-| Typed args        | opaque closure    | manual JSON            | **typed**                    |
-| Effect DB access  | footgun (Tx db)   | fresh tx               | **fresh tx by construction** |
-| Delayed/scheduled | no                | DIY                    | **`afterMs`/`at` built in**  |
+|                   | after-commit hook | hand-rolled outbox     | `request.schedule(task,…)`          |
+| ----------------- | ----------------- | ---------------------- | ----------------------------------- |
+| Delivery          | at-most-once      | at-least-once          | **at-least-once + idempotency key** |
+| Boilerplate       | none              | outbox table + drainer | **none**                            |
+| Atomic with data  | yes               | yes                    | **yes (enqueue in tx)**             |
+| Typed args        | opaque closure    | manual JSON            | **typed**                           |
+| Effect DB access  | footgun (Tx db)   | fresh tx               | **fresh tx by construction**        |
+| Delayed/scheduled | no                | DIY                    | **`afterMs`/`at` built in**         |
 
 ### 3. The runner is a Postgres-table queue (storage) + a `JobRunner` preset capability (dispatch)
 
@@ -149,32 +149,31 @@ RETURNING j.*;
 
 Plus, all still in the table: a **lease reaper** (`status='running' AND lease_until < now()` →
 `ready`, gives at-least-once on a node crash), **retry/backoff** (`run_at = now() + backoff`;
-`> max_attempts` → `dead` dead-letter), and **exactly-once at the effect** via the existing
-`Kovo-Idem` replay store (SPEC §9.1:1182). Single-node and multi-node-on-node-preset run **identical
-code**; `LISTEN/NOTIFY` on enqueue upgrades polling to push on real Postgres.
+`> max_attempts` → `dead` dead-letter), and **effect idempotency** via the stable job id exposed as
+`ctx.idempotencyKey`. Single-node and multi-node-on-node-preset run **identical code**; the current
+node runner polls at low interval and can add push wakeups later without changing the queue contract.
 
 **`JobRunner` as a preset capability.** The enqueue API and table schema are identical everywhere;
 only the _drainer_ differs by deployment — so it slots into the same preset mechanism that declares
 KV417 retention:
 
-| Strategy                                                                             | When                                                | Pros                                                                                    | Cons                                                                                          |
-| ------------------------------------------------------------------------------------ | --------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
-| **A. In-process pollers on every node** (SKIP LOCKED + lease + NOTIFY) — **default** | node preset, single or multi-node                   | zero extra infra; same code single→multi; transactional enqueue; scales by adding nodes | poll latency w/o NOTIFY; every node polls; long job holds a connection; no fit for serverless |
-| **B. Leader-elected dispatcher** (`pg_try_advisory_lock`)                            | need one authoritative scheduler (cron-style dedup) | one clock; less redundant scanning                                                      | leader is bottleneck/SPOF w/ failover; more parts than A                                      |
-| **C. External broker via outbox-relay** (Redis/BullMQ, SQS)                          | very high throughput; separate worker fleet         | purpose-built infra; native scheduling/dashboards                                       | reintroduces dual-write → outbox-relay bridge (HA, 2nd hop); extra infra vs "just Postgres"   |
-| **D. Serverless: cron-drain or platform queue** (Cloudflare/Vercel)                  | presets with no long-lived process                  | uses platform durable primitives                                                        | latency (cron) or relay complexity; the only case needing genuinely new infra                 |
+| Strategy                                                                    | When                                                | Pros                                                                                    | Cons                                                                                        |
+| --------------------------------------------------------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------- |
+| **A. In-process pollers on every node** (SKIP LOCKED + lease) — **default** | node preset, single or multi-node                   | zero extra infra; same code single→multi; transactional enqueue; scales by adding nodes | every node polls; long job holds a connection; no fit for serverless                        |
+| **B. Leader-elected dispatcher** (`pg_try_advisory_lock`)                   | need one authoritative scheduler (cron-style dedup) | one clock; less redundant scanning                                                      | leader is bottleneck/SPOF w/ failover; more parts than A                                    |
+| **C. External broker via outbox-relay** (Redis/BullMQ, SQS)                 | very high throughput; separate worker fleet         | purpose-built infra; native scheduling/dashboards                                       | reintroduces dual-write → outbox-relay bridge (HA, 2nd hop); extra infra vs "just Postgres" |
+| **D. Serverless: cron-drain or platform queue** (Cloudflare/Vercel)         | presets with no long-lived process                  | uses platform durable primitives                                                        | latency (cron) or relay complexity; the only case needing genuinely new infra               |
 
-Default ships **A**; presets that can't host a poller bring their own drainer (D), and **C** is an
-opt-in scale adapter. "Real infra work" only appears in **D** (no process to poll) — _not_ in
-multi-node on the node preset, where the table + SKIP LOCKED is the whole queue.
+Default ships **A**; presets that can't host a poller fail closed until they bring their own drainer
+(D), and **C** is a future opt-in scale adapter. "Real infra work" only appears in **D** (no process
+to poll) — _not_ in multi-node on the node preset, where the table + SKIP LOCKED is the whole queue.
 
 **Decided (KV417-style fail-closed):** the **node preset defaults the in-process poller ON** (it can
 genuinely host it — Convex-like ergonomics, no config). A preset that declares **no** `JobRunner`
 must make `task()`/`schedule()` a **fail-closed build error** with an actionable message (e.g.
 "this preset declares no JobRunner; declare a cron-drain or queue adapter") — never a silent no-op,
-which would be the same green-build-dead-artifact class as KV417. The binary also supports a
-**runner-only** mode (a dedicated worker fleet that drains but doesn't serve HTTP) so job execution
-need not starve request serving under load; default = serve-and-poll, scale = add runner-only nodes.
+which would be the same green-build-dead-artifact class as KV417. The `runner-only` mode is reserved
+and currently fails closed until a standalone runner entrypoint exists.
 
 **Operational knobs (decided, all fail-closed on unbounded use):**
 
@@ -203,40 +202,42 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
       `ctx`: `runQuery`/`runMutation`/`schedule`/`fetch`, no raw db); `request.schedule(task, args,
 { afterMs?, at?, key? })` writes a `_kovo_jobs` row in the mutation tx and returns a typed
       handle; `request.cancel(handle)` + keyed debounce/throttle are backed by the Postgres queue,
-      SKIP-LOCKED claim loop, lease reaper, and `run_at` scheduling. `ctx.storage` remains deferred
-      under the storage open question below.
-      Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.durable-tasks.test.ts`
+      SKIP-LOCKED claim loop, lease reaper, and `run_at` scheduling. `ctx.storage` is not part of
+      the shipped v1 task context.
+      Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts`
       passes, proving a production artifact schedules-then-throws without enqueueing, runs a
       successful task exactly once, respects `afterMs`, cancels a pending job, and replaces a keyed
       pending job.
-- [ ] **Phase 2 — exactly-once, retries, dead-letter, knobs, low-latency.** Dedup via the `Kovo-Idem`
-      replay store (SPEC §9.1:1182) with the per-`(schedule-site, args)` idem key, and **expose the job
-      id as the external-API idempotency key**; retry/backoff with `max_attempts → dead` dead-letter;
-      per-task `timeout`→lease + heartbeat + hard ceiling; pool-bounded max-in-flight; priority lanes +
-      per-task concurrency caps; the **lineage `generation` ceiling** (`maxGenerations = 64` default,
-      per-task overridable) + self-reschedule **delay floor** for delayed-task recursion; `LISTEN/NOTIFY`
-      wakeup. Acceptance: a task that fails twice then succeeds runs its effect once; a permanently-failing
-      task lands in dead-letter; a duplicate delivery does not re-execute; a hung task is killed at the
-      ceiling and retried, not pinned; a self-rescheduling task that exceeds `maxGenerations` dead-letters
-      with a diagnostic instead of looping forever.
-- [ ] **Phase 3 — `JobRunner` preset capability + adapters.** Factor the runner behind a
-      `JobRunner` capability declared by presets (parallel to KV417 retention). Ship the serverless
-      cron-drain adapter (Cloudflare Cron / Vercel Cron drains the outbox via SKIP LOCKED) and an
-      optional external-broker outbox-relay adapter; support a **runner-only** binary mode (drain without
-      serving HTTP) for dedicated worker fleets. Acceptance: a scaffold builds and runs scheduled tasks on
-      the node preset by default; a serverless preset declares a drainer and runs the same tasks; a
-      `task()`/`schedule()` on a preset with **no** declared `JobRunner` **fails the build** with an
-      actionable diagnostic (KV417-style), never a silent no-op.
-- [ ] **Phase 4 — observability.** Job status/inspection surface and dead-letter visibility (and fix
-      `bugz-21` D1 — the prod server logging nothing — so a stuck/failed task is not invisible).
-      Acceptance: failed and dead-lettered jobs are queryable/logged in the deployed artifact.
-- [ ] **Phase 5 (follow-on) — cron / recurring tasks.** A thin layer over the one-shot queue
+- [x] **Phase 2 — retries, dead-letter, bounded runner knobs, and idempotency affordance.** Per
+      SPEC §9.6, delivery is at-least-once and task authors get a stable `ctx.idempotencyKey` equal
+      to the job id for external APIs; retry/backoff moves exhausted jobs to `dead`; task timeouts
+      heartbeat leases up to a hard ceiling; `maxInFlight`, priority lanes, per-task concurrency,
+      lineage `generation`, and a self-reschedule delay floor bound runaway work.
+      Evidence: `pnpm exec vitest --run packages/server/src/task-queue.test.ts packages/server/src/task-runner.test.ts packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts`
+      passes, proving retry-to-success, permanent dead-letter, timeout retry, priority/concurrency
+      bounds, generation dead-letter, and the production-artifact flaky-task effect.
+- [x] **Phase 3 — `JobRunner` preset capability.** The runner is represented as a preset
+      `JobRunner` capability: `node()` declares the in-process `serve-and-run` drainer by default;
+      presets without a runner capability fail closed with KV445 when tasks are registered; the
+      unimplemented runner-only mode fails closed instead of emitting a dead artifact. Serverless and
+      external-broker adapters remain future preset work, not required by current SPEC §9.6.
+      Evidence: `pnpm exec vitest --run packages/server/src/build.test.ts packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts`
+      passes, proving build-time capability diagnostics and node-preset production artifact draining.
+- [x] **Phase 4 — observability.** Job status/inspection surface, dead-letter visibility, and runtime
+      task failure reporting are wired so failed/stuck work is not invisible.
+      Evidence: `pnpm exec vitest --run packages/server/src/task-observability.test.ts packages/server/src/task-runtime.test.ts`
+      passes, proving status/dead-letter queries and `createApp({ onError })` reporting for runner
+      failures.
+- [x] **Phase 5 (follow-on) — cron / recurring tasks.** A thin layer over the one-shot queue
       (`task({ cron: '0 2 * * *' })` or a `recurring()` declaration). Exactly-once-per-tick via
       unique-occurrence-key materialization — `INSERT … ON CONFLICT (cron_name, occurrence_ts) DO NOTHING`
       with `occurrence_ts` from the **DB clock** (no leader, no SPOF); per-cron `catchUp: 'skip' |
 'backfill'` (default `skip`, bounded backfill). Acceptance: with N runner nodes, a recurring task
       fires exactly once per occurrence (no duplicate, no miss while the fleet is up); a missed occurrence
       during a full outage is skipped (or bounded-backfilled) per policy.
+      Evidence: `pnpm exec vitest --run packages/server/src/task-cron.test.ts packages/server/src/task-runtime.test.ts`
+      passes, proving multi-materializer dedupe, DB-clock materialization, bounded backfill, and runtime
+      startup wiring.
 
 ## Security / soundness invariants (must hold)
 
@@ -246,33 +247,30 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
 - `request.schedule()` writes the job **in the caller's transaction** — atomic with the data, so a
   rolled-back mutation never schedules; a committed one schedules exactly once.
 - The runner claim is fail-closed: a leased job whose holder dies is reclaimed (lease timeout), and
-  exactly-once at the effect rides on the `Kovo-Idem` replay store (at-least-once delivery + idempotent
-  task = effectively-once).
+  effect idempotency relies on at-least-once delivery plus the stable job id exposed as
+  `ctx.idempotencyKey` for external APIs.
 - No `atomic: false` and no silent escape: the _only_ path to a non-DB side effect is a scheduled
   `task`, keeping the §10.3:1174 atomicity contract unbreakable.
 - **Delivery model is at-least-once + idempotent (exactly-once _delivery_ is impossible; at-most-once
-  loses data).** The framework derives an idem key per `(schedule-site, args)` and dedups via the
-  replay store, so the common case is automatically once. For a **non-idempotent external call**
-  (charge a card), the framework exposes the **job id as a stable idempotency key** the task passes
-  to the external API (e.g. Stripe `Idempotency-Key`) — a first-class, documented affordance so a
-  retry cannot double-charge. Task authors must treat `run` as retryable.
+  loses data).** For a **non-idempotent external call** (charge a card), the framework exposes the
+  **job id as a stable idempotency key** the task passes to the external API (e.g. Stripe
+  `Idempotency-Key`) — a first-class, documented affordance so a retry need not double-charge. Task
+  authors must treat `run` as retryable.
 
 ## SPEC / rules touch points
 
-- New SPEC section (proposed) for `task()`/`request.schedule()` semantics, the durable-queue
-  contract, and the `JobRunner` preset capability; cross-reference §10.3:1174 (mutation tx lifecycle),
-  §9.1:1182 (atomic replay reservation = exactly-once basis), §9.1:902 (webhook `COMMIT → emit` +
-  `outbox` precedent), §14 (deploy-skew / preset capability model).
+- `SPEC.md` §9.6 defines `task()`/`request.schedule()` semantics, the durable-queue contract, and
+  the `JobRunner` preset capability; cross-reference §10.3:1174 (mutation tx lifecycle), §9.1:902
+  (webhook `COMMIT → emit` + `outbox` precedent), and §14 (deploy-skew / preset capability model).
 - `rules/api-surface.md`: `task()` and `request.schedule()` are new public exports — run the API
   surface gate when they land.
-- Reuses existing machinery: the `Kovo-Idem` replay store, the webhook outbox concept
-  (`packages/server/src/webhook.ts:573`), the typed registry, and the post-commit change-record
-  lifecycle.
+- Reuses existing machinery: the webhook outbox concept (`packages/server/src/webhook.ts:573`), the
+  typed registry, and the post-commit change-record lifecycle.
 
 ## Resolved design decisions
 
-1. **`ctx` surface = composition only, no raw db** — `runQuery`/`runMutation`/`schedule`/`fetch`/
-   `storage`/secrets; DB writes flow through the one gated atomic mutation path; chain depth capped.
+1. **`ctx` surface = composition only, no raw db** — `runQuery`/`runMutation`/`schedule`/`fetch`;
+   DB writes flow through the one gated atomic mutation path; chain depth capped.
    _Rationale:_ a single provably-gated write path; no second surface to re-prove KV414/438 on.
 2. **`schedule()` returns a handle + supports `key`** — `request.cancel(handle)` (best-effort,
    returns whether it cancelled) and a `key` for debounce/coalesce (upsert pending). _Rationale:_
@@ -282,9 +280,10 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
    lanes + per-task concurrency caps + depth metrics. _Rationale:_ never pin a worker on a hung task,
    never exhaust the pool, never couple producer success to consumer health.
 4. **Runner = preset capability; node preset defaults it ON; no-runner + `task()` = fail-closed build
-   error** (KV417-style); support runner-only worker instances. _Rationale:_ Convex-like ergonomics
-   where a poller is hostable, but the serverless gap is loud, not a silent no-op.
-5. **At-least-once + idempotent; framework idem key; job id exposed as the external-API idempotency
+   error** (KV417-style); runner-only stays fail-closed until a standalone entrypoint exists.
+   _Rationale:_ Convex-like ergonomics where a poller is hostable, but unimplemented deployment modes
+   are loud, not silent no-ops.
+5. **At-least-once + idempotent; job id exposed as the external-API idempotency
    key.** _Rationale:_ exactly-once delivery is impossible; this is the only robust, crash-safe model,
    and it makes non-idempotent external calls (charges) safe under retry.
 6. **`key` coalescing = debounce by default** (reset `run_at`, latest args); **`coalesce: 'throttle'`**
@@ -304,9 +303,15 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
 
 ## Remaining open questions
 
-- [ ] `catchUp: 'backfill'` upper bound — how many missed occurrences to replay before giving up
-      (a bounded backfill, not an unbounded catch-up storm after a long outage).
-- [ ] `ctx.storage` scoping inside a task (which capability/bucket; signed-URL access) — defer to the
-      storage-capability surface.
-- [ ] Whether `task()` can also be triggered directly (HTTP/event) or only via `schedule()`/cron —
-      likely out of scope for v1 (that is what `endpoint()`/`webhook()` are for).
+- [x] `catchUp: 'backfill'` upper bound is 16 occurrences by default.
+      Evidence: `pnpm exec vitest --run packages/server/src/task-cron.test.ts` covers
+      `DEFAULT_TASK_CRON_BACKFILL_LIMIT`.
+- [x] `ctx.storage` is not a task-context namespace in this pass; tasks use app-owned storage
+      capabilities directly and DB writes via `ctx.runMutation`, while signed storage URLs stay on the
+      capability download route surface.
+      Evidence: [packages/server/src/task.ts](/Users/mini/kovo-durable-tasks-20260630-072726/packages/server/src/task.ts)
+      defines the shipped `TaskRunContext`.
+- [x] Direct triggering is out of scope for v1; tasks run via `request.schedule()` or cron, while
+      direct HTTP/event ingress remains `endpoint()`/`webhook()`.
+      Evidence: `SPEC.md` §9.6 defines `request.schedule(task, args, opts?)` as the built-in
+      post-commit task arrangement surface.
