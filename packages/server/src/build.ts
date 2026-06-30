@@ -763,16 +763,19 @@ const immutableStaticHeaders = ${JSON.stringify(immutableStaticHeaders())};
 const revalidatingAssetHeaders = ${JSON.stringify(revalidatingAssetHeaders())};
 const documentStaticHeaders = ${JSON.stringify(documentStaticHeaders())};
 const bodylessMethods = new Set(['GET', 'HEAD']);
+const headersTimeoutMs = 10_000;
+const requestTimeoutMs = 30_000;
 
 export function createKovoNodeServer(options = {}) {
-  return createServer(async (nodeRequest, nodeResponse) => {
+  const server = createServer(async (nodeRequest, nodeResponse) => {
     try {
       if (await maybeServeStatic(nodeRequest, nodeResponse)) return;
 
       const request = nodeRequestToWebRequest(nodeRequest, options, nodeResponse);
       const response = await handler(request);
       await writeWebResponseToNode(response, nodeResponse, request.method);
-    } catch {
+    } catch (error) {
+      logUnhandledNodeError(error, nodeRequest);
       if (nodeResponse.headersSent) {
         nodeResponse.destroy();
       } else {
@@ -781,6 +784,19 @@ export function createKovoNodeServer(options = {}) {
       }
     }
   });
+  server.headersTimeout = headersTimeoutMs;
+  server.requestTimeout = requestTimeoutMs;
+  return server;
+}
+
+function logUnhandledNodeError(error, nodeRequest) {
+  const method = nodeRequest.method ?? 'UNKNOWN';
+  const url = nodeRequest.url ?? '/';
+  const detail =
+    error && typeof error === 'object' && 'stack' in error && typeof error.stack === 'string'
+      ? error.stack
+      : error;
+  console.error('[kovo] unhandled node server error', { method, url, error: detail });
 }
 
 async function maybeServeStatic(nodeRequest, nodeResponse) {

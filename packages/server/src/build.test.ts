@@ -650,11 +650,18 @@ export default async function handler(request) {
       expect(nodeServer).toContain('signal: controller.signal');
       expect(nodeServer).toContain('nodeRequest.socket?.remoteAddress?.trim()');
       expect(nodeServer).toContain("'__kovoPeerAddress'");
+      expect(nodeServer).toContain('const headersTimeoutMs = 10_000;');
+      expect(nodeServer).toContain('const requestTimeoutMs = 30_000;');
+      expect(nodeServer).toContain('server.headersTimeout = headersTimeoutMs;');
+      expect(nodeServer).toContain('server.requestTimeout = requestTimeoutMs;');
+      expect(nodeServer).toContain("console.error('[kovo] unhandled node server error'");
 
       const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
         createKovoNodeServer(): Server;
       };
       const server = serverModule.createKovoNodeServer();
+      expect(server.headersTimeout).toBe(10_000);
+      expect(server.requestTimeout).toBe(30_000);
       const baseUrl = await listen(server);
 
       try {
@@ -715,6 +722,75 @@ export default async function handler(request) {
         await close(server);
       }
     } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('logs unhandled production node server errors to stderr before returning a 500', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-errors-'));
+    const originalConsoleError = console.error;
+    const consoleErrors: unknown[][] = [];
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/boom', {
+              page() {
+                return renderedHtml('<main>Boom</main>');
+              },
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+export default async function handler(request) {
+  const url = new URL(request.url);
+  throw new Error('boom from generated handler at ' + url.pathname);
+}
+`,
+      });
+      const nodeOutDir = join(root, 'node-output');
+
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+
+      console.error = (...args: unknown[]) => {
+        consoleErrors.push(args);
+      };
+
+      try {
+        const response = await fetch(`${baseUrl}/boom?x=1`, { method: 'POST' });
+        expect(response.status).toBe(500);
+        await expect(response.text()).resolves.toBe('Internal Server Error');
+      } finally {
+        console.error = originalConsoleError;
+        await close(server);
+      }
+
+      expect(consoleErrors).toHaveLength(1);
+      expect(consoleErrors[0]?.[0]).toBe('[kovo] unhandled node server error');
+      expect(consoleErrors[0]?.[1]).toMatchObject({
+        method: 'POST',
+        url: '/boom?x=1',
+      });
+      const loggedError = (consoleErrors[0]?.[1] as { error?: unknown } | undefined)?.error;
+      expect(String(loggedError)).toContain('Error: boom from generated handler at /boom');
+      expect(String(loggedError)).toContain('handler');
+    } finally {
+      console.error = originalConsoleError;
       await rm(root, { force: true, recursive: true });
     }
   });
