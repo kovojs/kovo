@@ -1,6 +1,6 @@
 import { createQueryStore } from '@kovojs/browser/client';
-import { applyDeferredStreamResponseToRuntime } from '@kovojs/browser/generated';
-import { DomMorphRoot, keyedDomMorph } from '@kovojs/browser/internal/morph';
+import { applyDeferredStreamResponseToRuntime } from '@kovojs/test/internal/integration/fixture-abi';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/test/internal/integration/fixture-abi';
 
 const store = createQueryStore();
 const fixtureGlobal = globalThis as typeof globalThis & {

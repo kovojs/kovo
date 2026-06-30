@@ -5,12 +5,12 @@ import {
   type MorphRoot,
   type TargetCollectorRoot,
 } from '@kovojs/browser/client';
-import { DomMorphRoot, keyedDomMorph } from '@kovojs/browser/internal/morph';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/test/internal/integration/fixture-abi';
 import {
   type BroadcastLike,
   installMutationBroadcast,
   submitEnhancedMutation,
-} from '@kovojs/browser/internal/mutation';
+} from '@kovojs/test/internal/integration/fixture-abi';
 
 declare global {
   interface Window {

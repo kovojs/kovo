@@ -1,5 +1,5 @@
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { renderQueryScript } from '@kovojs/server/internal/html';
+import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 import { ProfileStatus } from './profile-status';

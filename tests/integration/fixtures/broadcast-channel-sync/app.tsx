@@ -7,7 +7,7 @@ import {
   s,
   type QueryLoadContext,
 } from '@kovojs/server';
-import { renderQueryScript } from '@kovojs/server/internal/html';
+import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type Presence = Record<string, unknown> & {

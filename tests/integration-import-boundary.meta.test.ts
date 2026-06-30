@@ -3,21 +3,16 @@ import { join, relative } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { importSpecifiers, nonPublicKovoImportTier } from '../scripts/import-boundary.mjs';
+
 const ROOT = 'tests/integration';
-const EXPECTED_ALLOWED_INTERNAL_IMPORTS = 51;
 
 const HARNESS_IMPORTS = new Set([
   '@kovojs/test/internal/integration',
   '@kovojs/test/internal/integration/define',
+  '@kovojs/test/internal/integration/fixture-abi',
   '@kovojs/test/internal/integration/optimistic-client',
 ]);
-
-const MIGRATED_FIXTURE_FILES = [
-  'tests/integration/fixtures/counter/app.tsx',
-  'tests/integration/fixtures/optimistic-success/client.ts',
-  'tests/integration/fixtures/query-args-search/app.tsx',
-  'tests/integration/fixtures/query-args-search/product-card.tsx',
-] as const;
 
 const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
   'tests/integration/specs/diagnostic-dev-document.spec.ts': {
@@ -36,34 +31,9 @@ const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
   },
 };
 
-const LEGACY_FIXTURE_IMPORT_RULES: readonly {
-  file: RegExp;
-  reason: string;
-  specifier: RegExp;
-}[] = [
-  {
-    file: /^tests\/integration\/fixtures\/[^/]+\/app\.tsx$/,
-    reason:
-      'Legacy fixture app-source uses server internals until the lowered-IR/public fixture migration is complete.',
-    specifier: /^@kovojs\/server\/internal\/(?:html|execution)$/,
-  },
-  {
-    file: /^tests\/integration\/fixtures\/[^/]+\/client\.ts$/,
-    reason:
-      'Legacy fixture client glue uses browser internals until compiler-emitted wiring replaces it.',
-    specifier: /^@kovojs\/browser\/(?:generated|internal\/(?:inline-loader|morph|mutation))$/,
-  },
-  {
-    file: /^tests\/integration\/fixtures\/storage-download-route\/app\.tsx$/,
-    reason: 'Storage capability fixture validates the internal storage adapter contract.',
-    specifier: /^@kovojs\/core\/internal\/storage$/,
-  },
-  {
-    file: /^tests\/integration\/fixtures\/webhook-idempotency\/app\.tsx$/,
-    reason: 'Webhook fixture validates the internal mutation wire header sanitizer contract.',
-    specifier: /^@kovojs\/server\/internal\/wire$/,
-  },
-];
+const EXPECTED_ALLOWED_INTERNAL_IMPORTS = Object.entries(ALLOWED_INTERNAL_IMPORTS).flatMap(
+  ([file, imports]) => Object.keys(imports).map((specifier) => `${file} imports ${specifier}`),
+);
 
 describe('integration import boundary', () => {
   it('requires non-harness package-internal imports to be explicitly allowlisted', () => {
@@ -72,49 +42,25 @@ describe('integration import boundary', () => {
 
     for (const file of sourceFiles(ROOT)) {
       const source = readFileSync(file, 'utf8');
-      for (const specifier of staticImportSpecifiers(source)) {
-        if (!isPackageInternalImport(specifier) || HARNESS_IMPORTS.has(specifier)) continue;
+      const relativeFile = relative(process.cwd(), file).replaceAll('\\', '/');
+      for (const specifier of importSpecifiers(source, { fileName: relativeFile })) {
+        if (nonPublicKovoImportTier(specifier) === null || HARNESS_IMPORTS.has(specifier)) {
+          continue;
+        }
 
-        const relativeFile = relative(process.cwd(), file).replaceAll('\\', '/');
-        const reason =
-          ALLOWED_INTERNAL_IMPORTS[relativeFile]?.[specifier] ??
-          legacyFixtureImportReason(relativeFile, specifier);
+        const reason = ALLOWED_INTERNAL_IMPORTS[relativeFile]?.[specifier];
         if (!reason) {
           violations.push(
             `${relativeFile} imports ${specifier}; use public app APIs or add a narrow allowlist reason.`,
           );
         } else {
-          allowed.push(`${relativeFile} imports ${specifier}: ${reason}`);
+          allowed.push(`${relativeFile} imports ${specifier}`);
         }
       }
     }
 
     expect(violations).toEqual([]);
-    expect(allowed).toHaveLength(EXPECTED_ALLOWED_INTERNAL_IMPORTS);
-  });
-
-  it('fails closed for a new fixture internal import', () => {
-    expect(
-      legacyFixtureImportReason(
-        'tests/integration/fixtures/example/client.ts',
-        '@kovojs/browser/internal/new-abi',
-      ),
-    ).toBeUndefined();
-  });
-
-  it('keeps migrated fixture entries off package-internal app/client imports', () => {
-    const violations: string[] = [];
-
-    for (const file of MIGRATED_FIXTURE_FILES) {
-      const source = readFileSync(file, 'utf8');
-      for (const specifier of staticImportSpecifiers(source)) {
-        if (!isPackageInternalImport(specifier) || HARNESS_IMPORTS.has(specifier)) continue;
-
-        violations.push(`${file} imports ${specifier}`);
-      }
-    }
-
-    expect(violations).toEqual([]);
+    expect(allowed.sort()).toEqual(EXPECTED_ALLOWED_INTERNAL_IMPORTS.sort());
   });
 });
 
@@ -130,24 +76,4 @@ function sourceFiles(root: string): string[] {
     }
   }
   return files.sort((a, b) => a.localeCompare(b));
-}
-
-function staticImportSpecifiers(source: string): string[] {
-  const specifiers: string[] = [];
-  const importPattern =
-    /import\s+(?:type\s+)?(?:[^'"]+?\s+from\s+)?['"]([^'"]+)['"]|import\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-  for (const match of source.matchAll(importPattern)) {
-    specifiers.push(match[1] ?? match[2]);
-  }
-  return specifiers;
-}
-
-function isPackageInternalImport(specifier: string): boolean {
-  return /^@kovojs\/[^/]+\/(?:internal|generated)(?:\/|$)/.test(specifier);
-}
-
-function legacyFixtureImportReason(relativeFile: string, specifier: string): string | undefined {
-  return LEGACY_FIXTURE_IMPORT_RULES.find(
-    (rule) => rule.file.test(relativeFile) && rule.specifier.test(specifier),
-  )?.reason;
 }

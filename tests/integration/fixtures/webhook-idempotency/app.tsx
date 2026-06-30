@@ -6,7 +6,7 @@ import type {
   WebhookReplayReservation,
   WebhookReplayStore,
   WebhookWireResponse,
-} from '@kovojs/server/internal/wire';
+} from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 type WebhookRequest = Request & KovoFixtureRequest;

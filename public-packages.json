@@ -1896,6 +1896,7 @@
         "internal": [
           "./internal/integration",
           "./internal/integration/define",
+          "./internal/integration/fixture-abi",
           "./internal/integration/optimistic-client",
           "./internal/harness-operations",
           "./internal/html-wire",

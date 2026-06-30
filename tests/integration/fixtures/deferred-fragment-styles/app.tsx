@@ -1,5 +1,5 @@
 import { createApp, endpoint, route, type ResponseHeaders } from '@kovojs/server';
-import { renderDeferredDocument } from '@kovojs/server/internal/html';
+import { renderDeferredDocument } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 import {
   kovoFixtureStylesheetManifest,

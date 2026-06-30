@@ -1,6 +1,10 @@
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
-import { runQuery } from '@kovojs/server/internal/execution';
-import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
+import { runQuery } from '@kovojs/test/internal/integration/fixture-abi';
+import {
+  escapeAttribute,
+  escapeHtml,
+  renderQueryScript,
+} from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const productDomain = domain('product');
