@@ -6,6 +6,7 @@ import {
   derive,
   kovoEscapeHtml,
   kovoStyleProperty,
+  runQueryUpdatePlan,
 } from '@kovojs/browser/generated';
 import { describe, expect, it } from 'vitest';
 
@@ -1667,6 +1668,7 @@ function executeClientModule(source: string): Record<string, unknown> {
         derive,
         kovoEscapeHtml,
         kovoStyleProperty,
+        runQueryUpdatePlan,
       },
     },
     { timeout: 1000 },

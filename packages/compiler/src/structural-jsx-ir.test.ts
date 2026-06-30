@@ -83,7 +83,7 @@ export const ProductPage = component({
     expect(serverSource).toContain('data-style-src="product-page.tsx#badge"');
     expect(serverSource).toMatch(/class="kv-product-page-bg-[^"]+ kv-product-page-fg-[^"]+"/);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive, handler, kovoStyleProperty } from '@kovojs/browser/generated';",
+      "import { derive, handler, kovoStyleProperty, runQueryUpdatePlan } from '@kovojs/browser/generated';",
     );
     expect(clientSource).toContain(
       'export const ProductPage$a_title_derive = derive(["product"], (product) => product.name.toUpperCase());',
@@ -181,7 +181,7 @@ export const ImportOrder = component({
     }).toMatchInlineSnapshot(`
       {
         "clientSource": "// @kovojs-ir
-      import { applyCompiledQueryUpdatePlan, derive, kovoStyleProperty } from '@kovojs/browser/generated';
+      import { derive, kovoStyleProperty, runQueryUpdatePlan } from '@kovojs/browser/generated';
 
       export const ImportOrder$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \`\${state.value}%\`)].filter(Boolean).join('; '));
 
@@ -189,7 +189,7 @@ export const ImportOrder = component({
 
       export const ImportOrder$queryUpdatePlans = {
         "product"(root, value, context = {}) {
-          return applyCompiledQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "style", selector: "[data-derive=\\"product.ImportOrder$img_style_derive\\"]", select(value, root, context) { return ImportOrder$img_style_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
+          return runQueryUpdatePlan(root, "product", value, { bindings: true, derives: [], stamps: [{ attr: "style", selector: "[data-derive=\\"product.ImportOrder$img_style_derive\\"]", select(value, root, context) { return ImportOrder$img_style_derive.run(value); } }], templateStamps: [] }, { queryStore: context.queryStore });
         },
       };
       ",

@@ -71,8 +71,10 @@ describe('runtime public export boundaries', () => {
     // app-facing client subpath.
     expect(typeof generated.applyDeferredStreamResponseToRuntime).toBe('function');
     expect(typeof generated.applyCompiledQueryUpdatePlan).toBe('function');
+    expect(typeof generated.runQueryUpdatePlan).toBe('function');
     expect(Object.hasOwn(client, 'applyDeferredStreamResponseToRuntime')).toBe(false);
     expect(Object.hasOwn(client, 'applyCompiledQueryUpdatePlan')).toBe(false);
+    expect(Object.hasOwn(client, 'runQueryUpdatePlan')).toBe(false);
     expect(Object.hasOwn(client, 'createEventBus')).toBe(false);
     expect(Object.hasOwn(client, 'submitEnhancedMutation')).toBe(false);
     expect(Object.hasOwn(client, 'installMutationBroadcast')).toBe(false);

@@ -146,7 +146,7 @@ export const ProductCard = component({
       `derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));`,
     );
     expect(clientSource).toContain(
-      `import { applyCompiledQueryUpdatePlan, derive, kovoStyleProperty } from '@kovojs/browser/generated';`,
+      `import { derive, kovoStyleProperty, runQueryUpdatePlan } from '@kovojs/browser/generated';`,
     );
     expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([]);
   });
