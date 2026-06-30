@@ -1153,10 +1153,18 @@ export default createApp({
       expect(
         graph.mutations.find((mutation) => mutation.key === 'mutations/update-contact')
           ?.invalidates,
-      ).toEqual(['queries/contact-detail-query', 'queries/contacts-query']);
+      ).toEqual([
+        'queries/auth-session-query',
+        'queries/contact-detail-query',
+        'queries/contacts-query',
+      ]);
       expect(
         graph.mutations.find((mutation) => mutation.key === 'mutations/sign-in')?.invalidates,
-      ).toEqual(['queries/auth-session-query']);
+      ).toEqual([
+        'queries/auth-session-query',
+        'queries/contact-detail-query',
+        'queries/contacts-query',
+      ]);
 
       stdout.mockClear();
       expect(
@@ -1164,10 +1172,10 @@ export default createApp({
       ).toBe(0);
       const explainOutput = stdout.mock.calls.map(([chunk]) => String(chunk)).join('');
       expect(explainOutput).toContain(
-        'invalidates: queries/contact-detail-query,queries/contacts-query',
+        'invalidates: queries/auth-session-query,queries/contact-detail-query,queries/contacts-query',
       );
       expect(explainOutput).toContain('OPTIMISTIC queries/contact-detail-query await-fragment');
-      expect(explainOutput).not.toContain('queries/auth-session-query');
+      expect(explainOutput).not.toContain('OPTIMISTIC queries/auth-session-query');
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

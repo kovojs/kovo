@@ -228,6 +228,9 @@ const generatedModuleRuntime = {
   handler: (callback) => (event, ctx) => callback(event, ctx),
   installKovoLoader,
   kovoEscapeHtml,
+  runQueryUpdatePlan(root, queryName, value, plan = {}, options = {}) {
+    return applyCompiledQueryUpdatePlan(root, queryName, value, plan, options);
+  },
 };
 
 const defaultDelegatedEvents = [
