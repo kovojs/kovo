@@ -1,4 +1,3 @@
-import { resolveLifecycleRequest } from './guards.js';
 import {
   renderMutationEndpointResponse,
   type MutationDefinition,
@@ -24,6 +23,7 @@ import {
 } from './app-document.js';
 import { matchShellDispatch } from './shell.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
+import { resolveKovoLifecycleRequest } from './response-posture.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -50,7 +50,7 @@ export async function handleAppMutationRequest(
   // mutation a compile error; this runtime floor makes the exemption sound even if a graph fact
   // is stale or missing, so `req.session` is genuinely absent rather than the victim's cookie.
   const csrfExempt = !mutationRequiresPreBodyCsrf(mutation, app);
-  const mutationRequest = await resolveLifecycleRequest(request, {
+  const mutationRequest = await resolveKovoLifecycleRequest(request, {
     // SPEC §9.5: attach the trustworthy client IP so a `guards.rateLimit({ per: 'ip' })` on this
     // mutation (e.g. a credential mutation) keys by IP. Reuses the coarse limiter's trusted source
     // (`resolveRequestClientIp`), never a raw header read in the guard.
@@ -59,6 +59,7 @@ export async function handleAppMutationRequest(
     ...(app.sessionProvider === undefined || csrfExempt
       ? {}
       : { sessionProvider: app.sessionProvider }),
+    surface: 'mutation',
   });
   const currentUrl = appRequestUrl(url);
   const sourceUrl = mutationSourceUrl(request, url);
