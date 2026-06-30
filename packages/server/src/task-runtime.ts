@@ -50,6 +50,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     schedule: async (request, definition, args, options) =>
       enqueueScheduledTask(this.queueForRequest(request), {
         args,
+        priority: definition.priority,
         options,
         task: definition.key,
       }) as Promise<TaskHandle<typeof definition.key>>,
@@ -119,6 +120,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
           }
           return enqueueScheduledTask(this.rootStore, {
             args,
+            priority: definition.priority,
             options,
             task: definition.key,
           }) as Promise<TaskHandle<typeof definition.key>>;
@@ -156,6 +158,7 @@ function enqueueScheduledTask(
   input: {
     args: unknown;
     options: TaskScheduleOptions | undefined;
+    priority: number | undefined;
     task: string;
   },
 ): Promise<TaskHandle> {
@@ -163,6 +166,7 @@ function enqueueScheduledTask(
     args: input.args,
     task: input.task,
     runAt: taskRunAt(input.options),
+    ...(input.priority === undefined ? {} : { priority: input.priority }),
     ...(input.options?.key === undefined ? {} : { key: input.options.key }),
     ...(input.options?.coalesce === undefined ? {} : { coalesce: input.options.coalesce }),
   });
