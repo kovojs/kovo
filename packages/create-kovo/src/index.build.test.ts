@@ -313,6 +313,74 @@ describe('create-kovo starter (build integration)', () => {
     }
   }, 120_000);
 
+  it('serves component-scoped FormError as a real no-JS 422 output from the production artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-form-error-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod FormError Proof' });
+      linkStarterBuildDependencies(root);
+      addNoJsFailureProof(root);
+
+      execFileSync('pnpm', ['run', 'build:prod'], {
+        cwd: root,
+        env: withRepoBinOnPath(),
+        stdio: 'pipe',
+      });
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+      const jar = new Map<string, string>();
+
+      const page = await fetchTextWhenReady(`${origin}/no-js-failure-proof`, output);
+      const pageResponse = await fetch(`${origin}/no-js-failure-proof`);
+      mergeCookies(jar, pageResponse.headers.getSetCookie());
+      const pageHtml = await pageResponse.text();
+      expect(page).toContain('Blocked title proof');
+      const form = firstFormHtml(pageHtml);
+      const action = attributeValue(form, 'action');
+      expect(action).toBeTruthy();
+
+      const response = await fetch(`${origin}${action}`, {
+        body: new URLSearchParams({
+          csrf: fieldValue(form, 'csrf'),
+          'Kovo-Idem': fieldValue(form, 'Kovo-Idem'),
+          title: '<output>helper</output>',
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      const body = await response.text();
+
+      expect(response.status).toBe(422);
+      expect(body).toContain(
+        '<output role="alert" data-error-code="BLOCKED_TITLE">{"title":"&lt;output&gt;helper&lt;/output&gt;"}</output>',
+      );
+      expect(body).not.toContain('&lt;output role=&quot;alert&quot;');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('fingerprints the starter stylesheet URL before serving it as immutable', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -544,6 +612,99 @@ describe('create-kovo starter (build integration)', () => {
   }, 120_000);
 });
 
+function addNoJsFailureProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/no-js-failure-proof.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component, FormError, type ComponentRenderSlots } from '@kovojs/core';",
+      "import { mutation, mutationFormAttributes, publicAccess, s, type MutationContext } from '@kovojs/server';",
+      '',
+      "import { appCsrf } from './auth.js';",
+      '',
+      'const blockedTitle = s.object({ title: s.string() });',
+      '',
+      'export const blockTitle = mutation({',
+      "  access: publicAccess('public production FormError regression proof'),",
+      '  csrf: appCsrf,',
+      '  errors: { BLOCKED_TITLE: blockedTitle },',
+      '  input: s.object({ title: s.string() }),',
+      '  handler(',
+      '    input: { title: string },',
+      '    _request: unknown,',
+      '    context: MutationContext<{ BLOCKED_TITLE: typeof blockedTitle }>,',
+      '  ) {',
+      "    return context.fail('BLOCKED_TITLE', { title: input.title });",
+      '  },',
+      '});',
+      '',
+      'type BlockTitleSlots = ComponentRenderSlots<{ blockTitle: typeof blockTitle }>;',
+      'interface BlockedTitleFailure {',
+      "  code: 'BLOCKED_TITLE';",
+      '  payload: { title: string };',
+      '}',
+      'const defaultSlots: BlockTitleSlots = { forms: { blockTitle: { failure: null } } };',
+      '',
+      'export const NoJsFailureProof = component({',
+      '  mutations: { blockTitle },',
+      '  render: (_queries, _state, slots: BlockTitleSlots = defaultSlots) => {',
+      '    const submitted = slots.forms.blockTitle.submitted ?? {};',
+      "    const submittedTitle = typeof submitted.title === 'string' ? submitted.title : '';",
+      '    return (',
+      '      <main>',
+      '        <h1>Blocked title proof</h1>',
+      '        <form {...mutationFormAttributes(blockTitle)}>',
+      '          <input name="title" value={submittedTitle} />',
+      '          <FormError',
+      '            code="BLOCKED_TITLE"',
+      '            failure={slots.forms.blockTitle.failure}',
+      '            message={(failure: BlockedTitleFailure) =>',
+      '              `Blocked title: ${failure.payload.title}`',
+      '            }',
+      '          />',
+      '          <button type="submit">Save</button>',
+      '        </form>',
+      '      </main>',
+      '    );',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8')
+    .replace(
+      "import { addContact } from './mutations.js';",
+      [
+        "import { addContact } from './mutations.js';",
+        "import { blockTitle, NoJsFailureProof } from './no-js-failure-proof.js';",
+      ].join('\n'),
+    )
+    .replace(
+      '  mutations: [addContact, appSignIn, appSignOut],',
+      '  mutations: [addContact, blockTitle, appSignIn, appSignOut],',
+    )
+    .replace(
+      '  routes: [\n    route(\'/\', {',
+      [
+        '  routes: [',
+        "    route('/no-js-failure-proof', {",
+        "      access: publicAccess('public production FormError regression proof'),",
+        "      meta: { title: 'FormError proof' },",
+        '      layout: AppLayout,',
+        '      stylesheets,',
+        '      page() {',
+        '        return <NoJsFailureProof />;',
+        '      },',
+        '    }),',
+        "    route('/', {",
+      ].join('\n'),
+    );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 async function waitForTcpPort(host: string, port: number, output: () => string): Promise<void> {
   const deadline = Date.now() + 60_000;
   let lastError: unknown;
@@ -577,6 +738,12 @@ function formHtmlByAction(html: string, action: string): string {
     html,
   );
   if (!match?.[0]) throw new Error(`Expected form action ${action}.`);
+  return match[0];
+}
+
+function firstFormHtml(html: string): string {
+  const match = /<form\b[\s\S]*?<\/form>/i.exec(html);
+  if (!match?.[0]) throw new Error('Expected a form.');
   return match[0];
 }
 
