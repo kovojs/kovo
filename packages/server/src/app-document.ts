@@ -1,4 +1,4 @@
-import { createHmac } from 'node:crypto';
+import { createHmac, randomBytes } from 'node:crypto';
 
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
@@ -37,6 +37,7 @@ import type { KovoApp } from './app-types.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
+const fallbackBroadcastFingerprintSecret = randomBytes(32);
 
 export interface AppRouteDocumentOptions {
   app: KovoApp;
@@ -314,7 +315,6 @@ function sessionFingerprintFromRequest(
   request: Request,
   secret: CsrfSecret | undefined,
 ): string | undefined {
-  if (secret === undefined) return undefined;
   // 1. Pre-resolved session id fields set by the route lifecycle / adapters.
   const req = request as unknown as {
     session?: { id?: string; user?: { id?: string } };
@@ -330,8 +330,10 @@ function sessionFingerprintFromRequest(
   return resolvedId === undefined ? undefined : hmacSessionFingerprint(resolvedId, secret);
 }
 
-function hmacSessionFingerprint(input: string, secret: CsrfSecret): string {
-  return createHmac('sha256', currentCsrfSecret(secret)).update(input).digest('base64url');
+function hmacSessionFingerprint(input: string, secret: CsrfSecret | undefined): string {
+  const hmacSecret =
+    secret === undefined ? fallbackBroadcastFingerprintSecret : currentCsrfSecret(secret);
+  return createHmac('sha256', hmacSecret).update(input).digest('base64url');
 }
 
 function queryRuntimeWarningHeader(
