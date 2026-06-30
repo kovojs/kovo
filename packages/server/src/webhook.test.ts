@@ -111,7 +111,8 @@ describe('server webhook primitive', () => {
       '/webhooks/stripe',
       typeof input,
       { received: string },
-      { id: string }
+      { id: string },
+      readonly [typeof invoice]
     >('/webhooks/stripe', {
       async handler(input, context) {
         steps.push(`handler:${context.tx.id}`);
@@ -136,6 +137,7 @@ describe('server webhook primitive', () => {
         }
       },
       verify: verifier,
+      writes: [invoice],
     });
     const body = JSON.stringify({
       id: 'evt_1',
@@ -222,6 +224,7 @@ describe('server webhook primitive', () => {
       },
       verify: 'none',
       verifyJustification: 'fixture-only webhook test',
+      writes: [invoice],
     });
 
     const body = JSON.stringify({ id: 'evt_ignore' });
@@ -437,11 +440,46 @@ describe('server webhook primitive', () => {
     expect(wh.webhookDefinition.writes).toEqual([invoice]);
   });
 
+  it('B4: fails closed when recordChange targets a domain outside declared writes', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    const contact = domain('model/contact');
+    const billing = domain('billing');
+    const wh = webhook('/webhooks/undeclared-write', {
+      handler(input, context) {
+        context.recordChange(contact, { keys: [input.id] });
+        (
+          context as unknown as {
+            recordChange(domain: typeof billing, options: { keys: readonly string[] }): unknown;
+          }
+        ).recordChange(billing, { keys: [input.id] });
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+      writes: [contact],
+    });
+
+    const result = await runWebhook(
+      wh,
+      new Request('https://example.test/webhooks/undeclared-write', {
+        body: JSON.stringify({ id: 'evt_undeclared' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(result.changes).toEqual([]);
+    expect(result.response.headers.get('kovo-changes')).toBeNull();
+  });
+
   it('fails closed when a write-reaching webhook lacks idempotency replay posture', async () => {
     const invoice = domain('invoice-missing-replay');
     const unsafeWebhook = webhook('/webhooks/missing-replay', {
       handler(input, context) {
-        context.recordChange(invoice, { keys: [input.id] });
+        (context as any).recordChange(invoice, { keys: [input.id] });
         return { ok: true };
       },
       input: s.object({ id: s.string() }),
@@ -474,7 +512,7 @@ describe('server webhook primitive', () => {
       webhook('/webhooks/charge-no-posture', {
         handler(input, context) {
           (context.tx as { insert(): void }).insert();
-          context.recordChange(ledger, { keys: [input.id] });
+          (context as any).recordChange(ledger, { keys: [input.id] });
           return { ok: true };
         },
         input: s.object({ id: s.string() }),
@@ -559,6 +597,7 @@ describe('server webhook primitive', () => {
       },
       verify: 'none',
       verifyJustification: 'fixture-only webhook test',
+      writes: [ledger],
     });
 
     const body = JSON.stringify({ id: 'evt_dup' });

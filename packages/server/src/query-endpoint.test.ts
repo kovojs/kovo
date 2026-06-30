@@ -453,6 +453,31 @@ describe('query endpoints', () => {
     });
   });
 
+  it('D1: logs default-config query endpoint exceptions to stderr', async () => {
+    const thrown = new Error('database password leaked in stack');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const request = {};
+    const productQuery = query('product', {
+      load() {
+        throw thrown;
+      },
+      reads: [domain('product')],
+    });
+
+    try {
+      await expect(renderQueryEndpointResponse(productQuery, { request })).resolves.toMatchObject({
+        body: '{"code":"SERVER_ERROR","payload":{}}',
+        status: 500,
+      });
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[kovo] query-endpoint failed query=product'),
+        thrown,
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it('renders structurally recognized args schema failures as safe 422 JSON', async () => {
     const productQuery = query('product', {
       args: alienValidationSchema<{ id: string }>('Expected string', ['id']),

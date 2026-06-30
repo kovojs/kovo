@@ -111,6 +111,9 @@ export { createMemoryWebhookReplayStore, webhook } from '../webhook.js';
 export type {
   WebhookChangeOptions,
   WebhookDeclaration,
+  WebhookDeclaredWriteDomain,
+  WebhookDeclaredWriteKey,
+  WebhookDeclaredWrites,
   WebhookDefinition,
   WebhookFail,
   WebhookFailureStatus,

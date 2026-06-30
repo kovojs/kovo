@@ -434,9 +434,35 @@ describe('server app matched dispatch boundary', () => {
     const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
 
     expect(response.status).toBe(405);
-    expect(response.headers.get('allow')).toBe('GET');
+    expect(response.headers.get('allow')).toBe('GET, HEAD');
     await expect(response.text()).resolves.toBe('Method Not Allowed');
     expect(handlerCalls).toBe(0);
+  });
+
+  it('D2: dispatches HEAD to GET endpoints with bodyless GET semantics', async () => {
+    let handlerCalls = 0;
+    const status = endpoint('/status', {
+      handler() {
+        handlerCalls += 1;
+        return new Response('ok', {
+          headers: { 'Content-Type': 'text/plain; charset=utf-8', 'X-Status': 'ok' },
+          status: 200,
+        });
+      },
+      method: 'GET',
+      reason: 'endpoint HEAD dispatch test',
+      response: rawTextResponse,
+    });
+    const app = createApp({ endpoints: [status] });
+    const request = new Request('https://shop.example.test/status', { method: 'HEAD' });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('x-status')).toBe('ok');
+    expect(response.headers.get('content-type')).toBe('text/plain; charset=utf-8');
+    expect(await response.text()).toBe('');
+    expect(handlerCalls).toBe(1);
   });
 
   it('owns SPEC §9.5 page method rejection after route matching', async () => {
