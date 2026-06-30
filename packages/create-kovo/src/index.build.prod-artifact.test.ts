@@ -18,6 +18,8 @@ import {
 } from './index.test-support.js';
 import {
   addAuthSecretLeakProof,
+  addEscapedAttackerTextProof,
+  addInternalHtmlImportProof,
   addNoJsFailureProof,
   addRawSqlOwnerWriteProof,
   attributeValue,
@@ -261,6 +263,69 @@ describe('create-kovo starter (build integration: production artifacts)', () => 
         expect(output).toContain('Secret query value reaches the client wire');
       }
     } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('blocks internal raw-HTML helper imports from authored .ts modules in production build', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-internal-html-import-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Internal HTML Import Proof' });
+      linkStarterBuildDependencies(root);
+      addInternalHtmlImportProof(root);
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail with KV235.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV235');
+        expect(output).toContain('@kovojs/server/internal/html');
+        expect(output).toContain('raw-helper.ts');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('serves attacker-shaped helper text escaped from the production build artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-escaped-helper-text-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod Escaped Helper Text Proof' });
+      linkStarterBuildDependencies(root);
+      addEscapedAttackerTextProof(root);
+
+      buildProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+
+      const html = await fetchTextWhenReady(`${origin}/xss-escape-proof`, output);
+      expect(html).toContain('data-proof="xss-escape"');
+      expect(html).toContain('&lt;img src=x onerror="alert(1)"&gt;');
+      expect(html).toContain('&lt;b id="xss-probe"&gt;RAW&lt;/b&gt;');
+      expect(html).not.toContain('<img src=x onerror="alert(1)">');
+      expect(html).not.toContain('<b id="xss-probe">RAW</b>');
+    } finally {
+      await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);

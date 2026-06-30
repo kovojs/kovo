@@ -144,6 +144,35 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     expect(transformed?.code).toContain('"app-shell/order-paid"');
   });
 
+  it('blocks non-public Kovo subpath imports in non-component authored modules', async () => {
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule, {
+      include: ['src'],
+    });
+
+    expect(() =>
+      plugin.transform(
+        `
+import { renderedHtml } from '@kovojs/server/internal/html';
+
+export const rawUnescaped = (markup: string) => renderedHtml(markup);
+`,
+        'src/raw-helper.ts',
+      ),
+    ).toThrow(
+      [
+        'Kovo Vite transform failed with 1 error diagnostic.',
+        [
+          'KV235 src/raw-helper.ts:2:30 App source imports a non-public Kovo subpath; use a documented public entrypoint.',
+          '  help: Blocked reason: app source imports non-public Kovo subpath `@kovojs/server/internal/html`.',
+          '  help: Fixes: import Kovo packages through documented public entrypoints; generated ABI subpaths are reserved for compiler-emitted modules.',
+          '  help: SPEC.md §5.2: app-authored source may import Kovo packages only through documented public entrypoints.',
+        ].join('\n'),
+      ].join('\n\n'),
+    );
+    expect(compileComponentModule).not.toHaveBeenCalled();
+  });
+
   it('lowers standalone source-derived aliased public query imports', async () => {
     const compileComponentModule = vi.fn(() => ({ files: [] }));
     const plugin = createKovoVitePlugin(compileComponentModule, {

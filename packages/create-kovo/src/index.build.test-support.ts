@@ -189,6 +189,77 @@ export function addRawSqlOwnerWriteProof(
   writeFileSync(mutationsPath, mutations, 'utf8');
 }
 
+export function addInternalHtmlImportProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/raw-helper.ts'),
+    [
+      "import { renderedHtml } from '@kovojs/server/internal/html';",
+      '',
+      'export const rawUnescaped = (markup: string) => renderedHtml(markup);',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8')
+    .replace(
+      "import { contactsQuery } from './queries.js';",
+      [
+        "import { contactsQuery } from './queries.js';",
+        "import { rawUnescaped } from './raw-helper.js';",
+      ].join('\n'),
+    )
+    .replace(
+      '// Fail fast on schema/seed errors, then seed the local demo account when the',
+      [
+        'void rawUnescaped;',
+        '',
+        '// Fail fast on schema/seed errors, then seed the local demo account when the',
+      ].join('\n'),
+    );
+  writeFileSync(appPath, app, 'utf8');
+}
+
+export function addEscapedAttackerTextProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/raw-helper.ts'),
+    [
+      'export function attackerMarkup(): string {',
+      '  return \'<img src=x onerror="alert(1)"><b id="xss-probe">RAW</b>\';',
+      '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8')
+    .replace(
+      "import { contactsQuery } from './queries.js';",
+      [
+        "import { contactsQuery } from './queries.js';",
+        "import { attackerMarkup } from './raw-helper.js';",
+      ].join('\n'),
+    )
+    .replace(
+      "    route('/', {",
+      [
+        "    route('/xss-escape-proof', {",
+        "      access: publicAccess('public output escaping regression proof'),",
+        "      meta: { title: 'Output escaping proof' },",
+        '      layout: AppLayout,',
+        '      stylesheets,',
+        '      page() {',
+        '        return <main data-proof="xss-escape">{attackerMarkup()}</main>;',
+        '      },',
+        '    }),',
+        "    route('/', {",
+      ].join('\n'),
+    );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export function addAuthSecretLeakProof(root: string): void {
   const queriesPath = join(root, 'src/queries.ts');
   const queries = readFileSync(queriesPath, 'utf8')
