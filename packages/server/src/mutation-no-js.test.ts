@@ -408,6 +408,40 @@ describe('no-JS mutation responses', () => {
     expect(third.status).toBe(303);
   });
 
+  it('keeps enhanced fragment and no-JS PRG replay records in separate mode scopes', async () => {
+    const handler = vi.fn((input: { productId: string }) => input);
+    const addToCart = mutation('cart/mode-scope', {
+      input: s.object({ productId: s.string() }),
+      handler,
+    });
+    const replayStore = createMemoryMutationReplayStore();
+    const idem = 'idem_mode_scope_01';
+    const enhanced = await renderMutationEndpointResponse(addToCart, {
+      buildToken: 'mode-scope-build',
+      headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': idem },
+      rawInput: { productId: 'p1' },
+      redirectTo: '/cart',
+      replayStore,
+      request: { sessionId: 's1' },
+    });
+
+    const form = new FormData();
+    form.set('productId', 'p1');
+    form.set(KOVO_IDEM_FIELD_NAME, idem);
+    const noJs = await renderMutationEndpointResponse(addToCart, {
+      headers: new Headers(),
+      rawInput: form,
+      redirectTo: '/cart',
+      replayStore,
+      request: { sessionId: 's1' },
+    });
+
+    expect(enhanced.status).toBe(200);
+    expect(noJs.status).toBe(303);
+    expect(noJs.headers['Location']).toBe('/cart');
+    expect(handler).toHaveBeenCalledTimes(2);
+  });
+
   it('rejects no-JS same Kovo-Idem with a different body as a 422 conflict', async () => {
     const writes: string[] = [];
     const addContact = mutation('contacts/add', {
