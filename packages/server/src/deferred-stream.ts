@@ -2,7 +2,6 @@ import { randomBytes } from 'node:crypto';
 
 import { cspHashAttribute, cspSha256, type CspInlineMetadata } from './csp.js';
 import type { StylesheetAsset } from './hints.js';
-import { escapeScriptJson } from './html.js';
 import type { ServerResponseBase } from './response.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from './wire-html.js';
 
@@ -33,12 +32,23 @@ export interface DeferredStreamOptions {
   shell: string;
 }
 
+/** @internal */
+export interface DeferredStreamingOptions {
+  boundary?: string;
+  chunks: readonly Promise<DeferredStreamChunk>[];
+  closeHtml?: string;
+  shell: string;
+}
+
 /** One deferred route-region stream chunk. */
 export interface DeferredStreamChunk {
   fragments: readonly DeferredFragmentChunk[];
   priority?: DeferredPriority;
   queries?: readonly DeferredQueryChunk[];
 }
+
+/** @internal A route response may carry realized chunks or pending region renders. */
+export type DeferredStreamChunkInput = DeferredStreamChunk | Promise<DeferredStreamChunk>;
 
 /** @internal */
 export interface DeferredStreamResponse extends ServerResponseBase<
@@ -52,6 +62,15 @@ export interface DeferredStreamResponse extends ServerResponseBase<
    * hash-CSP built from the framework's own hashes must include these or deferred
    * fragments/queries never apply. Callers merge this into the document's `csp`.
    */
+  csp: CspInlineMetadata;
+}
+
+/** @internal */
+export interface DeferredStreamingResponse extends ServerResponseBase<
+  ReadableStream<Uint8Array>,
+  Record<string, string>,
+  200
+> {
   csp: CspInlineMetadata;
 }
 
@@ -91,7 +110,7 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
   // over the inline content, not the wrapping tag) and each `<script>` is stamped with
   // the matching `data-kovo-csp-hash` so a strict hash-CSP admits them; the hashes are
   // surfaced on `csp` so `renderDeferredDocument` merges them into `document.csp`.
-  const cleanupScriptBody = `for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--${boundary}"))n.remove();document.currentScript.remove()`;
+  const cleanupScriptBody = deferredCloseCleanupScriptBody(boundary);
   const cleanupHash = cspSha256(cleanupScriptBody);
   const deferredCloseCleanupScript = `<script ${cspHashAttribute(cleanupHash)}>${cleanupScriptBody}</script>`;
   // SPEC §9:769 ("deferred query JSON is guaranteed to arrive before or with its
@@ -105,16 +124,11 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
   // within-chunk priority sort would reorder same-target append/replace pairs (pagination
   // rows out of order, append-before-cleanup). Preserve author order INSIDE a chunk; only
   // chunk-level priority ordering remains (documented behavior).
-  const applyScriptBodies = sortedChunks.map((chunk) =>
-    deferredChunkApplyScriptBody(boundary, visibleFragmentTargets(chunk)),
-  );
-  const applyHashes = applyScriptBodies.map(cspSha256);
-  const chunks = serializedChunks.map((chunkLines, index) =>
-    [
-      `--${boundary}`,
-      ...chunkLines,
-      `<script ${cspHashAttribute(applyHashes[index] ?? '')}>${applyScriptBodies[index] ?? ''}</script>`,
-    ].join('\n'),
+  const applyScriptBody = deferredChunkApplyScriptBody(boundary);
+  const applyHash = cspSha256(applyScriptBody);
+  const deferredApplyScript = `<script ${cspHashAttribute(applyHash)}>${applyScriptBody}</script>`;
+  const chunks = serializedChunks.map((chunkLines) =>
+    [`--${boundary}`, ...chunkLines, deferredApplyScript].join('\n'),
   );
 
   return {
@@ -126,7 +140,91 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
       options.closeHtml ?? '',
     ].join('\n'),
     // Dedupe: the apply hash repeats once per chunk but the CSP hash list is a set.
-    csp: { scripts: [...new Set([...applyHashes, cleanupHash])], styles: [] },
+    csp: { scripts: [applyHash, cleanupHash], styles: [] },
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+    },
+    status: 200,
+  };
+}
+
+interface StreamDeferredChunksOptions {
+  applyScript: string;
+  boundary: string;
+  chunks: readonly Promise<DeferredStreamChunk>[];
+  cleanupScript: string;
+  closeHtml: string;
+  controller: ReadableStreamDefaultController<Uint8Array>;
+  encoder: TextEncoder;
+}
+
+async function streamDeferredChunks(options: StreamDeferredChunksOptions): Promise<void> {
+  const pending = options.chunks.map((chunk, index) => ({
+    index,
+    promise: Promise.resolve(chunk).then((value) => ({ index, value })),
+  }));
+
+  try {
+    while (pending.length > 0) {
+      const settled = await Promise.race(pending.map((entry) => entry.promise));
+      const pendingIndex = pending.findIndex((entry) => entry.index === settled.index);
+      if (pendingIndex !== -1) pending.splice(pendingIndex, 1);
+      options.controller.enqueue(
+        options.encoder.encode(
+          `\n${serializeDeferredStreamChunk(options.boundary, settled.value, options.applyScript)}`,
+        ),
+      );
+    }
+    options.controller.enqueue(
+      options.encoder.encode(
+        `\n--${options.boundary}--\n${options.cleanupScript}\n${options.closeHtml}`,
+      ),
+    );
+    options.controller.close();
+  } catch (error) {
+    options.controller.error(error);
+  }
+}
+
+/**
+ * Render a live deferred stream. The shell is enqueued immediately; each deferred chunk is
+ * serialized when its region promise settles, so one slow region cannot hold the first paint
+ * hostage (SPEC §8).
+ *
+ * @internal
+ */
+export function renderDeferredStreamingResponse(
+  options: DeferredStreamingOptions,
+): DeferredStreamingResponse {
+  const baseBoundary = options.boundary ?? `kovo-boundary-${randomBoundaryToken()}`;
+  const contentLines = collectContentLines(options.shell, []);
+  const boundary = chooseNonCollidingBoundary(baseBoundary, contentLines);
+  const cleanupScriptBody = deferredCloseCleanupScriptBody(boundary);
+  const cleanupHash = cspSha256(cleanupScriptBody);
+  const deferredCloseCleanupScript = `<script ${cspHashAttribute(cleanupHash)}>${cleanupScriptBody}</script>`;
+  const applyScriptBody = deferredChunkApplyScriptBody(boundary);
+  const applyHash = cspSha256(applyScriptBody);
+  const deferredApplyScript = `<script ${cspHashAttribute(applyHash)}>${applyScriptBody}</script>`;
+  const encoder = new TextEncoder();
+
+  const body = new ReadableStream<Uint8Array>({
+    start(controller) {
+      controller.enqueue(encoder.encode(options.shell));
+      void streamDeferredChunks({
+        applyScript: deferredApplyScript,
+        boundary,
+        chunks: options.chunks,
+        closeHtml: options.closeHtml ?? '',
+        cleanupScript: deferredCloseCleanupScript,
+        controller,
+        encoder,
+      });
+    },
+  });
+
+  return {
+    body,
+    csp: { scripts: [applyHash, cleanupHash], styles: [] },
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
     },
@@ -262,24 +360,13 @@ function randomBoundaryToken(): string {
   return randomBytes(16).toString('hex');
 }
 
-function deferredChunkApplyScriptBody(boundary: string, visibleTargets: readonly string[]): string {
-  const collectBody = `var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--${boundary}"))break;n=p}`;
-  if (visibleTargets.length === 0) {
-    return `${collectBody}globalThis.__kovo_a?.(e.join("\\n"));s.remove()`;
-  }
-
-  // L4 (bugz-3; SPEC §6.x inline-script JSON): `visibleTargets` is attacker-influenceable Defer
-  // target data embedded in an inline `<script>` body. Plain `JSON.stringify` escapes quotes/control
-  // chars but NOT `<`, so a target containing `</script>` would terminate the script early
-  // (breakout). Use the framework's script-context escaper (the same `escapeScriptJson` that
-  // `renderQueryScript`/wire-html use) to turn `<` into `<`.
-  return `${collectBody}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){for(var v of ${escapeScriptJson(JSON.stringify(visibleTargets))}){var d=[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()`;
+function deferredCloseCleanupScriptBody(boundary: string): string {
+  return `for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--${boundary}"))n.remove();document.currentScript.remove()`;
 }
 
-function visibleFragmentTargets(chunk: DeferredStreamChunk): readonly string[] {
-  return chunk.fragments
-    .filter((fragment) => fragment.priority === 'visible')
-    .map((fragment) => fragment.target);
+function deferredChunkApplyScriptBody(boundary: string): string {
+  const collectBody = `var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--${boundary}"))break;n=p}`;
+  return `${collectBody}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){var m=b.match(/<kovo-fragment\\b[^>]*>/g)||[];for(var h of m){if(!/\\bpriority=["']visible["']/.test(h))continue;var v=(h.match(/\\btarget=["']([^"']+)["']/)||[])[1];var d=v&&[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()`;
 }
 
 function renderDeferredFragmentChunk(fragment: DeferredFragmentChunk): string {
@@ -300,6 +387,19 @@ function renderDeferredQueryChunks(queries: readonly DeferredQueryChunk[]): stri
       value: queryChunk.value,
     }),
   );
+}
+
+function serializeDeferredStreamChunk(
+  boundary: string,
+  chunk: DeferredStreamChunk,
+  applyScript: string,
+): string {
+  return [
+    `--${boundary}`,
+    ...renderDeferredQueryChunks(chunk.queries ?? []),
+    ...chunk.fragments.map(renderDeferredFragmentChunk),
+    applyScript,
+  ].join('\n');
 }
 
 function sortDeferredChunks(chunks: readonly DeferredStreamChunk[]): DeferredStreamChunk[] {

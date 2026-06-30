@@ -28,7 +28,7 @@ import { jsx } from './jsx-runtime.js';
 
 // G1 (bugs-part3 CSP-1): the deferred apply/cleanup scripts now carry a CSP hash attr.
 const deferredApplyScriptBody =
-  'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
+  'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){var m=b.match(/<kovo-fragment\\b[^>]*>/g)||[];for(var h of m){if(!/\\bpriority=["\']visible["\']/.test(h))continue;var v=(h.match(/\\btarget=["\']([^"\']+)["\']/)||[])[1];var d=v&&[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()';
 const deferredCleanupScriptBody =
   'for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()';
 const deferredApplyHash = cspSha256(deferredApplyScriptBody);

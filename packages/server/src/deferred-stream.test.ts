@@ -5,18 +5,16 @@ import { renderDeferredStream } from './deferred-stream.js';
 
 // G1 (bugs-part3 CSP-1): the apply/cleanup scripts now carry a CSP hash attribute and
 // their bodies are hashed for `response.csp`.
-const applyScriptBody =
-  'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
-const cleanupScriptBody =
-  'for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--kovo-boundary"))n.remove();document.currentScript.remove()';
-const visibleApplyScriptBody =
-  'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--kovo-boundary"))break;n=p}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){for(var v of ["rail:p1"]){var d=[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()';
+const applyScriptBodyFor = (boundary: string) =>
+  `var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--${boundary}"))break;n=p}var b=e.join("\\n"),a=()=>globalThis.__kovo_a?.(b),o=globalThis.IntersectionObserver&&new IntersectionObserver((r)=>{for(const x of r)if(x.isIntersecting){o.disconnect();a();break}},{rootMargin:"600px 0px"}),c=0;if(o){var m=b.match(/<kovo-fragment\\b[^>]*>/g)||[];for(var h of m){if(!/\\bpriority=["']visible["']/.test(h))continue;var v=(h.match(/\\btarget=["']([^"']+)["']/)||[])[1];var d=v&&[...document.getElementsByTagName("kovo-defer")].find((x)=>x.getAttribute("target")===v);if(d){o.observe(d);c++}}}if(!c)a();s.remove()`;
+const cleanupScriptBodyFor = (boundary: string) =>
+  `for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--${boundary}"))n.remove();document.currentScript.remove()`;
+const applyScriptBody = applyScriptBodyFor('kovo-boundary');
+const cleanupScriptBody = cleanupScriptBodyFor('kovo-boundary');
 const applyHash = cspSha256(applyScriptBody);
 const cleanupHash = cspSha256(cleanupScriptBody);
-const visibleApplyHash = cspSha256(visibleApplyScriptBody);
 const applyScript = `<script data-kovo-csp-hash="${applyHash}">${applyScriptBody}</script>`;
 const cleanupScript = `<script data-kovo-csp-hash="${cleanupHash}">${cleanupScriptBody}</script>`;
-const visibleApplyScript = `<script data-kovo-csp-hash="${visibleApplyHash}">${visibleApplyScriptBody}</script>`;
 
 describe('deferred streams', () => {
   it('renders deferred streams with shell first and query JSON before fragments', () => {
@@ -70,10 +68,8 @@ describe('deferred streams', () => {
       shell: '<!doctype html><html><body><kovo-defer target="main"></kovo-defer>',
     });
 
-    const applyBody =
-      'var s=document.currentScript,n=s.previousSibling,e=[];for(;n;){var p=n.previousSibling,t=n.textContent||"";if(n.outerHTML)e.unshift(n.outerHTML);n.remove();if(t.includes("--x-b"))break;n=p}globalThis.__kovo_a?.(e.join("\\n"));s.remove()';
-    const cleanupBody =
-      'for(var n of [...document.body.childNodes])if((n.textContent||"").includes("--x-b"))n.remove();document.currentScript.remove()';
+    const applyBody = applyScriptBodyFor('x-b');
+    const cleanupBody = cleanupScriptBodyFor('x-b');
     const applyHashXb = cspSha256(applyBody);
     const cleanupHashXb = cspSha256(cleanupBody);
 
@@ -175,13 +171,13 @@ describe('deferred streams', () => {
         '<!doctype html><html><body><kovo-defer target="rail:p1"></kovo-defer>',
         '--kovo-boundary',
         '<kovo-fragment target="rail:p1" priority="visible"><aside>Rail ready</aside></kovo-fragment>',
-        visibleApplyScript,
+        applyScript,
         '--kovo-boundary--',
         cleanupScript,
         '',
       ].join('\n'),
     );
-    expect(result.csp.scripts).toEqual([visibleApplyHash, cleanupHash]);
+    expect(result.csp.scripts).toEqual([applyHash, cleanupHash]);
   });
 
   // L2-deferred-2 (bugs-part3): same-target append/replace fragments in one chunk keep
@@ -421,11 +417,10 @@ describe('deferred streams', () => {
     expect(realSep).not.toBe('--kovo-boundary');
   });
 
-  // L4 (bugz-3; SPEC §6.x inline-script JSON): a `visible` Defer target embedded in the apply
-  // <script> body must be script-context escaped. Plain `JSON.stringify` leaves `<` raw, so a
-  // target containing `</script>` breaks out of the inline script; `escapeScriptJson` turns `<`
-  // into `<` so the closing tag can no longer terminate the script.
-  it('script-context-escapes visible Defer targets in the apply script (L4)', () => {
+  // L4 (bugz-3; SPEC §6.x inline-script JSON): visible Defer targets are attacker-influenceable
+  // strings. The apply script now derives them from escaped fragment markup instead of embedding
+  // target JSON in inline script text, so a target containing `</script>` cannot break out.
+  it('keeps visible Defer targets out of the apply script body (L4)', () => {
     const result = renderDeferredStream({
       chunks: [
         {
@@ -445,8 +440,10 @@ describe('deferred streams', () => {
     // KEY ASSERTION (fails on old `JSON.stringify` behavior): the raw `</script><img ...>`
     // breakout never appears verbatim anywhere in the rendered stream.
     expect(result.body).not.toContain('</script><img');
-    // The target survives, script-context-escaped (`<` -> <), inside the apply <script>.
-    expect(result.body).toContain('\\u003c/script>\\u003cimg src=x onerror=alert(1)>');
+    expect(result.body).toContain(
+      '<kovo-fragment target="&lt;/script&gt;&lt;img src=x onerror=alert(1)&gt;" priority="visible">',
+    );
+    expect(result.body).not.toContain('\\u003c/script>');
   });
 
   // L13-1: when content does NOT collide, the default boundary is preserved so the

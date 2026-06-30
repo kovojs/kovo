@@ -14,7 +14,12 @@ import {
   type CspInlineMetadata,
   type DocumentCspConfig,
 } from './csp.js';
-import { renderDeferredStream, type DeferredStreamChunk } from './deferred-stream.js';
+import {
+  renderDeferredStream,
+  renderDeferredStreamingResponse,
+  type DeferredStreamChunk,
+  type DeferredStreamChunkInput,
+} from './deferred-stream.js';
 import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
 import { renderShellAttributes, type DocumentConfig } from './document-structured.js';
 import {
@@ -93,7 +98,7 @@ export interface DocumentAssemblyOptions {
 /** @internal */
 export interface DocumentRoutePageResponse extends DocumentRouteResponseBase {
   /** @internal Deferred route-region chunks streamed after the initial document shell. */
-  deferredChunks?: readonly DeferredStreamChunk[];
+  deferredChunks?: readonly DeferredStreamChunkInput[];
 }
 
 /**
@@ -201,6 +206,15 @@ export interface DeferredDocumentRenderResult extends ServerResponseBase<
   csp: CspInlineMetadata;
 }
 
+/** @internal */
+export interface DeferredStreamingDocumentRenderResult extends ServerResponseBase<
+  ReadableStream<Uint8Array>,
+  ResponseHeaders,
+  200
+> {
+  csp: CspInlineMetadata;
+}
+
 const fallbackTitles = {
   403: 'Forbidden',
   404: 'Not Found',
@@ -252,6 +266,36 @@ export function renderDeferredDocument(
       assembled.csp,
       response.csp,
       styleAttributeCspInlineMetadata(response.body),
+    ),
+    headers: mergeDocumentHeaders(response.headers, assembled.earlyHints),
+  };
+}
+
+function renderDeferredStreamingDocument(
+  options: Omit<DeferredDocumentAssemblyOptions, 'chunks'> & {
+    chunks: readonly Promise<DeferredStreamChunk>[];
+  },
+): DeferredStreamingDocumentRenderResult {
+  const assembled = assembleDocumentShellParts(options);
+  const frame = renderStructuredDeferredDocumentShell(
+    { csp: assembled.csp, parts: assembled.parts },
+    assembled.document,
+  );
+  const response = renderDeferredStreamingResponse({
+    chunks: options.chunks,
+    closeHtml: frame.closeHtml,
+    ...(options.boundary === undefined ? {} : { boundary: options.boundary }),
+    shell: frame.shell,
+  });
+
+  return {
+    ...response,
+    // SPEC §8 streams the shell before deferred render promises settle, so only the already-known
+    // shell/close frame can contribute style-attribute hashes to the initial CSP header.
+    csp: mergeCspInlineMetadata(
+      assembled.csp,
+      response.csp,
+      styleAttributeCspInlineMetadata(`${frame.shell}${frame.closeHtml}`),
     ),
     headers: mergeDocumentHeaders(response.headers, assembled.earlyHints),
   };
@@ -360,21 +404,7 @@ export function renderRouteDocumentResponse(
     return response;
   }
 
-  const document =
-    response.deferredChunks && response.deferredChunks.length > 0
-      ? deferredDocumentResult(
-          renderDeferredDocument({
-            ...assemblyOptions,
-            body: response.body,
-            chunks: response.deferredChunks,
-          }),
-        )
-      : standardDocumentResult(
-          renderDocument({
-            ...assemblyOptions,
-            body: response.body,
-          }),
-        );
+  const document = routeDocumentResult({ ...response, body: response.body }, assemblyOptions);
   const shouldAttachFrameworkCsp =
     findHeaderRecordName(response.headers, 'Content-Security-Policy') === undefined;
   const shouldAttachReporting =
@@ -450,13 +480,64 @@ export function renderRouteDocumentResponse(
   }
 
   return {
-    body: document.html,
+    body: document.body,
     // CSP-3 (bugs-part3): surface the assembled CSP so the dispatch path can attach a
     // `Content-Security-Policy` header when the app opts in (previously discarded).
     csp: document.csp,
     headers: htmlHeaders,
     status: response.status,
   };
+}
+
+function routeDocumentResult(
+  response: DocumentRoutePageResponse & { body: string },
+  assemblyOptions: Omit<DocumentAssemblyOptions, 'body'>,
+): {
+  body: ReadableStream<Uint8Array> | string;
+  csp: CspInlineMetadata;
+  earlyHints: ResponseHeaders;
+} {
+  if (response.deferredChunks && response.deferredChunks.length > 0) {
+    const pendingChunks = deferredChunkPromises(response.deferredChunks);
+    if (pendingChunks) {
+      return streamingDeferredDocumentResult(
+        renderDeferredStreamingDocument({
+          ...assemblyOptions,
+          body: response.body,
+          chunks: pendingChunks,
+        }),
+      );
+    }
+    return deferredDocumentResult(
+      renderDeferredDocument({
+        ...assemblyOptions,
+        body: response.body,
+        chunks: response.deferredChunks as readonly DeferredStreamChunk[],
+      }),
+    );
+  }
+
+  return standardDocumentResult(
+    renderDocument({
+      ...assemblyOptions,
+      body: response.body,
+    }),
+  );
+}
+
+function deferredChunkPromises(
+  chunks: readonly DeferredStreamChunkInput[],
+): readonly Promise<DeferredStreamChunk>[] | undefined {
+  return chunks.some(isPromiseLike) ? chunks.map((chunk) => Promise.resolve(chunk)) : undefined;
+}
+
+function isPromiseLike<Value>(value: unknown): value is PromiseLike<Value> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'then' in value &&
+    typeof (value as { then?: unknown }).then === 'function'
+  );
 }
 
 function isRouteResponseOutcome(response: DocumentRoutePageResponse): boolean {
@@ -584,22 +665,38 @@ function permissionsPolicyWithReporting(reportingGroup: string): string {
 }
 
 function standardDocumentResult(document: DocumentRenderResult): {
+  body: string;
   csp: CspInlineMetadata;
   earlyHints: ResponseHeaders;
-  html: string;
 } {
-  return document;
+  return {
+    body: document.html,
+    csp: document.csp,
+    earlyHints: document.earlyHints,
+  };
 }
 
 function deferredDocumentResult(document: DeferredDocumentRenderResult): {
+  body: string;
   csp: CspInlineMetadata;
   earlyHints: ResponseHeaders;
-  html: string;
 } {
   return {
+    body: document.body,
     csp: document.csp,
     earlyHints: document.headers,
-    html: document.body,
+  };
+}
+
+function streamingDeferredDocumentResult(document: DeferredStreamingDocumentRenderResult): {
+  body: ReadableStream<Uint8Array>;
+  csp: CspInlineMetadata;
+  earlyHints: ResponseHeaders;
+} {
+  return {
+    body: document.body,
+    csp: document.csp,
+    earlyHints: document.headers,
   };
 }
 

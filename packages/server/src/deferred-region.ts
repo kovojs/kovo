@@ -105,6 +105,7 @@ export function defer(options: DeferredRegionOptions): MaybePromise<string> {
 /** @internal */
 export interface DeferredRegionChunkCollector extends DeferredRegionCollector {
   chunks(): Promise<readonly DeferredStreamChunk[]>;
+  pendingChunks(): readonly Promise<DeferredStreamChunk>[];
 }
 
 /** @internal */
@@ -116,6 +117,9 @@ export function createDeferredRegionChunkCollector(): DeferredRegionChunkCollect
     },
     async chunks() {
       return Promise.all(chunks);
+    },
+    pendingChunks() {
+      return [...chunks];
     },
   };
 }

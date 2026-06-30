@@ -13,6 +13,26 @@ import {
   createMemoryVersionedClientModuleRegistry,
 } from './client-modules.js';
 
+async function responseBodyText(body: unknown): Promise<string> {
+  if (typeof body === 'string') return body;
+  if (body instanceof Uint8Array) return new TextDecoder().decode(body);
+  if (body instanceof ArrayBuffer) return new TextDecoder().decode(new Uint8Array(body));
+  if (body instanceof ReadableStream) return new Response(body).text();
+  throw new Error('expected readable response body');
+}
+
+async function readRemainingStreamText(
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+): Promise<string> {
+  const decoder = new TextDecoder();
+  let text = '';
+  for (;;) {
+    const chunk = await reader.read();
+    if (chunk.done) return text + decoder.decode();
+    text += decoder.decode(chunk.value, { stream: true });
+  }
+}
+
 function headerValue(headers: Record<string, string | readonly string[]>, name: string) {
   const key = Object.keys(headers).find((candidate) => candidate.toLowerCase() === name);
   const value = key === undefined ? undefined : headers[key];
@@ -482,8 +502,7 @@ describe('server app document boundary', () => {
       route: productRoute,
       url: new URL(request.url),
     });
-    if (typeof response.body !== 'string') throw new Error('expected HTML document body');
-    const body = response.body;
+    const body = await responseBodyText(response.body);
 
     expect(response.status).toBe(200);
     expect(body).toContain('<h1>Product p1</h1>');
@@ -496,6 +515,55 @@ describe('server app document boundary', () => {
     expect(body).toContain('<kovo-fragment target="reviews:p1" priority="normal">');
     expect(body).toContain('<link rel="stylesheet" href="/assets/reviews.css">');
     expect(body).toContain('<section class="reviews-card">Reviews ready</section>');
+  });
+
+  it('flushes the document shell before a slow deferred route region resolves', async () => {
+    let resolveReviews: ((html: string) => void) | undefined;
+    const productRoute = route('/products/:id', {
+      async page({ params }) {
+        return renderedHtml(
+          `<main><h1>Product ${params.id}</h1>` +
+            (await defer({
+              fallback: '<section aria-busy="true">Loading reviews</section>',
+              priority: 'after-paint',
+              render: () =>
+                new Promise<string>((resolve) => {
+                  resolveReviews = resolve;
+                }),
+              target: `reviews:${params.id}`,
+            })) +
+            '</main>',
+        );
+      },
+    });
+    const request = new Request('https://shop.example.test/products/p1');
+    const app = createApp({ routes: [productRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: { id: 'p1' },
+      request,
+      route: productRoute,
+      url: new URL(request.url),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toBeInstanceOf(ReadableStream);
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+    const firstText = new TextDecoder().decode(first.value);
+    expect(firstText).toContain('<h1>Product p1</h1>');
+    expect(firstText).toContain(
+      '<kovo-defer target="reviews:p1" state="pending" data-kovo-region-priority="after-paint"><section aria-busy="true">Loading reviews</section></kovo-defer>',
+    );
+    expect(firstText).not.toContain('Reviews ready');
+
+    if (!resolveReviews) throw new Error('deferred render did not start');
+    resolveReviews('<section class="reviews-card">Reviews ready</section>');
+    const rest = await readRemainingStreamText(reader);
+    expect(rest).toContain('<kovo-fragment target="reviews:p1" priority="normal">');
+    expect(rest).toContain('<section class="reviews-card">Reviews ready</section>');
   });
 
   it('streams visible deferred route regions for viewport-gated browser apply', async () => {
@@ -524,8 +592,7 @@ describe('server app document boundary', () => {
       route: productRoute,
       url: new URL(request.url),
     });
-    if (typeof response.body !== 'string') throw new Error('expected HTML document body');
-    const body = response.body;
+    const body = await responseBodyText(response.body);
 
     expect(response.status).toBe(200);
     expect(body).toContain(
@@ -568,12 +635,13 @@ describe('server app document boundary', () => {
     });
 
     expect(response.status).toBe(200);
-    expect(response.body).toContain('<h1>Product p1</h1>');
-    expect(response.body).toContain(
+    const body = await responseBodyText(response.body);
+    expect(body).toContain('<h1>Product p1</h1>');
+    expect(body).toContain(
       '<kovo-fragment target="reviews:p1" priority="normal"><kovo-defer target="reviews:p1" state="error"',
     );
-    expect(response.body).toContain('<section aria-busy="true">Loading reviews</section>');
-    expect(response.body).not.toContain('review service unavailable');
+    expect(body).toContain('<section aria-busy="true">Loading reviews</section>');
+    expect(body).not.toContain('review service unavailable');
   });
 
   it('bounds a hung deferred route region with a per-region timeout', async () => {
@@ -597,22 +665,32 @@ describe('server app document boundary', () => {
       const request = new Request('https://shop.example.test/products/p1');
       const app = createApp({ routes: [productRoute] });
 
-      const response = renderAppRouteDocumentResponse({
+      const response = await renderAppRouteDocumentResponse({
         app,
         params: { id: 'p1' },
         request,
         route: productRoute,
         url: new URL(request.url),
       });
-      await vi.advanceTimersByTimeAsync(5);
 
-      await expect(response).resolves.toMatchObject({ status: 200 });
-      const body = (await response).body as string;
-      expect(body).toContain('<h1>Product p1</h1>');
-      expect(body).toContain(
+      expect(response.status).toBe(200);
+      expect(response.body).toBeInstanceOf(ReadableStream);
+      const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+      const first = await reader.read();
+      expect(first.done).toBe(false);
+      const firstText = new TextDecoder().decode(first.value);
+      expect(firstText).toContain('<h1>Product p1</h1>');
+      expect(firstText).toContain(
+        '<kovo-defer target="rail:p1" state="pending" data-kovo-region-priority="visible"><aside aria-busy="true">Loading rail</aside></kovo-defer>',
+      );
+      expect(firstText).not.toContain('state="error"');
+
+      await vi.advanceTimersByTimeAsync(5);
+      const rest = await readRemainingStreamText(reader);
+      expect(rest).toContain(
         '<kovo-fragment target="rail:p1" priority="visible"><kovo-defer target="rail:p1" state="error"',
       );
-      expect(body).toContain('<aside aria-busy="true">Loading rail</aside>');
+      expect(rest).toContain('<aside aria-busy="true">Loading rail</aside>');
     } finally {
       vi.useRealTimers();
     }

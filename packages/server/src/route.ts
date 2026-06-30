@@ -1163,7 +1163,7 @@ export async function renderRoutePageResponse<
 
   try {
     const body = await render(result.value);
-    const deferredChunks = await deferredRegions.chunks();
+    const deferredChunks = deferredRegions.pendingChunks();
     return attachLifecycleRequest(
       {
         body,
