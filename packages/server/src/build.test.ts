@@ -751,13 +751,19 @@ export default async function handler(request) {
       await expect(readFile(join(nodeOutDir, 'Dockerfile'))).rejects.toThrow();
       expect(logs).toEqual([`Emitted Kovo node preset output to ${nodeOutDir}`]);
       const nodeServer = await readFile(join(nodeOutDir, 'server.mjs'), 'utf8');
-      expect(nodeServer).toContain('function nodeRequestToWebRequest');
-      expect(nodeServer).toContain('function responseHeadersToNodeHeaders');
-      expect(nodeServer).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(nodeServer).toContain(
+        "import { nodeRequestToWebRequest, writeWebResponseToNode } from './node-adapter.mjs';",
+      );
+      const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
+      expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
+      expect(nodeAdapter).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(nodeAdapter).toContain('signal: controller.signal');
+      expect(nodeAdapter).toContain('nodeRequest.socket?.remoteAddress?.trim()');
+      expect(nodeAdapter).toContain("'__kovoPeerAddress'");
+      expect(nodeServer).not.toContain('function nodeRequestToWebRequest');
+      expect(nodeServer).not.toContain('function responseHeadersToNodeHeaders');
       expect(nodeServer).toContain('nodeResponse.destroy()');
-      expect(nodeServer).toContain('signal: controller.signal');
-      expect(nodeServer).toContain('nodeRequest.socket?.remoteAddress?.trim()');
-      expect(nodeServer).toContain("'__kovoPeerAddress'");
       expect(nodeServer).toContain('const headersTimeoutMs = 10_000;');
       expect(nodeServer).toContain('const requestTimeoutMs = 30_000;');
       expect(nodeServer).toContain('server.headersTimeout = headersTimeoutMs;');
@@ -1040,13 +1046,20 @@ export default async function handler(request) {
         join(vercelOutDir, 'functions/kovo.func/index.cjs'),
         'utf8',
       );
-      expect(vercelFunction).toContain('function nodeRequestToWebRequest');
-      expect(vercelFunction).toContain('function responseHeadersToNodeHeaders');
-      expect(vercelFunction).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(vercelFunction).toContain("import('./node-adapter.mjs')");
+      const vercelAdapter = await readFile(
+        join(vercelOutDir, 'functions/kovo.func/node-adapter.mjs'),
+        'utf8',
+      );
+      expect(vercelAdapter).toContain('export function nodeRequestToWebRequest');
+      expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
+      expect(vercelAdapter).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(vercelAdapter).toContain('signal: controller.signal');
+      expect(vercelAdapter).toContain('nodeRequest.socket?.remoteAddress?.trim()');
+      expect(vercelAdapter).toContain("'__kovoPeerAddress'");
+      expect(vercelFunction).not.toContain('function nodeRequestToWebRequest');
+      expect(vercelFunction).not.toContain('function responseHeadersToNodeHeaders');
       expect(vercelFunction).toContain('nodeResponse.destroy()');
-      expect(vercelFunction).toContain('signal: controller.signal');
-      expect(vercelFunction).toContain('nodeRequest.socket?.remoteAddress?.trim()');
-      expect(vercelFunction).toContain("'__kovoPeerAddress'");
       await expect(
         readJson(join(vercelOutDir, 'functions/kovo.func/.vc-config.json')),
       ).resolves.toEqual({

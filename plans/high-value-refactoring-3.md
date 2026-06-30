@@ -57,7 +57,7 @@ invariant.
     assert no leakage; data-plane tests prove graph derivation is context-scoped. Run the focused CLI
     build/export and server data-plane test set.
 
-- [ ] **P0.4 - Share one Node adapter runtime between dev and generated production builds.**
+- [x] **P0.4 - Share one Node adapter runtime between dev and generated production builds.**
   - Current signals: `packages/server/src/node.ts` owns tested request/response conversion, while
     `packages/server/src/build.ts` embeds duplicated Node adapter functions as source strings for
     generated builds.
@@ -66,8 +66,7 @@ invariant.
     abort handling, HEAD/body suppression, and stream error behavior in one implementation.
   - Risk reduced: production build presets cannot drift from dev/server behavior for headers,
     streaming, abort cleanup, or response finalization.
-  - Verification: parity tests compare generated adapter output to `node.ts` behavior for headers,
-    cookies, HEAD, stream errors, and aborts. Run `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/build.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/build.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-headers.test.ts packages/server/src/vite-static-export-result.test.ts` passed on 2026-06-30, covering generated adapter parity for headers/cookies/HEAD/stream errors/abort cleanup.
 
 - [ ] **P0.5 - Replace global mutation form-helper placeholder registries with render-scoped state.**
   - Current signals: `packages/core/src/index.ts` and `packages/server/src/jsx-runtime.ts` both use
@@ -144,7 +143,7 @@ invariant.
     consistency as analyzers are split.
   - Verification: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/sql-safety-static.test.ts packages/drizzle/src/static-analysis-context.test.ts`; an `rg "site: ''" packages/drizzle/src` check returns no production diagnostics.
 
-- [ ] **P1.5 - Share static host header policy across build and export emitters.**
+- [x] **P1.5 - Share static host header policy across build and export emitters.**
   - Current signals: `packages/server/src/static-export-output.ts` notes immutable asset headers are
     kept in lockstep with `packages/server/src/build.ts`, while platform sidecar policies for Vercel,
     Netlify, Cloudflare, and filesystem output are encoded separately.
@@ -153,7 +152,7 @@ invariant.
     that manifest.
   - Risk reduced: one hosting target cannot silently miss cache posture, `nosniff`, CORP, isolation,
     or future security headers.
-  - Verification: `pnpm exec vitest --run packages/server/src/static-export-output.test.ts packages/server/src/static-export-headers.test.ts packages/server/src/build.test.ts packages/server/src/vite-static-export-result.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/build.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-headers.test.ts packages/server/src/vite-static-export-result.test.ts` passed on 2026-06-30, covering the shared static host header policy manifest across build and static export emitters.
 
 - [ ] **P1.6 - Make JSON clone/assert/size semantics canonical.**
   - Current signals: `packages/core/src/json-clone.ts` has proxy-safe clone logic, while
