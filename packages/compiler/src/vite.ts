@@ -22,7 +22,11 @@ import {
   readPersistentCompileCacheEntryForInput,
   writePersistentCompileCacheEntry,
 } from './persistent-compile-cache.js';
-import { allComponentOptionObjectEntries, parseComponentModule } from './scan/parse.js';
+import {
+  allComponentOptionObjectEntries,
+  parseComponentModule,
+  parseDiagnosticsForSourceFile,
+} from './scan/parse.js';
 import { queryExpressionFromBinding } from './scan/query-binding.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
@@ -36,6 +40,7 @@ import type {
   QueryShapeFact,
   RegistryFacts,
 } from './types.js';
+import { validateAuthoringSurface } from './validate/authoring-surface.js';
 
 /**
  * The Vite plugin object produced by createKovoVitePlugin (and the `kovoVitePlugin` barrel
@@ -301,10 +306,15 @@ export function createKovoVitePlugin(
         isKovoEmittedServerModuleReentry(fileName, source)
       )
         return null;
-      const standaloneRegistrySource = shouldTransformViteAuthoredSource(fileName, source, options)
+      const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
+      const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
+      if (isAuthoredSource && !isComponentSource) {
+        validateViteStandaloneAuthoringSurface(options, fileName, source);
+      }
+      const standaloneRegistrySource = isAuthoredSource
         ? lowerStandaloneSourceDerivedRegistryDeclarations({ fileName, source })
         : null;
-      if (!shouldTransformViteComponentSource(fileName, source, options)) {
+      if (!isComponentSource) {
         return standaloneRegistrySource === null
           ? null
           : { code: standaloneRegistrySource, map: null };
@@ -376,8 +386,12 @@ export function createKovoVitePlugin(
       // stale emitted-output re-entry.
       forgetKovoCompiledComponent(componentId);
       forgetKovoCompiledComponent(fileName);
-      if (!shouldTransformViteComponentSource(fileName, source, options))
-        return context.modules ?? [];
+      const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
+      const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
+      if (isAuthoredSource && !isComponentSource) {
+        validateViteStandaloneAuthoringSurface(options, fileName, source);
+      }
+      if (!isComponentSource) return context.modules ?? [];
 
       const previous = hmrImpacts.get(fileName) ?? null;
       rememberKovoCompiledComponent(componentId);
@@ -565,6 +579,27 @@ function shouldTransformViteAuthoredSource(
     return false;
 
   return true;
+}
+
+function validateViteStandaloneAuthoringSurface(
+  options: KovoVitePluginOptions,
+  fileName: string,
+  source: string,
+): void {
+  const model = parseComponentModule(fileName, source);
+  const parseDiagnostics = parseDiagnosticsForSourceFile(model.sourceFile, source);
+  if (parseDiagnostics.length > 0) return;
+
+  const diagnostics = validateAuthoringSurface({ fileName, source }, model);
+  if (diagnostics.length === 0) return;
+
+  const errorDiagnostics = reportViteDiagnostics(
+    { diagnostics, files: [] },
+    options,
+    fileName,
+    source,
+  );
+  if (errorDiagnostics.length > 0) throw new Error(viteDiagnosticErrorMessage(errorDiagnostics));
 }
 
 function matchesAnyViteFilter(
