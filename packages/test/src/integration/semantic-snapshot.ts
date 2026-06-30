@@ -4,10 +4,13 @@
 // versions, inline styles, class soup, framework-internal stamps).
 //
 // The result diffs only when semantics change, so snapshots survive markup churn
-// — the non-brittle assertion layer in plans/integration-test-suite.md. The set of
-// kept generated attributes is intentionally aligned with the compiler's
-// render-equivalence allowlist (`isGeneratedOnlyRenderAttribute`,
-// packages/compiler/src/emit/server.ts, SPEC §5.2/§4.8); keep the two in lockstep.
+// — the non-brittle assertion layer in plans/integration-test-suite.md.
+
+import {
+  ACCESSIBLE_SEMANTIC_ATTRIBUTES,
+  BEHAVIORAL_SEMANTIC_ATTRIBUTES,
+  KOVO_SEMANTIC_SNAPSHOT_ATTRIBUTES,
+} from '@kovojs/core/internal/semantic-attributes';
 
 /**
  * Kovo-emitted semantic attributes that describe app meaning: data bindings,
@@ -15,62 +18,20 @@
  * error channels, and routing. These are framework-guaranteed output, far more
  * stable than incidental markup.
  */
-export const KOVO_SEMANTIC_ATTRS: readonly string[] = [
-  'data-bind',
-  'data-bind-list',
-  'data-derive',
-  'data-derive-attr',
-  'data-error-code',
-  'data-error-path',
-  'data-route',
-  'data-row',
-  'data-state',
-  'kovo-c',
-  'kovo-deps',
-  'kovo-fragment-target',
-  'kovo-key',
-  'kovo-query',
-  'kovo-state',
-];
+export const KOVO_SEMANTIC_ATTRS: readonly string[] = [...KOVO_SEMANTIC_SNAPSHOT_ATTRIBUTES];
 
 /**
  * Accessibility / user-facing attributes that define how an element is perceived
  * and operated. Kept because they encode behavior, not styling.
  */
-export const ACCESSIBLE_ATTRS: readonly string[] = [
-  'alt',
-  'aria-checked',
-  'aria-current',
-  'aria-disabled',
-  'aria-expanded',
-  'aria-hidden',
-  'aria-invalid',
-  'aria-label',
-  'aria-level',
-  'aria-pressed',
-  'aria-selected',
-  'checked',
-  'disabled',
-  'name',
-  'placeholder',
-  'role',
-  'selected',
-  'type',
-  'value',
-];
+export const ACCESSIBLE_ATTRS: readonly string[] = [...ACCESSIBLE_SEMANTIC_ATTRIBUTES];
 
 /**
  * Behavioral / navigational attributes that define what an element *does*: which
  * mutation a form posts to, where a link goes, which module a script loads. These
  * are wire contracts — kept (with volatile version/hash segments normalized).
  */
-export const BEHAVIORAL_ATTRS: readonly string[] = [
-  'action',
-  'formaction',
-  'href',
-  'method',
-  'src',
-];
+export const BEHAVIORAL_ATTRS: readonly string[] = [...BEHAVIORAL_SEMANTIC_ATTRIBUTES];
 
 /** Attributes whose values carry a URL that may embed a volatile version/hash. */
 const URL_ATTRS = new Set(['action', 'href', 'src', 'formaction']);

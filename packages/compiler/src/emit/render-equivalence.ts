@@ -1,5 +1,7 @@
 import { runInNewContext } from 'node:vm';
 
+import { isGeneratedOnlySemanticAttribute } from '@kovojs/core/internal/semantic-attributes';
+
 import {
   authorJsxAttributes,
   mergePrimitiveAndAuthorAttributes,
@@ -479,7 +481,7 @@ function renderSemanticAttributeWithName(
   name: string,
   attribute: JsxAttributeModel,
 ): string | null {
-  if (isGeneratedOnlyRenderAttribute(attribute.name)) return null;
+  if (isGeneratedOnlySemanticAttribute(attribute.name)) return null;
   if (attribute.domEventName || /^on[A-Z][\w-]*$/.test(attribute.name)) return null;
 
   if (attribute.value !== undefined) {
@@ -600,33 +602,4 @@ function childBodySlice(
   end: number,
 ): string {
   return body.source.slice(start - body.offset, end - body.offset);
-}
-
-function isGeneratedOnlyRenderAttribute(name: string): boolean {
-  // SPEC §5.2 rule 3 permits the semantic gate to ignore generated-only stamps while requiring
-  // byte-identical visible HTML. SPEC §4.8 defines binding stamps as compiler-derived IR.
-  return (
-    name === 'kovo-c' ||
-    name === 'kovo-deps' ||
-    name === 'kovo-fragment-target' ||
-    name === 'kovo-live-component' ||
-    name === 'kovo-props' ||
-    name === 'kovo-key' ||
-    name === 'kovo-state' ||
-    name === 'kovo-param-types' ||
-    name === 'data-bind' ||
-    name === 'data-derive' ||
-    name === 'data-derive-attr' ||
-    name === 'command' ||
-    name === 'commandfor' ||
-    name === 'popovertarget' ||
-    name === 'popovertargetaction' ||
-    name.startsWith('data-bind:') ||
-    // SPEC §4.8 data-bind-prop: the live-property stamp is a non-attribute output
-    // (the loader assigns el[prop]); it carries no visible HTML, so the §5.2 #3
-    // render-equivalence gate treats it as generated-only like data-bind:*.
-    name.startsWith('data-bind-prop:') ||
-    name.startsWith('data-p-') ||
-    name.startsWith('on:')
-  );
 }
