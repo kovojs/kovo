@@ -43,12 +43,13 @@ errors with no logging (§D).
 
 ### B. Abuse / DoS hardening (pairs with `bugz-21` B4)
 
-- [ ] **B1 — The §9.5 pre-dispatch load-shed covers only content-length `413` and post-header rate `429`; it imposes no bound on concurrent in-flight connections or slow body transfer, and the node preset sets no `maxConnections`/`headersTimeout`/`requestTimeout` — a slowloris-style trickle pins connections.** (med, framework; found by `t4-rate-limit`)
+- [x] **B1 — The §9.5 pre-dispatch load-shed covers only content-length `413` and post-header rate `429`; it imposes no bound on concurrent in-flight connections or slow body transfer, and the node preset sets no `maxConnections`/`headersTimeout`/`requestTimeout` — a slowloris-style trickle pins connections.** (med, framework; found by `t4-rate-limit`)
   - Observed behavior: 60 concurrent raw TCP connections each sending `POST /_m/add-contact … Content-Length: 1000000` then only 2 body bytes (and trickling nothing) — all 60 are accepted and held open indefinitely; the server pins those connections/workers with no timeout or connection cap.
   - Root cause: `packages/server/src/app-load-shed.ts:118-140` (load-shed = 413 + 429 only) reads `Content-Length` pre-body (`:200-206`) but never bounds slow/partial transfer; `packages/server/src/build.ts:759-776` / `dist/server/server.mjs` `createServer` sets no `maxConnections`, `headersTimeout`, or `requestTimeout`.
   - Why it matters: the request-shell load-shed is the framework's stated abuse defense, but it only guards declared-oversize and request-rate, leaving the classic slowloris / connection-exhaustion vector open by default. (The verifier kept this a hardening papercut rather than a `bugz`; it pairs with the `bugz-21` B4 rate-limit collapse.)
   - Repro evidence: `t4-rate-limit` — 60 trickling connections all held open. Source: `app-load-shed.ts:118-140,200-206`, `build.ts:759-776`.
   - Acceptance: the node preset sets sane `headersTimeout`/`requestTimeout` (and optionally `maxConnections`), and/or the load-shed bounds slow-transfer connections. SPEC §9.5.
+  - Evidence: `pnpm exec vitest --run packages/server/src/build.test.ts packages/server/src/node.test.ts` passes with emitted node server `headersTimeout = 10_000` and `requestTimeout = 30_000` assertions.
 
 ### C. Write ergonomics
 
@@ -62,12 +63,13 @@ errors with no logging (§D).
 
 ### D. Observability
 
-- [ ] **D1 — The production node server swallows ALL handler/transport errors in an empty `catch {}` with no logging, returning a bare `Internal Server Error` body — a deployed app emits nothing to stdout/stderr on a 500.** (low, framework; found by `t6-transactions`)
+- [x] **D1 — The production node server swallows ALL handler/transport errors in an empty `catch {}` with no logging, returning a bare `Internal Server Error` body — a deployed app emits nothing to stdout/stderr on a 500.** (low, framework; found by `t6-transactions`)
   - Observed behavior: every 500 from the prod artifact (e.g. a throwing handler) returns the bare text `Internal Server Error` and writes **nothing** to the server's stdout/stderr — the operator has no signal, stack, or correlation id.
   - Root cause: `packages/server/src/build.ts:767` — the node server source wraps dispatch in an empty `catch {` that writes the 500 response but never logs the error; emitted to `dist/server/server.mjs` in the prod artifact.
   - Why it matters: a production server that logs nothing on errors is operationally blind — every 500 (including the `bugz-21` B3 partial-write and any handler bug) is invisible to logs/APM, making incidents undiagnosable. (Compounds `super-7` B3, the dev render-error swallow; this is the prod path with zero logging.)
   - Repro evidence: `t6-transactions` — a 500 from the prod artifact produces no stderr output. Source: `build.ts:767`.
   - Acceptance: the prod node server logs unhandled errors (stack + request context) to stderr by default (and/or routes through a configurable `onError`/logger). SPEC §9.5.1.
+  - Evidence: `pnpm exec vitest --run packages/server/src/build.test.ts packages/server/src/node.test.ts` passes with generated prod-node error logging coverage for method, URL, and stack detail before the 500 response.
 
 ## Refuted / Not Carried Forward
 
