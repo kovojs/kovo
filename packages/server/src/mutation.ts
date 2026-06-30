@@ -237,7 +237,13 @@ async function executeMutationLifecycle<
     guardResolved: true,
     preParsedInput: { value: input },
   } satisfies RunMutationOptions<Request>;
-  const lifecycleRequest = withGuardArgs(await resolveLifecycleRequest(request, options), input);
+  const lifecycleRequest = withGuardArgs(
+    await resolveLifecycleRequest(
+      request,
+      mutationLifecycleOptionsWithSqlPolicy(definition, options),
+    ),
+    input,
+  );
 
   if (!options.guardResolved) {
     const guardFailure = await runGuard(definition.guard, lifecycleRequest);
@@ -388,7 +394,13 @@ export async function runMutation<
   // both see the same `s.*`-coerced values, discharging KV414 for the covered key. In the
   // enhanced/no-JS paths the authoritative arg-aware guard already ran pre-replay against this same
   // merged shape, so `guardResolved` skips the re-run below (avoiding double-running rateLimit).
-  const lifecycleRequest = withGuardArgs(await resolveLifecycleRequest(request, options), input);
+  const lifecycleRequest = withGuardArgs(
+    await resolveLifecycleRequest(
+      request,
+      mutationLifecycleOptionsWithSqlPolicy(definition, options),
+    ),
+    input,
+  );
 
   // A1 (SPEC §10.3): when the dispatch layer already evaluated the guard chain before the replay
   // lookup, skip it here so a stateful guard (rateLimit) is not double-executed.
@@ -491,6 +503,32 @@ export async function runMutation<
     },
     input,
   );
+}
+
+function mutationLifecycleOptionsWithSqlPolicy<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  options: RunMutationOptions<Request>,
+): RunMutationOptions<Request> {
+  const tables = definition.registry?.tables;
+  if (tables === undefined || tables.length === 0 || options.sqlWritePolicy !== undefined) {
+    return options;
+  }
+
+  const touches = definition.registry?.touches?.map((domain) => domain.key);
+  return {
+    ...options,
+    sqlWritePolicy: {
+      tables,
+      ...(touches === undefined ? {} : { touches }),
+    },
+  };
 }
 
 function mutationSuccess<Value, Input>(

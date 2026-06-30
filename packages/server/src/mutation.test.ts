@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { Secret } from '@kovojs/core';
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
 import { invalidate } from './change-record.js';
@@ -588,6 +589,44 @@ describe('server mutation lifecycle', () => {
       rerunQueries: ['cart'],
       value: 'p1',
     });
+  });
+
+  it('enforces declared raw-SQL tables on mutation DB handles before driver execution', async () => {
+    const contact = domain('contact');
+    const calls: unknown[] = [];
+    const driftedWrite = stampTrustedSql(
+      { text: 'update users set role = $1 where id = $2', values: ['admin', 'u1'] },
+      'drifted user write',
+    );
+    const addContact = mutation('contacts/raw-drift', {
+      input: s.object({}),
+      registry: {
+        tables: ['contacts'],
+        touches: [contact],
+      },
+      handler(_input, request) {
+        return (request as { db: { execute(statement: unknown): unknown } }).db.execute(
+          driftedWrite,
+        );
+      },
+    });
+
+    await expect(
+      runMutation(
+        addContact,
+        {},
+        {},
+        {
+          db: () => ({
+            execute(statement: unknown) {
+              calls.push(statement);
+              return 'ok';
+            },
+          }),
+        },
+      ),
+    ).rejects.toThrow(/KV406/);
+    expect(calls).toEqual([]);
   });
 
   it('renders mutation query chunks after the configured transaction commits', async () => {

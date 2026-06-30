@@ -16,6 +16,14 @@ import {
   validateManagedSqlStatement,
   type SqlSafetyMode,
 } from '@kovojs/core/internal/sql-safety';
+import { parseSqlWriteTables, type ParseSqlWriteTablesOptions } from './sql-write-allowlist.js';
+
+/** Runtime raw-SQL write table policy enforced on mutation managed DB handles. */
+export interface ManagedSqlWritePolicy {
+  dialect?: ParseSqlWriteTablesOptions['dialect'];
+  tables?: readonly string[];
+  touches?: readonly string[];
+}
 
 /**
  * Resolve the managed-SQL guard mode (SPEC §10.2/§744). The fail-closed default — in every
@@ -39,12 +47,13 @@ export function managedSqlSafetyMode(): SqlSafetyMode {
 export function wrapManagedDbForSqlSafety<DbValue>(
   db: DbValue,
   mode: SqlSafetyMode = managedSqlSafetyMode(),
+  writePolicy?: ManagedSqlWritePolicy,
 ): DbValue {
   if (!isDbAdapterLike(db)) return db;
 
   const proxyCache = new WeakMap<object, object>();
   const methodCache = new WeakMap<object, Map<PropertyKey, Function>>();
-  return wrapDbAdapter(db, mode, proxyCache, methodCache) as DbValue;
+  return wrapDbAdapter(db, mode, proxyCache, methodCache, writePolicy) as DbValue;
 }
 
 function wrapDbAdapter(
@@ -52,6 +61,7 @@ function wrapDbAdapter(
   mode: SqlSafetyMode,
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  writePolicy: ManagedSqlWritePolicy | undefined,
 ): object {
   const cached = proxyCache.get(db);
   if (cached) return cached;
@@ -61,12 +71,12 @@ function wrapDbAdapter(
       const value = Reflect.get(target, prop, receiver);
 
       if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
-        return wrapSqlHandle(value, mode, proxyCache, methodCache);
+        return wrapSqlHandle(value, mode, proxyCache, methodCache, writePolicy);
       }
 
       if (prop === 'sql' && typeof value === 'function' && isDbAdapterLike(target)) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedSqlMethod(target, value, mode),
+          guardedSqlMethod(target, value, mode, writePolicy),
         );
       }
 
@@ -76,13 +86,13 @@ function wrapDbAdapter(
         (isDbAdapterLike(target) || isSqlHandleLike(target))
       ) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedSqlMethod(target, value, mode),
+          guardedSqlMethod(target, value, mode, writePolicy),
         );
       }
 
       if (prop === 'prepare' && typeof value === 'function' && isSqlHandleLike(target)) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedPrepareMethod(target, value, mode, proxyCache, methodCache),
+          guardedPrepareMethod(target, value, mode, proxyCache, methodCache, writePolicy),
         );
       }
 
@@ -101,6 +111,7 @@ function wrapSqlHandle(
   mode: SqlSafetyMode,
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  writePolicy: ManagedSqlWritePolicy | undefined,
 ): object {
   const cached = proxyCache.get(handle);
   if (cached) return cached;
@@ -119,7 +130,8 @@ function wrapSqlHandle(
             (callback: (tx: object) => unknown, ...args: unknown[]) =>
               value.call(
                 target,
-                (tx: object) => callback(wrapSqlHandle(tx, mode, proxyCache, methodCache)),
+                (tx: object) =>
+                  callback(wrapSqlHandle(tx, mode, proxyCache, methodCache, writePolicy)),
                 ...args,
               ),
         );
@@ -130,13 +142,13 @@ function wrapSqlHandle(
         typeof value === 'function'
       ) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedSqlMethod(target, value, mode),
+          guardedSqlMethod(target, value, mode, writePolicy),
         );
       }
 
       if (prop === 'prepare' && typeof value === 'function') {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedPrepareMethod(target, value, mode, proxyCache, methodCache),
+          guardedPrepareMethod(target, value, mode, proxyCache, methodCache, writePolicy),
         );
       }
 
@@ -150,9 +162,14 @@ function wrapSqlHandle(
   return proxy;
 }
 
-function guardedSqlMethod(target: object, value: Function, mode: SqlSafetyMode): Function {
+function guardedSqlMethod(
+  target: object,
+  value: Function,
+  mode: SqlSafetyMode,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): Function {
   return (statement: unknown, ...args: unknown[]) => {
-    assertManagedSqlStatement(statement, mode);
+    assertManagedSqlStatement(statement, mode, writePolicy);
     return value.call(target, statement, ...args);
   };
 }
@@ -163,9 +180,10 @@ function guardedPrepareMethod(
   mode: SqlSafetyMode,
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  writePolicy: ManagedSqlWritePolicy | undefined,
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
-    assertManagedSqlStatement(statement, mode);
+    assertManagedSqlStatement(statement, mode, writePolicy);
     const prepared = value.call(target, statement, ...args);
     return typeof prepared === 'object' && prepared !== null
       ? wrapPreparedSqlStatement(prepared, mode, proxyCache, methodCache)
@@ -199,11 +217,122 @@ function wrapPreparedSqlStatement(
   return proxy;
 }
 
-function assertManagedSqlStatement(statement: unknown, mode: SqlSafetyMode): void {
+function assertManagedSqlStatement(
+  statement: unknown,
+  mode: SqlSafetyMode,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): void {
   void mode;
   const validation = validateManagedSqlStatement(statement);
-  if (validation.ok) return;
-  throw new Error(validation.message);
+  if (!validation.ok) throw new Error(validation.message);
+  assertSqlWriteTablesAllowed(statement, writePolicy);
+}
+
+function assertSqlWriteTablesAllowed(
+  statement: unknown,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): void {
+  const declaredTables = writePolicy?.tables;
+  if (declaredTables === undefined || declaredTables.length === 0) return;
+
+  const sql = sqlStatementText(statement);
+  if (sql === undefined) return;
+
+  let writeTables: string[];
+  try {
+    writeTables = parseManagedSqlWriteTables(sql, writePolicy?.dialect);
+  } catch (error) {
+    throw new Error(
+      'KV406: raw-SQL write table allowlist could not parse an executable statement on a managed mutation DB handle (SPEC §10.3/§11.2).',
+      { cause: error },
+    );
+  }
+  if (writeTables.length === 0) return;
+
+  const allowed = new Set(declaredTables);
+  const unexpected = writeTables.filter((table) => !allowed.has(table));
+  if (unexpected.length === 0) return;
+
+  throw new Error(
+    [
+      'KV406: raw-SQL write touched table(s) outside the declared mutation registry tables (SPEC §10.3/§11.2).',
+      `  unexpected: ${[...new Set(unexpected)].sort().join(', ')}`,
+      `  declared tables: ${[...new Set(declaredTables)].sort().join(', ')}`,
+      `  touches: ${[...new Set(writePolicy?.touches ?? [])].sort().join(', ') || '<none>'}`,
+    ].join('\n'),
+  );
+}
+
+function parseManagedSqlWriteTables(
+  sql: string,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
+): string[] {
+  try {
+    return parseSqlWriteTables(sql, { dialect });
+  } catch (error) {
+    if (dialect !== undefined) throw error;
+    return parseSqlWriteTables(sql, { dialect: 'sqlite' });
+  }
+}
+
+function sqlStatementText(statement: unknown): string | undefined {
+  if (typeof statement === 'string') return statement;
+  if (typeof statement !== 'object' || statement === null) return undefined;
+
+  const record = statement as Record<PropertyKey, unknown>;
+  const text = readStringProperty(record, 'text') ?? readStringProperty(record, 'sql');
+  if (text !== undefined) return text;
+
+  const queryChunks = record.queryChunks;
+  if (Array.isArray(queryChunks)) return sqlFromQueryChunks(queryChunks);
+  return undefined;
+}
+
+function readStringProperty(
+  record: Record<PropertyKey, unknown>,
+  property: 'text' | 'sql',
+): string | undefined {
+  try {
+    const value = record[property];
+    return typeof value === 'string' ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function sqlFromQueryChunks(chunks: readonly unknown[]): string {
+  let sql = '';
+  let parameterIndex = 0;
+  const nextParameter = () => `$${++parameterIndex}`;
+
+  for (const chunk of chunks) {
+    sql += sqlFromQueryChunk(chunk, nextParameter);
+  }
+
+  return sql;
+}
+
+function sqlFromQueryChunk(chunk: unknown, nextParameter: () => string): string {
+  if (typeof chunk === 'string' || typeof chunk === 'number' || typeof chunk === 'boolean') {
+    return nextParameter();
+  }
+  if (typeof chunk !== 'object' || chunk === null) return nextParameter();
+
+  const record = chunk as Record<PropertyKey, unknown>;
+  const value = record.value;
+  if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    return value.join('');
+  }
+  if (typeof value === 'string' && Object.prototype.hasOwnProperty.call(record, 'brand')) {
+    return value;
+  }
+
+  const nested = record.queryChunks;
+  if (Array.isArray(nested)) {
+    return nested.map((item) => sqlFromQueryChunk(item, nextParameter)).join('');
+  }
+
+  return nextParameter();
 }
 
 function cachedSqlSafetyMethod(

@@ -5,6 +5,7 @@ import {
   stampGuardFailureDocumentSecurityFloor,
 } from './document-core.js';
 import { managedDb, type ManagedDbMode } from './managed-db.js';
+import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import { matchRoute, type RouteLike } from './match.js';
 import {
@@ -312,6 +313,8 @@ export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbV
    * @internal
    */
   dbMode?: ManagedDbMode;
+  /** @internal SPEC §10.3/§11.2 raw-SQL write table allowlist enforced by mutation DB handles. */
+  sqlWritePolicy?: ManagedSqlWritePolicy;
   onError?: ServerErrorHandler;
   /**
    * @internal part-3 I2: optional sink the lifecycle calls with each raw `Set-Cookie`
@@ -703,7 +706,11 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     lifecycleRequest = requestWithProperty(
       lifecycleRequest,
       'db',
-      managedDb(dbValue, options.dbMode ?? 'write'),
+      managedDb(
+        dbValue,
+        options.dbMode ?? 'write',
+        options.sqlWritePolicy === undefined ? {} : { sqlWritePolicy: options.sqlWritePolicy },
+      ),
     );
   }
 

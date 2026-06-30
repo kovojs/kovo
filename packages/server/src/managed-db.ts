@@ -15,7 +15,7 @@
 // summary work is still residue (SPEC §6.6/§10.3: proxies are defense-in-depth, never sold as the
 // proof).
 
-import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
+import { wrapManagedDbForSqlSafety, type ManagedSqlWritePolicy } from './sql-safe-handle.js';
 
 /**
  * The write verbs forbidden on a `query()` loader's read-only handle (SPEC §9.4 KV433). A loader is
@@ -81,8 +81,12 @@ export function readonlyDb<Db extends object>(db: Db): Db {
  * @param mode - `'read'` for a `query()` loader, `'write'` for a `mutation()`/`query.elevated`.
  * @internal
  */
-export function managedDb<Db>(raw: Db, mode: ManagedDbMode): Db {
-  const safe = wrapManagedDbForSqlSafety(raw);
+export interface ManagedDbOptions {
+  sqlWritePolicy?: ManagedSqlWritePolicy;
+}
+
+export function managedDb<Db>(raw: Db, mode: ManagedDbMode, options: ManagedDbOptions = {}): Db {
+  const safe = wrapManagedDbForSqlSafety(raw, undefined, options.sqlWritePolicy);
   if (mode === 'write') return safe;
   if (typeof safe !== 'object' || safe === null) return safe;
   return readonlyDb(safe as unknown as object) as unknown as Db;

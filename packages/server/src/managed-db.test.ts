@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { KovoReadonlyHandleError, managedDb, readonlyDb } from './managed-db.js';
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
@@ -91,6 +92,36 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       .values();
     expect(log).toContain('insert:products');
     expect(() => (handle as { query(s: unknown): unknown }).query('SELECT 1')).toThrow(/KV422/);
+  });
+
+  it('write mode enforces the raw-SQL table allowlist before execution', async () => {
+    const log: string[] = [];
+    const handle = managedDb(fakeDb(log), 'write', {
+      sqlWritePolicy: {
+        tables: ['products'],
+        touches: ['product'],
+      },
+    });
+
+    await expect(
+      (handle as { execute(statement: unknown): Promise<unknown> }).execute(
+        stampTrustedSql(
+          { text: 'update products set name = $1 where id = $2', values: ['Ada', 'p1'] },
+          'audited product update',
+        ),
+      ),
+    ).resolves.toMatchObject({ text: 'update products set name = $1 where id = $2' });
+    expect(log).toEqual(['execute']);
+
+    expect(() =>
+      (handle as { execute(statement: unknown): unknown }).execute(
+        stampTrustedSql(
+          { sql: 'delete from users where id = ?', args: ['u1'] },
+          'drifted user delete',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['execute']);
   });
 });
 
