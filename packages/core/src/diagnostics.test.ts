@@ -94,6 +94,8 @@ describe('diagnostic registry', () => {
       'KV437',
       'KV438',
       'KV439',
+      'KV445',
+      'KV446',
     ]);
   });
 
@@ -816,6 +818,24 @@ describe('diagnostic registry', () => {
       Fixes: project the exact response fields, for example db.select({ id: users.id, name: users.name }), or map rows to an explicit object shape before returning.
       SPEC §6.2, §9.4, and §11.3 make query results JsonValue-bounded client wire values; DB/table row provenance must cross that boundary through an intentional projection allowlist.",
           "message": "DB table row reaches the client query wire without an explicit projection.",
+          "severity": "error",
+        },
+        "KV445": {
+          "code": "KV445",
+          "help": "Would lower to: a durable task deployment whose preset declares and emits a real JobRunner drainer for every registered task().
+      Blocked reason: the build registers durable tasks, but the selected preset declares no JobRunner capability, so scheduled work could be accepted without any deployed process able to drain it.
+      Fixes: use the node preset in serve-and-run mode, configure a preset/adapter with a cron-drain or external queue runner, or remove task()/request.schedule() before deploying to that target.
+      SPEC §9.6 requires durable tasks to be backed by a real persistent runner instead of a best-effort in-memory promise.",
+          "message": "Durable tasks require a preset JobRunner capability.",
+          "severity": "error",
+        },
+        "KV446": {
+          "code": "KV446",
+          "help": "Would lower to: durable task enqueue/drain operations persisted in the node preset JobRunner store with the same durability contract the app can actually host.
+      Blocked reason: the node preset default JobRunner persists jobs in Postgres _kovo_jobs, but this server bundle uses SQLite/better-sqlite3, so durable task storage would not be available in production.
+      Fixes: use a Postgres-compatible app database for durable tasks, configure a supported durable queue adapter when one exists, or remove task()/request.schedule() from SQLite deployments.
+      SPEC §9.6 requires node durable tasks to use the Postgres durable-task store until a supported SQLite durable queue adapter exists.",
+          "message": "SQLite deployments cannot use the node preset durable-task store.",
           "severity": "error",
         },
       }
