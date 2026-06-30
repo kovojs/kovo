@@ -3,11 +3,10 @@ import {
   dataOrientation,
   dataState,
   dispatchCancelableChange,
-  findTypeaheadMatch,
   mergeDataAttributes,
-  moveCollectionIndex,
-  navigationIntentFromKey,
-  nextTypeaheadState,
+  moveCollection,
+  projectCollectionItems,
+  typeaheadCollection,
   openState,
   scheduleDeferred,
   type CollectionOrientation,
@@ -754,27 +753,21 @@ export function menubarMove(
   key: string,
   options: MenubarMoveOptions = {},
 ): MenubarMoveResult | undefined {
-  if (state.disabled) return undefined;
-
   const parentValue = options.parentValue;
-  const intent = navigationIntentFromKey(key, {
-    ...(state.dir === undefined ? {} : { dir: state.dir }),
+  const result = moveCollection({
+    currentValue: state.activeValue,
+    dir: state.dir,
+    disabled: state.disabled,
+    items: projectCollectionItems(menubarItemsForParent(state, parentValue), menubarCollectionItem),
+    key,
+    loop: options.loop ?? state.loop,
     orientation: parentValue === undefined ? (state.orientation ?? 'horizontal') : 'vertical',
   });
-  if (intent === undefined) return undefined;
-
-  const items = menubarItemsForParent(state, parentValue);
-  const currentIndex = items.findIndex((item) => item.value === state.activeValue);
-  const loop = options.loop ?? state.loop;
-  const activeIndex = moveCollectionIndex(intent, {
-    currentIndex,
-    items,
-    ...(loop === undefined ? {} : { loop }),
-  });
+  if (result === undefined) return undefined;
 
   return {
-    activeIndex,
-    activeValue: activeIndex < 0 ? undefined : items[activeIndex]?.value,
+    activeIndex: result.highlightedIndex,
+    activeValue: result.highlightedValue,
     parentValue,
   };
 }
@@ -802,40 +795,21 @@ export function menubarTypeahead(
   options: MenubarTypeaheadOptions,
 ): MenubarTypeaheadResult {
   const parentValue = options.parentValue;
-  const nextState = nextMenubarTypeaheadState(state, key, options);
-  if (state.disabled || nextState.buffer === '') {
-    return {
-      activeIndex: -1,
-      activeValue: options.currentValue ?? state.activeValue,
-      parentValue,
-      state: nextState,
-    };
-  }
-
-  const collection = menubarItemsForParent(state, parentValue);
-  const items = collection.map((item) => ({
-    disabled: state.disabled === true || item.disabled === true,
-    textValue: item.textValue ?? item.label ?? item.value,
-  }));
-  const currentIndex = collection.findIndex(
-    (item) => item.value === (options.currentValue ?? state.activeValue),
-  );
-  const loop = options.loop ?? state.loop;
-  const activeIndex = findTypeaheadMatch({
-    currentIndex,
-    items,
-    ...(loop === undefined ? {} : { loop }),
-    search: nextState.buffer,
+  const result = typeaheadCollection(key, {
+    currentValue: options.currentValue ?? state.activeValue,
+    disabled: state.disabled,
+    items: projectCollectionItems(menubarItemsForParent(state, parentValue), menubarCollectionItem),
+    loop: options.loop ?? state.loop,
+    now: options.now,
+    state: options.state,
+    timeoutMs: options.timeoutMs,
   });
 
   return {
-    activeIndex,
-    activeValue:
-      activeIndex < 0
-        ? (options.currentValue ?? state.activeValue)
-        : collection[activeIndex]?.value,
+    activeIndex: result.matchIndex,
+    activeValue: result.value,
     parentValue,
-    state: nextState,
+    state: result.state,
   };
 }
 
@@ -1102,17 +1076,12 @@ function menubarItemsForParent(
   return (state.items ?? []).filter((item) => item.parentValue === parentValue);
 }
 
-function nextMenubarTypeaheadState(
-  state: MenubarState,
-  key: string,
-  options: MenubarTypeaheadOptions,
-): TypeaheadState {
-  return nextTypeaheadState(
-    state.disabled ? undefined : options.state,
-    key,
-    options.now,
-    options.timeoutMs,
-  );
+function menubarCollectionItem(item: MenubarItem) {
+  return {
+    ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
+    textValue: item.textValue ?? item.label ?? item.value,
+    value: item.value,
+  };
 }
 
 function menubarDataOrientation(

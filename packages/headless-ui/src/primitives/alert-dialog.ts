@@ -1,8 +1,10 @@
 import {
   dataDisabled,
-  dispatchCancelableChange,
   mergeDataAttributes,
+  openStateFromBeforeToggle,
   openState,
+  setOpenState,
+  toggleOpenState,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
@@ -422,16 +424,7 @@ export function setAlertDialogOpen(
   reason: AlertDialogChangeReason,
   options: AlertDialogChangeOptions = {},
 ): AlertDialogChangeResult {
-  if (state.disabled || state.open === open) {
-    return { changed: false, open: state.open };
-  }
-
-  const detail = dispatchCancelableChange({ reason, value: open }, options.onOpenChange);
-  if (detail.defaultPrevented) {
-    return { changed: false, detail, open: state.open };
-  }
-
-  return { changed: true, detail, open };
+  return setOpenState(state, open, reason, options);
 }
 
 /**
@@ -456,7 +449,7 @@ export function toggleAlertDialog(
   reason: AlertDialogChangeReason,
   options: AlertDialogChangeOptions = {},
 ): AlertDialogChangeResult {
-  return setAlertDialogOpen(state, !state.open, reason, options);
+  return toggleOpenState(state, reason, options);
 }
 
 /**
@@ -623,14 +616,10 @@ export function alertDialogBeforeToggle(
   options: AlertDialogChangeOptions = {},
 ): AlertDialogChangeResult | undefined {
   if (event.defaultPrevented) return;
-  if (event.newState !== 'open' && event.newState !== 'closed') return;
+  const open = openStateFromBeforeToggle(event);
+  if (open === undefined) return;
 
-  const result = setAlertDialogOpen(
-    state,
-    event.newState === 'open',
-    'native-beforetoggle',
-    options,
-  );
+  const result = setAlertDialogOpen(state, open, 'native-beforetoggle', options);
   if (!result.changed) {
     event.preventDefault();
   }

@@ -3,11 +3,11 @@ import {
   dataDisabled,
   dataState,
   dispatchCancelableChange,
-  findTypeaheadMatch,
   mergeDataAttributes,
-  moveCollectionIndex,
-  navigationIntentFromKey,
-  nextTypeaheadState,
+  moveCollection,
+  projectCollectionItems,
+  setOpenState,
+  typeaheadCollection,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
   type TypeaheadState,
@@ -701,16 +701,9 @@ export function setComboboxOpen(
   reason: ComboboxOpenChangeReason,
   options: ComboboxChangeOptions = {},
 ): ComboboxOpenChangeResult {
-  if (state.disabled || state.open === open) {
-    return { changed: false, open: state.open === true };
-  }
-
-  const detail = dispatchCancelableChange({ reason, value: open }, options.onOpenChange);
-  if (detail.defaultPrevented) {
-    return { changed: false, detail, open: state.open === true };
-  }
-
-  return { changed: true, detail, open };
+  return setOpenState({ disabled: state.disabled, open: state.open === true }, open, reason, {
+    onOpenChange: options.onOpenChange,
+  });
 }
 
 /**
@@ -780,36 +773,16 @@ export function comboboxTypeahead(
   key: string,
   options: ComboboxTypeaheadOptions,
 ): ComboboxTypeaheadResult {
-  const nextState = nextTypeaheadState(
-    state.disabled ? undefined : options.state,
-    key,
-    options.now,
-    options.timeoutMs,
-  );
-  if (state.disabled || nextState.buffer === '') {
-    return { matchIndex: -1, state: nextState, value: options.currentValue ?? state.value };
-  }
-
-  const items = (state.items ?? []).map((item) => ({
-    ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
-    textValue: item.textValue ?? item.label ?? item.value,
-  }));
-  const currentIndex = (state.items ?? []).findIndex(
-    (item) => item.value === (options.currentValue ?? state.highlightedValue ?? state.value),
-  );
-  const matchIndex = findTypeaheadMatch({
-    currentIndex,
-    items,
-    ...(options.loop === undefined ? {} : { loop: options.loop }),
-    search: nextState.buffer,
+  const result = typeaheadCollection(key, {
+    currentValue: options.currentValue ?? state.highlightedValue ?? state.value,
+    disabled: state.disabled,
+    items: projectCollectionItems(state.items, comboboxCollectionItem),
+    loop: options.loop,
+    now: options.now,
+    state: options.state,
+    timeoutMs: options.timeoutMs,
   });
-
-  return {
-    matchIndex,
-    state: nextState,
-    value:
-      matchIndex < 0 ? (options.currentValue ?? state.value) : state.items?.[matchIndex]?.value,
-  };
+  return result.matchIndex < 0 ? { ...result, value: options.currentValue ?? state.value } : result;
 }
 
 /**
@@ -834,28 +807,13 @@ export function comboboxMove(
   key: string,
   options: { loop?: boolean } = {},
 ): ComboboxMoveResult | undefined {
-  if (state.disabled) return undefined;
-
-  const intent = navigationIntentFromKey(key, { orientation: 'vertical' });
-  if (intent === undefined) return undefined;
-
-  const sourceItems = state.items ?? [];
-  const items = sourceItems.map((item) =>
-    item.disabled === undefined ? {} : { disabled: item.disabled },
-  );
-  const currentIndex = items.findIndex(
-    (_item, index) => sourceItems[index]?.value === (state.highlightedValue ?? state.value),
-  );
-  const highlightedIndex = moveCollectionIndex(intent, {
-    currentIndex,
-    items,
-    ...(options.loop === undefined ? {} : { loop: options.loop }),
+  return moveCollection({
+    currentValue: state.highlightedValue ?? state.value,
+    disabled: state.disabled,
+    items: projectCollectionItems(state.items, comboboxCollectionItem),
+    key,
+    loop: options.loop,
   });
-
-  return {
-    highlightedIndex,
-    highlightedValue: highlightedIndex < 0 ? undefined : sourceItems[highlightedIndex]?.value,
-  };
 }
 
 /**
@@ -1095,6 +1053,14 @@ function comboboxDescribedBy(options: {
 
 function comboboxItemMatches(item: ComboboxItem, query: string): boolean {
   return comboboxSearchText(item).includes(query);
+}
+
+function comboboxCollectionItem(item: ComboboxItem) {
+  return {
+    ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
+    textValue: item.textValue ?? item.label ?? item.value,
+    value: item.value,
+  };
 }
 
 function comboboxSearchText(item: ComboboxItem): string {

@@ -288,7 +288,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm exec vitest --run packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs scripts/package-exports.test.mjs scripts/import-boundary.test.mjs scripts/api-surface-gate.test.mjs scripts/exported-symbols.test.mjs site/scripts/api-ref.test.mjs --reporter=verbose`, `pnpm run check:api-surface`, and `pnpm run check:imports` pass with command and package-export registries driving dispatch/docs/tooling.
   - SPEC/rules: `SPEC.md` sections 5.2 rules 8 and 10, 11.4; `rules/api-surface.md`.
 
-- [ ] **P1.7 - Extract shared headless UI collection and openable-state cores.**
+- [x] **P1.7 - Extract shared headless UI collection and openable-state cores.**
   - Affected: `packages/headless-ui/src/primitives/select.ts`,
     `autocomplete.ts`, `dropdown-menu.ts`, `navigation-menu.ts`, `combobox.ts`,
     `context-menu.ts`, `menubar.ts`, `command.ts`, `accordion.ts`, `tabs.ts`,
@@ -307,6 +307,7 @@ test brittleness, and distribution confusion.
   - Verification: shared unit matrices across primitive families; rerun headless primitive tests and
     gallery browser suites for dialog, popover, hover-card, tooltip, menu, select, tabs, toolbar, and
     command surfaces.
+  - Evidence: `pnpm exec vitest --run packages/headless-ui/src/lib/collection-controller.test.ts packages/headless-ui/src/lib/open-state.test.ts packages/headless-ui/src/primitives/disclosure.test.ts packages/headless-ui/src/primitives/dialog.test.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/popover.test.ts packages/headless-ui/src/primitives/tooltip.test.ts packages/headless-ui/src/primitives/menubar.test.ts packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/alert-dialog.test.ts packages/headless-ui/src/primitives/hover-card.test.ts packages/headless-ui/src/primitives/collapsible.test.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/select.test.ts examples/gallery/src/interactive-gallery.compile.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts` passes with shared collection and open-state cores.
   - SPEC: section 4.6.
 
 - [x] **P1.8 - Replace UI/headless/gallery/copy-in registries with one generated manifest.**

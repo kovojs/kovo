@@ -1,8 +1,10 @@
 import {
   dataDisabled,
-  dispatchCancelableChange,
   mergeDataAttributes,
+  openStateFromBeforeToggle,
   openState,
+  setOpenState,
+  toggleOpenState,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
@@ -327,16 +329,7 @@ export function setDialogOpen(
   reason: DialogChangeReason,
   options: DialogChangeOptions = {},
 ): DialogChangeResult {
-  if (state.disabled || state.open === open) {
-    return { changed: false, open: state.open };
-  }
-
-  const detail = dispatchCancelableChange({ reason, value: open }, options.onOpenChange);
-  if (detail.defaultPrevented) {
-    return { changed: false, detail, open: state.open };
-  }
-
-  return { changed: true, detail, open };
+  return setOpenState(state, open, reason, options);
 }
 
 /**
@@ -361,7 +354,7 @@ export function toggleDialog(
   reason: DialogChangeReason,
   options: DialogChangeOptions = {},
 ): DialogChangeResult {
-  return setDialogOpen(state, !state.open, reason, options);
+  return toggleOpenState(state, reason, options);
 }
 
 /**
@@ -493,9 +486,10 @@ export function dialogBeforeToggle(
   options: DialogChangeOptions = {},
 ): DialogChangeResult | undefined {
   if (event.defaultPrevented) return;
-  if (event.newState !== 'open' && event.newState !== 'closed') return;
+  const open = openStateFromBeforeToggle(event);
+  if (open === undefined) return;
 
-  const result = setDialogOpen(state, event.newState === 'open', 'native-beforetoggle', options);
+  const result = setDialogOpen(state, open, 'native-beforetoggle', options);
   if (!result.changed) {
     event.preventDefault();
   }

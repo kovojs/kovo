@@ -37,11 +37,38 @@ export type { PrimitiveDataAttributes, PrimitiveStateToken } from './state-attri
 export { createChangeDetail, dispatchCancelableChange } from './change-details.js';
 export type { PrimitiveChangeDetail, PrimitiveChangeDetailInput } from './change-details.js';
 
+export {
+  moveCollection,
+  projectCollectionItems,
+  typeaheadCollection,
+} from './collection-controller.js';
+export type {
+  CollectionControllerItem,
+  CollectionMoveOptions,
+  CollectionMoveResult,
+  CollectionTypeaheadOptions,
+  CollectionTypeaheadResult,
+} from './collection-controller.js';
+
 export { scheduleDeferred } from './deferred-scheduler.js';
 export type { DeferredCallback, DeferredScheduler } from './deferred-scheduler.js';
 
 export { runDialogInvokerCommand } from './dialog-invoker.js';
 export type { DialogInvokerCommand, DialogInvokerEvent } from './dialog-invoker.js';
+
+export {
+  applyOpenableInteraction,
+  openStateFromBeforeToggle,
+  setOpenState,
+  toggleOpenState,
+} from './open-state.js';
+export type {
+  OpenableBeforeToggleEvent,
+  OpenableChangeResult,
+  OpenableInteractionHooks,
+  OpenableState,
+  SetOpenStateOptions,
+} from './open-state.js';
 
 export { moveCollectionIndex, navigationIntentFromKey } from './keyboard-navigation.js';
 export type {
