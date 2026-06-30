@@ -1,4 +1,3 @@
-import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type { KovoDomainTableAnnotation, KovoFanAnnotation } from '../drizzle-surface.js';
 import type {
   ReadSummaryInput,
@@ -17,6 +16,7 @@ import {
   type SourceFile,
   type VariableDeclaration,
 } from 'ts-morph';
+import { drizzleDiagnostic } from './diagnostics.js';
 import {
   isQueryReceiverIdentifier,
   queryCallbackBodies,
@@ -59,7 +59,6 @@ import {
   type SessionProvenanceContext,
   type SourceFileInput,
   type UnmodeledRelationFact,
-  KV411_MESSAGE,
   UNRESOLVED_READ_SOURCE_EXPRESSION,
   isDomainExtractedTableAnnotation,
   isExemptExtractedTableAnnotation,
@@ -120,12 +119,11 @@ import {
   if (exemptTables.size === 0) return [];
 
   return [
-    {
+    drizzleDiagnostic({
       code: 'KV411',
-      message: `${KV411_MESSAGE}. Tables: ${[...exemptTables].sort().join(', ')}.`,
-      severity: 'error',
+      detail: `Tables: ${[...exemptTables].sort().join(', ')}.`,
       site,
-    },
+    }),
   ];
 }
 
@@ -156,15 +154,13 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
     hasOutputSchema && (declaredReadExpressions.length > 0 || declaredReadDomains.length > 0);
   if (!declaredOpaqueRead || resolvedReads.length > 0) return [];
 
-  const definition = diagnosticDefinitions.KV410;
-  const message = diagnosticDefinitionText('KV410', { preferHelp: true });
   return [
-    {
+    drizzleDiagnostic({
       code: 'KV410',
-      message: `${message} ${query} declares an opaque read whose reads: set resolves to no invalidation domain; declare a resolvable reads: domain set so the read folds into the query read set (§11.1).`,
-      severity: definition.severity,
+      detail: `${query} declares an opaque read whose reads: set resolves to no invalidation domain; declare a resolvable reads: domain set so the read folds into the query read set (§11.1).`,
+      preferHelp: true,
       site,
-    },
+    }),
   ];
 }
 
@@ -183,12 +179,13 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
     .sort(
       (left, right) => left.name.localeCompare(right.name) || left.kind.localeCompare(right.kind),
     )
-    .map((relation) => ({
-      code: 'KV412' as const,
-      message: `${diagnosticDefinitions.KV412.message} ${relation.kind} ${relation.name} has no derived or declared domain.`,
-      severity: diagnosticDefinitions.KV412.severity,
-      site,
-    }));
+    .map((relation) =>
+      drizzleDiagnostic({
+        code: 'KV412',
+        detail: `${relation.kind} ${relation.name} has no derived or declared domain.`,
+        site,
+      }),
+    );
 }
 
 /** @internal */ export function queryTableExpressions(
@@ -274,12 +271,11 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
       if (table) return [];
 
       return [
-        {
+        drizzleDiagnostic({
           code: 'KV406' as const,
-          message: `${diagnosticDefinitions.KV406.message} Query read source for db.${name}() could not be resolved to a Drizzle table.`,
-          severity: diagnosticDefinitions.KV406.severity,
-          site: '',
-        },
+          detail: `Query read source for db.${name}() could not be resolved to a Drizzle table.`,
+          node: call,
+        }),
       ];
     },
   );
@@ -315,12 +311,11 @@ export function opaqueReadWithoutResolvableReadsDiagnostics(
     if (!isQueryReceiverIdentifier(receiver, receiverReferences)) return [];
 
     return [
-      {
+      drizzleDiagnostic({
         code: 'KV406' as const,
-        message: `${diagnosticDefinitions.KV406.message} Query relational read source could not be resolved to a Drizzle table.`,
-        severity: diagnosticDefinitions.KV406.severity,
-        site: '',
-      },
+        detail: 'Query relational read source could not be resolved to a Drizzle table.',
+        node: call,
+      }),
     ];
   });
 }

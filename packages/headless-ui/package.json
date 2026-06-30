@@ -25,7 +25,6 @@
     "./dropdown-menu": "./src/public/dropdown-menu.ts",
     "./field": "./src/public/field.ts",
     "./hover-card": "./src/public/hover-card.ts",
-    "./internal": "./src/internal.ts",
     "./menubar": "./src/public/menubar.ts",
     "./meter": "./src/public/meter.ts",
     "./navigation-menu": "./src/public/navigation-menu.ts",
@@ -35,8 +34,8 @@
     "./progress": "./src/public/progress.ts",
     "./radio-group": "./src/public/radio-group.ts",
     "./scroll-area": "./src/public/scroll-area.ts",
-    "./select": "./src/public/select.ts",
     "./separator": "./src/public/separator.ts",
+    "./select": "./src/public/select.ts",
     "./slider": "./src/public/slider.ts",
     "./switch": "./src/public/switch.ts",
     "./tabs": "./src/public/tabs.ts",
@@ -47,6 +46,7 @@
     "./tooltip": "./src/public/tooltip.ts",
     "./types": "./src/types.ts",
     "./generated": "./src/generated.ts",
+    "./internal": "./src/internal.ts",
     "./internal/primitive": "./src/primitive-internal.ts"
   },
   "publishConfig": {
@@ -111,10 +111,6 @@
         "types": "./dist/public/hover-card.d.mts",
         "default": "./dist/public/hover-card.mjs"
       },
-      "./internal": {
-        "types": "./dist/internal.d.mts",
-        "default": "./dist/internal.mjs"
-      },
       "./menubar": {
         "types": "./dist/public/menubar.d.mts",
         "default": "./dist/public/menubar.mjs"
@@ -151,13 +147,13 @@
         "types": "./dist/public/scroll-area.d.mts",
         "default": "./dist/public/scroll-area.mjs"
       },
-      "./select": {
-        "types": "./dist/public/select.d.mts",
-        "default": "./dist/public/select.mjs"
-      },
       "./separator": {
         "types": "./dist/public/separator.d.mts",
         "default": "./dist/public/separator.mjs"
+      },
+      "./select": {
+        "types": "./dist/public/select.d.mts",
+        "default": "./dist/public/select.mjs"
       },
       "./slider": {
         "types": "./dist/public/slider.d.mts",
@@ -199,6 +195,10 @@
         "types": "./dist/generated.d.mts",
         "default": "./dist/generated.mjs"
       },
+      "./internal": {
+        "types": "./dist/internal.d.mts",
+        "default": "./dist/internal.mjs"
+      },
       "./internal/primitive": {
         "types": "./dist/primitive-internal.d.mts",
         "default": "./dist/primitive-internal.mjs"
@@ -207,7 +207,7 @@
   },
   "scripts": {
     "lint:primitives": "rm -rf .lint-primitives && tsc --ignoreConfig --module NodeNext --moduleResolution NodeNext --target ES2024 --types node --skipLibCheck --strict --outDir .lint-primitives --rootDir src src/tooling/lint-primitives.ts && node .lint-primitives/tooling/lint-primitives.js; status=$?; rm -rf .lint-primitives; exit $status",
-    "build:dist": "vp pack src/generated.ts src/internal.ts src/primitive-internal.ts src/public/accordion.ts src/public/alert-dialog.ts src/public/autocomplete.ts src/public/avatar.ts src/public/checkbox-group.ts src/public/checkbox.ts src/public/collapsible.ts src/public/combobox.ts src/public/command.ts src/public/context-menu.ts src/public/dialog.ts src/public/disclosure.ts src/public/dropdown-menu.ts src/public/field.ts src/public/hover-card.ts src/public/menubar.ts src/public/meter.ts src/public/navigation-menu.ts src/public/number-field.ts src/public/otp-field.ts src/public/popover.ts src/public/progress.ts src/public/radio-group.ts src/public/scroll-area.ts src/public/select.ts src/public/separator.ts src/public/slider.ts src/public/switch.ts src/public/tabs.ts src/public/toast.ts src/public/toggle-group.ts src/public/toggle.ts src/public/toolbar.ts src/public/tooltip.ts src/types.ts --dts",
+    "build:dist": "vp pack src/generated.ts src/internal.ts src/primitive-internal.ts src/public/accordion.ts src/public/alert-dialog.ts src/public/autocomplete.ts src/public/avatar.ts src/public/checkbox.ts src/public/checkbox-group.ts src/public/collapsible.ts src/public/combobox.ts src/public/command.ts src/public/context-menu.ts src/public/dialog.ts src/public/disclosure.ts src/public/dropdown-menu.ts src/public/field.ts src/public/hover-card.ts src/public/menubar.ts src/public/meter.ts src/public/navigation-menu.ts src/public/number-field.ts src/public/otp-field.ts src/public/popover.ts src/public/progress.ts src/public/radio-group.ts src/public/scroll-area.ts src/public/separator.ts src/public/select.ts src/public/slider.ts src/public/switch.ts src/public/tabs.ts src/public/toast.ts src/public/toggle.ts src/public/toggle-group.ts src/public/toolbar.ts src/public/tooltip.ts src/types.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

@@ -13,6 +13,7 @@ import type {
   RoutePageComponentPropFact,
   RoutePageFact,
   RoutePageLayoutFact,
+  RoutePageOutcomeFact,
   RouteRegionFact,
   RouteNavigationSegmentFact,
 } from '../types.js';
@@ -55,7 +56,10 @@ interface RouteComponentImportModel {
 interface RouteFrameworkBindings {
   readonly layoutNames: ReadonlySet<string>;
   readonly namespaceNames: ReadonlySet<string>;
+  readonly respondNames: ReadonlySet<string>;
   readonly routeNames: ReadonlySet<string>;
+  readonly rootedFileHandleNames: ReadonlySet<string>;
+  readonly rootedFilesNames: ReadonlySet<string>;
 }
 
 const navigationSegmentStampAttributes = new Set([
@@ -164,11 +168,13 @@ function routePageFromCall(
         diagnostics,
       )
     : [];
+  const outcome = routeOutcomeFact(pageHandler?.node, frameworkBindings);
   if (
     pageHandler &&
     pageComponents.length === 0 &&
     regions.length === 0 &&
-    !containsJsx(pageHandler.node)
+    !containsJsx(pageHandler.node) &&
+    outcome === undefined
   )
     return null;
   const components = uniqueRouteComponents([
@@ -200,6 +206,7 @@ function routePageFromCall(
     ...(guards.length === 0 ? {} : { guards }),
     ...(routeLayouts.length > 0 ? { layouts: routeLayouts } : {}),
     navigationSegments,
+    ...(outcome === undefined ? {} : { outcome }),
     ...(regions.length > 0 ? { regions } : {}),
     route: pathArg.text,
   };
@@ -407,7 +414,10 @@ function routeLayoutModels(
 function routeFrameworkBindings(sourceFile: ts.SourceFile): RouteFrameworkBindings {
   const layoutNames = new Set<string>();
   const namespaceNames = new Set<string>();
+  const respondNames = new Set<string>();
   const routeNames = new Set<string>();
+  const rootedFileHandleNames = new Set<string>();
+  const rootedFilesNames = new Set<string>();
 
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement)) continue;
@@ -425,10 +435,37 @@ function routeFrameworkBindings(sourceFile: ts.SourceFile): RouteFrameworkBindin
       const importedName = element.propertyName?.text ?? element.name.text;
       if (importedName === 'route') routeNames.add(element.name.text);
       if (importedName === 'layout') layoutNames.add(element.name.text);
+      if (importedName === 'respond') respondNames.add(element.name.text);
+      if (importedName === 'rootedFiles') rootedFilesNames.add(element.name.text);
     }
   }
 
-  return { layoutNames, namespaceNames, routeNames };
+  const bindings = {
+    layoutNames,
+    namespaceNames,
+    respondNames,
+    routeNames,
+    rootedFileHandleNames,
+    rootedFilesNames,
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
+      const initializer = unwrapExpression(node.initializer);
+      if (isFrameworkRootedFilesReference(initializer, bindings)) {
+        rootedFilesNames.add(node.name.text);
+      }
+      if (ts.isCallExpression(initializer) && isFrameworkRootedFilesCall(initializer, bindings)) {
+        rootedFileHandleNames.add(node.name.text);
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+
+  return bindings;
 }
 
 function isFrameworkRouteCall(call: ts.CallExpression, bindings: RouteFrameworkBindings): boolean {
@@ -441,7 +478,7 @@ function isFrameworkLayoutCall(call: ts.CallExpression, bindings: RouteFramework
 
 function isFrameworkCall(
   expression: ts.Expression,
-  propertyName: 'layout' | 'route',
+  propertyName: 'layout' | 'respond' | 'rootedFiles' | 'route',
   localNames: ReadonlySet<string>,
   namespaceNames: ReadonlySet<string>,
 ): boolean {
@@ -451,6 +488,99 @@ function isFrameworkCall(
     expression.name.text === propertyName &&
     ts.isIdentifier(expression.expression) &&
     namespaceNames.has(expression.expression.text)
+  );
+}
+
+function routeOutcomeFact(
+  pageHandler: ts.Node | undefined,
+  frameworkBindings: RouteFrameworkBindings,
+): RoutePageOutcomeFact | undefined {
+  if (!pageHandler) return undefined;
+
+  let outcome: RoutePageOutcomeFact['kind'] | undefined;
+  const visit = (node: ts.Node): void => {
+    if (outcome === 'stream') return;
+    if (ts.isCallExpression(node)) {
+      const kind = routeOutcomeKindFromCall(node, frameworkBindings);
+      if (kind === 'stream') {
+        outcome = 'stream';
+        return;
+      }
+      if (kind === 'file' && outcome === undefined) outcome = 'file';
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(pageHandler);
+  return outcome === undefined ? undefined : { kind: outcome };
+}
+
+function routeOutcomeKindFromCall(
+  call: ts.CallExpression,
+  frameworkBindings: RouteFrameworkBindings,
+): RoutePageOutcomeFact['kind'] | undefined {
+  const expression = call.expression;
+  if (!ts.isPropertyAccessExpression(expression)) return undefined;
+
+  if (
+    (expression.name.text === 'file' || expression.name.text === 'stream') &&
+    isFrameworkRespondReference(unwrapExpression(expression.expression), frameworkBindings)
+  ) {
+    return expression.name.text;
+  }
+
+  if (
+    expression.name.text === 'serve' &&
+    isRootedFilesServeReceiver(expression.expression, frameworkBindings)
+  ) {
+    return 'stream';
+  }
+
+  return undefined;
+}
+
+function isRootedFilesServeReceiver(
+  expression: ts.Expression,
+  frameworkBindings: RouteFrameworkBindings,
+): boolean {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isIdentifier(unwrapped)) {
+    return frameworkBindings.rootedFileHandleNames.has(unwrapped.text);
+  }
+  if (ts.isCallExpression(unwrapped)) {
+    return isFrameworkRootedFilesCall(unwrapped, frameworkBindings);
+  }
+  return false;
+}
+
+function isFrameworkRespondReference(
+  expression: ts.Expression,
+  bindings: RouteFrameworkBindings,
+): boolean {
+  return isFrameworkCall(expression, 'respond', bindings.respondNames, bindings.namespaceNames);
+}
+
+function isFrameworkRootedFilesCall(
+  call: ts.CallExpression,
+  bindings: RouteFrameworkBindings,
+): boolean {
+  return isFrameworkCall(
+    call.expression,
+    'rootedFiles',
+    bindings.rootedFilesNames,
+    bindings.namespaceNames,
+  );
+}
+
+function isFrameworkRootedFilesReference(
+  expression: ts.Expression,
+  bindings: RouteFrameworkBindings,
+): boolean {
+  return isFrameworkCall(
+    expression,
+    'rootedFiles',
+    bindings.rootedFilesNames,
+    bindings.namespaceNames,
   );
 }
 
@@ -893,10 +1023,12 @@ function propertyNameText(name: ts.PropertyName): string | null {
 function unwrapExpression(expression: ts.Expression): ts.Expression {
   let current = expression;
   while (
+    ts.isAwaitExpression(current) ||
     ts.isParenthesizedExpression(current) ||
     ts.isNonNullExpression(current) ||
     ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current)
+    ts.isSatisfiesExpression(current) ||
+    ts.isTypeAssertionExpression(current)
   ) {
     current = current.expression;
   }

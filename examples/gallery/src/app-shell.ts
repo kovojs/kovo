@@ -8,10 +8,10 @@ import {
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   publicAccess,
+  renderRouteHtml,
   route,
   toNodeHandler,
 } from '@kovojs/server';
-import type { BrowserTrustedHTML, TrustedHtml } from '@kovojs/browser';
 import ts from 'typescript';
 
 import {
@@ -324,47 +324,6 @@ function escapeRegExp(value: string): string {
   return value.replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 }
 
-function routeValueToHtml(value: unknown): string {
-  if (value === undefined || value === null) return '';
-  if (isFrameworkRenderedHtml(value)) return value.html;
-  const trusted = trustedRouteHtmlContent(value);
-  if (trusted !== '') return trusted;
-  if (typeof value === 'string') return value;
-  return JSON.stringify(value);
-}
-
-function trustedRouteHtmlContent(value: unknown): string {
-  if (isKovoTrustedHtml(value)) return trustedHtmlValueContent(value.value);
-  if (isBrowserTrustedHtml(value)) return value.toString();
-  return '';
-}
-
-function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { __kovoTrustedHtml?: unknown }).__kovoTrustedHtml === true
-  );
-}
-
-function isBrowserTrustedHtml(value: unknown): value is BrowserTrustedHTML {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { [Symbol.toStringTag]?: unknown })[Symbol.toStringTag] === 'TrustedHTML' &&
-    typeof (value as { toString?: unknown }).toString === 'function'
-  );
-}
-
-function trustedHtmlValueContent(value: string | BrowserTrustedHTML): string {
-  return typeof value === 'string' ? value : value.toString();
-}
-
-function isFrameworkRenderedHtml(value: unknown): value is { html: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[Symbol.for('kovo.renderedHtml')] === true &&
-    typeof (value as { html?: unknown }).html === 'string'
-  );
+export function routeValueToHtml(value: unknown): string {
+  return renderRouteHtml(value);
 }

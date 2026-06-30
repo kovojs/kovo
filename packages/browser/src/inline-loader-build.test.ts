@@ -111,7 +111,10 @@ describe('inline loader build source', () => {
   it('generates the enhanced-navigation request header from the core protocol', () => {
     // SPEC.md §4.4: enhanced navigation must negotiate the no-loader document variant.
     expect(inlineKovoLoaderInstallerReadableSource).toContain(
-      `headers: { Accept: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)} }`,
+      `acceptHeader: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)}`,
+    );
+    expect(inlineKovoLoaderInstallerReadableSource).toContain(
+      'headers: { Accept: options.acceptHeader }',
     );
   });
 

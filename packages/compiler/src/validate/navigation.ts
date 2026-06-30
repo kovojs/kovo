@@ -1,3 +1,5 @@
+import { matchRoute } from '@kovojs/core/internal/route-pattern';
+
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import { jsxElements, type ComponentModuleModel } from '../scan/parse.js';
 import { dedupeBy } from '../shared.js';
@@ -54,12 +56,5 @@ function isExternalNavigationTarget(target: string): boolean {
 
 function routePathMatchesUrl(routePath: string, target: string): boolean {
   const pathname = target.split(/[?#]/, 1)[0] ?? '';
-  const routeSegments = routePath.split('/');
-  const pathSegments = pathname.split('/');
-  if (routeSegments.length !== pathSegments.length) return false;
-
-  return routeSegments.every((segment, index) => {
-    const pathSegment = pathSegments[index] ?? '';
-    return segment.startsWith(':') ? pathSegment !== '' : segment === pathSegment;
-  });
+  return matchRoute([{ path: routePath }], pathname) !== undefined;
 }

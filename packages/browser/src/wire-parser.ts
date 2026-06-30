@@ -9,6 +9,7 @@ import {
 } from './wire-response-scanner.js';
 import type { ElementChunk, FragmentChunk, StreamTextChunk } from './wire-response-scanner.js';
 import { readAttribute, unescapeHtml } from './wire-html.js';
+import { readWireElementAttribute, type WireAttribute } from './wire-tokenizer.js';
 
 /**
  * One decoded query value from a wire response or inline script: its `name`,
@@ -33,6 +34,7 @@ export interface QueryChunk {
 
 /** The raw `{ attrs, content }` of a `<kovo-query>` element before decoding (SPEC §9.4). */
 export interface QueryElementChunkLike {
+  attributes?: readonly WireAttribute[];
   attrs: string;
   content: string;
 }
@@ -142,66 +144,12 @@ export function readQueryElementChunk(
     {
       content: chunk.content,
       decodeHtmlEntities: true,
-      delta: hasBooleanAttribute(chunk.attrs, 'delta'),
+      delta: readWireElementAttribute(chunk, 'delta').present,
       key: readAttribute(chunk.attrs, 'key'),
       name: readAttribute(chunk.attrs, 'name'),
       settles: readAttribute(chunk.attrs, 'settles'),
     },
     onError,
-  );
-}
-
-/**
- * Test whether a boolean HTML attribute is present in an attrs string (presence
- * only — no value). Returns true when the attribute name appears, false when
- * absent. Does not distinguish valueless from valued; use `readAttribute` for
- * valued attributes.
- */
-function hasBooleanAttribute(attrs: string, name: string): boolean {
-  const expected = name.toLowerCase();
-  let index = 0;
-
-  while (index < attrs.length) {
-    while (index < attrs.length && isHtmlAttributeWhitespace(attrs[index] ?? '')) index += 1;
-    if (index >= attrs.length || attrs[index] === '/' || attrs[index] === '>') return false;
-
-    const nameStart = index;
-    while (index < attrs.length && !isHtmlAttributeNameTerminator(attrs[index] ?? '')) index += 1;
-    const attrName = attrs.slice(nameStart, index).toLowerCase();
-
-    while (index < attrs.length && isHtmlAttributeWhitespace(attrs[index] ?? '')) index += 1;
-    if (attrs[index] === '=') {
-      index += 1;
-      while (index < attrs.length && isHtmlAttributeWhitespace(attrs[index] ?? '')) index += 1;
-      const quote = attrs[index];
-      if (quote === '"' || quote === "'") {
-        index += 1;
-        while (index < attrs.length && attrs[index] !== quote) index += 1;
-        if (attrs[index] === quote) index += 1;
-      } else {
-        while (index < attrs.length && !isHtmlAttributeWhitespace(attrs[index] ?? '')) index += 1;
-      }
-    }
-
-    if (attrName === expected) return true;
-  }
-
-  return false;
-}
-
-function isHtmlAttributeWhitespace(char: string): boolean {
-  return char === ' ' || char === '\n' || char === '\r' || char === '\t' || char === '\f';
-}
-
-function isHtmlAttributeNameTerminator(char: string): boolean {
-  return (
-    isHtmlAttributeWhitespace(char) ||
-    char === '=' ||
-    char === '/' ||
-    char === '>' ||
-    char === '"' ||
-    char === "'" ||
-    char === '<'
   );
 }
 

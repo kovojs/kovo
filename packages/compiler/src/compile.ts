@@ -432,6 +432,7 @@ function emitRegistryCssPhase(
       fact.component?.localName,
       index === 0 ? mutationForms : [],
       fact.component,
+      parsed.options.fileName,
     ),
   );
   const cssAssets = cssSource

@@ -3,6 +3,7 @@ import { redirect } from '@kovojs/core';
 
 import { renderedHtml, renderHtmlValue, type RenderedHtml } from './html.js';
 import { renderPageHints } from './hints.js';
+import { guards } from './guards.js';
 import { meta } from './meta.js';
 import {
   layout,
@@ -82,6 +83,35 @@ describe('route primitives', () => {
       redirect('/products/:id', { params: { id: 'p1' }, search: { sku: 'sku-1' } });
     };
     expect(assertBadRedirect).toBeTypeOf('function');
+  });
+
+  it('derives route currentUrl from the shared route pattern contract for auth redirects', async () => {
+    const nextValues: string[] = [];
+    const guardedRoute = route('/users/:user-id/files/:name.json', {
+      guard: guards.authed<{ session?: { user?: { id: string } } | null }>(),
+      onUnauthenticated({ next }) {
+        nextValues.push(next);
+        return redirect('/cart', {});
+      },
+      page: () => renderedHtml('private'),
+    });
+
+    await expect(
+      renderRoutePageResponse(
+        guardedRoute,
+        {
+          params: { 'name.json': 'report 1', 'user-id': 'u/1' },
+          search: { from: 'dashboard' },
+        },
+        { session: null },
+      ),
+    ).resolves.toMatchObject({
+      headers: {
+        Location: '/cart',
+      },
+      status: 303,
+    });
+    expect(nextValues).toEqual(['/users/u%2F1/files/report%201?from=dashboard']);
   });
 
   it('accepts optional route search schema fields', async () => {

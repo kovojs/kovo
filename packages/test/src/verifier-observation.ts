@@ -130,7 +130,11 @@ export function observableSqlMethod(
     const sql = sqlStatementText(statement);
     // Snapshot before-counts fully (so the count queries are dispatched and
     // executed before the mutating call), then run the statement and compare.
-    const before = tableObservationSnapshots(target, Object.keys(config.domainByTable));
+    const before = tableObservationSnapshots(
+      target,
+      Object.keys(config.domainByTable),
+      config.sqlDialect,
+    );
     return Promise.resolve(before).then((counts) => {
       if (counts.size === 0) return value.call(target, statement, ...args);
 

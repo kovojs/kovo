@@ -219,6 +219,7 @@ function wrapSqlHandle<Handle extends object>(
               const before = await tableObservationSnapshots(
                 target,
                 Object.keys(config.domainByTable),
+                config.sqlDialect,
               );
               const start = recorder.observed.length;
               const result = await value.call(

@@ -10,6 +10,7 @@ import { promisify } from 'node:util';
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import type { CompileResult, CompileRouteModuleResult } from '@kovojs/compiler';
 import type {
   lowerStandaloneSourceDerivedRegistryDeclarations,
   QueryShapeFact,
@@ -17,6 +18,7 @@ import type {
 import type { KovoApp, StaticExportCompileDiagnostic, StylesheetAsset } from '@kovojs/server';
 import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
+import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
 import type {
   DataPlaneSourceFile as BuildCheckSourceFile,
@@ -24,7 +26,15 @@ import type {
   StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
 
-import { BUILD_USAGE, EXPORT_USAGE } from '../commands-manifest.js';
+import {
+  BUILD_ARGV_SPEC,
+  BUILD_USAGE,
+  EXPORT_ARGV_SPEC,
+  EXPORT_USAGE,
+  parsedBooleanOption,
+  parsedStringOption,
+  parseCommandArgv,
+} from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
 import {
   buildOutputVersion,
@@ -113,91 +123,42 @@ interface SelectedKovoBuildPreset {
 }
 
 export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
-  let appModulePath: string | undefined;
-  let cache = true;
-  let check = false;
-  let outDir = 'dist';
-  let preset: KovoBuildPresetName | undefined;
+  const parsed = parseCommandArgv(args, BUILD_ARGV_SPEC);
+  if (!parsed.ok) return buildArgvError(parsed);
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-
-    if (arg === '--help' || arg === '-h') {
-      return { message: buildUsage(), ok: false };
-    }
-    if (arg === '--no-cache') {
-      cache = false;
-      continue;
-    }
-    if (arg === '--check') {
-      check = true;
-      continue;
-    }
-
-    if (arg === '--out') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: build --out requires a directory.\n', ok: false };
-      outDir = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--out=')) {
-      outDir = arg.slice('--out='.length);
-      if (!outDir) return { message: 'kovo: build --out requires a directory.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--preset') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: build --preset requires a preset name.\n', ok: false };
-      const parsedPreset = parseKovoBuildPresetName(value);
-      if (!parsedPreset) {
-        return { message: `kovo: unsupported build preset ${stableValue(value)}.\n`, ok: false };
-      }
-      preset = parsedPreset;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--preset=')) {
-      const value = arg.slice('--preset='.length);
-      if (!value) return { message: 'kovo: build --preset requires a preset name.\n', ok: false };
-      const parsedPreset = parseKovoBuildPresetName(value);
-      if (!parsedPreset) {
-        return { message: `kovo: unsupported build preset ${stableValue(value)}.\n`, ok: false };
-      }
-      preset = parsedPreset;
-      continue;
-    }
-
-    if (arg.startsWith('-')) {
-      return {
-        message: `kovo: unknown build option ${stableValue(arg)}.\n${buildUsage()}`,
-        ok: false,
-      };
-    }
-
-    if (appModulePath) {
-      return { message: `kovo: build accepts one app module path.\n${buildUsage()}`, ok: false };
-    }
-
-    appModulePath = arg;
-  }
-
+  const [appModulePath, extraPath] = parsed.value.positionals;
+  if (extraPath)
+    return { message: `kovo: build accepts one app module path.\n${buildUsage()}`, ok: false };
   if (!appModulePath)
     return { message: `kovo: build requires an app module path.\n${buildUsage()}`, ok: false };
+
+  const presetValue = parsedStringOption(parsed.value, '--preset');
+  const preset = presetValue === undefined ? undefined : parseKovoBuildPresetName(presetValue);
+  if (presetValue !== undefined && preset === undefined) {
+    return { message: `kovo: unsupported build preset ${stableValue(presetValue)}.\n`, ok: false };
+  }
 
   return {
     ok: true,
     options: {
       appModulePath,
-      cache,
-      check,
-      outDir,
+      cache: !parsedBooleanOption(parsed.value, '--no-cache'),
+      check: parsedBooleanOption(parsed.value, '--check'),
+      outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
       ...(preset === undefined ? {} : { preset }),
     },
+  };
+}
+
+function buildArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
+  message: string;
+  ok: false;
+} {
+  if (error.error === 'help') return { message: buildUsage(), ok: false };
+  if (error.error === 'missing-value') return { message: error.message, ok: false };
+  return {
+    message: `kovo: unknown build option ${stableValue(error.option)}.\n${buildUsage()}`,
+    ok: false,
   };
 }
 
@@ -210,152 +171,25 @@ function buildUsage(): string {
 }
 
 export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
-  let appModulePath: string | undefined;
-  let assetBase: string | undefined;
-  let distDir: string | undefined;
-  let manifestFile: string | undefined;
-  let origin: string | undefined;
-  let outDir = 'dist';
-  let onNonExportable: 'error' | 'skip' | undefined;
-  let root: string | undefined;
-  let stylesheetEnv: string | undefined;
-  let vite = false;
+  const parsed = parseCommandArgv(args, EXPORT_ARGV_SPEC);
+  if (!parsed.ok) return exportArgvError(parsed);
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-
-    if (arg === '--help' || arg === '-h') {
-      return { message: exportUsage(), ok: false };
-    }
-
-    if (arg === '--out') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --out requires a directory.\n', ok: false };
-      outDir = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--out=')) {
-      outDir = arg.slice('--out='.length);
-      if (!outDir) return { message: 'kovo: export --out requires a directory.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--dist') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --dist requires a directory.\n', ok: false };
-      distDir = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--dist=')) {
-      distDir = arg.slice('--dist='.length);
-      if (!distDir) return { message: 'kovo: export --dist requires a directory.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--manifest') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --manifest requires a file.\n', ok: false };
-      manifestFile = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--manifest=')) {
-      manifestFile = arg.slice('--manifest='.length);
-      if (!manifestFile)
-        return { message: 'kovo: export --manifest requires a file.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--asset-base') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --asset-base requires a URL path.\n', ok: false };
-      assetBase = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--asset-base=')) {
-      assetBase = arg.slice('--asset-base='.length);
-      if (!assetBase)
-        return { message: 'kovo: export --asset-base requires a URL path.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--stylesheet-env') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --stylesheet-env requires a name.\n', ok: false };
-      stylesheetEnv = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--stylesheet-env=')) {
-      stylesheetEnv = arg.slice('--stylesheet-env='.length);
-      if (!stylesheetEnv)
-        return { message: 'kovo: export --stylesheet-env requires a name.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--origin') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --origin requires a URL.\n', ok: false };
-      origin = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg === '--root') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --root requires a directory.\n', ok: false };
-      root = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--root=')) {
-      root = arg.slice('--root='.length);
-      if (!root) return { message: 'kovo: export --root requires a directory.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--vite') {
-      vite = true;
-      continue;
-    }
-
-    if (arg.startsWith('--origin=')) {
-      origin = arg.slice('--origin='.length);
-      if (!origin) return { message: 'kovo: export --origin requires a URL.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--skip-non-exportable') {
-      onNonExportable = 'skip';
-      continue;
-    }
-
-    if (arg.startsWith('-')) {
-      return {
-        message: `kovo: unknown export option ${stableValue(arg)}.\n${exportUsage()}`,
-        ok: false,
-      };
-    }
-
-    if (appModulePath) {
-      return { message: `kovo: export accepts one app module path.\n${exportUsage()}`, ok: false };
-    }
-
-    appModulePath = arg;
-  }
-
+  const [appModulePath, extraPath] = parsed.value.positionals;
+  if (extraPath)
+    return { message: `kovo: export accepts one app module path.\n${exportUsage()}`, ok: false };
   if (!appModulePath)
     return { message: `kovo: export requires an app module path.\n${exportUsage()}`, ok: false };
+
+  const assetBase = parsedStringOption(parsed.value, '--asset-base');
+  const distDir = parsedStringOption(parsed.value, '--dist');
+  const manifestFile = parsedStringOption(parsed.value, '--manifest');
+  const origin = parsedStringOption(parsed.value, '--origin');
+  const root = parsedStringOption(parsed.value, '--root');
+  const stylesheetEnv = parsedStringOption(parsed.value, '--stylesheet-env');
+  const vite = parsedBooleanOption(parsed.value, '--vite');
+  const onNonExportable = parsedBooleanOption(parsed.value, '--skip-non-exportable')
+    ? ('skip' as const)
+    : undefined;
 
   return {
     ok: true,
@@ -366,11 +200,23 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
       ...(manifestFile === undefined ? {} : { manifestFile }),
       ...(onNonExportable === undefined ? {} : { onNonExportable }),
       ...(origin === undefined ? {} : { origin }),
-      outDir,
+      outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
       ...(root === undefined ? {} : { root }),
       ...(stylesheetEnv === undefined ? {} : { stylesheetEnv }),
       ...(vite ? { vite } : {}),
     },
+  };
+}
+
+function exportArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
+  message: string;
+  ok: false;
+} {
+  if (error.error === 'help') return { message: exportUsage(), ok: false };
+  if (error.error === 'missing-value') return { message: error.message, ok: false };
+  return {
+    message: `kovo: unknown export option ${stableValue(error.option)}.\n${exportUsage()}`,
+    ok: false,
   };
 }
 
@@ -404,7 +250,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     // export, or a security-gate failure). The tsc preflight started above runs concurrently with all
     // of it; deferring these errors past the `await typeScriptPreflight` preserves tsc-error-first.
     const loadAndCheck = await (async () => {
-      const [loadedBuildApp, buildStylesheetCss] = await withGraphDerivationFlag(() =>
+      const [loadedBuildApp, buildStylesheetCss] = await withBuildGraphDerivationContext(() =>
         Promise.all([
           loadBuildAppModule(resolvedAppModulePath, process.cwd()),
           kovoBuildStylesheetCss(resolvedAppModulePath),
@@ -614,9 +460,18 @@ async function runKovoBuildCheckPreflight(
 }
 
 interface KovoBuildCheckArtifacts {
+  components?: readonly SourceComponentGraphFacts[];
   graph: CoreGraph.KovoCheckInput;
   queryShapeFacts: readonly QueryShapeFact[];
+  routePages?: readonly SourceRoutePageFacts[];
 }
+
+type SourceComponentGraphFacts = Pick<
+  CompileResult,
+  'componentGraphFacts' | 'publishToClientFacts' | 'taskGraphFacts'
+>;
+
+type SourceRoutePageFacts = Pick<CompileRouteModuleResult, 'routePageFacts'>;
 
 function writeKovoBuildGraphArtifact(
   neutralBuild: KovoNeutralBuild,
@@ -718,10 +573,12 @@ async function buildCheckGraph(
   const staticArtifacts = await staticBuildCheckGraph(app, appModulePath, options);
   const graph = staticArtifacts.graph;
   const result = deriveAppGraph({
+    ...(staticArtifacts.components === undefined ? {} : { components: staticArtifacts.components }),
     graph: {
       ...graph,
       access: accessFactsFromApp(app),
     },
+    ...(staticArtifacts.routePages === undefined ? {} : { routePages: staticArtifacts.routePages }),
   });
   if (result.diagnostics.length > 0) {
     return {
@@ -756,7 +613,11 @@ async function staticBuildCheckGraph(
     files.length === 0
       ? [
           emptyStaticDataPlaneBuildFacts(),
-          { components: [] as CoreGraph.ComponentExplain[], tasks: [] as CoreGraph.TaskExplain[] },
+          {
+            components: [] as SourceComponentGraphFacts[],
+            routeOutcomes: new Map<string, 'file' | 'stream'>(),
+            routePages: [] as SourceRoutePageFacts[],
+          },
         ]
       : await Promise.all([
           staticDataPlaneBuildFacts(files, { cache: options.cache }),
@@ -767,9 +628,13 @@ async function staticBuildCheckGraph(
     drizzleFacts,
   ) as readonly QueryShapeFact[];
   const queryReadSets = app.queries.map((query) => queryCheckFact(query, drizzleFacts.queries));
-  const routeOutcomeFacts = routeFileStreamEndpointFacts(app.routes, files);
+  const routeOutcomeFacts = routeFileStreamEndpointFacts(
+    app.routes,
+    sourceGraphFacts.routeOutcomes,
+  );
 
   return {
+    components: sourceGraphFacts.components,
     graph: {
       ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
       ...(drizzleFacts.sqlSafetyDiagnostics.length === 0
@@ -786,10 +651,6 @@ async function staticBuildCheckGraph(
         ? {}
         : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
       ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
-      ...(sourceGraphFacts.components.length === 0
-        ? {}
-        : { components: sourceGraphFacts.components }),
-      ...(sourceGraphFacts.tasks.length === 0 ? {} : { tasks: sourceGraphFacts.tasks }),
       endpoints: [...app.endpoints.map(endpointCheckFact), ...routeOutcomeFacts],
       mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
       optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
@@ -797,92 +658,50 @@ async function staticBuildCheckGraph(
       queries: queryReadSets,
     },
     queryShapeFacts,
+    routePages: sourceGraphFacts.routePages,
   };
 }
 
-async function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Promise<{
-  components: CoreGraph.ComponentExplain[];
-  tasks: CoreGraph.TaskExplain[];
-}> {
-  const {
-    allComponentOptionObjectEntries,
-    deriveRegistryIdentity,
-    parseComponentModule,
-    queryExpressionFromBinding,
-  } = await import('@kovojs/compiler/internal');
-  const components: CoreGraph.ComponentExplain[] = [];
-  const tasks: CoreGraph.TaskExplain[] = [];
+interface SourceGraphFacts {
+  components: SourceComponentGraphFacts[];
+  routeOutcomes: Map<string, 'file' | 'stream'>;
+  routePages: SourceRoutePageFacts[];
+}
+
+async function sourceGraphFactsFromFiles(
+  files: readonly BuildCheckSourceFile[],
+): Promise<SourceGraphFacts> {
+  const { compileComponentModule, compileRouteModule } = await import('@kovojs/compiler');
+  const components: SourceComponentGraphFacts[] = [];
+  const routeOutcomes = new Map<string, 'file' | 'stream'>();
+  const routePages: SourceRoutePageFacts[] = [];
 
   for (const file of files) {
-    const model = parseComponentModule(file.fileName, file.source);
+    const component = compileComponentModule({
+      fileName: file.fileName,
+      source: file.source,
+      sourceProvenance: 'app',
+    });
+    if (
+      component.componentGraphFacts.length > 0 ||
+      component.publishToClientFacts.length > 0 ||
+      component.taskGraphFacts.length > 0
+    ) {
+      components.push(component);
+    }
 
-    if (file.source.includes('component(') && file.source.includes('queries')) {
-      const queries = allComponentOptionObjectEntries(model, 'queries').flatMap((entry) => {
-        const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
-        return uniqueSorted(
-          [
-            entry.key,
-            ...(queryExpression
-              ? [
-                  queryExpression,
-                  derivedImportedQueryKey(
-                    file.fileName,
-                    model.namedImports,
-                    queryExpression,
-                    deriveRegistryIdentity,
-                  ),
-                ]
-              : []),
-          ].filter(isString),
-        );
-      });
-
-      if (queries.length > 0) {
-        for (const component of model.components) {
-          if (!component.localName) continue;
-          components.push({
-            name: deriveRegistryIdentity(file.fileName, component.localName).key,
-            queries: uniqueSorted(queries),
-          });
+    const routePage = compileRouteModule({ fileName: file.fileName, source: file.source });
+    if (routePage.routePageFacts.length > 0) {
+      routePages.push(routePage);
+      for (const fact of routePage.routePageFacts) {
+        if (fact.outcome !== undefined && !routeOutcomes.has(fact.route)) {
+          routeOutcomes.set(fact.route, fact.outcome.kind);
         }
       }
     }
-
-    for (const task of model.taskRunHandlers) {
-      tasks.push({
-        ...(task.cron === undefined ? {} : { cron: task.cron }),
-        key: task.key,
-        ...(task.runMutationEdges.length === 0 ? {} : { runMutations: task.runMutationEdges }),
-        ...(task.runQueryEdges.length === 0 ? {} : { runQueries: task.runQueryEdges }),
-        ...(task.scheduleEdges.length === 0 ? {} : { schedules: task.scheduleEdges }),
-      });
-    }
   }
 
-  return { components, tasks };
-}
-
-function derivedImportedQueryKey(
-  fileName: string,
-  imports: readonly { importedName: string; localName: string; moduleSpecifier: string }[],
-  queryExpression: string,
-  deriveRegistryIdentity: (fileName: string, exportedBinding: string) => { key: string },
-): string | undefined {
-  const namedImport = imports.find(
-    (entry) => entry.localName === queryExpression && entry.moduleSpecifier.startsWith('.'),
-  );
-  if (!namedImport) return undefined;
-
-  return deriveRegistryIdentity(
-    resolveImportedSourceFileName(fileName, namedImport.moduleSpecifier),
-    namedImport.importedName,
-  ).key;
-}
-
-function resolveImportedSourceFileName(fileName: string, moduleSpecifier: string): string {
-  const normalized = join(dirname(fileName), moduleSpecifier).split(/[\\/]/).join('/');
-  if (/\.[cm]?[jt]sx?$/.test(normalized)) return normalized;
-  return normalized.replace(/\.js$/, '.ts');
+  return { components, routeOutcomes, routePages };
 }
 
 function emptyStaticDataPlaneBuildFacts(): StaticDataPlaneBuildFacts {
@@ -1023,9 +842,8 @@ function routeCheckFact(route: KovoApp['routes'][number]): CoreGraph.PageExplain
 
 function routeFileStreamEndpointFacts(
   routes: readonly KovoApp['routes'][number][],
-  files: readonly BuildCheckSourceFile[],
+  outcomeByPath: ReadonlyMap<string, 'file' | 'stream'>,
 ): CoreGraph.EndpointExplain[] {
-  const outcomeByPath = sourceRouteOutcomeKinds(files);
   return routes.flatMap((route) => {
     const outcome = outcomeByPath.get(route.path);
     if (outcome === undefined) return [];
@@ -1055,136 +873,6 @@ function routeFileStreamEndpointFact(
     reason: `route respond.${outcome} outcome`,
     surface: outcome === 'file' ? 'route-file' : 'route-stream',
   };
-}
-
-function sourceRouteOutcomeKinds(
-  files: readonly BuildCheckSourceFile[],
-): Map<string, 'file' | 'stream'> {
-  const outcomes = new Map<string, 'file' | 'stream'>();
-  for (const file of files) {
-    const rootedFilesIdentifiers = sourceRootedFilesIdentifiers(file.source);
-    for (const match of file.source.matchAll(/route\s*\(\s*(['"`])([^'"`]+)\1/g)) {
-      const path = match[2];
-      if (path === undefined || outcomes.has(path)) continue;
-      const body = routeDeclarationSourceBody(file.source, match.index ?? 0);
-      const outcome = routeDeclarationOutcomeKind(body, rootedFilesIdentifiers);
-      if (outcome !== undefined) outcomes.set(path, outcome);
-    }
-  }
-  return outcomes;
-}
-
-function sourceRootedFilesIdentifiers(source: string): Set<string> {
-  const identifiers = new Set<string>();
-  for (const match of source.matchAll(
-    /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?rootedFiles\s*\(/g,
-  )) {
-    const identifier = match[1];
-    if (identifier !== undefined) identifiers.add(identifier);
-  }
-  return identifiers;
-}
-
-function routeDeclarationOutcomeKind(
-  body: string,
-  rootedFilesIdentifiers: ReadonlySet<string>,
-): 'file' | 'stream' | undefined {
-  if (body.includes('respond.stream')) return 'stream';
-  if (body.includes('respond.file')) return 'file';
-  if (hasDirectRootedFilesServeCall(body)) return 'stream';
-  for (const identifier of rootedFilesIdentifiers) {
-    if (new RegExp(`\\b${escapeRegExp(identifier)}\\s*\\.\\s*serve\\s*\\(`).test(body)) {
-      return 'stream';
-    }
-  }
-  return undefined;
-}
-
-function hasDirectRootedFilesServeCall(body: string): boolean {
-  for (const match of body.matchAll(/\brootedFiles\s*\(/g)) {
-    const openParen = body.indexOf('(', match.index);
-    if (openParen < 0) continue;
-    const closeParen = sourceClosingParenIndex(body, openParen);
-    if (closeParen === undefined) continue;
-
-    let index = closeParen + 1;
-    while (/\s/.test(body[index] ?? '')) index += 1;
-    while (body[index] === ')') {
-      index += 1;
-      while (/\s/.test(body[index] ?? '')) index += 1;
-    }
-    if (/^\.\s*serve\s*\(/.test(body.slice(index))) return true;
-  }
-  return false;
-}
-
-function sourceClosingParenIndex(source: string, openParen: number): number | undefined {
-  let depth = 0;
-  let quote: '"' | "'" | '`' | undefined;
-  let escaped = false;
-  for (let index = openParen; index < source.length; index += 1) {
-    const char = source[index];
-    if (quote !== undefined) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === quote) {
-        quote = undefined;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'" || char === '`') {
-      quote = char;
-      continue;
-    }
-    if (char === '(') {
-      depth += 1;
-      continue;
-    }
-    if (char !== ')') continue;
-    depth -= 1;
-    if (depth === 0) return index;
-  }
-  return undefined;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
-function routeDeclarationSourceBody(source: string, start: number): string {
-  let depth = 0;
-  let quote: '"' | "'" | '`' | undefined;
-  let escaped = false;
-  for (let index = start; index < source.length; index += 1) {
-    const char = source[index];
-    if (quote !== undefined) {
-      if (escaped) {
-        escaped = false;
-      } else if (char === '\\') {
-        escaped = true;
-      } else if (char === quote) {
-        quote = undefined;
-      }
-      continue;
-    }
-
-    if (char === '"' || char === "'" || char === '`') {
-      quote = char;
-      continue;
-    }
-    if (char === '(') {
-      depth += 1;
-      continue;
-    }
-    if (char !== ')') continue;
-    depth -= 1;
-    if (depth === 0) return source.slice(start, index + 1);
-  }
-
-  return source.slice(start);
 }
 
 function endpointCheckFact(endpoint: KovoApp['endpoints'][number]): CoreGraph.EndpointExplain {
@@ -1441,22 +1129,8 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
   }
 }
 
-/**
- * Run `fn` with `KOVO_BUILD_GRAPH_DERIVATION=1` set, then restore the prior value. The
- * `@kovojs/server` vite plugin reads this flag to skip its redundant whole-project drizzle
- * data-plane analysis while the CLI is only loading app source to derive the build graph
- * (the CLI runs that analysis authoritatively in `runKovoBuildCheckPreflight`).
- * plans/fast-kovo-check2.md #A.
- */
-async function withGraphDerivationFlag<T>(fn: () => Promise<T>): Promise<T> {
-  const previous = process.env.KOVO_BUILD_GRAPH_DERIVATION;
-  process.env.KOVO_BUILD_GRAPH_DERIVATION = '1';
-  try {
-    return await fn();
-  } finally {
-    if (previous === undefined) delete process.env.KOVO_BUILD_GRAPH_DERIVATION;
-    else process.env.KOVO_BUILD_GRAPH_DERIVATION = previous;
-  }
+async function withBuildGraphDerivationContext<T>(fn: () => Promise<T>): Promise<T> {
+  return await withKovoBuildContext({ graphDerivation: true }, fn);
 }
 
 async function loadBuildAppModule(
@@ -2182,18 +1856,21 @@ export async function runExportCommand(options: KovoExportOptions): Promise<CliC
   let loadedExport: LoadedExportAppModule | undefined;
   try {
     const manifestPlan = await staticExportManifestPlan(options);
-    loadedExport = await loadExportAppModule(options);
-    const app = appFromModule(loadedExport.appModule, options.appModulePath);
-    const result = await loadedExport.exportStaticApp(app, {
-      ...(manifestPlan.assets.length === 0 ? {} : { assets: manifestPlan.assets }),
-      ...(options.onNonExportable === undefined
-        ? {}
-        : { onNonExportable: options.onNonExportable }),
-      diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
-      ...(options.origin === undefined ? {} : { origin: options.origin }),
-      outDir: options.outDir,
-      ...(options.assetBase === undefined ? {} : { publicAssetBase: options.assetBase }),
-      publicAssetRoot: manifestPlan.publicAssetRoot ?? staticExportDefaultPublicAssetRoot(options),
+    const result = await withStylesheetEnvOverlay(manifestPlan.stylesheetEnv, async () => {
+      loadedExport = await loadExportAppModule(options);
+      const app = appFromModule(loadedExport.appModule, options.appModulePath);
+      return await loadedExport.exportStaticApp(app, {
+        ...(manifestPlan.assets.length === 0 ? {} : { assets: manifestPlan.assets }),
+        ...(options.onNonExportable === undefined
+          ? {}
+          : { onNonExportable: options.onNonExportable }),
+        diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
+        ...(options.origin === undefined ? {} : { origin: options.origin }),
+        outDir: options.outDir,
+        ...(options.assetBase === undefined ? {} : { publicAssetBase: options.assetBase }),
+        publicAssetRoot:
+          manifestPlan.publicAssetRoot ?? staticExportDefaultPublicAssetRoot(options),
+      });
     });
 
     return kovoExportResult(result, options);
@@ -2255,6 +1932,10 @@ interface ExportManifestPlan {
   }[];
   publicAssetRoot?: string;
   stylesheetHref?: string;
+  stylesheetEnv?: {
+    name: string;
+    value: string;
+  };
 }
 
 function buildTimeViteServerOptions(): { hmr: false } {
@@ -2292,14 +1973,31 @@ async function staticExportManifestPlan(options: KovoExportOptions): Promise<Exp
         `kovo export --stylesheet-env requires exactly one stylesheet asset in --manifest; found ${stylesheetCount}.`,
       );
     }
-    process.env[options.stylesheetEnv] = stylesheetHref;
   }
 
   return {
     assets: [...assets.values()],
     publicAssetRoot: distDir,
+    ...(options.stylesheetEnv === undefined || stylesheetHref === undefined
+      ? {}
+      : { stylesheetEnv: { name: options.stylesheetEnv, value: stylesheetHref } }),
     ...(stylesheetHref === undefined ? {} : { stylesheetHref }),
   };
+}
+
+async function withStylesheetEnvOverlay<T>(
+  overlay: ExportManifestPlan['stylesheetEnv'],
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (overlay === undefined) return await fn();
+  const previous = process.env[overlay.name];
+  process.env[overlay.name] = overlay.value;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env[overlay.name];
+    else process.env[overlay.name] = previous;
+  }
 }
 
 function staticExportDefaultPublicAssetRoot(options: KovoExportOptions): string {

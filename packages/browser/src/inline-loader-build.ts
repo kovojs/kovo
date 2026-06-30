@@ -19,8 +19,15 @@ const responseFragmentApplySourcePath = fileURLToPath(
   new URL('./response-fragment-apply.ts', import.meta.url),
 );
 const wireHtmlSourcePath = fileURLToPath(new URL('./wire-html.ts', import.meta.url));
+const wireTokenizerSourcePath = fileURLToPath(new URL('./wire-tokenizer.ts', import.meta.url));
 const wireResponseScannerSourcePath = fileURLToPath(
   new URL('./wire-response-scanner.ts', import.meta.url),
+);
+const enhancedNavigationSourcePath = fileURLToPath(
+  new URL('./enhanced-navigation.ts', import.meta.url),
+);
+const documentLifecycleSourcePath = fileURLToPath(
+  new URL('./document-lifecycle.ts', import.meta.url),
 );
 
 const inlineHelperSpecs = {
@@ -49,7 +56,25 @@ const inlineHelperSpecs = {
     rootFunctionNames: ['readInlineMutationResponseBodyChunks'],
     sourceFileName: 'wire-response-scanner.ts',
     sourcePath: wireResponseScannerSourcePath,
-    sourcePaths: [wireHtmlSourcePath, wireResponseScannerSourcePath],
+    sourcePaths: [wireTokenizerSourcePath, wireHtmlSourcePath, wireResponseScannerSourcePath],
+  },
+  enhancedNavigation: {
+    label: 'enhanced navigation',
+    readableParityLabel: 'canonical enhanced navigation helper closure',
+    minifiedParityLabel: 'canonical minified enhanced navigation helper closure',
+    rootFunctionNames: ['installEnhancedNavigationRuntime'],
+    sourceFileName: 'enhanced-navigation.ts',
+    sourcePath: enhancedNavigationSourcePath,
+    sourcePaths: [enhancedNavigationSourcePath],
+  },
+  documentLifecycle: {
+    label: 'document lifecycle',
+    readableParityLabel: 'canonical document lifecycle helper closure',
+    minifiedParityLabel: 'canonical minified document lifecycle helper closure',
+    rootFunctionNames: ['createDocumentLifecycleRecovery'],
+    sourceFileName: 'document-lifecycle.ts',
+    sourcePath: documentLifecycleSourcePath,
+    sourcePaths: [documentLifecycleSourcePath],
   },
 } as const;
 
@@ -65,6 +90,8 @@ export const inlineWireParserReadableSource = readInlineWireParserReadableSource
 export const inlineResponseApplyReadableSource = readInlineResponseApplyReadableSource();
 export const inlineFragmentTargetEscapeReadableSource =
   readInlineFragmentTargetEscapeReadableSource();
+export const inlineEnhancedNavigationReadableSource = readInlineEnhancedNavigationReadableSource();
+export const inlineDocumentLifecycleReadableSource = readInlineDocumentLifecycleReadableSource();
 export const inlineDelegatedEvents = readModularDefaultDelegatedEvents();
 const inlineBooleanPresenceAttributes = [
   'checked',
@@ -88,6 +115,8 @@ export function buildInlineKovoLoaderInstallerReadableSource(
   responseApplyReadableSource = inlineResponseApplyReadableSource,
   delegatedEvents: readonly string[] = inlineDelegatedEvents,
   fragmentTargetEscapeReadableSource = inlineFragmentTargetEscapeReadableSource,
+  enhancedNavigationReadableSource = inlineEnhancedNavigationReadableSource,
+  documentLifecycleReadableSource = inlineDocumentLifecycleReadableSource,
 ): string {
   return String.raw`
 /* SPEC.md §4.4: this is the always-loaded bootstrap source. */
@@ -131,54 +160,6 @@ function installInlineKovoLoader(im) {
     current.classList?.toggle('dark', dark);
     current.classList?.toggle('light', light && !dark);
     if (theme === 'dark' || theme === 'light') current.setAttribute('data-theme', theme);
-  };
-  const sf = (href) => {
-    const x = globalThis.scrollX || globalThis.pageXOffset || 0;
-    const y = globalThis.scrollY || globalThis.pageYOffset || 0;
-    if (href) sc[href] = [x, y];
-  };
-  const hid = (hash) => {
-    const value = hash.slice(1);
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  };
-  const ht = (hash) => {
-    const raw = hash.slice(1);
-    const decoded = hid(hash);
-    return (
-      doc.getElementById(decoded) ??
-      doc.getElementById(raw) ??
-      doc.getElementsByName?.(decoded)?.[0] ??
-      doc.getElementsByName?.(raw)?.[0]
-    );
-  };
-  const so = () => {
-    let offset = 0;
-    for (const el of qa(doc, 'body *')) {
-      const style = globalThis.getComputedStyle?.(el);
-      if (!style || (style.position !== 'fixed' && style.position !== 'sticky')) continue;
-      const top = parseFloat(style.top || '0') || 0;
-      const rect = el.getBoundingClientRect?.();
-      if (top <= 0 && rect && rect.top <= 1 && rect.bottom > offset) offset = rect.bottom;
-    }
-    return offset;
-  };
-  const hscl = (hash) => {
-    const target = ht(hash);
-    if (!target) return;
-    const offset = so();
-    const rect = target.getBoundingClientRect?.();
-    if (offset && rect) {
-      globalThis.scrollTo?.(
-        globalThis.scrollX || globalThis.pageXOffset || 0,
-        (globalThis.scrollY || globalThis.pageYOffset || 0) + rect.top - offset,
-      );
-      return;
-    }
-    target.scrollIntoView?.();
   };
   const vp = (val, path) =>
     path.split('.').reduce((cur, seg) => {
@@ -486,43 +467,6 @@ function installInlineKovoLoader(im) {
     const k = i > 0 ? wireKey.slice(i + 1) : undefined;
     return n ? '/_q/' + encodeURIComponent(n) + (k == null ? '' : '?key=' + encodeURIComponent(k)) : '';
   };
-  const ns = (root) => [...root.querySelectorAll('[kovo-nav-segment]')];
-  const nk = (el) =>
-    [
-      el.getAttribute('kovo-nav-segment'),
-      el.getAttribute('kovo-nav-kind'),
-      el.getAttribute('kovo-nav-name'),
-      el.getAttribute('kovo-nav-queries') || '',
-      el.getAttribute('kovo-nav-components') || '',
-    ].join('|');
-  const nc = (el) => {
-    const copy = el.cloneNode(true);
-    for (const child of qa(copy, '[kovo-nav-segment]')) child.remove();
-    return copy.outerHTML;
-  };
-  const di = (root) => {
-    const ids = new Set();
-    const add = (el) => {
-      const id = el.getAttribute?.('id') || el.id;
-      if (id) ids.add(id);
-    };
-    add(root);
-    for (const el of qa(root, '[id]')) add(el);
-    return ids;
-  };
-  const pi = (segments, end) => {
-    const ids = new Set();
-    for (let i = 0; i < end; i += 1) {
-      const copy = segments[i].cloneNode(true);
-      for (const child of qa(copy, '[kovo-nav-segment]')) child.remove();
-      for (const id of di(copy)) ids.add(id);
-    }
-    return ids;
-  };
-  const dc = (preserved, next) => {
-    for (const id of di(next)) if (preserved.has(id)) return true;
-    return false;
-  };
   const rbd = (nextBody) => {
     if (doc.documentElement?.replaceChild && doc.body) {
       doc.documentElement.replaceChild(nextBody, doc.body);
@@ -540,13 +484,6 @@ function installInlineKovoLoader(im) {
       fresh.textContent = old.textContent;
       old.replaceWith(fresh);
     }
-  };
-  const ng = (href) => {
-    if (globalThis.history?.scrollRestoration !== undefined) {
-      globalThis.history.scrollRestoration = 'auto';
-    }
-    if (location.assign) location.assign(href);
-    else location.href = href;
   };
   const hk = (el) => {
     if (el.nodeType !== 1) return '';
@@ -626,139 +563,23 @@ function installInlineKovoLoader(im) {
     }
     flush(null);
   };
-  const vt = async (apply) => {
-    const start = doc.startViewTransition;
-    if (typeof start !== 'function') {
-      apply();
-      return;
-    }
-    let ran = false;
-    try {
-      const transition = start.call(doc, () => {
-        ran = true;
-        apply();
-      });
-      await transition?.updateCallbackDone;
-    } catch (error) {
-      if (!ran) apply();
-      else throw error;
-    }
-  };
-  const an = async (href, pop = false) => {
-    const navId = (ni += 1);
-    try {
-      const requestedUrl = new URL(href, location.href);
-      const response = await fetch(href, {
-        headers: { Accept: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)} },
-      });
-      if (navId !== ni) return;
-      const finalUrl = new URL(response.url || href, location.href);
-      if (!finalUrl.hash && requestedUrl.hash) finalUrl.hash = requestedUrl.hash;
-      const contentType = response.headers?.get('content-type') || '';
-      if (finalUrl.origin !== location.origin || !contentType.toLowerCase().includes('text/html')) {
-        throw Error();
-      }
-      const nextDoc = new DOMParser().parseFromString(await response.text(), 'text/html');
-      if (navId !== ni) return;
-      const nextBody = nextDoc?.body;
-      if (!nextBody || kb() !== kb(nextDoc)) throw Error();
-      const currentSegments = ns(doc.body);
-      const nextSegments = ns(nextBody);
-      if (!nextSegments.length) throw Error();
-      let triggerRoot;
-      await vt(() => {
-        if (nextDoc.querySelector(ks) || !currentSegments.length || currentSegments.length !== nextSegments.length) {
-          for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
-          triggerRoot = rbd(nextBody);
-        } else {
-          const same = currentSegments.map(
-            (segment, index) => nk(segment) === nk(nextSegments[index]) && nc(segment) === nc(nextSegments[index]),
-          );
-          if (!same[0]) {
-            for (const el of qa(doc.body, '[kovo-c]')) el.a?.abort();
-            triggerRoot = rbd(nextBody);
-          } else {
-            const preservedIds = pi(
-              currentSegments.filter((_segment, index) => same[index]),
-              currentSegments.filter((_segment, index) => same[index]).length,
-            );
-            const changed = new Set();
-            for (let index = 1; index < currentSegments.length; index += 1) {
-              if (same[index]) continue;
-              if (currentSegments.some((segment, other) => other < index && changed.has(other) && segment.contains?.(currentSegments[index]))) continue;
-              if (dc(preservedIds, nextSegments[index])) throw Error();
-              changed.add(index);
-              for (const el of qa(currentSegments[index], '[kovo-c]')) el.a?.abort();
-              triggerRoot = m(currentSegments[index], nextSegments[index]) || triggerRoot;
-            }
-          }
-        }
-        ch(nextDoc.head);
-        ps();
-        xd(doc.documentElement, nextDoc.documentElement);
-        const body = doc.body || triggerRoot;
-        if (!body) throw Error();
-        xa(body, nextBody);
-        rscr(body);
-      });
-      const body = doc.body || triggerRoot;
-      if (!body) throw Error();
-      if (!pop) globalThis.history?.pushState?.({}, '', finalUrl.href);
-      const focusTarget = doc.querySelector('main,h1') ?? doc.querySelector('[kovo-nav-segment]');
-      focusTarget?.setAttribute?.('tabindex', '-1');
-      focusTarget?.focus?.({ preventScroll: true });
-      const saved = sc[finalUrl.href];
-      if (pop && saved) globalThis.scrollTo?.(saved[0], saved[1]);
-      else if (finalUrl.hash) {
-        hscl(finalUrl.hash);
-        setTimeout(() => {
-          if (navId === ni) hscl(finalUrl.hash);
-        });
-      }
-      else globalThis.scrollTo?.(0, 0);
-      if (triggerRoot) setTimeout(tr);
-      cu = finalUrl.href;
-      dispatchEvent(new CustomEvent('kovo:navigate', { detail: { url: finalUrl.href } }));
-    } catch {
-      if (navId === ni) ng(href);
-    }
-  };
-  const inav = (event) => {
-    if (
-      event.defaultPrevented ||
-      event.button ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.shiftKey ||
-      event.altKey
-    ) {
-      return false;
-    }
-    const anchor = event.target?.closest?.('a[href]');
-    if (
-      !anchor ||
-      event.target?.closest?.('[on\\:click]') ||
-      anchor.target ||
-      anchor.hasAttribute?.('download')
-    ) {
-      return false;
-    }
-    const url = new URL(anchor.href, location.href);
-    if (url.origin !== location.origin) return false;
-    if (url.pathname === location.pathname && url.search === location.search && url.hash) {
-      return false;
-    }
-    event.preventDefault();
-    sf(location.href);
-    void an(url.href);
-    return true;
-  };
-  const sc = {};
-  let cu = location.href;
-  let ni = 0;
-  if (globalThis.history?.scrollRestoration !== undefined) {
-    globalThis.history.scrollRestoration = 'manual';
-  }
+  ${enhancedNavigationReadableSource}
+  const nav = installEnhancedNavigationRuntime({
+    acceptHeader: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)},
+    applyDocumentElementAttributes: xd,
+    applyHead: ch,
+    applyStylePromotion: () => ps(),
+    document: doc,
+    morph: m,
+    queryAll: qa,
+    replayScripts: rscr,
+    replaceBody: rbd,
+    replaceElementAttributes: xa,
+    runTriggers: () => tr(),
+  });
+  const an = nav.navigate;
+  const inav = nav.handleClick;
+  const sf = nav.saveScroll;
   for (const el of qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
@@ -769,54 +590,6 @@ function installInlineKovoLoader(im) {
   ${responseApplyReadableSource}
   const dq = (type, init) => {
     dispatchEvent(new CustomEvent(type, init));
-  };
-  const qd = (q) => {
-    let i = 0;
-    const attrs = q.attrs;
-    while (i < attrs.length) {
-      while (/[\t\n\f\r ]/.test(attrs[i] ?? '')) i += 1;
-      if (i >= attrs.length || attrs[i] === '/' || attrs[i] === '>') return false;
-      const start = i;
-      while (!/[\t\n\f\r =/>"'<]/.test(attrs[i] ?? ' ')) i += 1;
-      const name = attrs.slice(start, i).toLowerCase();
-      while (/[\t\n\f\r ]/.test(attrs[i] ?? '')) i += 1;
-      if (attrs[i] === '=') {
-        i += 1;
-        while (/[\t\n\f\r ]/.test(attrs[i] ?? '')) i += 1;
-        const quote = attrs[i];
-        if (quote === '"' || quote === "'") {
-          for (i += 1; i < attrs.length && attrs[i] !== quote; i += 1);
-          if (attrs[i] === quote) i += 1;
-        } else {
-          while (!/[\t\n\f\r ]/.test(attrs[i] ?? ' ')) i += 1;
-        }
-      }
-      if (name === 'delta') return true;
-    }
-    return false;
-  };
-  const qw = (q) => {
-    const name = readAttribute(q.attrs, 'name');
-    const key = readAttribute(q.attrs, 'key');
-    return qurl(qwk(name, key));
-  };
-  const qr = (q) => {
-    const u = typeof q === 'string' ? qurl(q) : qw(q);
-    if (!u) return;
-    fetch(u, {
-      cache: 'no-store',
-      headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
-      method: 'GET',
-    })
-      .then((res) => {
-        if (res.status >= 400) return;
-        if (kb() && (!bh(res) || bh(res) !== kb())) {
-          location.reload?.();
-          return;
-        }
-        return res.text().then((text) => ab(text, bh(res)));
-      })
-      .catch(() => {});
   };
   const ea = (value) =>
     String(value)
@@ -831,62 +604,28 @@ function installInlineKovoLoader(im) {
       doc.getElementById(activeId)?.focus?.({ preventScroll: true });
     }
   };
-  const frf = () => {
-    const live = rlt();
-    if (!live.length) return;
-    fetch(location.href, {
-      cache: 'no-store',
-      headers: {
-        Accept: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)},
-        'Kovo-Fragment': 'true',
-        'Kovo-Live-Targets': live.join('; '),
-        'Kovo-Targets': rt().join('; '),
-      },
-      method: 'GET',
-    })
-      .then((res) => {
-        if (res.status >= 400) return;
-        const responseBuild = bh(res);
-        if (kb() && responseBuild && responseBuild !== kb()) {
-          location.reload?.();
-          return;
-        }
-        return res.text().then((text) => {
-          if (text.includes('<kovo-fragment') || text.includes('<kovo-query') || text.includes('<kovo-text')) {
-            fab(text, responseBuild || kb());
-            return;
-          }
-          const nextDoc = new DOMParser().parseFromString(text, 'text/html');
-          const nextBuild = responseBuild || kb(nextDoc);
-          if (kb() && (!nextBuild || nextBuild !== kb())) {
-            location.reload?.();
-            return;
-          }
-          const fragments = [];
-          const seen = new Set();
-          for (const entry of live) {
-            const target = entry.split('#')[0];
-            if (!target || seen.has(target)) continue;
-            seen.add(target);
-            const next = ftd(nextDoc, target);
-            if (next) fragments.push('<kovo-fragment target="' + ea(target) + '">' + next.outerHTML + '</kovo-fragment>');
-          }
-          if (fragments.length) fab(fragments.join(''), nextBuild || kb());
-        });
-      })
-      .catch(() => {});
-  };
-  const fqs = new Set();
-  const rememberQueryChunk = (q) => {
-    const w = qwk(readAttribute(q.attrs, 'name'), readAttribute(q.attrs, 'key'));
-    if (w) fqs.add(w);
-  };
-  const rememberQueryScripts = () => {
-    for (const script of qa(doc, 'script[kovo-query]')) {
-      const w = qwk(script.getAttribute?.('kovo-query'), script.getAttribute?.('key'));
-      if (w) fqs.add(w);
-    }
-  };
+  ${documentLifecycleReadableSource}
+  const dl = createDocumentLifecycleRecovery({
+    acceptHeader: ${JSON.stringify(enhancedNavigationDocumentAcceptHeader)},
+    applyBody: fab,
+    buildHeader: bh,
+    currentBuild: kb,
+    document: doc,
+    encodeAttribute: ea,
+    findTarget: ftd,
+    liveTargets: rlt,
+    queryAll: qa,
+    queryUrl: qurl,
+    readAttribute,
+    readElementAttribute: readWireElementAttribute,
+    targetHeader: rt,
+    wireKey: qwk,
+  });
+  const qd = dl.isDeltaQuery;
+  const qr = dl.refreshQuery;
+  const frf = dl.refreshLiveTargets;
+  const rememberQueryChunk = dl.rememberQueryChunk;
+  const rememberQueryScripts = dl.rememberQueryScripts;
   const aq = (queries, applyQueries) => {
     for (const q of queries) rememberQueryChunk(q);
     if (applyQueries) {
@@ -1283,36 +1022,7 @@ function installInlineKovoLoader(im) {
     );
   crossing('pointerover', 'pointerenter');
   crossing('pointerout', 'pointerleave');
-  addEventListener('popstate', () => {
-    sf(cu);
-    void an(location.href, true);
-  });
-  const vrf = () => {
-    rememberQueryScripts();
-    for (const query of fqs) qr(query);
-    frf();
-  };
-  rememberQueryScripts();
-  addEventListener('visibilitychange', () => {
-    if (doc.visibilityState === 'hidden') return;
-    vrf();
-  });
-  addEventListener('pageshow', (event) => {
-    if (event.persisted) vrf();
-  });
-  // SPEC.md §780: second bfcache defense. A bfcache restore (event.persisted) is a history
-  // traversal that bypassed the loader, sessionProvider, and route guard, so a persisted
-  // session-dependent document would otherwise reappear after logout/expiry/revocation. Some
-  // user agents (Safari/WebKit) keep a no-store page in the in-memory bfcache, so a document
-  // carrying the per-principal kovo-session fingerprint meta (stamped by document-core only for
-  // guarded/session-dependent docs) MUST revalidate with a full server GET (location.reload)
-  // rather than presenting the restored DOM. Anonymous documents carry no kovo-session meta, so
-  // this is a no-op and they stay fully bfcache-eligible. Adds no unload handler.
-  if (doc.querySelector?.('meta[name="kovo-session"]')) {
-    addEventListener('pageshow', (event) => {
-      if (event.persisted) location.reload?.();
-    });
-  }
+  dl.install(nav);
   // SPEC.md §4.7: declared triggers are legible in body markup, while the default
   // document emits the loader in <head>. Defer the scan one task so the parser can
   // continue into the body; event delegation above is installed immediately.
@@ -1631,6 +1341,14 @@ function readInlineFragmentTargetEscapeReadableSource(): string {
   return readInlineHelperReadableSource(inlineHelperSpecs.fragmentTargetEscape);
 }
 
+function readInlineEnhancedNavigationReadableSource(): string {
+  return readInlineHelperReadableSource(inlineHelperSpecs.enhancedNavigation);
+}
+
+function readInlineDocumentLifecycleReadableSource(): string {
+  return readInlineHelperReadableSource(inlineHelperSpecs.documentLifecycle);
+}
+
 function readModularDefaultDelegatedEvents(
   source = readFileSync(modularLoaderSourcePath, 'utf8'),
 ): string[] {
@@ -1942,6 +1660,17 @@ function compactInlineKovoLoaderInstallerLocalNames(source: string): string {
     ['readFragmentElementChunk', 'rf'],
     ['readStreamTextChunksFromElements', 'rtc'],
     ['readStreamTextElementChunk', 'rte'],
+    ['readWireElementTokens', 'rwt'],
+    ['readWireAttributes', 'rwa'],
+    ['readWireElementAttribute', 'rwe'],
+    ['matchingWireElementEnd', 'mwe'],
+    ['findWireClosingTagStart', 'fwc'],
+    ['findWireTagStart', 'fwt'],
+    ['matchesWireTagName', 'mwt'],
+    ['isHtmlAttributeWhitespace', 'ihw'],
+    ['isHtmlAttributeNameTerminator', 'iat'],
+    ['installEnhancedNavigationRuntime', 'ien'],
+    ['createDocumentLifecycleRecovery', 'cdr'],
     ['applyInlineMutationResponseChunks', 'ai'],
     ['isFragmentResourceHint', 'irh'],
     // SF (secure-framework Tier 3): the inline Trusted Types createHTML shim

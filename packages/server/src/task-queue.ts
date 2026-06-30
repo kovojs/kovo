@@ -1,3 +1,4 @@
+import { assertAndCloneJsonValue, canonicalJsonStringify } from '@kovojs/core/internal/json';
 import type { TaskHandle, TaskScheduleOptions } from './task.js';
 import type {
   DurableTaskStatusSqlExecutor,
@@ -224,7 +225,7 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     const now = new Date();
     const runAt = input.runAt ?? now;
     const id = createJobId();
-    const argsJson = JSON.stringify(assertJsonSerializable(input.args));
+    const argsJson = canonicalJsonStringify(input.args, { root: 'args' });
     const coalesce = input.coalesce ?? 'debounce';
     const lineage = input.lineage ?? id;
     const generation = normalizeNonNegativeInteger(input.generation, 0);
@@ -361,7 +362,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
   async enqueue(input: DurableTaskEnqueueInput): Promise<TaskHandle> {
     const now = new Date();
     const runAt = input.runAt ?? now;
-    const args = cloneJson(assertJsonSerializable(input.args));
+    const args = assertAndCloneJsonValue(input.args, { root: 'args' });
     const coalesce = input.coalesce ?? 'debounce';
     const id = createJobId();
     const lineage = input.lineage ?? id;
@@ -688,7 +689,7 @@ function readonlyJob(job: MutableDurableTaskJob): DurableTaskJob {
   return {
     id: job.id,
     task: job.task,
-    args: cloneJson(job.args),
+    args: assertAndCloneJsonValue(job.args, { root: 'args' }),
     runAt: copyDate(job.runAt),
     lineage: job.lineage,
     generation: job.generation,
@@ -711,18 +712,6 @@ function dateFrom(value: Date | string): Date {
 
 function copyDate(value: Date): Date {
   return new Date(value.getTime());
-}
-
-function assertJsonSerializable(value: unknown): unknown {
-  try {
-    return JSON.parse(JSON.stringify(value)) as unknown;
-  } catch (error) {
-    throw new TypeError(`Durable task args must be JSON-serializable: ${errorMessage(error)}`);
-  }
-}
-
-function cloneJson(value: unknown): unknown {
-  return JSON.parse(JSON.stringify(value)) as unknown;
 }
 
 function createJobId(): string {

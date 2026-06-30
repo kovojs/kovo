@@ -16,8 +16,14 @@ import {
   EXPORT_USAGE,
   MCP_USAGE,
   UPDATE_DOCS_USAGE,
+  BUILD_ARGV_SPEC,
+  COMPILE_ARGV_SPECS,
   formatNoArgsMessage,
   formatUnknownCommandMessage,
+  parsedBooleanOption,
+  parsedStringListOption,
+  parsedStringOption,
+  parseCommandArgv,
   resolveCommand,
 } from './commands-manifest.js';
 import { CLI_COMMAND_DISPATCHER_NAMES, main } from './index.js';
@@ -162,6 +168,53 @@ describe('commands manifest', () => {
         constant,
       );
     }
+  });
+
+  it('parses command argv from manifest-owned flag specs', () => {
+    const build = parseCommandArgv(
+      ['src/app.tsx', '--out=dist-prod', '--check', '--preset', 'node', '--no-cache'],
+      BUILD_ARGV_SPEC,
+    );
+    expect(build).toEqual(expect.objectContaining({ ok: true }));
+    if (build.ok) {
+      expect(build.value.positionals).toEqual(['src/app.tsx']);
+      expect(parsedStringOption(build.value, '--out')).toBe('dist-prod');
+      expect(parsedStringOption(build.value, '--preset')).toBe('node');
+      expect(parsedBooleanOption(build.value, '--check')).toBe(true);
+      expect(parsedBooleanOption(build.value, '--no-cache')).toBe(true);
+    }
+
+    const route = parseCommandArgv(
+      [
+        'src/route.tsx',
+        '--rewrite',
+        'Cart=./cart.js',
+        '--rewrite=Shell=./shell.js',
+        '--out',
+        'dist/route.tsx',
+      ],
+      COMPILE_ARGV_SPECS.route,
+    );
+    expect(route).toEqual(expect.objectContaining({ ok: true }));
+    if (route.ok) {
+      expect(route.value.positionals).toEqual(['src/route.tsx']);
+      expect(parsedStringListOption(route.value, '--rewrite')).toEqual([
+        'Cart=./cart.js',
+        'Shell=./shell.js',
+      ]);
+      expect(parsedStringOption(route.value, '--out')).toBe('dist/route.tsx');
+    }
+
+    expect(parseCommandArgv(['--out='], BUILD_ARGV_SPEC)).toEqual({
+      error: 'missing-value',
+      message: 'kovo: build --out requires a directory.\n',
+      ok: false,
+    });
+    expect(parseCommandArgv(['--check=false'], BUILD_ARGV_SPEC)).toEqual({
+      error: 'unknown-option',
+      ok: false,
+      option: '--check=false',
+    });
   });
 });
 

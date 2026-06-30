@@ -1,3 +1,5 @@
+import { buildRoutePatternHref } from '@kovojs/core/internal/route-pattern';
+
 import {
   callExpressions,
   jsxElements,
@@ -114,52 +116,5 @@ export function buildStaticHref(
   params: Record<string, string | number | boolean | null>,
   searchValues: Record<string, string | number | boolean | null>,
 ): string {
-  const pathname = substituteStaticRouteParams(path, params);
-  const search = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(searchValues)) {
-    if (value === null || value === undefined) continue;
-    search.set(key, String(value));
-  }
-
-  const query = search.toString();
-  return query ? `${pathname}?${query}` : pathname;
-}
-
-// H1 (bugs-part4 L6-1): a `:param` name is the whole segment after `:` up to the
-// next `/`, `?`, or `#`. This matches the runtime matcher (server match.ts
-// `parseRouteSegment` takes the entire segment after `:`, splitting only on `/`)
-// and core's `PathParamNames`/`buildHref` (`:([^/?#]+)`). A narrower `\w`-only name
-// stopped at the first hyphen/dot, so `:user-id`/`:name.json` silently dropped the
-// value and emitted a wrong URL (`/users/-id`). Stopping only at `/`, `?`, `#`
-// keeps every typed link round-trip-safe through `matchRoute`.
-function substituteStaticRouteParams(
-  path: string,
-  params: Record<string, string | number | boolean | null>,
-): string {
-  let output = '';
-  let index = 0;
-
-  while (index < path.length) {
-    const char = path[index];
-    const next = path[index + 1];
-    if (char !== ':' || next === undefined || isRouteParamNameTerminator(next)) {
-      output += char;
-      index += 1;
-      continue;
-    }
-
-    let end = index + 2;
-    while (end < path.length && !isRouteParamNameTerminator(path[end] ?? '')) end += 1;
-
-    const key = path.slice(index + 1, end);
-    output += encodeURIComponent(String(params[key] ?? ''));
-    index = end;
-  }
-
-  return output;
-}
-
-function isRouteParamNameTerminator(char: string): boolean {
-  return char === '/' || char === '?' || char === '#';
+  return buildRoutePatternHref(path, { params, search: searchValues });
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { trustedHtml } from '@kovojs/browser';
-import { component } from '@kovojs/core';
+import { component, FieldError, FormError } from '@kovojs/core';
 import {
   setRuntimeSinkSecurityEventHandler,
   type RuntimeSinkSecurityEvent,
@@ -188,6 +188,95 @@ describe('server jsx runtime', () => {
     expect(rendered).toContain('action="/_m/cart/add"');
     expect(rendered.match(/name="csrf"/g)).toHaveLength(1);
     expect(rendered.match(/name="Kovo-Idem"/g)).toHaveLength(1);
+  });
+
+  it('keeps deferred mutation form helpers isolated across interleaved renders', async () => {
+    const renderFailureForm = (
+      formKey: string,
+      titleMessage: string,
+      formMessage: string,
+    ): Promise<string> =>
+      asyncHtml(
+        runWithJsxRequestContext(
+          {},
+          {
+            mutationFailure: {
+              failure: {
+                error: {
+                  code: 'VALIDATION',
+                  payload: {
+                    issues: [{ message: titleMessage, path: ['title'] }],
+                  },
+                },
+                ok: false,
+                status: 422,
+              },
+              mutationKey: formKey,
+            },
+          },
+          () =>
+            jsx('form', {
+              mutation: { key: formKey },
+              children: Promise.resolve().then(() => [
+                FieldError({ name: 'title' }),
+                FormError({ code: 'BLOCKED', message: formMessage }),
+              ]),
+            }),
+        ),
+      );
+
+    const [first, second] = await Promise.all([
+      renderFailureForm('post/save', 'First title is required.', 'First blocked.'),
+      renderFailureForm('comment/save', 'Second title is required.', 'Second blocked.'),
+    ]);
+
+    expect(first).toContain('First title is required.');
+    expect(first).not.toContain('Second title is required.');
+    expect(second).toContain('Second title is required.');
+    expect(second).not.toContain('First title is required.');
+    expect(first).not.toContain('kovo-form-helper');
+    expect(second).not.toContain('kovo-form-helper');
+  });
+
+  it('resolves deferred mutation form helpers against the nearest nested form scope', async () => {
+    const rendered = await asyncHtml(
+      runWithJsxRequestContext(
+        {},
+        {
+          mutationFailure: {
+            failure: {
+              error: {
+                code: 'VALIDATION',
+                payload: {
+                  issues: [
+                    { message: 'Inner title is required.', path: ['innerTitle'] },
+                    { message: 'Outer title is required.', path: ['outerTitle'] },
+                  ],
+                },
+              },
+              ok: false,
+              status: 422,
+            },
+            mutationKey: 'inner/save',
+          },
+        },
+        () =>
+          jsx('form', {
+            mutation: { key: 'outer/save' },
+            children: [
+              FieldError({ name: 'outerTitle' }),
+              jsx('form', {
+                mutation: { key: 'inner/save' },
+                children: FieldError({ name: 'innerTitle' }),
+              }),
+            ],
+          }),
+      ),
+    );
+
+    expect(rendered).toContain('Inner title is required.');
+    expect(rendered).not.toContain('Outer title is required.');
+    expect(rendered).not.toContain('kovo-form-helper');
   });
 
   it('does not render CSRF fields for csrf:false mutation forms but does render Kovo-Idem', () => {
@@ -443,9 +532,7 @@ describe('server jsx runtime', () => {
         }),
       ),
     ).toBe('<section><b>kovo trusted</b></section>');
-    expect(html(jsx('section', { innerHTML: browserTrustedHtml }))).toBe(
-      '<section><i>browser trusted</i></section>',
-    );
+    expect(html(jsx('section', { innerHTML: browserTrustedHtml }))).toBe('<section></section>');
     expect(html(jsx('section', { rawHtml: trustedHtml(browserTrustedHtml) }))).toBe(
       '<section><i>browser trusted</i></section>',
     );

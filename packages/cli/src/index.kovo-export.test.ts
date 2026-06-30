@@ -579,10 +579,10 @@ describe('kovo export', () => {
       ).resolves.toBe(0);
 
       expect(stderr).not.toHaveBeenCalled();
-      expect(process.env.KOVO_TEST_STYLESHEET_HREF).toBe('/assets/site.css');
       expect(readFileSync(join(outDir, 'index.html'), 'utf8')).toContain(
         '<link href="/assets/site.css">',
       );
+      expect(process.env.KOVO_TEST_STYLESHEET_HREF).toBeUndefined();
     } finally {
       delete process.env.KOVO_TEST_STYLESHEET_HREF;
       stdout.mockRestore();

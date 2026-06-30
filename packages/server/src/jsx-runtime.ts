@@ -27,7 +27,11 @@ import {
   safeRuntimeAttributeName,
   unwrapCoercedRenderedHtml,
 } from './html.js';
-import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-context.js';
+import {
+  currentJsxFrameworkContext,
+  currentJsxMutationFormHelperRegistry,
+  currentJsxRequestContext,
+} from './jsx-context.js';
 import { runQuery, type QueryDefinition } from './query.js';
 import { renderServerRenderable } from './renderable.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
@@ -63,7 +67,7 @@ const voidElements = new Set([
 ]);
 
 const kovoFormKeyFieldName = 'kovo-form-key';
-const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
+const mutationFormHelperRenderContextKey = Symbol.for('kovo.mutationFormHelperRenderContext');
 const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
 const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
 
@@ -99,14 +103,15 @@ type KovoJsxComponent = Component<ComponentDefinitionInput>;
 
 type MutationFormHelperKind = 'field' | 'form';
 
-interface MutationFormHelperPlaceholder {
-  kind: MutationFormHelperKind;
-  props: JsxProps;
-}
+installMutationFormHelperRenderContext();
 
-interface MutationFormHelperRegistry {
-  nextId: number;
-  placeholders: Map<number, MutationFormHelperPlaceholder>;
+function installMutationFormHelperRenderContext(): void {
+  const global = globalThis as typeof globalThis & Record<symbol, unknown>;
+  global[mutationFormHelperRenderContextKey] = {
+    defer(kind: MutationFormHelperKind, props: Record<string, unknown>) {
+      return renderedHtml(deferMutationFormHelperInCurrentRender(kind, props as JsxProps) ?? '');
+    },
+  };
 }
 
 /** @generated JSX automatic-runtime ABI `Fragment` (compiler-emitted). */
@@ -420,10 +425,8 @@ function renderMutationFormHelper(kind: MutationFormHelperKind, props: JsxProps)
     return isRenderedHtml(rendered) ? rendered : renderedHtml(rendered);
   }
 
-  const registry = mutationFormHelperRegistry();
-  registry.nextId += 1;
-  registry.placeholders.set(registry.nextId, { kind, props });
-  return renderedHtml(`<!--kovo-form-helper:${registry.nextId}-->`);
+  const placeholder = deferMutationFormHelperInCurrentRender(kind, props);
+  return renderedHtml(placeholder ?? '');
 }
 
 function resolveMutationFormHelperPlaceholders(
@@ -433,10 +436,13 @@ function resolveMutationFormHelperPlaceholders(
 ): string {
   if (!html.includes('<!--kovo-form-helper:')) return html;
   const failure = mutationFailureForForm(formProps, jsxKey);
+  const registry = currentJsxMutationFormHelperRegistry();
+  if (!registry) return html.replace(/<!--kovo-form-helper:[^>]*-->/g, '');
 
-  return html.replace(/<!--kovo-form-helper:(\d+)-->/g, (_match, idText: string) => {
+  const placeholderPattern = /<!--kovo-form-helper:([0-9a-f-]+):(\d+)-->/g;
+  return html.replace(placeholderPattern, (_match, token: string, idText: string) => {
+    if (token !== registry.token) return '';
     const id = Number(idText);
-    const registry = mutationFormHelperRegistry();
     const placeholder = registry.placeholders.get(id);
     registry.placeholders.delete(id);
     if (!placeholder) return '';
@@ -445,13 +451,15 @@ function resolveMutationFormHelperPlaceholders(
   });
 }
 
-function mutationFormHelperRegistry(): MutationFormHelperRegistry {
-  const global = globalThis as typeof globalThis & Record<symbol, unknown>;
-  global[mutationFormHelperRegistryKey] ??= {
-    nextId: 0,
-    placeholders: new Map(),
-  };
-  return global[mutationFormHelperRegistryKey] as MutationFormHelperRegistry;
+function deferMutationFormHelperInCurrentRender(
+  kind: MutationFormHelperKind,
+  props: JsxProps,
+): string | undefined {
+  const registry = currentJsxMutationFormHelperRegistry();
+  if (!registry) return undefined;
+  registry.nextId += 1;
+  registry.placeholders.set(registry.nextId, { kind, props });
+  return `<!--kovo-form-helper:${registry.token}:${registry.nextId}-->`;
 }
 
 function renderMutationFormHelperNow(

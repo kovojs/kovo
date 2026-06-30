@@ -29,25 +29,23 @@ export function escapeAttribute(value: string): string {
   return escapeHtml(value).replaceAll('"', '&quot;');
 }
 
-const kovoRenderedHtml = Symbol.for('kovo.renderedHtml');
 const coercedRenderedHtmlPrefix = `\uE000kovo-rendered-html:${Math.random().toString(36).slice(2)}:`;
 const coercedRenderedHtmlSuffix = '\uE001';
 const coercedRenderedHtmlValues = new Map<string, string>();
+const renderedHtmlValues = new WeakSet<object>();
 let coercedRenderedHtmlId = 0;
 
 /** @internal framework-rendered HTML, distinct from app-authored text strings. */
 export type RenderedHtml = string & {
-  readonly [kovoRenderedHtml]: true;
   readonly html: string;
-  [Symbol.toPrimitive](): string;
+  [Symbol.toPrimitive](hint: string): string;
   toJSON(): string;
   toString(): string;
 };
 
 /** @internal create a branded framework-rendered HTML value. */
 export function renderedHtml(html: string): RenderedHtml {
-  return {
-    [kovoRenderedHtml]: true,
+  const rendered = {
     html,
     [Symbol.toPrimitive](hint: string) {
       return hint === 'default' ? coerceRenderedHtml(html) : html;
@@ -58,17 +56,14 @@ export function renderedHtml(html: string): RenderedHtml {
     toJSON() {
       return html;
     },
-  } as unknown as RenderedHtml;
+  };
+  renderedHtmlValues.add(rendered);
+  return rendered as unknown as RenderedHtml;
 }
 
 /** @internal true for values produced by the server JSX/runtime HTML renderer. */
 export function isRenderedHtml(value: unknown): value is RenderedHtml {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Partial<RenderedHtml>)[kovoRenderedHtml] === true &&
-    typeof (value as { html?: unknown }).html === 'string'
-  );
+  return typeof value === 'object' && value !== null && renderedHtmlValues.has(value);
 }
 
 export type { FragmentHtml } from '@kovojs/core/internal/sink-policy';
@@ -126,6 +121,17 @@ export function renderHtmlValue(value: unknown): string {
   }
 
   return escapeTextWithRenderedHtml(JSON.stringify(value) ?? '');
+}
+
+/**
+ * Render a custom `createApp({ renderRoute })` value through Kovo's framework-owned
+ * HTML trust boundary (SPEC §4.5, §9.5). String route-shell HTML remains an explicit
+ * app-authored shell result; non-string values are unwrapped only when Kovo minted the
+ * rendered/trusted value, otherwise they are escaped as text.
+ */
+export function renderRouteHtml(value: unknown): string {
+  if (typeof value === 'string') return value;
+  return renderHtmlValue(value);
 }
 
 /** @internal escape text while preserving framework-rendered HTML coerced via `+`. */

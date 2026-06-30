@@ -103,6 +103,268 @@ describe('compiler diagnostic coverage matrix', () => {
     `);
   });
 
+  it('requires every generated matrix row to declare producer-owned coverage metadata', () => {
+    const seenCodes = new Set<DiagnosticCode>();
+    const ownershipFacts = compilerOwnedDiagnosticMatrix.map((row) => {
+      expect(seenCodes.has(row.code), `${row.code} should be registered once`).toBe(false);
+      seenCodes.add(row.code);
+      expect(row.owner, `${row.code} needs a producer owner`).toMatch(/^[a-z][a-z0-9-]+$/);
+      expect(row.spec, `${row.code} needs a SPEC citation`).toMatch(/^SPEC\.md §/);
+      expect(typeof row.positive, `${row.code} needs an accepted-path fixture`).toBe('function');
+      expect(typeof row.negative, `${row.code} needs a failing-path fixture`).toBe('function');
+      return {
+        code: row.code,
+        owner: row.owner,
+        spec: row.spec,
+      };
+    });
+
+    expect(ownershipFacts).toMatchInlineSnapshot(`
+      [
+        {
+          "code": "KV201",
+          "owner": "handler-lowering",
+          "spec": "SPEC.md §4.3/§5.2",
+        },
+        {
+          "code": "KV210",
+          "owner": "handler-lowering",
+          "spec": "SPEC.md §5.2",
+        },
+        {
+          "code": "KV211",
+          "owner": "execution-triggers",
+          "spec": "SPEC.md §4.7",
+        },
+        {
+          "code": "KV212",
+          "owner": "execution-triggers",
+          "spec": "SPEC.md §4.7",
+        },
+        {
+          "code": "KV220",
+          "owner": "navigation-idref",
+          "spec": "SPEC.md §6.4/§9.5",
+        },
+        {
+          "code": "KV221",
+          "owner": "navigation-idref",
+          "spec": "SPEC.md §4.5/§6.4",
+        },
+        {
+          "code": "KV222",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV223",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV224",
+          "owner": "navigation-idref",
+          "spec": "SPEC.md §4.5",
+        },
+        {
+          "code": "KV225",
+          "owner": "navigation-idref",
+          "spec": "SPEC.md §4.2",
+        },
+        {
+          "code": "KV226",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §5.2",
+        },
+        {
+          "code": "KV227",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV228",
+          "owner": "app-graph-registry",
+          "spec": "SPEC.md §9.5",
+        },
+        {
+          "code": "KV230",
+          "owner": "fragment-targets",
+          "spec": "SPEC.md §4.5",
+        },
+        {
+          "code": "KV231",
+          "owner": "attribute-merge",
+          "spec": "SPEC.md §4.6",
+        },
+        {
+          "code": "KV232",
+          "owner": "attribute-merge",
+          "spec": "SPEC.md §4.6",
+        },
+        {
+          "code": "KV317",
+          "owner": "attribute-merge",
+          "spec": "SPEC.md §4.6",
+        },
+        {
+          "code": "KV233",
+          "owner": "attribute-merge",
+          "spec": "SPEC.md §4.6/§4.8",
+        },
+        {
+          "code": "KV234",
+          "owner": "package-components",
+          "spec": "SPEC.md §6.1.1",
+        },
+        {
+          "code": "KV235",
+          "owner": "authoring-surface",
+          "spec": "SPEC.md §5.2",
+        },
+        {
+          "code": "KV244",
+          "owner": "defer-lowering",
+          "spec": "SPEC.md §8",
+        },
+        {
+          "code": "KV245",
+          "owner": "authoring-surface",
+          "spec": "SPEC.md §5.2",
+        },
+        {
+          "code": "KV236",
+          "owner": "navigation-idref",
+          "spec": "SPEC.md §1/§5.2",
+        },
+        {
+          "code": "KV237",
+          "owner": "app-graph-registry",
+          "spec": "SPEC.md §6.1.1",
+        },
+        {
+          "code": "KV238",
+          "owner": "app-graph-registry",
+          "spec": "SPEC.md §4.5/§6.2",
+        },
+        {
+          "code": "KV242",
+          "owner": "form-mutation",
+          "spec": "SPEC.md §6.2/§6.3",
+        },
+        {
+          "code": "KV243",
+          "owner": "navigation-idref",
+          "spec": "SPEC.md §9.1",
+        },
+        {
+          "code": "KV239",
+          "owner": "app-graph-registry",
+          "spec": "SPEC.md §8",
+        },
+        {
+          "code": "KV240",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV241",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.2/§4.8",
+        },
+        {
+          "code": "KV246",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.1/§10.3",
+        },
+        {
+          "code": "KV247",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.1/§10.2",
+        },
+        {
+          "code": "KV301",
+          "owner": "state-bindings",
+          "spec": "SPEC.md §4.1",
+        },
+        {
+          "code": "KV302",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.8/§6.2",
+        },
+        {
+          "code": "KV303",
+          "owner": "fragment-targets",
+          "spec": "SPEC.md §4.5",
+        },
+        {
+          "code": "KV304",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV311",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.9",
+        },
+        {
+          "code": "KV312",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.8/§4.9",
+        },
+        {
+          "code": "KV315",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.8/§4.9",
+        },
+        {
+          "code": "KV316",
+          "owner": "fragment-targets",
+          "spec": "SPEC.md §4.5/§4.8",
+        },
+        {
+          "code": "KV318",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §4.8",
+        },
+        {
+          "code": "KV320",
+          "owner": "handler-lowering",
+          "spec": "SPEC.md §6.4",
+        },
+        {
+          "code": "KV330",
+          "owner": "form-mutation",
+          "spec": "SPEC.md §11.4/§14",
+        },
+        {
+          "code": "KV420",
+          "owner": "fragment-targets",
+          "spec": "SPEC.md §4.5/§4.9/§9.1",
+        },
+        {
+          "code": "KV421",
+          "owner": "app-graph-registry",
+          "spec": "SPEC.md §6.1/§9.5",
+        },
+        {
+          "code": "KV435",
+          "owner": "query-bindings",
+          "spec": "SPEC.md §6.2/§6.6/§10.2",
+        },
+        {
+          "code": "KV426",
+          "owner": "form-mutation",
+          "spec": "SPEC.md §9.1/§5.2 #10/§4.8",
+        },
+        {
+          "code": "KV437",
+          "owner": "handler-lowering",
+          "spec": "SPEC.md §6.2/§6.6",
+        },
+      ]
+    `);
+  });
+
   it('proves every in-scope compiler-owned diagnostic has positive and negative coverage', () => {
     const coverageFacts = compilerOwnedDiagnosticMatrix.map((row) => {
       const positiveDiagnostics = row

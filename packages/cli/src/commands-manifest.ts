@@ -88,6 +88,253 @@ export interface CommandFlag {
   description: string;
 }
 
+/** @internal Value shape accepted by the shared argv parser. */
+export type CommandArgvOptionKind = 'boolean' | 'value';
+
+/** @internal One flag spec consumed by the shared argv parser. */
+export interface CommandArgvOptionSpec {
+  /** Canonical flag token, e.g. `--out`. */
+  flag: `--${string}`;
+  /** Whether the flag is valueless or consumes a value. */
+  kind: CommandArgvOptionKind;
+  /** Allow the option to appear multiple times and collect every value. */
+  repeat?: boolean;
+  /** Exact diagnostic emitted when a value flag is present with no value. */
+  requiresValueMessage?: string;
+}
+
+/** @internal One command or compile-subcommand argv parse spec. */
+export interface CommandArgvSpec {
+  /** Specs for all supported flags. */
+  options: readonly CommandArgvOptionSpec[];
+}
+
+/** @internal Parsed argv result before command-specific semantic validation. */
+export interface ParsedCommandArgv {
+  options: ReadonlyMap<string, true | string | readonly string[]>;
+  positionals: readonly string[];
+}
+
+/** @internal Shared argv parser result. */
+export type ParseCommandArgvResult =
+  | { ok: true; value: ParsedCommandArgv }
+  | { error: 'help'; ok: false }
+  | { error: 'missing-value'; message: string; ok: false }
+  | { error: 'unknown-option'; ok: false; option: string };
+
+/** @internal Add command flags consumed by `parseAddArgs`. */
+export const ADD_ARGV_SPEC = {
+  options: [
+    {
+      flag: '--out',
+      kind: 'value',
+      requiresValueMessage: 'kovo: add --out requires a directory.\n',
+    },
+  ],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Build command flags consumed by `parseBuildArgs`. */
+export const BUILD_ARGV_SPEC = {
+  options: [
+    {
+      flag: '--out',
+      kind: 'value',
+      requiresValueMessage: 'kovo: build --out requires a directory.\n',
+    },
+    {
+      flag: '--preset',
+      kind: 'value',
+      requiresValueMessage: 'kovo: build --preset requires a preset name.\n',
+    },
+    { flag: '--check', kind: 'boolean' },
+    { flag: '--no-cache', kind: 'boolean' },
+  ],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Export command flags consumed by `parseExportArgs`. */
+export const EXPORT_ARGV_SPEC = {
+  options: [
+    { flag: '--vite', kind: 'boolean' },
+    {
+      flag: '--root',
+      kind: 'value',
+      requiresValueMessage: 'kovo: export --root requires a directory.\n',
+    },
+    {
+      flag: '--out',
+      kind: 'value',
+      requiresValueMessage: 'kovo: export --out requires a directory.\n',
+    },
+    {
+      flag: '--origin',
+      kind: 'value',
+      requiresValueMessage: 'kovo: export --origin requires a URL.\n',
+    },
+    {
+      flag: '--manifest',
+      kind: 'value',
+      requiresValueMessage: 'kovo: export --manifest requires a file.\n',
+    },
+    {
+      flag: '--dist',
+      kind: 'value',
+      requiresValueMessage: 'kovo: export --dist requires a directory.\n',
+    },
+    {
+      flag: '--asset-base',
+      kind: 'value',
+      requiresValueMessage: 'kovo: export --asset-base requires a URL path.\n',
+    },
+    {
+      flag: '--stylesheet-env',
+      kind: 'value',
+      requiresValueMessage: 'kovo: export --stylesheet-env requires a name.\n',
+    },
+    { flag: '--skip-non-exportable', kind: 'boolean' },
+  ],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Compile subcommand flags consumed by `parseCompileArgs`. */
+export const COMPILE_ARGV_SPECS = {
+  component: {
+    options: [
+      {
+        flag: '--out',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile component --out requires a path.\n',
+      },
+      {
+        flag: '--file-name',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile component --file-name requires a name.\n',
+      },
+      { flag: '--check', kind: 'boolean' },
+      { flag: '--no-cache', kind: 'boolean' },
+      { flag: '--fixpoint', kind: 'boolean' },
+      { flag: '--render-equivalence', kind: 'boolean' },
+      {
+        flag: '--registry-facts',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile component --registry-facts requires a JSON path.\n',
+      },
+      {
+        flag: '--query-shape-facts',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile component --query-shape-facts requires a JSON path.\n',
+      },
+      {
+        flag: '--facts-out',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile component --facts-out requires a JSON path.\n',
+      },
+      { flag: '--emit-client-files', kind: 'boolean' },
+      {
+        flag: '--allow-diagnostic',
+        kind: 'value',
+        repeat: true,
+        requiresValueMessage: 'kovo: compile component --allow-diagnostic requires a code.\n',
+      },
+    ],
+  },
+  route: {
+    options: [
+      {
+        flag: '--out',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile route --out requires a path.\n',
+      },
+      {
+        flag: '--file-name',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile route --file-name requires a name.\n',
+      },
+      {
+        flag: '--artifact-file-name',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile route --artifact-file-name requires a name.\n',
+      },
+      {
+        flag: '--rewrite',
+        kind: 'value',
+        repeat: true,
+        requiresValueMessage: 'kovo: compile route --rewrite requires Local=specifier.\n',
+      },
+      {
+        flag: '--facts-out',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile route --facts-out requires a JSON path.\n',
+      },
+      { flag: '--check', kind: 'boolean' },
+    ],
+  },
+  graph: {
+    options: [
+      {
+        flag: '--out',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile graph --out requires a path.\n',
+      },
+      { flag: '--check', kind: 'boolean' },
+    ],
+  },
+  'mutation-inputs': {
+    options: [
+      {
+        flag: '--out',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile mutation-inputs --out requires a path.\n',
+      },
+      {
+        flag: '--file-name',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile mutation-inputs --file-name requires a name.\n',
+      },
+      { flag: '--check', kind: 'boolean' },
+    ],
+  },
+  'drizzle-optimistic': {
+    options: [
+      {
+        flag: '--out',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile drizzle-optimistic --out requires a path.\n',
+      },
+      {
+        flag: '--facts-out',
+        kind: 'value',
+        requiresValueMessage:
+          'kovo: compile drizzle-optimistic --facts-out requires a JSON path.\n',
+      },
+      { flag: '--check', kind: 'boolean' },
+    ],
+  },
+  'drizzle-static': {
+    options: [
+      {
+        flag: '--out',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile drizzle-static --out requires a path.\n',
+      },
+      { flag: '--check', kind: 'boolean' },
+    ],
+  },
+  'package-css': {
+    options: [
+      {
+        flag: '--out',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile package-css --out requires a path.\n',
+      },
+      {
+        flag: '--entry',
+        kind: 'value',
+        requiresValueMessage: 'kovo: compile package-css --entry requires a source path.\n',
+      },
+      { flag: '--check', kind: 'boolean' },
+    ],
+  },
+} as const satisfies Record<string, CommandArgvSpec>;
+
 /** @internal One `kovo <command>` entry rendered into the CLI docs page. */
 export interface CommandManifestEntry {
   /** The dispatched sub-command name, e.g. `check`. */
@@ -455,4 +702,80 @@ export function formatExpectedCommandList(): string {
 /** @internal Unknown-command diagnostic emitted by the bin. */
 export function formatUnknownCommandMessage(command: string): string {
   return `kovo: unknown command ${JSON.stringify(command)}. expected ${formatExpectedCommandList()}.\n`;
+}
+
+/** @internal Parse command argv from a manifest-owned flag spec. */
+export function parseCommandArgv(
+  args: readonly string[],
+  spec: CommandArgvSpec,
+): ParseCommandArgvResult {
+  const optionSpecs = new Map(spec.options.map((option) => [option.flag, option]));
+  const options = new Map<string, true | string | string[]>();
+  const positionals: string[] = [];
+
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (!arg) continue;
+
+    if (arg === '--help' || arg === '-h') return { error: 'help', ok: false };
+
+    const equalsIndex = arg.indexOf('=');
+    const flag = equalsIndex > 0 ? arg.slice(0, equalsIndex) : arg;
+    const optionSpec = flag.startsWith('--') ? optionSpecs.get(flag as `--${string}`) : undefined;
+    if (optionSpec) {
+      if (optionSpec.kind === 'boolean') {
+        if (equalsIndex > 0) return { error: 'unknown-option', ok: false, option: arg };
+        options.set(flag, true);
+        continue;
+      }
+
+      const value = equalsIndex > 0 ? arg.slice(equalsIndex + 1) : args[index + 1];
+      if (!value) {
+        return {
+          error: 'missing-value',
+          message:
+            optionSpec.requiresValueMessage ?? `kovo: ${optionSpec.flag} requires a value.\n`,
+          ok: false,
+        };
+      }
+      if (equalsIndex <= 0) index += 1;
+      if (optionSpec.repeat) {
+        const previous = options.get(flag);
+        const values =
+          previous === undefined
+            ? []
+            : Array.isArray(previous)
+              ? [...previous]
+              : [String(previous)];
+        values.push(value);
+        options.set(flag, values);
+      } else {
+        options.set(flag, value);
+      }
+      continue;
+    }
+
+    if (arg.startsWith('-')) return { error: 'unknown-option', ok: false, option: arg };
+    positionals.push(arg);
+  }
+
+  return { ok: true, value: { options, positionals } };
+}
+
+/** @internal True when a parsed boolean flag appeared. */
+export function parsedBooleanOption(parsed: ParsedCommandArgv, flag: string): boolean {
+  return parsed.options.get(flag) === true;
+}
+
+/** @internal Return a parsed value option, if present. */
+export function parsedStringOption(parsed: ParsedCommandArgv, flag: string): string | undefined {
+  const value = parsed.options.get(flag);
+  return typeof value === 'string' ? value : undefined;
+}
+
+/** @internal Return a repeatable value option. */
+export function parsedStringListOption(parsed: ParsedCommandArgv, flag: string): string[] {
+  const value = parsed.options.get(flag);
+  if (Array.isArray(value)) return [...value];
+  return typeof value === 'string' ? [value] : [];
 }

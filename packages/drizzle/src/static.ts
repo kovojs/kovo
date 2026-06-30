@@ -1,7 +1,6 @@
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { JsonValue } from '@kovojs/core';
-import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type {
   AlgebraicField,
   AlgebraicQueryShape,
@@ -114,6 +113,7 @@ import {
   type SymbolProvenanceContext,
   type SymbolProvenanceRoot,
 } from './static/symbol-provenance.js';
+import { drizzleDiagnostic } from './static/diagnostics.js';
 
 /** @internal */ export const IGNORED_LOCAL_CALL_NAMES = new Set([
   'eq',
@@ -842,12 +842,13 @@ function sqlSafetyDiagnosticsForSourceFile(
     const safety = sqlTextSafety(statement, context);
     if (safety === 'safe') continue;
 
-    diagnostics.push({
-      code: 'KV422',
-      message: `${diagnosticDefinitions.KV422.message} ${sinkName}() receives ${sqlSafetyDescription(safety)} SQL text; use Kovo sql\`...\`, staticSql\`...\`, a separated parameter carrier, or trustedSql(...).`,
-      severity: diagnosticDefinitions.KV422.severity,
-      site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
-    });
+    diagnostics.push(
+      drizzleDiagnostic({
+        code: 'KV422',
+        detail: `${sinkName}() receives ${sqlSafetyDescription(safety)} SQL text; use Kovo sql\`...\`, staticSql\`...\`, a separated parameter carrier, or trustedSql(...).`,
+        site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+      }),
+    );
   }
 
   return diagnostics;
@@ -868,12 +869,11 @@ function sqlRawHelperDiagnostic(
   if (method !== 'raw' && method !== 'identifier') return null;
   const [first, second] = call.getArguments();
   if (nativeDrizzleSqlReceivers.has(receiver.getText())) {
-    return {
+    return drizzleDiagnostic({
       code: 'KV422',
-      message: `${diagnosticDefinitions.KV422.message} Direct drizzle-orm sql.${method}(...) is not accepted in app code; import Kovo's sql from @kovojs/drizzle so raw chunks and identifiers are auditable.`,
-      severity: diagnosticDefinitions.KV422.severity,
+      detail: `Direct drizzle-orm sql.${method}(...) is not accepted in app code; import Kovo's sql from @kovojs/drizzle so raw chunks and identifiers are auditable.`,
       site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
-    };
+    });
   }
 
   // SPEC §10.2/§6.6 (KV422): recognize Kovo's raw-SQL helper through its resolved
@@ -886,12 +886,11 @@ function sqlRawHelperDiagnostic(
   const safety = sqlTextSafety(first, context);
   if (safety === 'literal') return null;
 
-  return {
+  return drizzleDiagnostic({
     code: 'KV422',
-    message: `${diagnosticDefinitions.KV422.message} sql.${method}(...) receives ${sqlSafetyDescription(safety)} text; use sql.identifier(value, { allow }) for identifiers or trustedSql(...) for audited raw SQL.`,
-    severity: diagnosticDefinitions.KV422.severity,
+    detail: `sql.${method}(...) receives ${sqlSafetyDescription(safety)} text; use sql.identifier(value, { allow }) for identifiers or trustedSql(...) for audited raw SQL.`,
     site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
-  };
+  });
 }
 
 function nativeDrizzleSqlReceiverTexts(sourceFile: SourceFile): Set<string> {
@@ -2921,14 +2920,14 @@ function secretProjectionBackstopDiagnostics(
     .sort();
   if (secretTables.length === 0) return [];
 
-  const definition = diagnosticDefinitions.KV435;
   const tableList = [...new Set(secretTables)].join(', ');
-  return paths.map((path) => ({
-    code: 'KV435',
-    message: `${definition.message} Query projection ${query}.${path} is opaque or unresolved while reading secret-classified table(s): ${tableList}. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
-    severity: definition.severity,
-    site,
-  }));
+  return paths.map((path) =>
+    drizzleDiagnostic({
+      code: 'KV435',
+      detail: `Query projection ${query}.${path} is opaque or unresolved while reading secret-classified table(s): ${tableList}. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
+      site,
+    }),
+  );
 }
 
 function tableRowProjectionDiagnostics(
@@ -2936,13 +2935,13 @@ function tableRowProjectionDiagnostics(
   shape: QueryShape,
   site: string,
 ): TouchGraphDiagnostic[] {
-  const definition = diagnosticDefinitions.KV439;
-  return tableRowQueryShapePaths(shape).map((path) => ({
-    code: 'KV439',
-    message: `${definition.message} Query projection ${pathForQueryDiagnostic(query, path)} carries table-row provenance; select explicit fields instead.`,
-    severity: definition.severity,
-    site,
-  }));
+  return tableRowQueryShapePaths(shape).map((path) =>
+    drizzleDiagnostic({
+      code: 'KV439',
+      detail: `Query projection ${pathForQueryDiagnostic(query, path)} carries table-row provenance; select explicit fields instead.`,
+      site,
+    }),
+  );
 }
 
 function tableRowQueryShapePaths(shape: QueryShape, path: readonly string[] = []): string[] {
@@ -3055,21 +3054,23 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
   const diagnostics: TouchGraphDiagnostic[] = [];
 
   for (const write of summary.writes) {
-    diagnostics.push({
-      code: 'KV406',
-      message: `${diagnosticDefinitions.KV406.message} Query local helper touches Drizzle table via ${write.operation}().`,
-      severity: diagnosticDefinitions.KV406.severity,
-      site: write.site,
-    });
+    diagnostics.push(
+      drizzleDiagnostic({
+        code: 'KV406',
+        detail: `Query local helper touches Drizzle table via ${write.operation}().`,
+        site: write.site,
+      }),
+    );
   }
 
   for (const unresolved of summary.unresolved) {
-    diagnostics.push({
-      code: 'KV406',
-      message: `${diagnosticDefinitions.KV406.message} Query local helper has unresolved Drizzle ${unresolved.operation}().`,
-      severity: diagnosticDefinitions.KV406.severity,
-      site: unresolved.site,
-    });
+    diagnostics.push(
+      drizzleDiagnostic({
+        code: 'KV406',
+        detail: `Query local helper has unresolved Drizzle ${unresolved.operation}().`,
+        site: unresolved.site,
+      }),
+    );
   }
 
   return diagnostics;
@@ -3284,7 +3285,7 @@ function extractQueryDefinitionsFromSourceFile(
         definitions.push({
           declaredReadDomains: [],
           declaredReadExpressions: [],
-          diagnostics: [unresolvedQueryLoadCallbackDiagnostic()],
+          diagnostics: [unresolvedQueryLoadCallbackDiagnostic(bodyArgument ?? queryCall)],
           hasOutputSchema: false,
           hasSelection: false,
           index: declaration.getStart(),
@@ -3350,7 +3351,7 @@ function extractQueryDefinitionsFromSourceFile(
       ...(options.relationalTableName ? { relationalTableName: options.relationalTableName } : {}),
     };
     const diagnostics = [
-      ...(bodyResolution.unresolved ? [unresolvedQueryLoadCallbackDiagnostic()] : []),
+      ...(bodyResolution.unresolved ? [unresolvedQueryLoadCallbackDiagnostic(bodyObject)] : []),
       ...dynamicDeclaredReadsDiagnostics(bodyObject),
       ...unresolvedQueryCallbackDiagnostics(bodyObject, receiverMode),
       ...relationalQueryDiagnostics(bodyObject, receiverReferences),
@@ -3432,25 +3433,25 @@ function dynamicDeclaredReadsDiagnostics(body: ObjectLiteralExpression): TouchGr
   const reads = initializer ? unwrappedStaticExpressionNode(initializer) : undefined;
   if (!reads) return [];
   if (!Node.isArrayLiteralExpression(reads)) {
-    return [dynamicDeclaredReadsDiagnostic()];
+    return [dynamicDeclaredReadsDiagnostic(reads)];
   }
   for (const element of reads.getElements()) {
     const expression = unwrappedStaticExpressionNode(element);
     // SPEC §10.2: identifier/property-access references and inline `domain('x')`/`tag('x')` Domain
     // values are static; dynamic or spread entries fail closed as KV410.
     if (isStaticDeclaredReadEntry(expression)) continue;
-    return [dynamicDeclaredReadsDiagnostic()];
+    return [dynamicDeclaredReadsDiagnostic(expression)];
   }
   return [];
 }
 
-function dynamicDeclaredReadsDiagnostic(): TouchGraphDiagnostic {
-  return {
+function dynamicDeclaredReadsDiagnostic(node: Node): TouchGraphDiagnostic {
+  return drizzleDiagnostic({
     code: 'KV410',
-    message: `${diagnosticDefinitions.KV410.message} Opaque query reads must be a fully static table list; dynamic or spread reads fail closed.`,
-    severity: diagnosticDefinitions.KV410.severity,
-    site: '',
-  };
+    detail:
+      'Opaque query reads must be a fully static table list; dynamic or spread reads fail closed.',
+    node,
+  });
 }
 
 /** @internal */ export function tableAnnotation(

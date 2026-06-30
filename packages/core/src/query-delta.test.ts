@@ -313,6 +313,14 @@ describe('queryDeltaIsSmaller', () => {
     expect(delta).toBeDefined();
     expect(queryDeltaIsSmaller(delta!, value)).toBe(false);
   });
+
+  it('compares canonical UTF-8 bytes instead of JavaScript string length', () => {
+    const delta: QueryDelta = { set: { x: '😀' } };
+    const value: JsonValue = { x: 'aaaaaaaaaaa' };
+
+    expect(JSON.stringify(delta).length).toBeLessThan(JSON.stringify(value).length);
+    expect(queryDeltaIsSmaller(delta, value)).toBe(false);
+  });
 });
 
 describe('read-side pagination accumulation (SPEC §9.1.1/§9.3)', () => {

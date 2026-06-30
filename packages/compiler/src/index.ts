@@ -43,6 +43,7 @@ export type {
   RoutePageComponentFact,
   RoutePageComponentPropFact,
   RoutePageFact,
+  RoutePageOutcomeFact,
   TaskGraphFact,
 } from './types.js';
 export {

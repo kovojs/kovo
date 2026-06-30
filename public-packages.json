@@ -17,10 +17,12 @@
           "./internal/document-protocol",
           "./internal/fragment-target",
           "./internal/graph",
+          "./internal/json",
           "./internal/module-ref",
           "./internal/package-prefix",
           "./internal/query-delta",
           "./internal/render-plan-token",
+          "./internal/route-pattern",
           "./internal/security-url",
           "./internal/semantic-attributes",
           "./internal/sink-policy",
@@ -1810,6 +1812,8 @@
         "generated": ["./jsx-runtime", "./jsx-dev-runtime"],
         "internal": [
           "./internal/app-shell-vite",
+          "./internal/build",
+          "./internal/build-context",
           "./internal/client-modules",
           "./internal/csrf",
           "./internal/data-plane-static-analysis",
@@ -1818,8 +1822,7 @@
           "./internal/html",
           "./internal/route",
           "./internal/static-export",
-          "./internal/wire",
-          "./internal/build"
+          "./internal/wire"
         ]
       },
       "apiRef": {
@@ -2000,8 +2003,8 @@
           "./progress",
           "./radio-group",
           "./scroll-area",
-          "./select",
           "./separator",
+          "./select",
           "./slider",
           "./switch",
           "./tabs",

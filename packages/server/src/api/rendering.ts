@@ -6,6 +6,7 @@
 export { trustedHtml, trustedUrl } from '@kovojs/browser';
 export { cspSha256, renderContentSecurityPolicy } from '../csp.js';
 export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
+export { renderRouteHtml } from '../html.js';
 export { Defer } from '../deferred-region.js';
 export type { DeferProps, RegionPriority, ServerRenderable } from '../deferred-region.js';
 export type {

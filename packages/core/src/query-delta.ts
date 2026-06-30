@@ -1,5 +1,5 @@
 import type { JsonValue } from './index.js';
-import { cloneJsonValue } from './json-clone.js';
+import { cloneJsonValue, jsonEncodedByteLength } from './json-clone.js';
 
 /**
  * @internal
@@ -156,7 +156,7 @@ export function buildQueryDelta(
  * only when this holds, so a delta is never larger than the value it replaces.
  */
 export function queryDeltaIsSmaller(delta: QueryDelta, value: JsonValue): boolean {
-  return JSON.stringify(delta).length < JSON.stringify(value).length;
+  return jsonEncodedByteLength(delta) < jsonEncodedByteLength(value);
 }
 
 /**

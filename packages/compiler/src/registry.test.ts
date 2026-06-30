@@ -180,7 +180,7 @@ export const ContactStatsRegion = component({
           exportName: 'ContactStatsRegion',
           fragments: ['components/interaction-lab/contact-stats-region'],
           name: 'components/interaction-lab/contact-stats-region',
-          queries: ['contacts'],
+          queries: ['contacts', 'contactsQuery', 'queries/contacts-query'],
         },
       ]),
     );
@@ -240,7 +240,7 @@ export const ContactStatsRegion = component({
           domName: 'contact-stats-region',
           exportName: 'ContactStatsRegion',
           name: 'components/interaction-lab/contact-stats-region',
-          queries: ['contacts'],
+          queries: ['contacts', 'contactsQuery', 'queries/contacts-query'],
         },
       ]),
     );
