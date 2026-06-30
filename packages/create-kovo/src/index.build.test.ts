@@ -302,6 +302,57 @@ describe('create-kovo starter (build integration)', () => {
     }
   }, 120_000);
 
+  it('fingerprints the starter stylesheet URL before serving it as immutable', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-build-prod-cache-'));
+    const port = await reservePort();
+    let prodServer: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Build Prod Cache Proof' });
+      linkStarterBuildDependencies(root);
+
+      execFileSync('pnpm', ['run', 'build:prod'], {
+        cwd: root,
+        env: withRepoBinOnPath(),
+        stdio: 'pipe',
+      });
+
+      prodServer = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(prodServer);
+      await waitForTcpPort('127.0.0.1', port, output);
+
+      const origin = `http://127.0.0.1:${port}`;
+      const loginResponse = await fetch(`${origin}/login`);
+      expect(loginResponse.status).toBe(200);
+      const loginHtml = await loginResponse.text();
+      const stylesheetHref = /\/assets\/styles\.css/.exec(loginHtml)?.[0] ?? '';
+
+      expect(stylesheetHref).toBe('/assets/styles.css');
+
+      const stylesheetResponse = await fetch(`${origin}${stylesheetHref}`);
+      expect(stylesheetResponse.status).toBe(200);
+      expect(stylesheetResponse.headers.get('cache-control')).toBe(
+        'public, max-age=0, must-revalidate',
+      );
+      expect(stylesheetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
+      expect(await stylesheetResponse.text()).toContain('--kovo-theme');
+    } finally {
+      await stopProcess(prodServer);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('boots Postgres starter DDL with serial columns, reordered foreign keys, and additive drift', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });

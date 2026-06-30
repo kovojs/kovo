@@ -101,7 +101,7 @@ describe('kovo build', () => {
         expect(stylesheetText).toContain('color:#639');
         expect(stylesheetResponse.status).toBe(200);
         expect(stylesheetResponse.headers.get('cache-control')).toBe(
-          'public, max-age=31536000, immutable',
+          'public, max-age=0, must-revalidate',
         );
         expect(stylesheetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
       } finally {
@@ -1883,7 +1883,25 @@ export async function resetFixture() {
               'cross-origin-resource-policy': 'same-origin',
               'x-content-type-options': 'nosniff',
             },
-            src: '/(?:assets|c)/(.*)',
+            src: '/c/(.*)',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(?:.*\\/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=0, must-revalidate',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(.*)',
           },
           {
             continue: true,
@@ -1960,7 +1978,25 @@ export async function resetFixture() {
               'cross-origin-resource-policy': 'same-origin',
               'x-content-type-options': 'nosniff',
             },
-            src: '/(?:assets|c)/(.*)',
+            src: '/c/(.*)',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(?:.*\\/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=0, must-revalidate',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(.*)',
           },
           {
             continue: true,

@@ -607,7 +607,7 @@ export default async function handler(request) {
         const assetResponse = await fetch(`${baseUrl}/assets/cart.css`);
         await expect(assetResponse.text()).resolves.toBe('body { color: navy; }');
         expect(assetResponse.headers.get('cache-control')).toBe(
-          'public, max-age=31536000, immutable',
+          'public, max-age=0, must-revalidate',
         );
         expect(assetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
         expect(assetResponse.headers.get('x-content-type-options')).toBe('nosniff');
@@ -792,7 +792,25 @@ export default async function handler(request) {
               'cross-origin-resource-policy': 'same-origin',
               'x-content-type-options': 'nosniff',
             },
-            src: '/(?:assets|c)/(.*)',
+            src: '/c/(.*)',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(?:.*\\/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=0, must-revalidate',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(.*)',
           },
           {
             continue: true,
@@ -922,7 +940,25 @@ export default async function handler(request) {
               'cross-origin-resource-policy': 'same-origin',
               'x-content-type-options': 'nosniff',
             },
-            src: '/(?:assets|c)/(.*)',
+            src: '/c/(.*)',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(?:.*\\/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=0, must-revalidate',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(.*)',
           },
           {
             continue: true,
@@ -1088,7 +1124,25 @@ export default async function handler(request) {
               'cross-origin-resource-policy': 'same-origin',
               'x-content-type-options': 'nosniff',
             },
-            src: '/(?:assets|c)/(.*)',
+            src: '/c/(.*)',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=31536000, immutable',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(?:.*\\/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+',
+          },
+          {
+            continue: true,
+            headers: {
+              'cache-control': 'public, max-age=0, must-revalidate',
+              'cross-origin-resource-policy': 'same-origin',
+              'x-content-type-options': 'nosniff',
+            },
+            src: '/assets/(.*)',
           },
           {
             continue: true,
@@ -1259,6 +1313,25 @@ export default async function handler(request) {
       };
 
       const assetResponse = await workerModule.default.fetch(
+        new Request('https://worker.test/assets/cart.css'),
+        {
+          ASSETS: {
+            fetch: async () =>
+              new Response('body { color: navy; }', {
+                headers: { 'content-type': 'text/css; charset=utf-8' },
+              }),
+          },
+        },
+      );
+      await expect(assetResponse.text()).resolves.toBe('body { color: navy; }');
+      expect(assetResponse.headers.get('cache-control')).toBe('public, max-age=0, must-revalidate');
+      expect(assetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+      expect(assetResponse.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(assetResponse.headers.get('access-control-allow-origin')).toBeNull();
+      expect(assetResponse.headers.get('vary')).toBeNull();
+      expect(assetResponse.headers.get('set-cookie')).toBeNull();
+
+      const immutableAssetResponse = await workerModule.default.fetch(
         new Request('https://worker.test/c/__v/cart-v1/cart.client.js'),
         {
           ASSETS: {
@@ -1269,15 +1342,15 @@ export default async function handler(request) {
           },
         },
       );
-      await expect(assetResponse.text()).resolves.toBe('export const asset = true;');
-      expect(assetResponse.headers.get('cache-control')).toBe(
+      await expect(immutableAssetResponse.text()).resolves.toBe('export const asset = true;');
+      expect(immutableAssetResponse.headers.get('cache-control')).toBe(
         'public, max-age=31536000, immutable',
       );
-      expect(assetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
-      expect(assetResponse.headers.get('x-content-type-options')).toBe('nosniff');
-      expect(assetResponse.headers.get('access-control-allow-origin')).toBeNull();
-      expect(assetResponse.headers.get('vary')).toBeNull();
-      expect(assetResponse.headers.get('set-cookie')).toBeNull();
+      expect(immutableAssetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+      expect(immutableAssetResponse.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(immutableAssetResponse.headers.get('access-control-allow-origin')).toBeNull();
+      expect(immutableAssetResponse.headers.get('vary')).toBeNull();
+      expect(immutableAssetResponse.headers.get('set-cookie')).toBeNull();
 
       const assetErrorResponse = await workerModule.default.fetch(
         new Request('https://worker.test/c/__v/cart-v1/missing.client.js'),

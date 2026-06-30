@@ -52,12 +52,13 @@ enhanced-mutation success body is **still** empty end-to-end despite being close
 
 ### B. HTTP caching hygiene
 
-- [ ] **B1 — The starter's `src/styles.css` is emitted as the non-fingerprinted `/assets/styles.css` yet served `cache-control: public, max-age=31536000, immutable` by every preset, so the app's own stylesheet is permanently stale in browser/shared caches after any redeploy.** (med, template; found by `t2-http-caching`)
+- [x] **B1 — The starter's `src/styles.css` is emitted as the non-fingerprinted `/assets/styles.css` yet served `cache-control: public, max-age=31536000, immutable` by every preset, so the app's own stylesheet is permanently stale in browser/shared caches after any redeploy.** (med, template; found by `t2-http-caching`)
   - Observed behavior: `build:prod` then `curl -i /assets/styles.css` → `cache-control: public, max-age=31536000, immutable` on a URL whose bytes change when you edit `src/styles.css`. Editing a theme token / base rule and redeploying leaves `/assets/styles.css` unchanged-URL but changed-content → returning visitors keep the old CSS for up to a year.
   - Root cause: `packages/create-kovo/templates/vite.config.ts:20-21` sets `rollupOptions.input` styles to `src/styles.css` with `assetFileNames: 'assets/[name][extname]'`, forcing the unhashed name (Kovo-emitted base/route CSS keep their content hashes); the preset then applies the `immutable`/`max-age=31536000` directive to `/assets/*` whose correctness precondition is a content-hashed (stable) URL.
   - Why it matters: `immutable` is a promise that the URL's bytes never change; the starter breaks that promise for its primary stylesheet, so every visual/theme change is invisible to returning users until a hard refresh — a classic stale-cache footgun shipped by default.
   - Repro evidence: fresh scaffold `build:prod` → `curl -i /assets/styles.css` → `…immutable`; edit `styles.css`, rebuild, same URL, changed bytes. Source: `templates/vite.config.ts:20-21`.
   - Acceptance: fingerprint the template stylesheet (content-hashed filename) so the `immutable` directive is correct, or serve `/assets/styles.css` with a revalidating cache directive. SPEC §9.5.
+  - Evidence 2026-06-29: `packages/server/src/build.ts` now serves unhashed `/assets/*` with `cache-control: public, max-age=0, must-revalidate` while keeping `/c/__v/*` and hashed `/assets/*` immutable; `node /Users/mini/kovo/node_modules/vitest/vitest.mjs run packages/create-kovo/src/index.build.test.ts packages/server/src/build.test.ts packages/cli/src/index.kovo-build.test.ts --testNamePattern "fingerprints the starter stylesheet URL before serving it as immutable|runs the generated production build graph gate|bundles an app module and emits node preset output without Vite at request time|auto-detects Vercel and emits Build Output API files|emits node, vercel, and cloudflare output with full security headers" --run` proves the starter stylesheet remains `/assets/styles.css` but is no longer served as immutable across the built-in presets (SPEC §9.5).
 
 ### C. Static export ships broken
 
@@ -109,9 +110,9 @@ enhanced-mutation success body is **still** empty end-to-end despite being close
 ## Latest Verification
 
 - **A1 (fixed/verified 2026-06-29):** `pnpm exec vitest run packages/server/src/build.test.ts`; `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-build-browser.test.ts`.
-- **bugz-17 B1 (self-verified):** `publicAccess` + `cacheControl:'public'` session-reading query → anon and authed `/_q/` both `cache-control: public, max-age=300`, no `Vary`, authed body leaks `userId`; `build:prod` clean.
-- **bugz-17 B2 (self-verified):** clean prod rebuild → add-contact success body still empty, DOM stale (bugz-16 regression).
+- **B1 (fixed/verified 2026-06-29):** focused build/preset tests prove unhashed `/assets/*` now revalidates while hashed `/assets/*` and `/c/__v/*` remain immutable.
+- **bugz-17 B1/B2:** fixed in `plans/bugz-17.md`; B1 fails closed to `private, no-store` + `Vary: Cookie`, and B2's prod starter mutation response now emits query + fragment truth.
 - **C1/C2 (fixed 2026-06-29):** focused tests `pnpm exec vitest run packages/cli/src/index.kovo-export.test.ts` and `pnpm exec vitest run packages/server/src/static-export-route-plan.test.ts`; `git diff --check` clean.
 - **D2 fixed / D3 partially bounded:** `pnpm exec vitest run packages/server/src/deferred-region.test.ts packages/server/src/app-document.test.ts --reporter=dot` verifies throwing and hung deferred regions degrade to per-region error fallback chunks without a route 500 or indefinite request hang; D1 remains open for true shell-first streaming.
-- **B1, D1, and the remaining D3 shell-first gap:** independently reproduced by the track verifiers and source-confirmed (`templates/vite.config.ts:20-21`, `deferred-region.ts:111-164`, `route.ts:1166`, `deferred-stream.ts:120-134`).
+- **D1 and the remaining D3 shell-first gap:** independently reproduced by the track verifiers and source-confirmed (`deferred-region.ts:111-164`, `route.ts:1166`, `deferred-stream.ts:120-134`).
 - Baseline: fresh default scaffold passes `pnpm run check`. Monorepo repaired; transitive deps resolve. Throwaway apps under `/Users/mini/kovo-dogfood-pg8-20260629/` (+ `-pg8-base`) safe to delete.

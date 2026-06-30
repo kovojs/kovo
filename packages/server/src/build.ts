@@ -10,6 +10,8 @@ import { resolvedFileSystemPath } from './vite-build-assets.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
 
 const immutableCacheControl = 'public, max-age=31536000, immutable';
+const revalidatingAssetCacheControl = 'public, max-age=0, must-revalidate';
+const immutableAssetPathPattern = /^\/assets\/(?:.*\/)?[^/]*-[a-f0-9]{8,}(?:\.[^/.]+)+$/i;
 
 /**
  * Build-time preset descriptor consumed by `kovo build` and deployment tooling.
@@ -155,8 +157,8 @@ export function defineConfig(config: KovoConfig): KovoConfig {
  * Create the built-in Node/VPS preset descriptor.
  *
  * The emitted output wraps the neutral `server/handler.mjs` Request-to-Response
- * contract in a Node `http` server and serves immutable `/c/*` and `/assets/*`
- * client files without Vite at request time.
+ * contract in a Node `http` server and serves immutable `/c/*` plus hashed
+ * `/assets/*` client files without Vite at request time.
  *
  * @experimental
  */
@@ -393,7 +395,17 @@ function vercelBuildOutputConfig(): unknown {
       {
         continue: true,
         headers: immutableStaticHeaders(),
-        src: '/(?:assets|c)/(.*)',
+        src: '/c/(.*)',
+      },
+      {
+        continue: true,
+        headers: immutableStaticHeaders(),
+        src: '/assets/(?:.*\\/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+',
+      },
+      {
+        continue: true,
+        headers: revalidatingAssetHeaders(),
+        src: '/assets/(.*)',
       },
       {
         continue: true,
@@ -413,7 +425,17 @@ function vercelStaticBuildOutputConfig(): unknown {
       {
         continue: true,
         headers: immutableStaticHeaders(),
-        src: '/(?:assets|c)/(.*)',
+        src: '/c/(.*)',
+      },
+      {
+        continue: true,
+        headers: immutableStaticHeaders(),
+        src: '/assets/(?:.*\\/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+',
+      },
+      {
+        continue: true,
+        headers: revalidatingAssetHeaders(),
+        src: '/assets/(.*)',
       },
       {
         continue: true,
@@ -432,6 +454,18 @@ function immutableStaticHeaders(): Record<string, string> {
     'cross-origin-resource-policy': 'same-origin',
     'x-content-type-options': 'nosniff',
   };
+}
+
+function revalidatingAssetHeaders(): Record<string, string> {
+  return {
+    'cache-control': revalidatingAssetCacheControl,
+    'cross-origin-resource-policy': 'same-origin',
+    'x-content-type-options': 'nosniff',
+  };
+}
+
+function isImmutableStaticAssetPath(pathname: string): boolean {
+  return pathname.startsWith('/c/') || immutableAssetPathPattern.test(pathname);
 }
 
 // SPEC §6.6 / bugz M4: Vercel/Cloudflare `config.json` route headers carry the full
@@ -569,6 +603,9 @@ function responseHeadersToNodeHeaders(headers) {
 function firstHeaderValue(value) {
   return Array.isArray(value) ? value[0] : value;
 }
+function isImmutableStaticAssetPath(pathname) {
+  return pathname.startsWith('/c/') || ${immutableAssetPathPattern}.test(pathname);
+}
 `;
 }
 
@@ -576,6 +613,7 @@ function cloudflareWorkerSource(): string {
   return `import handler from './server/handler.mjs';
 
 const immutableStaticHeaders = ${JSON.stringify(immutableStaticHeaders())};
+const revalidatingAssetHeaders = ${JSON.stringify(revalidatingAssetHeaders())};
 const documentStaticHeaders = ${JSON.stringify(documentStaticHeaders())};
 const staticErrorHeaders = {
   'cache-control': 'no-store',
@@ -593,8 +631,10 @@ export default {
         const headers = new Headers(assetResponse.headers);
         if (assetResponse.status >= 400) {
           applyHeaders(headers, staticErrorHeaders);
-        } else if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/c/')) {
+        } else if (isImmutableStaticAssetPath(url.pathname)) {
           applyHeaders(headers, immutableStaticHeaders);
+        } else if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/c/')) {
+          applyHeaders(headers, revalidatingAssetHeaders);
         } else {
           applyHeaders(headers, documentStaticHeaders);
         }
@@ -614,6 +654,9 @@ function applyHeaders(headers, policy) {
   for (const [name, value] of Object.entries(policy)) {
     headers.set(name, value);
   }
+}
+function isImmutableStaticAssetPath(pathname) {
+  return pathname.startsWith('/c/') || ${immutableAssetPathPattern}.test(pathname);
 }
 `;
 }
@@ -713,6 +756,7 @@ import handler from './server/handler.mjs';
 const clientRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'client');
 const staticRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'static');
 const immutableStaticHeaders = ${JSON.stringify(immutableStaticHeaders())};
+const revalidatingAssetHeaders = ${JSON.stringify(revalidatingAssetHeaders())};
 const documentStaticHeaders = ${JSON.stringify(documentStaticHeaders())};
 const bodylessMethods = new Set(['GET', 'HEAD']);
 
@@ -741,11 +785,12 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
 
   const pathname = staticPathname(nodeRequest);
   if (pathname === undefined) return false;
-  const immutableAsset = pathname.startsWith('/c/') || pathname.startsWith('/assets/');
-  const filePath = immutableAsset ? staticFilePath(clientRoot, pathname) : routeDocumentPath(pathname);
+  const staticAsset = pathname.startsWith('/c/') || pathname.startsWith('/assets/');
+  const immutableAsset = staticAsset && isImmutableStaticAssetPath(pathname);
+  const filePath = staticAsset ? staticFilePath(clientRoot, pathname) : routeDocumentPath(pathname);
 
   if (filePath === undefined) {
-    if (!immutableAsset) return false;
+    if (!staticAsset) return false;
     nodeResponse.writeHead(403, staticErrorHeaders());
     nodeResponse.end('Forbidden');
     return true;
@@ -753,14 +798,18 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
 
   const fileStat = await stat(filePath).catch(() => undefined);
   if (fileStat === undefined || !fileStat.isFile()) {
-    if (!immutableAsset) return false;
+    if (!staticAsset) return false;
     nodeResponse.writeHead(404, staticErrorHeaders());
     nodeResponse.end('Not Found');
     return true;
   }
 
   nodeResponse.writeHead(200, {
-    ...(immutableAsset ? immutableStaticHeaders : documentStaticHeaders),
+    ...(staticAsset
+      ? immutableAsset
+        ? immutableStaticHeaders
+        : revalidatingAssetHeaders
+      : documentStaticHeaders),
     'content-length': String(fileStat.size),
     'content-type': contentType(filePath),
   });
@@ -947,6 +996,10 @@ function staticErrorHeaders() {
 
 function firstHeaderValue(value) {
   return Array.isArray(value) ? value[0] : value;
+}
+
+function isImmutableStaticAssetPath(pathname) {
+  return pathname.startsWith('/c/') || ${immutableAssetPathPattern}.test(pathname);
 }
 
 if (process.argv[1] && pathToFileURL(process.argv[1]).href === import.meta.url) {
