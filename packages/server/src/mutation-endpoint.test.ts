@@ -178,6 +178,37 @@ describe('server mutation endpoint routing', () => {
     await expect(runMutation(fails, { value: 'ok' }, {})).rejects.toBe(thrown);
   });
 
+  it('D1: logs default-config mutation handler exceptions to stderr', async () => {
+    const thrown = new Error('handler failed:default');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const fails = mutation('lifecycle/handler-throw-default-log', {
+      csrf: false,
+      input: s.object({ value: s.string() }),
+      handler() {
+        throw thrown;
+      },
+    });
+
+    try {
+      const response = await renderMutationEndpointResponse(fails, {
+        headers: {},
+        rawInput: { value: 'ok' },
+        redirectTo: '/done',
+        request: {},
+      });
+
+      expect(response.status).toBe(500);
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining(
+          '[kovo] no-js-mutation-handler failed mutation=lifecycle/handler-throw-default-log',
+        ),
+        thrown,
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it('routes mutation endpoints without Kovo-Fragment through the no-JS POST redirect', async () => {
     const addToCart = mutation('cart/add', {
       input: s.object({ productId: s.string() }),

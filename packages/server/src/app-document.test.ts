@@ -34,6 +34,14 @@ async function readRemainingStreamText(
   }
 }
 
+function deferred<Value = void>() {
+  let resolve!: (value: Value | PromiseLike<Value>) => void;
+  const promise = new Promise<Value>((settle) => {
+    resolve = settle;
+  });
+  return { promise, resolve };
+}
+
 function headerValue(headers: Record<string, string | readonly string[]>, name: string) {
   const key = Object.keys(headers).find((candidate) => candidate.toLowerCase() === name);
   const value = key === undefined ? undefined : headers[key];
@@ -617,6 +625,83 @@ describe('server app document boundary', () => {
     expect(body.indexOf('<kovo-fragment target="dashboard:outer"')).toBeLessThan(
       body.indexOf('<kovo-fragment target="dashboard:inner"'),
     );
+  });
+
+  it('drains nested Defer regions registered after an async outer stream chunk settles', async () => {
+    const outerStarted = deferred();
+    const outerRelease = deferred();
+    const innerStarted = deferred();
+    const innerRelease = deferred();
+    const dashboardRoute = route('/dashboard', {
+      async page() {
+        const outer = await renderHtmlValue(
+          await Defer({
+            fallback: jsx('section', { children: 'Loading outer' }),
+            priority: 'after-paint',
+            render: async () => {
+              outerStarted.resolve();
+              await outerRelease.promise;
+              const inner = await renderHtmlValue(
+                await Defer({
+                  fallback: jsx('p', { children: 'Loading inner' }),
+                  priority: 'after-paint',
+                  render: async () => {
+                    innerStarted.resolve();
+                    await innerRelease.promise;
+                    return jsx('p', { children: 'Inner ready' });
+                  },
+                  target: 'dashboard:inner',
+                }),
+              );
+              return renderedHtml(`<section><h2>Outer ready</h2>${inner}</section>`);
+            },
+            target: 'dashboard:outer',
+          }),
+        );
+        return renderedHtml(`<main>${outer}</main>`);
+      },
+    });
+    const request = new Request('https://app.example.test/dashboard');
+    const app = createApp({ routes: [dashboardRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request,
+      route: dashboardRoute,
+      url: new URL(request.url),
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toBeInstanceOf(ReadableStream);
+    const reader = (response.body as ReadableStream<Uint8Array>).getReader();
+    const first = await reader.read();
+    expect(first.done).toBe(false);
+    const firstText = new TextDecoder().decode(first.value);
+    expect(firstText).toContain(
+      '<kovo-defer target="dashboard:outer" state="pending" data-kovo-region-priority="after-paint"><section>Loading outer</section></kovo-defer>',
+    );
+    expect(firstText).not.toContain('dashboard:inner');
+    await outerStarted.promise;
+
+    outerRelease.resolve();
+    const outerChunk = await reader.read();
+    expect(outerChunk.done).toBe(false);
+    const outerChunkText = new TextDecoder().decode(outerChunk.value);
+    expect(outerChunkText).toContain('<kovo-fragment target="dashboard:outer" priority="normal">');
+    expect(outerChunkText).toContain('<h2>Outer ready</h2>');
+    expect(outerChunkText).toContain(
+      '<kovo-defer target="dashboard:inner" state="pending" data-kovo-region-priority="after-paint"><p>Loading inner</p></kovo-defer>',
+    );
+    expect(outerChunkText).not.toContain('Inner ready');
+    await innerStarted.promise;
+
+    innerRelease.resolve();
+    const rest = await readRemainingStreamText(reader);
+    expect(rest).toContain('<kovo-fragment target="dashboard:inner" priority="normal">');
+    expect(rest).toContain('<p>Inner ready</p>');
+    expect(rest).toContain('--kovo-boundary-');
+    expect(rest).toContain('--');
   });
 
   it('streams visible deferred route regions for viewport-gated browser apply', async () => {

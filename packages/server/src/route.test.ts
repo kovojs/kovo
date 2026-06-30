@@ -302,4 +302,30 @@ describe('route primitives', () => {
       routePath: '/cart',
     });
   });
+
+  it('D1: logs default-config route page exceptions to stderr', async () => {
+    const thrown = new Error('private route load detail');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const request = {};
+    const throwingPage = route('/products/:id', {
+      page() {
+        throw thrown;
+      },
+    });
+
+    try {
+      await expect(
+        renderRoutePageResponse(throwingPage, { params: { id: 'p1' } }, request),
+      ).resolves.toMatchObject({
+        body: 'Internal Server Error',
+        status: 500,
+      });
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[kovo] route-page failed route=/products/:id'),
+        thrown,
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
 });

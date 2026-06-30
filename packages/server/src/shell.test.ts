@@ -142,10 +142,23 @@ describe('server app shell dispatch table', () => {
         pathname: '/status',
       }),
     ).toMatchObject({
-      allowedMethods: ['GET'],
+      allowedMethods: ['GET', 'HEAD'],
       endpoint: status,
       kind: 'endpoint',
       methodAllowed: false,
+    });
+
+    expect(
+      matchShellDispatch({
+        endpoints: [status],
+        method: 'HEAD',
+        pathname: '/status',
+      }),
+    ).toMatchObject({
+      allowedMethods: ['GET', 'HEAD'],
+      endpoint: status,
+      kind: 'endpoint',
+      methodAllowed: true,
     });
   });
 

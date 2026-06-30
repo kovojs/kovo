@@ -311,7 +311,7 @@ describe('server schemas', () => {
       },
     });
     const form = new FormData();
-    form.set('avatar', formDataFile(['avatar'], 'avatar.png', 'image/png'));
+    form.set('avatar', pngFile('avatar.png', 'image/png'));
 
     await expect(runMutation(uploadAvatar, form, {})).resolves.toEqual({
       changes: [],
@@ -319,7 +319,67 @@ describe('server schemas', () => {
       rerunQueries: [],
       value: {
         name: 'avatar.png',
-        size: 6,
+        size: 11,
+        type: 'image/png',
+      },
+    });
+  });
+
+  it('enforces bare file accept allowlists against sniffed bytes', async () => {
+    const schema = s.file().accept(['image/png']);
+    const lyingHtml = formDataFile(
+      ['<html><script>alert(document.cookie)</script></html>'],
+      'avatar.png',
+      'image/png',
+    );
+    const png = pngFile('avatar.png', 'text/html');
+
+    await expect(schema.parseAsync(lyingHtml)).rejects.toThrow('Expected file type image/png');
+    await expect(parseSchemaAsync(schema, lyingHtml)).rejects.toThrow(
+      'Expected file type image/png',
+    );
+    await expect(schema.parseAsync(png)).resolves.toBe(png);
+    expect(() => schema.parse(png)).toThrow(/verified file type checks require async parsing/u);
+  });
+
+  it('rejects non-storing mutation uploads whose client MIME lies about sniffed bytes', async () => {
+    const uploadAvatar = mutation('profile/avatar-sniff-only', {
+      input: s.object({
+        avatar: s.file().accept(['image/png']),
+      }),
+      handler(input) {
+        return {
+          name: input.avatar.name,
+          type: input.avatar.type,
+        };
+      },
+    });
+    const lying = new FormData();
+    lying.set(
+      'avatar',
+      formDataFile(
+        ['<html><script>alert(document.cookie)</script></html>'],
+        'avatar.png',
+        'image/png',
+      ),
+    );
+    const legitimate = new FormData();
+    legitimate.set('avatar', pngFile('avatar.png', 'image/png'));
+
+    await expect(runMutation(uploadAvatar, lying, {})).resolves.toEqual({
+      error: {
+        code: 'VALIDATION',
+        payload: { issues: [{ message: 'Expected file type image/png', path: ['avatar'] }] },
+      },
+      ok: false,
+      status: 422,
+    });
+    await expect(runMutation(uploadAvatar, legitimate, {})).resolves.toEqual({
+      changes: [],
+      ok: true,
+      rerunQueries: [],
+      value: {
+        name: 'avatar.png',
         type: 'image/png',
       },
     });

@@ -78,18 +78,45 @@ export interface WebhookReplayReservation {
 }
 
 /**
+ * Declared domain writes for a webhook. Used by {@link WebhookDefinition.writes}
+ * and {@link WebhookHandlerContext.recordChange} so the TypeScript surface mirrors
+ * the SPEC §9.1 endpoint audit contract.
+ */
+export type WebhookDeclaredWrites = readonly Domain[];
+
+/**
+ * Domain keys a webhook may record from its declared `writes` list. If a webhook
+ * declares no writes, `recordChange` has no valid domain key.
+ */
+export type WebhookDeclaredWriteKey<Writes extends WebhookDeclaredWrites | undefined> =
+  Writes extends readonly Domain<infer DomainKey>[] ? DomainKey : never;
+
+/**
+ * Domain accepted by `WebhookHandlerContext.recordChange`. SPEC §9.1 requires
+ * webhook writes to be declared so `kovo explain --endpoints` cannot under-report
+ * machine-ingress invalidation.
+ */
+export type WebhookDeclaredWriteDomain<Writes extends WebhookDeclaredWrites | undefined> = Domain<
+  WebhookDeclaredWriteKey<Writes>
+>;
+
+/**
  * The `context` passed to a webhook `handler` (SPEC §9.1 webhook lifecycle): the
  * transaction handle `tx`, verified `rawBody`, the raw `request`, `fail` to return a
- * typed {@link WebhookFail}, and `recordChange` to emit a domain change record.
+ * typed {@link WebhookFail}, and `recordChange` to emit a declared domain change record.
  */
-export interface WebhookHandlerContext<Input, Tx = unknown> {
+export interface WebhookHandlerContext<
+  Input,
+  Tx = unknown,
+  Writes extends WebhookDeclaredWrites | undefined = WebhookDeclaredWrites,
+> {
   fail<Code extends string, Payload>(
     code: Code,
     payload: Payload,
     options?: { retryAfter?: number; status?: 400 | 401 | 422 | 429 | 500 },
   ): WebhookFail<Code, Payload>;
   rawBody: Uint8Array;
-  recordChange<const DomainKey extends string, ChangeInput = Input>(
+  recordChange<const DomainKey extends WebhookDeclaredWriteKey<Writes>, ChangeInput = Input>(
     domain: Domain<DomainKey>,
     options?: WebhookChangeOptions<ChangeInput>,
   ): ChangeRecord<DomainKey, ChangeInput | Input>;
@@ -111,11 +138,16 @@ export interface WebhookTransactionContext<Input> {
 type WebhookInputFor<InputSchema extends Schema<unknown>> = InferSchema<InputSchema> &
   Record<string, unknown>;
 
-interface WebhookDefinitionBase<InputSchema extends Schema<unknown>, Value, Tx> {
+interface WebhookDefinitionBase<
+  InputSchema extends Schema<unknown>,
+  Value,
+  Tx,
+  Writes extends WebhookDeclaredWrites | undefined,
+> {
   access?: AccessDecision;
   handler: (
     input: WebhookInputFor<InputSchema>,
-    context: WebhookHandlerContext<WebhookInputFor<InputSchema>, Tx>,
+    context: WebhookHandlerContext<WebhookInputFor<InputSchema>, Tx, Writes>,
   ) => Promise<Value | WebhookFail> | (Value | WebhookFail);
   idempotency?: (input: WebhookInputFor<InputSchema>) => string | undefined;
   input: InputSchema;
@@ -130,7 +162,7 @@ interface WebhookDefinitionBase<InputSchema extends Schema<unknown>, Value, Tx> 
    * declaration lets `kovo explain --endpoints` print the webhook write chain without executing
    * provider traffic (SPEC §11.4).
    */
-  writes?: readonly Domain[];
+  writes?: Writes;
 }
 
 interface WebhookVerifiedDefinition {
@@ -153,7 +185,8 @@ export type WebhookDefinition<
   InputSchema extends Schema<unknown> = Schema<unknown>,
   Value = unknown,
   Tx = unknown,
-> = WebhookDefinitionBase<InputSchema, Value, Tx> &
+  Writes extends WebhookDeclaredWrites | undefined = undefined,
+> = WebhookDefinitionBase<InputSchema, Value, Tx, Writes> &
   (WebhookVerifiedDefinition | WebhookNoneDefinition);
 
 /**
@@ -167,11 +200,12 @@ export interface WebhookDeclaration<
   InputSchema extends Schema<unknown> = Schema<unknown>,
   Value = unknown,
   Tx = unknown,
+  Writes extends WebhookDeclaredWrites | undefined = WebhookDeclaredWrites,
 > extends EndpointDeclaration<Path, 'POST', 'exact'> {
   access?: AccessDecision;
   name: Name;
   webhook: true;
-  webhookDefinition: WebhookDefinition<InputSchema, Value, Tx>;
+  webhookDefinition: WebhookDefinition<InputSchema, Value, Tx, Writes>;
 }
 
 export interface WebhookRunResult<Input = unknown, Value = unknown> {
@@ -275,13 +309,14 @@ export function webhook<
   InputSchema extends Schema<unknown>,
   Value = unknown,
   Tx = unknown,
+  const Writes extends WebhookDeclaredWrites | undefined = undefined,
 >(
   path: Path,
-  definition: WebhookDefinition<InputSchema, Value, Tx>,
-): WebhookDeclaration<Path, Path, InputSchema, Value, Tx> {
+  definition: WebhookDefinition<InputSchema, Value, Tx, Writes>,
+): WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes> {
   const name = webhookNameFromPath(path);
   assertWebhookWritePosture(name, definition);
-  let declaration: WebhookDeclaration<Path, Path, InputSchema, Value, Tx>;
+  let declaration: WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes>;
   const handler = async (request: EndpointRequest): Promise<Response> =>
     (await runWebhook(declaration, request)).response;
 
@@ -310,7 +345,7 @@ export function webhook<
     },
     webhook: true,
     webhookDefinition: definition,
-  } satisfies WebhookDeclaration<Path, Path, InputSchema, Value, Tx>;
+  } satisfies WebhookDeclaration<Path, Path, InputSchema, Value, Tx, Writes>;
 
   return declaration;
 }
@@ -329,10 +364,11 @@ export function assignDerivedWebhookName<
   InputSchema extends Schema<unknown>,
   Value,
   Tx,
+  Writes extends WebhookDeclaredWrites | undefined,
 >(
-  declaration: WebhookDeclaration<string, Path, InputSchema, Value, Tx>,
+  declaration: WebhookDeclaration<string, Path, InputSchema, Value, Tx, Writes>,
   name: Name,
-): WebhookDeclaration<Name, Path, InputSchema, Value, Tx> {
+): WebhookDeclaration<Name, Path, InputSchema, Value, Tx, Writes> {
   if (!name) {
     throw new TypeError('assignDerivedWebhookName() requires a non-empty webhook name.');
   }
@@ -342,7 +378,7 @@ export function assignDerivedWebhookName<
     exempt: true,
     justification: webhookCsrfJustification(name, declaration.webhookDefinition),
   };
-  return declaration as WebhookDeclaration<Name, Path, InputSchema, Value, Tx>;
+  return declaration as WebhookDeclaration<Name, Path, InputSchema, Value, Tx, Writes>;
 }
 
 function webhookNameFromPath<const Path extends string>(path: Path): Path {
@@ -355,8 +391,9 @@ export async function runWebhook<
   InputSchema extends Schema<unknown>,
   Value,
   Tx,
+  Writes extends WebhookDeclaredWrites | undefined,
 >(
-  declaration: WebhookDeclaration<Name, Path, InputSchema, Value, Tx>,
+  declaration: WebhookDeclaration<Name, Path, InputSchema, Value, Tx, Writes>,
   request: Request,
 ): Promise<WebhookRunResult<WebhookInputFor<InputSchema>, Value>> {
   const endpointRequest = endpointRequestWithoutSession(request);
@@ -482,7 +519,13 @@ export async function runWebhook<
   const reservation = reserveOutcome.kind === 'reserved' ? reserveOutcome.reservation : undefined;
 
   const changes: ChangeRecord<string, WebhookInputFor<InputSchema>>[] = [];
-  const context = webhookHandlerContext(input, endpointRequest, rawBody, changes);
+  const context = webhookHandlerContext(
+    input,
+    endpointRequest,
+    rawBody,
+    changes,
+    declaration.webhookDefinition.writes,
+  );
 
   try {
     const runHandler = async (tx: Tx): Promise<Value> => {
@@ -558,7 +601,13 @@ export async function runWebhook<
  * covers the recordChange-without-posture developer error the runtime can still observe.
  */
 function assertWebhookReplayPosture(
-  declaration: WebhookDeclaration<string, string, any, any, any>,
+  declaration: {
+    name: string;
+    webhookDefinition: {
+      idempotency?: unknown;
+      replayStore?: unknown;
+    };
+  },
   changes: readonly ChangeRecord[],
 ): void {
   if (changes.length === 0) return;
@@ -585,7 +634,7 @@ function assertWebhookWritePosture(
     idempotency?: unknown;
     replayStore?: unknown;
     transaction?: unknown;
-    writes?: readonly unknown[];
+    writes?: readonly unknown[] | undefined;
   },
 ): void {
   const declaresWrites = (definition.writes?.length ?? 0) > 0;
@@ -741,7 +790,8 @@ function webhookHandlerContext<Input, Tx>(
   request: EndpointRequest,
   rawBody: Uint8Array,
   changes: ChangeRecord<string, Input>[],
-): WebhookHandlerContext<Input, Tx> {
+  declaredWrites: readonly Domain[] | undefined,
+): WebhookHandlerContext<Input, Tx, WebhookDeclaredWrites> {
   return {
     fail(code, payload, options = {}) {
       return {
@@ -753,6 +803,7 @@ function webhookHandlerContext<Input, Tx>(
     },
     rawBody,
     recordChange(domain, options = {}) {
+      assertDeclaredWebhookChangeDomain(domain, declaredWrites);
       // SPEC §9.1: webhook domain writes emit the same internal change record shape as mutations.
       const record = {
         domain: domain.key,
@@ -766,6 +817,19 @@ function webhookHandlerContext<Input, Tx>(
     request,
     tx: undefined as Tx,
   };
+}
+
+function assertDeclaredWebhookChangeDomain(
+  domain: Domain,
+  declaredWrites: readonly Domain[] | undefined,
+): void {
+  if (declaredWrites?.some((declared) => declared.key === domain.key)) return;
+  const declared = (declaredWrites ?? []).map((write) => write.key).join(', ') || 'none';
+  throw new Error(
+    `Webhook recordChange("${domain.key}") is outside declared writes (${declared}). ` +
+      `SPEC §9.1 requires webhook changes to be declared so kovo explain --endpoints ` +
+      `cannot under-report machine-ingress writes.`,
+  );
 }
 
 function isWebhookFail(value: unknown): value is WebhookFail {

@@ -225,7 +225,9 @@ export function matchShellDispatch<
 
 function endpointAllowedMethods(endpoint: EndpointLike): readonly string[] {
   if (endpoint.allowedMethods !== undefined) return endpoint.allowedMethods;
-  return endpoint.method === undefined ? [] : [endpoint.method.toUpperCase()];
+  if (endpoint.method === undefined) return [];
+  const method = endpoint.method.toUpperCase();
+  return method === 'GET' ? ['GET', 'HEAD'] : [method];
 }
 
 function endpointPathMatches(endpoint: EndpointLike, pathname: string): boolean {
