@@ -1,7 +1,13 @@
 {
-  "$comment": "Generated copy-in registry for @kovojs/ui. public-packages.json declares distributionMode \"package-and-copy-in\", so apps can install versioned @kovojs/ui/<component> subpaths or copy component TSX into app-owned source with kovo add. registryDependencies lists the public packages copied source may import: `@kovojs/core`, `@kovojs/icons`, `@kovojs/headless-ui`, and `@kovojs/style`. dependencies records the exact imported symbols per package, uiComponents lists sibling files to copy, and family metadata records manifest-owned ids, parts, slots, and state for 3 copy-in-sensitive component families across 44 components. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`.",
+  "$comment": "Generated copy-in registry for @kovojs/ui. public-packages.json declares distributionMode \"package-and-copy-in\", so apps can install versioned @kovojs/ui/<component> subpaths or copy component TSX into app-owned source with kovo add. registryDependencies lists the public packages copied source may import: `@kovojs/core`, `@kovojs/icons`, `@kovojs/server`, `@kovojs/headless-ui`, and `@kovojs/style`. dependencies records the exact imported symbols per package, uiComponents lists sibling files to copy, and family metadata records manifest-owned ids, parts, slots, and state for 3 copy-in-sensitive component families across 44 components. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`.",
   "distributionMode": "package-and-copy-in",
-  "registryDependencies": ["@kovojs/core", "@kovojs/icons", "@kovojs/headless-ui", "@kovojs/style"],
+  "registryDependencies": [
+    "@kovojs/core",
+    "@kovojs/icons",
+    "@kovojs/server",
+    "@kovojs/headless-ui",
+    "@kovojs/style"
+  ],
   "components": [
     {
       "family": {
@@ -1004,7 +1010,8 @@
       "dependencies": {
         "@kovojs/headless-ui": [],
         "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
+        "@kovojs/core": ["component"],
+        "@kovojs/server": ["renderRouteHtml", "trustedHtml"]
       },
       "uiComponents": ["theme"]
     },

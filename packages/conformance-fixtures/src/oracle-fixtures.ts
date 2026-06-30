@@ -285,7 +285,7 @@ export function crossPackageOracleFixture(): CrossPackageOracleFixture {
         {
           fragments: [component.fragmentTarget],
           name: component.fragmentTarget,
-          queries: ['cart', 'product'],
+          queries: ['cart', 'cartQuery', 'product', 'productQuery'],
         },
       ],
       domainByTable: {

@@ -111,6 +111,7 @@ function installMutationFormHelperRenderContext(): void {
     defer(kind: MutationFormHelperKind, props: Record<string, unknown>) {
       return renderedHtml(deferMutationFormHelperInCurrentRender(kind, props as JsxProps) ?? '');
     },
+    renderHtml: renderedHtml,
   };
 }
 

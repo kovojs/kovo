@@ -90,7 +90,7 @@ describe('oracle fixtures', () => {
       {
         fragments: ['conformance/oracles/cart-oracle/cart-oracle'],
         name: 'conformance/oracles/cart-oracle/cart-oracle',
-        queries: ['cart', 'product'],
+        queries: ['cart', 'cartQuery', 'product', 'productQuery'],
       },
     ]);
     expect(fixture.graph.queryFacts).toEqual([
