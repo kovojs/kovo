@@ -17,6 +17,28 @@ import type { JsonSerializable } from '../json-boundary.js';
 import type { TaskDefinition, TaskHandle, TaskInput, TaskScheduleOptions } from '../task.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
 
+declare const mutationRequestDbBrand: unique symbol;
+
+/**
+ * Framework-owned transaction-scoped database handle passed to mutation handlers
+ * (SPEC §10.3). It preserves the app DB provider's surface but hides the raw
+ * `.transaction()` opener so handlers cannot casually start or retain nested
+ * transaction capabilities through the public mutation request type.
+ */
+export type MutationRequestDb<DbValue> = (DbValue extends object
+  ? Omit<DbValue, 'transaction'>
+  : DbValue) & {
+  readonly [mutationRequestDbBrand]: {
+    readonly db: DbValue;
+    readonly scope: 'mutation-handler';
+  };
+};
+
+/** Mutation handler request shape with the provider DB narrowed to the transaction handle. */
+export type MutationHandlerRequest<Request> = Request extends { db: infer DbValue }
+  ? Omit<Request, 'db'> & { db: MutationRequestDb<DbValue> }
+  : Request;
+
 /**
  * A typed mutation failure outcome (SPEC §9.2): a declared `error` `code` plus its
  * validated `payload`, served as HTTP 422 (validation/app `fail()`), 429 (rate limit,
@@ -387,7 +409,7 @@ export interface MutationFactory<Request = unknown> {
   <
     InputSchema extends Schema<unknown>,
     Errors extends Record<string, Schema<unknown>> = Record<string, Schema<unknown>>,
-    ContextRequest extends Request = Request,
+    ContextRequest extends MutationHandlerRequest<Request> = MutationHandlerRequest<Request>,
     Value = unknown,
     GuardedRequest extends ContextRequest = ContextRequest,
   >(
