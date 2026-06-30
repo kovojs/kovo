@@ -1,6 +1,12 @@
 import type { TaskHandle, TaskScheduleOptions } from './task.js';
 
-export type DurableTaskJobStatus = 'ready' | 'running' | 'succeeded' | 'failed' | 'cancelled';
+export type DurableTaskJobStatus =
+  | 'ready'
+  | 'running'
+  | 'succeeded'
+  | 'failed'
+  | 'dead'
+  | 'cancelled';
 
 export interface DurableTaskJob {
   readonly id: string;
@@ -8,12 +14,16 @@ export interface DurableTaskJob {
   readonly args: unknown;
   readonly runAt: Date;
   readonly key?: string;
+  readonly lineage: string;
+  readonly generation: number;
+  readonly priority: number;
   readonly status: DurableTaskJobStatus;
   readonly attempts: number;
   readonly createdAt: Date;
   readonly updatedAt: Date;
   readonly leasedUntil?: Date;
   readonly leaseOwner?: string;
+  readonly leaseToken?: string;
   readonly lastError?: string;
 }
 
@@ -23,6 +33,11 @@ export interface DurableTaskEnqueueInput {
   readonly runAt?: Date;
   readonly key?: string;
   readonly coalesce?: TaskScheduleOptions['coalesce'];
+  readonly generation?: number;
+  readonly lineage?: string;
+  readonly priority?: number;
+  readonly status?: 'ready' | 'dead';
+  readonly lastError?: string;
 }
 
 export interface DurableTaskClaimOptions {
@@ -30,14 +45,38 @@ export interface DurableTaskClaimOptions {
   readonly leaseMs: number;
   readonly now?: Date;
   readonly owner?: string;
+  readonly taskKeys?: readonly string[];
+}
+
+export interface DurableTaskCompletionOptions {
+  readonly leaseOwner?: string;
+  readonly leaseToken?: string;
+  readonly now?: Date;
+}
+
+export interface DurableTaskFailureOptions extends DurableTaskCompletionOptions {
+  readonly maxAttempts?: number;
+  readonly retryAt?: Date;
+}
+
+export interface DurableTaskHeartbeatOptions {
+  readonly leaseMs: number;
+  readonly leaseOwner?: string;
+  readonly leaseToken?: string;
+  readonly now?: Date;
 }
 
 export interface DurableTaskQueueStore {
   enqueue(input: DurableTaskEnqueueInput): Promise<TaskHandle>;
   cancel(handle: TaskHandle): Promise<boolean>;
   claimDue(options: DurableTaskClaimOptions): Promise<DurableTaskJob[]>;
-  markSucceeded(id: string, now?: Date): Promise<boolean>;
-  markFailed(id: string, error: unknown, now?: Date): Promise<boolean>;
+  heartbeat(id: string, options: DurableTaskHeartbeatOptions): Promise<boolean>;
+  markSucceeded(id: string, options?: DurableTaskCompletionOptions | Date): Promise<boolean>;
+  markFailed(
+    id: string,
+    error: unknown,
+    options?: DurableTaskFailureOptions | Date,
+  ): Promise<boolean>;
   reapExpiredLeases(now?: Date): Promise<number>;
 }
 
@@ -103,12 +142,16 @@ interface DurableTaskJobRow {
   args: unknown;
   run_at: Date | string;
   logical_key: string | null;
+  lineage: string | null;
+  generation: number | null;
+  priority: number | null;
   status: DurableTaskJobStatus;
   attempts: number;
   created_at: Date | string;
   updated_at: Date | string;
   leased_until: Date | string | null;
   lease_owner: string | null;
+  lease_token: string | null;
   last_error: string | null;
 }
 
@@ -119,11 +162,15 @@ export const KOVO_JOBS_TABLE_SQL: readonly DurableTaskSqlStatement[] = [
   task_key text not null,
   args jsonb not null,
   logical_key text null,
-  status text not null check (status in ('ready', 'running', 'succeeded', 'failed', 'cancelled')),
+  status text not null check (status in ('ready', 'running', 'succeeded', 'failed', 'dead', 'cancelled')),
   attempts integer not null default 0,
+  lineage text null,
+  generation integer not null default 0,
+  priority integer not null default 0,
   run_at timestamptz not null,
   leased_until timestamptz null,
   lease_owner text null,
+  lease_token text null,
   last_error text null,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -140,7 +187,7 @@ where status = 'ready' and logical_key is not null`,
   },
   {
     text: `create index if not exists _kovo_jobs_ready_run_at
-on _kovo_jobs (run_at, created_at)
+on _kovo_jobs (priority desc, run_at, created_at)
 where status = 'ready'`,
     values: [],
   },
@@ -167,6 +214,11 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     const id = createJobId();
     const argsJson = JSON.stringify(assertJsonSerializable(input.args));
     const coalesce = input.coalesce ?? 'debounce';
+    const lineage = input.lineage ?? id;
+    const generation = normalizeNonNegativeInteger(input.generation, 0);
+    const priority = normalizePriority(input.priority);
+    const status = input.status ?? 'ready';
+    const lastError = input.lastError ?? null;
 
     if (input.key !== undefined && coalesce === 'throttle') {
       const result = await this.executor.execute<{ id: string }>(
@@ -177,6 +229,11 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
           input.key,
           runAt,
           now,
+          lineage,
+          generation,
+          priority,
+          status,
+          lastError,
         ]),
       );
       const row = result.rows[0];
@@ -186,7 +243,19 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     const statementText =
       input.key === undefined ? taskQueueSql.enqueueUnkeyed : taskQueueSql.enqueueDebounce;
     const result = await this.executor.execute<{ id: string }>(
-      sqlStatement(statementText, [id, input.task, argsJson, input.key ?? null, runAt, now]),
+      sqlStatement(statementText, [
+        id,
+        input.task,
+        argsJson,
+        input.key ?? null,
+        runAt,
+        now,
+        lineage,
+        generation,
+        priority,
+        status,
+        lastError,
+      ]),
     );
     return { id: result.rows[0]?.id ?? id, task: input.task };
   }
@@ -202,25 +271,68 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     const now = options.now ?? new Date();
     const owner = options.owner ?? 'kovo-runner';
     const leasedUntil = new Date(now.getTime() + options.leaseMs);
+    const leaseToken = createLeaseToken();
+    const taskKeys = options.taskKeys?.length ? [...new Set(options.taskKeys)] : null;
     const result = await this.executor.execute<DurableTaskJobRow>(
       sqlStatement(taskQueueSql.claimDue, [
         now,
         Math.max(1, Math.floor(options.limit)),
         owner,
         leasedUntil,
+        leaseToken,
+        taskKeys,
       ]),
     );
     return result.rows.map(jobFromRow);
   }
 
-  async markSucceeded(id: string, now: Date = new Date()): Promise<boolean> {
-    const result = await this.executor.execute(sqlStatement(taskQueueSql.markSucceeded, [id, now]));
+  async heartbeat(id: string, options: DurableTaskHeartbeatOptions): Promise<boolean> {
+    const now = options.now ?? new Date();
+    const leasedUntil = new Date(now.getTime() + Math.max(1, options.leaseMs));
+    const result = await this.executor.execute(
+      sqlStatement(taskQueueSql.heartbeat, [
+        id,
+        now,
+        leasedUntil,
+        options.leaseOwner ?? null,
+        options.leaseToken ?? null,
+      ]),
+    );
     return (result.rowCount ?? result.rows.length) > 0;
   }
 
-  async markFailed(id: string, error: unknown, now: Date = new Date()): Promise<boolean> {
+  async markSucceeded(
+    id: string,
+    options: DurableTaskCompletionOptions | Date = {},
+  ): Promise<boolean> {
+    const normalized = normalizeCompletionOptions(options);
     const result = await this.executor.execute(
-      sqlStatement(taskQueueSql.markFailed, [id, errorMessage(error), now]),
+      sqlStatement(taskQueueSql.markSucceeded, [
+        id,
+        normalized.now,
+        normalized.leaseOwner ?? null,
+        normalized.leaseToken ?? null,
+      ]),
+    );
+    return (result.rowCount ?? result.rows.length) > 0;
+  }
+
+  async markFailed(
+    id: string,
+    error: unknown,
+    options: DurableTaskFailureOptions | Date = {},
+  ): Promise<boolean> {
+    const normalized = normalizeFailureOptions(options);
+    const result = await this.executor.execute(
+      sqlStatement(taskQueueSql.markFailed, [
+        id,
+        errorMessage(error),
+        normalized.now,
+        normalized.maxAttempts,
+        normalized.retryAt ?? normalized.now,
+        normalized.leaseOwner ?? null,
+        normalized.leaseToken ?? null,
+      ]),
     );
     return (result.rowCount ?? result.rows.length) > 0;
   }
@@ -239,6 +351,11 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     const runAt = input.runAt ?? now;
     const args = cloneJson(assertJsonSerializable(input.args));
     const coalesce = input.coalesce ?? 'debounce';
+    const id = createJobId();
+    const lineage = input.lineage ?? id;
+    const generation = normalizeNonNegativeInteger(input.generation, 0);
+    const priority = normalizePriority(input.priority);
+    const status = input.status ?? 'ready';
 
     if (input.key !== undefined) {
       const ready = [...this.jobs.values()].find(
@@ -254,18 +371,21 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
       }
     }
 
-    const id = createJobId();
     const job: MutableDurableTaskJob = {
       id,
       task: input.task,
       args,
       runAt: copyDate(runAt),
-      status: 'ready',
+      lineage,
+      generation,
+      priority,
+      status,
       attempts: 0,
       createdAt: now,
       updatedAt: now,
     };
     if (input.key !== undefined) job.key = input.key;
+    if (input.lastError !== undefined) job.lastError = input.lastError;
     this.jobs.set(id, job);
     return { id, task: input.task };
   }
@@ -283,11 +403,19 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     const now = options.now ?? new Date();
     const leaseMs = Math.max(1, options.leaseMs);
     const owner = options.owner ?? 'memory-runner';
+    const taskKeys = options.taskKeys === undefined ? undefined : new Set(options.taskKeys);
     const due = [...this.jobs.values()]
-      .filter((job) => job.status === 'ready' && job.runAt.getTime() <= now.getTime())
+      .filter(
+        (job) =>
+          job.status === 'ready' &&
+          job.runAt.getTime() <= now.getTime() &&
+          (taskKeys === undefined || taskKeys.has(job.task)),
+      )
       .sort(
         (a, b) =>
-          a.runAt.getTime() - b.runAt.getTime() || a.createdAt.getTime() - b.createdAt.getTime(),
+          b.priority - a.priority ||
+          a.runAt.getTime() - b.runAt.getTime() ||
+          a.createdAt.getTime() - b.createdAt.getTime(),
       )
       .slice(0, Math.max(1, Math.floor(options.limit)));
 
@@ -295,6 +423,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
       job.status = 'running';
       job.attempts += 1;
       job.leaseOwner = owner;
+      job.leaseToken = createLeaseToken();
       job.leasedUntil = new Date(now.getTime() + leaseMs);
       job.updatedAt = now;
     }
@@ -302,24 +431,50 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     return due.map(readonlyJob);
   }
 
-  async markSucceeded(id: string, now: Date = new Date()): Promise<boolean> {
+  async heartbeat(id: string, options: DurableTaskHeartbeatOptions): Promise<boolean> {
     const job = this.jobs.get(id);
     if (job === undefined || job.status !== 'running') return false;
-    job.status = 'succeeded';
-    delete job.leasedUntil;
-    delete job.leaseOwner;
+    if (!leaseMatches(job, options)) return false;
+    const now = options.now ?? new Date();
+    job.leasedUntil = new Date(now.getTime() + Math.max(1, options.leaseMs));
     job.updatedAt = now;
     return true;
   }
 
-  async markFailed(id: string, error: unknown, now: Date = new Date()): Promise<boolean> {
+  async markSucceeded(
+    id: string,
+    options: DurableTaskCompletionOptions | Date = {},
+  ): Promise<boolean> {
     const job = this.jobs.get(id);
     if (job === undefined || job.status !== 'running') return false;
-    job.status = 'failed';
-    job.lastError = errorMessage(error);
+    const normalized = normalizeCompletionOptions(options);
+    if (!leaseMatches(job, normalized)) return false;
+    job.status = 'succeeded';
     delete job.leasedUntil;
     delete job.leaseOwner;
-    job.updatedAt = now;
+    delete job.leaseToken;
+    job.updatedAt = normalized.now;
+    return true;
+  }
+
+  async markFailed(
+    id: string,
+    error: unknown,
+    options: DurableTaskFailureOptions | Date = {},
+  ): Promise<boolean> {
+    const job = this.jobs.get(id);
+    if (job === undefined || job.status !== 'running') return false;
+    const normalized = normalizeFailureOptions(options);
+    if (!leaseMatches(job, normalized)) return false;
+    job.status = job.attempts >= normalized.maxAttempts ? 'dead' : 'ready';
+    job.lastError = errorMessage(error);
+    if (job.status === 'ready') {
+      job.runAt = copyDate(normalized.retryAt ?? normalized.now);
+    }
+    delete job.leasedUntil;
+    delete job.leaseOwner;
+    delete job.leaseToken;
+    job.updatedAt = normalized.now;
     return true;
   }
 
@@ -334,6 +489,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
         job.status = 'ready';
         delete job.leasedUntil;
         delete job.leaseOwner;
+        delete job.leaseToken;
         job.updatedAt = now;
         reaped += 1;
       }
@@ -352,29 +508,39 @@ interface MutableDurableTaskJob {
   args: unknown;
   runAt: Date;
   key?: string;
+  lineage: string;
+  generation: number;
+  priority: number;
   status: DurableTaskJobStatus;
   attempts: number;
   createdAt: Date;
   updatedAt: Date;
   leasedUntil?: Date;
   leaseOwner?: string;
+  leaseToken?: string;
   lastError?: string;
 }
 
 const taskQueueSql = {
   enqueueUnkeyed: `insert into _kovo_jobs (
-  id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at
-) values ($1, $2, $3::jsonb, $4, 'ready', 0, $5, $6, $6)
+  id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at,
+  lineage, generation, priority, last_error
+) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11)
 returning id`,
   enqueueDebounce: `insert into _kovo_jobs (
-  id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at
-) values ($1, $2, $3::jsonb, $4, 'ready', 0, $5, $6, $6)
+  id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at,
+  lineage, generation, priority, last_error
+) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11)
 on conflict (task_key, logical_key) where status = 'ready' and logical_key is not null
-do update set args = excluded.args, run_at = excluded.run_at, updated_at = excluded.updated_at
+do update set args = excluded.args,
+  run_at = excluded.run_at,
+  priority = excluded.priority,
+  updated_at = excluded.updated_at
 returning id`,
   enqueueThrottle: `insert into _kovo_jobs (
-  id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at
-) values ($1, $2, $3::jsonb, $4, 'ready', 0, $5, $6, $6)
+  id, task_key, args, logical_key, status, attempts, run_at, created_at, updated_at,
+  lineage, generation, priority, last_error
+) values ($1, $2, $3::jsonb, $4, $10, 0, $5, $6, $6, $7, $8, $9, $11)
 on conflict (task_key, logical_key) where status = 'ready' and logical_key is not null
 do update set updated_at = _kovo_jobs.updated_at
 returning id`,
@@ -383,8 +549,8 @@ set status = 'cancelled', cancelled_at = $2, updated_at = $2
 where id = $1 and status = 'ready'`,
   claimDue: `with claimed as (
   select id from _kovo_jobs
-  where status = 'ready' and run_at <= $1
-  order by run_at asc, created_at asc
+  where status = 'ready' and run_at <= $1 and ($6::text[] is null or task_key = any($6::text[]))
+  order by priority desc, run_at asc, created_at asc
   for update skip locked
   limit $2
 )
@@ -393,28 +559,46 @@ set status = 'running',
   attempts = attempts + 1,
   lease_owner = $3,
   leased_until = $4,
+  lease_token = $5,
   updated_at = $1
 where id in (select id from claimed)
 returning id, task_key, args, run_at, logical_key, status, attempts, created_at, updated_at,
-  leased_until, lease_owner, last_error`,
+  leased_until, lease_owner, lease_token, last_error, lineage, generation, priority`,
+  heartbeat: `update _kovo_jobs
+set leased_until = $3,
+  updated_at = $2
+where id = $1
+  and status = 'running'
+  and ($4::text is null or lease_owner = $4)
+  and ($5::text is null or lease_token = $5)`,
   markSucceeded: `update _kovo_jobs
 set status = 'succeeded',
   completed_at = $2,
   leased_until = null,
   lease_owner = null,
+  lease_token = null,
   updated_at = $2
-where id = $1 and status = 'running'`,
+where id = $1
+  and status = 'running'
+  and ($3::text is null or lease_owner = $3)
+  and ($4::text is null or lease_token = $4)`,
   markFailed: `update _kovo_jobs
-set status = 'failed',
+set status = case when attempts >= $4 then 'dead' else 'ready' end,
   last_error = $2,
+  run_at = case when attempts >= $4 then run_at else $5 end,
   leased_until = null,
   lease_owner = null,
+  lease_token = null,
   updated_at = $3
-where id = $1 and status = 'running'`,
+where id = $1
+  and status = 'running'
+  and ($6::text is null or lease_owner = $6)
+  and ($7::text is null or lease_token = $7)`,
   reapExpiredLeases: `update _kovo_jobs
 set status = 'ready',
   leased_until = null,
   lease_owner = null,
+  lease_token = null,
   updated_at = $1
 where status = 'running' and leased_until <= $1`,
 } as const;
@@ -425,6 +609,9 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
     task: row.task_key,
     args: row.args,
     runAt: dateFrom(row.run_at),
+    lineage: row.lineage ?? row.id,
+    generation: row.generation ?? 0,
+    priority: row.priority ?? 0,
     status: row.status,
     attempts: row.attempts,
     createdAt: dateFrom(row.created_at),
@@ -432,6 +619,7 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
     ...(row.logical_key === null ? {} : { key: row.logical_key }),
     ...(row.leased_until === null ? {} : { leasedUntil: dateFrom(row.leased_until) }),
     ...(row.lease_owner === null ? {} : { leaseOwner: row.lease_owner }),
+    ...(row.lease_token === null ? {} : { leaseToken: row.lease_token }),
     ...(row.last_error === null ? {} : { lastError: row.last_error }),
   };
 }
@@ -490,6 +678,9 @@ function readonlyJob(job: MutableDurableTaskJob): DurableTaskJob {
     task: job.task,
     args: cloneJson(job.args),
     runAt: copyDate(job.runAt),
+    lineage: job.lineage,
+    generation: job.generation,
+    priority: job.priority,
     status: job.status,
     attempts: job.attempts,
     createdAt: copyDate(job.createdAt),
@@ -497,6 +688,7 @@ function readonlyJob(job: MutableDurableTaskJob): DurableTaskJob {
     ...(job.key === undefined ? {} : { key: job.key }),
     ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
     ...(job.leaseOwner === undefined ? {} : { leaseOwner: job.leaseOwner }),
+    ...(job.leaseToken === undefined ? {} : { leaseToken: job.leaseToken }),
     ...(job.lastError === undefined ? {} : { lastError: job.lastError }),
   };
 }
@@ -525,6 +717,56 @@ function createJobId(): string {
   return `job_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
 }
 
+function createLeaseToken(): string {
+  return `lease_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function normalizePriority(value: number | undefined): number {
+  if (value === undefined || !Number.isFinite(value)) return 0;
+  return Math.trunc(value);
+}
+
+function normalizeNonNegativeInteger(value: number | undefined, fallback: number): number {
+  if (value === undefined || !Number.isFinite(value)) return fallback;
+  return Math.max(0, Math.trunc(value));
+}
+
+function normalizeCompletionOptions(
+  options: DurableTaskCompletionOptions | Date,
+): Required<Pick<DurableTaskCompletionOptions, 'now'>> & Omit<DurableTaskCompletionOptions, 'now'> {
+  if (options instanceof Date) return { now: options };
+  return { ...options, now: options.now ?? new Date() };
+}
+
+interface NormalizedDurableTaskFailureOptions extends DurableTaskFailureOptions {
+  readonly maxAttempts: number;
+  readonly now: Date;
+}
+
+function normalizeFailureOptions(
+  options: DurableTaskFailureOptions | Date,
+): NormalizedDurableTaskFailureOptions {
+  if (options instanceof Date) return { maxAttempts: 1, now: options };
+  const maxAttempts =
+    options.maxAttempts === undefined || !Number.isFinite(options.maxAttempts)
+      ? 1
+      : Math.max(1, Math.trunc(options.maxAttempts));
+  return {
+    ...options,
+    maxAttempts,
+    now: options.now ?? new Date(),
+  };
+}
+
+function leaseMatches(
+  job: MutableDurableTaskJob,
+  options: Pick<DurableTaskCompletionOptions, 'leaseOwner' | 'leaseToken'>,
+): boolean {
+  if (options.leaseOwner !== undefined && job.leaseOwner !== options.leaseOwner) return false;
+  if (options.leaseToken !== undefined && job.leaseToken !== options.leaseToken) return false;
+  return true;
 }

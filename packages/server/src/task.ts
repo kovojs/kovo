@@ -57,6 +57,8 @@ export type TaskRunnableQueryInput<Query> = Query extends { args: Schema<infer I
 /** Context available to durable task bodies (SPEC §9.6: composition only, no raw db). */
 export interface TaskRunContext {
   readonly jobId: string;
+  /** Stable idempotency key for external APIs; equal to the durable job id (SPEC §9.6). */
+  readonly idempotencyKey: string;
   readonly fetch: typeof globalThis.fetch;
   runMutation<const Mutation extends TaskRunnableMutation<any>>(
     definition: Mutation,
@@ -88,6 +90,8 @@ export interface TaskDefinition<
   input: InputSchema;
   key: Key;
   maxGenerations?: number;
+  priority?: number;
+  concurrency?: number;
   retry?: {
     backoff?: 'exponential' | 'linear';
     maxAttempts?: number;
@@ -163,10 +167,12 @@ export function assignDerivedTaskKey<Task extends TaskDefinition<string, any, an
 function assertKnownTaskDefinitionKeys(definition: object): void {
   const known = new Set([
     'catchUp',
+    'concurrency',
     'cron',
     'cronArgs',
     'input',
     'maxGenerations',
+    'priority',
     'retry',
     'run',
     'timeoutMs',

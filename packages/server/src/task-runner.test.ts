@@ -40,16 +40,20 @@ describe('durable task runner (SPEC §9.6)', () => {
     expect(store.snapshot()[0]).toMatchObject({ id: handle.id, status: 'succeeded' });
   });
 
-  it('marks unknown task keys failed instead of dropping the claimed job', async () => {
+  it('dead-letters unknown task keys instead of dropping the claimed job', async () => {
     const store = new MemoryDurableTaskQueue();
-    const handle = await store.enqueue({ task: 'missing.task', args: {} });
+    const handle = await store.enqueue({
+      task: 'missing.task',
+      args: {},
+      runAt: new Date('2026-06-30T10:00:00.000Z'),
+    });
     const runner = createDurableTaskRunner({ store, tasks: [] });
 
-    await runner.runOnce(new Date());
+    await runner.runOnce(new Date('2026-06-30T10:00:00.000Z'));
 
     expect(store.snapshot()[0]).toMatchObject({
       id: handle.id,
-      status: 'failed',
+      status: 'dead',
       lastError: 'No durable task is registered for key "missing.task".',
     });
   });
@@ -86,6 +90,181 @@ describe('durable task runner (SPEC §9.6)', () => {
         }),
       ]),
     );
+  });
+
+  it('exposes stable job idempotency keys and retries with backoff until success', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const effects: string[] = [];
+    const flaky = task('flaky.task', {
+      input: s.object({ id: s.string() }),
+      retry: { maxAttempts: 3, backoff: 'linear' },
+      async run(args, ctx) {
+        if (effects.length < 2) {
+          effects.push(`${ctx.jobId}:${ctx.idempotencyKey}:${args.id}`);
+          throw new Error('transient');
+        }
+        effects.push(`done:${ctx.idempotencyKey}:${args.id}`);
+      },
+    });
+    await store.enqueue({
+      task: flaky.key,
+      args: { id: 'ord_1' },
+      runAt: new Date('2026-06-30T10:00:00.000Z'),
+    });
+    const runner = createDurableTaskRunner({ store, tasks: [flaky] });
+
+    await runner.runOnce(new Date('2026-06-30T10:00:00.000Z'));
+    await runner.runOnce(new Date(Date.now() + 5000));
+    await runner.runOnce(new Date(Date.now() + 10_000));
+
+    const [job] = store.snapshot();
+    expect(job).toMatchObject({ status: 'succeeded', attempts: 3 });
+    expect(effects).toHaveLength(3);
+    expect(effects[0]!.split(':')[0]).toBe(effects[0]!.split(':')[1]);
+    expect(effects[2]).toBe(`done:${job!.id}:ord_1`);
+  });
+
+  it('dead-letters permanently failing tasks at maxAttempts', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const alwaysFails = task('always.fail', {
+      input: s.object({}),
+      retry: { maxAttempts: 2, backoff: 'exponential' },
+      async run() {
+        throw new Error('nope');
+      },
+    });
+    await store.enqueue({
+      task: alwaysFails.key,
+      args: {},
+      runAt: new Date('2026-06-30T10:00:00.000Z'),
+    });
+    const runner = createDurableTaskRunner({ store, tasks: [alwaysFails] });
+
+    await runner.runOnce(new Date('2026-06-30T10:00:00.000Z'));
+    await runner.runOnce(new Date(Date.now() + 5000));
+
+    expect(store.snapshot()[0]).toMatchObject({
+      status: 'dead',
+      attempts: 2,
+      lastError: 'nope',
+    });
+  });
+
+  it('times out hung tasks at the hard ceiling and retries without pinning the runner', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-30T10:00:00.000Z'));
+      const store = new MemoryDurableTaskQueue();
+      const hung = task('hung.task', {
+        input: s.object({}),
+        retry: { maxAttempts: 2 },
+        timeoutMs: 5000,
+        run: () => new Promise(() => undefined),
+      });
+      await store.enqueue({ task: hung.key, args: {} });
+      const runner = createDurableTaskRunner({
+        store,
+        tasks: [hung],
+        hardTimeoutMs: 100,
+        heartbeatIntervalMs: 25,
+        leaseMs: 30,
+      });
+
+      const run = runner.runOnce(new Date('2026-06-30T10:00:00.000Z'));
+      await vi.advanceTimersByTimeAsync(125);
+      await run;
+
+      expect(store.snapshot()[0]).toMatchObject({
+        status: 'ready',
+        attempts: 1,
+        lastError: 'Durable task "hung.task" exceeded timeoutMs 100.',
+      });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('bounds claims by maxInFlight and per-task concurrency while respecting priority lanes', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const order: string[] = [];
+    const high = task('high.task', {
+      input: s.object({ n: s.number() }),
+      priority: 10,
+      concurrency: 1,
+      run: (args) => {
+        order.push(`high:${args.n}`);
+      },
+    });
+    const low = task('low.task', {
+      input: s.object({ n: s.number() }),
+      priority: 1,
+      run: (args) => {
+        order.push(`low:${args.n}`);
+      },
+    });
+    await store.enqueue({ task: low.key, args: { n: 1 }, priority: low.priority });
+    await store.enqueue({ task: high.key, args: { n: 1 }, priority: high.priority });
+    await store.enqueue({ task: high.key, args: { n: 2 }, priority: high.priority });
+
+    const runner = createDurableTaskRunner({
+      store,
+      tasks: [high, low],
+      batchSize: 3,
+      maxInFlight: 2,
+    });
+    const claimed = await runner.runOnce(new Date());
+
+    expect(claimed.map((job) => job.task)).toEqual(['high.task', 'low.task']);
+    expect(order).toEqual(['high:1', 'low:1']);
+    expect(
+      store.snapshot().find((job) => job.args && (job.args as { n: number }).n === 2),
+    ).toMatchObject({
+      status: 'ready',
+    });
+  });
+
+  it('applies the self-reschedule delay floor and dead-letters past maxGenerations', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-30T10:00:00.000Z'));
+      const store = new MemoryDurableTaskQueue();
+      let loop!: ReturnType<typeof task>;
+      loop = task('loop.task', {
+        input: s.object({}),
+        maxGenerations: 1,
+        async run(_, ctx) {
+          await ctx.schedule(loop, {}, { afterMs: 1 });
+        },
+      });
+      await store.enqueue({ task: loop.key, args: {} });
+      const runner = createDurableTaskRunner({
+        store,
+        tasks: [loop],
+        selfRescheduleDelayFloorMs: 1000,
+      });
+
+      await runner.runOnce(new Date('2026-06-30T10:00:00.000Z'));
+      const child = store.snapshot().find((job) => job.status === 'ready');
+      expect(child).toMatchObject({
+        generation: 1,
+        lineage: store.snapshot()[0]!.id,
+        runAt: new Date('2026-06-30T10:00:01.000Z'),
+      });
+
+      vi.setSystemTime(new Date('2026-06-30T10:00:01.000Z'));
+      await runner.runOnce(new Date('2026-06-30T10:00:01.000Z'));
+      expect(store.snapshot()).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            generation: 2,
+            status: 'dead',
+            lastError: expect.stringContaining('exceeded maxGenerations 1'),
+          }),
+        ]),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('is stoppable when started as a polling helper', async () => {

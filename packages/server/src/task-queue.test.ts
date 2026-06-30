@@ -25,6 +25,9 @@ describe('durable task queue store (SPEC §9.6)', () => {
     expect(statements).toHaveLength(KOVO_JOBS_TABLE_SQL.length);
     expect(statements[0]!.text).toContain('create table if not exists _kovo_jobs');
     expect(statements[0]!.text).toContain('args jsonb not null');
+    expect(statements[0]!.text).toContain("'dead'");
+    expect(statements[0]!.text).toContain('priority integer not null default 0');
+    expect(statements[0]!.text).toContain('lease_token text null');
     expect(statements[0]!.text).toContain('leased_until timestamptz null');
     expect(statements[1]!.text).toContain("where status = 'ready'");
     expect(statements.every((statement) => Array.isArray(statement.values))).toBe(true);
@@ -87,6 +90,8 @@ describe('durable task queue store (SPEC §9.6)', () => {
       id: first.id,
       args: { orderId: 'first' },
       runAt: firstRunAt,
+      lineage: first.id,
+      generation: 0,
       status: 'ready',
     });
   });
@@ -120,7 +125,9 @@ describe('durable task queue store (SPEC §9.6)', () => {
       status: 'running',
       attempts: 1,
       leaseOwner: 'test-runner',
+      lineage: claimed[0]!.id,
     });
+    expect(claimed[0]!.leaseToken).toEqual(expect.any(String));
     expect(claimed[0]!.leasedUntil).toEqual(new Date('2026-06-30T10:00:31.000Z'));
 
     await expect(store.reapExpiredLeases(new Date('2026-06-30T10:00:30.999Z'))).resolves.toBe(0);
@@ -132,6 +139,104 @@ describe('durable task queue store (SPEC §9.6)', () => {
     });
     expect(reaped).not.toHaveProperty('leasedUntil');
     expect(reaped).not.toHaveProperty('leaseOwner');
+    expect(reaped).not.toHaveProperty('leaseToken');
+  });
+
+  it('orders claims by priority lane before run_at and supports task filters', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const now = new Date('2026-06-30T10:00:00.000Z');
+    await store.enqueue({ task: 'low', args: {}, runAt: now, priority: 1 });
+    await store.enqueue({ task: 'high', args: {}, runAt: now, priority: 10 });
+    await store.enqueue({ task: 'blocked', args: {}, runAt: now, priority: 99 });
+
+    const claimed = await store.claimDue({
+      now,
+      limit: 2,
+      leaseMs: 30_000,
+      taskKeys: ['low', 'high'],
+    });
+
+    expect(claimed.map((job) => job.task)).toEqual(['high', 'low']);
+  });
+
+  it('retries failed jobs with backoff until maxAttempts moves them to dead-letter', async () => {
+    const store = new MemoryDurableTaskQueue();
+    await store.enqueue({ task: 'flaky', args: {}, runAt: new Date('2026-06-30T10:00:00.000Z') });
+    const [first] = await store.claimDue({
+      now: new Date('2026-06-30T10:00:00.000Z'),
+      limit: 1,
+      leaseMs: 30_000,
+      owner: 'runner-1',
+    });
+
+    await expect(
+      store.markFailed(first!.id, new Error('try again'), {
+        leaseOwner: first!.leaseOwner,
+        leaseToken: first!.leaseToken,
+        maxAttempts: 2,
+        retryAt: new Date('2026-06-30T10:00:05.000Z'),
+        now: new Date('2026-06-30T10:00:01.000Z'),
+      }),
+    ).resolves.toBe(true);
+    expect(store.snapshot()[0]).toMatchObject({
+      status: 'ready',
+      attempts: 1,
+      runAt: new Date('2026-06-30T10:00:05.000Z'),
+      lastError: 'try again',
+    });
+
+    const [second] = await store.claimDue({
+      now: new Date('2026-06-30T10:00:05.000Z'),
+      limit: 1,
+      leaseMs: 30_000,
+      owner: 'runner-1',
+    });
+    await expect(
+      store.markFailed(second!.id, 'permanent', {
+        leaseOwner: second!.leaseOwner,
+        leaseToken: second!.leaseToken,
+        maxAttempts: 2,
+        now: new Date('2026-06-30T10:00:06.000Z'),
+      }),
+    ).resolves.toBe(true);
+    expect(store.snapshot()[0]).toMatchObject({
+      status: 'dead',
+      attempts: 2,
+      lastError: 'permanent',
+    });
+  });
+
+  it('rejects stale duplicate completions after a lease has been reclaimed', async () => {
+    const store = new MemoryDurableTaskQueue();
+    await store.enqueue({ task: 'effect', args: {}, runAt: new Date('2026-06-30T10:00:00.000Z') });
+    const [first] = await store.claimDue({
+      now: new Date('2026-06-30T10:00:00.000Z'),
+      limit: 1,
+      leaseMs: 1000,
+      owner: 'runner-old',
+    });
+    await store.reapExpiredLeases(new Date('2026-06-30T10:00:01.000Z'));
+    const [second] = await store.claimDue({
+      now: new Date('2026-06-30T10:00:01.000Z'),
+      limit: 1,
+      leaseMs: 1000,
+      owner: 'runner-new',
+    });
+
+    await expect(
+      store.markSucceeded(first!.id, {
+        leaseOwner: first!.leaseOwner,
+        leaseToken: first!.leaseToken,
+        now: new Date('2026-06-30T10:00:01.100Z'),
+      }),
+    ).resolves.toBe(false);
+    await expect(
+      store.markSucceeded(second!.id, {
+        leaseOwner: second!.leaseOwner,
+        leaseToken: second!.leaseToken,
+        now: new Date('2026-06-30T10:00:01.200Z'),
+      }),
+    ).resolves.toBe(true);
   });
 
   it('keeps SQL execution parameterized when enqueuing and claiming through Postgres adapter', async () => {
@@ -162,9 +267,14 @@ describe('durable task queue store (SPEC §9.6)', () => {
       'order-1',
       new Date('2026-06-30T10:00:00.000Z'),
       expect.any(Date),
+      handle.id,
+      0,
+      0,
+      'ready',
+      null,
     ]);
     expect(statements[1]!.text).toContain('for update skip locked');
-    expect(statements[1]!.values).toHaveLength(4);
+    expect(statements[1]!.values).toHaveLength(6);
   });
 
   it('adapts a root Postgres-compatible client query(text, values)', async () => {
