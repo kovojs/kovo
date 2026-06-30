@@ -125,7 +125,7 @@ export async function tableObservationSnapshots(
   tables: readonly string[],
   sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
 ): Promise<ReadonlyMap<string, TableObservationSnapshot>> {
-  const query = tableCountQuery(target);
+  const query = tableCountQuery(target, sqlDialect);
   if (!query) return new Map();
   const existing = await existingTables(query, sqlDialect);
   if (!existing) return new Map();
@@ -153,7 +153,7 @@ export async function tableCounts(
   tables: readonly string[],
   sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
 ): Promise<ReadonlyMap<string, number>> {
-  const query = tableCountQuery(target);
+  const query = tableCountQuery(target, sqlDialect);
   if (!query) return new Map();
   const existing = await existingTables(query, sqlDialect);
   if (!existing) return new Map();
@@ -201,11 +201,17 @@ async function existingTables(
  * synchronous adapter methods (better-sqlite3) by normalizing query results to a
  * Promise at the boundary.
  */
-export function hasTableCountHandle(target: object): boolean {
-  return tableCountQuery(target) !== null;
+export function hasTableCountHandle(
+  target: object,
+  sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
+): boolean {
+  return tableCountQuery(target, sqlDialect) !== null;
 }
 
-function tableCountQuery(target: object): ((statement: string) => Promise<unknown>) | null {
+function tableCountQuery(
+  target: object,
+  sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
+): ((statement: string) => Promise<unknown>) | null {
   const record = target as Record<PropertyKey, unknown>;
   const pglite = record.pglite;
   if (typeof pglite === 'object' && pglite !== null) {
@@ -225,11 +231,18 @@ function tableCountQuery(target: object): ((statement: string) => Promise<unknow
     };
   }
 
-  if (typeof record.query === 'function') {
+  if (
+    isAsyncFunction(record.query) ||
+    (sqlDialect === 'sqlite' && typeof record.query === 'function')
+  ) {
     return (statement) => Promise.resolve((record.query as Function).call(target, statement));
   }
 
   return null;
+}
+
+function isAsyncFunction(value: unknown): value is Function {
+  return typeof value === 'function' && value.constructor.name === 'AsyncFunction';
 }
 
 function tableDiscoverySql(sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres'): string {

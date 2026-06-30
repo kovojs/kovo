@@ -125,7 +125,9 @@ export function observableSqlMethod(
     // every synchronous test double — run the call straight through so adapter
     // results pass through unwrapped (SPEC.md §11.4): a synchronous db cannot be
     // count-netted across the awaited before/after snapshot boundary.
-    if (!hasTableCountHandle(target)) return value.call(target, statement, ...args);
+    if (!hasTableCountHandle(target, config.sqlDialect)) {
+      return value.call(target, statement, ...args);
+    }
 
     const sql = sqlStatementText(statement);
     // Snapshot before-counts fully (so the count queries are dispatched and
