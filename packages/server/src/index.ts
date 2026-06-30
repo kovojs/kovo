@@ -153,6 +153,18 @@ export { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
 export { toNodeHandler } from './node.js';
 export { exportStaticApp } from './static-export.js';
 export { StaticExportError } from './static-export-diagnostics.js';
+export { createDurableTaskStatus } from './task-observability.js';
+export type {
+  DurableTaskObservedStatus,
+  DurableTaskStatusFilters,
+  DurableTaskStatusJob,
+  DurableTaskStatusSnapshotSource,
+  DurableTaskStatusRecord,
+  DurableTaskStatusSqlExecutor,
+  DurableTaskStatusSqlResult,
+  DurableTaskStatusSqlStatement,
+  DurableTaskStatusSurface,
+} from './task-observability.js';
 // SPEC.md §9.5: app authors wire the app shell into their Vite dev server from
 // vite.config.ts (the create-kovo starter template does exactly this). These stay
 // public at the root barrel and also remain on `@kovojs/server/internal/app-shell-vite`.
