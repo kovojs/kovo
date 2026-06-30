@@ -1,13 +1,7 @@
 {
-  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. Component membership/order comes from packages/ui/scripts/primitive-component-manifest.mjs; dependency metadata is derived from source. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
+  "$comment": "Generated copy-in registry for @kovojs/ui. public-packages.json declares distributionMode \"package-and-copy-in\", so apps can install versioned @kovojs/ui/<component> subpaths or copy component TSX into app-owned source with kovo add. registryDependencies lists the public packages copied source may import: `@kovojs/core`, `@kovojs/icons`, `@kovojs/headless-ui`, and `@kovojs/style`. dependencies records the exact imported symbols per package, uiComponents lists sibling files to copy, and family metadata records manifest-owned ids, parts, slots, and state for 3 copy-in-sensitive component families across 44 components. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`.",
   "distributionMode": "package-and-copy-in",
-  "registryDependencies": [
-    "@kovojs/headless-ui",
-    "@kovojs/style",
-    "@kovojs/core",
-    "@kovojs/server",
-    "@kovojs/icons"
-  ],
+  "registryDependencies": ["@kovojs/core", "@kovojs/icons", "@kovojs/headless-ui", "@kovojs/style"],
   "components": [
     {
       "family": {
