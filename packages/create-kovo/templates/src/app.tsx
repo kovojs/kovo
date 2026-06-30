@@ -126,6 +126,7 @@ const AppLayout = layout({
 });
 
 const healthEndpoint = endpoint('/api/health', {
+  access: publicAccess('public uptime probe'),
   auth: { justification: 'public uptime probe', kind: 'none' },
   csrf: false,
   csrfJustification: 'read-only machine health probe',
@@ -179,6 +180,7 @@ const app = createApp({
       // The contact book is the signed-in user's data, so this route's KV436 access
       // decision is the session-presence guard (SPEC §10.2). The redirect below is
       // the no-JS UX for an unauthenticated visitor.
+      access: { guards: [{ guard: appAuthed, name: 'appAuthed' }], kind: 'guard-chain' },
       guard: appAuthed,
       meta: {
         description: 'A Kovo starter: a contact book over a real database, gated by real auth.',

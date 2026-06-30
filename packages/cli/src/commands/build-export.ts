@@ -88,6 +88,12 @@ interface KovoBuildOptions {
   preset?: KovoBuildPresetName;
 }
 
+interface LoadedBuildAppModule {
+  appModule: unknown;
+  serverBuildModule: typeof import('@kovojs/server/build');
+  serverInternalBuildModule: typeof import('@kovojs/server/internal/build');
+}
+
 interface LoadedExportAppModule {
   appModule: unknown;
   close?: () => Promise<void>;
@@ -398,19 +404,15 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     // export, or a security-gate failure). The tsc preflight started above runs concurrently with all
     // of it; deferring these errors past the `await typeScriptPreflight` preserves tsc-error-first.
     const loadAndCheck = await (async () => {
-      const [
-        { cloudflare, node, vercel },
-        { writeKovoNeutralBuild },
-        appModule,
-        buildStylesheetCss,
-      ] = await withGraphDerivationFlag(() =>
+      const [loadedBuildApp, buildStylesheetCss] = await withGraphDerivationFlag(() =>
         Promise.all([
-          import('@kovojs/server/build'),
-          import('@kovojs/server/internal/build'),
           loadBuildAppModule(resolvedAppModulePath, process.cwd()),
           kovoBuildStylesheetCss(resolvedAppModulePath),
         ]),
       );
+      const { cloudflare, node, vercel } = loadedBuildApp.serverBuildModule;
+      const { writeKovoNeutralBuild } = loadedBuildApp.serverInternalBuildModule;
+      const appModule = loadedBuildApp.appModule;
       const app = appFromModule(appModule, options.appModulePath);
       const buildCheck = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
         cache: options.cache,
@@ -1437,9 +1439,13 @@ async function withGraphDerivationFlag<T>(fn: () => Promise<T>): Promise<T> {
   }
 }
 
-async function loadBuildAppModule(appModulePath: string, root: string): Promise<unknown> {
+async function loadBuildAppModule(
+  appModulePath: string,
+  root: string,
+): Promise<LoadedBuildAppModule> {
   const [{ lowerStandaloneSourceDerivedRegistryDeclarations }, { createServer }] =
     await Promise.all([import('@kovojs/compiler/internal'), import('vite-plus')]);
+  const requireFromApp = createRequire(pathToFileURL(appModulePath));
   const server = await createServer({
     appType: 'custom',
     logLevel: 'error',
@@ -1450,7 +1456,19 @@ async function loadBuildAppModule(appModulePath: string, root: string): Promise<
     server: buildTimeViteServerOptions(),
   });
   try {
-    return await server.ssrLoadModule(viteSsrModuleId(appModulePath, root));
+    const [appModule, serverBuildModule, serverInternalBuildModule] = await Promise.all([
+      server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
+      server.ssrLoadModule(viteSsrModuleId(requireFromApp.resolve('@kovojs/server/build'), root)),
+      server.ssrLoadModule(
+        viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
+      ),
+    ]);
+    return {
+      appModule,
+      serverBuildModule: serverBuildModule as LoadedBuildAppModule['serverBuildModule'],
+      serverInternalBuildModule:
+        serverInternalBuildModule as LoadedBuildAppModule['serverInternalBuildModule'],
+    };
   } finally {
     await server.close();
   }

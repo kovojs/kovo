@@ -718,6 +718,7 @@ const allow = () => true;
 
 const adminQuery = query('adminOrders', {
   args: s.object({ id: s.string() }),
+  access: { guards: [{ name: 'allow' }], kind: 'guard-chain' },
   guard: allow,
   load(input) {
     return { id: input.id };
@@ -725,6 +726,7 @@ const adminQuery = query('adminOrders', {
 });
 
 const adminMutation = mutation('admin/update', {
+  access: { guards: [{ name: 'allow' }], kind: 'guard-chain' },
   csrf: false,
   csrfJustification: 'non-browser regression fixture',
   guard: allow,

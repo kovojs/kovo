@@ -1,6 +1,6 @@
 import type { WebhookVerifier } from '@kovojs/core';
 import type { ChangeRecord } from './change-record.js';
-import type { AccessDecision } from './access.js';
+import { verifiedAccess, type AccessDecision } from './access.js';
 import type { Domain } from './domain.js';
 import {
   endpointRequestWithoutSession,
@@ -286,7 +286,11 @@ export function webhook<
     (await runWebhook(declaration, request)).response;
 
   declaration = {
-    ...(definition.access === undefined ? {} : { access: definition.access }),
+    ...(definition.access === undefined
+      ? definition.verify === 'none'
+        ? {}
+        : { access: verifiedAccess }
+      : { access: definition.access }),
     auth: webhookAuth(definition),
     csrf: {
       exempt: true,

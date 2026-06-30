@@ -179,7 +179,10 @@ function hasExecutableMachineAuth(
   if (isWebhookEndpoint(endpoint)) {
     return endpoint.webhookDefinition.verify !== 'none';
   }
-  return endpoint.auth?.kind !== 'none' && endpoint.auth?.verify !== undefined;
+  return (
+    endpoint.auth?.kind !== 'none' &&
+    (endpoint.auth?.verify !== undefined || endpoint.auth?.name === 'kovo-capability-url')
+  );
 }
 
 function compareAccessFact(left: AccessExplainFact, right: AccessExplainFact): number {

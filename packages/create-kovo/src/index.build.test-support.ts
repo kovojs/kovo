@@ -295,6 +295,7 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
       '});',
       '',
       "export const txProofCountEndpoint = endpoint('/api/tx-proof-count', {",
+      '  access: publicProof,',
       "  auth: { justification: 'public transaction rollback proof', kind: 'none' },",
       '  csrf: false,',
       "  csrfJustification: 'read-only transaction rollback proof',",
@@ -308,6 +309,7 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
       '});',
       '',
       "export const rawRuntimeDriftCountEndpoint = endpoint('/api/raw-runtime-drift-count', {",
+      '  access: publicProof,',
       "  auth: { justification: 'public runtime raw-SQL allowlist proof', kind: 'none' },",
       '  csrf: false,',
       "  csrfJustification: 'read-only runtime raw-SQL allowlist proof',",
@@ -450,6 +452,7 @@ export function addAuthSecretLeakProof(root: string): void {
       '// SPEC §9.4 (MARQUEE): the framework provides `context.db` as the read-only managed handle.',
       [
         'export const authSecretLeakQuery = query({',
+        "  access: { guards: [{ guard: appAuthed, name: 'appAuthed' }], kind: 'guard-chain' },",
         '  guard: appAuthed,',
         "  reads: [domain('auth')],",
         '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<AuthSecretLeakResult> {',

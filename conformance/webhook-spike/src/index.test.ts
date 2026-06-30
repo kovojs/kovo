@@ -55,7 +55,7 @@ type StripeSpikeOptions = {
 type SpikeResponse = {
   body: string;
   headers: MutationWireResponse['headers'];
-  status: MutationWireResponse['status'] | 400 | 409;
+  status: MutationWireResponse['status'] | 303 | 400 | 409;
 };
 
 describe('S7 Stripe-format webhook lifecycle spike', () => {

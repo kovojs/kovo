@@ -34,6 +34,7 @@
 import type { StorageCapability } from '@kovojs/core';
 import { normalizeStorageKey } from '@kovojs/core/internal/storage';
 
+import { verifiedAccess } from './access.js';
 import {
   endpoint,
   type EndpointDeclaration,
@@ -345,6 +346,7 @@ export function createStorageDownloadEndpoint(
   };
 
   const declaration = endpoint(basePath, {
+    access: verifiedAccess,
     method: 'GET',
     mount: 'prefix',
     mountJustification:
@@ -356,10 +358,8 @@ export function createStorageDownloadEndpoint(
     // The capability token IS the auth/CSRF defense here: a state-changing verb never reaches this
     // read-only route (non-GET/HEAD fail closed), and the bearer token gates every read.
     auth: {
-      kind: 'none',
-      justification:
-        'Framework-owned storage download route uses a per-object signed capability token ' +
-        'verified before any storage read (SPEC §6.6); no ambient cookie/session auth is used.',
+      kind: 'verifier',
+      name: 'kovo-capability-url',
     },
     csrf: false,
     csrfJustification:

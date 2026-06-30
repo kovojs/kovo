@@ -521,10 +521,8 @@ function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
 }
 
 function serverHandlerUsesSqliteDurableIncompatibleStore(source: string): boolean {
-  return (
-    source.includes('better-sqlite3') ||
-    source.includes('drizzle-orm/better-sqlite3') ||
-    source.includes('drizzle-orm/sqlite-core')
+  return /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:better-sqlite3|drizzle-orm\/better-sqlite3|drizzle-orm\/sqlite-core)["']/.test(
+    source,
   );
 }
 
@@ -901,10 +899,9 @@ function tomlString(value: string): string {
 }
 
 function nodeServerSource(): string {
-  return `import { createReadStream } from 'node:fs';
-import { stat } from 'node:fs/promises';
+  return `import { readFile, realpath, stat } from 'node:fs/promises';
 import { createServer } from 'node:http';
-import { extname, isAbsolute, relative, resolve } from 'node:path';
+import { basename, extname, isAbsolute, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -918,6 +915,7 @@ const documentStaticHeaders = ${JSON.stringify(documentStaticHeaders())};
 const bodylessMethods = new Set(['GET', 'HEAD']);
 const headersTimeoutMs = 10_000;
 const requestTimeoutMs = 30_000;
+const rootedFileCapabilities = new Map();
 
 export function createKovoNodeServer(options = {}) {
   const server = createServer(async (nodeRequest, nodeResponse) => {
@@ -960,50 +958,38 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
   if (pathname === undefined) return false;
   const clientAsset = pathname.startsWith('/c/') || pathname.startsWith('/assets/');
   const immutableAsset = clientAsset && isImmutableStaticAssetPath(pathname);
-  let filePath = clientAsset ? staticFilePath(clientRoot, pathname) : routeDocumentPath(pathname);
-  let publicAsset = false;
+  let relativePath = clientAsset ? staticRelativePath(pathname) : routeDocumentPath(pathname);
+  const root = clientAsset ? clientRoot : staticRoot;
 
-  if (filePath === undefined) {
+  if (relativePath === undefined) {
     if (!clientAsset) return false;
     nodeResponse.writeHead(403, staticErrorHeaders());
     nodeResponse.end('Forbidden');
     return true;
   }
 
-  let fileStat = await stat(filePath).catch(() => undefined);
-  if (!clientAsset && (fileStat === undefined || !fileStat.isFile())) {
-    filePath = publicStaticFilePath(pathname);
-    publicAsset = filePath !== undefined;
-    fileStat = filePath === undefined ? undefined : await stat(filePath).catch(() => undefined);
+  let outcome = await serveRootedStaticFile(root, relativePath, {
+    ...(clientAsset
+      ? immutableAsset
+        ? immutableStaticHeaders
+        : revalidatingAssetHeaders
+      : documentStaticHeaders),
+  });
+  if (!clientAsset && outcome === undefined) {
+    relativePath = publicStaticPath(pathname);
+    outcome =
+      relativePath === undefined
+        ? undefined
+        : await serveRootedStaticFile(staticRoot, relativePath, revalidatingAssetHeaders);
   }
-  if (fileStat === undefined || !fileStat.isFile()) {
+  if (outcome === undefined) {
     if (!clientAsset) return false;
     nodeResponse.writeHead(404, staticErrorHeaders());
     nodeResponse.end('Not Found');
     return true;
   }
 
-  nodeResponse.writeHead(200, {
-    ...(clientAsset || publicAsset
-      ? immutableAsset
-        ? immutableStaticHeaders
-        : revalidatingAssetHeaders
-      : documentStaticHeaders),
-    'content-length': String(fileStat.size),
-    'content-type': contentType(filePath),
-  });
-  if (method === 'HEAD') {
-    nodeResponse.end();
-    return true;
-  }
-
-  await new Promise((resolvePromise, reject) => {
-    createReadStream(filePath)
-      .once('error', reject)
-      .pipe(nodeResponse)
-      .once('error', reject)
-      .once('finish', resolvePromise);
-  });
+  await writeRouteOutcomeToNode(outcome, nodeResponse, method);
   return true;
 }
 
@@ -1017,10 +1003,10 @@ function staticPathname(nodeRequest) {
 
 function routeDocumentPath(pathname) {
   const cleanPathname = pathname.endsWith('/') ? pathname : pathname + '/';
-  return staticFilePath(staticRoot, cleanPathname + 'index.html');
+  return staticRelativePath(cleanPathname + 'index.html');
 }
 
-function publicStaticFilePath(pathname) {
+function publicStaticPath(pathname) {
   if (
     pathname === '/_headers' ||
     pathname === '/kovo-static-manifest.json' ||
@@ -1029,29 +1015,161 @@ function publicStaticFilePath(pathname) {
   ) {
     return undefined;
   }
-  return staticFilePath(staticRoot, pathname);
+  return staticRelativePath(pathname);
 }
 
-function staticFilePath(root, pathname) {
-  let relativePath;
+function staticRelativePath(pathname) {
   try {
-    relativePath = decodeURIComponent(pathname.slice(1));
+    return decodeURIComponent(pathname.slice(1));
   } catch {
     return undefined;
   }
+}
+
+async function serveRootedStaticFile(root, relativePath, headers) {
   if (relativePath.includes('\\0')) return undefined;
+  const files = await rootedFileCapability(root);
+  if (files === undefined) return undefined;
+  return files.serve(relativePath, {
+    contentType: contentType(relativePath),
+    disposition: 'inline',
+    headers,
+    verifiedSafe: true,
+  });
+}
 
-  const filePath = resolve(root, relativePath);
-  const relativePathFromRoot = relative(root, filePath);
-  if (
-    relativePathFromRoot === '' ||
-    relativePathFromRoot.startsWith('..') ||
-    isAbsolute(relativePathFromRoot)
-  ) {
-    return undefined;
+async function rootedFileCapability(root) {
+  let capability = rootedFileCapabilities.get(root);
+  if (capability === undefined) {
+    capability = rootedStaticFiles(root).catch((error) => {
+      if (isMissingStaticRootError(error)) return undefined;
+      throw error;
+    });
+    rootedFileCapabilities.set(root, capability);
   }
+  return capability;
+}
 
-  return filePath;
+function isMissingStaticRootError(error) {
+  return (
+    error &&
+    typeof error === 'object' &&
+    'code' in error &&
+    (error.code === 'ENOENT' || error.code === 'ENOTDIR')
+  );
+}
+
+async function rootedStaticFiles(root) {
+  const realRoot = await realpath(root);
+  return Object.freeze({
+    root: realRoot,
+    serve: (path, options) => serveRootedStaticFileBytes(realRoot, path, options),
+  });
+}
+
+async function serveRootedStaticFileBytes(realRoot, requestedPath, options) {
+  const candidate = rootedStaticCandidate(realRoot, requestedPath);
+  if (candidate === undefined) return undefined;
+  const resolved = await safeRealpath(candidate);
+  if (resolved === undefined || !containsPath(realRoot, resolved)) return undefined;
+  const fileStat = await stat(resolved).catch((error) => {
+    if (isMissingStaticRootError(error)) return undefined;
+    throw error;
+  });
+  if (fileStat === undefined || !fileStat.isFile()) return undefined;
+  return {
+    body: await readFile(resolved),
+    contentDisposition: routeOutcomeContentDisposition(options, resolved),
+    contentType: options.contentType,
+    ...(options.headers === undefined ? {} : { headers: options.headers }),
+    routeResponse: true,
+  };
+}
+
+function rootedStaticCandidate(realRoot, requestedPath) {
+  if (requestedPath.includes('\\0') || isAbsolute(requestedPath)) return undefined;
+  const candidate = resolve(realRoot, requestedPath);
+  return containsPath(realRoot, candidate) ? candidate : undefined;
+}
+
+function containsPath(root, target) {
+  return target === root || target.startsWith(root + sep);
+}
+
+async function safeRealpath(path) {
+  try {
+    return await realpath(path);
+  } catch (error) {
+    if (isMissingStaticRootError(error)) return undefined;
+    throw error;
+  }
+}
+
+function routeOutcomeContentDisposition(options, resolvedPath) {
+  const disposition = options.disposition ?? 'attachment';
+  const filename = options.filename ?? basename(resolvedPath);
+  return filename
+    ? disposition + '; filename="' + contentDispositionFilename(filename) + '"'
+    : disposition;
+}
+
+function contentDispositionFilename(filename) {
+  return filename.replace(/[\\r\\n"]/g, '_');
+}
+
+async function writeRouteOutcomeToNode(outcome, nodeResponse, method) {
+  const headers = {
+    ...safeRouteOutcomeHeaders(outcome.headers),
+    'content-disposition': outcome.contentDisposition,
+    'content-type': outcome.contentType,
+    'x-content-type-options': 'nosniff',
+    ...(outcome.etag === undefined ? {} : { etag: outcome.etag }),
+  };
+  const contentLength = routeOutcomeContentLength(outcome.body);
+  if (contentLength !== undefined) headers['content-length'] = String(contentLength);
+  nodeResponse.writeHead(200, headers);
+  if (method === 'HEAD') {
+    nodeResponse.end();
+    return;
+  }
+  await writeRouteOutcomeBody(outcome.body, nodeResponse);
+}
+
+function safeRouteOutcomeHeaders(headers) {
+  if (headers === undefined) return {};
+  const safeHeaders = {};
+  for (const [name, value] of Object.entries(headers)) {
+    if (reservedRouteOutcomeHeaderNames.has(name.toLowerCase())) continue;
+    safeHeaders[name] = value;
+  }
+  return safeHeaders;
+}
+
+const reservedRouteOutcomeHeaderNames = new Set([
+  'content-disposition',
+  'content-length',
+  'content-type',
+  'etag',
+  'set-cookie',
+  'x-content-type-options',
+]);
+
+function routeOutcomeContentLength(body) {
+  if (typeof body === 'string') return Buffer.byteLength(body);
+  if (body instanceof Uint8Array || body instanceof ArrayBuffer) return body.byteLength;
+  return undefined;
+}
+
+async function writeRouteOutcomeBody(body, nodeResponse) {
+  if (typeof body === 'string' || body instanceof Uint8Array) {
+    nodeResponse.end(body);
+    return;
+  }
+  if (body instanceof ArrayBuffer) {
+    nodeResponse.end(Buffer.from(body));
+    return;
+  }
+  await pipeline(Readable.fromWeb(body), nodeResponse);
 }
 
 function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {

@@ -198,6 +198,7 @@ export function addDurableTaskProofs(root: string): void {
       '});',
       '',
       "export const taskProofCountEndpoint = endpoint('/api/task-proof-count', {",
+      '  access: publicProof,',
       "  auth: { justification: 'public durable task proof count', kind: 'none' },",
       '  csrf: false,',
       "  csrfJustification: 'read-only durable task proof count',",
