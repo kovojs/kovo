@@ -23,6 +23,9 @@ importers:
       '@vitest/browser-playwright':
         specifier: 4.1.8
         version: 4.1.8(playwright@1.60.0)(vite@8.0.16(@types/node@25.9.2)(esbuild@0.27.3)(jiti@2.7.0))(vitest@4.1.8)
+      pgsql-ast-parser:
+        specifier: ^12.0.2
+        version: 12.0.2
       playwright:
         specifier: ^1.60.0
         version: 1.60.0

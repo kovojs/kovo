@@ -173,6 +173,36 @@ export const rawUnescaped = (markup: string) => renderedHtml(markup);
     expect(compileComponentModule).not.toHaveBeenCalled();
   });
 
+  it('does not treat linked Kovo framework package source as app-authored source', async () => {
+    const frameworkRoot = mkdtempSync(join(tmpdir(), 'kovo-framework-source-'));
+    const packageRoot = join(frameworkRoot, 'packages/server');
+    const frameworkModule = join(packageRoot, 'src/jsx-runtime.ts');
+    mkdirSync(join(packageRoot, 'src'), { recursive: true });
+    writeFileSync(
+      join(packageRoot, 'package.json'),
+      JSON.stringify({ name: '@kovojs/server', type: 'module' }),
+    );
+
+    const compileComponentModule = vi.fn(() => ({ files: [] }));
+    const plugin = createKovoVitePlugin(compileComponentModule);
+
+    try {
+      expect(
+        await plugin.transform(
+          `
+import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
+
+export const token = kovoTrustedHtmlContent;
+`,
+          frameworkModule,
+        ),
+      ).toBeNull();
+      expect(compileComponentModule).not.toHaveBeenCalled();
+    } finally {
+      rmSync(frameworkRoot, { force: true, recursive: true });
+    }
+  });
+
   it('lowers standalone source-derived aliased public query imports', async () => {
     const compileComponentModule = vi.fn(() => ({ files: [] }));
     const plugin = createKovoVitePlugin(compileComponentModule, {

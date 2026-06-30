@@ -306,8 +306,18 @@ export function createKovoVitePlugin(
         isKovoEmittedServerModuleReentry(fileName, source)
       )
         return null;
-      const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
-      const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
+      const isAuthoredSource = shouldTransformViteAuthoredSource(
+        fileName,
+        componentId,
+        source,
+        options,
+      );
+      const isComponentSource = shouldTransformViteComponentSource(
+        fileName,
+        componentId,
+        source,
+        options,
+      );
       if (isAuthoredSource && !isComponentSource) {
         validateViteStandaloneAuthoringSurface(options, fileName, source);
       }
@@ -386,8 +396,18 @@ export function createKovoVitePlugin(
       // stale emitted-output re-entry.
       forgetKovoCompiledComponent(componentId);
       forgetKovoCompiledComponent(fileName);
-      const isAuthoredSource = shouldTransformViteAuthoredSource(fileName, source, options);
-      const isComponentSource = shouldTransformViteComponentSource(fileName, source, options);
+      const isAuthoredSource = shouldTransformViteAuthoredSource(
+        fileName,
+        componentId,
+        source,
+        options,
+      );
+      const isComponentSource = shouldTransformViteComponentSource(
+        fileName,
+        componentId,
+        source,
+        options,
+      );
       if (isAuthoredSource && !isComponentSource) {
         validateViteStandaloneAuthoringSurface(options, fileName, source);
       }
@@ -559,10 +579,11 @@ function isPromiseLike<T>(value: MaybePromise<T>): value is Promise<T> {
 
 function shouldTransformViteComponentSource(
   fileName: string,
+  componentId: string,
   source: string,
   options: KovoVitePluginOptions,
 ): boolean {
-  if (!shouldTransformViteAuthoredSource(fileName, source, options)) return false;
+  if (!shouldTransformViteAuthoredSource(fileName, componentId, source, options)) return false;
   if (!source.includes('component(')) return false;
 
   return true;
@@ -570,15 +591,43 @@ function shouldTransformViteComponentSource(
 
 function shouldTransformViteAuthoredSource(
   fileName: string,
+  componentId: string,
   source: string,
   options: KovoVitePluginOptions,
 ): boolean {
   if (!/\.[cm]?tsx?$/.test(fileName)) return false;
+  if (isKovoFrameworkPackageSource(componentId)) return false;
   if (matchesAnyViteFilter(options.exclude, fileName, source)) return false;
   if (options.include !== undefined && !matchesAnyViteFilter(options.include, fileName, source))
     return false;
 
   return true;
+}
+
+const kovoFrameworkPackageSourceCache = new Map<string, boolean>();
+
+function isKovoFrameworkPackageSource(componentId: string): boolean {
+  const normalized = slashPath(componentId);
+  const match = /(^|\/)(.+\/packages\/[^/]+)\/src\//.exec(normalized);
+  const packageRoot = match?.[2];
+  if (packageRoot === undefined) return false;
+
+  const cached = kovoFrameworkPackageSourceCache.get(packageRoot);
+  if (cached !== undefined) return cached;
+
+  const packageJsonPath = `${packageRoot}/package.json`;
+  let isFrameworkSource = false;
+  try {
+    if (existsSync(packageJsonPath)) {
+      const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as { name?: unknown };
+      isFrameworkSource = typeof parsed.name === 'string' && parsed.name.startsWith('@kovojs/');
+    }
+  } catch {
+    isFrameworkSource = false;
+  }
+
+  kovoFrameworkPackageSourceCache.set(packageRoot, isFrameworkSource);
+  return isFrameworkSource;
 }
 
 function validateViteStandaloneAuthoringSurface(
@@ -745,8 +794,9 @@ function loadViteClientModule(
   if (!existsSync(sourceFilePath)) return null;
 
   const fileName = viteComponentFileName(sourceFilePath, root);
+  const componentId = viteComponentIdentity(sourceFilePath, root);
   const source = readFileSync(sourceFilePath, 'utf8');
-  if (!shouldTransformViteComponentSource(fileName, source, options)) return null;
+  if (!shouldTransformViteComponentSource(fileName, componentId, source, options)) return null;
 
   const result = compileCachedViteComponentModule(
     compileComponentModule,
