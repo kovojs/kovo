@@ -190,7 +190,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm exec vitest --run packages/compiler/src/compile-fact-ledger.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/hmr-impact.test.ts packages/compiler/src/cache-identity.test.ts packages/compiler/src/style.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities.test.ts packages/compiler/src/output-context-facts.test.ts packages/compiler/src/package-styles.test.ts packages/conformance-fixtures/src/source-fixtures.test.ts` passes with typed compiler fact-ledger snapshots and the widened post-parse source-string guard.
   - SPEC: sections 1.3, 5.2 rule 10, 9.1, 11.3.
 
-- [ ] **P1.2 - Normalize runtime generated registry facts once.**
+- [x] **P1.2 - Normalize runtime generated registry facts once.**
   - Affected: `packages/server/src/app.ts`, `packages/server/src/mutation.ts`,
     `packages/server/src/app-mutation-request.ts`,
     `packages/server/src/mutation/targets.ts`, generated query/mutation registries.
@@ -205,6 +205,7 @@ test brittleness, and distribution confusion.
   - Verification: tests where facts arrive through live targets, app queries, generated mutation
     registries, and duplicate keys; assert identical rerun/fragment selection for enhanced mutation,
     no-JS failure rerender, and query endpoint paths.
+  - Evidence: `pnpm exec vitest --run packages/server/src/registry-facts.test.ts packages/server/src/app.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/query-endpoint.test.ts` passes with normalized runtime registry facts covering generated touches, live-target queries, duplicate query keys, enhanced mutation, no-JS failure rerender, and `/_q` paths.
   - SPEC: sections 1.2, 4.1, 6.1, 9.1, 10.2, 10.3.
 
 - [x] **P1.3 - Replace static-export string scans with parsed protocol extraction.**
