@@ -164,11 +164,36 @@ describe('create-kovo starter (build integration)', () => {
       writeKovoProject(root, { name: 'Build Prod Proof' });
       linkStarterBuildDependencies(root);
 
-      execFileSync('pnpm', ['run', 'build:prod'], {
-        cwd: root,
-        env: withRepoBinOnPath(),
-        stdio: 'pipe',
-      });
+      buildProductionArtifact(root);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('rebuilds production artifacts from current source when cache is warm', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-build-source-proof-'));
+
+    try {
+      writeKovoProject(root, { name: 'Build Source Proof' });
+      linkStarterBuildDependencies(root);
+
+      buildProductionArtifact(root);
+      const firstHandler = readFileSync(join(root, 'dist/server/server/handler.mjs'), 'utf8');
+      expect(firstHandler).toContain('Contacts');
+
+      const contactsPath = join(root, 'src/components/contacts.tsx');
+      writeFileSync(
+        contactsPath,
+        readFileSync(contactsPath, 'utf8').replace('Contacts</h1>', 'Current Source Contacts</h1>'),
+        'utf8',
+      );
+
+      buildProductionArtifact(root);
+      const secondHandler = readFileSync(join(root, 'dist/server/server/handler.mjs'), 'utf8');
+      expect(secondHandler).toContain('Current Source Contacts');
+      expect(secondHandler).not.toBe(firstHandler);
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
@@ -185,11 +210,7 @@ describe('create-kovo starter (build integration)', () => {
       writeKovoProject(root, { name: 'Prod Add Contact Proof' });
       linkStarterBuildDependencies(root);
 
-      execFileSync('pnpm', ['run', 'build:prod'], {
-        cwd: root,
-        env: withRepoBinOnPath(),
-        stdio: 'pipe',
-      });
+      buildProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -324,11 +345,7 @@ describe('create-kovo starter (build integration)', () => {
       writeKovoProject(root, { name: 'Prod NoJS Idem Proof' });
       linkStarterBuildDependencies(root);
 
-      execFileSync('pnpm', ['run', 'build:prod'], {
-        cwd: root,
-        env: withRepoBinOnPath(),
-        stdio: 'pipe',
-      });
+      buildProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -404,12 +421,8 @@ describe('create-kovo starter (build integration)', () => {
       addAuthSecretLeakProof(root);
 
       try {
-        execFileSync('pnpm', ['run', 'build:prod'], {
-          cwd: root,
-          env: withRepoBinOnPath(),
-          stdio: 'pipe',
-        });
-        throw new Error('Expected build:prod to fail with KV435.');
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail with KV435.');
       } catch (error) {
         const output = execFileSyncErrorOutput(error);
         expect(output).toContain('KV435');
@@ -432,11 +445,7 @@ describe('create-kovo starter (build integration)', () => {
       linkStarterBuildDependencies(root);
       addNoJsFailureProof(root);
 
-      execFileSync('pnpm', ['run', 'build:prod'], {
-        cwd: root,
-        env: withRepoBinOnPath(),
-        stdio: 'pipe',
-      });
+      buildProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -499,11 +508,7 @@ describe('create-kovo starter (build integration)', () => {
       writeKovoProject(root, { name: 'Build Prod Cache Proof' });
       linkStarterBuildDependencies(root);
 
-      execFileSync('pnpm', ['run', 'build:prod'], {
-        cwd: root,
-        env: withRepoBinOnPath(),
-        stdio: 'pipe',
-      });
+      buildProductionArtifact(root);
 
       prodServer = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -810,6 +815,16 @@ function addNoJsFailureProof(root: string): void {
       ].join('\n'),
     );
   writeFileSync(appPath, app, 'utf8');
+}
+
+function buildProductionArtifact(root: string): void {
+  // CI restores **/.kovo/cache, so this prod-artifact gate must prove current source, not cache.
+  rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
+  execFileSync(join(root, 'node_modules/.bin/kovo'), ['build', './src/app.tsx', '--no-cache'], {
+    cwd: root,
+    env: withRepoBinOnPath(),
+    stdio: 'pipe',
+  });
 }
 
 function addAuthSecretLeakProof(root: string): void {
