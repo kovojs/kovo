@@ -17,6 +17,7 @@ export interface EmitRegistryModuleOptions {
   clientFileName: string;
   cssAssets: readonly ComponentCssAsset[];
   componentName: string;
+  componentRegistryNames?: readonly string[];
   domComponentName: string;
   fragmentTargetFacts: readonly FragmentTargetFact[];
   handlers: readonly Pick<HandlerLowering, 'exportName'>[];
@@ -57,6 +58,7 @@ export function emitRegistryModule(options: EmitRegistryModuleOptions): string {
     .join('\n');
   const componentRegistryLines = componentRegistryFactLines([
     options.registryComponentName,
+    ...(options.componentRegistryNames ?? []),
     ...(options.registryFacts?.components ?? []),
   ]);
   const stylesheetLines = options.cssAssets.map(componentStylesheetLine).join('\n');

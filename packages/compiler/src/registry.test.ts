@@ -139,6 +139,123 @@ export const ProductDetail = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('emits live-target facts, stamps, and renderers for later query-backed components', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/interaction-lab.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { contactsQuery } from '../queries.js';
+
+export const TriageIsland = component({
+  state: () => ({ open: true }),
+  render: (_queries, state) => (
+    <triage-island>{state.open ? 'Open' : 'Closed'}</triage-island>
+  ),
+});
+
+export const ContactStatsRegion = component({
+  queries: { contacts: contactsQuery },
+  render: ({ contacts }) => (
+    <section>
+      <strong>{contacts.count}</strong>
+    </section>
+  ),
+});
+`,
+    });
+
+    const registry = result.files.find((file) => file.kind === 'registry')?.source ?? '';
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
+    expect(result.componentGraphFacts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          domName: 'triage-island',
+          exportName: 'TriageIsland',
+          mutableLocalState: true,
+          name: 'components/interaction-lab/triage-island',
+        }),
+        {
+          domName: 'contact-stats-region',
+          exportName: 'ContactStatsRegion',
+          fragments: ['components/interaction-lab/contact-stats-region'],
+          name: 'components/interaction-lab/contact-stats-region',
+          queries: ['contacts'],
+        },
+      ]),
+    );
+    expect(registry).toContain(`interface FragmentTargets {
+  'components/interaction-lab/contact-stats-region': {};
+}`);
+    expect(registry).toContain(
+      `'components/interaction-lab/contact-stats-region': { component: 'components/interaction-lab/contact-stats-region'; targetBase: 'contact-stats-region'; identityProps: readonly []; queries: readonly ['contacts']; queryBindings: readonly [{ name: 'contacts'; queryExpression: "contactsQuery" }]; props: {}; coverage: readonly [{ query: 'contacts.count'; position: "binding"; status: 'plan' }]; };`,
+    );
+    expect(registry).toContain(
+      `'components/interaction-lab/contact-stats-region': import('@kovojs/core').Component<import('@kovojs/core').ComponentDefinitionInput>;`,
+    );
+    expect(result.loweredSource).toContain(
+      '<section kovo-c="contact-stats-region" kovo-deps="contacts" kovo-fragment-target="contact-stats-region" kovo-live-component="components/interaction-lab/contact-stats-region">',
+    );
+    expect(result.loweredSource).toContain(
+      `export const ContactStatsRegion$liveTargetRenderer = registerGeneratedLiveTargetRenderer(componentLiveTargetRenderer({
+  component: ContactStatsRegion,
+  componentId: "components/interaction-lab/contact-stats-region",
+  queries: [
+    { name: "contacts", query: contactsQuery }
+  ],
+}));`,
+    );
+    expect(result.loweredSource).not.toContain('TriageIsland$liveTargetRenderer');
+  });
+
+  it('honors disableServerRefresh on later query-backed components', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/interaction-lab.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { contactsQuery } from '../queries.js';
+
+export const DraftScoreIsland = component({
+  state: () => ({ score: 0 }),
+  render: (_queries, state) => <draft-score>{state.score}</draft-score>,
+});
+
+export const ContactStatsRegion = component({
+  disableServerRefresh: true,
+  queries: { contacts: contactsQuery },
+  render: ({ contacts }) => (
+    <contact-stats-region>
+      <strong>{contacts.count}</strong>
+    </contact-stats-region>
+  ),
+});
+`,
+    });
+
+    const registry = result.files.find((file) => file.kind === 'registry')?.source ?? '';
+
+    expect(result.componentGraphFacts).toEqual(
+      expect.arrayContaining([
+        {
+          domName: 'contact-stats-region',
+          exportName: 'ContactStatsRegion',
+          name: 'components/interaction-lab/contact-stats-region',
+          queries: ['contacts'],
+        },
+      ]),
+    );
+    expect(registry).not.toContain(`interface FragmentTargets {
+  'components/interaction-lab/contact-stats-region': {};
+}`);
+    expect(registry).not.toContain(
+      `'components/interaction-lab/contact-stats-region': { component: 'components/interaction-lab/contact-stats-region';`,
+    );
+    expect(result.loweredSource).not.toContain(
+      'kovo-live-component="components/interaction-lab/contact-stats-region"',
+    );
+    expect(result.loweredSource).not.toContain('ContactStatsRegion$liveTargetRenderer');
+  });
+
   it('unwraps refresh modifiers when emitting component query binding facts', () => {
     const result = compileComponentModule({
       fileName: 'components/products/product-detail.tsx',

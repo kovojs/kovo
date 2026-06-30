@@ -12,10 +12,12 @@ import { jsxElements, type ComponentModuleModel, type JsxElementModel } from '..
 import type { GeneratedOutputWriteFact } from '../output-context-facts.js';
 
 export interface DataBindAttribute {
+  end?: number;
   name: string;
   path: string;
   query: string | null;
   relativeReadPath: string | null;
+  start?: number;
 }
 
 export function dataBindAttributeFact(name: string, path: string): DataBindAttribute {

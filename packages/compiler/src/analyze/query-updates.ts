@@ -30,8 +30,11 @@ import {
   updateCoverageKey,
 } from './query-coverage.js';
 import {
-  componentHasInferredServerRefreshTarget,
-  componentOptionStaticValue,
+  componentHasInferredFragmentTarget,
+  componentModelForSourceSpan,
+  componentOptionStaticValueFor,
+  jsxElements,
+  type ComponentModel,
   type ComponentModuleModel,
 } from '../scan/parse.js';
 import type { GeneratedOutputWriteFact } from '../output-context-facts.js';
@@ -156,16 +159,20 @@ export function collectQueryUpdateCoverage(
     const path = binding.path;
     const query = binding.query;
     if (!query) continue;
+    const ownerName = componentNameForSpan(model, componentName, {
+      end: binding.end ?? binding.start ?? 0,
+      start: binding.start ?? 0,
+    });
 
     facts.push({
-      componentName,
+      componentName: ownerName,
       detail: binding.name,
       position: binding.name === 'data-bind' ? 'binding' : 'attribute',
       query: path,
       ...(query === 'state' ? { source: 'state' as const } : {}),
       status: 'plan',
     });
-    const key = coveragePathKey(query === 'state' ? 'state' : 'query', path);
+    const key = componentCoveragePathKey(ownerName, query === 'state' ? 'state' : 'query', path);
     coveredPaths.add(key);
     planCoveredPaths.add(key);
   }
@@ -180,7 +187,7 @@ export function collectQueryUpdateCoverage(
       query: stamp.list,
       status: 'plan',
     });
-    const key = coveragePathKey('query', stamp.list);
+    const key = componentCoveragePathKey(componentName, 'query', stamp.list);
     coveredPaths.add(key);
     planCoveredPaths.add(key);
   }
@@ -193,7 +200,7 @@ export function collectQueryUpdateCoverage(
       query: path,
       status: 'renderOnce',
     });
-    const key = coveragePathKey('query', path);
+    const key = componentCoveragePathKey(componentName, 'query', path);
     coveredPaths.add(key);
     statusCoveredPaths.add(key);
   }
@@ -207,67 +214,77 @@ export function collectQueryUpdateCoverage(
       source: 'state',
       status: 'renderOnce',
     });
-    const key = coveragePathKey('state', path);
+    const key = componentCoveragePathKey(componentName, 'state', path);
     coveredPaths.add(key);
     statusCoveredPaths.add(key);
   }
 
-  if (componentOptionStaticValue(model, 'isomorphic') === true) {
-    for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
-      const path = expression.path;
-      if (coveredPaths.has(coveragePathKey('query', path))) continue;
+  for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+    const owner = componentForSpan(model, expression);
+    if (!owner || componentOptionStaticValueFor(owner, 'isomorphic') !== true) continue;
+    const ownerName = owner?.localName ?? componentName;
+    const path = expression.path;
+    const key = componentCoveragePathKey(ownerName, 'query', path);
+    if (coveredPaths.has(key)) continue;
 
-      facts.push({
-        componentName,
-        detail: 'declared isomorphic island',
-        position: 'expression',
-        query: path,
-        status: 'isomorphic',
-      });
-      const key = coveragePathKey('query', path);
-      coveredPaths.add(key);
-      statusCoveredPaths.add(key);
-    }
-
-    for (const expression of jsxStateExpressionPaths(model)) {
-      const path = expression.path;
-      if (coveredPaths.has(coveragePathKey('state', path))) continue;
-
-      facts.push({
-        componentName,
-        detail: 'declared isomorphic island',
-        position: 'expression',
-        query: path,
-        source: 'state',
-        status: 'isomorphic',
-      });
-      const key = coveragePathKey('state', path);
-      coveredPaths.add(key);
-      statusCoveredPaths.add(key);
-    }
+    facts.push({
+      componentName: ownerName,
+      detail: 'declared isomorphic island',
+      position: 'expression',
+      query: path,
+      status: 'isomorphic',
+    });
+    coveredPaths.add(key);
+    statusCoveredPaths.add(key);
   }
 
-  if (componentHasInferredServerRefreshTarget(model)) {
-    for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
-      const path = expression.path;
-      if (coveredPaths.has(coveragePathKey('query', path))) continue;
+  for (const expression of jsxStateExpressionPaths(model)) {
+    const owner = componentForSpan(model, expression);
+    if (!owner || componentOptionStaticValueFor(owner, 'isomorphic') !== true) continue;
+    const ownerName = owner?.localName ?? componentName;
+    const path = expression.path;
+    const key = componentCoveragePathKey(ownerName, 'state', path);
+    if (coveredPaths.has(key)) continue;
 
-      facts.push({
-        componentName,
-        detail: 'inferred query-backed server refresh target',
-        position: 'expression',
-        query: path,
-        status: 'fragment',
-      });
-      const key = coveragePathKey('query', path);
-      coveredPaths.add(key);
-      statusCoveredPaths.add(key);
-    }
+    facts.push({
+      componentName: ownerName,
+      detail: 'declared isomorphic island',
+      position: 'expression',
+      query: path,
+      source: 'state',
+      status: 'isomorphic',
+    });
+    coveredPaths.add(key);
+    statusCoveredPaths.add(key);
   }
 
   for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+    const owner = componentForSpan(model, expression);
+    const fragmentTarget =
+      owner && componentHasInferredFragmentTarget(owner)
+        ? owner
+        : fragmentTargetComponentReferenceForSpan(model, expression);
+    if (!fragmentTarget) continue;
+    const ownerName = owner?.localName ?? componentName;
     const path = expression.path;
-    const key = coveragePathKey('query', path);
+    const key = componentCoveragePathKey(ownerName, 'query', path);
+    if (coveredPaths.has(key)) continue;
+
+    facts.push({
+      componentName: ownerName,
+      detail: 'inferred query-backed server refresh target',
+      position: 'expression',
+      query: path,
+      status: 'fragment',
+    });
+    coveredPaths.add(key);
+    statusCoveredPaths.add(key);
+  }
+
+  for (const expression of jsxQueryExpressionPaths(model, knownQueries)) {
+    const ownerName = componentNameForSpan(model, componentName, expression);
+    const path = expression.path;
+    const key = componentCoveragePathKey(ownerName, 'query', path);
     if (
       statusCoveredPaths.has(key) ||
       (planCoveredPaths.has(key) && queryExpressionCoveredByDataBind(expression, model))
@@ -276,7 +293,7 @@ export function collectQueryUpdateCoverage(
     }
 
     facts.push({
-      componentName,
+      componentName: ownerName,
       detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
       position: 'expression',
       query: path,
@@ -286,8 +303,9 @@ export function collectQueryUpdateCoverage(
   }
 
   for (const expression of jsxStateExpressionPaths(model)) {
+    const ownerName = componentNameForSpan(model, componentName, expression);
     const path = expression.path;
-    const key = coveragePathKey('state', path);
+    const key = componentCoveragePathKey(ownerName, 'state', path);
     if (
       statusCoveredPaths.has(key) ||
       (planCoveredPaths.has(key) && stateExpressionCoveredByDataBind(expression, model))
@@ -297,7 +315,7 @@ export function collectQueryUpdateCoverage(
     if (stateExpressionCoveredByDataBind(expression, model)) continue;
 
     facts.push({
-      componentName,
+      componentName: ownerName,
       detail: 'state expression has no data-bind, renderOnce, or isomorphic status',
       position: 'expression',
       query: path,
@@ -308,4 +326,52 @@ export function collectQueryUpdateCoverage(
   }
 
   return dedupeBy(facts, updateCoverageKey);
+}
+
+function componentForSpan(
+  model: ComponentModuleModel,
+  span: { end: number; start: number },
+): ComponentModel | null {
+  return componentModelForSourceSpan(model, span);
+}
+
+function componentNameForSpan(
+  model: ComponentModuleModel,
+  fallback: string,
+  span: { end: number; start: number },
+): string {
+  return componentForSpan(model, span)?.localName ?? fallback;
+}
+
+function componentCoveragePathKey(
+  componentName: string,
+  source: 'query' | 'state',
+  path: string,
+): string {
+  return `${componentName}\0${coveragePathKey(source, path)}`;
+}
+
+function fragmentTargetComponentReferenceForSpan(
+  model: ComponentModuleModel,
+  span: { end: number; start: number },
+): ComponentModel | null {
+  const fragmentTargetsByLocalName = new Map(
+    model.components.flatMap((component) =>
+      component.localName && componentHasInferredFragmentTarget(component)
+        ? [[component.localName, component]]
+        : [],
+    ),
+  );
+  if (fragmentTargetsByLocalName.size === 0) return null;
+
+  const containingTarget = jsxElements(model)
+    .filter(
+      (element) =>
+        span.start >= element.start &&
+        span.end <= element.end &&
+        fragmentTargetsByLocalName.has(element.tag),
+    )
+    .sort((left, right) => left.end - left.start - (right.end - right.start))[0];
+
+  return containingTarget ? (fragmentTargetsByLocalName.get(containingTarget.tag) ?? null) : null;
 }
