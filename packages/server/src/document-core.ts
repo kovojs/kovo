@@ -2,6 +2,7 @@ import {
   createInlineKovoLoaderSource,
   inlineKovoLoaderInstallerSource,
 } from '@kovojs/browser/internal/inline-loader';
+import { stringifyWireValue } from '@kovojs/core/internal/wire-json';
 import {
   KOVO_CSP_REPORT_GROUP,
   cspHashAttribute,
@@ -36,11 +37,7 @@ import {
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
-import {
-  renderQueryScript,
-  stringifyWireValue,
-  type QueryScriptRenderOptions,
-} from './wire-html.js';
+import { renderQueryScript, type QueryScriptRenderOptions } from './wire-html.js';
 
 /**
  * Framework-owned assembled document parts consumed by the structured document

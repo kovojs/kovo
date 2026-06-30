@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
 import {
   clientModuleContentVersion,
   clientModuleHrefForSourceFile,
@@ -96,7 +97,9 @@ export function lowerEventHandlers(
       attributeName: `on:${eventName}`,
       attributeEnd,
       attributeStart,
-      attributeValue: `${clientModuleUrl(options.fileName)}#${exportName}`,
+      attributeValue: formatKovoModuleRef(
+        kovoModuleRef(clientModuleUrl(options.fileName), exportName, 'handler'),
+      ),
       ...(eventAttribute.zeroArgArrow
         ? {
             arrowBody: {
@@ -143,7 +146,12 @@ export function versionHandlerLowering(
   clientHref: string,
 ): HandlerLowering {
   const unversionedHref = clientModuleUrl(fileName);
-  const versionedAttributeValue = `${clientHref}#${handler.exportName}`;
+  const unversionedAttributeValue = formatKovoModuleRef(
+    kovoModuleRef(unversionedHref, handler.exportName, 'handler'),
+  );
+  const versionedAttributeValue = formatKovoModuleRef(
+    kovoModuleRef(clientHref, handler.exportName, 'handler'),
+  );
   return {
     ...handler,
     attributeValue: versionedAttributeValue,
@@ -153,7 +161,10 @@ export function versionHandlerLowering(
             diagnostic.help
               ? {
                   ...diagnostic,
-                  help: diagnostic.help.replaceAll(`${unversionedHref}#`, `${clientHref}#`),
+                  help: diagnostic.help.replaceAll(
+                    unversionedAttributeValue,
+                    versionedAttributeValue,
+                  ),
                 }
               : diagnostic,
           ),
@@ -165,7 +176,10 @@ export function versionHandlerLowering(
             ...handler.diagnostic,
             ...(handler.diagnostic.help
               ? {
-                  help: handler.diagnostic.help.replaceAll(`${unversionedHref}#`, `${clientHref}#`),
+                  help: handler.diagnostic.help.replaceAll(
+                    unversionedAttributeValue,
+                    versionedAttributeValue,
+                  ),
                 }
               : {}),
           },
@@ -376,10 +390,13 @@ function kv201Diagnostic(
 ): CompilerDiagnostic {
   const definition = diagnosticDefinitions.KV201;
   const labels = definition.detailLabels;
+  const handlerRef = formatKovoModuleRef(
+    kovoModuleRef(clientModuleUrl(fileName), lowering.exportName, 'handler'),
+  );
   return {
     ...diagnosticFor(fileName, 'KV201', source, offset, lowering.attributeName.length),
     help: [
-      `${labels.handlerLowering} ${lowering.attributeName}="${clientModuleUrl(fileName)}#${lowering.exportName}"`,
+      `${labels.handlerLowering} ${lowering.attributeName}="${handlerRef}"`,
       `${labels.blockedExpression} ${lowering.expression}`,
       `${labels.elementParams} ${lowering.params.map((param) => param.attributeName).join(', ') || '-'}`,
       definition.help ?? '',

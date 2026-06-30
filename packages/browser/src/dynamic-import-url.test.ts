@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
+import { parseKovoModuleRef } from '@kovojs/core/internal/module-ref';
+
 import {
   assertAllowedKovoDynamicImportUrl,
+  isAllowedKovoDynamicImportRef,
   isAllowedKovoDynamicImportUrl,
 } from './dynamic-import-url.js';
 
@@ -54,6 +57,18 @@ describe('Kovo dynamic import URL guard', () => {
     expect(isAllowedKovoDynamicImportUrl('/c/__v/cart-v1/panel.client.js?hash=2', options)).toBe(
       false,
     );
+  });
+
+  it('checks parsed Kovo module refs at the dynamic import boundary', () => {
+    const ref = parseKovoModuleRef('/c/__v/cart-v1/cart.client.js#Cart$click', 'handler');
+    expect(ref).toBeDefined();
+
+    expect(
+      isAllowedKovoDynamicImportRef(ref!, {
+        allowedModuleUrls: ['/c/__v/cart-v1/cart.client.js'],
+        buildToken: 'cart-v1',
+      }),
+    ).toBe(true);
   });
 
   it('treats document modulepreloads as an allowlist only when explicitly marked', () => {

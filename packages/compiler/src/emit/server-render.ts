@@ -1,3 +1,5 @@
+import { formatKovoModuleRef, parseKovoModuleRef } from '@kovojs/core/internal/module-ref';
+
 import { compilerIrHeader } from '../ir.js';
 import {
   outputContextForAttribute,
@@ -183,9 +185,10 @@ function executionTriggerRenderLowering(
   for (const element of model.jsxElements) {
     for (const attribute of element.attributes) {
       if (attribute.executionTriggerName === undefined || attribute.value === undefined) continue;
-      if (!attribute.value.startsWith(`${unversionedHref}#`)) continue;
+      const ref = parseKovoModuleRef(attribute.value, 'handler');
+      if (!ref || ref.url !== unversionedHref) continue;
 
-      const value = `${options.clientHref}#${attribute.value.slice(`${unversionedHref}#`.length)}`;
+      const value = formatKovoModuleRef({ ...ref, url: options.clientHref });
       replacements.push({
         end: attribute.end,
         replacement: `${attribute.name}="${escapeAttribute(value)}"`,

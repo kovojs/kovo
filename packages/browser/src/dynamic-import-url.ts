@@ -1,3 +1,5 @@
+import type { KovoModuleRef } from '@kovojs/core/internal/module-ref';
+
 export interface DynamicImportUrlOptions {
   allowedModuleUrls?: readonly string[];
   buildToken?: string;
@@ -15,6 +17,16 @@ export function assertAllowedKovoDynamicImportUrl(
   }
 }
 
+/** @internal Runtime allowlist for a parsed compiler-emitted module ref (SPEC §4.4). */
+export function assertAllowedKovoDynamicImportRef(
+  ref: KovoModuleRef,
+  options: DynamicImportUrlOptions = {},
+): void {
+  if (!isAllowedKovoDynamicImportRef(ref, options)) {
+    throw new Error(`Disallowed Kovo dynamic import URL: ${ref.url}`);
+  }
+}
+
 /** @internal Wrap a dynamic importer with the same URL allowlist used by handler/derive refs. */
 export function guardKovoDynamicImportModule<T = Record<string, unknown>>(
   importModule: DynamicImportModule<T>,
@@ -24,6 +36,14 @@ export function guardKovoDynamicImportModule<T = Record<string, unknown>>(
     assertAllowedKovoDynamicImportUrl(url, options);
     return importModule(url);
   };
+}
+
+/** @internal True when a parsed handler/derive ref points at an allowed client module. */
+export function isAllowedKovoDynamicImportRef(
+  ref: KovoModuleRef,
+  options: DynamicImportUrlOptions = {},
+): boolean {
+  return isAllowedKovoDynamicImportUrl(ref.url, options);
 }
 
 /** @internal True when a handler/derive ref points at a same-origin Kovo client module. */

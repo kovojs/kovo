@@ -17,6 +17,7 @@
           "./internal/document-protocol",
           "./internal/fragment-target",
           "./internal/graph",
+          "./internal/module-ref",
           "./internal/package-prefix",
           "./internal/query-delta",
           "./internal/render-plan-token",
@@ -26,7 +27,8 @@
           "./internal/sql-safety",
           "./internal/component-render",
           "./internal/event",
-          "./internal/storage"
+          "./internal/storage",
+          "./internal/wire-json"
         ]
       },
       "apiRef": {
