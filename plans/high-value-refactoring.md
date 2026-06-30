@@ -355,7 +355,10 @@ test brittleness, and distribution confusion.
 
 - [x] **P2.1 - Make `create-kovo` starter tests prove published package shape.**
   - Affected: `packages/create-kovo/src/index.test-support.ts`,
-    `packages/create-kovo/src/index.build.test.ts`, `scripts/link-local-kovo.mjs`,
+    `packages/create-kovo/src/index.build.scaffold.test.ts`,
+    `packages/create-kovo/src/index.build.prod-artifact.test.ts`,
+    `packages/create-kovo/src/index.build.runtime.test.ts`,
+    `packages/create-kovo/src/index.build.test-support.ts`, `scripts/link-local-kovo.mjs`,
     publish/package scripts.
   - Why high value: starter integration tests mostly use symlinked workspace packages, which is fast but
     can miss publish config, bin wiring, dist layout, and dependency issues that real users hit.

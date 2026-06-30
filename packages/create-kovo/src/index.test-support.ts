@@ -76,9 +76,9 @@ const packedWorkspacePackages: readonly WorkspacePackage[] = [
 let packedKovoPackageCache: PackedKovoPackages | undefined;
 
 export function createStarterApp(options: StarterAppOptions): StarterTestApp {
-  const parent = mkdtempSync(
-    join(options.tempParent ?? tmpdir(), options.tempPrefix ?? 'create-kovo-app-'),
-  );
+  const tempParent = options.tempParent ?? tmpdir();
+  mkdirSync(tempParent, { recursive: true });
+  const parent = mkdtempSync(join(tempParent, options.tempPrefix ?? 'create-kovo-app-'));
   const root = join(parent, 'app');
   mkdirSync(root, { recursive: true });
 
