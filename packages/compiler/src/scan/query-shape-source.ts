@@ -1,6 +1,6 @@
 import * as ts from 'typescript';
 
-import type { QueryShape, QueryShapeFact } from './types.js';
+import type { QueryShape, QueryShapeFact } from '../types.js';
 
 /**
  * @internal Merge projected query-shape facts from multiple analyzers. Primary facts win for
