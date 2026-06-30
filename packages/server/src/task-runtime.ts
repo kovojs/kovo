@@ -58,7 +58,6 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
   private cronMaterializer: RecurringTaskMaterializer | undefined;
   private cronTimer: ReturnType<typeof setTimeout> | undefined;
   private runner: DurableTaskRunner | undefined;
-  private rootStore: DurableTaskQueueStore | undefined;
   private startPromise: Promise<void> | undefined;
 
   readonly scheduler: TaskScheduler = {
@@ -92,7 +91,6 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     const store = new PostgresDurableTaskQueue(executor);
     await ensureDurableTaskSchema(executor);
     await ensureRecurringTaskSchema(executor);
-    this.rootStore = store;
     this.cronMaterializer = createRecurringTaskMaterializer({
       occurrenceStore: new PostgresRecurringTaskOccurrenceStore(executor),
       store,
@@ -214,18 +212,6 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     }
     return new PostgresDurableTaskQueue(createDurableTaskSqlExecutor(request.db));
   }
-}
-
-function enqueueScheduledTask(
-  store: DurableTaskQueueStore,
-  registeredTasks: readonly KovoApp['tasks'][number][],
-  input: {
-    args: unknown;
-    definition: KovoApp['tasks'][number];
-    options: TaskScheduleOptions | undefined;
-  },
-): Promise<TaskHandle> {
-  return store.enqueue(scheduledTaskInput(registeredTasks, input));
 }
 
 function scheduledTaskInput(
