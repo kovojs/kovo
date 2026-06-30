@@ -63,7 +63,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm exec vitest --run packages/server/src/response-posture.test.ts packages/server/src/response.test.ts packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app.test.ts` passes with centralized response finalization and endpoint ambient-authority posture coverage.
   - SPEC: sections 5.2.1, 6.6, 9.1, 9.4, 9.5, 10.3.
 
-- [ ] **P0.3 - Make contextual output safety one cross-package policy plus branded fragment sinks.**
+- [x] **P0.3 - Make contextual output safety one cross-package policy plus branded fragment sinks.**
   - Affected: `packages/core/src/internal/sink-policy.ts`,
     `packages/compiler/src/output-context-facts.ts`,
     `packages/compiler/src/security/output-context.ts`,
@@ -90,6 +90,7 @@ test brittleness, and distribution confusion.
     `packages/browser/src/inline-loader-trusted-types-routing.test.ts`; type tests that raw strings
     cannot reach fragment sinks; runtime tests for trusted HTML, generated component HTML, streaming
     fragments, and malicious fragment content.
+  - Evidence: `pnpm run check:inline-loader && pnpm run check:inline-loader:trusted-types && pnpm run check:imports && pnpm run check:sink-policy` and `pnpm exec vitest --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/server-emit-security.test.ts packages/compiler/src/security-output.test.ts packages/browser/src/inline-loader-security.test.ts packages/browser/src/inline-loader-trusted-types-routing.test.ts packages/browser/src/response-fragment-apply.test.ts packages/server/src/wire-html.test.ts packages/server/src/mutation-response.test.ts packages/server/src/html.test.ts packages/server/src/response.test.ts packages/server/src/wire-fixtures.test.ts packages/server/src/replay.test.ts packages/core/src/security-url.test.ts packages/core/src/sink-policy.test.ts` pass with shared sink-policy and branded fragment sink coverage.
   - SPEC: sections 2, 4.8, 5.2 rule 10, 6.6, 9.1.
 
 - [ ] **P0.4 - Replace generated query-update helper duplication with one runtime VM and one keyed reconciler core.**
