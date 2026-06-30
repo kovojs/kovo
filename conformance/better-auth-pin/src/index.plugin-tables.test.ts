@@ -59,11 +59,8 @@ describe('Better Auth pinned conformance', () => {
     });
     expect(
       validateBetterAuthSchemaBridge(tables, {
-        credentialMutationDeclaredTableTouches: {
-          signInEmail: [
-            { domain: 'auth', table: 'session' },
-            { domain: 'auth', table: 'twoFactor' },
-          ],
+        credentialMutationTableTouches: {
+          signInEmail: [{ table: 'session' }, { table: 'twoFactor' }],
         },
       }),
     ).toEqual({

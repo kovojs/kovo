@@ -8,7 +8,7 @@ import {
   renderErrorDocument,
   renderRouteDocumentResponse,
 } from './document-core.js';
-import { normalizeForwardedSetCookie } from './cookies.js';
+import { forwardSetCookie } from './cookies.js';
 import {
   createSignUrl,
   storageDownloadEndpointInfo,
@@ -80,7 +80,7 @@ export async function renderAppRouteDocumentResponse({
   // `{ value, setCookies }` provider envelope. The route lifecycle forwards them to this sink; we
   // re-emit them on the document response so a continuously-active user's session actually extends
   // instead of being hard-logged-out at the original boundary.
-  const refreshSetCookies: string[] = [];
+  const refreshSetCookies: { raw: string; source: 'csrf' | 'session-provider' }[] = [];
   const routeResponse = await renderRoutePageResponse(
     route,
     routeInput,
@@ -101,10 +101,12 @@ export async function renderAppRouteDocumentResponse({
         ? {}
         : { mutationFailure: jsxContext.mutationFailure }),
       maxListItems: app.requestLimits.maxQueryListItems,
-      onCsrfSetCookie: (rawSetCookie) => refreshSetCookies.push(rawSetCookie),
+      onCsrfSetCookie: (rawSetCookie) =>
+        refreshSetCookies.push({ raw: rawSetCookie, source: 'csrf' }),
       ...(app.db === undefined ? {} : { db: app.db }),
       ...(app.onError === undefined ? {} : { onError: app.onError }),
-      onSessionSetCookie: (rawSetCookie) => refreshSetCookies.push(rawSetCookie),
+      onSessionSetCookie: (rawSetCookie) =>
+        refreshSetCookies.push({ raw: rawSetCookie, source: 'session-provider' }),
       clientIp: (req) => resolveRequestClientIp(app, req),
       renderForbidden: (async () => {
         const forbidden = await renderAppErrorDocumentResponse(app, request, 403);
@@ -125,14 +127,14 @@ export async function renderAppRouteDocumentResponse({
   }
 
   const withRefreshCookies = (response: RoutePageResponse): RoutePageResponse => {
-    // Forwarded better-auth/session Set-Cookie strings are routed through the cookie floor
+    // Forwarded session/CSRF Set-Cookie strings are routed through the cookie floor
     // (cookies.ts) so a forwarded credential cookie can never land below the
     // HttpOnly/Secure(prod)/SameSite floor (SPEC §6.6/§9.1).
     for (const cookie of refreshSetCookies)
       appendResponseHeader(
         response.headers,
         'Set-Cookie',
-        normalizeForwardedSetCookie(cookie, 'session'),
+        forwardSetCookie(cookie.raw, { class: 'session', source: cookie.source }),
       );
     return response;
   };

@@ -236,7 +236,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm exec vitest --run packages/better-auth/src/index.schema-materialize.test.ts packages/better-auth/src/index.schema-bridge.test.ts` and `pnpm --filter @kovojs/conformance-better-auth-pin test -- src/index.plugin-tables.test.ts` pass after the structured schema IR/codegen refactor.
   - SPEC: sections 1.3, 4.8, 10.1, 11.2.
 
-- [ ] **P1.5 - Make Better Auth operation contracts, graph facts, and cookie forwarding single-source.**
+- [x] **P1.5 - Make Better Auth operation contracts, graph facts, and cookie forwarding single-source.**
   - Affected: `packages/better-auth/src/internal.ts`,
     `packages/better-auth/src/mutations.ts`, `packages/better-auth/src/mount.ts`,
     `packages/better-auth/src/credential-options.ts`,
@@ -258,6 +258,7 @@ test brittleness, and distribution confusion.
     domains match bridge domains; conformance tests for `csrf:false`, guarded mutations, and `mount()`
     explain output; cookie tests for folded cookies, `Expires`, `Partitioned`, `Priority`,
     `SameSite=None`, deletion cookies, session refresh, and sign-out clearing.
+  - Evidence: `pnpm exec vitest --run packages/server/src/cookies.test.ts packages/better-auth/src/index.schema-bridge.test.ts packages/better-auth/src/index.credential-mutations.test.ts packages/better-auth/src/index.session.test.ts packages/server/src/mutation.test.ts packages/server/src/app-document.test.ts` and `pnpm --filter @kovojs/conformance-better-auth-pin test -- src/index.session-credentials.test.ts src/index.plugin-tables.test.ts` pass with operation contracts deriving touches/keys/access facts and server-owned `forwardSetCookie()` enforcing cookie forwarding posture.
   - SPEC: sections 6.5, 6.6, 9.1, 9.1.1, 10.1, 10.3, 11.2, 11.3.
 
 - [x] **P1.6 - Make CLI and API tooling manifests executable sources of truth.**

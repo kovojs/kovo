@@ -1,5 +1,5 @@
 import type {
-  CookieOptions,
+  AccessDecision,
   Domain,
   Guard,
   GuardDenial,
@@ -28,34 +28,34 @@ export type BetterAuthCredentialFailure = MutationFail<
   Record<string, never>
 >;
 
+interface BetterAuthForwardSetCookiePosture {
+  class: 'session';
+  source: 'better-auth-credential';
+}
+
 /** @internal Forward Better Auth `Set-Cookie` headers into the mutation response channel. */
 // SPEC.md §9.1 and archived D5 auth plan B4: credential mutations can only forward auth cookies
 // through the current mutation response-header channel.
-export function forwardBetterAuthSetCookie(
-  headers: Headers,
-  context: {
-    setCookie?: (name: string, value: string, options?: CookieOptions) => void;
-    setForwardedCookie?: (rawSetCookie: string) => void;
-  },
-): void {
-  // bug-and-testing-part2 B3: the public Set-Cookie channel is the typed builder only (no raw
-  // free-string overload). Better Auth emits standard URL-encoded Set-Cookie strings, so parse each
-  // into (name, value, attributes) and re-emit through the typed builder. The value is decoded once
-  // (Better Auth URL-encodes it) so the typed builder re-encodes it to the identical wire bytes.
+export function forwardBetterAuthSetCookie(headers: Headers, context: unknown): void {
+  const forward = readBetterAuthForwardSetCookie(context);
+  if (!forward) return;
+
   for (const cookie of getBetterAuthSetCookie(headers)) {
-    // bugz-15 B1: Better Auth owns the cookie name it later reads. The internal forwarded-cookie
-    // sink preserves that name while still applying the credential floor; routing through
-    // `setCookie` would treat the upstream cookie as app-authored and may add a `__Host-` prefix
-    // Better Auth does not read.
-    if (context.setForwardedCookie) {
-      context.setForwardedCookie(cookie);
-      continue;
-    }
-    const setCookie = context.setCookie;
-    if (!setCookie) continue;
-    const parsed = parseSetCookieHeader(cookie);
-    if (parsed) setCookie(parsed.name, parsed.value, parsed.options);
+    // P1.5 / SPEC.md §9.1.1: Better Auth owns the cookie name it later reads. The server
+    // internal forwarding sink preserves that name and every upstream attribute while applying
+    // Kovo's credential-cookie floor.
+    forward(cookie, { class: 'session', source: 'better-auth-credential' });
   }
+}
+
+function readBetterAuthForwardSetCookie(
+  context: unknown,
+): ((rawSetCookie: string, posture: BetterAuthForwardSetCookiePosture) => void) | undefined {
+  if (typeof context !== 'object' || context === null) return undefined;
+  const candidate = (context as { forwardSetCookie?: unknown }).forwardSetCookie;
+  return typeof candidate === 'function'
+    ? (candidate as (rawSetCookie: string, posture: BetterAuthForwardSetCookiePosture) => void)
+    : undefined;
 }
 
 type SessionRevocationHeaderContext = {
@@ -67,91 +67,6 @@ type SessionRevocationHeaderContext = {
 // revoke path carries Clear-Site-Data alongside the session-clearing cookies.
 export function setSessionRevocationClearSiteData(context: unknown): void {
   (context as SessionRevocationHeaderContext).setSessionRevocationClearSiteData?.();
-}
-
-/** @internal Parse a standard `Set-Cookie` header string into a typed cookie-builder call. */
-function parseSetCookieHeader(
-  raw: string,
-): { name: string; options: CookieOptions; value: string } | undefined {
-  const segments = raw.split(';');
-  const first = segments[0] ?? '';
-  const separator = first.indexOf('=');
-  if (separator <= 0) return undefined;
-  const name = first.slice(0, separator).trim();
-  if (!name) return undefined;
-  const value = decodeCookieOctet(first.slice(separator + 1).trim());
-
-  const options: CookieOptions = {};
-  for (let index = 1; index < segments.length; index += 1) {
-    const segment = segments[index]?.trim();
-    if (!segment) continue;
-    const attrSeparator = segment.indexOf('=');
-    const attr = (attrSeparator === -1 ? segment : segment.slice(0, attrSeparator))
-      .trim()
-      .toLowerCase();
-    const attrValue = attrSeparator === -1 ? '' : segment.slice(attrSeparator + 1).trim();
-    switch (attr) {
-      case 'httponly':
-        options.httpOnly = true;
-        break;
-      case 'secure':
-        options.secure = true;
-        break;
-      case 'path':
-        options.path = attrValue;
-        break;
-      case 'domain':
-        options.domain = attrValue;
-        break;
-      case 'max-age': {
-        const maxAge = Number(attrValue);
-        if (!Number.isNaN(maxAge)) options.maxAge = maxAge;
-        break;
-      }
-      case 'expires':
-        options.expires = attrValue;
-        break;
-      case 'samesite': {
-        const sameSite = attrValue.toLowerCase();
-        if (sameSite === 'lax' || sameSite === 'none' || sameSite === 'strict') {
-          options.sameSite = sameSite;
-          if (sameSite === 'none') {
-            options.unsafe = {
-              downgrade: { sameSite: 'none' },
-              justification:
-                'Better Auth emitted SameSite=None for a third-party or partitioned credential cookie.',
-            };
-          }
-        }
-        break;
-      }
-      // part-3 I1 (SPEC §9.1.1:856): `Partitioned` (CHIPS) is correctness-critical for
-      // cross-site login — dropping it makes Chrome refuse/segregate the re-emitted cookie
-      // so the session never sticks. Map it (and `Priority`) through the typed builder
-      // instead of silently discarding the attribute.
-      case 'partitioned':
-        options.partitioned = true;
-        break;
-      case 'priority': {
-        const priority = attrValue.toLowerCase();
-        if (priority === 'high' || priority === 'low' || priority === 'medium') {
-          options.priority = priority;
-        }
-        break;
-      }
-      default:
-        break; // ignore attributes the typed builder does not model
-    }
-  }
-  return { name, options, value };
-}
-
-function decodeCookieOctet(value: string): string {
-  try {
-    return decodeURIComponent(value);
-  } catch {
-    return value;
-  }
 }
 
 /** @internal Read all `Set-Cookie` values from a Headers object across platform variants. */
@@ -308,10 +223,7 @@ async function isBetterAuthTwoFactorPendingResponse(
  */
 export async function resolveBetterAuthCredentialSuccess<Status extends string>(
   response: BetterAuthResponseLike,
-  context: {
-    setCookie?: (name: string, value: string, options?: CookieOptions) => void;
-    setForwardedCookie?: (rawSetCookie: string) => void;
-  },
+  context: unknown,
   success: BetterAuthCredentialMutationValue<Status>,
 ): Promise<BetterAuthCredentialMutationValue<Status> | null> {
   if (!isSuccessStatus(response.status)) return null;
@@ -424,20 +336,30 @@ export function credentialMutationDefinitionOptions<
   GuardedRequest extends Request,
 >(
   options: BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
-  touches: readonly Domain[],
+  contract: {
+    defaultAccess?: AccessDecision;
+    touches: readonly Domain[];
+  },
 ): Pick<
   MutationDefinition<Key, never, never, Request, never, GuardedRequest>,
   'access' | 'csrf' | 'guard' | 'registry' | 'transaction'
 > {
+  const access =
+    options.access !== undefined
+      ? options.access
+      : options.guard === undefined
+        ? contract.defaultAccess
+        : undefined;
+
   return {
     // SPEC.md §10.2: a credential mutation with no `guard` (sign-in/sign-up run
     // before authentication) declares its KV436 access decision via `access:`.
-    ...(options.access === undefined ? {} : { access: options.access }),
+    ...(access === undefined ? {} : { access }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(options.guard === undefined ? {} : { guard: options.guard }),
     registry: {
       ...options.registry,
-      touches: mergeDomainTouches(touches, options.registry?.touches),
+      touches: mergeDomainTouches(contract.touches, options.registry?.touches),
     },
     ...(options.transaction === undefined ? {} : { transaction: options.transaction }),
   };
@@ -461,5 +383,10 @@ export function isBetterAuthCredentialMutationTouchGraphOptions(
     | BetterAuthCredentialMutationTouchGraphOptions
     | Partial<Record<BetterAuthCredentialMutationApi, string>>,
 ): value is BetterAuthCredentialMutationTouchGraphOptions {
-  return 'apis' in value || 'credentialMutationDeclaredTableTouches' in value || 'keys' in value;
+  return (
+    'apis' in value ||
+    'credentialMutationTableTouches' in value ||
+    'keys' in value ||
+    'schemaBridge' in value
+  );
 }

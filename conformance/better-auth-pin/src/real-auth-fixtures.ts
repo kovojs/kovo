@@ -225,7 +225,7 @@ export async function expectObservedTables(
   await run();
 
   const observed = changedTables(before, snapshotTables(db));
-  const declaredTables: Set<BetterAuthTable> = new Set(
+  const declaredTables = new Set(
     betterAuthCredentialMutationDeclaredTableTouches[api].map((touch) => touch.table),
   );
 
