@@ -259,7 +259,7 @@ test brittleness, and distribution confusion.
     `SameSite=None`, deletion cookies, session refresh, and sign-out clearing.
   - SPEC: sections 6.5, 6.6, 9.1, 9.1.1, 10.1, 10.3, 11.2, 11.3.
 
-- [ ] **P1.6 - Make CLI and API tooling manifests executable sources of truth.**
+- [x] **P1.6 - Make CLI and API tooling manifests executable sources of truth.**
   - Affected: `packages/cli/src/index.ts`,
     `packages/cli/src/commands-manifest.ts`, `site/scripts/cli-ref.mjs`,
     `scripts/api-surface-gate.mjs`, `scripts/exported-symbols.mjs`,
@@ -282,6 +282,7 @@ test brittleness, and distribution confusion.
     API-surface, api-ref, exported-symbols, and build-publish tests; import-boundary fixtures for
     `export type`, multiline imports, dynamic imports, comments, string literals, markdown fences, and
     stale exceptions.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs scripts/package-exports.test.mjs scripts/import-boundary.test.mjs scripts/api-surface-gate.test.mjs scripts/exported-symbols.test.mjs site/scripts/api-ref.test.mjs --reporter=verbose`, `pnpm run check:api-surface`, and `pnpm run check:imports` pass with command and package-export registries driving dispatch/docs/tooling.
   - SPEC/rules: `SPEC.md` sections 5.2 rules 8 and 10, 11.4; `rules/api-surface.md`.
 
 - [ ] **P1.7 - Extract shared headless UI collection and openable-state cores.**

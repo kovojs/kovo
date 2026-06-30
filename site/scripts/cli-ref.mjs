@@ -3,7 +3,10 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { COMMANDS_MANIFEST } from '../../packages/cli/src/commands-manifest.ts';
+import {
+  COMMANDS_MANIFEST,
+  formatNoArgsMessage,
+} from '../../packages/cli/src/commands-manifest.ts';
 
 import { slugify } from './md.mjs';
 
@@ -121,7 +124,7 @@ function transform(source) {
     'Run `kovo` with no arguments to list the available commands:',
     '',
     '```sh',
-    'kovo: explain, check, audit, export, mcp',
+    formatNoArgsMessage().trimEnd(),
     '```',
     '',
     '## Commands',

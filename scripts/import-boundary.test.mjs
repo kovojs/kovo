@@ -17,16 +17,47 @@ describe('import-boundary check', () => {
     expect(
       importSpecifiers(`
 import { component } from '@kovojs/core';
-import type { KovoExplainInput } from '@kovojs/core/internal/graph';
-export { escapeHtml } from '@kovojs/server/internal/html';
+import type {
+  KovoExplainInput,
+} from '@kovojs/core/internal/graph';
+export type {
+  EscapeHtml,
+} from '@kovojs/server/internal/html';
 const runtime = () => import('@kovojs/browser/generated');
+type Generated = import('@kovojs/core/generated').GeneratedThing;
+// import { ignored } from '@kovojs/core/internal/commented';
+const ignored = "import('@kovojs/core/internal/string-literal')";
 `),
     ).toEqual([
       '@kovojs/core',
       '@kovojs/core/internal/graph',
       '@kovojs/server/internal/html',
       '@kovojs/browser/generated',
+      '@kovojs/core/generated',
     ]);
+  });
+
+  it('extracts imports from markdown code fences only', () => {
+    expect(
+      importSpecifiers(
+        [
+          'Prose can mention @kovojs/core/internal/graph without becoming a violation.',
+          '',
+          '```ts',
+          "import type { Graph } from '@kovojs/core/internal/graph';",
+          '```',
+          '',
+          '```sh',
+          'node -e "import(\'@kovojs/browser/generated\')"',
+          '```',
+          '',
+          '```tsx',
+          "const generated = import('@kovojs/browser/generated');",
+          '```',
+        ].join('\n'),
+        { fileName: 'site/content/example.md' },
+      ),
+    ).toEqual(['@kovojs/core/internal/graph', '@kovojs/browser/generated']);
   });
 
   it('classifies non-public Kovo import tiers', () => {
