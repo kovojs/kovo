@@ -4,6 +4,7 @@ import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { validateManagedSqlStatement } from '@kovojs/core/internal/sql-safety';
 import { sql as drizzleSql } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
 import { sql, staticSql, trustedSql } from './runtime.js';
 
 interface DrizzlePackageJson {
@@ -39,6 +40,31 @@ function drizzleCompatibilityBarrelSource(): string {
 }
 
 describe('@kovojs/drizzle runtime surface', () => {
+  it('types Kovo SQL constructors as Drizzle SQL values accepted by common sinks', () => {
+    interface DrizzleSinks {
+      execute(statement: SQL<unknown>): Promise<unknown>;
+      select(): { where(condition: SQL<unknown>): Promise<unknown[]> };
+    }
+
+    const typedSql: SQL<number> = sql<number>`select count(*) from products`;
+    const typedStaticSql: SQL<{ id: string }> = staticSql<{ id: string }>`select id from products`;
+    const identifier: SQL<unknown> = sql.identifier('products', { allow: ['products'] });
+    const direction: SQL<unknown> = sql.allow('asc', ['asc', 'desc']);
+
+    function acceptsDrizzleSinks(db: DrizzleSinks) {
+      return [
+        db.execute(sql`select * from products`),
+        db.select().where(sql<boolean>`archived = false`),
+        typedSql,
+        typedStaticSql,
+        identifier,
+        direction,
+      ];
+    }
+
+    expect(acceptsDrizzleSinks).toBeTypeOf('function');
+  });
+
   it('brands Kovo SQL values accepted by managed DB guards', () => {
     const productId = 'p1';
     const statement = sql`select * from products where id = ${productId}`;
