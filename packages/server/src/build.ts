@@ -464,10 +464,6 @@ function revalidatingAssetHeaders(): Record<string, string> {
   };
 }
 
-function isImmutableStaticAssetPath(pathname: string): boolean {
-  return pathname.startsWith('/c/') || immutableAssetPathPattern.test(pathname);
-}
-
 // SPEC §6.6 / bugz M4: Vercel/Cloudflare `config.json` route headers carry the full
 // security-header floor for every document path, matching the floor that dynamic dispatch
 // emits. These headers are host-config complements to the per-document `_headers` sidecar

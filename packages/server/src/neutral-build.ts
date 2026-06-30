@@ -486,7 +486,8 @@ function addStylesheetSource(
   if (typeof asset === 'string') return;
 
   const assetPath = localStylesheetAssetPath(asset.href);
-  const sourceFile = stylesheetSourceFile(asset) ?? stylesheetSourceFileFromRoot(asset, stylesheetSourceRoot);
+  const sourceFile =
+    stylesheetSourceFile(asset) ?? stylesheetSourceFileFromRoot(asset, stylesheetSourceRoot);
   if (!assetPath || sourceFile === undefined) return;
   if (!sources.has(assetPath)) sources.set(assetPath, sourceFile);
 }

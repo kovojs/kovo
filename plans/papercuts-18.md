@@ -35,19 +35,21 @@ refuted by dev/prod evidence.
 
 ### B. Endpoint And Capability Ergonomics
 
-- [ ] **B1 — `ctx.signUrl` signs storage capability URLs with the app CSRF secret, while `createStorageDownloadEndpoint` verifies with its own declared secret.** (med, framework/API; found by `t5-endpoints-files-webhooks`, verified independently)
+- [x] **B1 — `ctx.signUrl` signs storage capability URLs with the app CSRF secret, while `createStorageDownloadEndpoint` verifies with its own declared secret.** (med, framework/API; found by `t5-endpoints-files-webhooks`, verified independently)
   - Observed behavior: a documented pairing of `createStorageDownloadEndpoint({ secret })` and route `ctx.signUrl({ key })` mints `/downloads/...` links that 404 in dev and production unless the capability secret happens to equal the app CSRF secret.
   - Root cause: route context creates `ctx.signUrl` from `app.csrf.secret`, but the download endpoint verifies with `options.secret` (`packages/server/src/app-document.ts`, `packages/server/src/capability-route.ts`). This overturns the previously refuted auth-C7 note in `plans/papercut-super-2.md`.
   - Why it matters: the framework-owned capability URL surface fails closed for ordinary apps with separate secrets and gives only a 404, not an actionable diagnostic.
   - Repro evidence: T5 app POSTed a signed webhook, listed a fresh `/downloads/...` URL from `/files`, and GET returned 404; control run with `KOVO_CAPABILITY_SECRET=KOVO_CSRF_SECRET` returned 200 with the stored body.
   - Acceptance: `ctx.signUrl` and the mounted storage download endpoint share the same configured capability signer or fail with a clear build/runtime diagnostic; regression proves the documented pairing returns 200 without secret aliasing.
+  - Evidence: `pnpm exec vitest run packages/server/src/capability-route.test.ts packages/server/src/csrf.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/api/app.test.ts --run --reporter=dot` proves `ctx.signUrl` composes with the mounted storage endpoint secret and fails clearly when multiple endpoint signers are ambiguous.
 
-- [ ] **B2 — Public `csrfToken`/`csrfField` cannot mint the first anonymous CSRF cookie for raw endpoint forms or JSON.** (med, framework/API+docs; found by `t5-endpoints-files-webhooks`, verified independently)
+- [x] **B2 — Public `csrfToken`/`csrfField` cannot mint the first anonymous CSRF cookie for raw endpoint forms or JSON.** (med, framework/API+docs; found by `t5-endpoints-files-webhooks`, verified independently)
   - Observed behavior: default-CSRF raw endpoints build, but anonymous endpoint forms render an empty token, endpoint-posture cannot mint a token via public APIs, and first same-origin POST returns 422 `CSRF` unless another mutation form seeded the cookie.
   - Root cause: public `csrfToken` requires an existing session or anonymous binding, while anonymous binding minting is only available through internal mutation-form rendering; endpoint dispatch validates tokens but has no mint/render channel (`packages/server/src/csrf.ts`, `packages/server/src/app-dispatch.ts`).
   - Why it matters: app authors can keep endpoint CSRF enabled but cannot author a first anonymous browser endpoint flow through public APIs without switching to `csrf:false` or relying on unrelated mutation forms.
   - Repro evidence: verifier reran `pnpm exec kovo check endpoint-posture .kovo/endpoint-posture.json` in the T5 app and got `csrfToken requires a session id or anonymous CSRF cookie`; direct built-handler flow showed `GET /files` no `Set-Cookie`, upload form empty CSRF, and first POST 422 `CSRF`.
   - Acceptance: public endpoint form/token helpers can mint and set an anonymous binding safely, or documentation/API clearly routes endpoint authors through a supported CSRF minting channel; endpoint-posture and first anonymous POST pass without disabling CSRF.
+  - Evidence: `pnpm exec vitest run packages/server/src/capability-route.test.ts packages/server/src/csrf.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/api/app.test.ts --run --reporter=dot` proves `mintCsrfField` and `mintCsrfToken` seed first anonymous endpoint form and JSON POSTs.
 
 ### C. Starter Tooling Noise
 

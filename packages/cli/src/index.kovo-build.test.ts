@@ -179,9 +179,7 @@ export default createApp({
 
         const publicAssetResponse = await fetch(`${origin}/logo.svg`);
         expect(publicAssetResponse.status).toBe(200);
-        await expect(publicAssetResponse.text()).resolves.toBe(
-          '<svg viewBox="0 0 1 1"></svg>\n',
-        );
+        await expect(publicAssetResponse.text()).resolves.toBe('<svg viewBox="0 0 1 1"></svg>\n');
       } finally {
         await close(server);
       }

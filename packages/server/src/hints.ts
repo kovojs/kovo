@@ -382,7 +382,7 @@ function localStylesheetSourceFile(cleanSource: string): string | undefined {
 }
 
 function stylesheetInternalMetadata(asset: StylesheetAsset, key: symbol): string | undefined {
-  const value = (asset as Record<symbol, unknown>)[key];
+  const value = Reflect.get(asset, key);
   return typeof value === 'string' ? value : undefined;
 }
 

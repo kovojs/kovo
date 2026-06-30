@@ -281,7 +281,7 @@ describe('server build-time deployment API', () => {
           '  routes: [',
           "    route('/', {",
           "      stylesheets: [stylesheet('./local.css')],",
-          "      page: () => trustedHtml('<main class=\"local-source\">Home</main>'),",
+          '      page: () => trustedHtml(\'<main class="local-source">Home</main>\'),',
           '    }),',
           '  ],',
           '});',
@@ -338,10 +338,11 @@ describe('server build-time deployment API', () => {
         app: ReturnType<typeof createApp>;
       };
 
-      await expect(writeKovoNeutralBuild({ app, outDir: join(root, 'dist', '.kovo') })).rejects
-        .toThrow(
-          "KV229 neutral build cannot materialize stylesheet '/assets/missing.css' from local source",
-        );
+      await expect(
+        writeKovoNeutralBuild({ app, outDir: join(root, 'dist', '.kovo') }),
+      ).rejects.toThrow(
+        "KV229 neutral build cannot materialize stylesheet '/assets/missing.css' from local source",
+      );
     } finally {
       await rm(root, { force: true, recursive: true });
     }
