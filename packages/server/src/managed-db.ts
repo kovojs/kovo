@@ -71,6 +71,11 @@ export function readonlyDb<Db extends object>(db: Db): Db {
   });
 }
 
+/** @internal Options for the framework-owned managed DB handle composition point. */
+export interface ManagedDbOptions {
+  sqlWritePolicy?: ManagedSqlWritePolicy;
+}
+
 /**
  * Resolve the framework-owned managed handle for a request (SPEC §6.6/§9.4/§10.3). Always applies
  * the KV422 SQL-safe wrap; in `'read'` mode it additionally applies the KV433 read-only proxy. This
@@ -81,10 +86,6 @@ export function readonlyDb<Db extends object>(db: Db): Db {
  * @param mode - `'read'` for a `query()` loader, `'write'` for a `mutation()`/`query.elevated`.
  * @internal
  */
-export interface ManagedDbOptions {
-  sqlWritePolicy?: ManagedSqlWritePolicy;
-}
-
 export function managedDb<Db>(raw: Db, mode: ManagedDbMode, options: ManagedDbOptions = {}): Db {
   const safe = wrapManagedDbForSqlSafety(raw, undefined, options.sqlWritePolicy);
   if (mode === 'write') return safe;
