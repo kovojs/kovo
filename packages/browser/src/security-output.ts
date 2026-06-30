@@ -65,18 +65,10 @@ export interface TrustedHtml {
 
 // SPEC §4.8 KV236: the `__kovoTrustedHtml` / `__kovoTrustedUrl` properties are a
 // DEFENSE-IN-DEPTH brand for source/`kovo explain`, NOT the enforcement check. A
-// structural property is JSON-reproducible, so a value decoded from the wire/query
-// JSON (`{"__kovoTrustedUrl":true,"value":"javascript:…"}`) would forge author trust
-// and bypass scheme neutralization / SSR HTML escaping. The non-forgeable witness is a
-// process-global `Symbol.for` marker stamped (non-enumerable) only at `trustedUrl()` /
-// `trustedHtml()` creation — mirroring `Symbol.for('kovo.renderedHtml')`. JSON/wire data
-// carries only string keys, so a decoded object can never bear this symbol and is never
-// treated as author-vouched. Using `Symbol.for` (not a per-instance WeakSet) also keeps the
-// brand valid across module instances — e.g. an app loaded through a separate Vite SSR graph
-// still renders trusted on the host renderer — and the non-enumerable symbol never serializes
-// onto the wire.
-const trustedHtmlWitness = Symbol.for('kovo.security.trustedHtml');
-const trustedUrlWitness = Symbol.for('kovo.security.trustedUrl');
+// structural property or process-global symbol is userland-forgeable, so only
+// objects minted by this owner module are recognized by raw HTML / URL sinks.
+const trustedHtmlValues = new WeakSet<object>();
+const trustedUrlValues = new WeakSet<object>();
 
 /**
  * Marks intentional raw HTML for Kovo sinks that require an explicit escape hatch.
@@ -94,8 +86,8 @@ export function trustedHtml(
   Object.defineProperties(trusted, {
     [Symbol.toPrimitive]: { value: stringify },
     toString: { value: stringify },
-    [trustedHtmlWitness]: { value: true },
   });
+  trustedHtmlValues.add(trusted);
   return trusted;
 }
 
@@ -137,11 +129,7 @@ export function sanitizeRichHtml(value: string, options?: SafeRichHtmlOptions): 
  * the property shape is never honored as author-vouched raw HTML.
  */
 export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[trustedHtmlWitness] === true
-  );
+  return typeof value === 'object' && value !== null && trustedHtmlValues.has(value);
 }
 
 /**
@@ -166,7 +154,7 @@ export interface TrustedUrl {
  */
 export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput): TrustedUrl {
   const trusted: TrustedUrl = { __kovoTrustedUrl: true, ...trustedOutputMetadata(metadata), value };
-  Object.defineProperty(trusted, trustedUrlWitness, { value: true });
+  trustedUrlValues.add(trusted);
   return trusted;
 }
 
@@ -177,22 +165,19 @@ export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput)
  * the property shape is never honored as an author-vouched URL.
  */
 export function isKovoTrustedUrl(value: unknown): value is TrustedUrl {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[trustedUrlWitness] === true
-  );
+  return typeof value === 'object' && value !== null && trustedUrlValues.has(value);
 }
 
 /**
  * Returns whether a value matches the browser TrustedHTML brand accepted by Kovo.
  */
 export function isBrowserTrustedHtml(value: unknown): value is BrowserTrustedHTML {
+  const TrustedHTMLCtor = (globalThis as { TrustedHTML?: unknown }).TrustedHTML;
   return (
+    typeof TrustedHTMLCtor === 'function' &&
     typeof value === 'object' &&
     value !== null &&
-    (value as { [Symbol.toStringTag]?: unknown })[Symbol.toStringTag] === 'TrustedHTML' &&
-    typeof (value as { toString?: unknown }).toString === 'function'
+    value instanceof TrustedHTMLCtor
   );
 }
 

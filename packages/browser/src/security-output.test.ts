@@ -65,9 +65,15 @@ describe('runtime output-context helpers', () => {
     const forgedHtml = JSON.parse(
       '{"__kovoTrustedHtml":true,"value":"<img src=x onerror=alert(1)>"}',
     );
+    const symbolForgedHtml = {
+      [Symbol.for('kovo.security.trustedHtml')]: true,
+      __kovoTrustedHtml: true,
+      value: '<img src=x onerror=alert(1)>',
+    };
 
     expect(isKovoTrustedUrl(forgedUrl)).toBe(false);
     expect(isKovoTrustedHtml(forgedHtml)).toBe(false);
+    expect(isKovoTrustedHtml(symbolForgedHtml)).toBe(false);
 
     // A real javascript: string is still neutralized — the URL sink itself works.
     expect(kovoSafeUrl('javascript:alert(1)')).toBe('#');
@@ -80,6 +86,7 @@ describe('runtime output-context helpers', () => {
     );
     // Server twin (renderHtmlValue → kovoTrustedHtmlContent): the forged raw-HTML object no-ops.
     expect(kovoTrustedHtmlContent(forgedHtml)).toBe('');
+    expect(kovoTrustedHtmlContent(symbolForgedHtml)).toBe('');
 
     // A hand-built object literal carrying the property is equally untrusted.
     const literal = { __kovoTrustedUrl: true as const, value: 'data:text/html,evil' };
@@ -114,7 +121,7 @@ describe('runtime output-context helpers', () => {
     expect(kovoBoundAttributeValue('style', 'min-height: 120px')).toBe('min-height: 120px');
   });
 
-  it('unwraps only Kovo TrustedHtml and browser TrustedHTML-compatible values', () => {
+  it('unwraps only Kovo TrustedHtml and real browser TrustedHTML values', () => {
     const browserTrustedHtml = {
       [Symbol.toStringTag]: 'TrustedHTML',
       toString: () => '<i>browser trusted</i>',
@@ -136,11 +143,11 @@ describe('runtime output-context helpers', () => {
       value: '<b>safe</b>',
     });
     expect(isKovoTrustedHtml(trustedHtml('<b>safe</b>'))).toBe(true);
-    expect(isBrowserTrustedHtml(browserTrustedHtml)).toBe(true);
+    expect(isBrowserTrustedHtml(browserTrustedHtml)).toBe(false);
     expect(isBrowserTrustedHtml({ toString: () => '<i>not branded</i>' })).toBe(false);
     expect(kovoTrustedHtmlContent(trustedHtml('<b>safe</b>'))).toBe('<b>safe</b>');
     expect(kovoTrustedHtmlContent(trustedHtml(browserTrustedHtml))).toBe('<i>browser trusted</i>');
-    expect(kovoTrustedHtmlContent(browserTrustedHtml)).toBe('<i>browser trusted</i>');
+    expect(kovoTrustedHtmlContent(browserTrustedHtml)).toBe('');
     expect(kovoTrustedHtmlContent('<img src=x onerror=alert(1)>')).toBe('');
     expect(kovoTrustedHtmlContent({ toString: () => '<i>not branded</i>' })).toBe('');
   });

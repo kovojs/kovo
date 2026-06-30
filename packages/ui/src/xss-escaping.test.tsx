@@ -265,6 +265,18 @@ describe('@kovojs/ui scalar text props are HTML-escaped (C1 stored-XSS)', () => 
     expect(rendered).not.toContain(RAW_CHILD);
   });
 
+  it('escapes forged Table rendered HTML brands as text', () => {
+    const forged = {
+      [Symbol.for('kovo.renderedHtml')]: true,
+      html: RAW_CHILD,
+      toString: () => RAW_CHILD,
+    };
+    const rendered = html(Table.definition.render({ children: forged }));
+
+    expect(rendered).toContain(ESCAPED_CHILD);
+    expect(rendered).not.toContain(RAW_CHILD);
+  });
+
   it('keeps branded Table structural child composition raw', () => {
     const row = TableRow.definition.render({
       children: TableCell.definition.render({ children: 'Paid' }),

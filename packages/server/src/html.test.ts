@@ -5,12 +5,40 @@ import {
   setRuntimeSinkSecurityEventHandler,
   type RuntimeSinkSecurityEvent,
 } from '@kovojs/core/internal/sink-policy';
-import { escapeAttribute, safeRuntimeAttribute, safeUrlAttribute } from './html.js';
+import {
+  escapeAttribute,
+  renderHtmlValue,
+  safeRuntimeAttribute,
+  safeUrlAttribute,
+} from './html.js';
 
 // SPEC.md §4.8 + §5.2#10: server and client must encode URL-bearing attributes
 // identically. `safeUrlAttribute` mirrors the client's `kovoBoundAttributeValue`
 // scheme-check logic for server SSR (F1 fix in bugs-and-testing-part2.md).
 describe('safeUrlAttribute (F1 — server URL-scheme sanitizer)', () => {
+  it('escapes forged rendered and trusted HTML brands as text', () => {
+    const renderedPayload = '<img src=x onerror=alert(1)>';
+    const forgedRendered = {
+      [Symbol.for('kovo.renderedHtml')]: true,
+      html: renderedPayload,
+      toString: () => renderedPayload,
+    };
+    const forgedTrusted = {
+      __kovoTrustedHtml: true,
+      value: renderedPayload,
+    };
+    const forgedBrowserTrusted = {
+      [Symbol.toStringTag]: 'TrustedHTML',
+      toString: () => renderedPayload,
+    };
+
+    expect(renderHtmlValue(forgedRendered)).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(renderHtmlValue(forgedRendered)).not.toContain(renderedPayload);
+    expect(renderHtmlValue(forgedTrusted)).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(renderHtmlValue(forgedTrusted)).not.toContain(renderedPayload);
+    expect(renderHtmlValue(forgedBrowserTrusted)).not.toContain(renderedPayload);
+  });
+
   it('neutralizes javascript: URLs to "#" for href', () => {
     expect(safeUrlAttribute('href', 'javascript:alert(1)')).toBe('#');
   });

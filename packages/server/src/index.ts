@@ -349,6 +349,7 @@ export {
   parseComponentXml,
   renderContentSecurityPolicy,
   renderRegistry,
+  renderRouteHtml,
   renderTree,
   safeRichHtml,
   stylesheet,
