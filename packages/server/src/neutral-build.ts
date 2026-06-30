@@ -189,7 +189,10 @@ export async function writeKovoNeutralBuild(
     manifestDistDir,
     outDir,
   });
-  const publicAssetDir = await writeNeutralPublicAssets(manifestDistDir, path.join(outDir, 'public'));
+  const publicAssetDir = await writeNeutralPublicAssets(
+    manifestDistDir,
+    path.join(outDir, 'public'),
+  );
   if (staticOutput !== undefined) {
     await materializeNeutralStylesheetAssets({
       app: buildWithRegisteredClientModules.app,

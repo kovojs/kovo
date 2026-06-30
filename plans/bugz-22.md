@@ -13,14 +13,14 @@ below was independently verified by a skeptical sub-agent and deduped against ex
 
 ## Issues
 
-- [ ] **B1 — SQLite starter mutations can 500 at runtime because the framework default transaction
+- [x] **B1 — SQLite starter mutations can 500 at runtime because the framework default transaction
       wrapper returns async handlers from a better-sqlite3 sync transaction callback.** (high,
       framework/runtime; found by `t2-islands-live` + `t3-storage`)
   - Observed behavior: a fresh SQLite starter can pass `check`, `test`, and `build:prod`, then a
     signed-in enhanced POST to `/_m/mutations/add-contact` returns HTTP 500 with
     `TypeError: Transaction function cannot return a promise`.
   - Root cause: `packages/server/src/mutation.ts:521-533` calls `db.transaction((tx) =>
-    runHandler(...))`; mutation handlers are Promise-capable (`packages/server/src/mutation/definition.ts:282`)
+runHandler(...))`; mutation handlers are Promise-capable (`packages/server/src/mutation/definition.ts:282`)
     while the SQLite starter uses `better-sqlite3` (`packages/create-kovo/templates/src/db.sqlite.ts:1`),
     whose transaction callbacks must be synchronous.
   - Why it matters: SPEC §10.3 requires a coherent mutation transaction lifecycle. The advertised
@@ -33,8 +33,14 @@ below was independently verified by a skeptical sub-agent and deduped against ex
   - Acceptance: default framework transaction handling supports async mutation handlers for SQLite
     without losing rollback semantics, or fails closed with an explicit diagnostic. Add a SQLite
     runtime/prod-artifact test that submits the generated `add-contact` mutation successfully.
+  - Fixed evidence: `pnpm exec vitest --run packages/server/src/mutation.test.ts
+packages/server/src/managed-db.test.ts packages/server/src/guards.test.ts` proves async
+    better-sqlite3-style default transactions commit/roll back correctly; `pnpm exec vitest --run
+packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts -t "serves generated SQLite
+add-contact mutations"` proves the generated SQLite starter production artifact submits and
+    persists `add-contact`.
 
-- [ ] **B2 — Query-backed components later in a multi-component module lose live-target ownership
+- [x] **B2 — Query-backed components later in a multi-component module lose live-target ownership
       when the first component is not server-refreshable.** (med, framework/compiler soundness;
       found by `t2-islands-live`)
   - Observed behavior: a module with state-only `TriageIsland`, state-only `DraftScoreIsland`, then
@@ -58,13 +64,20 @@ below was independently verified by a skeptical sub-agent and deduped against ex
   - Acceptance: compiler graph/lowering records fragment/live-target facts for every eligible
     component in a multi-component module. Prove with compiler coverage and a prod-artifact mutation
     response test where a later query-backed component receives refreshed server truth.
+  - Fixed evidence: `pnpm exec vitest --run packages/compiler/src/registry.test.ts
+packages/compiler/src/stamps.test.ts packages/compiler/src/fragment-targets.test.ts
+packages/compiler/src/query-coverage.test.ts packages/compiler/src/compile-component.test.ts`
+    proves per-component graph/stamp/renderer coverage; `pnpm exec vitest --run
+packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts -t "refreshes later
+query-backed components"` proves the production mutation response includes the later component's
+    refreshed fragment.
 
-- [ ] **B3 — SQLite apps can build with durable tasks but every request fails at runtime because the
+- [x] **B3 — SQLite apps can build with durable tasks but every request fails at runtime because the
       default node `JobRunner` always creates the Postgres durable queue.** (high, framework build
       gate/runtime; found by `t1-durable`)
   - Observed behavior: adding a durable task to a SQLite scaffold leaves `pnpm run build:prod` green,
     but runtime request handling fails before page rendering with `TypeError: Durable tasks require a
-    Postgres-compatible db client...`.
+Postgres-compatible db client...`.
   - Root cause: `packages/server/src/app.ts:329-332` starts the task runtime before request
     handling; `packages/server/src/task-runtime.ts:80` unconditionally creates
     `PostgresDurableTaskQueue`; `packages/server/src/task-queue.ts:158` is Postgres-specific
@@ -79,6 +92,12 @@ below was independently verified by a skeptical sub-agent and deduped against ex
   - Acceptance: a SQLite build that registers durable tasks fails at build/check time with an
     actionable diagnostic naming the Postgres durable-task store requirement, or the framework ships
     a supported SQLite durable queue. Add a starter/build test for the fail-closed path.
+  - Fixed evidence: `pnpm exec vitest --run packages/server/src/build.test.ts
+packages/server/src/task-runtime.test.ts packages/server/src/app.test.ts` proves KV446
+    fail-closed durable-store diagnostics and startup error-shell routing; `pnpm exec vitest --run
+packages/create-kovo/src/index.build.scaffold.test.ts -t "fails production build when a SQLite
+app registers durable tasks"` proves the generated SQLite durable-task build fails with the
+    actionable Postgres store diagnostic.
 
 ## Refuted / Not Carried Forward
 
@@ -92,6 +111,6 @@ below was independently verified by a skeptical sub-agent and deduped against ex
 
 - `pnpm --filter create-kovo run build:dist`; baseline linked scaffold `check`, `test`,
   `build:prod`, and dev HTTP smoke passed.
-- Independent verifier reports confirmed B1, B2, and B3 with source file/line roots and runtime or
-  artifact reproductions.
+- Fix pass: focused server/compiler suites plus the split create-kovo prod-artifact/scaffold tests
+  named under B1-B3 passed.
 - `pnpm install` at the monorepo root completed after multi-app dogfood.

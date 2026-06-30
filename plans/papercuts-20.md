@@ -11,7 +11,7 @@ routed to `plans/bugz-22.md`; this ledger keeps non-security deploy/runtime pape
 
 ## Issues
 
-- [ ] **A1 — Node production artifacts for dynamic apps still omit referenced `public/` assets.**
+- [x] **A1 — Node production artifacts for dynamic apps still omit referenced `public/` assets.**
       (med, framework deploy artifact; regression variant of `plans/papercuts-18.md` A1)
   - Observed behavior: apps with queries or mutations render route HTML linking valid `public/`
     assets, but the built node artifact serves those links as 404. The same assets exist in
@@ -29,8 +29,12 @@ routed to `plans/bugz-22.md`; this ledger keeps non-security deploy/runtime pape
   - Acceptance: node dynamic production builds copy and serve referenced `public/` assets, with a
     prod-artifact test where an app with at least one query or mutation renders `/logo.svg` and the
     emitted node server returns 200 for it.
+  - Fixed evidence: `pnpm exec vitest --run packages/server/src/build.test.ts` proves dynamic node
+    preset output serves public-root assets; `pnpm exec vitest --run
+packages/create-kovo/src/index.build.prod-artifact.assets.test.ts` proves a generated dynamic
+    production artifact serves a referenced `public/` SVG.
 
-- [ ] **A2 — Task-runtime startup failures bypass app `onError` and are opaque in dev.** (low-med,
+- [x] **A2 — Task-runtime startup failures bypass app `onError` and are opaque in dev.** (low-med,
       framework/dev-tooling; found by `t1-durable`)
   - Observed behavior: when task runtime startup fails, the request returns a generic/plain 500 and
     the app-level `onError` shell is not invoked; dev terminal output does not point authors to the
@@ -46,6 +50,10 @@ routed to `plans/bugz-22.md`; this ledger keeps non-security deploy/runtime pape
     fails before request handling.
   - Acceptance: task-runtime startup failures route through the app/global error reporting surface
     with an actionable diagnostic, without hiding the underlying build-gate bug from `bugz-22` B3.
+  - Fixed evidence: `pnpm exec vitest --run packages/server/src/build.test.ts
+packages/server/src/task-runtime.test.ts packages/server/src/app.test.ts` proves task runtime
+    startup failures call app `onError` and render the configured error shell while the incompatible
+    SQLite durable-task build fails earlier with KV446.
 
 ## Refuted / Not Carried Forward
 
@@ -56,5 +64,6 @@ routed to `plans/bugz-22.md`; this ledger keeps non-security deploy/runtime pape
 
 ## Latest Verification
 
-- Independent verifier reports confirmed A1 and A2 with source file/line roots and prod/dev smokes.
+- Fix pass: focused server tests and the split create-kovo public-asset prod-artifact test named
+  under A1-A2 passed.
 - `pnpm install` at the monorepo root completed after multi-app dogfood.
