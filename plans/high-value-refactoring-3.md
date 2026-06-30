@@ -40,7 +40,7 @@ invariant.
     diagnostics because the analyzer was old or crashed.
   - Evidence: `pnpm exec vitest --run packages/server/src/vite-data-plane-gate.test.ts packages/server/src/internal/data-plane-static-analysis.test.ts packages/drizzle/src/static-analysis-context.test.ts` passed on 2026-06-30, covering failing analyzer diagnostics, missing aggregate ABI, invalid aggregate output, and no-source empty facts.
 
-- [ ] **P0.3 - Replace build/export process-global side channels with scoped build context.**
+- [x] **P0.3 - Replace build/export process-global side channels with scoped build context.**
   - Current signals: `packages/cli/src/commands/build-export.ts` toggles
     `KOVO_BUILD_GRAPH_DERIVATION`, writes `--stylesheet-env` values into `process.env`, and server
     Vite/data-plane code reads those process globals during build/export.
@@ -49,9 +49,7 @@ invariant.
     scope it with restoration around the exact module load/build call.
   - Risk reduced: repeated builds in one process cannot leak stylesheet env, accidentally disable or
     enable graph derivation, or couple CLI/server internals through hidden process state.
-  - Verification: tests run two builds with different stylesheet/env settings in one process and
-    assert no leakage; data-plane tests prove graph derivation is context-scoped. Run the focused CLI
-    build/export and server data-plane test set.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/commands/build-export.context.test.ts packages/server/src/internal/data-plane-static-analysis.test.ts packages/server/src/vite-data-plane-gate.test.ts`, `pnpm run check:vp`, and `git diff --check` passed on 2026-06-30.
 
 - [x] **P0.4 - Share one Node adapter runtime between dev and generated production builds.**
   - Current signals: `packages/server/src/node.ts` owns tested request/response conversion, while

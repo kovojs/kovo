@@ -253,10 +253,11 @@ export async function collectCompilerQueryShapeFacts(options: {
 }): Promise<readonly QueryShapeFact[]> {
   const buildSeed = seededBuildCompilerQueryShapeFacts();
   if (buildSeed !== undefined) return buildSeed;
+  const { currentKovoBuildContext } = await import('./build-context.js');
 
   const analysis = await collectDataPlaneAnalysis({
     ...options,
-    skipStaticFacts: process.env.KOVO_BUILD_GRAPH_DERIVATION === '1',
+    skipStaticFacts: currentKovoBuildContext()?.graphDerivation === true,
   });
   if (analysis.files.length === 0) return [];
   return mergeStaticAndOutputQueryShapeFacts(

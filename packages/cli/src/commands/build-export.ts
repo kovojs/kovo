@@ -17,6 +17,7 @@ import type {
 import type { KovoApp, StaticExportCompileDiagnostic, StylesheetAsset } from '@kovojs/server';
 import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
+import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
 import type { KovoAppShellCompiledClientModule } from '@kovojs/server/internal/app-shell-vite';
 import type {
   DataPlaneSourceFile as BuildCheckSourceFile,
@@ -404,7 +405,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     // export, or a security-gate failure). The tsc preflight started above runs concurrently with all
     // of it; deferring these errors past the `await typeScriptPreflight` preserves tsc-error-first.
     const loadAndCheck = await (async () => {
-      const [loadedBuildApp, buildStylesheetCss] = await withGraphDerivationFlag(() =>
+      const [loadedBuildApp, buildStylesheetCss] = await withBuildGraphDerivationContext(() =>
         Promise.all([
           loadBuildAppModule(resolvedAppModulePath, process.cwd()),
           kovoBuildStylesheetCss(resolvedAppModulePath),
@@ -1441,22 +1442,8 @@ async function loadKovoBuildConfig(root: string): Promise<LoadedKovoBuildConfig>
   }
 }
 
-/**
- * Run `fn` with `KOVO_BUILD_GRAPH_DERIVATION=1` set, then restore the prior value. The
- * `@kovojs/server` vite plugin reads this flag to skip its redundant whole-project drizzle
- * data-plane analysis while the CLI is only loading app source to derive the build graph
- * (the CLI runs that analysis authoritatively in `runKovoBuildCheckPreflight`).
- * plans/fast-kovo-check2.md #A.
- */
-async function withGraphDerivationFlag<T>(fn: () => Promise<T>): Promise<T> {
-  const previous = process.env.KOVO_BUILD_GRAPH_DERIVATION;
-  process.env.KOVO_BUILD_GRAPH_DERIVATION = '1';
-  try {
-    return await fn();
-  } finally {
-    if (previous === undefined) delete process.env.KOVO_BUILD_GRAPH_DERIVATION;
-    else process.env.KOVO_BUILD_GRAPH_DERIVATION = previous;
-  }
+async function withBuildGraphDerivationContext<T>(fn: () => Promise<T>): Promise<T> {
+  return await withKovoBuildContext({ graphDerivation: true }, fn);
 }
 
 async function loadBuildAppModule(
@@ -2182,18 +2169,21 @@ export async function runExportCommand(options: KovoExportOptions): Promise<CliC
   let loadedExport: LoadedExportAppModule | undefined;
   try {
     const manifestPlan = await staticExportManifestPlan(options);
-    loadedExport = await loadExportAppModule(options);
-    const app = appFromModule(loadedExport.appModule, options.appModulePath);
-    const result = await loadedExport.exportStaticApp(app, {
-      ...(manifestPlan.assets.length === 0 ? {} : { assets: manifestPlan.assets }),
-      ...(options.onNonExportable === undefined
-        ? {}
-        : { onNonExportable: options.onNonExportable }),
-      diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
-      ...(options.origin === undefined ? {} : { origin: options.origin }),
-      outDir: options.outDir,
-      ...(options.assetBase === undefined ? {} : { publicAssetBase: options.assetBase }),
-      publicAssetRoot: manifestPlan.publicAssetRoot ?? staticExportDefaultPublicAssetRoot(options),
+    const result = await withStylesheetEnvOverlay(manifestPlan.stylesheetEnv, async () => {
+      loadedExport = await loadExportAppModule(options);
+      const app = appFromModule(loadedExport.appModule, options.appModulePath);
+      return await loadedExport.exportStaticApp(app, {
+        ...(manifestPlan.assets.length === 0 ? {} : { assets: manifestPlan.assets }),
+        ...(options.onNonExportable === undefined
+          ? {}
+          : { onNonExportable: options.onNonExportable }),
+        diagnostics: staticExportDiagnosticsFromModule(loadedExport.appModule),
+        ...(options.origin === undefined ? {} : { origin: options.origin }),
+        outDir: options.outDir,
+        ...(options.assetBase === undefined ? {} : { publicAssetBase: options.assetBase }),
+        publicAssetRoot:
+          manifestPlan.publicAssetRoot ?? staticExportDefaultPublicAssetRoot(options),
+      });
     });
 
     return kovoExportResult(result, options);
@@ -2255,6 +2245,10 @@ interface ExportManifestPlan {
   }[];
   publicAssetRoot?: string;
   stylesheetHref?: string;
+  stylesheetEnv?: {
+    name: string;
+    value: string;
+  };
 }
 
 function buildTimeViteServerOptions(): { hmr: false } {
@@ -2292,14 +2286,31 @@ async function staticExportManifestPlan(options: KovoExportOptions): Promise<Exp
         `kovo export --stylesheet-env requires exactly one stylesheet asset in --manifest; found ${stylesheetCount}.`,
       );
     }
-    process.env[options.stylesheetEnv] = stylesheetHref;
   }
 
   return {
     assets: [...assets.values()],
     publicAssetRoot: distDir,
+    ...(options.stylesheetEnv === undefined || stylesheetHref === undefined
+      ? {}
+      : { stylesheetEnv: { name: options.stylesheetEnv, value: stylesheetHref } }),
     ...(stylesheetHref === undefined ? {} : { stylesheetHref }),
   };
+}
+
+async function withStylesheetEnvOverlay<T>(
+  overlay: ExportManifestPlan['stylesheetEnv'],
+  fn: () => Promise<T>,
+): Promise<T> {
+  if (overlay === undefined) return await fn();
+  const previous = process.env[overlay.name];
+  process.env[overlay.name] = overlay.value;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete process.env[overlay.name];
+    else process.env[overlay.name] = previous;
+  }
 }
 
 function staticExportDefaultPublicAssetRoot(options: KovoExportOptions): string {
