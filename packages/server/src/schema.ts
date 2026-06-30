@@ -339,6 +339,11 @@ export interface FileSchema extends Schema<FileLike> {
    * escape, surfaced in `kovo explain --capabilities`). KV428 (SPEC §6.6/§9.1).
    */
   accept(acceptance: UnverifiedAcceptance | readonly string[]): FileSchema;
+  /**
+   * Parse an uploaded file and, for verified `accept([...])`, enforce the allowlist against the
+   * server-sniffed bytes rather than the client-declared MIME (SPEC §6.6/§9.1, KV428).
+   */
+  parseAsync(input: unknown): Promise<FileLike>;
   store(options: StoredFileSchemaOptions): StoredFileSchema;
 }
 
@@ -739,6 +744,10 @@ class FileSchemaImpl implements FileSchema {
     return parseFileLike(input, createFileOptions(this.#maxBytes, this.#accept));
   }
 
+  async parseAsync(input: unknown): Promise<FileLike> {
+    return parseFileLikeAsync(input, createFileOptions(this.#maxBytes, this.#accept));
+  }
+
   store(options: StoredFileSchemaOptions): StoredFileSchema {
     return new StoredFileSchemaImpl(createFileOptions(this.#maxBytes, this.#accept), options);
   }
@@ -767,17 +776,7 @@ class StoredFileSchemaImpl implements StoredFileSchema {
   }
 
   async parseAsync(input: unknown): Promise<StoredFileUpload> {
-    const file = parseFileLike(input, this.#fileOptions);
-    const bytes = new Uint8Array(await file.arrayBuffer());
-    const sniffed = sniffUploadBytes(bytes);
-    const accept = this.#fileOptions.accept;
-    if (!isUnverifiedAcceptance(accept) && accept && accept.length > 0) {
-      // SPEC §6.6/§9.1: plain `accept([...])` is the verified path. On stored uploads the bytes are
-      // available, so the allowlist is enforced against server-sniffed truth rather than `file.type`.
-      if (!accept.includes(sniffed.contentType)) {
-        throw validationError(`Expected file type ${accept.join(', ')}`);
-      }
-    }
+    const { bytes, file, sniffed } = await parseVerifiedFileLike(input, this.#fileOptions);
 
     // KV428 (SPEC §6.6/§9.1): the storage key is SERVER-GENERATED and opaque (random UUID), never
     // derived from the client filename. This kills path traversal / overwrite by construction — an
@@ -792,7 +791,7 @@ class StoredFileSchemaImpl implements StoredFileSchema {
       ? file.type
       : sniffed.contentType;
 
-    const storage = await this.#storageOptions.storage.put(key, bytes.buffer.slice(0), {
+    const storage = await this.#storageOptions.storage.put(key, bytes.slice(), {
       ...(contentType === '' ? {} : { contentType }),
       metadata: {
         ...this.#storageOptions.metadata?.(file),
@@ -880,18 +879,52 @@ function readOwnInputField(record: Record<string, unknown>, key: string): unknow
 }
 
 function parseFileLike(input: unknown, options: FileSchemaOptions): FileLike {
+  const file = parseFileLikeShape(input, options);
+  const accept = options.accept;
+  if (isUnverifiedAcceptance(accept)) {
+    if (accept.types.length > 0 && !accept.types.includes(file.type)) {
+      throw validationError(`Expected file type ${accept.types.join(', ')}`);
+    }
+  } else if (accept && accept.length > 0) {
+    // SPEC §6.6/§9.1, KV428: plain `accept([...])` is verified against server-sniffed bytes.
+    // Synchronous parsing cannot await `file.arrayBuffer()`, so fail closed instead of trusting
+    // the client-declared `file.type`; `parseSchemaAsync` / mutation parsing takes the async path.
+    throw new Error(
+      's.file().accept([...]): verified file type checks require async parsing; call parseAsync (SPEC §6.6/§9.1).',
+    );
+  }
+
+  return file;
+}
+
+async function parseFileLikeAsync(input: unknown, options: FileSchemaOptions): Promise<FileLike> {
+  const { file } = await parseVerifiedFileLike(input, options);
+  return file;
+}
+
+async function parseVerifiedFileLike(
+  input: unknown,
+  options: FileSchemaOptions,
+): Promise<{ bytes: Uint8Array; file: FileLike; sniffed: ReturnType<typeof sniffUploadBytes> }> {
+  const file = parseFileLikeShape(input, options);
+  const bytes = new Uint8Array(await file.arrayBuffer());
+  const sniffed = sniffUploadBytes(bytes);
+  const accept = options.accept;
+  if (isUnverifiedAcceptance(accept)) {
+    if (accept.types.length > 0 && !accept.types.includes(file.type)) {
+      throw validationError(`Expected file type ${accept.types.join(', ')}`);
+    }
+  } else if (accept && accept.length > 0 && !accept.includes(sniffed.contentType)) {
+    throw validationError(`Expected file type ${accept.join(', ')}`);
+  }
+
+  return { bytes, file, sniffed };
+}
+
+function parseFileLikeShape(input: unknown, options: FileSchemaOptions): FileLike {
   if (!isFileLike(input)) throw validationError('Expected file');
   if (options.maxBytes !== undefined && input.size > options.maxBytes) {
     throw validationError(`Expected file <= ${options.maxBytes} bytes`);
-  }
-  // The `.accept(...)` allowlist on the SYNC parse path is a cheap client-MIME pre-filter only; the
-  // authoritative server-sniffed-type check happens on the async `.store()` path (KV428). For an
-  // `accept.unverified(...)` allowlist this client-MIME check is the *intended* (audited) check.
-  const acceptedTypes = isUnverifiedAcceptance(options.accept)
-    ? options.accept.types
-    : options.accept;
-  if (acceptedTypes && acceptedTypes.length > 0 && !acceptedTypes.includes(input.type)) {
-    throw validationError(`Expected file type ${acceptedTypes.join(', ')}`);
   }
 
   return input;
