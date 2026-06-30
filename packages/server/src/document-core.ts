@@ -270,7 +270,7 @@ export function renderDeferredDocument(
 
 function renderDeferredStreamingDocument(
   options: Omit<DeferredDocumentAssemblyOptions, 'chunks'> & {
-    chunks: readonly Promise<DeferredStreamChunk>[];
+    chunks: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[];
   },
 ): DeferredStreamingDocumentRenderResult {
   const assembled = assembleDocumentShellParts(options);
@@ -526,8 +526,8 @@ function routeDocumentResult(
 
 function deferredChunkPromises(
   chunks: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[],
-): readonly Promise<DeferredStreamChunk>[] | undefined {
-  return chunks.some(isPromiseLike) ? chunks.map((chunk) => Promise.resolve(chunk)) : undefined;
+): readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[] | undefined {
+  return chunks.some(isPromiseLike) ? chunks : undefined;
 }
 
 function isPromiseLike<Value>(value: unknown): value is PromiseLike<Value> {

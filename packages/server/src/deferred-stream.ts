@@ -37,7 +37,7 @@ export interface DeferredStreamOptions {
 /** @internal */
 export interface DeferredStreamingOptions {
   boundary?: string;
-  chunks: readonly Promise<DeferredStreamChunk>[];
+  chunks: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[];
   closeHtml?: string;
   shell: string;
 }
@@ -153,7 +153,7 @@ export function renderDeferredStream(options: DeferredStreamOptions): DeferredSt
 interface StreamDeferredChunksOptions {
   applyScript: string;
   boundary: string;
-  chunks: readonly Promise<DeferredStreamChunk>[];
+  chunks: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[];
   cleanupScript: string;
   closeHtml: string;
   controller: ReadableStreamDefaultController<Uint8Array>;
@@ -204,9 +204,11 @@ async function streamDeferredChunks(options: StreamDeferredChunksOptions): Promi
   }
 }
 
-function initialDeferredChunkCount(chunks: readonly Promise<DeferredStreamChunk>[]): number {
+function initialDeferredChunkCount(
+  chunks: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[],
+): number {
   const initialCount = (
-    chunks as readonly Promise<DeferredStreamChunk>[] & {
+    chunks as readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[] & {
       [deferredStreamInitialChunkCount]?: number;
     }
   )[deferredStreamInitialChunkCount];
