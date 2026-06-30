@@ -7,6 +7,7 @@ import {
   runQuery,
   type QueryDefinition,
 } from '../query.js';
+import { runtimeLiveTargetQueryBindings, type RuntimeRegistryFacts } from '../registry-facts.js';
 import { renderFragmentWireHtml, renderQueryWireHtml } from '../wire-html.js';
 import type {
   FragmentRenderer,
@@ -279,7 +280,7 @@ interface MutationResponseSelectionInput<Request> {
   liveTargetDescriptors: readonly MutationLiveTargetDescriptor[];
   liveTargetRenderers: readonly LiveTargetRenderer<Request>[];
   liveTargets?: readonly MutationLiveTarget[] | undefined;
-  queryDefinitions: readonly QueryDefinition<string, unknown, unknown, unknown>[];
+  registryFacts: RuntimeRegistryFacts<Request>;
   rerunQueries: readonly QueryRerun[];
   targets: readonly string[];
 }
@@ -325,7 +326,7 @@ export function selectMutationResponseTargets<Request>(
     const reruns = liveTargetDescriptorQueryReruns(
       renderer,
       descriptor,
-      input.queryDefinitions,
+      input.registryFacts,
       input.changes,
     );
     descriptorReruns.set(descriptor, reruns);
@@ -372,22 +373,13 @@ export function selectMutationResponseTargets<Request>(
   };
 }
 
-interface LiveTargetRendererQueryBinding {
-  args?: (props: Record<string, unknown>) => unknown;
-  query: QueryDefinition<string, unknown, unknown, unknown>;
-}
-
-type LiveTargetRendererWithQueryBindings<Request> = LiveTargetRenderer<Request> & {
-  queryBindings?: readonly LiveTargetRendererQueryBinding[];
-};
-
 function liveTargetDescriptorQueryReruns<Request>(
   renderer: LiveTargetRenderer<Request>,
   descriptor: MutationLiveTargetDescriptor,
-  queryDefinitions: readonly QueryDefinition<string, unknown, unknown, unknown>[],
+  registryFacts: RuntimeRegistryFacts<Request>,
   changes: readonly ChangeRecord[],
 ): QueryRerun[] {
-  const bindings = liveTargetRendererQueryBindings(renderer, queryDefinitions);
+  const bindings = runtimeLiveTargetQueryBindings(renderer, registryFacts);
   const reruns: QueryRerun[] = [];
 
   for (const binding of bindings) {
@@ -411,22 +403,6 @@ function liveTargetDescriptorQueryReruns<Request>(
   }
 
   return mergeQueryReruns(reruns);
-}
-
-function liveTargetRendererQueryBindings<Request>(
-  renderer: LiveTargetRenderer<Request>,
-  queryDefinitions: readonly QueryDefinition<string, unknown, unknown, unknown>[],
-): readonly LiveTargetRendererQueryBinding[] {
-  const rendererWithBindings = renderer as LiveTargetRendererWithQueryBindings<Request>;
-  if (rendererWithBindings.queryBindings) return rendererWithBindings.queryBindings;
-  if (renderer.queryDefinitions) {
-    return renderer.queryDefinitions.map((queryDefinition) => ({ query: queryDefinition }));
-  }
-
-  return (renderer.queries ?? []).flatMap((queryKey) => {
-    const queryDefinition = queryDefinitions.find((candidate) => candidate.key === queryKey);
-    return queryDefinition === undefined ? [] : [{ query: queryDefinition }];
-  });
 }
 
 function mergeQueryReruns(queries: readonly QueryRerun[]): QueryRerun[] {

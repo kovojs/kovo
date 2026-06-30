@@ -453,7 +453,9 @@ describe('server mutation endpoint routing', () => {
     });
 
     expect(response).toEqual({
-      body: '',
+      body:
+        '<kovo-query name="generatedProductDetail" key="generated-direct-product:p1">' +
+        '{"id":"p1","stock":0}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',

@@ -3,11 +3,9 @@ import {
   renderMutationEndpointResponse,
   type MutationDefinition,
   type MutationFail,
-  type MutationRegistry,
 } from './mutation.js';
 import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
 import { mutationCsrfOptions } from './csrf.js';
-import type { RegisteredQueryDefinition } from './query.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
 import type {
@@ -101,15 +99,12 @@ export async function handleAppMutationRequest(
     mutation.key,
     rawInput,
   );
-  const requestMutation = mutationWithAppQueries(
-    mutation as unknown as MutationDefinition<
-      string,
-      Schema<unknown>,
-      Record<string, Schema<unknown>>,
-      Request
-    >,
-    app.queries as readonly RegisteredQueryDefinition[],
-  );
+  const requestMutation = mutation as unknown as MutationDefinition<
+    string,
+    Schema<unknown>,
+    Record<string, Schema<unknown>>,
+    Request
+  >;
   // Derive the build token from the app's client-module registry so it is
   // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
@@ -173,15 +168,12 @@ async function renderPreBodyCsrfFailure(
     mutation.key,
     {},
   );
-  const requestMutation = mutationWithAppQueries(
-    mutation as unknown as MutationDefinition<
-      string,
-      Schema<unknown>,
-      Record<string, Schema<unknown>>,
-      Request
-    >,
-    app.queries as readonly RegisteredQueryDefinition[],
-  );
+  const requestMutation = mutation as unknown as MutationDefinition<
+    string,
+    Schema<unknown>,
+    Record<string, Schema<unknown>>,
+    Request
+  >;
   const buildToken = app.clientModules.buildToken();
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
@@ -296,37 +288,6 @@ async function resolveMutationResponsePolicy(
 ): Promise<AppMutationResponseOptions | undefined> {
   if (policy === undefined) return undefined;
   return typeof policy === 'function' ? policy(context) : policy;
-}
-
-function mutationWithAppQueries<Request>(
-  mutation: MutationDefinition<string, Schema<unknown>, Record<string, Schema<unknown>>, Request>,
-  queries: readonly RegisteredQueryDefinition[],
-): MutationDefinition<string, Schema<unknown>, Record<string, Schema<unknown>>, Request> {
-  if (queries.length === 0) return mutation;
-
-  return {
-    ...mutation,
-    registry: mergeMutationRegistryQueries(mutation.registry, queries),
-  };
-}
-
-function mergeMutationRegistryQueries(
-  registry: MutationRegistry | undefined,
-  appQueries: readonly RegisteredQueryDefinition[],
-): MutationRegistry {
-  const queriesByKey = new Map<string, RegisteredQueryDefinition>();
-
-  for (const query of registry?.queries ?? []) {
-    queriesByKey.set(query.key, query);
-  }
-  for (const query of appQueries) {
-    if (!queriesByKey.has(query.key)) queriesByKey.set(query.key, query);
-  }
-
-  return {
-    ...registry,
-    queries: [...queriesByKey.values()],
-  };
 }
 
 type MutationRequestBodyResult = { ok: true; value: unknown } | { ok: false; reason: string };

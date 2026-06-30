@@ -1811,4 +1811,119 @@ describe('server createApp request shell', () => {
     );
     expect(renderCartPanel).toHaveBeenCalledOnce();
   });
+
+  it('normalizes runtime registry facts across query, enhanced mutation, and no-JS failure paths', async () => {
+    const cart = domain('runtime-registry-cart');
+    let count = 1;
+    const cartQuery = query('runtimeRegistryCart', {
+      load: () => ({ count }),
+      reads: [cart],
+    });
+    const conflictingCartQuery = query('runtimeRegistryCart', {
+      load: () => ({ count: 999 }),
+      reads: [cart],
+    });
+
+    expect(() =>
+      createApp({
+        liveTargetRenderers: [
+          {
+            component: 'components/runtime-registry/cart-panel-conflict',
+            queryDefinitions: [conflictingCartQuery],
+            queries: ['runtimeRegistryCart'],
+            render: () => '<cart-panel>conflict</cart-panel>',
+          },
+        ],
+        queries: [cartQuery],
+      }),
+    ).toThrow(/two queries with the same key "runtimeRegistryCart"/);
+
+    const addToCart = mutation('runtime-registry/add', {
+      csrf: false,
+      input: s.object({}),
+      handler() {
+        count += 1;
+        return { count };
+      },
+    });
+    const failCart = mutation('runtime-registry/fail', {
+      csrf: false,
+      errors: { NOPE: s.object({}) },
+      input: s.object({}),
+      handler(_input, _request, context) {
+        return context.fail('NOPE', {});
+      },
+    });
+    const CartLayout = layout({
+      queries: { cart: cartQuery },
+      render: ({ cart: cartData }, _state, { children }) =>
+        trustedHtml(
+          `<main><output data-bind="runtimeRegistryCart.count">${cartData.count}</output>` +
+            `${String(children)}</main>`,
+        ),
+    });
+    registerGeneratedMutationTouchRegistry({
+      'runtime-registry/add': [{ domain: 'runtime-registry-cart', keys: null }],
+    });
+
+    const handler = createRequestHandler(
+      createApp({
+        liveTargetRenderers: [
+          {
+            component: 'components/runtime-registry/cart-panel',
+            queryDefinitions: [cartQuery],
+            queries: ['runtimeRegistryCart'],
+            render: () => `<cart-panel>${count}</cart-panel>`,
+          },
+        ],
+        mutations: [addToCart, failCart],
+        routes: [
+          route('/cart', {
+            layout: CartLayout,
+            page: () => trustedHtml('<section>Cart</section>'),
+          }),
+        ],
+      }),
+    );
+
+    const queryResponse = await handler(new Request('https://example.test/_q/runtimeRegistryCart'));
+    expect(queryResponse.status).toBe(200);
+    await expect(queryResponse.text()).resolves.toContain(
+      '<kovo-query name="runtimeRegistryCart">{"count":1}</kovo-query>',
+    );
+
+    const enhanced = await handler(
+      new Request('https://example.test/_m/runtime-registry/add', {
+        body: new FormData(),
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Live-Targets': attestedLiveTargetHeader(
+            'cart-panel',
+            'components/runtime-registry/cart-panel',
+          ),
+          'Kovo-Targets': 'cart-panel=runtimeRegistryCart',
+        },
+        method: 'POST',
+      }),
+    );
+    expect(enhanced.status).toBe(200);
+    await expect(enhanced.text()).resolves.toBe(
+      [
+        '<kovo-query name="runtimeRegistryCart">{"count":2}</kovo-query>',
+        '<kovo-fragment target="cart-panel"><cart-panel>2</cart-panel></kovo-fragment>',
+      ].join('\n'),
+    );
+
+    const noJsFailure = await handler(
+      new Request('https://example.test/_m/runtime-registry/fail', {
+        body: new FormData(),
+        headers: { Referer: 'https://example.test/cart' },
+        method: 'POST',
+      }),
+    );
+    expect(noJsFailure.status).toBe(422);
+    const failureBody = await noJsFailure.text();
+    expect(failureBody).toContain('<output data-bind="runtimeRegistryCart.count">2</output>');
+    expect(failureBody).toContain('>Cart</section>');
+  });
 });

@@ -3,13 +3,12 @@ import { handleAppRequest } from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
-import { registeredGeneratedMutationTouches } from './generated-mutation-registry.js';
-import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { mutation } from './mutation.js';
-import { query, queryHasDerivedKey } from './query.js';
+import { query } from './query.js';
 import { layout, route } from './route.js';
+import { runtimeRegistryFacts } from './registry-facts.js';
 import { isDocumentConfig, resolveDocumentDeclaration } from './document-structured.js';
 import { resolveBootMode, validateAppEnv } from './env.js';
 import { EgressFloorBootError, installEgressFloorSync, selfProbe } from './egress-bootstrap.js';
@@ -43,9 +42,6 @@ export type {
   ResolvedAppRequestRateLimitOptions,
 } from './app-types.js';
 import type { EgressOptions } from './egress.js';
-import type { LiveTargetRenderer } from './mutation-wire.js';
-import type { QueryDefinition } from './query.js';
-import type { LayoutDeclaration } from './route.js';
 import type {
   AppEgressOptions,
   AppAuthoringContext,
@@ -107,20 +103,22 @@ export function createApp<
   ) as readonly AppRouteDeclaration<AppRequest>[];
   const liveTargetRenderers =
     options.liveTargetRenderers ?? registeredGeneratedLiveTargetRenderers();
-  const queries = appQueryRegistry(
-    resolveAppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>(
+  const runtimeFacts = runtimeRegistryFacts({
+    liveTargetRenderers,
+    mutations: assertUniqueMutationKeys(
+      resolveAppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>(
+        options.mutations,
+        authoringContext,
+      ),
+    ),
+    queries: resolveAppAuthoringDeclarations<AppQueryDeclaration<AppRequest>, AppRequest>(
       options.queries,
       authoringContext,
-    ) as readonly QueryDefinition<string, unknown, unknown, AppRequest>[],
-    liveTargetRendererQueries(liveTargetRenderers),
-    routeLayoutQueries(routes),
-  );
-  const mutations = assertUniqueMutationKeys(
-    resolveAppAuthoringDeclarations<AppMutationDeclaration<AppRequest>, AppRequest>(
-      options.mutations,
-      authoringContext,
-    ).map(withGeneratedMutationTouches),
-  );
+    ),
+    routes,
+  });
+  const queries = runtimeFacts.queries;
+  const mutations = runtimeFacts.mutations;
   const clientModules = options.clientModules ?? createMemoryVersionedClientModuleRegistry();
   ensureKovoLoaderRuntimeClientModule(clientModules);
 
@@ -278,21 +276,6 @@ function assertUniqueMutationKeys<Mutation extends AppMutationDeclaration<any>>(
   return mutations;
 }
 
-function withGeneratedMutationTouches<Mutation extends AppMutationDeclaration<any>>(
-  definition: Mutation,
-): Mutation {
-  const inferredTouches = registeredGeneratedMutationTouches(definition.key);
-  if (inferredTouches.length === 0) return definition;
-
-  return {
-    ...definition,
-    registry: {
-      ...definition.registry,
-      inferredTouches,
-    },
-  };
-}
-
 /**
  * Turn a `KovoApp` into a `(request: Request) => Response` handler that dispatches
  * to routes, queries, mutations, and endpoints. Requires an app built by
@@ -328,89 +311,4 @@ function resolveAppAuthoringDeclarations<Declaration, AppRequest>(
   return typeof declarations === 'function'
     ? (declarations(context) as readonly Declaration[])
     : declarations;
-}
-
-function appQueryRegistry<Request>(
-  ...groups: readonly (readonly QueryDefinition<string, unknown, unknown, Request>[])[]
-): readonly QueryDefinition<string, unknown, unknown, Request>[] {
-  const originals = new Map<string, QueryDefinition<string, unknown, unknown, Request>>();
-  const queries = new Map<string, QueryDefinition<string, unknown, unknown, Request>>();
-
-  for (const [groupIndex, group] of groups.entries()) {
-    for (const queryDefinition of group) {
-      assertQueryKeyAssigned(queryDefinition);
-      const existing = originals.get(queryDefinition.key);
-      if (groupIndex === 0 && existing && existing !== queryDefinition) {
-        throw new Error(
-          `createApp() received two queries with the same key "${queryDefinition.key}". ` +
-            'Query keys address one typed read for /_q dispatch, kovo-query hydration, kovo-deps, ' +
-            'and generated query registries (SPEC §4.1, §9.4); duplicate keys are ambiguous. ' +
-            'Rename or move one exported query so its derived key is unique.',
-        );
-      }
-      if (existing === queryDefinition) continue;
-      if (existing) continue;
-
-      originals.set(queryDefinition.key, queryDefinition);
-      queries.set(queryDefinition.key, queryWithGeneratedReads(queryDefinition));
-    }
-  }
-
-  return [...queries.values()];
-}
-
-function assertQueryKeyAssigned(
-  definition: QueryDefinition<string, unknown, unknown, unknown>,
-): void {
-  if (queryHasDerivedKey(definition)) return;
-  throw new Error(
-    'createApp() received query({ ... }) before the compiler assigned its source-derived key. ' +
-      'Runtime cannot infer module path plus exported binding; compile app-authored exported queries ' +
-      'or use the generated/internal query key assignment ABI before registering the query ' +
-      '(SPEC §4.1).',
-  );
-}
-
-function liveTargetRendererQueries<Request>(
-  renderers: readonly LiveTargetRenderer<Request>[],
-): readonly QueryDefinition<string, unknown, unknown, Request>[] {
-  return renderers.flatMap((renderer) => renderer.queryDefinitions ?? []);
-}
-
-function routeLayoutQueries<Request>(
-  routes: readonly { layout?: LayoutDeclaration<any, any, any> }[],
-): readonly QueryDefinition<string, unknown, unknown, Request>[] {
-  const queries: QueryDefinition<string, unknown, unknown, Request>[] = [];
-
-  for (const routeDeclaration of routes) {
-    for (const layoutDeclaration of layoutChain(routeDeclaration.layout)) {
-      queries.push(
-        ...Object.values(layoutDeclaration.queries ?? {}).map(
-          (queryDefinition) =>
-            queryDefinition as QueryDefinition<string, unknown, unknown, Request>,
-        ),
-      );
-    }
-  }
-
-  return queries;
-}
-
-function layoutChain(
-  layoutDeclaration: LayoutDeclaration<any, any, any> | undefined,
-): LayoutDeclaration<any, any, any>[] {
-  const chain: LayoutDeclaration<any, any, any>[] = [];
-  const seen = new Set<LayoutDeclaration<any, any, any>>();
-  let current = layoutDeclaration;
-
-  while (current) {
-    if (seen.has(current)) {
-      throw new Error('Cyclic route layout parent chain.');
-    }
-    seen.add(current);
-    chain.unshift(current);
-    current = current.parent;
-  }
-
-  return chain;
 }
