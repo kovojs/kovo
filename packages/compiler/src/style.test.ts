@@ -334,6 +334,44 @@ export const WarningCallout = component({
     );
   });
 
+  it('does not treat local static object calls as customColor token paths', () => {
+    const source = `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const palette = {
+  customColor: {
+    warning: {
+      colorContainer: 'red',
+    },
+  },
+} as const;
+
+const base = style.create({
+  root: {
+    backgroundColor: palette.customColor('warning').colorContainer,
+  },
+});
+
+export const WarningCallout = component({
+  render: () => <aside style={base.root}>Check this first</aside>,
+});
+`;
+    const result = compileComponentModule({
+      fileName: 'components/warning-callout.tsx',
+      source,
+    });
+
+    expect(result.files.find((file) => file.kind === 'css')).toBeUndefined();
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV236',
+        fileName: 'components/warning-callout.tsx',
+        message: 'Static style extraction could not prove style.create values.',
+      }),
+    );
+  });
+
   it('resolves bounded same-package static token adapters', () => {
     const source = `
 import { component } from '@kovojs/core';

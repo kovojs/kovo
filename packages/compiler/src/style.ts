@@ -1423,6 +1423,9 @@ function staticPropertyAccessValue(
   staticValues: ReadonlyMap<string, unknown>,
   styleImports: StyleImports,
 ): unknown {
+  const publicTokenSegments = publicThemeTokenAccessSegments(node, styleImports);
+  if (publicTokenSegments) return publicThemeTokenValue(publicTokenSegments);
+
   const path = propertyAccessPath(node);
   if (!path || path.length === 0) return undefined;
   const [root, ...segments] = path;
@@ -1440,6 +1443,43 @@ function staticPropertyAccessValue(
   return valueAtPath(staticValues.get(root), segments);
 }
 
+function publicThemeTokenAccessSegments(
+  node: ts.Expression,
+  styleImports: StyleImports,
+): string[] | null {
+  const path = publicThemeTokenAccessPath(node);
+  if (!path || path.length === 0) return null;
+  const [root, ...segments] = path;
+  if (!root) return null;
+  if (styleImports.publicTokenNames.has(root)) return segments;
+  if (styleImports.namespaces.has(root) && segments[0] === 'tokens') return segments.slice(1);
+  return null;
+}
+
+function publicThemeTokenAccessPath(node: ts.Expression): string[] | null {
+  if (ts.isIdentifier(node)) return [node.text];
+  if (ts.isPropertyAccessExpression(node)) {
+    const prefix = publicThemeTokenAccessPath(node.expression);
+    return prefix ? [...prefix, node.name.text] : null;
+  }
+  if (ts.isCallExpression(node)) {
+    const prefix = publicThemeTokenAccessPath(node.expression);
+    const [argument] = node.arguments;
+    if (!prefix || node.arguments.length !== 1 || !argument) return null;
+    if (prefix[prefix.length - 1] !== 'customColor') return null;
+    return ts.isStringLiteral(argument) ? [...prefix, argument.text] : null;
+  }
+  if (ts.isElementAccessExpression(node)) {
+    const prefix = publicThemeTokenAccessPath(node.expression);
+    const argument = node.argumentExpression;
+    if (!prefix || !argument) return null;
+    if (ts.isStringLiteral(argument) || ts.isNumericLiteral(argument)) {
+      return [...prefix, argument.text];
+    }
+  }
+  return null;
+}
+
 function publicThemeTokenValue(segments: readonly string[]): unknown {
   if (segments[0] === 'customColor') {
     const [, name, ...rest] = segments;
@@ -1455,13 +1495,6 @@ function propertyAccessPath(node: ts.Expression): string[] | null {
   if (ts.isPropertyAccessExpression(node)) {
     const prefix = propertyAccessPath(node.expression);
     return prefix ? [...prefix, node.name.text] : null;
-  }
-  if (ts.isCallExpression(node)) {
-    const prefix = propertyAccessPath(node.expression);
-    const [argument] = node.arguments;
-    if (!prefix || node.arguments.length !== 1 || !argument) return null;
-    if (ts.isStringLiteral(argument)) return [...prefix, argument.text];
-    return null;
   }
   if (ts.isElementAccessExpression(node)) {
     const prefix = propertyAccessPath(node.expression);
