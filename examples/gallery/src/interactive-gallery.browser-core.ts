@@ -20,7 +20,7 @@ const COMPONENT_DEFINITION_KEYS = new Set([
 
 export function component<Definition extends ComponentDefinition>(definition: Definition) {
   assertKnownComponentDefinitionKeys(definition as unknown as Record<PropertyKey, unknown>);
-  const descriptor = (() => undefined) as {
+  const descriptor = (() => undefined) as unknown as {
     definition: Definition;
     name?: string;
   };
