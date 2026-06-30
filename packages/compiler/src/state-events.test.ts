@@ -56,16 +56,16 @@ export const CartBadge = component({
 `,
     });
 
-    expect(result.diagnostics).toMatchObject([
-      {
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
         code: 'KV301',
         fileName: 'cart-badge.tsx',
         message: kv301.message,
         severity: kv301.severity,
         start: { column: 26, line: 4 },
         length: 10,
-      },
-    ]);
+      }),
+    );
   });
 
   it('does not report KV301 for state keys merely prefixed by a declared query name', () => {

@@ -62,7 +62,10 @@ describe('mutation response DOM apply', () => {
     const root = new FakeMorphRoot();
     const store = createQueryStore();
     const count = new FakeQueryBindingElement('cart.count', { textContent: '1' });
-    const total = new FakeQueryBindingElement('cart.total', { value: '1499' });
+    const total = new FakeQueryBindingElement(
+      { 'data-bind:value': 'cart.total' },
+      { value: '1499' },
+    );
     const product = new FakeQueryBindingElement('product.name', { textContent: 'Coffee' });
     root.bindings.push(count, total, product);
 
