@@ -680,7 +680,7 @@ void test('P10 commerce graph assertions answer behavior mechanically', async ()
       exportName: 'CartBadge',
       fragments: ['cart-badge/cart-badge'],
       name: 'cart-badge/cart-badge',
-      queries: ['cart'],
+      queries: ['cart', 'cartQuery'],
     },
   ]);
   assert.deepEqual(fact.registryFacts, {
