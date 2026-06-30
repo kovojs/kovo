@@ -1,3 +1,5 @@
+import { assertKovoModuleRef, type KovoModuleRef } from '@kovojs/core/internal/module-ref';
+
 import type { DelegatedEvent, EventElementLike } from './events.js';
 import {
   createDelegatedHandlerContext,
@@ -8,7 +10,7 @@ import {
   type IslandSignalScope,
 } from './handler-context.js';
 import { applyStateBindings, supportsQueryBindings } from './query-bindings.js';
-import { assertAllowedKovoDynamicImportUrl } from './dynamic-import-url.js';
+import { assertAllowedKovoDynamicImportRef } from './dynamic-import-url.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export type ImportHandlerModule = (url: string) => Promise<Record<string, unknown>>;
@@ -143,14 +145,15 @@ async function dispatchDelegatedEventForElement(
   const postCommitQueue: Array<() => void> = [];
 
   try {
-    for (const ref of parseHandlerReferences(element.getAttribute(`on:${event.type}`))) {
-      const { exportName, url } = parseHandlerReference(ref);
-      assertAllowedKovoDynamicImportUrl(url);
-      const mod = await importModule(url);
-      const fn = mod[exportName];
+    for (const { ref, source } of parseHandlerReferences(
+      element.getAttribute(`on:${event.type}`),
+    )) {
+      assertAllowedKovoDynamicImportRef(ref);
+      const mod = await importModule(ref.url);
+      const fn = mod[ref.exportName];
 
       if (typeof fn !== 'function') {
-        throw new Error(`Handler export not found: ${ref}`);
+        throw new Error(`Handler export not found: ${source}`);
       }
 
       // Install the post-commit scheduler only around the handler's synchronous
@@ -170,18 +173,13 @@ async function dispatchDelegatedEventForElement(
   }
 }
 
-function parseHandlerReferences(refs: string | null): string[] {
-  return refs?.split(/\s+/).filter(Boolean) ?? [];
-}
-
-function parseHandlerReference(ref: string): { exportName: string; url: string } {
-  const hashIndex = ref.lastIndexOf('#');
-  if (hashIndex <= 0 || hashIndex === ref.length - 1) {
-    throw new Error(`Invalid handler reference: ${ref}`);
-  }
-
-  return {
-    exportName: ref.slice(hashIndex + 1),
-    url: ref.slice(0, hashIndex),
-  };
+function parseHandlerReferences(
+  refs: string | null,
+): { ref: KovoModuleRef<'handler'>; source: string }[] {
+  return (
+    refs
+      ?.split(/\s+/)
+      .filter(Boolean)
+      .map((source) => ({ ref: assertKovoModuleRef(source, 'handler'), source })) ?? []
+  );
 }

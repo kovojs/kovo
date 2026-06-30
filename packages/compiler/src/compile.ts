@@ -6,6 +6,7 @@ import {
   type RenderPlanFingerprintInput,
 } from '@kovojs/core/internal/render-plan-token';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
 import {
@@ -1025,7 +1026,7 @@ export function collectStateDeriveReferenceFacts(
         exportName: derive.exportName,
         placeholder: derive.placeholder,
         target: { end: attribute.end, start: attribute.start },
-        value: `${clientHref}#${derive.exportName}`,
+        value: formatKovoModuleRef(kovoModuleRef(clientHref, derive.exportName, 'derive')),
         writer: 'state derive URL versioning',
       });
     }

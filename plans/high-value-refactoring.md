@@ -140,7 +140,7 @@ test brittleness, and distribution confusion.
     `conformance/drizzle-pin`, and `packages/conformance-fixtures/src`.
   - SPEC: sections 2, 6.6, 10.1, 10.2, 10.3, 10.5, 11.1, 11.2, 11.3.
 
-- [ ] **P0.6 - Move wire JSON and module-reference parsing to structured core contracts.**
+- [x] **P0.6 - Move wire JSON and module-reference parsing to structured core contracts.**
   - Affected: `packages/server/src/wire-html.ts`, `packages/server/src/query.ts`,
     `packages/server/src/document-core.ts`, `packages/browser/src/wire-parser.ts`,
     `packages/browser/src/query-bindings.ts`, `packages/browser/src/dynamic-import-url.ts`,
@@ -159,6 +159,7 @@ test brittleness, and distribution confusion.
     query deltas, document query scripts, and `/_q/`; `packages/browser/src/dynamic-import-url.test.ts`,
     `packages/browser/src/inline-loader-delegated.test.ts`,
     `packages/compiler/src/handler-lowering.test.ts`, and compiler conformance diagnostics.
+  - Evidence: `pnpm exec vitest run packages/core/src/internal/wire-json.test.ts packages/core/src/internal/module-ref.test.ts packages/browser/src/json.test.ts packages/browser/src/dynamic-import-url.test.ts packages/browser/src/query-bindings.test.ts packages/browser/src/inline-loader-delegated.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/query-bindings.test.ts packages/server/src/wire-html.test.ts packages/server/src/static-export-client-module-refs.test.ts`, `pnpm run check:api-surface`, and `pnpm run check:imports` pass after moving wire JSON and module refs into core contracts.
   - SPEC: sections 4.3, 4.4, 4.7, 6.1, 9.1.1, 9.4, 9.5.
 
 ## P1 - Cross-Package Contract Drift And Generation
