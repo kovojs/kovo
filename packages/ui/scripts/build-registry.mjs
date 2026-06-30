@@ -2,13 +2,14 @@
 // Checks or writes the generated UI/headless/gallery manifest artifacts.
 //
 // The manifest in primitive-component-manifest.mjs owns the ordered component catalog,
-// interactive browser fixture list, and headless primitive handler ABI groups. This
-// script derives the residual copy-in metadata from source and keeps every checked-in
-// registry surface round-trip checked:
+// interactive browser fixture list, headless primitive handler ABI groups, headless
+// public facades, and headless package/API-boundary metadata. This script derives the
+// residual copy-in metadata from source and keeps every checked-in registry surface
+// round-trip checked:
 //   node packages/ui/scripts/build-registry.mjs            # check (default)
 //   node packages/ui/scripts/build-registry.mjs --write    # rewrite generated artifacts
 
-import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, unlinkSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -38,6 +39,8 @@ const paths = {
   galleryComponentManifest: path.join(galleryRoot, 'src', 'gallery-component-manifest.ts'),
   galleryPrimitiveActions: path.join(galleryRoot, 'src', 'primitive-actions.ts'),
   headlessGenerated: path.join(headlessRoot, 'src', 'generated.ts'),
+  headlessPackageJson: path.join(headlessRoot, 'package.json'),
+  headlessPublicDir: path.join(headlessRoot, 'src', 'public'),
   uiRegistry: path.join(pkgRoot, 'registry.json'),
   componentsGuide: componentsGuidePath,
 };
@@ -51,6 +54,9 @@ if (unknownArg) {
 
 const writeMode = process.argv.includes('--write');
 const manifestComponents = componentManifestEntries();
+const headlessPrimitiveSubpaths = primitiveComponentManifest.headlessPrimitives.map(
+  (primitive) => primitive.subpath,
+);
 const uiDistributionMode = uiPackageDistributionMode();
 const generatedUiRegistry = generateUiRegistry();
 const generatedTargets = [
@@ -59,6 +65,12 @@ const generatedTargets = [
     label: 'packages/ui/registry.json',
     path: paths.uiRegistry,
     source: `${JSON.stringify(generatedUiRegistry, null, 2)}\n`,
+  },
+  {
+    compare: 'text',
+    label: 'public-packages.json',
+    path: publicPackagesPath,
+    source: generatePublicPackagesJson(),
   },
   {
     compare: 'text',
@@ -72,6 +84,13 @@ const generatedTargets = [
     path: paths.headlessGenerated,
     source: generateHeadlessGeneratedTs(),
   },
+  {
+    compare: 'json',
+    label: 'packages/headless-ui/package.json',
+    path: paths.headlessPackageJson,
+    source: generateHeadlessPackageJson(),
+  },
+  ...generateHeadlessPublicFacadeTargets(),
   {
     compare: 'text',
     label: 'examples/gallery/src/primitive-actions.ts',
@@ -100,6 +119,7 @@ const generatedTargets = [
 
 const validationFindings = validateManifestDrift();
 const targetFindings = [];
+const staleGeneratedTargets = staleHeadlessPublicFacadeTargets();
 
 for (const target of generatedTargets) {
   if (writeMode) {
@@ -107,6 +127,15 @@ for (const target of generatedTargets) {
     console.log(`Wrote ${target.label}.`);
   } else if (!targetMatchesFile(target)) {
     targetFindings.push(`${target.label} is out of date`);
+  }
+}
+
+for (const target of staleGeneratedTargets) {
+  if (writeMode) {
+    unlinkSync(target.path);
+    console.log(`Removed ${target.label}.`);
+  } else {
+    targetFindings.push(`${target.label} is stale`);
   }
 }
 
@@ -354,6 +383,106 @@ function orderedPublicPackageNames(packageNames) {
   return ordered;
 }
 
+function generatePublicPackagesJson() {
+  const source = readFileSync(publicPackagesPath, 'utf8');
+  const packageNameIndex = source.indexOf('"name": "@kovojs/headless-ui"');
+  if (packageNameIndex === -1) {
+    throw new Error('Unable to generate public-packages.json: missing @kovojs/headless-ui');
+  }
+
+  const packageObjectStart = source.lastIndexOf('{', packageNameIndex);
+  if (packageObjectStart === -1) {
+    throw new Error(
+      'Unable to generate public-packages.json: missing @kovojs/headless-ui package object',
+    );
+  }
+  const packageObjectEnd = matchingJsonObjectEnd(source, packageObjectStart);
+  const packageSource = source.slice(packageObjectStart, packageObjectEnd + 1);
+  const boundaryKeyIndex = packageSource.indexOf('"apiBoundary":');
+  if (boundaryKeyIndex === -1) {
+    throw new Error(
+      'Unable to generate public-packages.json: missing @kovojs/headless-ui apiBoundary',
+    );
+  }
+
+  const boundaryObjectStart = packageSource.indexOf('{', boundaryKeyIndex);
+  if (boundaryObjectStart === -1) {
+    throw new Error(
+      'Unable to generate public-packages.json: missing @kovojs/headless-ui apiBoundary object',
+    );
+  }
+  const boundaryObjectEnd = matchingJsonObjectEnd(packageSource, boundaryObjectStart);
+
+  const absoluteBoundaryKeyIndex = packageObjectStart + boundaryKeyIndex;
+  const absoluteBoundaryObjectEnd = packageObjectStart + boundaryObjectEnd;
+
+  return [
+    source.slice(0, absoluteBoundaryKeyIndex),
+    formatHeadlessApiBoundaryProperty('      '),
+    source.slice(absoluteBoundaryObjectEnd + 1),
+  ].join('');
+}
+
+function formatHeadlessApiBoundaryProperty(indent) {
+  const boundary = headlessApiBoundary();
+  const publicSubpaths = boundary.public.map((subpath, index) => {
+    const suffix = index === boundary.public.length - 1 ? '' : ',';
+    return `${indent}    ${JSON.stringify(subpath)}${suffix}`;
+  });
+  return [
+    '"apiBoundary": {',
+    `${indent}  "public": [`,
+    ...publicSubpaths,
+    `${indent}  ],`,
+    `${indent}  "generated": ${formatInlineJsonArray(boundary.generated)},`,
+    `${indent}  "internal": ${formatInlineJsonArray(boundary.internal)}`,
+    `${indent}}`,
+  ].join('\n');
+}
+
+function headlessApiBoundary() {
+  return {
+    public: [...headlessPrimitiveSubpaths.map((subpath) => `./${subpath}`), './types'],
+    generated: ['./generated'],
+    internal: ['./internal', './internal/primitive'],
+  };
+}
+
+function matchingJsonObjectEnd(source, startIndex) {
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+
+  for (let index = startIndex; index < source.length; index += 1) {
+    const char = source[index];
+    if (inString) {
+      if (escaped) {
+        escaped = false;
+      } else if (char === '\\') {
+        escaped = true;
+      } else if (char === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (char === '"') {
+      inString = true;
+    } else if (char === '{') {
+      depth += 1;
+    } else if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return index;
+    }
+  }
+
+  throw new Error('Unable to find matching JSON object boundary');
+}
+
+function formatInlineJsonArray(values) {
+  return `[${values.map((value) => JSON.stringify(value)).join(', ')}]`;
+}
+
 function replaceMarkedSection(source, startMarker, endMarker, replacement) {
   const startIndex = source.indexOf(startMarker);
   const endIndex = source.indexOf(endMarker);
@@ -380,6 +509,116 @@ function generateHeadlessGeneratedTs() {
     ...groups,
     '',
   ].join('\n');
+}
+
+function generateHeadlessPackageJson() {
+  const packageJson = JSON.parse(readFileSync(paths.headlessPackageJson, 'utf8'));
+  packageJson.exports = generateHeadlessDevelopmentExports();
+  packageJson.publishConfig = {
+    ...(packageJson.publishConfig ?? {}),
+    exports: generateHeadlessPublishExports(),
+  };
+  packageJson.scripts = {
+    ...(packageJson.scripts ?? {}),
+    'build:dist': generateHeadlessPackCommand(),
+  };
+  return `${JSON.stringify(packageJson, null, 2)}\n`;
+}
+
+function generateHeadlessDevelopmentExports() {
+  return {
+    ...Object.fromEntries(
+      headlessPrimitiveSubpaths.map((subpath) => [
+        `./${subpath}`,
+        `./src/public/${subpath}.ts`,
+      ]),
+    ),
+    './types': './src/types.ts',
+    './generated': './src/generated.ts',
+    './internal': './src/internal.ts',
+    './internal/primitive': './src/primitive-internal.ts',
+  };
+}
+
+function generateHeadlessPublishExports() {
+  return {
+    ...Object.fromEntries(
+      headlessPrimitiveSubpaths.map((subpath) => [
+        `./${subpath}`,
+        {
+          types: `./dist/public/${subpath}.d.mts`,
+          default: `./dist/public/${subpath}.mjs`,
+        },
+      ]),
+    ),
+    './types': {
+      types: './dist/types.d.mts',
+      default: './dist/types.mjs',
+    },
+    './generated': {
+      types: './dist/generated.d.mts',
+      default: './dist/generated.mjs',
+    },
+    './internal': {
+      types: './dist/internal.d.mts',
+      default: './dist/internal.mjs',
+    },
+    './internal/primitive': {
+      types: './dist/primitive-internal.d.mts',
+      default: './dist/primitive-internal.mjs',
+    },
+  };
+}
+
+function generateHeadlessPackCommand() {
+  return `vp pack ${headlessPackEntryPoints().join(' ')} --dts`;
+}
+
+function headlessPackEntryPoints() {
+  return [
+    'src/generated.ts',
+    'src/internal.ts',
+    'src/primitive-internal.ts',
+    ...headlessPrimitiveSubpaths.map((subpath) => `src/public/${subpath}.ts`),
+    'src/types.ts',
+  ];
+}
+
+function generateHeadlessPublicFacadeTargets() {
+  return headlessPrimitiveSubpaths.map((subpath) => ({
+    compare: 'text',
+    label: `packages/headless-ui/src/public/${subpath}.ts`,
+    path: path.join(paths.headlessPublicDir, `${subpath}.ts`),
+    source: generateHeadlessPublicFacadeTs(subpath),
+  }));
+}
+
+function generateHeadlessPublicFacadeTs(subpath) {
+  const primitivePath = path.join(headlessRoot, 'src', 'primitives', `${subpath}.ts`);
+  const { types, values } = publicPrimitiveExportsFromSource(
+    `packages/headless-ui/src/primitives/${subpath}.ts`,
+    subpath,
+    readFileSync(primitivePath, 'utf8'),
+  );
+  const moduleSpecifier = `../primitives/${subpath}.js`;
+  return [
+    generatedSourceComment,
+    `// Public facade for @kovojs/headless-ui/${subpath}; implementation-only helpers stay in src/primitives.`,
+    ...(values.length > 0 ? [formatNamedExport(values, moduleSpecifier)] : []),
+    ...(types.length > 0 ? [formatNamedExport(types, moduleSpecifier, { typeOnly: true })] : []),
+    '',
+  ].join('\n');
+}
+
+function staleHeadlessPublicFacadeTargets() {
+  const expectedFileNames = new Set(headlessPrimitiveSubpaths.map((subpath) => `${subpath}.ts`));
+  return readdirSync(paths.headlessPublicDir)
+    .filter((fileName) => fileName.endsWith('.ts') && !expectedFileNames.has(fileName))
+    .sort((left, right) => left.localeCompare(right))
+    .map((fileName) => ({
+      label: `packages/headless-ui/src/public/${fileName}`,
+      path: path.join(paths.headlessPublicDir, fileName),
+    }));
 }
 
 function generateGalleryPrimitiveActionsTs() {
@@ -474,9 +713,8 @@ function validateManifestDrift() {
   );
   addDuplicateFindings(findings, 'interactive demos', primitiveComponentManifest.interactiveDemos);
 
-  const headlessExportSubpaths = Object.keys(
-    JSON.parse(readFileSync(path.join(headlessRoot, 'package.json'), 'utf8')).exports,
-  )
+  const headlessPackageJson = JSON.parse(readFileSync(paths.headlessPackageJson, 'utf8'));
+  const headlessExportSubpaths = Object.keys(headlessPackageJson.exports)
     .filter(
       (subpath) =>
         subpath.startsWith('./') &&
@@ -486,9 +724,37 @@ function validateManifestDrift() {
   addSetDrift(
     findings,
     'headless package public primitive subpaths',
-    primitiveComponentManifest.headlessPrimitives.map((entry) => entry.subpath),
+    headlessPrimitiveSubpaths,
     headlessExportSubpaths,
   );
+
+  const publicPackagesJson = JSON.parse(readFileSync(publicPackagesPath, 'utf8'));
+  const headlessPublicPackage = publicPackagesJson.packages?.find(
+    (entry) => entry.name === '@kovojs/headless-ui',
+  );
+  if (headlessPublicPackage === undefined) {
+    findings.push('public-packages.json is missing @kovojs/headless-ui');
+  } else {
+    const boundary = headlessApiBoundary();
+    addSetDrift(
+      findings,
+      'public-packages @kovojs/headless-ui apiBoundary.public',
+      boundary.public,
+      (headlessPublicPackage.apiBoundary?.public ?? []).map(String),
+    );
+    addSetDrift(
+      findings,
+      'public-packages @kovojs/headless-ui apiBoundary.generated',
+      boundary.generated,
+      (headlessPublicPackage.apiBoundary?.generated ?? []).map(String),
+    );
+    addSetDrift(
+      findings,
+      'public-packages @kovojs/headless-ui apiBoundary.internal',
+      boundary.internal,
+      (headlessPublicPackage.apiBoundary?.internal ?? []).map(String),
+    );
+  }
 
   const packageJson = JSON.parse(readFileSync(path.join(galleryRoot, 'package.json'), 'utf8'));
   addSetDrift(
@@ -589,6 +855,122 @@ function parseExportedComponents(source) {
   return names;
 }
 
+function publicPrimitiveExportsFromSource(fileName, subpath, source) {
+  const declarations = primitiveExportDeclarations(fileName, subpath, source);
+  const unclassified = [];
+
+  for (const declaration of declarations.values()) {
+    if (declaration.jsdoc === undefined) {
+      unclassified.push(declaration.name);
+    }
+  }
+
+  if (unclassified.length > 0) {
+    throw new Error(
+      `${fileName}: exported declarations must carry public-subpath docs, @internal, or @kovoPrimitiveHandler before they can be generated into a facade: ${sorted(
+        unclassified,
+      ).join(', ')}`,
+    );
+  }
+
+  const publicNames = new Set(
+    [...declarations.values()]
+      .filter((declaration) => declaration.isPublic)
+      .map((declaration) => declaration.name),
+  );
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const declaration of declarations.values()) {
+      if (publicNames.has(declaration.name) || declaration.isImplementationOnly) continue;
+      if (!isTypeDeclarationKind(declaration.kind)) continue;
+      if (!publicSignatureReferences(publicNames, declaration.name, declarations)) continue;
+      publicNames.add(declaration.name);
+      changed = true;
+    }
+  }
+
+  const values = [];
+  const types = [];
+  for (const declaration of declarations.values()) {
+    if (!publicNames.has(declaration.name)) continue;
+    if (declaration.kind === 'type' || declaration.kind === 'interface') {
+      types.push(declaration.name);
+    } else {
+      values.push(declaration.name);
+    }
+  }
+
+  return { types, values };
+}
+
+function primitiveExportDeclarations(fileName, subpath, source) {
+  const exportRe = /^\s*export\s+(type|interface|function|const|class|enum)\s+(\w+)/gm;
+  const matches = [...source.matchAll(exportRe)];
+  const declarations = new Map();
+
+  for (let index = 0; index < matches.length; index += 1) {
+    const match = matches[index];
+    const kind = match[1];
+    const name = match[2];
+    if (kind === undefined || name === undefined || match.index === undefined) continue;
+
+    const jsdoc = immediateJsdocBefore(source, match.index);
+    const declarationEnd = matches[index + 1]?.index ?? source.length;
+    const fullDeclarationSource = source.slice(match.index, declarationEnd);
+    const isImplementationOnly =
+      jsdoc?.includes('@internal') === true || jsdoc?.includes('@kovoPrimitiveHandler') === true;
+    declarations.set(name, {
+      fullDeclarationSource,
+      isImplementationOnly,
+      isPublic:
+        jsdoc?.includes(`@kovojs/headless-ui/${subpath}`) === true && !isImplementationOnly,
+      kind,
+      name,
+      publicSignatureSource: publicSignatureSource(kind, fullDeclarationSource),
+      jsdoc,
+    });
+  }
+
+  return declarations;
+}
+
+function immediateJsdocBefore(source, exportIndex) {
+  const prefix = source.slice(0, exportIndex);
+  const endIndex = prefix.lastIndexOf('*/');
+  if (endIndex === -1 || prefix.slice(endIndex + 2).trim() !== '') return undefined;
+  const startIndex = prefix.lastIndexOf('/**', endIndex);
+  if (startIndex === -1) return undefined;
+  return prefix.slice(startIndex + 3, endIndex);
+}
+
+function publicSignatureReferences(publicNames, candidateName, declarations) {
+  const pattern = new RegExp(`\\b${escapeRegExp(candidateName)}\\b`);
+  for (const publicName of publicNames) {
+    const declaration = declarations.get(publicName);
+    if (declaration !== undefined && pattern.test(declaration.publicSignatureSource)) return true;
+  }
+  return false;
+}
+
+function publicSignatureSource(kind, declarationSource) {
+  if (kind === 'function') {
+    const bodyIndex = declarationSource.indexOf('{');
+    return bodyIndex === -1 ? declarationSource : declarationSource.slice(0, bodyIndex);
+  }
+  if (kind === 'const') {
+    const initializerIndex = declarationSource.indexOf('=');
+    return initializerIndex === -1
+      ? declarationSource
+      : declarationSource.slice(0, initializerIndex);
+  }
+  return declarationSource;
+}
+
+function isTypeDeclarationKind(kind) {
+  return kind === 'class' || kind === 'enum' || kind === 'interface' || kind === 'type';
+}
+
 function primitiveHandlerExportsFromSource(fileName, source) {
   const names = [];
   const re =
@@ -632,13 +1014,16 @@ function targetMatchesFile(target) {
   return current === target.source;
 }
 
-function formatNamedExport(names, moduleSpecifier) {
-  const oneLine = `export { ${names.join(', ')} } from '${moduleSpecifier}';`;
+function formatNamedExport(names, moduleSpecifier, options = {}) {
+  const typeKeyword = options.typeOnly === true ? ' type' : '';
+  const oneLine = `export${typeKeyword} { ${names.join(', ')} } from '${moduleSpecifier}';`;
   if (oneLine.length <= 100) return oneLine;
 
-  return [`export {`, ...names.map((name) => `  ${name},`), `} from '${moduleSpecifier}';`].join(
-    '\n',
-  );
+  return [
+    `export${typeKeyword} {`,
+    ...names.map((name) => `  ${name},`),
+    `} from '${moduleSpecifier}';`,
+  ].join('\n');
 }
 
 function formatGalleryComponentEntry(entry) {
@@ -684,6 +1069,10 @@ function tsString(value) {
   }
 
   return `'${value.replaceAll('\\', '\\\\').replaceAll("'", "\\'")}'`;
+}
+
+function escapeRegExp(value) {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function addDuplicateFindings(findings, label, values) {

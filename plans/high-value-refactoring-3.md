@@ -169,7 +169,7 @@ invariant.
 
 ## P2 - Maintainability and Gate Quality
 
-- [ ] **P2.1 - Generate headless public facades, package exports, and pack inputs from the primitive manifest.**
+- [x] **P2.1 - Generate headless public facades, package exports, and pack inputs from the primitive manifest.**
   - Current signals: `packages/headless-ui/src/public/*.ts` files look generated but are checked in
     manually; `packages/headless-ui/package.json` and `build:dist` manually list the same public
     subpaths; `packages/ui/scripts/build-registry.mjs` currently checks mostly subpath presence.
@@ -177,7 +177,7 @@ invariant.
     exports, public API boundary entries, and `vp pack` inputs for headless UI.
   - Risk reduced: primitive additions/removals cannot leave stale public facades, missed exports, or
     pack metadata drift.
-  - Verification: `node packages/ui/scripts/build-registry.mjs`, `pnpm --filter @kovojs/headless-ui run lint:primitives`, `pnpm --filter @kovojs/headless-ui run build:dist`, and `pnpm run check:api-surface`.
+  - Evidence: `node packages/ui/scripts/build-registry.mjs`, `pnpm --filter @kovojs/headless-ui run lint:primitives`, `pnpm --filter @kovojs/headless-ui run build:dist`, `pnpm run check:api-surface`, and `git diff --check` passed on 2026-06-30 after generating the headless facades/package exports/API boundary/pack inputs from `packages/ui/scripts/primitive-component-manifest.mjs`.
 
 - [ ] **P2.2 - Centralize CLI argv parsing from command manifests.**
   - Current signals: `packages/cli/src/commands/build-export.ts` hand-rolls separate build/export arg
