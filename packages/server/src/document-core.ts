@@ -84,6 +84,7 @@ export interface DocumentAssemblyOptions {
    */
   loader?: 'inline' | 'omit';
   loaderRuntimeHref?: string;
+  metaContext?: unknown;
   document?: DocumentConfig;
   queries?: readonly QueryScriptRenderOptions[];
   /**
@@ -309,6 +310,7 @@ function assembleDocumentShellParts(
     | 'hints'
     | 'lang'
     | 'loader'
+    | 'metaContext'
     | 'queries'
     | 'sessionFingerprint'
     | 'loaderRuntimeHref'
@@ -324,10 +326,11 @@ function assembleDocumentShellParts(
   // of an always-empty `{}` (which previously made every such factory throw → a hard
   // 500 during head render). Map by query name, matching `RouteMetaFactory.queries`.
   const queryValues = queryValuesByName(options.queries ?? []);
-  const hints = renderPageHints(
-    options.hints ?? {},
-    Object.keys(queryValues).length > 0 ? { queries: queryValues } : {},
-  );
+  const hintContext = {
+    ...(Object.keys(queryValues).length > 0 ? { queries: queryValues } : {}),
+    ...(options.metaContext === undefined ? {} : { route: options.metaContext }),
+  };
+  const hints = renderPageHints(options.hints ?? {}, hintContext);
   const queryScripts = (options.queries ?? []).map(renderDocumentQueryScriptWithCsp);
   const loader =
     options.loader === 'omit' ? undefined : inlineLoaderScript(options.loaderRuntimeHref);
@@ -868,7 +871,7 @@ function routeMetaArray(value: PageHintOptions['meta']): readonly RouteMetaSourc
 
 function withoutStaticTitleMeta(metas: readonly RouteMetaSource[]): readonly RouteMetaSource[] {
   return metas.map((meta) => {
-    if ('resolve' in meta) return meta;
+    if (typeof meta === 'function' || 'resolve' in meta) return meta;
     const { title: _title, ...rest } = meta;
     return rest;
   });
