@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { kovo } from './vite.js';
+import { withKovoBuildContext } from './internal/build-context.js';
 
 // SPEC.md §11.4 (shared verification surface) / §10.2 / §10.3 / §9.5.1: the data-plane safety
 // gates (KV422 SQL injection, KV410/KV411 opaque projection/read set, KV429 lost update) must run
@@ -592,15 +593,10 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     });
     const captured: CapturedReport[] = [];
     const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
-    const previous = process.env.KOVO_BUILD_GRAPH_DERIVATION;
-    process.env.KOVO_BUILD_GRAPH_DERIVATION = '1';
 
-    try {
-      await plugin.configResolved({ command: 'build', root });
-    } finally {
-      if (previous === undefined) delete process.env.KOVO_BUILD_GRAPH_DERIVATION;
-      else process.env.KOVO_BUILD_GRAPH_DERIVATION = previous;
-    }
+    await withKovoBuildContext({ graphDerivation: true }, () =>
+      plugin.configResolved({ command: 'build', root }),
+    );
     await configureDevServer(plugin, root, captured);
 
     await expect(

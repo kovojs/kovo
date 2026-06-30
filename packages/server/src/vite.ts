@@ -10,6 +10,7 @@ import type {
   DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
   QueryShapeFact as CompilerQueryShapeFact,
 } from '@kovojs/server/internal/data-plane-static-analysis';
+import { currentKovoBuildContext } from './internal/build-context.js';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
 
 /** Options for the public Kovo Vite plugin (SPEC.md §9.5). */
@@ -528,7 +529,7 @@ async function collectCompilerQueryShapeFacts(
   app: string,
 ): Promise<readonly CompilerQueryShapeFact[]> {
   const adapter = await importKovoDataPlaneStaticAnalysisModule();
-  if (process.env.KOVO_BUILD_GRAPH_DERIVATION === '1') {
+  if (currentKovoBuildContext()?.graphDerivation === true) {
     await adapter.collectDataPlaneAnalysis({
       appSourceDir: dirname(appEntryFileName(app, root)),
       root,

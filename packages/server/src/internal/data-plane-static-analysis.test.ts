@@ -1,3 +1,7 @@
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 type DataPlaneStaticAnalysisModule = typeof import('./data-plane-static-analysis.js');
@@ -90,6 +94,69 @@ describe('data-plane static analysis aggregate ABI', () => {
       toctouFacts: [],
       touchGraph: {},
     });
+  });
+
+  it('scopes build graph derivation to KovoBuildContext instead of process env', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-context-'));
+    const srcDir = join(root, 'src');
+    const previous = process.env.KOVO_BUILD_GRAPH_DERIVATION;
+    process.env.KOVO_BUILD_GRAPH_DERIVATION = '1';
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject: () => ({
+        queries: [
+          {
+            query: 'staticContact',
+            shape: 'string',
+            site: 'src/schema.ts:2',
+          },
+        ],
+        sqlSafetyDiagnostics: [],
+        toctouFacts: [],
+        touchGraph: {},
+      }),
+    }));
+
+    try {
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(
+        join(srcDir, 'schema.ts'),
+        'import { sql } from "@kovojs/drizzle";\nexport const marker = sql`select 1`;\n',
+        'utf8',
+      );
+      const [{ withKovoBuildContext }, { collectCompilerQueryShapeFacts }] = await Promise.all([
+        import('./build-context.js'),
+        loadSubject(),
+      ]);
+
+      await expect(collectCompilerQueryShapeFacts({ appSourceDir: srcDir, root })).resolves.toEqual(
+        [
+          {
+            query: 'staticContact',
+            shape: 'string',
+            source: 'src/schema.ts:2',
+          },
+        ],
+      );
+      await expect(
+        withKovoBuildContext({ graphDerivation: true }, () =>
+          collectCompilerQueryShapeFacts({ appSourceDir: srcDir, root }),
+        ),
+      ).resolves.toEqual([]);
+      await expect(collectCompilerQueryShapeFacts({ appSourceDir: srcDir, root })).resolves.toEqual(
+        [
+          {
+            query: 'staticContact',
+            shape: 'string',
+            source: 'src/schema.ts:2',
+          },
+        ],
+      );
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_BUILD_GRAPH_DERIVATION;
+      else process.env.KOVO_BUILD_GRAPH_DERIVATION = previous;
+      await rm(root, { force: true, recursive: true });
+    }
   });
 });
 
