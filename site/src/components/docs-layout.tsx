@@ -323,13 +323,21 @@ function DocsRouteContentView({ content }: { content: DocsRouteContent }): strin
     return (
       <div>
         <p style={docsLayoutStyles.specBanner}>
-          This is the normative specification, rendered verbatim from{' '}
+          This is the normative specification, rendered from{' '}
           <a
             href="https://github.com/kovojs/kovo/blob/main/SPEC.md"
             rel="external"
             style={docsLayoutStyles.specBannerLink}
           >
             SPEC.md
+          </a>{' '}
+          and any split{' '}
+          <a
+            href="https://github.com/kovojs/kovo/tree/main/spec"
+            rel="external"
+            style={docsLayoutStyles.specBannerLink}
+          >
+            spec/*.md modules
           </a>{' '}
           at build time. The docs explain; the spec decides.
         </p>

@@ -209,7 +209,7 @@ function referenceHubIndex(): SectionIndexInput {
         title: 'Specification',
         url: '/spec/',
         description:
-          'The normative spec, rendered verbatim from SPEC.md. The docs explain; the spec decides.',
+          'The normative spec, rendered from SPEC.md and any split spec/*.md modules. The docs explain; the spec decides.',
       },
     ],
     title: 'Reference',

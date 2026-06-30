@@ -13,7 +13,7 @@ import { fileURLToPath } from 'node:url';
 // read here as plain data, so SSR render and static export never run the
 // compiler/CLI themselves.
 
-import { parseFrontmatter, renderMarkdown } from '../scripts/md.mjs';
+import { parseFrontmatter, renderMarkdown, specHeadingId } from '../scripts/md.mjs';
 import { loadTutorialSnippets, substituteSnippets } from '../tutorial/extract-snippets.mjs';
 import { galleryComponentCatalog } from '../../examples/gallery/src/component-catalog.js';
 import { EXAMPLES, LLMS_ONLY_EXAMPLES } from '../scripts/examples.mjs';
@@ -119,8 +119,14 @@ export interface SearchEntry {
 export interface SpecContent {
   html: string;
   ids: Set<string>;
+  /** Combined normative corpus: root SPEC.md followed by any spec/*.md modules. */
   source: string;
   text: string;
+}
+
+export interface SpecSourcePart {
+  relativePath: string;
+  source: string;
 }
 
 export interface SiteContent {
@@ -214,6 +220,76 @@ function substituteCaptures(body: string, captures: Record<string, string>): str
   });
 }
 
+function readNormativeSpecParts(root: string = repoRoot): SpecSourcePart[] {
+  const parts: SpecSourcePart[] = [
+    {
+      relativePath: 'SPEC.md',
+      source: readFileSync(path.join(root, 'SPEC.md'), 'utf8'),
+    },
+  ];
+
+  const specDir = path.join(root, 'spec');
+  if (!existsSync(specDir)) return parts;
+
+  const modules = readdirSync(specDir, { withFileTypes: true })
+    .filter((entry) => entry.isFile() && entry.name.endsWith('.md'))
+    .map((entry) => entry.name)
+    .sort((a, b) => a.localeCompare(b));
+
+  for (const moduleName of modules) {
+    parts.push({
+      relativePath: `spec/${moduleName}`,
+      source: readFileSync(path.join(specDir, moduleName), 'utf8'),
+    });
+  }
+
+  return parts;
+}
+
+export function combineNormativeSpecSources(parts: readonly SpecSourcePart[]): string {
+  if (parts.length === 0) throw new Error('content: no normative spec sources found');
+  if (parts.length === 1) return parts[0]!.source;
+
+  return `${parts
+    .map((part, index) =>
+      index === 0
+        ? part.source.trimEnd()
+        : `<!-- Source: ${part.relativePath} -->\n\n${part.source.trimEnd()}`,
+    )
+    .join('\n\n---\n\n')}\n`;
+}
+
+function firstHeadingId(source: string): string | undefined {
+  for (const line of source.split(/\r?\n/)) {
+    const match = /^(#{1,6})\s+(.+?)\s*$/.exec(line);
+    if (!match) continue;
+
+    const rawTextWithAnchor = match[2]!;
+    const explicitAnchor = /\s*\{#([A-Za-z0-9_-]+)\}\s*$/.exec(rawTextWithAnchor);
+    if (explicitAnchor) return explicitAnchor[1];
+
+    return specHeadingId(rawTextWithAnchor);
+  }
+
+  return undefined;
+}
+
+function fallbackModuleAnchor(relativePath: string): string | undefined {
+  const match = /^spec\/(\d{2})-/u.exec(relativePath);
+  if (!match) return undefined;
+  return String(Number(match[1]));
+}
+
+function specModuleAnchors(parts: readonly SpecSourcePart[]): Map<string, string> {
+  const anchors = new Map<string, string>();
+  for (const part of parts) {
+    if (!part.relativePath.startsWith('spec/')) continue;
+    const anchor = firstHeadingId(part.source) ?? fallbackModuleAnchor(part.relativePath);
+    if (anchor) anchors.set(part.relativePath, anchor);
+  }
+  return anchors;
+}
+
 /** SPEC subsections like "**13.1 CSS.**" are bold paragraphs, not headings —
  * stamp them with number-derived ids so § citations resolve. */
 function stampSpecParagraphIds(html: string): string {
@@ -223,16 +299,62 @@ function stampSpecParagraphIds(html: string): string {
   );
 }
 
+function nearestSpecAnchor(anchor: string, specIds: Set<string>): string | undefined {
+  if (specIds.has(anchor)) return anchor;
+  if (!/^\d+(?:-\d+)*$/u.test(anchor)) return undefined;
+
+  let candidate = anchor;
+  while (candidate && !specIds.has(candidate)) {
+    candidate = candidate.includes('-') ? candidate.slice(0, candidate.lastIndexOf('-')) : '';
+  }
+  return candidate || undefined;
+}
+
 /** Rewrite /spec/# citations whose exact anchor doesn't exist to the nearest
  * enclosing section that does (e.g. #16-1 → #16). */
 function resolveSpecAnchors(html: string, specIds: Set<string>): string {
   return html.replace(/href="\/spec\/#([0-9-]+)"/g, (_match, anchor: string) => {
-    let candidate = anchor;
-    while (candidate && !specIds.has(candidate)) {
-      candidate = candidate.includes('-') ? candidate.slice(0, candidate.lastIndexOf('-')) : '';
-    }
-    return `href="/spec/${candidate ? `#${candidate}` : ''}"`;
+    const resolved = nearestSpecAnchor(anchor, specIds);
+    return `href="/spec/${resolved ? `#${resolved}` : ''}"`;
   });
+}
+
+function resolveSpecModuleLinks(
+  html: string,
+  specIds: Set<string>,
+  moduleAnchors: ReadonlyMap<string, string>,
+): string {
+  return html.replace(
+    /href="(?:\.\/)?spec\/([^"#]+\.md)(?:#([^"]+))?"/g,
+    (_match, moduleName: string, fragment: string | undefined) => {
+      const relativePath = `spec/${moduleName}`;
+      const anchor = fragment ?? moduleAnchors.get(relativePath);
+      const resolved = anchor ? nearestSpecAnchor(anchor, specIds) : undefined;
+      return `href="/spec/${resolved ? `#${resolved}` : ''}"`;
+    },
+  );
+}
+
+function resolveSpecLinks(
+  html: string,
+  specIds: Set<string>,
+  moduleAnchors: ReadonlyMap<string, string>,
+): string {
+  return resolveSpecAnchors(resolveSpecModuleLinks(html, specIds, moduleAnchors), specIds);
+}
+
+export function rewriteRenderedSpecLinksForTest(
+  html: string,
+  specIds: Set<string>,
+  moduleAnchors: ReadonlyMap<string, string>,
+): string {
+  return resolveSpecLinks(html, specIds, moduleAnchors);
+}
+
+export function specModuleAnchorsForTest(
+  parts: readonly SpecSourcePart[],
+): ReadonlyMap<string, string> {
+  return specModuleAnchors(parts);
 }
 
 interface RawPage {
@@ -292,19 +414,22 @@ async function buildSiteContent(): Promise<SiteContent> {
   // Snippets are pure file extraction (no toolchain), so read them directly.
   const snippets = loadTutorialSnippets() as Map<string, { code: string; lang: string }>;
 
-  // Spec first so every page's § citations resolve against its real anchors.
-  const specSource = readFileSync(path.join(repoRoot, 'SPEC.md'), 'utf8');
+  // Spec first so every page's § citations resolve against the full normative
+  // corpus: root SPEC.md plus any split-out spec/*.md modules.
+  const specParts = readNormativeSpecParts();
+  const specSource = combineNormativeSpecSources(specParts);
   const specRendered = (await renderMarkdown(specSource, { anchorStyle: 'spec', copyHref })) as {
     headings: Heading[];
     html: string;
     text: string;
   };
   const specHtml = stampSpecParagraphIds(specRendered.html);
+  const moduleAnchors = specModuleAnchors(specParts);
   const specIds = new Set<string>([
     ...specRendered.headings.map((heading) => heading.id),
     ...[...specHtml.matchAll(/\sid="([^"]+)"/g)].map((match) => match[1] as string),
   ]);
-  const finish = (html: string): string => resolveSpecAnchors(html, specIds);
+  const finish = (html: string): string => resolveSpecLinks(html, specIds, moduleAnchors);
 
   const sections: DocSection[] = [];
   const search: SearchEntry[] = [];

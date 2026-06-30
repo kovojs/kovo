@@ -29,9 +29,10 @@ const SEVERITY_BLURB = {
 
 const CORE_DIAGNOSTICS_SOURCE = new URL('packages/core/src/diagnostics.ts', repoRoot);
 const PACKAGES_DIR = new URL('packages/', repoRoot);
-const SPEC_SOURCE = new URL('SPEC.md', repoRoot);
 const SOURCE_EXTENSIONS = new Set(['.js', '.jsx', '.mjs', '.ts', '.tsx']);
 const KV_CODE_PATTERN = /\bKV\d{3}\b/g;
+const DIAGNOSTICS_SPEC_RELATIVE_PATH = 'spec/11-diagnostics.md';
+const LEGACY_DIAGNOSTICS_HEADING = '### 11.3 Diagnostic codes (registry)';
 const INTENTIONAL_NON_FRAMEWORK_PLACEHOLDERS = [
   {
     code: 'KV999',
@@ -142,38 +143,73 @@ async function collectPackageSourceCodes() {
   return codes;
 }
 
-async function collectSpecDiagnosticTableCodes() {
-  const spec = await readFile(SPEC_SOURCE, 'utf8');
-  const sectionStart = spec.indexOf('### 11.3 Diagnostic codes (registry)');
-  if (sectionStart < 0) {
-    throw new Error('diagnostics-ref: SPEC §11.3 diagnostic table is missing');
-  }
-  const nextSection = spec.indexOf('\n### ', sectionStart + 1);
-  const tableText = spec.slice(sectionStart, nextSection < 0 ? undefined : nextSection);
+export function collectDiagnosticRegistryCodesFromMarkdown(markdown) {
   const codes = new Set();
-  for (const match of tableText.matchAll(/^\|\s*(KV\d{3})\s*\|/gmu)) {
+  for (const match of markdown.matchAll(/^\|\s*`?(KV\d{3})`?\s*\|/gmu)) {
     codes.add(match[1]);
   }
   return codes;
 }
 
+export async function collectSpecDiagnosticRegistryCodes({
+  repoRootPath = fileURLToPath(repoRoot),
+} = {}) {
+  const splitRegistryPath = path.join(repoRootPath, DIAGNOSTICS_SPEC_RELATIVE_PATH);
+  if (existsSync(splitRegistryPath)) {
+    const source = await readFile(splitRegistryPath, 'utf8');
+    const codes = collectDiagnosticRegistryCodesFromMarkdown(source);
+    if (codes.size === 0) {
+      throw new Error(
+        `diagnostics-ref: ${DIAGNOSTICS_SPEC_RELATIVE_PATH} exists but contains no diagnostic registry table`,
+      );
+    }
+    return { codes, enforceComplete: true, label: DIAGNOSTICS_SPEC_RELATIVE_PATH };
+  }
+
+  const spec = await readFile(path.join(repoRootPath, 'SPEC.md'), 'utf8');
+  const sectionStart = spec.indexOf(LEGACY_DIAGNOSTICS_HEADING);
+  if (sectionStart < 0) {
+    throw new Error(
+      `diagnostics-ref: ${DIAGNOSTICS_SPEC_RELATIVE_PATH} is missing and legacy SPEC §11.3 diagnostic table is missing`,
+    );
+  }
+  const nextSection = spec.indexOf('\n### ', sectionStart + 1);
+  const tableText = spec.slice(sectionStart, nextSection < 0 ? undefined : nextSection);
+  const codes = collectDiagnosticRegistryCodesFromMarkdown(tableText);
+  if (codes.size === 0) {
+    throw new Error('diagnostics-ref: legacy SPEC §11.3 diagnostic table contains no KV### rows');
+  }
+  return { codes, enforceComplete: false, label: 'SPEC §11.3 diagnostic table' };
+}
+
 async function assertCatalogCoversFrameworkCodes(definitions, page) {
   const registryCodes = new Set(Object.keys(definitions));
-  const [packageSourceCodes, specTableCodes] = await Promise.all([
+  const [packageSourceCodes, specRegistry] = await Promise.all([
     collectPackageSourceCodes(),
-    collectSpecDiagnosticTableCodes(),
+    collectSpecDiagnosticRegistryCodes(),
   ]);
 
   const failures = [];
   const requiredCodeSources = [
     { codes: packageSourceCodes, label: 'packages/*/src' },
-    { codes: specTableCodes, label: 'SPEC §11.3 diagnostic table' },
+    { codes: specRegistry.codes, label: specRegistry.label },
   ];
   for (const source of requiredCodeSources) {
     const missing = Array.from(source.codes)
       .filter((code) => !registryCodes.has(code))
       .sort(byCode);
     if (missing.length > 0) failures.push(`${source.label}: ${missing.join(', ')}`);
+  }
+
+  if (specRegistry.enforceComplete) {
+    const missingFromNormativeRegistry = Array.from(registryCodes)
+      .filter((code) => !specRegistry.codes.has(code))
+      .sort(byCode);
+    if (missingFromNormativeRegistry.length > 0) {
+      failures.push(
+        `${specRegistry.label}: missing registered diagnostics ${missingFromNormativeRegistry.join(', ')}`,
+      );
+    }
   }
 
   const missingFromPage = Array.from(registryCodes)
@@ -186,7 +222,7 @@ async function assertCatalogCoversFrameworkCodes(definitions, page) {
   if (failures.length > 0) {
     throw new Error(
       [
-        'diagnostics-ref: every framework KV### emitted in packages/*/src or listed in SPEC §11.3 must be present in diagnosticDefinitions and the generated catalog.',
+        `diagnostics-ref: every framework KV### emitted in packages/*/src, listed in ${specRegistry.label}, or registered in diagnosticDefinitions must agree with the generated catalog.`,
         ...failures.map((failure) => `- ${failure}`),
         'Use a comment shaped like `diagnostics-ref-ignore KV000: reason` only for intentional non-framework placeholders.',
       ].join('\n'),

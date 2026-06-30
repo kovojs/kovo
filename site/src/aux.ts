@@ -11,7 +11,7 @@ import { loadSiteContent } from './content.js';
 // Agent + static-host surface emitted alongside the replayed route documents:
 //   - search-index.json  the ⌘K search island's corpus (W8)
 //   - <section>/<slug>.md raw markdown mirrors (snippets substituted)
-//   - spec.md            the normative spec, verbatim
+//   - spec.md            the normative spec corpus (SPEC.md + spec/*.md)
 //   - kovo-rules.md      the condensed app-local AGENTS.md rules block body
 //   - llms.txt           llms.txt-convention index over the mirrors
 //   - llms-full.txt      the whole corpus for ingestion

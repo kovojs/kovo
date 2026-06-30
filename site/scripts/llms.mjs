@@ -9,7 +9,7 @@
  *   llms-full.txt  — the full corpus: every docs/guides/tutorial/API/reference
  *                    page concatenated into one agent-ingestible markdown file,
  *                    each preceded by `# <title>` and its canonical URL, plus
- *                    the normative SPEC.md.
+ *                    the normative spec corpus (SPEC.md + spec/*.md).
  *
  * One source feeds both files and the human pages (plan "one source feeds
  * both"). Output is deterministic: no timestamps, no absolute paths.
@@ -64,7 +64,7 @@ export function buildLlmsIndex(sections, { origin, specMirror = '/spec.md' } = {
  * llms-full.txt corpus. `renderBody(page)` returns the page's markdown body
  * with build-time snippets/captures substituted (owned by build.mjs, which
  * holds the captures and snippets); `spec` is { title, url, body } for the
- * normative SPEC.md appended at the end. `origin` makes the per-page URLs
+ * normative spec corpus appended at the end. `origin` makes the per-page URLs
  * absolute.
  */
 export function buildLlmsFull(sections, { origin, renderBody, spec } = {}) {
