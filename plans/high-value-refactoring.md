@@ -93,7 +93,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm run check:inline-loader && pnpm run check:inline-loader:trusted-types && pnpm run check:imports && pnpm run check:sink-policy` and `pnpm exec vitest --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/server-emit-security.test.ts packages/compiler/src/security-output.test.ts packages/browser/src/inline-loader-security.test.ts packages/browser/src/inline-loader-trusted-types-routing.test.ts packages/browser/src/response-fragment-apply.test.ts packages/server/src/wire-html.test.ts packages/server/src/mutation-response.test.ts packages/server/src/html.test.ts packages/server/src/response.test.ts packages/server/src/wire-fixtures.test.ts packages/server/src/replay.test.ts packages/core/src/security-url.test.ts packages/core/src/sink-policy.test.ts` pass with shared sink-policy and branded fragment sink coverage.
   - SPEC: sections 2, 4.8, 5.2 rule 10, 6.6, 9.1.
 
-- [ ] **P0.4 - Replace generated query-update helper duplication with one runtime VM and one keyed reconciler core.**
+- [x] **P0.4 - Replace generated query-update helper duplication with one runtime VM and one keyed reconciler core.**
   - Affected: `packages/compiler/src/emit/client.ts`,
     `packages/compiler/src/analyze/query-updates.ts`,
     `packages/browser/src/query-bindings.ts`, `query-apply.ts`, `morph.ts`,
@@ -116,6 +116,7 @@ test brittleness, and distribution confusion.
     `packages/browser/src/morph.test.ts`,
     `packages/browser/src/response-fragment-apply.browser.test.ts`, plus keyed reorder/insert/remove
     property tests.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/query-update-plans.test.ts packages/compiler/src/output-context-payloads.test.ts packages/browser/src/generated-exports.test.ts packages/browser/src/index-exports.test.ts packages/browser/src/query-bindings.test.ts packages/browser/src/keyed-reconciler.test.ts packages/browser/src/mutation-response-dom.test.ts packages/browser/src/morph.test.ts packages/browser/src/response-fragment-apply.test.ts` and `vp run browser` pass with the generated query-update VM, generated export contract, keyed reconciler, mutation DOM path, modular fragment path, and inline-loader/browser coverage.
   - SPEC: sections 4.4, 4.7, 4.8, 4.9, 5.2, 9.1, 9.1.1, 13.2.
 
 - [x] **P0.5 - Consolidate Drizzle static analysis into one fact pipeline and reuse symbol provenance for SQL safety.**

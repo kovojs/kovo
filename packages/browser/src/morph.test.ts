@@ -1,10 +1,38 @@
+import {
+  createRenderedFragmentHtml,
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it } from 'vitest';
 
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
-import { readMutationResponseBodyChunks } from './wire-parser.js';
 import { applyFragments, morphStructuralTree, type StructuralMorphNode } from './morph.js';
 import { createQueryStore } from './query-store.js';
 import { FakeMorphRoot, FakeMorphTarget } from './runtime-test-fakes.js';
+import { readMutationResponseBodyChunks } from './wire-parser.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentHtml(html: string): RenderedFragmentHtml {
+  return createRenderedFragmentHtml(html);
+}
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
 
 function keyedListRow(key: string, text: string): StructuralMorphNode {
   return {
@@ -22,8 +50,8 @@ describe('fragment morph runtime', () => {
 
     expect(
       applyFragments(root, [
-        { html: '<cart-badge>new</cart-badge>', target: 'cart-badge' },
-        { html: '<aside>ignored</aside>', target: 'missing' },
+        { html: fragmentHtml('<cart-badge>new</cart-badge>'), target: 'cart-badge' },
+        { html: fragmentHtml('<aside>ignored</aside>'), target: 'missing' },
       ]),
     ).toEqual(['cart-badge']);
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>new</cart-badge>');
@@ -44,7 +72,7 @@ describe('fragment morph runtime', () => {
       },
     );
 
-    expect(result.fragments).toEqual([
+    expect(fragmentSnapshots(result.fragments)).toEqual([
       {
         html: '<article kovo-key="p2"></article>',
         mode: 'append',
@@ -69,7 +97,7 @@ describe('fragment morph runtime', () => {
       { root, store },
     );
 
-    expect(result.fragments).toEqual([
+    expect(fragmentSnapshots(result.fragments)).toEqual([
       { html: '<article kovo-key="m1"></article>', mode: 'prepend', target: 'chat-log' },
     ]);
     expect(result.appliedFragments).toEqual(['chat-log']);
