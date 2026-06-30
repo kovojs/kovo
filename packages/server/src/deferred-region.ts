@@ -1,7 +1,11 @@
 import type { TrustedHtml } from '@kovojs/browser';
 
 import { escapeAttribute, renderedHtml, type RenderedHtml } from './html.js';
-import type { DeferredPriority, DeferredStreamChunk } from './deferred-stream.js';
+import {
+  deferredStreamInitialChunkCount,
+  type DeferredPriority,
+  type DeferredStreamChunk,
+} from './deferred-stream.js';
 import type { StylesheetAsset } from './hints.js';
 import { currentJsxFrameworkContext, type DeferredRegionCollector } from './jsx-context.js';
 import { renderServerRenderable, type InternalServerRenderable } from './renderable.js';
@@ -119,7 +123,14 @@ export function createDeferredRegionChunkCollector(): DeferredRegionChunkCollect
       return Promise.all(chunks);
     },
     pendingChunks() {
-      return [...chunks];
+      // SPEC §8: a deferred region render can itself discover more deferred regions. The document
+      // stream consumes this live queue so nested regions registered while a chunk settles are not
+      // stranded behind their fallback placeholders.
+      Object.defineProperty(chunks, deferredStreamInitialChunkCount, {
+        configurable: true,
+        value: chunks.length,
+      });
+      return chunks;
     },
   };
 }

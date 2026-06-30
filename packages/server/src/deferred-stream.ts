@@ -50,6 +50,9 @@ export interface DeferredStreamChunk {
 }
 
 /** @internal */
+export const deferredStreamInitialChunkCount = Symbol('kovo.deferredStreamInitialChunkCount');
+
+/** @internal */
 export interface DeferredStreamResponse extends ServerResponseBase<
   string,
   Record<string, string>,
@@ -158,12 +161,25 @@ interface StreamDeferredChunksOptions {
 }
 
 async function streamDeferredChunks(options: StreamDeferredChunksOptions): Promise<void> {
-  const pending = options.chunks.map((chunk, index) => ({
-    index,
-    promise: Promise.resolve(chunk).then((value) => ({ index, value })),
-  }));
+  const pending: {
+    index: number;
+    promise: Promise<{ index: number; value: DeferredStreamChunk }>;
+  }[] = [];
+  let nextIndex = 0;
+  const collectPending = (limit: number) => {
+    while (nextIndex < limit && nextIndex < options.chunks.length) {
+      const index = nextIndex;
+      const chunk = options.chunks[index]!;
+      nextIndex += 1;
+      pending.push({
+        index,
+        promise: Promise.resolve(chunk).then((value) => ({ index, value })),
+      });
+    }
+  };
 
   try {
+    collectPending(initialDeferredChunkCount(options.chunks));
     while (pending.length > 0) {
       const settled = await Promise.race(pending.map((entry) => entry.promise));
       const pendingIndex = pending.findIndex((entry) => entry.index === settled.index);
@@ -173,6 +189,9 @@ async function streamDeferredChunks(options: StreamDeferredChunksOptions): Promi
           `\n${serializeDeferredStreamChunk(options.boundary, settled.value, options.applyScript)}`,
         ),
       );
+      // SPEC §8: rendering a settled deferred region may have registered nested regions into the
+      // same live queue. Drain newly discovered work before closing the stream.
+      collectPending(options.chunks.length);
     }
     options.controller.enqueue(
       options.encoder.encode(
@@ -183,6 +202,15 @@ async function streamDeferredChunks(options: StreamDeferredChunksOptions): Promi
   } catch (error) {
     options.controller.error(error);
   }
+}
+
+function initialDeferredChunkCount(chunks: readonly Promise<DeferredStreamChunk>[]): number {
+  const initialCount = (
+    chunks as readonly Promise<DeferredStreamChunk>[] & {
+      [deferredStreamInitialChunkCount]?: number;
+    }
+  )[deferredStreamInitialChunkCount];
+  return initialCount ?? chunks.length;
 }
 
 /**

@@ -3,10 +3,11 @@ import { trustedHtml } from '@kovojs/browser';
 
 import { createApp } from './app.js';
 import { renderAppErrorDocumentResponse, renderAppRouteDocumentResponse } from './app-document.js';
-import { defer } from './deferred-region.js';
+import { Defer, defer } from './deferred-region.js';
 import { guards } from './guards.js';
-import { renderedHtml } from './html.js';
+import { renderedHtml, renderHtmlValue } from './html.js';
 import { stylesheet } from './hints.js';
+import { jsx } from './jsx-runtime.js';
 import { layout, notFound, route } from './route.js';
 import {
   computeRenderPlanFingerprint,
@@ -564,6 +565,58 @@ describe('server app document boundary', () => {
     const rest = await readRemainingStreamText(reader);
     expect(rest).toContain('<kovo-fragment target="reviews:p1" priority="normal">');
     expect(rest).toContain('<section class="reviews-card">Reviews ready</section>');
+  });
+
+  it('drains nested Defer regions discovered while streaming an outer region', async () => {
+    const dashboardRoute = route('/dashboard', {
+      async page() {
+        const outer = await renderHtmlValue(
+          await Defer({
+            fallback: jsx('section', { children: 'Loading outer' }),
+            priority: 'after-paint',
+            render: async () => {
+              const inner = await renderHtmlValue(
+                await Defer({
+                  fallback: jsx('p', { children: 'Loading inner' }),
+                  priority: 'after-paint',
+                  render: () => jsx('p', { children: 'Inner ready' }),
+                  target: 'dashboard:inner',
+                }),
+              );
+              return renderedHtml(`<section><h2>Outer ready</h2>${inner}</section>`);
+            },
+            target: 'dashboard:outer',
+          }),
+        );
+        return renderedHtml(`<main>${outer}</main>`);
+      },
+    });
+    const request = new Request('https://app.example.test/dashboard');
+    const app = createApp({ routes: [dashboardRoute] });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request,
+      route: dashboardRoute,
+      url: new URL(request.url),
+    });
+    const body = await responseBodyText(response.body);
+
+    expect(response.status).toBe(200);
+    expect(body).toContain(
+      '<kovo-defer target="dashboard:outer" state="pending" data-kovo-region-priority="after-paint"><section>Loading outer</section></kovo-defer>',
+    );
+    expect(body).toContain('<kovo-fragment target="dashboard:outer" priority="normal">');
+    expect(body).toContain('<h2>Outer ready</h2>');
+    expect(body).toContain(
+      '<kovo-defer target="dashboard:inner" state="pending" data-kovo-region-priority="after-paint"><p>Loading inner</p></kovo-defer>',
+    );
+    expect(body).toContain('<kovo-fragment target="dashboard:inner" priority="normal">');
+    expect(body).toContain('<p>Inner ready</p>');
+    expect(body.indexOf('<kovo-fragment target="dashboard:outer"')).toBeLessThan(
+      body.indexOf('<kovo-fragment target="dashboard:inner"'),
+    );
   });
 
   it('streams visible deferred route regions for viewport-gated browser apply', async () => {
