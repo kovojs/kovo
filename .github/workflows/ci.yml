@@ -119,6 +119,10 @@ jobs:
 
   starter:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [scaffold, prod-artifact, runtime]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
@@ -136,8 +140,10 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - name: Generated starter proofs
-        run: vp exec vitest --run packages/create-kovo/src/index.build.test.ts
+      - name: Generated starter proofs (${{ matrix.shard }})
+        run: |
+          pattern="$(vp exec node scripts/starter-build-shards.mjs pattern ${{ matrix.shard }})"
+          vp exec vitest --run packages/create-kovo/src/index.build.test.ts --testNamePattern "$pattern"
 
   build:
     runs-on: ubuntu-latest
