@@ -94,4 +94,4 @@ fingerprint → silent lost-update; B3 — the scaffold ships Better Auth creden
 ## Latest Verification
 
 - **A1/B1/C1/C2/D1:** closed with the evidence nested above; latest shared checks also include `pnpm exec vp check --no-lint --no-error-on-unmatched-pattern ...` and `git diff --check`.
-- **bugz-20 B1:** artifact gates now cover KV406/KV414/trusted raw SQL; runtime cross-tenant/KV438 follow-up remains tracked in `plans/bugz-20.md`.
+- **bugz-20 B1:** closed in `plans/bugz-20.md`; latest raw SQL gates cover KV406/KV414/KV438, trusted raw SQL suppression, and the runtime owner-write cross-tenant check.

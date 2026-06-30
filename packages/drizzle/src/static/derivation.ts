@@ -66,11 +66,11 @@ import {
   serverSummaryKeysForSourceFile,
   sessionProvenanceContextForNodes,
   staticQueryDeclarationFromCall,
-  symbolProvenanceContextForNodes,
-  symbolProvenanceForExpression,
   staticAccessExpression,
   staticAccessName,
   staticExpressionRootIdentifier,
+  symbolProvenanceContextForNodes,
+  symbolProvenanceForExpression,
   symbolForIdentifierReference,
   touchBodyCallExpressions,
   unwrappedFunctionExpression,
@@ -86,7 +86,17 @@ import {
   type SourceFileInput,
   type SymbolProvenanceContext,
   type TouchGraphProjectOptions,
+  directDrizzleReceiverCallSurface,
+  objectPropertyInitializer,
+  staticMutationDeclarationFromCall,
+  stringArrayPropertyFromObject,
 } from '../static.js';
+import {
+  domainWriteObject,
+  domainWriteProperties,
+  rawTablesFromWriteInitializer,
+  writeActionCallbackFunction,
+} from './domain-writes.js';
 
 // ───────────────────────────────────────────────────────────────────────────
 // SPEC.md §10.5 derivation extraction (Stage 1 write→effect, Stage 2 query→shape).
@@ -1019,6 +1029,7 @@ function extractMassAssignmentFromDeriveExtraction(
         );
       }
     }
+    facts.push(...rawMassAssignmentFactsForSourceFile(sourceFile, file, governedByTable));
   });
   return dedupeMassAssignmentFacts(facts);
 }
@@ -1099,6 +1110,18 @@ interface MassAssignmentCallContext {
   privilegedHelpers: PrivilegedWriteHelpers;
 }
 
+interface RawWriteDeclaration {
+  name: string;
+  tables: readonly string[];
+  trust: RawWriteSqlTrust;
+}
+
+interface RawWriteSqlTrust {
+  hasExecute: boolean;
+  site?: string;
+  trusted: boolean;
+}
+
 interface PrivilegedWriteHelpers {
   adminAssign: ReadonlySet<string>;
   encryptAtRest: ReadonlySet<string>;
@@ -1142,6 +1165,193 @@ function massAssignmentFactsForWriteCall(
     facts.push(...massAssignmentFactsForObject(conflictSet, 'set', info, site, context, table));
   }
   return facts;
+}
+
+function rawMassAssignmentFactsForSourceFile(
+  sourceFile: SourceFile,
+  file: SourceFileInput,
+  governedByTable: ReadonlyMap<string, GovernedTableInfo>,
+): MassAssignmentFact[] {
+  if (governedByTable.size === 0) return [];
+
+  return rawWriteDeclarationsForSourceFile(sourceFile, file).flatMap((declaration) =>
+    rawMassAssignmentFactsForDeclaration(declaration, governedByTable),
+  );
+}
+
+function rawWriteDeclarationsForSourceFile(
+  sourceFile: SourceFile,
+  file: SourceFileInput,
+): RawWriteDeclaration[] {
+  return [
+    ...rawDomainWriteDeclarations(sourceFile, file),
+    ...rawMutationWriteDeclarations(sourceFile, file),
+  ];
+}
+
+function rawDomainWriteDeclarations(
+  sourceFile: SourceFile,
+  file: SourceFileInput,
+): RawWriteDeclaration[] {
+  const declarations: RawWriteDeclaration[] = [];
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const domainName = declaration.getNameNode();
+    const initializer = declaration.getInitializer();
+    if (!Node.isIdentifier(domainName) || !initializer) continue;
+    const domainCall = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(domainCall)) continue;
+    if (!isKovoServerCalleeExpression(domainCall.getExpression(), 'domain')) continue;
+
+    const domainObject = domainWriteObject(domainCall.getArguments()[0]);
+    if (!domainObject.body) continue;
+
+    for (const property of domainWriteProperties(domainObject.body)) {
+      const tables = rawTablesFromWriteInitializer(property.initializer);
+      if (tables.length === 0) continue;
+      const callback = writeActionCallbackFunction(property.initializer);
+      if (!callback) continue;
+      const trust = rawExecuteTrustForCallback(callback, file);
+      if (!trust.hasExecute) continue;
+      declarations.push({
+        name: `${domainName.getText()}.${property.memberName}`,
+        tables,
+        trust,
+      });
+    }
+  }
+
+  return declarations;
+}
+
+function rawMutationWriteDeclarations(
+  sourceFile: SourceFile,
+  file: SourceFileInput,
+): RawWriteDeclaration[] {
+  const declarations: RawWriteDeclaration[] = [];
+
+  forEachMutationConfig(sourceFile, (key, config) => {
+    const tables = rawTablesFromMutationRegistry(config);
+    if (tables.length === 0) return;
+    const callback = mutationHandlerCallback(config);
+    if (!callback) return;
+    const trust = rawExecuteTrustForCallback(callback, file);
+    if (!trust.hasExecute) return;
+    declarations.push({ name: key, tables, trust });
+  });
+
+  return declarations;
+}
+
+function rawMassAssignmentFactsForDeclaration(
+  declaration: RawWriteDeclaration,
+  governedByTable: ReadonlyMap<string, GovernedTableInfo>,
+): MassAssignmentFact[] {
+  if (declaration.trust.trusted) return [];
+
+  return [...new Set(declaration.tables)].flatMap((table) => {
+    const info = governedByTable.get(table);
+    if (!info) return [];
+    return [
+      {
+        column: governedColumnsLabel(info, table),
+        detail: 'raw SQL statement cannot prove governed value provenance',
+        domain: info.domain,
+        name: declaration.name,
+        provenance: 'unknown' as const,
+        site: declaration.trust.site ?? '',
+        via: 'raw-sql' as const,
+      },
+    ];
+  });
+}
+
+function forEachMutationConfig(
+  sourceFile: SourceFile,
+  visit: (key: string, config: ObjectLiteralExpression) => void,
+): void {
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const call = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(call)) continue;
+    const mutation = staticMutationDeclarationFromCall(declaration, call);
+    if (!mutation || !Node.isObjectLiteralExpression(mutation.bodyArgument)) continue;
+    visit(mutation.key, mutation.bodyArgument);
+  }
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)) continue;
+    if (!isKovoServerCalleeExpression(call.getExpression(), 'mutation')) continue;
+
+    const [keyArgument, configArgument] = call.getArguments();
+    if (
+      !(
+        (Node.isStringLiteral(keyArgument) || Node.isNoSubstitutionTemplateLiteral(keyArgument)) &&
+        Node.isObjectLiteralExpression(configArgument)
+      )
+    ) {
+      continue;
+    }
+
+    visit(keyArgument.getLiteralText(), configArgument);
+  }
+}
+
+function rawTablesFromMutationRegistry(config: ObjectLiteralExpression): string[] {
+  const registry = objectPropertyInitializer(config, 'registry');
+  if (!registry) return [];
+  const registryObject = unwrappedStaticExpressionNode(registry);
+  if (!Node.isObjectLiteralExpression(registryObject)) return [];
+  return stringArrayPropertyFromObject(registryObject, 'tables');
+}
+
+function mutationHandlerCallback(config: ObjectLiteralExpression): Node | undefined {
+  for (const property of config.getProperties()) {
+    if (Node.isMethodDeclaration(property)) {
+      if (propertyNameText(property.getNameNode()) === 'handler') return property;
+      continue;
+    }
+
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== 'handler') continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) continue;
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
+      return expression;
+    }
+  }
+
+  return undefined;
+}
+
+function rawExecuteTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {
+  const executeCalls = callback
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .filter((call) => directDrizzleReceiverCallSurface(call)?.name === 'execute');
+  const firstUntrusted = executeCalls.find((call) => !isTrustedSqlArgument(call));
+  const siteCall = firstUntrusted ?? executeCalls[0];
+
+  return {
+    hasExecute: executeCalls.length > 0,
+    ...(siteCall
+      ? { site: `${file.fileName}:${lineForIndex(file.source, siteCall.getStart())}` }
+      : {}),
+    trusted: executeCalls.length > 0 && !firstUntrusted,
+  };
+}
+
+function isTrustedSqlArgument(call: CallExpression): boolean {
+  const argument = call.getArguments()[0];
+  if (!argument) return false;
+  const expression = unwrappedStaticExpressionNode(argument);
+  if (!Node.isCallExpression(expression)) return false;
+  const callee = expression.getExpression();
+  return Node.isIdentifier(callee)
+    ? callee.getText() === 'trustedSql'
+    : staticAccessName(callee) === 'trustedSql';
 }
 
 function massAssignmentFactsForPayload(

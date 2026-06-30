@@ -449,8 +449,10 @@ describe('create-kovo starter (build integration)', () => {
       } catch (error) {
         const output = execFileSyncErrorOutput(error);
         expect(output).toContain('KV414');
+        expect(output).toContain('KV438');
         expect(output).toContain('WRITE');
         expect(output).toContain('domain=raw-owner');
+        expect(output).toContain('via=raw-sql');
       }
     } finally {
       rmSync(root, { force: true, recursive: true });

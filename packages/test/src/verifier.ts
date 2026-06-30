@@ -356,3 +356,31 @@ export function assertOwnerRowsScoped(options: {
       `${foreignOwners.join(', ')}, not the session principal ${String(options.principal)} — IDOR.`,
   );
 }
+
+/**
+ * SPEC §11.2 runtime cross-check for KV414 (IDOR): assert that every owner-table
+ * row a mutation wrote belongs to the session principal. This is the deployed
+ * runtime counterpart to the static raw-SQL owner-write gate from SPEC §10.3.
+ *
+ * @param options.rows - The owner-table rows the mutation wrote.
+ * @param options.ownerColumn - The principal-owning column (the table's `owner:`, §10.1).
+ * @param options.principal - The session principal (e.g. `req.session.user.id`).
+ * @param options.domain - The owner domain, for the diagnostic message.
+ * @throws if any written row's owner column is not the principal (cross-principal write).
+ * @internal
+ */
+export function assertOwnerWritesScoped(options: {
+  rows: readonly Record<string, unknown>[];
+  ownerColumn: string;
+  principal: unknown;
+  domain: string;
+}): void {
+  const leaked = options.rows.filter((row) => row[options.ownerColumn] !== options.principal);
+  if (leaked.length === 0) return;
+
+  const foreignOwners = [...new Set(leaked.map((row) => String(row[options.ownerColumn])))];
+  throw new Error(
+    `KV414 (runtime §11.2): a mutation wrote ${leaked.length} ${options.domain} row(s) owned by ` +
+      `${foreignOwners.join(', ')}, not the session principal ${String(options.principal)} — IDOR.`,
+  );
+}

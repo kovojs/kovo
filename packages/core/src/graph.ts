@@ -401,7 +401,7 @@ export interface MassAssignmentFact {
   /** The write site (`file:line`). */
   site: string;
   /** The table column-write the finding flags. */
-  via: 'set' | 'spread' | 'values';
+  via: 'raw-sql' | 'set' | 'spread' | 'values';
 }
 
 /**

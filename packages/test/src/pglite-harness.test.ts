@@ -5,7 +5,7 @@ import { mutation, s } from '@kovojs/server';
 import { createKovoTestHarness } from './harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
-import { createDbVerifier } from './verifier.js';
+import { assertOwnerWritesScoped, createDbVerifier } from './verifier.js';
 
 describe('@kovojs/test PGlite harness integration', () => {
   it('runs mutation suites against an in-memory pglite database', async () => {
@@ -122,6 +122,74 @@ describe('@kovojs/test PGlite harness integration', () => {
         ok: true,
         value: 'p1',
       });
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('detects a real raw SQL cross-tenant owner write with the runtime KV414 check', async () => {
+    const cancelOrder = mutation('order/cancel', {
+      csrf: false,
+      input: s.object({ id: s.string() }),
+      async handler(
+        input,
+        request: {
+          db: Pick<PgliteTestDb, 'query'>;
+          session: { user: { id: string } };
+        },
+      ) {
+        await request.db.query('update orders set status = $1 where id = $2', [
+          'cancelled',
+          input.id,
+        ]);
+        return request.db.query<{ id: string; userId: string }>(
+          'select id, user_id as "userId" from orders where id = $1',
+          [input.id],
+        );
+      },
+    });
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec(
+        [
+          'create table orders (id text primary key, user_id text not null, status text not null)',
+          "insert into orders (id, user_id, status) values ('o1', 'u1', 'open'), ('o2', 'u2', 'open')",
+        ].join('; '),
+      );
+      const harness = createKovoTestHarness({
+        db,
+        request: { session: { user: { id: 'u1' } } },
+        touchGraph: {
+          'order.cancel': {
+            touches: [
+              { domain: 'order', keys: 'arg:id', site: 'order.domain.ts:1', via: 'orders' },
+            ],
+            unresolved: [],
+          },
+        },
+        verification: {
+          domainByTable: {
+            orders: 'order',
+          },
+        },
+      });
+
+      const result = await harness.exec(
+        cancelOrder,
+        { id: 'o2' },
+        { touchGraphKey: 'order.cancel' },
+      );
+      if (!result.ok) throw new Error('Expected mutation to return the written owner row.');
+
+      expect(() =>
+        assertOwnerWritesScoped({
+          domain: 'order',
+          ownerColumn: 'userId',
+          principal: 'u1',
+          rows: result.value,
+        }),
+      ).toThrow(/KV414 \(runtime §11\.2\).*mutation wrote.*u2.*not the session principal u1/);
     } finally {
       await db.close();
     }
