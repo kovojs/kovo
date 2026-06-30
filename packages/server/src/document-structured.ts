@@ -16,8 +16,10 @@ import {
   safeUrlAttribute,
 } from './html.js';
 
-const documentConfigBrand: unique symbol = Symbol.for('kovo.document.config') as any;
-const documentNodeBrand: unique symbol = Symbol.for('kovo.document.node') as any;
+const documentConfigSentinel: unique symbol = Symbol('kovo.document.config');
+const documentNodeSentinel: unique symbol = Symbol('kovo.document.node');
+const documentConfigProofs = new WeakSet<object>();
+const documentNodeProofs = new WeakSet<object>();
 const invalidAttributeNamePattern = new RegExp(String.raw`[\s"'=<>/\u0000-\u001f\u007f]`, 'u');
 const linkAttributeNames = new Set([
   'as',
@@ -42,7 +44,7 @@ export type DocumentShellAttributeValue = boolean | number | string | undefined;
 export type DocumentShellAttributes = Record<string, DocumentShellAttributeValue>;
 
 interface DocumentNode {
-  readonly [documentNodeBrand]: true;
+  readonly [documentNodeSentinel]: true;
   readonly attrs?: DocumentShellAttributes;
   readonly csp?: CspInlineMetadata;
   readonly html?: string;
@@ -56,7 +58,7 @@ export interface DocumentAuthoringContext {
 
 /** Structured document facts consumed by framework-owned document assembly (SPEC.md §9.5). */
 export interface DocumentConfig {
-  readonly [documentConfigBrand]: true;
+  readonly [documentConfigSentinel]: true;
   readonly bodyAttrs: DocumentShellAttributes;
   readonly bodyEnd: readonly string[];
   readonly bodyStart: readonly string[];
@@ -106,8 +108,8 @@ export function Document(props: {
     htmlAttrs.lang = props.lang;
   }
 
-  return {
-    [documentConfigBrand]: true,
+  return documentConfig({
+    [documentConfigSentinel]: true,
     bodyAttrs,
     bodyEnd,
     bodyStart,
@@ -115,7 +117,7 @@ export function Document(props: {
     head,
     htmlAttrs,
     ...(props.lang === undefined ? {} : { lang: props.lang }),
-  };
+  });
 }
 
 /** Document head contribution container (SPEC.md §9.5). */
@@ -257,11 +259,7 @@ export function InlineStyle(props: {
 }
 
 export function isDocumentConfig(value: unknown): value is DocumentConfig {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Partial<DocumentConfig>)[documentConfigBrand] === true
-  );
+  return typeof value === 'object' && value !== null && documentConfigProofs.has(value);
 }
 
 /** @internal */
@@ -288,25 +286,40 @@ export function renderShellAttributes(attributes: DocumentShellAttributes): stri
     .join('');
 }
 
+function documentConfig(config: DocumentConfig): DocumentConfig {
+  documentConfigProofs.add(config);
+  return config;
+}
+
+function markDocumentNode(node: DocumentNode): DocumentNode {
+  documentNodeProofs.add(node);
+  return node;
+}
+
 function documentNode(
   placement: DocumentPlacement,
   html: string,
   csp?: CspInlineMetadata,
 ): DocumentNode {
-  return {
-    [documentNodeBrand]: true,
+  return markDocumentNode({
+    [documentNodeSentinel]: true,
     placement,
     ...(html === '' ? {} : { html }),
     ...(csp === undefined ? {} : { csp }),
-  };
+  });
 }
 
 function documentAttrs(placement: DocumentPlacement, attrs: DocumentShellAttributes): DocumentNode {
-  return {
-    [documentNodeBrand]: true,
+  return markDocumentNode({
+    [documentNodeSentinel]: true,
     attrs,
     placement,
-  };
+  });
+}
+
+/** @internal */
+export function isStructuredDocumentNode(value: unknown): value is object {
+  return isDocumentNode(value);
 }
 
 function collectDocumentNodes(value: unknown): DocumentNode[] {
@@ -324,11 +337,7 @@ function collectDocumentNodes(value: unknown): DocumentNode[] {
 }
 
 function isDocumentNode(value: unknown): value is DocumentNode {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Partial<DocumentNode>)[documentNodeBrand] === true
-  );
+  return typeof value === 'object' && value !== null && documentNodeProofs.has(value);
 }
 
 function renderDocumentChildren(value: unknown): { csp: CspInlineMetadata; html: string } {

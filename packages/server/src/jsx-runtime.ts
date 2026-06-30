@@ -31,6 +31,7 @@ import { currentJsxFrameworkContext, currentJsxRequestContext } from './jsx-cont
 import { runQuery, type QueryDefinition } from './query.js';
 import { renderServerRenderable } from './renderable.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
+import { isDocumentConfig, isStructuredDocumentNode } from './document-structured.js';
 
 // Server-side JSX runtime. Components author JSX sugar (SPEC.md section 4.1)
 // and render to light-DOM HTML strings (SPEC.md section 3 pipeline, section
@@ -64,8 +65,6 @@ const voidElements = new Set([
 const kovoFormKeyFieldName = 'kovo-form-key';
 const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
 const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
-const documentConfigBrand = Symbol.for('kovo.document.config');
-const documentNodeBrand = Symbol.for('kovo.document.node');
 
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
 export type JsxNode =
@@ -249,12 +248,7 @@ function renderFunctionComponentResult(value: unknown): MaybePromise<RenderedHtm
 }
 
 function isStructuredDocumentValue(value: unknown): value is object {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    ((value as Record<symbol, unknown>)[documentConfigBrand] === true ||
-      (value as Record<symbol, unknown>)[documentNodeBrand] === true)
-  );
+  return isDocumentConfig(value) || isStructuredDocumentNode(value);
 }
 
 function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): string {

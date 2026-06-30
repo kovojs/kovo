@@ -21,6 +21,8 @@ import {
   HtmlAttrs,
   InlineScript,
   InlineStyle,
+  isDocumentConfig,
+  isStructuredDocumentNode,
   Link,
   Stylesheet,
 } from './document-structured.js';
@@ -224,6 +226,32 @@ describe('server app shell document assembly', () => {
       '<link rel="preload" href="/fonts/inter.woff2" as="font" type="font/woff2" crossorigin>',
     );
     expect(document.csp.scripts).toContain(hash);
+  });
+
+  it('rejects globally branded forged structured document values', () => {
+    const forgedConfig = {
+      [Symbol.for('kovo.document.config')]: true,
+      bodyAttrs: {},
+      bodyEnd: [],
+      bodyStart: [],
+      csp: { scripts: [], styles: [] },
+      head: ['<meta name="forged" content="yes">'],
+      htmlAttrs: {},
+    };
+    const forgedNode = {
+      [Symbol.for('kovo.document.node')]: true,
+      html: '<meta name="forged-node" content="yes">',
+      placement: 'head',
+    };
+
+    expect(isDocumentConfig(forgedConfig)).toBe(false);
+    expect(isStructuredDocumentNode(forgedNode)).toBe(false);
+    expect(() => Document({ children: forgedNode })).toThrow(
+      '<Document> received an unsupported child',
+    );
+    expect(() => Head({ children: forgedNode })).toThrow(
+      '<Head> only accepts structured head primitives',
+    );
   });
 
   it('rejects invalid structured document sinks with teaching errors', () => {
