@@ -136,24 +136,13 @@ interface ToctouFactLike {
 }
 
 interface KovoDrizzleStaticModule {
-  analyzeSqlSafetyFromProject(options: {
-    files: readonly DataPlaneSourceFile[];
-  }): readonly TouchGraphDiagnosticLike[];
   deriveMutationTouchRegistry(options: {
     mutations: readonly { mutation: string; touchGraphKey: string }[];
     touchGraph: unknown;
   }): Readonly<Record<string, readonly RuntimeMutationTouchSiteLike[]>>;
-  diagnosticsForQueryFacts(facts: readonly unknown[]): readonly TouchGraphDiagnosticLike[];
-  extractQueryFactsFromProject(options: {
-    files: readonly DataPlaneSourceFile[];
-  }): readonly unknown[];
-  extractStaticBuildAnalysisFactsFromProject?(options: {
+  extractStaticBuildAnalysisFactsFromProject(options: {
     files: readonly DataPlaneSourceFile[];
   }): StaticBuildAnalysisFactsLike;
-  extractToctouFromProject(options: {
-    files: readonly DataPlaneSourceFile[];
-  }): readonly ToctouFactLike[];
-  extractTouchGraphFromProject(options: { files: readonly DataPlaneSourceFile[] }): unknown;
 }
 
 interface StaticBuildAnalysisFactsLike {
@@ -184,6 +173,16 @@ type TypeScriptModule = typeof import('typescript');
 let compilerSourceResolutionHooksRegistered = false;
 let loadedTypeScript: TypeScriptModule | undefined;
 const dataPlaneAnalysisCache = new Map<string, Promise<DataPlaneAnalysis>>();
+
+class DataPlaneStaticAnalysisError extends Error {
+  readonly cause: unknown;
+
+  constructor(message: string, cause: unknown) {
+    super(message, { cause });
+    this.name = 'DataPlaneStaticAnalysisError';
+    this.cause = cause;
+  }
+}
 
 if (!isMainThread && isOutputSchemaQueryShapeWorkerData(workerData)) {
   parentPort?.postMessage(outputSchemaQueryShapeFactsSerial(workerData.files));
@@ -301,15 +300,9 @@ export async function staticDataPlaneBuildFacts(
   options: StaticDataPlaneBuildFactsOptions,
 ): Promise<StaticDataPlaneBuildFacts> {
   const analysisFiles = files.filter(isBuildSecurityAnalysisSourceFile);
-  if (!analysisFiles.some(hasDrizzleImport))
-    return { ...emptyStaticDataPlaneBuildFacts(), touchGraph: {} };
+  if (analysisFiles.length === 0) return { ...emptyStaticDataPlaneBuildFacts(), touchGraph: {} };
 
-  let rawFacts: StaticBuildAnalysisFactsLike;
-  try {
-    rawFacts = await cachedStaticBuildAnalysisFacts(analysisFiles, options);
-  } catch {
-    return { ...emptyStaticDataPlaneBuildFacts(), touchGraph: {} };
-  }
+  const rawFacts = await cachedStaticBuildAnalysisFacts(files, options);
 
   const queryReadFacts = rawFacts.queries as readonly QueryReadFactLike[];
   const result: StaticDataPlaneBuildFacts = {
@@ -448,7 +441,11 @@ async function createDataPlaneAnalysis(
       staticFacts: cached,
     };
   }
-  const staticFacts = await runStaticBuildAnalysisFacts(files);
+  const analysisFiles = files.filter(isBuildSecurityAnalysisSourceFile);
+  const staticFacts =
+    analysisFiles.length === 0
+      ? emptyStaticBuildAnalysisFactsLike()
+      : await runStaticBuildAnalysisFacts(files);
   writeCachedDataPlaneStaticFacts(root, `vite-${cacheKey}`, staticFacts);
   return {
     files,
@@ -475,27 +472,23 @@ async function cachedStaticBuildAnalysisFacts(
 async function runStaticBuildAnalysisFacts(
   files: readonly DataPlaneSourceFile[],
 ): Promise<StaticBuildAnalysisFactsLike> {
-  const drizzle = await importKovoDrizzleStaticModule();
-  return (
-    drizzle.extractStaticBuildAnalysisFactsFromProject?.({ files }) ??
-    fallbackDataPlaneAnalysisFacts(drizzle, files)
-  );
-}
-
-function fallbackDataPlaneAnalysisFacts(
-  drizzle: KovoDrizzleStaticModule,
-  files: readonly DataPlaneSourceFile[],
-): StaticBuildAnalysisFactsLike {
-  const queries = drizzle.extractQueryFactsFromProject({ files });
-  return {
-    queries,
-    sqlSafetyDiagnostics: [
-      ...drizzle.analyzeSqlSafetyFromProject({ files }),
-      ...drizzle.diagnosticsForQueryFacts(queries),
-    ],
-    toctouFacts: drizzle.extractToctouFromProject({ files }),
-    touchGraph: drizzle.extractTouchGraphFromProject({ files }),
-  };
+  try {
+    const drizzle = await importKovoDrizzleStaticModule();
+    if (typeof drizzle.extractStaticBuildAnalysisFactsFromProject !== 'function') {
+      throw new TypeError(
+        '@kovojs/drizzle/internal/static must export extractStaticBuildAnalysisFactsFromProject.',
+      );
+    }
+    const facts = drizzle.extractStaticBuildAnalysisFactsFromProject({ files });
+    if (!isStaticBuildAnalysisFactsLike(facts)) {
+      throw new TypeError(
+        '@kovojs/drizzle/internal/static extractStaticBuildAnalysisFactsFromProject returned an invalid static-analysis aggregate.',
+      );
+    }
+    return facts;
+  } catch (error) {
+    throw dataPlaneStaticAnalysisError(error, files);
+  }
 }
 
 async function importKovoDrizzleStaticModule(): Promise<KovoDrizzleStaticModule> {
@@ -515,6 +508,28 @@ function missingDrizzleError(cause: unknown): Error {
   return new Error(
     'Kovo requires @kovojs/drizzle to be installed so the data-plane static-analysis gates can run (KV422/KV410/KV411/KV429).',
     { cause },
+  );
+}
+
+function dataPlaneStaticAnalysisError(
+  cause: unknown,
+  files: readonly DataPlaneSourceFile[],
+): DataPlaneStaticAnalysisError {
+  if (cause instanceof DataPlaneStaticAnalysisError) return cause;
+  const sample = files
+    .map((file) => file.fileName)
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, 3)
+    .join(', ');
+  const causeMessage = cause instanceof Error ? cause.message : String(cause);
+  return new DataPlaneStaticAnalysisError(
+    [
+      'KV245 Kovo data-plane static analysis failed closed (SPEC.md §10 / §11.4).',
+      'The aggregate @kovojs/drizzle analyzer ABI is required; Kovo will not synthesize old analyzer entrypoints or return empty facts after import, parse, or ts-morph failures.',
+      sample ? `Relevant source sample: ${sample}.` : 'Relevant source sample: <none>.',
+      `Cause: ${causeMessage}`,
+    ].join(' '),
+    cause,
   );
 }
 
@@ -1075,16 +1090,18 @@ function isCompilerQueryShapeFact(value: unknown): value is QueryShapeFact {
 function isBuildSecurityAnalysisSourceFile(file: DataPlaneSourceFile): boolean {
   const source = file.source;
   if (source.startsWith('// @kovojs-ui-copy\n')) return false;
-  if (/from ['"](?:@kovojs\/server|@kovojs\/drizzle|drizzle-orm)/.test(source)) return true;
-  if (/\b(?:domain|tag|query|mutation|webhook|endpoint)\s*\(/.test(source)) return true;
+  if (/from ['"](?:@kovojs\/drizzle|drizzle-orm)/.test(source)) return true;
+  if (/\b(?:pgTable|sqliteTable|mysqlTable|kovo)\s*\(/.test(source)) return true;
   if (/\b(?:db|tx)\s*\.\s*(?:all|get|query|run|execute|select|insert|update|delete)\b/.test(source))
+    return true;
+  if (
+    /\brequest\s*\.\s*db\s*\.\s*(?:all|get|query|run|execute|select|insert|update|delete)\b/.test(
+      source,
+    )
+  )
     return true;
   if (/\bsql\s*(?:`|\.raw\s*\(|\.identifier\s*\()/.test(source)) return true;
   return false;
-}
-
-function hasDrizzleImport(file: DataPlaneSourceFile): boolean {
-  return /from ['"](?:@kovojs\/drizzle|drizzle-orm)/.test(file.source);
 }
 
 function sourceFilesUnder(dir: string, root: string): DataPlaneSourceFile[] {
