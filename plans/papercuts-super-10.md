@@ -34,12 +34,13 @@ errors with no logging (§D).
 
 ### A. `<Defer>` streaming
 
-- [ ] **A1 — A nested `<Defer>` (a `<Defer>` rendered inside another `<Defer>`'s output) never streams: the inner region is stranded on its fallback placeholder forever — no fragment, no error, no timeout.** (med, framework; found by `t3-defer-streaming`)
+- [x] **A1 — A nested `<Defer>` (a `<Defer>` rendered inside another `<Defer>`'s output) never streams: the inner region is stranded on its fallback placeholder forever — no fragment, no error, no timeout.** (med, framework; found by `t3-defer-streaming`)
   - Observed behavior: prod artifact, chunked `GET /defer`. An outer `<Defer priority="after-paint">` whose render returns JSX containing an inner `<Defer>` — the outer streams, but the inner region's placeholder is never replaced (its chunk never arrives), indefinitely.
   - Root cause: `packages/server/src/route.ts:1168-1169` snapshots `await render(result.value)` then collects `deferredRegions.pendingChunks()`, and `packages/server/src/deferred-region.ts:120-124` `pendingChunks()` returns `[...chunks]` — the chunk set captured at the top level only. A `<Defer>` discovered _while rendering_ a deferred region is registered after the snapshot, so its chunk is never collected or streamed.
   - Why it matters: SPEC §8:809 frames `<Defer>` as out-of-order streaming for expensive/independent subtrees; nesting them (a common composition — a deferred panel containing a deferred sub-list) silently strands the inner content. (Distinct from the `super-8` D1/D2/D3 top-level streaming/isolation/timeout items — this is the nesting case.)
   - Repro evidence: `t3-defer-streaming` — outer `<Defer>` containing an inner `<Defer>`; the inner placeholder never resolves in the streamed response. Source: `route.ts:1168-1169`, `deferred-region.ts:120-124`.
   - Acceptance: nested `<Defer>` regions discovered during a deferred render are collected and streamed (drain until no pending chunks remain). Prove with a streaming test asserting the inner region's content arrives. SPEC §8.
+  - Evidence: `pnpm exec vitest --run packages/server/src/deferred-region.test.ts packages/server/src/deferred-stream.test.ts packages/server/src/app-document.test.ts` passes with nested `<Defer>` stream coverage asserting inner content arrives after the outer fragment.
 
 ### B. Abuse / DoS hardening (pairs with `bugz-21` B4)
 
