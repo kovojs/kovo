@@ -7,6 +7,7 @@ import type { StaticLiteralValue } from './object.js';
 import type {
   ArrowFunctionPartsModel,
   CallExpressionModel,
+  ConditionalExpressionModel,
   ComponentModel,
   ComponentModuleModel,
   ComponentOptionEntry,
@@ -1792,6 +1793,7 @@ function jsxAttributeExpression(
   expressionEnd: number;
   expressionIsBareIdentifier: boolean;
   expressionBareIdentifierName?: string;
+  expressionConditionalFacts: readonly ConditionalExpressionModel[];
   expressionPropertyAccesses: readonly PropertyAccessPathModel[];
   expressionReferences: readonly string[];
   expressionStart: number;
@@ -1819,6 +1821,11 @@ function jsxAttributeExpression(
     ...(ts.isObjectLiteralExpression(unwrapped)
       ? { expressionObjectEntries: objectLiteralEntries(sourceFile, source, unwrapped) }
       : {}),
+    expressionConditionalFacts: conditionalExpressionModels(
+      sourceFile,
+      source,
+      initializer.expression,
+    ),
     expressionPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.expression),
     expressionReferences: referenceIdentifiers(initializer.expression),
     expressionStart,
@@ -1832,6 +1839,33 @@ function jsxAttributeExpressionStaticValue(
 ): { expressionStaticValue: StaticLiteralValue } | {} {
   const value = staticLiteralValue(expression);
   return value === undefined ? {} : { expressionStaticValue: value };
+}
+
+function conditionalExpressionModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  node: ts.Node,
+): ConditionalExpressionModel[] {
+  const facts: ConditionalExpressionModel[] = [];
+
+  const visit = (current: ts.Node): void => {
+    if (ts.isConditionalExpression(current)) {
+      const conditionStart = current.condition.getStart(sourceFile);
+      const conditionEnd = current.condition.getEnd();
+      facts.push({
+        condition: source.slice(conditionStart, conditionEnd).trim(),
+        conditionEnd,
+        conditionPropertyAccesses: propertyAccessPathModels(sourceFile, current.condition),
+        conditionStart,
+        end: current.getEnd(),
+        start: current.getStart(sourceFile),
+      });
+    }
+    ts.forEachChild(current, visit);
+  };
+
+  visit(node);
+  return facts;
 }
 
 function solePropertyAccessPathFromExpression(expression: ts.Expression): string | null {

@@ -703,6 +703,42 @@ export const CartButton = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers nested style conditions from scanner-owned condition facts', () => {
+    const result = compileComponentModule({
+      fileName: 'components/cart-status.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const statusStyles = style.create({
+  empty: { color: 'gray' },
+  full: { color: 'green' },
+  stale: { color: 'orange' },
+});
+
+export const CartStatus = component({
+  queries: { cart: true },
+  render: ({ cart }) => (
+    <span style={cart.stale ? statusStyles.stale : cart.count > 0 ? statusStyles.full : statusStyles.empty}>Cart</span>
+  ),
+});
+`,
+    });
+
+    const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
+
+    expect(clientSource).toContain('cart.stale');
+    expect(clientSource).toContain('cart.count > 0');
+    expect(result.queryUpdatePlans[0]?.stamps?.[0]?.derive.expression).toContain('cart.stale');
+    expect(result.queryUpdatePlans[0]?.stamps?.[0]?.derive.expression).toContain('cart.count > 0');
+    expect(result.updateCoverage).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ query: 'cart.stale', status: 'plan' }),
+        expect.objectContaining({ query: 'cart.count', status: 'plan' }),
+      ]),
+    );
+  });
+
   it('lowers prop/local conditional style object handles to server-rendered class output', () => {
     const result = compileComponentModule({
       fileName: 'components/nav-link.tsx',
