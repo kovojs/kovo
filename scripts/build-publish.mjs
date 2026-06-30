@@ -26,7 +26,8 @@ import { publicPackages, repoRoot } from './public-packages.mjs';
  *
  * Modes:
  *   --write   Write each public package.json: `publishConfig` (exports/bin → dist),
- *             publish `files` (dist, plus starter templates for `create-kovo`),
+ *             publish `files` (dist, plus starter templates for `create-kovo` and
+ *             vendored copy-in source for `@kovojs/ui`),
  *             `scripts["build:dist"]` = `vp pack <entries> --dts`,
  *             and `scripts.prepack` = `pnpm run build:dist` (a dedicated script name so
  *             a package's existing `build` — e.g. runtime's inline-loader build — is
@@ -78,6 +79,7 @@ function resolveExportTarget(value) {
 export function derivePublishPlan(pkgJson) {
   const entries = new Set(); // distinct ./src/<path>.ts(x) build entries
   const stemBySubpath = new Map(); // subpath -> dist stem
+  const extraStems = new Set(); // package-owned dist entries that are not exported subpaths
 
   const exportsMap = pkgJson.exports ?? {};
   for (const [subpath, value] of Object.entries(exportsMap)) {
@@ -106,6 +108,14 @@ export function derivePublishPlan(pkgJson) {
       entries.add(target.replace(/^\.\//, ''));
       binTargets.set(name, srcStem(target));
     }
+  }
+
+  for (const target of pkgJson.kovo?.publishExtraEntries ?? []) {
+    if (!isSrcTarget(target)) {
+      throw new Error(`kovo.publishExtraEntries target does not target ./src: ${target}`);
+    }
+    entries.add(target.replace(/^\.\//, ''));
+    extraStems.add(srcStem(target));
   }
 
   // publishConfig.exports — mirror the subpath structure, each → dist.
@@ -150,6 +160,10 @@ export function derivePublishPlan(pkgJson) {
   for (const stem of binTargets.values()) {
     targetFiles.add(`dist/${stem}.mjs`);
   }
+  for (const stem of extraStems) {
+    targetFiles.add(`dist/${stem}.mjs`);
+    targetFiles.add(`dist/${stem}.d.mts`);
+  }
 
   const byString = (a, b) => (a < b ? -1 : a > b ? 1 : 0);
   return {
@@ -178,7 +192,7 @@ function write() {
     const pkgJson = JSON.parse(readFileSync(pkgPath, 'utf8'));
     const plan = derivePublishPlan(pkgJson);
 
-    pkgJson.files = publishFiles(pkg);
+    pkgJson.files = publishFiles(pkg, pkgJson);
     // Use a dedicated `build:dist` script so we never clobber a package's existing
     // `build` (e.g. @kovojs/browser's `build` = inline-loader generation).
     pkgJson.scripts = {
@@ -197,8 +211,28 @@ function write() {
   }
 }
 
-function publishFiles(pkg) {
-  return pkg.name === 'create-kovo' ? ['dist', 'templates'] : ['dist'];
+function publishFiles(pkg, pkgJson) {
+  if (pkg.name === 'create-kovo') return ['dist', 'templates'];
+  if (pkg.name === '@kovojs/ui') return ['dist', ...uiVendoredSourceFiles(pkgJson)];
+  return ['dist'];
+}
+
+function uiVendoredSourceFiles(pkgJson) {
+  const files = new Set();
+  for (const [subpath, target] of Object.entries(pkgJson.exports ?? {})) {
+    if (subpath === '.' || !subpath.startsWith('./')) continue;
+    const sourceTarget = resolveExportTarget(target).replace(/^\.\//, '');
+    if (/^src\/[^/]+\.tsx$/.test(sourceTarget)) files.add(sourceTarget);
+  }
+  for (const helper of [
+    'src/navigation-types.ts',
+    'src/pass-through.ts',
+    'src/safe-url.ts',
+    'src/theme.ts',
+  ]) {
+    files.add(helper);
+  }
+  return [...files].sort((left, right) => left.localeCompare(right));
 }
 
 function buildAndVerify() {

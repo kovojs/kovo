@@ -10,7 +10,7 @@ import {
   cookieHeader,
   fetchTextWhenReady,
   mergeCookies,
-  withRepoBinOnPath,
+  withStarterBinOnPath,
 } from './index.test-support.js';
 
 export function addNoJsFailureProof(root: string): void {
@@ -111,7 +111,7 @@ export function buildProductionArtifact(root: string): void {
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
   execFileSync(join(root, 'node_modules/.bin/kovo'), ['build', './src/app.tsx', '--no-cache'], {
     cwd: root,
-    env: withRepoBinOnPath(),
+    env: withStarterBinOnPath(root),
     stdio: 'pipe',
   });
 }

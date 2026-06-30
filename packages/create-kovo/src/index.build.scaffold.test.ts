@@ -1,191 +1,213 @@
-import { execFileSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { tmpdir } from 'node:os';
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { writeKovoProject } from './index.js';
-import { linkStarterBuildDependencies, resolveBin } from './index.test-support.js';
+import {
+  collectOutput,
+  createStarterApp,
+  fetchTextWhenReady,
+  installedPackageJson,
+  reservePort,
+  resolveStarterBin,
+  runStarterTypecheck,
+  runStarterVpCheck,
+  stopProcess,
+  withStarterBinOnPath,
+} from './index.test-support.js';
 import { buildProductionArtifact } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: scaffold)', () => {
   it('typechecks the generated app with starter dependencies', () => {
-    const tempParent = join(process.cwd(), 'node_modules/.tmp');
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-tsc-'));
+    const app = createStarterApp({
+      name: 'Tsc Proof',
+      tempParent: join(process.cwd(), 'node_modules/.tmp'),
+      tempPrefix: 'create-kovo-tsc-',
+    });
 
     try {
-      writeKovoProject(root, { name: 'Tsc Proof' });
-      linkStarterBuildDependencies(root);
-
-      execFileSync(
-        resolveBin('tsc'),
-        [
-          '--ignoreConfig',
-          '--noEmit',
-          '--jsx',
-          'react-jsx',
-          '--jsxImportSource',
-          '@kovojs/server',
-          '--module',
-          'NodeNext',
-          '--moduleResolution',
-          'NodeNext',
-          '--target',
-          'ES2024',
-          '--strict',
-          '--skipLibCheck',
-          '--exactOptionalPropertyTypes',
-          '--noUncheckedIndexedAccess',
-          '--types',
-          'node',
-          'src/schema.ts',
-          'src/db.ts',
-          'src/auth.ts',
-          'src/queries.ts',
-          'src/mutations.ts',
-          'src/components/contacts.tsx',
-          'src/components/auth-forms.tsx',
-          'src/app.tsx',
-        ],
-        { cwd: root, stdio: 'pipe' },
-      );
+      runStarterTypecheck(app.root);
     } finally {
-      rmSync(root, { force: true, recursive: true });
+      app.cleanup();
     }
   });
 
   it('typechecks the generated SQLite app variant', () => {
-    const tempParent = join(process.cwd(), 'node_modules/.tmp');
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-sqlite-tsc-'));
+    const app = createStarterApp({
+      dialect: 'sqlite',
+      name: 'Sqlite Tsc Proof',
+      tempParent: join(process.cwd(), 'node_modules/.tmp'),
+      tempPrefix: 'create-kovo-sqlite-tsc-',
+    });
 
     try {
-      writeKovoProject(root, { dialect: 'sqlite', name: 'Sqlite Tsc Proof' });
-      linkStarterBuildDependencies(root);
-
-      execFileSync(
-        resolveBin('tsc'),
-        [
-          '--ignoreConfig',
-          '--noEmit',
-          '--jsx',
-          'react-jsx',
-          '--jsxImportSource',
-          '@kovojs/server',
-          '--module',
-          'NodeNext',
-          '--moduleResolution',
-          'NodeNext',
-          '--target',
-          'ES2024',
-          '--strict',
-          '--skipLibCheck',
-          '--exactOptionalPropertyTypes',
-          '--noUncheckedIndexedAccess',
-          '--types',
-          'node',
-          'src/schema.ts',
-          'src/db.ts',
-          'src/auth.ts',
-          'src/queries.ts',
-          'src/mutations.ts',
-          'src/components/contacts.tsx',
-          'src/components/auth-forms.tsx',
-          'src/app.tsx',
-        ],
-        { cwd: root, stdio: 'pipe' },
-      );
+      runStarterTypecheck(app.root);
     } finally {
-      rmSync(root, { force: true, recursive: true });
+      app.cleanup();
     }
   });
 
   it('runs vp check in the generated SQLite app', () => {
-    const tempParent = join(process.cwd(), 'node_modules/.tmp');
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-sqlite-check-'));
+    const app = createStarterApp({
+      dialect: 'sqlite',
+      install: 'link-local',
+      name: 'Sqlite Check Proof',
+      tempParent: join(process.cwd(), 'node_modules/.tmp'),
+      tempPrefix: 'create-kovo-sqlite-check-',
+    });
 
     try {
-      writeKovoProject(root, { dialect: 'sqlite', name: 'Sqlite Check Proof' });
-      execFileSync(process.execPath, ['scripts/link-local-kovo.mjs', root, process.cwd()], {
-        cwd: process.cwd(),
-        stdio: 'pipe',
-      });
-      execFileSync('pnpm', ['install', '--ignore-workspace'], {
-        cwd: root,
-        stdio: 'pipe',
-      });
-
-      execFileSync(resolveBin('vp'), ['check'], {
-        cwd: root,
-        stdio: 'inherit',
-      });
+      runStarterVpCheck(app.root);
     } finally {
-      rmSync(root, { force: true, recursive: true });
+      app.cleanup();
     }
   }, 90_000);
 
   it('runs the generated in-app tests (data layer + request shell)', () => {
-    const tempParent = join(process.cwd(), 'node_modules/.tmp');
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-vitest-'));
+    const app = createStarterApp({
+      name: 'Vitest Proof',
+      tempParent: join(process.cwd(), 'node_modules/.tmp'),
+      tempPrefix: 'create-kovo-vitest-',
+    });
 
     try {
-      writeKovoProject(root, { name: 'Vitest Proof' });
-      linkStarterBuildDependencies(root);
-
-      execFileSync(resolveBin('vitest'), ['--run', 'src/app.test.ts'], {
-        cwd: root,
+      execFileSync(resolveStarterBin(app.root, 'vitest'), ['--run', 'src/app.test.ts'], {
+        cwd: app.root,
+        env: withStarterBinOnPath(app.root),
         stdio: 'pipe',
       });
     } finally {
-      rmSync(root, { force: true, recursive: true });
+      app.cleanup();
     }
   }, 90_000);
 
   it('runs the generated production build graph gate', () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-build-prod-'));
+    const app = createStarterApp({
+      name: 'Build Prod Proof',
+      tempPrefix: 'create-kovo-build-prod-',
+    });
 
     try {
-      writeKovoProject(root, { name: 'Build Prod Proof' });
-      linkStarterBuildDependencies(root);
-
-      buildProductionArtifact(root);
+      buildProductionArtifact(app.root);
     } finally {
-      rmSync(root, { force: true, recursive: true });
+      app.cleanup();
     }
   }, 120_000);
 
   it('rebuilds production artifacts from current source when cache is warm', () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-build-source-proof-'));
+    const app = createStarterApp({
+      name: 'Build Source Proof',
+      tempPrefix: 'create-kovo-build-source-proof-',
+    });
 
     try {
-      writeKovoProject(root, { name: 'Build Source Proof' });
-      linkStarterBuildDependencies(root);
-
-      buildProductionArtifact(root);
-      const firstHandler = readFileSync(join(root, 'dist/server/server/handler.mjs'), 'utf8');
+      buildProductionArtifact(app.root);
+      const firstHandler = readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8');
       expect(firstHandler).toContain('Contacts');
 
-      const contactsPath = join(root, 'src/components/contacts.tsx');
+      const contactsPath = join(app.root, 'src/components/contacts.tsx');
       writeFileSync(
         contactsPath,
         readFileSync(contactsPath, 'utf8').replace('Contacts</h1>', 'Current Source Contacts</h1>'),
         'utf8',
       );
 
-      buildProductionArtifact(root);
-      const secondHandler = readFileSync(join(root, 'dist/server/server/handler.mjs'), 'utf8');
+      buildProductionArtifact(app.root);
+      const secondHandler = readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8');
       expect(secondHandler).toContain('Current Source Contacts');
       expect(secondHandler).not.toBe(firstHandler);
     } finally {
-      rmSync(root, { force: true, recursive: true });
+      app.cleanup();
     }
   }, 120_000);
+
+  it.each(['postgres', 'sqlite'] as const)(
+    'installs the packed %s starter from published-shape tarballs',
+    (dialect) => {
+      const app = createStarterApp({
+        dialect,
+        install: 'packed',
+        name: `Packed ${dialect} Shape Proof`,
+        scaffold: 'packed-bin',
+        tempPrefix: `create-kovo-packed-${dialect}-`,
+      });
+
+      try {
+        expect(app.install.mode).toBe('packed');
+        expect(app.install.tarballDir).toBeTruthy();
+        expectPackedKovoPackageShape(app.root);
+        runStarterTypecheck(app.root);
+      } finally {
+        app.cleanup();
+      }
+    },
+    240_000,
+  );
+
+  it('runs vp check and the production artifact from a packed starter install', async () => {
+    const app = createStarterApp({
+      install: 'packed',
+      name: 'Packed Build Run Proof',
+      scaffold: 'packed-bin',
+      tempPrefix: 'create-kovo-packed-build-run-',
+    });
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      expectPackedKovoPackageShape(app.root);
+      runStarterVpCheck(app.root);
+      buildProductionArtifact(app.root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: app.root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withStarterBinOnPath(app.root),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const login = await fetchTextWhenReady(`http://127.0.0.1:${port}/login`, output);
+
+      expect(login).toContain('Sign in');
+      expect(login).toContain('--kovo-theme');
+    } finally {
+      await stopProcess(server);
+      app.cleanup();
+    }
+  }, 240_000);
 });
+
+function expectPackedKovoPackageShape(root: string): void {
+  expect(installedPackageJson(root, '@kovojs/core')).toMatchObject({
+    exports: {
+      '.': {
+        default: './dist/index.mjs',
+        types: './dist/index.d.mts',
+      },
+    },
+  });
+  expect(installedPackageJson(root, '@kovojs/server')).toMatchObject({
+    exports: {
+      './jsx-runtime': {
+        default: './dist/jsx-runtime.mjs',
+        types: './dist/jsx-runtime.d.mts',
+      },
+    },
+  });
+  expect(installedPackageJson(root, '@kovojs/cli')).toMatchObject({
+    bin: {
+      kovo: './dist/bin.mjs',
+    },
+    exports: {
+      '.': {
+        default: './dist/api.mjs',
+        types: './dist/api.d.mts',
+      },
+    },
+  });
+}
