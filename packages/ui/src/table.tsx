@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
+import { isRenderedHtml, renderedHtml, type RenderedHtml } from '@kovojs/server/internal/html';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
@@ -61,39 +62,10 @@ export interface TableCellProps {
   styles?: TableStyleOverrides;
 }
 
-const kovoRenderedHtml = Symbol.for('kovo.renderedHtml');
-
-interface RenderedHtml {
-  readonly [kovoRenderedHtml]: true;
-  readonly html: string;
-  [Symbol.toPrimitive](): string;
-  toString(): string;
-}
-
 type MaybePromise<Value> = Promise<Value> | Value;
 
-function renderedHtml(html: string): RenderedHtml {
-  return {
-    [kovoRenderedHtml]: true,
-    html,
-    [Symbol.toPrimitive]() {
-      return html;
-    },
-    toString() {
-      return html;
-    },
-  };
-}
-
 function escapeHtml(value: unknown): string {
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[kovoRenderedHtml] === true &&
-    typeof (value as { html?: unknown }).html === 'string'
-  ) {
-    return (value as { html: string }).html;
-  }
+  if (isRenderedHtml(value)) return value.html;
   const text = tableTextValue(value);
   return text.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
 }

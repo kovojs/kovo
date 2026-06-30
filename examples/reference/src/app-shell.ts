@@ -3,13 +3,14 @@ import {
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   publicAccess,
+  renderRouteHtml,
   route,
   toNodeHandler,
   type CsrfValidationOptions,
   type RequestHandler,
   type ServerErrorHandler,
 } from '@kovojs/server';
-import { trustedHtml, type BrowserTrustedHTML, type TrustedHtml } from '@kovojs/browser';
+import { trustedHtml } from '@kovojs/browser';
 
 import {
   accountRoute,
@@ -169,49 +170,8 @@ function attachReferenceRequestContext(request: Request): ReferenceShellRequest 
   return request as ReferenceShellRequest;
 }
 
-function routeValueToHtml(value: unknown): string {
-  if (value === undefined || value === null) return '';
-  if (isFrameworkRenderedHtml(value)) return value.html;
-  const trusted = trustedRouteHtmlContent(value);
-  if (trusted !== '') return trusted;
-  if (typeof value === 'string') return value;
-  return JSON.stringify(value);
-}
-
-function trustedRouteHtmlContent(value: unknown): string {
-  if (isKovoTrustedHtml(value)) return trustedHtmlValueContent(value.value);
-  if (isBrowserTrustedHtml(value)) return value.toString();
-  return '';
-}
-
-function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { __kovoTrustedHtml?: unknown }).__kovoTrustedHtml === true
-  );
-}
-
-function isBrowserTrustedHtml(value: unknown): value is BrowserTrustedHTML {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as { [Symbol.toStringTag]?: unknown })[Symbol.toStringTag] === 'TrustedHTML' &&
-    typeof (value as { toString?: unknown }).toString === 'function'
-  );
-}
-
-function trustedHtmlValueContent(value: string | BrowserTrustedHTML): string {
-  return typeof value === 'string' ? value : value.toString();
-}
-
-function isFrameworkRenderedHtml(value: unknown): value is { html: string } {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    (value as Record<symbol, unknown>)[Symbol.for('kovo.renderedHtml')] === true &&
-    typeof (value as { html?: unknown }).html === 'string'
-  );
+export function routeValueToHtml(value: unknown): string {
+  return renderRouteHtml(value);
 }
 
 function nextFromRawInput(rawInput: unknown): string | undefined {

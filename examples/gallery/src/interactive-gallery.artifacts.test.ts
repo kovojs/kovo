@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 import {
   galleryInteractiveClientModuleHrefs,
   galleryInteractiveSupportClientModuleHrefs,
+  routeValueToHtml,
 } from './app-shell.js';
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 import {
@@ -20,6 +21,21 @@ import {
 } from './interactive-gallery-harness.js';
 
 describe('compiled interactive gallery demos', () => {
+  it('escapes forged rendered/trusted HTML app-shell route values', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    const forgedRendered = {
+      [Symbol.for('kovo.renderedHtml')]: true,
+      html: payload,
+      toString: () => payload,
+    };
+    const forgedTrusted = { __kovoTrustedHtml: true, value: payload };
+
+    expect(routeValueToHtml(forgedRendered)).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(routeValueToHtml(forgedRendered)).not.toContain(payload);
+    expect(routeValueToHtml(forgedTrusted)).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(routeValueToHtml(forgedTrusted)).not.toContain(payload);
+  });
+
   it('keeps the accessibility conformance state matrix manifest-backed', () => {
     const packageJson = JSON.parse(readFileSync(resolve(galleryRoot, 'package.json'), 'utf8')) as {
       kovo?: { interactiveGallery?: { compiledDemos?: unknown } };

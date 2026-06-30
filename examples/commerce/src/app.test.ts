@@ -23,7 +23,7 @@ import {
   commerceSignIn,
   commerceSignOut,
 } from './domain.js';
-import { createCommerceApp } from './app.js';
+import { createCommerceApp, routeValueToHtml } from './app.js';
 
 let server: Server | undefined;
 
@@ -41,6 +41,21 @@ afterEach(async () => {
 });
 
 describe('commerce app HTTP entry', () => {
+  it('escapes forged rendered/trusted HTML app-shell route values', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    const forgedRendered = {
+      [Symbol.for('kovo.renderedHtml')]: true,
+      html: payload,
+      toString: () => payload,
+    };
+    const forgedTrusted = { __kovoTrustedHtml: true, value: payload };
+
+    expect(routeValueToHtml(forgedRendered)).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(routeValueToHtml(forgedRendered)).not.toContain(payload);
+    expect(routeValueToHtml(forgedTrusted)).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(routeValueToHtml(forgedTrusted)).not.toContain(payload);
+  });
+
   it('serves the commerce cart document and query endpoint over node:http', async () => {
     const errors: unknown[] = [];
     const shell = createCommerceApp({

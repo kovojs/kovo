@@ -88,10 +88,7 @@ export type ComponentRenderResult =
 /** Escaped text/message content used by explicit text-oriented helpers. */
 export type ComponentTextResult = ComponentRenderResult | string;
 
-const kovoRenderedHtml = Symbol.for('kovo.renderedHtml');
-
 interface FrameworkRenderedHtml {
-  readonly [kovoRenderedHtml]: true;
   readonly html: string;
   [Symbol.toPrimitive](): string;
   toJSON(): string;
@@ -1059,7 +1056,6 @@ function escapeHtmlText(value: string): string {
 
 function frameworkRenderedHtml(html: string): string {
   const rendered: FrameworkRenderedHtml = {
-    [kovoRenderedHtml]: true,
     html,
     [Symbol.toPrimitive]() {
       return html;

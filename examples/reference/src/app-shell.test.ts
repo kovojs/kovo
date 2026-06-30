@@ -9,7 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createServer as createViteServer } from 'vite-plus';
 
-import { createReferenceAppShell } from './app-shell.js';
+import { createReferenceAppShell, routeValueToHtml } from './app-shell.js';
 
 let server: Server | undefined;
 
@@ -22,6 +22,21 @@ afterEach(async () => {
 });
 
 describe('reference app shell HTTP entry', () => {
+  it('escapes forged rendered/trusted HTML app-shell route values', () => {
+    const payload = '<img src=x onerror=alert(1)>';
+    const forgedRendered = {
+      [Symbol.for('kovo.renderedHtml')]: true,
+      html: payload,
+      toString: () => payload,
+    };
+    const forgedTrusted = { __kovoTrustedHtml: true, value: payload };
+
+    expect(routeValueToHtml(forgedRendered)).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(routeValueToHtml(forgedRendered)).not.toContain(payload);
+    expect(routeValueToHtml(forgedTrusted)).toContain('&lt;img src=x onerror=alert(1)&gt;');
+    expect(routeValueToHtml(forgedTrusted)).not.toContain(payload);
+  });
+
   it('serves auth routes and mutations through the reference Vite dev middleware', async () => {
     const vite = await createViteServer({
       appType: 'custom',

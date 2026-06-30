@@ -10,7 +10,7 @@ invariant.
 
 ## P0 - Correctness and Security Invariants
 
-- [ ] **P0.1 - Make rendered/trusted HTML capabilities unforgeable across framework and examples.**
+- [x] **P0.1 - Make rendered/trusted HTML capabilities unforgeable across framework and examples.**
   - Current signals: `packages/server/src/html.ts` and `packages/core/src/index.ts` still mint
     rendered HTML with `Symbol.for('kovo.renderedHtml')`; `packages/ui/src/table.tsx` locally
     recreates and trusts that same global symbol; `examples/gallery/src/app-shell.ts`,
@@ -24,11 +24,7 @@ invariant.
   - Risk reduced: userland cannot forge `{ [Symbol.for('kovo.renderedHtml')]: true, html: ... }`
     or `{ __kovoTrustedHtml: true, value: ... }` to bypass escaping in table composition or example
     app shells.
-  - Verification: add forged-brand XSS regressions for server HTML rendering, UI table children,
-    gallery/commerce/reference route shells, and browser trusted output. Run the focused
-    server/UI/browser/example test set; an `rg` check shows no production
-    `Symbol.for('kovo.renderedHtml')` outside the owning module and no structural
-    `__kovoTrustedHtml` guards outside tests.
+  - Evidence: `pnpm exec vitest --run packages/server/src/html.test.ts packages/browser/src/security-output.test.ts packages/ui/src/xss-escaping.test.tsx examples/gallery/src/interactive-gallery.artifacts.test.ts examples/commerce/src/app.test.ts examples/reference/src/app-shell.test.ts`, `pnpm run check:imports`, `pnpm run check:api-surface`, and `git diff --check` passed on 2026-06-30; `rg "Symbol\\.for\\('kovo\\.renderedHtml'\\)|__kovoTrustedHtml" packages examples --glob '!**/*.test.*'` reports only the browser security owner module.
 
 - [x] **P0.2 - Make data-plane static analysis fail closed on missing aggregate ABI or analyzer crashes.**
   - Current signals: `packages/server/src/internal/data-plane-static-analysis.ts` still treats
