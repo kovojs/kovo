@@ -40,6 +40,27 @@ describe('@kovojs/ui theme token contract', () => {
     expect(offenders).toEqual([]);
   });
 
+  it('keeps copied UI source on public sys/custom theme tokens only (SPEC.md §13.1)', () => {
+    const offenders: Array<{ file: string; token: string }> = [];
+    for (const file of componentSourceFiles()) {
+      const source = readFileSync(file, 'utf8');
+      if (source.includes('tokens.component(')) {
+        offenders.push({ file: path.relative(srcDir, file), token: 'tokens.component' });
+      }
+      for (const match of source.matchAll(/tokens\.customColor\(([^)]+)\)/g)) {
+        const arg = match[1]?.trim() ?? '';
+        if (!/^['"][^'"]+['"]$/.test(arg)) {
+          offenders.push({
+            file: path.relative(srcDir, file),
+            token: `tokens.customColor(${arg})`,
+          });
+        }
+      }
+    }
+
+    expect(offenders).toEqual([]);
+  });
+
   it('passes author style overrides as the final StyleX merge argument', () => {
     const offenders: Array<{ args: string; file: string }> = [];
     for (const file of componentSourceFiles()) {

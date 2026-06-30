@@ -10,6 +10,7 @@ import {
   defineThemeFromBase,
   emitAtomicCss,
   getPriority,
+  internalThemeTokens,
   raw,
   themeFromSeed,
 } from './internal.js';
@@ -301,8 +302,19 @@ describe('@kovojs/style phase 1 runtime fork', () => {
     expect(tokens.sys.color.primary).toBe('var(--kovo-theme-sys-color-primary)');
     expect(tokens.ref.palette.primary[40]).toBe('var(--kovo-theme-ref-palette-primary-40)');
     expect(tokens.customColor('success').onColor).toBe('var(--kovo-theme-custom-success-on-color)');
+    expect('component' in tokens).toBe(false);
     expect(metadataRules(styles.root.__rules).map((rule) => rule.value)).toContain(
       'var(--kovo-theme-sys-color-primary)',
+    );
+  });
+
+  it('keeps component token refs on the internal style surface only', () => {
+    expect(internalThemeTokens.component('button-border')).toBe(
+      'var(--kovo-theme-component-button-border)',
+    );
+    expect(internalThemeTokens.sys.color.primary).toBe(tokens.sys.color.primary);
+    expect(internalThemeTokens.customColor('success').color).toBe(
+      tokens.customColor('success').color,
     );
   });
 

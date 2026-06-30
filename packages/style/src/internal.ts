@@ -12,9 +12,10 @@ export type {
   CssEmitOptions,
   KeyframesResult,
 } from './engine.js';
-export { defineThemeFromBase, themeFromSeed } from './theme.js';
+export { defineThemeFromBase, internalThemeTokens, themeFromSeed } from './theme.js';
 export type {
   DefineThemeFromBaseOptions,
+  InternalThemeTokens,
   ThemeComponentTokensInput,
   ThemeSystemOverrides,
 } from './theme.js';
