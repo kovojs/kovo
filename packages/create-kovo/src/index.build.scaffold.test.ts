@@ -64,6 +64,31 @@ describe('create-kovo starter (build integration: scaffold)', () => {
     }
   }, 90_000);
 
+  it('fails production build when a SQLite app registers durable tasks', () => {
+    const app = createStarterApp({
+      dialect: 'sqlite',
+      name: 'Sqlite Durable Task Proof',
+      tempPrefix: 'create-kovo-sqlite-durable-task-build-',
+    });
+
+    try {
+      addSqliteDurableTaskRegistration(app.root);
+      let output = '';
+      try {
+        buildProductionArtifact(app.root);
+      } catch (error) {
+        output = execFileFailureOutput(error);
+      }
+
+      expect(output).toContain('ERROR KV446');
+      expect(output).toContain('Postgres _kovo_jobs store');
+      expect(output).toContain('SQLite/better-sqlite3');
+      expect(output).toContain('SPEC §9.6');
+    } finally {
+      app.cleanup();
+    }
+  }, 120_000);
+
   it('runs the generated in-app tests (data layer + request shell)', () => {
     const app = createStarterApp({
       name: 'Vitest Proof',
@@ -210,4 +235,45 @@ function expectPackedKovoPackageShape(root: string): void {
       },
     },
   });
+}
+
+function addSqliteDurableTaskRegistration(root: string): void {
+  writeFileSync(
+    join(root, 'src/sqlite-durable-task-proof.ts'),
+    [
+      "import { s, task } from '@kovojs/server';",
+      '',
+      "export const sqliteDurableTaskProof = task('sqlite-durable-task-proof', {",
+      '  input: s.object({}),',
+      '  run() {},',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const appSource = readFileSync(appPath, 'utf8')
+    .replace(
+      "import { contactsQuery } from './queries.js';",
+      [
+        "import { contactsQuery } from './queries.js';",
+        "import { sqliteDurableTaskProof } from './sqlite-durable-task-proof.js';",
+      ].join('\n'),
+    )
+    .replace('routes: [', 'tasks: [sqliteDurableTaskProof],\n  routes: [');
+  writeFileSync(appPath, appSource, 'utf8');
+}
+
+function execFileFailureOutput(error: unknown): string {
+  if (error && typeof error === 'object') {
+    const { stderr, stdout } = error as { stderr?: unknown; stdout?: unknown };
+    const chunks = [stdout, stderr]
+      .map((chunk) =>
+        Buffer.isBuffer(chunk) ? chunk.toString('utf8') : typeof chunk === 'string' ? chunk : '',
+      )
+      .filter(Boolean);
+    if (chunks.length > 0) return chunks.join('\n');
+  }
+  return error instanceof Error ? error.message : String(error);
 }

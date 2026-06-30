@@ -17,6 +17,7 @@ export interface ServerErrorDiagnosticContext {
     | 'no-js-mutation-handler'
     | 'query-endpoint'
     | 'task-runner'
+    | 'task-runtime-startup'
     | 'route-page'
     | 'route-render';
   queryKey?: string;

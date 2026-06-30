@@ -208,10 +208,10 @@ export function node(options: NodePresetOptions = {}): KovoPreset {
     emit(build, context) {
       return emitNodePreset(build, context, options);
     },
-    inspect(build, _context) {
+    inspect(build, context) {
       const diagnostics = [
         ...clientModuleRetentionDiagnostics(build, 'node', options),
-        ...nodeJobRunnerDiagnostics(build, options, jobRunner),
+        ...nodeJobRunnerDiagnostics(build, options, jobRunner, context),
       ];
       if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
         diagnostics.push({
@@ -441,6 +441,7 @@ function nodeJobRunnerDiagnostics(
   build: KovoNeutralBuild,
   options: NodePresetOptions,
   capability: JobRunnerCapability | undefined,
+  context: PresetInspectContext,
 ): PresetDiagnostic[] {
   if (options.jobRunner && options.jobRunner.mode === 'runner-only') {
     return [
@@ -452,8 +453,34 @@ function nodeJobRunnerDiagnostics(
       },
     ];
   }
-  if (capability !== undefined) return [];
-  return missingJobRunnerDiagnostics(build, 'node');
+  if (capability === undefined) return missingJobRunnerDiagnostics(build, 'node');
+  const source = synchronousServerHandlerSourceForInspection(context);
+  const storeDiagnostics = durableTaskStoreDiagnostics(build, 'node', source);
+  if (storeDiagnostics.length > 0) return storeDiagnostics;
+  return [];
+}
+
+function durableTaskStoreDiagnostics(
+  build: KovoNeutralBuild,
+  presetName: string,
+  serverHandlerSource: string | undefined,
+): PresetDiagnostic[] {
+  if (build.tasks.length === 0) return [];
+  if (
+    serverHandlerSource === undefined ||
+    !serverHandlerUsesSqliteDurableIncompatibleStore(serverHandlerSource)
+  ) {
+    return [];
+  }
+
+  const taskList = build.tasks.map((task) => task.key).join(', ');
+  return [
+    {
+      code: 'KV446',
+      message: `The ${presetName} preset's default JobRunner persists durable task(s) in the Postgres _kovo_jobs store, but this build registers durable task(s): ${taskList} and the server bundle uses SQLite/better-sqlite3. SPEC §9.6 requires the node JobRunner's Postgres durable-task store; use a Postgres-compatible app db for durable tasks or remove task()/request.schedule() until a supported SQLite durable queue adapter exists.`,
+      severity: 'error',
+    },
+  ];
 }
 
 function missingJobRunnerDiagnostics(
@@ -469,6 +496,21 @@ function missingJobRunnerDiagnostics(
       severity: 'error',
     },
   ];
+}
+
+function synchronousServerHandlerSourceForInspection(
+  context: PresetInspectContext,
+): string | undefined {
+  const source = context.readServerHandlerSource?.();
+  return typeof source === 'string' ? source : undefined;
+}
+
+function serverHandlerUsesSqliteDurableIncompatibleStore(source: string): boolean {
+  return (
+    source.includes('better-sqlite3') ||
+    source.includes('drizzle-orm/better-sqlite3') ||
+    source.includes('drizzle-orm/sqlite-core')
+  );
 }
 
 function isFrameworkRuntimeClientModule(
