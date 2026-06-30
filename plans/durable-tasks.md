@@ -37,9 +37,9 @@ export const sendOrderEmail = task({
   input: s.object({ orderId: s.string() }),
   retry: { maxAttempts: 5, backoff: 'exponential' },
   async run({ orderId }, ctx) {
-    const order = await ctx.runQuery(getOrder, { orderId });     // fresh read
+    const order = await ctx.runQuery(getOrder, { orderId }); // fresh read
     await email.send(order.email, 'Order confirmed', { order }); // external I/O allowed HERE
-    await ctx.runMutation(markEmailed, { orderId });             // a FRESH transaction
+    await ctx.runMutation(markEmailed, { orderId }); // a FRESH transaction
   },
 });
 ```
@@ -47,16 +47,17 @@ export const sendOrderEmail = task({
 **`ctx` surface (decided): composition only — no raw `db`.** A task gets `runQuery`, `runMutation`,
 `schedule` (chain more tasks), `fetch`/external I/O, `storage`, and secrets — but **not** a raw
 transactional `db`. Every DB write a task makes flows through `ctx.runMutation(...)`, so it reuses the
-*one* atomic, KV414/438/407-audited, idempotent write path; the analyzer also sees `runQuery`/
+_one_ atomic, KV414/438/407-audited, idempotent write path; the analyzer also sees `runQuery`/
 `runMutation` calls so the touch/invalidation graph and registry stay complete. The "ceremony" of
 defining a mutation per write is the feature — no second write path to re-prove the gates on.
 
-**A task MAY schedule both immediate fan-out and *delayed* tasks** (`ctx.schedule(t, args, { afterMs })`)
+**A task MAY schedule both immediate fan-out and _delayed_ tasks** (`ctx.schedule(t, args, { afterMs })`)
 — this is what enables polling loops, sagas/workflows (step N → step N+1), custom backoff, and
 self-reschedule. Two distinct runaway backstops:
+
 - **Synchronous fan-out within one `run` is capped by chain depth** (a task can't enqueue unbounded
   work in one execution).
-- **Delayed scheduling is bounded by a *lineage generation* counter, not depth** (each delayed job is
+- **Delayed scheduling is bounded by a _lineage generation_ counter, not depth** (each delayed job is
   a fresh execution with depth reset, so the depth cap doesn't catch a self-reschedule loop). A
   scheduled job carries a `lineage` (root id) + `generation`; a (re)schedule from within a task
   increments `generation`; past a **conservative default ceiling (`maxGenerations = 64`, per-task
@@ -66,19 +67,28 @@ self-reschedule. Two distinct runaway backstops:
   case a visible, opt-in decision. A **delay floor** (self-reschedule `afterMs ≥ 1s`, clamped)
   prevents a zero-delay self-loop from becoming a hot loop hammering Postgres.
 
-### 2. `request.schedule(task, args, opts?)` — enqueue *inside* the mutation tx
+### 2. `request.schedule(task, args, opts?)` — enqueue _inside_ the mutation tx
 
 ```ts
 export const createOrder = mutation({
   input: s.object({ items: s.array(/* … */) }),
   registry: { touches: [order, orderItem] },
   async handler({ items }, request) {
-    const [{ id }] = await request.db.insert(orders).values({ /* … */ }).returning({ id: orders.id });
+    const [{ id }] = await request.db
+      .insert(orders)
+      .values({
+        /* … */
+      })
+      .returning({ id: orders.id });
     for (const it of items) await request.db.insert(orderItems).values({ orderId: id, ...it });
 
-    request.schedule(sendOrderEmail, { orderId: id });                 // ≈ Convex runAfter(0, …)
+    request.schedule(sendOrderEmail, { orderId: id }); // ≈ Convex runAfter(0, …)
     // a delayed job, debounce-keyed so re-scheduling replaces the pending one:
-    const h = request.schedule(chargeReminder, { orderId: id }, { afterMs: 86_400_000, key: `reminder:${id}` });
+    const h = request.schedule(
+      chargeReminder,
+      { orderId: id },
+      { afterMs: 86_400_000, key: `reminder:${id}` },
+    );
     // ... in a LATER mutation (e.g. on completion): request.cancel(h) — or schedule the same key again
     return { orderId: id };
   },
@@ -86,6 +96,7 @@ export const createOrder = mutation({
 ```
 
 Semantics (normative once SPEC'd):
+
 - The job row is written to the durable queue **in the same transaction** as the data. **Commit ⇒
   runs exactly-once; rollback ⇒ never enqueued.** No outbox table or drainer for the author to write.
 - Args are typed against the task's `input` (no opaque closures); the task runs in a clean context
@@ -93,7 +104,7 @@ Semantics (normative once SPEC'd):
 - `opts`: `{ afterMs?, at?, key? }`. Delayed execution is a `run_at` column.
 - **`schedule()` returns a typed handle** (the row id, known synchronously since it's written in the
   tx). **`request.cancel(handle)`** cancels a still-`ready` job (transactional, in a mutation tx) and
-  **returns whether it cancelled** — cancellation is honestly *best-effort* (a `running`/already-run
+  **returns whether it cancelled** — cancellation is honestly _best-effort_ (a `running`/already-run
   job can't be cancelled). A **`key`** gives debounce/coalesce: scheduling the same key upserts the
   pending job, so reminders reschedule without the app tracking ids.
 - **`key` coalescing semantics (decided):** default `{ key }` is **debounce** — upsert the pending
@@ -101,26 +112,26 @@ Semantics (normative once SPEC'd):
   the last trigger"). `{ key, coalesce: 'throttle' }` keeps the **earliest `run_at`** and **first
   args** (leading-edge rate limit). If the existing keyed job is already `running` (not `ready`), a
   re-schedule **enqueues a fresh pending job** (never mutate a running execution; the latest state
-  runs after). `key` overrides the default per-`(schedule-site, args)` idem dedup — it *is* the
+  runs after). `key` overrides the default per-`(schedule-site, args)` idem dedup — it _is_ the
   logical identity. Mechanism: a partial unique index `(key) WHERE status='ready'` + `INSERT … ON
-  CONFLICT … DO UPDATE`, atomic against the SKIP-LOCKED claimer.
+CONFLICT … DO UPDATE`, atomic against the SKIP-LOCKED claimer.
 
 This unification is strictly better than offering both seams:
 
-| | after-commit hook | hand-rolled outbox | `request.schedule(task,…)` |
-|---|---|---|---|
-| Delivery | at-most-once | exactly-once | **exactly-once** |
-| Boilerplate | none | outbox table + drainer | **none** |
-| Atomic with data | yes | yes | **yes (enqueue in tx)** |
-| Typed args | opaque closure | manual JSON | **typed** |
-| Effect DB access | footgun (Tx db) | fresh tx | **fresh tx by construction** |
-| Delayed/scheduled | no | DIY | **`afterMs`/`at` built in** |
+|                   | after-commit hook | hand-rolled outbox     | `request.schedule(task,…)`   |
+| ----------------- | ----------------- | ---------------------- | ---------------------------- |
+| Delivery          | at-most-once      | exactly-once           | **exactly-once**             |
+| Boilerplate       | none              | outbox table + drainer | **none**                     |
+| Atomic with data  | yes               | yes                    | **yes (enqueue in tx)**      |
+| Typed args        | opaque closure    | manual JSON            | **typed**                    |
+| Effect DB access  | footgun (Tx db)   | fresh tx               | **fresh tx by construction** |
+| Delayed/scheduled | no                | DIY                    | **`afterMs`/`at` built in**  |
 
 ### 3. The runner is a Postgres-table queue (storage) + a `JobRunner` preset capability (dispatch)
 
 **The queue is just a DB table.** The job row is written transactionally with the data; in
 multi-node both app servers point at the same Postgres and see the same table. The only non-trivial
-part is *who runs the loop without double-executing* — and Postgres `FOR UPDATE SKIP LOCKED` solves
+part is _who runs the loop without double-executing_ — and Postgres `FOR UPDATE SKIP LOCKED` solves
 that with no extra infra (the pattern behind pg-boss / Oban / River / Solid Queue):
 
 ```sql
@@ -143,18 +154,18 @@ Plus, all still in the table: a **lease reaper** (`status='running' AND lease_un
 code**; `LISTEN/NOTIFY` on enqueue upgrades polling to push on real Postgres.
 
 **`JobRunner` as a preset capability.** The enqueue API and table schema are identical everywhere;
-only the *drainer* differs by deployment — so it slots into the same preset mechanism that declares
+only the _drainer_ differs by deployment — so it slots into the same preset mechanism that declares
 KV417 retention:
 
-| Strategy | When | Pros | Cons |
-|---|---|---|---|
-| **A. In-process pollers on every node** (SKIP LOCKED + lease + NOTIFY) — **default** | node preset, single or multi-node | zero extra infra; same code single→multi; transactional enqueue; scales by adding nodes | poll latency w/o NOTIFY; every node polls; long job holds a connection; no fit for serverless |
-| **B. Leader-elected dispatcher** (`pg_try_advisory_lock`) | need one authoritative scheduler (cron-style dedup) | one clock; less redundant scanning | leader is bottleneck/SPOF w/ failover; more parts than A |
-| **C. External broker via outbox-relay** (Redis/BullMQ, SQS) | very high throughput; separate worker fleet | purpose-built infra; native scheduling/dashboards | reintroduces dual-write → outbox-relay bridge (HA, 2nd hop); extra infra vs "just Postgres" |
-| **D. Serverless: cron-drain or platform queue** (Cloudflare/Vercel) | presets with no long-lived process | uses platform durable primitives | latency (cron) or relay complexity; the only case needing genuinely new infra |
+| Strategy                                                                             | When                                                | Pros                                                                                    | Cons                                                                                          |
+| ------------------------------------------------------------------------------------ | --------------------------------------------------- | --------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| **A. In-process pollers on every node** (SKIP LOCKED + lease + NOTIFY) — **default** | node preset, single or multi-node                   | zero extra infra; same code single→multi; transactional enqueue; scales by adding nodes | poll latency w/o NOTIFY; every node polls; long job holds a connection; no fit for serverless |
+| **B. Leader-elected dispatcher** (`pg_try_advisory_lock`)                            | need one authoritative scheduler (cron-style dedup) | one clock; less redundant scanning                                                      | leader is bottleneck/SPOF w/ failover; more parts than A                                      |
+| **C. External broker via outbox-relay** (Redis/BullMQ, SQS)                          | very high throughput; separate worker fleet         | purpose-built infra; native scheduling/dashboards                                       | reintroduces dual-write → outbox-relay bridge (HA, 2nd hop); extra infra vs "just Postgres"   |
+| **D. Serverless: cron-drain or platform queue** (Cloudflare/Vercel)                  | presets with no long-lived process                  | uses platform durable primitives                                                        | latency (cron) or relay complexity; the only case needing genuinely new infra                 |
 
 Default ships **A**; presets that can't host a poller bring their own drainer (D), and **C** is an
-opt-in scale adapter. "Real infra work" only appears in **D** (no process to poll) — *not* in
+opt-in scale adapter. "Real infra work" only appears in **D** (no process to poll) — _not_ in
 multi-node on the node preset, where the table + SKIP LOCKED is the whole queue.
 
 **Decided (KV417-style fail-closed):** the **node preset defaults the in-process poller ON** (it can
@@ -166,6 +177,7 @@ which would be the same green-build-dead-artifact class as KV417. The binary als
 need not starve request serving under load; default = serve-and-poll, scale = add runner-only nodes.
 
 **Operational knobs (decided, all fail-closed on unbounded use):**
+
 - **Lease = per-task `timeout`** (default ~30 s, hard ceiling), with the runner **heartbeating** to
   extend `lease_until` for a legitimately-long job up to the ceiling; past the ceiling → kill +
   retry/dead-letter (backstop against a hung task pinning a worker — cf. the `bugz-21` D3 hang class).
@@ -173,54 +185,54 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
   connections via `runMutation`): default `≈ poolSize − reserve`, configurable, never unbounded; the
   claim `LIMIT` respects remaining capacity.
 - **Backpressure: grow the table, never fail the producer.** `schedule()` must not reject on queue
-  depth (that would fail the *order* because the *email* queue is deep). Use **priority lanes**
+  depth (that would fail the _order_ because the _email_ queue is deep). Use **priority lanes**
   (`task({ priority })`, claim ordered by priority then `run_at`) and **per-task-type concurrency
   caps** so one slow task type can't starve the pool; expose queue-depth/oldest-job metrics (Phase 4).
 
 ## Implementation checklist (phased)
 
 - [ ] **Phase 0 (prerequisite — `bugz-21` B3).** Default `mutation({ handler })` runs in a
-  framework-opened transaction with a **Tx-typed db** that rolls back on throw, per SPEC §10.3:1174;
-  external I/O in a mutation handler becomes a type/gate error. Lands independently; this plan builds
-  on it. Acceptance: an end-to-end prod-artifact test where a handler that writes then throws leaves
-  the DB unchanged (per the close-out rule — artifact layer, not a unit proxy).
+      framework-opened transaction with a **Tx-typed db** that rolls back on throw, per SPEC §10.3:1174;
+      external I/O in a mutation handler becomes a type/gate error. Lands independently; this plan builds
+      on it. Acceptance: an end-to-end prod-artifact test where a handler that writes then throws leaves
+      the DB unchanged (per the close-out rule — artifact layer, not a unit proxy).
 - [ ] **Phase 1 — `task()` + `request.schedule()` + Postgres queue + node-preset runner (MVP).**
-  Add the `task()` registry primitive (typed `input`, `run(args, ctx)` with the decided composition
-  `ctx` — `runQuery`/`runMutation`/`schedule`/`fetch`/`storage`, no raw db); `request.schedule(task,
-  args, { afterMs?, at?, key? })` writing a `_kovo_jobs` row in the mutation tx and **returning a
-  typed handle**; `request.cancel(handle)` + `key` upsert (debounce); the SKIP-LOCKED claim loop +
-  lease reaper + `run_at` scheduling as the in-process node-preset runner. Acceptance: prod-artifact
-  e2e — a mutation that schedules then throws enqueues nothing; on success the task runs exactly once
-  and its effect is observable; a delayed task runs no earlier than `afterMs`; a cancelled/`key`-
-  replaced pending job does not run.
+      Add the `task()` registry primitive (typed `input`, `run(args, ctx)` with the decided composition
+      `ctx` — `runQuery`/`runMutation`/`schedule`/`fetch`/`storage`, no raw db); `request.schedule(task,
+args, { afterMs?, at?, key? })` writing a `_kovo_jobs` row in the mutation tx and **returning a
+      typed handle**; `request.cancel(handle)` + `key` upsert (debounce); the SKIP-LOCKED claim loop +
+      lease reaper + `run_at` scheduling as the in-process node-preset runner. Acceptance: prod-artifact
+      e2e — a mutation that schedules then throws enqueues nothing; on success the task runs exactly once
+      and its effect is observable; a delayed task runs no earlier than `afterMs`; a cancelled/`key`-
+      replaced pending job does not run.
 - [ ] **Phase 2 — exactly-once, retries, dead-letter, knobs, low-latency.** Dedup via the `Kovo-Idem`
-  replay store (SPEC §9.1:1182) with the per-`(schedule-site, args)` idem key, and **expose the job
-  id as the external-API idempotency key**; retry/backoff with `max_attempts → dead` dead-letter;
-  per-task `timeout`→lease + heartbeat + hard ceiling; pool-bounded max-in-flight; priority lanes +
-  per-task concurrency caps; the **lineage `generation` ceiling** (`maxGenerations = 64` default,
-  per-task overridable) + self-reschedule **delay floor** for delayed-task recursion; `LISTEN/NOTIFY`
-  wakeup. Acceptance: a task that fails twice then succeeds runs its effect once; a permanently-failing
-  task lands in dead-letter; a duplicate delivery does not re-execute; a hung task is killed at the
-  ceiling and retried, not pinned; a self-rescheduling task that exceeds `maxGenerations` dead-letters
-  with a diagnostic instead of looping forever.
+      replay store (SPEC §9.1:1182) with the per-`(schedule-site, args)` idem key, and **expose the job
+      id as the external-API idempotency key**; retry/backoff with `max_attempts → dead` dead-letter;
+      per-task `timeout`→lease + heartbeat + hard ceiling; pool-bounded max-in-flight; priority lanes +
+      per-task concurrency caps; the **lineage `generation` ceiling** (`maxGenerations = 64` default,
+      per-task overridable) + self-reschedule **delay floor** for delayed-task recursion; `LISTEN/NOTIFY`
+      wakeup. Acceptance: a task that fails twice then succeeds runs its effect once; a permanently-failing
+      task lands in dead-letter; a duplicate delivery does not re-execute; a hung task is killed at the
+      ceiling and retried, not pinned; a self-rescheduling task that exceeds `maxGenerations` dead-letters
+      with a diagnostic instead of looping forever.
 - [ ] **Phase 3 — `JobRunner` preset capability + adapters.** Factor the runner behind a
-  `JobRunner` capability declared by presets (parallel to KV417 retention). Ship the serverless
-  cron-drain adapter (Cloudflare Cron / Vercel Cron drains the outbox via SKIP LOCKED) and an
-  optional external-broker outbox-relay adapter; support a **runner-only** binary mode (drain without
-  serving HTTP) for dedicated worker fleets. Acceptance: a scaffold builds and runs scheduled tasks on
-  the node preset by default; a serverless preset declares a drainer and runs the same tasks; a
-  `task()`/`schedule()` on a preset with **no** declared `JobRunner` **fails the build** with an
-  actionable diagnostic (KV417-style), never a silent no-op.
+      `JobRunner` capability declared by presets (parallel to KV417 retention). Ship the serverless
+      cron-drain adapter (Cloudflare Cron / Vercel Cron drains the outbox via SKIP LOCKED) and an
+      optional external-broker outbox-relay adapter; support a **runner-only** binary mode (drain without
+      serving HTTP) for dedicated worker fleets. Acceptance: a scaffold builds and runs scheduled tasks on
+      the node preset by default; a serverless preset declares a drainer and runs the same tasks; a
+      `task()`/`schedule()` on a preset with **no** declared `JobRunner` **fails the build** with an
+      actionable diagnostic (KV417-style), never a silent no-op.
 - [ ] **Phase 4 — observability.** Job status/inspection surface and dead-letter visibility (and fix
-  `bugz-21` D1 — the prod server logging nothing — so a stuck/failed task is not invisible).
-  Acceptance: failed and dead-lettered jobs are queryable/logged in the deployed artifact.
+      `bugz-21` D1 — the prod server logging nothing — so a stuck/failed task is not invisible).
+      Acceptance: failed and dead-lettered jobs are queryable/logged in the deployed artifact.
 - [ ] **Phase 5 (follow-on) — cron / recurring tasks.** A thin layer over the one-shot queue
-  (`task({ cron: '0 2 * * *' })` or a `recurring()` declaration). Exactly-once-per-tick via
-  unique-occurrence-key materialization — `INSERT … ON CONFLICT (cron_name, occurrence_ts) DO NOTHING`
-  with `occurrence_ts` from the **DB clock** (no leader, no SPOF); per-cron `catchUp: 'skip' |
-  'backfill'` (default `skip`, bounded backfill). Acceptance: with N runner nodes, a recurring task
-  fires exactly once per occurrence (no duplicate, no miss while the fleet is up); a missed occurrence
-  during a full outage is skipped (or bounded-backfilled) per policy.
+      (`task({ cron: '0 2 * * *' })` or a `recurring()` declaration). Exactly-once-per-tick via
+      unique-occurrence-key materialization — `INSERT … ON CONFLICT (cron_name, occurrence_ts) DO NOTHING`
+      with `occurrence_ts` from the **DB clock** (no leader, no SPOF); per-cron `catchUp: 'skip' |
+'backfill'` (default `skip`, bounded backfill). Acceptance: with N runner nodes, a recurring task
+      fires exactly once per occurrence (no duplicate, no miss while the fleet is up); a missed occurrence
+      during a full outage is skipped (or bounded-backfilled) per policy.
 
 ## Security / soundness invariants (must hold)
 
@@ -232,9 +244,9 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
 - The runner claim is fail-closed: a leased job whose holder dies is reclaimed (lease timeout), and
   exactly-once at the effect rides on the `Kovo-Idem` replay store (at-least-once delivery + idempotent
   task = effectively-once).
-- No `atomic: false` and no silent escape: the *only* path to a non-DB side effect is a scheduled
+- No `atomic: false` and no silent escape: the _only_ path to a non-DB side effect is a scheduled
   `task`, keeping the §10.3:1174 atomicity contract unbreakable.
-- **Delivery model is at-least-once + idempotent (exactly-once *delivery* is impossible; at-most-once
+- **Delivery model is at-least-once + idempotent (exactly-once _delivery_ is impossible; at-most-once
   loses data).** The framework derives an idem key per `(schedule-site, args)` and dedups via the
   replay store, so the common case is automatically once. For a **non-idempotent external call**
   (charge a card), the framework exposes the **job id as a stable idempotency key** the task passes
@@ -257,40 +269,40 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
 
 1. **`ctx` surface = composition only, no raw db** — `runQuery`/`runMutation`/`schedule`/`fetch`/
    `storage`/secrets; DB writes flow through the one gated atomic mutation path; chain depth capped.
-   *Rationale:* a single provably-gated write path; no second surface to re-prove KV414/438 on.
+   _Rationale:_ a single provably-gated write path; no second surface to re-prove KV414/438 on.
 2. **`schedule()` returns a handle + supports `key`** — `request.cancel(handle)` (best-effort,
-   returns whether it cancelled) and a `key` for debounce/coalesce (upsert pending). *Rationale:*
+   returns whether it cancelled) and a `key` for debounce/coalesce (upsert pending). _Rationale:_
    covers the reminder/debounce use case without app-tracked ids; honest about best-effort cancel.
 3. **Operational knobs are bounded/fail-closed** — per-task `timeout`→lease with heartbeat + hard
    ceiling; max-in-flight bounded by the connection pool; grow-don't-fail backpressure with priority
-   lanes + per-task concurrency caps + depth metrics. *Rationale:* never pin a worker on a hung task,
+   lanes + per-task concurrency caps + depth metrics. _Rationale:_ never pin a worker on a hung task,
    never exhaust the pool, never couple producer success to consumer health.
 4. **Runner = preset capability; node preset defaults it ON; no-runner + `task()` = fail-closed build
-   error** (KV417-style); support runner-only worker instances. *Rationale:* Convex-like ergonomics
+   error** (KV417-style); support runner-only worker instances. _Rationale:_ Convex-like ergonomics
    where a poller is hostable, but the serverless gap is loud, not a silent no-op.
 5. **At-least-once + idempotent; framework idem key; job id exposed as the external-API idempotency
-   key.** *Rationale:* exactly-once delivery is impossible; this is the only robust, crash-safe model,
+   key.** _Rationale:_ exactly-once delivery is impossible; this is the only robust, crash-safe model,
    and it makes non-idempotent external calls (charges) safe under retry.
 6. **`key` coalescing = debounce by default** (reset `run_at`, latest args); **`coalesce: 'throttle'`**
    keeps earliest `run_at` + first args; a re-schedule against a `running` keyed job enqueues a fresh
-   job; partial unique index `(key) WHERE ready`. *Rationale:* debounce is the common ask; throttle is
+   job; partial unique index `(key) WHERE ready`. _Rationale:_ debounce is the common ask; throttle is
    the explicit rate-limit opt; never mutate a running execution.
 7. **Tasks may schedule delayed tasks**, bounded by a **lineage `generation` ceiling
    (`maxGenerations = 64` default, conservative, per-task overridable)** + a self-reschedule delay
-   floor — *not* the synchronous chain-depth cap. *Rationale:* enables sagas/polling/backoff while a
+   floor — _not_ the synchronous chain-depth cap. _Rationale:_ enables sagas/polling/backoff while a
    runaway self-reschedule dead-letters fast; the long-running case is an explicit, visible opt-in.
 8. **Cron/recurring is a follow-on; "exactly one fire per tick" uses a unique occurrence key, NOT
    leader election** — each node races to `INSERT … ON CONFLICT (cron_name, occurrence_ts) DO NOTHING`
    with `occurrence_ts` computed from the **DB clock** (not local clocks → no skew), so exactly one row
    materializes with no leader/SPOF; per-cron `catchUp: 'skip' | 'backfill'` (default `skip`).
-   *Rationale:* reuses the idempotency principle, keeps "just Postgres, no SPOF"; leader election
+   _Rationale:_ reuses the idempotency principle, keeps "just Postgres, no SPOF"; leader election
    (strategy B) stays available for cases that genuinely need one authoritative scanner — cron doesn't.
 
 ## Remaining open questions
 
 - [ ] `catchUp: 'backfill'` upper bound — how many missed occurrences to replay before giving up
-  (a bounded backfill, not an unbounded catch-up storm after a long outage).
+      (a bounded backfill, not an unbounded catch-up storm after a long outage).
 - [ ] `ctx.storage` scoping inside a task (which capability/bucket; signed-URL access) — defer to the
-  storage-capability surface.
+      storage-capability surface.
 - [ ] Whether `task()` can also be triggered directly (HTTP/event) or only via `schedule()`/cron —
-  likely out of scope for v1 (that is what `endpoint()`/`webhook()` are for).
+      likely out of scope for v1 (that is what `endpoint()`/`webhook()` are for).
