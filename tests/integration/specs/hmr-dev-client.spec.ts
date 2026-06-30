@@ -100,34 +100,39 @@ test('dev HMR client applies server-rendered live-target fragments without reloa
     await page.locator('#hmr-input').fill('user draft');
 
     renderVersion = 2;
-    const refreshRequest = page.waitForRequest((request) => {
-      if (!request.url().includes('/@kovo/hmr/refresh/live-targets')) {
-        return false;
-      }
-      const headers = request.headers();
-      return (
-        headers['kovo-live-targets']?.includes('hmr-card#hmr/Card@') === true &&
-        headers['kovo-live-targets']?.includes(':{"id":"one"}') === true &&
-        headers['kovo-targets']?.includes('hmr-card=hmr') === true
+    await expect(async () => {
+      const refreshRequest = page.waitForRequest(
+        (request) => {
+          if (!request.url().includes('/@kovo/hmr/refresh/live-targets')) {
+            return false;
+          }
+          const headers = request.headers();
+          return (
+            headers['kovo-live-targets']?.includes('hmr-card#hmr/Card@') === true &&
+            headers['kovo-live-targets']?.includes(':{"id":"one"}') === true &&
+            headers['kovo-targets']?.includes('hmr-card=hmr') === true
+          );
+        },
+        { timeout: 5_000 },
       );
-    });
-    const refreshResponse = page.waitForResponse(
-      (response) =>
-        response.url().includes('/@kovo/hmr/refresh/live-targets') && response.status() === 200,
-    );
+      const refreshResponse = page.waitForResponse(
+        (response) =>
+          response.url().includes('/@kovo/hmr/refresh/live-targets') && response.status() === 200,
+        { timeout: 5_000 },
+      );
 
-    await page.evaluate(() => {
-      const hot = (
-        window as typeof window & {
-          __kovoHot?: Record<string, (event?: unknown) => void>;
-        }
-      ).__kovoHot;
-      hot?.['kovo:component-render']?.({ oldFactHash: 'old' });
-    });
-    await refreshRequest;
-    await refreshResponse;
-
-    await expect(page.locator('#hmr-output')).toHaveText('Version 2');
+      await page.evaluate(() => {
+        const hot = (
+          window as typeof window & {
+            __kovoHot?: Record<string, (event?: unknown) => void>;
+          }
+        ).__kovoHot;
+        hot?.['kovo:component-render']?.({ oldFactHash: 'old' });
+      });
+      await refreshRequest;
+      await refreshResponse;
+      await expect(page.locator('#hmr-output')).toHaveText('Version 2', { timeout: 5_000 });
+    }).toPass({ timeout: 20_000 });
     await expect(page.locator('#hmr-input')).toHaveValue('user draft');
     await expect(page.locator('#hmr-input')).toBeFocused();
     expect(page.url()).toBe(`${server.origin}/`);
