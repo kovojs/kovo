@@ -511,16 +511,82 @@ describe('kovo explain', () => {
     `);
   });
 
-  it('audits access decisions with stable explain output', () => {
+  it('audits producer-owned access decisions with stable explain output', () => {
     const result = kovoExplain(
       {
         access: [
+          {
+            decision: 'public',
+            detail: 'access=public method=GET path=/healthz mount=exact auth=none',
+            justification: 'public uptime probe',
+            kind: 'endpoint',
+            name: 'health',
+            source: 'access',
+          },
+          {
+            decision: 'missing',
+            detail: 'missing access fact method=GET path=/raw mount=exact auth=-',
+            kind: 'endpoint',
+            name: 'raw',
+            source: 'access',
+          },
+          {
+            decision: 'guard',
+            detail: 'access=guard-chain guards=authed',
+            kind: 'mutation',
+            name: 'cart/add',
+            source: 'access',
+          },
+          {
+            decision: 'missing',
+            detail: 'missing access fact',
+            kind: 'mutation',
+            name: 'inventory/sync',
+            source: 'access',
+          },
+          {
+            decision: 'guard',
+            detail: 'access=guard-chain guards=authed',
+            kind: 'page',
+            name: '/cart',
+            source: 'access',
+          },
+          {
+            decision: 'missing',
+            detail: 'missing access fact',
+            kind: 'page',
+            name: '/login',
+            source: 'access',
+          },
+          {
+            decision: 'guard',
+            detail: 'access=guard-chain guards=authed',
+            kind: 'query',
+            name: 'cart',
+            source: 'access',
+          },
+          {
+            decision: 'missing',
+            detail: 'missing access fact',
+            kind: 'query',
+            name: 'catalog',
+            source: 'access',
+          },
           {
             decision: 'missing',
             detail: 'no access property',
             kind: 'query',
             name: 'explicit-missing',
             site: 'queries.ts:4',
+            source: 'access',
+          },
+          {
+            decision: 'verified',
+            detail:
+              'access=verified-machine-auth method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature',
+            justification: 'signed stripe webhook',
+            kind: 'webhook',
+            name: 'app-shell/order-paid',
             source: 'access',
           },
         ],
@@ -568,17 +634,37 @@ describe('kovo explain', () => {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       ACCESS
-      ACCESS ENDPOINT health decision=public source=auth site=- detail="method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=checked" justification=-
-      ACCESS ENDPOINT raw decision=missing source=legacy-guard site=- detail="method=GET path=/raw mount=exact auth=- csrf=checked" justification=-
-      ACCESS MUTATION cart/add decision=guard source=legacy-guard site=- detail="guards=authed writes=cart invalidates=- manual-invalidates=-" justification=-
-      ACCESS MUTATION inventory/sync decision=missing source=legacy-guard site=- detail="guards=- writes=product invalidates=- manual-invalidates=-" justification=-
-      ACCESS PAGE /cart decision=guard source=legacy-guard site=- detail="guards=authed queries=cart" justification=-
-      ACCESS PAGE /login decision=missing source=legacy-guard site=- detail="guards=- queries=-" justification=-
-      ACCESS QUERY cart decision=guard source=legacy-guard site=- detail="guards=authed reads=cart" justification=-
-      ACCESS QUERY catalog decision=missing source=legacy-guard site=- detail="guards=- reads=product" justification=-
+      ACCESS ENDPOINT health decision=public source=access site=- detail="access=public method=GET path=/healthz mount=exact auth=none" justification="public uptime probe"
+      ACCESS ENDPOINT raw decision=missing source=access site=- detail="missing access fact method=GET path=/raw mount=exact auth=-" justification=-
+      ACCESS MUTATION cart/add decision=guard source=access site=- detail="access=guard-chain guards=authed" justification=-
+      ACCESS MUTATION inventory/sync decision=missing source=access site=- detail="missing access fact" justification=-
+      ACCESS PAGE /cart decision=guard source=access site=- detail="access=guard-chain guards=authed" justification=-
+      ACCESS PAGE /login decision=missing source=access site=- detail="missing access fact" justification=-
+      ACCESS QUERY cart decision=guard source=access site=- detail="access=guard-chain guards=authed" justification=-
+      ACCESS QUERY catalog decision=missing source=access site=- detail="missing access fact" justification=-
       ACCESS QUERY explicit-missing decision=missing source=access site=queries.ts:4 detail="no access property" justification=-
-      ACCESS WEBHOOK app-shell/order-paid decision=verified source=auth site=- detail="method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook" justification="signed stripe webhook"
+      ACCESS WEBHOOK app-shell/order-paid decision=verified source=access site=- detail="access=verified-machine-auth method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature" justification="signed stripe webhook"
       SUMMARY total=10 guard=3 verified=1 public=1 missing=5
+      "
+    `);
+  });
+
+  it('does not derive access output from graph surfaces without producer facts', () => {
+    const result = kovoExplain(
+      {
+        endpoints: [{ auth: 'none', method: 'GET', name: 'health', path: '/healthz' }],
+        mutations: [{ guards: ['authed'], key: 'cart/add', writes: ['cart'] }],
+        pages: [{ guards: ['authed'], route: '/cart' }],
+        queries: [{ domains: ['cart'], guards: ['authed'], query: 'cart' }],
+      },
+      { access: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      ACCESS
+      SUMMARY total=0 guard=0 verified=0 public=0 missing=0
       "
     `);
   });

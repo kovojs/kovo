@@ -1117,9 +1117,9 @@ export const ProductGrid = component({
   });
 
   // SPEC.md §10.2/§6.6: deriveAppGraph populates graph.access so the KV436 consumer
-  // (`kovo check`) fails any surface with no explicit access decision, guard, or
-  // machine-auth posture. By-construction: the proof is this static graph fact.
-  it('derives default-deny access facts for every surface (KV436)', () => {
+  // (`kovo check`) fails any surface with no explicit producer-owned access decision.
+  // By-construction: the proof is this static graph fact.
+  it('derives producer-owned default-deny access facts for every surface (KV436)', () => {
     const derived = deriveAppGraph({
       graph: {
         endpoints: [
@@ -1154,31 +1154,31 @@ export const ProductGrid = component({
     expect(derived.graph.access).toEqual([
       {
         decision: 'missing',
-        detail: 'method=POST path=/api/undecided mount=exact auth=-',
+        detail: 'missing access fact method=POST path=/api/undecided mount=exact auth=-',
         kind: 'endpoint',
         name: '/api/undecided',
-        source: 'legacy-guard',
-      },
-      {
-        decision: 'public',
-        detail: 'method=GET path=/healthz mount=exact auth=none',
-        kind: 'endpoint',
-        name: '/healthz',
-        source: 'auth',
-      },
-      {
-        decision: 'guard',
-        detail: 'guards=authed auth=none',
-        kind: 'mutation',
-        name: 'cart/add',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'missing access fact method=GET path=/healthz mount=exact auth=none',
+        kind: 'endpoint',
+        name: '/healthz',
+        source: 'access',
+      },
+      {
+        decision: 'missing',
+        detail: 'missing access fact',
+        kind: 'mutation',
+        name: 'cart/add',
+        source: 'access',
+      },
+      {
+        decision: 'missing',
+        detail: 'missing access fact',
         kind: 'mutation',
         name: 'cart/clear',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'public',
@@ -1189,25 +1189,25 @@ export const ProductGrid = component({
         source: 'access',
       },
       {
-        decision: 'guard',
-        detail: 'guards=authed',
+        decision: 'missing',
+        detail: 'missing access fact',
         kind: 'page',
         name: '/cart',
-        source: 'legacy-guard',
-      },
-      {
-        decision: 'guard',
-        detail: 'guards=authed',
-        kind: 'query',
-        name: 'cart',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'missing access fact',
+        kind: 'query',
+        name: 'cart',
+        source: 'access',
+      },
+      {
+        decision: 'missing',
+        detail: 'missing access fact',
         kind: 'query',
         name: 'drafts',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'verified',
@@ -1218,9 +1218,9 @@ export const ProductGrid = component({
       },
     ]);
 
-    // The three undecided surfaces (cart/clear, drafts, /api/undecided) are the
+    // Every surface without an explicit access decision is part of the
     // KV436 `missing` set that fails `kovo check`.
-    expect(derived.graph.access?.filter((fact) => fact.decision === 'missing')).toHaveLength(3);
+    expect(derived.graph.access?.filter((fact) => fact.decision === 'missing')).toHaveLength(7);
   });
 
   it('preserves caller-provided access facts when deriving the app graph', () => {
@@ -1232,7 +1232,7 @@ export const ProductGrid = component({
             detail: 'guard=mutation.guard',
             kind: 'mutation',
             name: 'cart/add',
-            source: 'legacy-guard',
+            source: 'access',
           },
         ],
         mutations: [{ key: 'cart/add', writes: ['cart'] }],
@@ -1246,14 +1246,14 @@ export const ProductGrid = component({
         detail: 'guard=mutation.guard',
         kind: 'mutation',
         name: 'cart/add',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'missing access fact',
         kind: 'query',
         name: 'cart',
-        source: 'legacy-guard',
+        source: 'access',
       },
     ]);
   });
@@ -1294,11 +1294,11 @@ export const missing = route('/missing', {
     ]);
     expect(derived.graph.access).toEqual([
       {
-        decision: 'guard',
-        detail: 'guards=authed',
+        decision: 'missing',
+        detail: 'missing access fact',
         kind: 'page',
         name: '/account',
-        source: 'legacy-guard',
+        source: 'access',
       },
       {
         decision: 'public',
@@ -1310,10 +1310,10 @@ export const missing = route('/missing', {
       },
       {
         decision: 'missing',
-        detail: 'guard=-',
+        detail: 'missing access fact',
         kind: 'page',
         name: '/missing',
-        source: 'legacy-guard',
+        source: 'access',
       },
     ]);
   });

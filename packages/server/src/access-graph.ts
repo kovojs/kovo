@@ -12,11 +12,9 @@ import type { LayoutDeclaration, RouteDeclaration } from './route.js';
 import type { WebhookDeclaration } from './webhook.js';
 
 /**
- * @internal Build the Phase 2 access ledger from an assembled app.
- *
- * This is intentionally additive: it records the current guard/auth posture so
- * graph emitters can opt into `kovo explain --access` before the public
- * `access:` declaration API becomes mandatory.
+ * @internal Build the producer-owned access ledger from an assembled app
+ * (SPEC.md §10.2). Guard/auth posture is runtime enforcement input, not an
+ * explain fact; missing `access:` declarations emit KV436-producing rows.
  */
 export function accessFactsFromApp(
   app: Pick<KovoApp, 'endpoints' | 'mutations' | 'queries' | 'routes'>,
@@ -33,28 +31,14 @@ function queryAccessFact(query: AppQueryDeclaration): AccessExplainFact {
   const explicit = explicitAccessFact('query', query.key, query.access);
   if (explicit) return explicit;
 
-  const hasGuard = typeof query.guard === 'function';
-  return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: hasGuard ? 'guard=query.guard' : 'guard=-',
-    kind: 'query',
-    name: query.key,
-    source: 'legacy-guard',
-  };
+  return missingAccessFact('query', query.key);
 }
 
 function mutationAccessFact(mutation: AppMutationDeclaration): AccessExplainFact {
   const explicit = explicitAccessFact('mutation', mutation.key, mutation.access);
   if (explicit) return explicit;
 
-  const hasGuard = typeof mutation.guard === 'function';
-  return {
-    decision: hasGuard ? 'guard' : 'missing',
-    detail: hasGuard ? 'guard=mutation.guard' : 'guard=-',
-    kind: 'mutation',
-    name: mutation.key,
-    source: 'legacy-guard',
-  };
+  return missingAccessFact('mutation', mutation.key);
 }
 
 function routeAccessFact(route: RouteDeclaration<any, any, any, any, any, any>): AccessExplainFact {
@@ -62,14 +46,7 @@ function routeAccessFact(route: RouteDeclaration<any, any, any, any, any, any>):
     explicitAccessFact('page', route.path, route.access) ?? explicitLayoutAccessFact(route);
   if (explicit) return explicit;
 
-  const guardSource = routeGuardSource(route);
-  return {
-    decision: guardSource === undefined ? 'missing' : 'guard',
-    detail: guardSource === undefined ? 'guard=-' : `guard=${guardSource}`,
-    kind: 'page',
-    name: route.path,
-    source: 'legacy-guard',
-  };
+  return missingAccessFact('page', route.path);
 }
 
 function endpointAccessFact(
@@ -78,7 +55,6 @@ function endpointAccessFact(
   const webhook = isWebhookEndpoint(endpoint);
   const kind = webhook ? 'webhook' : 'endpoint';
   const name = webhook ? endpoint.name : endpoint.path;
-  const source = webhook ? 'webhook' : 'auth';
   const auth = endpoint.auth;
   const detail = endpointAccessDetail(endpoint, auth);
   if (endpoint.access?.kind === 'verified-machine-auth' && !hasExecutableMachineAuth(endpoint)) {
@@ -99,33 +75,9 @@ function endpointAccessFact(
     };
   }
 
-  if (auth?.kind === 'none') {
-    return {
-      decision: 'public',
-      detail,
-      justification: auth.justification,
-      kind,
-      name,
-      source,
-    };
-  }
-
-  if (hasExecutableMachineAuth(endpoint)) {
-    return {
-      decision: 'verified',
-      detail,
-      kind,
-      name,
-      source,
-    };
-  }
-
   return {
-    decision: 'missing',
-    detail,
-    kind,
-    name,
-    source,
+    ...missingAccessFact(kind, name),
+    detail: `missing access fact ${detail}`,
   };
 }
 
@@ -196,22 +148,18 @@ function explicitAccessFact(
   };
 }
 
-function listAccessGuards(access: Extract<AccessDecision, { kind: 'guard-chain' }>): string {
-  return access.guards.length === 0 ? '-' : access.guards.map((guard) => guard.name).join(',');
+function missingAccessFact(kind: AccessExplainFact['kind'], name: string): AccessExplainFact {
+  return {
+    decision: 'missing',
+    detail: 'missing access fact',
+    kind,
+    name,
+    source: 'access',
+  };
 }
 
-function routeGuardSource(
-  route: RouteDeclaration<any, any, any, any, any, any>,
-): string | undefined {
-  if (typeof route.guard === 'function') return 'route.guard';
-
-  let layout: LayoutDeclaration<any, any, any> | undefined = route.layout;
-  while (layout !== undefined) {
-    if (typeof layout.guard === 'function') return 'layout.guard';
-    layout = layout.parent;
-  }
-
-  return undefined;
+function listAccessGuards(access: Extract<AccessDecision, { kind: 'guard-chain' }>): string {
+  return access.guards.length === 0 ? '-' : access.guards.map((guard) => guard.name).join(',');
 }
 
 function isWebhookEndpoint(
