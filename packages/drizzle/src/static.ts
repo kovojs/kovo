@@ -909,6 +909,7 @@ function nativeDrizzleSqlReceiverTexts(sourceFile: SourceFile): Set<string> {
 
 const KOVO_DRIZZLE_MODULE_SPECIFIER = '@kovojs/drizzle';
 const kovoSqlReceiverTextsCache = new WeakMap<SourceFile, Set<string>>();
+const kovoSqlTaggedTemplateTextsCache = new WeakMap<SourceFile, Set<string>>();
 
 /**
  * SPEC §10.2/§6.6 (KV422): the receiver texts that resolve to Kovo's auditable raw-SQL
@@ -936,6 +937,34 @@ function kovoSqlReceiverTextsForSourceFile(sourceFile: SourceFile): Set<string> 
 
   kovoSqlReceiverTextsCache.set(sourceFile, receivers);
   return receivers;
+}
+
+/**
+ * SPEC §10.2/§6.6 (KV422): tagged-template SQL safety follows the resolved
+ * `@kovojs/drizzle` import binding, so alias/namespace imports of `sql` and
+ * `staticSql` stay recognized as the same safe carriers as their bare forms.
+ */
+function kovoSqlTaggedTemplateTextsForSourceFile(sourceFile: SourceFile): Set<string> {
+  const cached = kovoSqlTaggedTemplateTextsCache.get(sourceFile);
+  if (cached) return cached;
+
+  const tags = new Set<string>(['sql', 'staticSql']);
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (declaration.getModuleSpecifierValue() !== KOVO_DRIZZLE_MODULE_SPECIFIER) continue;
+    for (const named of declaration.getNamedImports()) {
+      const importName = named.getName();
+      if (importName !== 'sql' && importName !== 'staticSql') continue;
+      tags.add(named.getAliasNode()?.getText() ?? importName);
+    }
+    const namespace = declaration.getNamespaceImport();
+    if (namespace) {
+      tags.add(`${namespace.getText()}.sql`);
+      tags.add(`${namespace.getText()}.staticSql`);
+    }
+  }
+
+  kovoSqlTaggedTemplateTextsCache.set(sourceFile, tags);
+  return tags;
 }
 
 /** @internal */
@@ -1459,7 +1488,8 @@ function sqlTextSafety(expression: Node | undefined, context: SqlSafetyContext):
   }
   if (Node.isTaggedTemplateExpression(expression)) {
     const tag = expression.getTag();
-    return tag.getText() === 'sql' || tag.getText() === 'staticSql' ? 'safe' : 'unknown';
+    const safeTags = kovoSqlTaggedTemplateTextsForSourceFile(expression.getSourceFile());
+    return safeTags.has(tag.getText()) ? 'safe' : 'unknown';
   }
   if (Node.isTemplateExpression(expression)) return 'tainted';
   if (Node.isCallExpression(expression)) {

@@ -177,6 +177,28 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it('accepts aliased and namespace-imported Kovo sql tags while still flagging raw helpers', () => {
+    const diagnostics = diagnosticsFor(`
+      import { sql as sqlTag, staticSql as ddl } from '@kovojs/drizzle';
+      import * as kovoDrizzle from '@kovojs/drizzle';
+      export async function loadProducts(input: { id: string, sort: string }, db: any) {
+        await db.execute(sqlTag\`select * from products where id = \${input.id}\`);
+        await db.query(ddl\`select * from products\`);
+        await db.prepare(kovoDrizzle.staticSql\`select * from products where id = $1\`);
+        await db.execute(kovoDrizzle.sql\`select * from products where id = \${input.id}\`);
+        await db.execute(sqlTag.raw(input.sort));
+      }
+    `);
+
+    expect(diagnostics.map(({ site }) => site)).toEqual(['app.ts:9', 'app.ts:9']);
+    expect(diagnostics.map(({ message }) => message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('execute() receives unknown-provenance SQL text'),
+        expect.stringContaining('sql.raw(...) receives request-derived text'),
+      ]),
+    );
+  });
+
   it('rejects request-controlled SQL allowlists and joined request-derived SQL parts', () => {
     const diagnostics = diagnosticsFor(`
       import { sql } from '@kovojs/drizzle';
