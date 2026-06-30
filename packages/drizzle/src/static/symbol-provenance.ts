@@ -22,6 +22,7 @@ export type SymbolProvenance =
 export interface SymbolProvenanceContext {
   aliases: ReadonlyMap<string, SymbolProvenance>;
   inputSymbolKeys: ReadonlySet<string>;
+  rootProvenanceBySymbolKey: ReadonlyMap<string, SymbolProvenance>;
   serverSymbolKeys: ReadonlySet<string>;
   /**
    * Symbol keys of same-package helpers declared
@@ -35,8 +36,15 @@ export interface SymbolProvenanceContext {
 }
 
 /** @internal */
+export interface SymbolProvenanceRoot {
+  node: Node;
+  path?: string;
+}
+
+/** @internal */
 export interface SymbolProvenanceContextOptions {
   inputRoots?: readonly Node[];
+  inputRootPaths?: readonly SymbolProvenanceRoot[];
   serverRoots?: readonly Node[];
   /** Symbol keys of `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })` helpers. */
   serverSummaryKeys?: Iterable<string>;
@@ -54,11 +62,13 @@ export function symbolProvenanceContextForNodes(
 ): SymbolProvenanceContext {
   const inputSymbolKeys = new Set(symbolKeysForNodes(options.inputRoots ?? []));
   const serverSymbolKeys = new Set(symbolKeysForNodes(options.serverRoots ?? []));
+  const rootProvenanceBySymbolKey = rootProvenanceMap(options);
   const serverSummaryKeys = new Set(options.serverSummaryKeys ?? []);
   const aliases = new Map<string, SymbolProvenance>();
   const context: SymbolProvenanceContext = {
     aliases,
     inputSymbolKeys,
+    rootProvenanceBySymbolKey,
     serverSymbolKeys,
     serverSummaryKeys,
   };
@@ -103,6 +113,8 @@ export function symbolProvenanceForExpression(
     if (symbolKey && context.aliases.has(symbolKey)) {
       return context.aliases.get(symbolKey) ?? unknownProvenance;
     }
+    const rootProvenance = symbolKey ? context.rootProvenanceBySymbolKey.get(symbolKey) : undefined;
+    if (rootProvenance) return rootProvenance;
     if (symbolKey && context.inputSymbolKeys.has(symbolKey)) return inputProvenance;
     if (symbolKey && context.serverSymbolKeys.has(symbolKey)) return serverProvenance;
     return unknownProvenance;
@@ -295,6 +307,24 @@ function joinExistingAlias(
   next: SymbolProvenance,
 ): SymbolProvenance {
   return current ? joinSymbolProvenance(current, next) : next;
+}
+
+function rootProvenanceMap(
+  options: SymbolProvenanceContextOptions,
+): ReadonlyMap<string, SymbolProvenance> {
+  const roots = new Map<string, SymbolProvenance>();
+  for (const node of options.inputRoots ?? []) {
+    for (const key of symbolKeysForNodes([node])) roots.set(key, inputProvenance);
+  }
+  for (const root of options.inputRootPaths ?? []) {
+    for (const key of symbolKeysForNodes([root.node])) {
+      roots.set(key, inputSymbolProvenance(root.path ?? ''));
+    }
+  }
+  for (const node of options.serverRoots ?? []) {
+    for (const key of symbolKeysForNodes([node])) roots.set(key, serverProvenance);
+  }
+  return roots;
 }
 
 /**

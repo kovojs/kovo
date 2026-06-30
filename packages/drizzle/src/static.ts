@@ -107,6 +107,13 @@ import {
   extractQueryWriteReachabilityFromProjectExtraction,
   extractToctouFromProjectExtraction,
 } from './static/derivation.js';
+import {
+  symbolProvenanceContextForNodes,
+  symbolProvenanceForExpression,
+  type SymbolProvenance,
+  type SymbolProvenanceContext,
+  type SymbolProvenanceRoot,
+} from './static/symbol-provenance.js';
 
 /** @internal */ export const IGNORED_LOCAL_CALL_NAMES = new Set([
   'eq',
@@ -753,6 +760,16 @@ function extractedDomainKey(domain: KovoDomainRef): string {
 
 type SqlTextSafety = 'literal' | 'safe' | 'tainted' | 'unknown';
 
+interface SqlSafetyContext {
+  /**
+   * SQL-specific capabilities (`sql```, `staticSql```, separated parameter carriers) are
+   * sink facts, not general value provenance. Request/literal/server flow comes from
+   * SymbolProvenance; this map only records values the SQL safety classifier minted.
+   */
+  sqlBindingsBySymbolKey: Map<string, SqlTextSafety>;
+  provenance: SymbolProvenanceContext;
+}
+
 /** @internal */
 export function analyzeSqlSafetyFromProject(
   options: TouchGraphProjectOptions,
@@ -771,12 +788,13 @@ export function analyzeSqlSafetyFromProject(
 /** @internal */ export function analyzeSqlSafetyFromProjectExtraction(
   extraction: ProjectExtraction,
 ): TouchGraphDiagnostic[] {
-  const contextFiles = projectContextFiles(extraction);
-  const diagnostics = contextFiles.flatMap((file, index) => {
-    const sourceFile = extraction.sourceFiles[index];
-    return sourceFile ? sqlSafetyDiagnosticsForSourceFile(file, sourceFile) : [];
-  });
-  return diagnostics.sort((left, right) => left.site.localeCompare(right.site));
+  return analyzeSqlSafetyFromAnalysisContext(createDrizzleAnalysisContext(extraction));
+}
+
+/** @internal */ export function analyzeSqlSafetyFromAnalysisContext(
+  context: DrizzleAnalysisContext,
+): TouchGraphDiagnostic[] {
+  return [...context.facts.sqlSafetyDiagnostics()];
 }
 
 function sqlSafetyDiagnosticsForSourceFile(
@@ -784,7 +802,7 @@ function sqlSafetyDiagnosticsForSourceFile(
   sourceFile: SourceFile,
 ): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = [];
-  const scopes = new Map<Node, Map<string, SqlTextSafety>>();
+  const context = sqlSafetyContextForSourceFile(sourceFile);
   const nativeDrizzleSqlReceivers = nativeDrizzleSqlReceiverTexts(sourceFile);
   const kovoSqlReceivers = kovoSqlReceiverTextsForSourceFile(sourceFile);
   const kovoMutationStreamReceivers = kovoMutationStreamReceiverTexts(sourceFile);
@@ -802,20 +820,15 @@ function sqlSafetyDiagnosticsForSourceFile(
     if (initializer && Node.isNewExpression(initializer)) {
       rawDriverClients.add(name.getText());
     }
-    const scope = nearestSqlSafetyScope(declaration);
-    let bindings = scopes.get(scope);
-    if (!bindings) {
-      bindings = new Map();
-      scopes.set(scope, bindings);
-    }
-    bindings.set(name.getText(), sqlTextSafety(initializer, scopes));
+    const safety = sqlTextSafety(initializer, context);
+    if (safety !== 'unknown') assignSqlSafetyBinding(name, safety, context);
   }
 
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const rawHelperDiagnostic = sqlRawHelperDiagnostic(
       file,
       call,
-      scopes,
+      context,
       nativeDrizzleSqlReceivers,
       kovoSqlReceivers,
     );
@@ -826,7 +839,7 @@ function sqlSafetyDiagnosticsForSourceFile(
     if (sqlSinkReceiverIsRawDriverClient(call, rawDriverClients)) continue;
     if (sqlSinkReceiverIsKovoMutationStream(call, kovoMutationStreamReceivers)) continue;
     const [statement] = call.getArguments();
-    const safety = sqlTextSafety(statement, scopes);
+    const safety = sqlTextSafety(statement, context);
     if (safety === 'safe') continue;
 
     diagnostics.push({
@@ -843,7 +856,7 @@ function sqlSafetyDiagnosticsForSourceFile(
 function sqlRawHelperDiagnostic(
   file: SourceFileInput,
   call: CallExpression,
-  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+  context: SqlSafetyContext,
   nativeDrizzleSqlReceivers: ReadonlySet<string>,
   kovoSqlReceivers: ReadonlySet<string>,
 ): TouchGraphDiagnostic | null {
@@ -868,9 +881,9 @@ function sqlRawHelperDiagnostic(
   // namespace `<ns>.sql` accessor — so `s.raw(...)` / `k.sql.raw(...)` cannot slip a
   // raw chunk past the gate the way a literal `receiver === 'sql'` check did.
   if (!kovoSqlReceivers.has(receiver.getText())) return null;
-  if (method === 'identifier' && sqlAllowlistSafety(second, scopes) === 'literal') return null;
+  if (method === 'identifier' && sqlAllowlistSafety(second, context) === 'literal') return null;
 
-  const safety = sqlTextSafety(first, scopes);
+  const safety = sqlTextSafety(first, context);
   if (safety === 'literal') return null;
 
   return {
@@ -1399,10 +1412,7 @@ function typeIsRegExpInstance(type: MorphType): boolean {
   return false;
 }
 
-function sqlTextSafety(
-  expression: Node | undefined,
-  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
-): SqlTextSafety {
+function sqlTextSafety(expression: Node | undefined, context: SqlSafetyContext): SqlTextSafety {
   if (!expression) return 'unknown';
   if (Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression)) {
     return 'literal';
@@ -1425,18 +1435,18 @@ function sqlTextSafety(
       if (kovoSqlReceivers.has(receiver.getText())) {
         const method = callExpression.getName();
         if (method === 'identifier') {
-          return sqlAllowlistSafety(expression.getArguments()[1], scopes) === 'literal'
+          return sqlAllowlistSafety(expression.getArguments()[1], context) === 'literal'
             ? 'safe'
-            : joinSqlTextSafety(sqlTextSafety(expression.getArguments()[0], scopes), 'unknown');
+            : joinSqlTextSafety(sqlTextSafety(expression.getArguments()[0], context), 'unknown');
         }
         if (method === 'allow') {
-          return sqlAllowlistSafety(expression.getArguments()[1], scopes) === 'literal'
+          return sqlAllowlistSafety(expression.getArguments()[1], context) === 'literal'
             ? 'safe'
-            : joinSqlTextSafety(sqlTextSafety(expression.getArguments()[0], scopes), 'unknown');
+            : joinSqlTextSafety(sqlTextSafety(expression.getArguments()[0], context), 'unknown');
         }
-        if (method === 'join') return sqlJoinSafety(expression, scopes);
+        if (method === 'join') return sqlJoinSafety(expression, context);
         if (method === 'raw') {
-          return sqlTextSafety(expression.getArguments()[0], scopes) === 'literal'
+          return sqlTextSafety(expression.getArguments()[0], context) === 'literal'
             ? 'literal'
             : 'unknown';
         }
@@ -1447,28 +1457,28 @@ function sqlTextSafety(
   }
   if (Node.isObjectLiteralExpression(expression)) return objectCarrierSafety(expression);
   if (Node.isIdentifier(expression)) {
-    return bindingSafety(expression, scopes) ?? 'unknown';
+    return bindingSafety(expression, context) ?? 'unknown';
   }
   if (Node.isPropertyAccessExpression(expression)) {
-    return requestSourceExpression(expression) ? 'tainted' : 'unknown';
+    return requestSourceExpression(expression, context) ? 'tainted' : 'unknown';
   }
   if (Node.isElementAccessExpression(expression)) {
-    return requestSourceExpression(expression) ? 'tainted' : 'unknown';
+    return requestSourceExpression(expression, context) ? 'tainted' : 'unknown';
   }
   if (Node.isBinaryExpression(expression)) {
     const operator = expression.getOperatorToken().getKind();
     if (operator !== SyntaxKind.PlusToken) return 'unknown';
     return joinSqlTextSafety(
-      sqlTextSafety(expression.getLeft(), scopes),
-      sqlTextSafety(expression.getRight(), scopes),
+      sqlTextSafety(expression.getLeft(), context),
+      sqlTextSafety(expression.getRight(), context),
     );
   }
   if (Node.isArrayLiteralExpression(expression)) {
-    return expression.getElements().some((item) => sqlTextSafety(item, scopes) !== 'literal')
+    return expression.getElements().some((item) => sqlTextSafety(item, context) !== 'literal')
       ? 'unknown'
       : 'literal';
   }
-  return requestSourceExpression(expression) ? 'tainted' : 'unknown';
+  return requestSourceExpression(expression, context) ? 'tainted' : 'unknown';
 }
 
 function objectCarrierSafety(expression: Node): SqlTextSafety {
@@ -1497,22 +1507,22 @@ function objectHasLiteralProperty(
 
 function sqlAllowlistSafety(
   expression: Node | undefined,
-  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+  context: SqlSafetyContext,
 ): SqlTextSafety {
   if (!expression) return 'unknown';
   const node = unwrappedStaticExpressionNode(expression);
   if (Node.isObjectLiteralExpression(node)) {
     const allow = node.getProperty('allow');
     if (!Node.isPropertyAssignment(allow)) return 'unknown';
-    return sqlAllowlistSafety(allow.getInitializer(), scopes);
+    return sqlAllowlistSafety(allow.getInitializer(), context);
   }
   if (Node.isArrayLiteralExpression(node)) {
     return node.getElements().every((item) => sqlAllowlistLiteral(item))
       ? 'literal'
-      : combineSqlTextSafetyForNodes(node.getElements(), scopes);
+      : combineSqlTextSafetyForNodes(node.getElements(), context);
   }
-  if (Node.isIdentifier(node)) return bindingSafety(node, scopes) ?? 'unknown';
-  return requestSourceExpression(node) ? 'tainted' : 'unknown';
+  if (Node.isIdentifier(node)) return bindingSafety(node, context) ?? 'unknown';
+  return requestSourceExpression(node, context) ? 'tainted' : 'unknown';
 }
 
 function sqlAllowlistLiteral(node: Node): boolean {
@@ -1526,13 +1536,10 @@ function sqlAllowlistLiteral(node: Node): boolean {
   );
 }
 
-function sqlJoinSafety(
-  expression: CallExpression,
-  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
-): SqlTextSafety {
+function sqlJoinSafety(expression: CallExpression, context: SqlSafetyContext): SqlTextSafety {
   const [parts, separator] = expression.getArguments();
-  const partSafety = sqlJoinPartsSafety(parts, scopes);
-  const separatorSafety = separator ? sqlTextSafety(separator, scopes) : 'literal';
+  const partSafety = sqlJoinPartsSafety(parts, context);
+  const separatorSafety = separator ? sqlTextSafety(separator, context) : 'literal';
   if (partSafety === 'literal' && separatorSafety === 'literal') return 'literal';
   if (
     (partSafety === 'literal' || partSafety === 'safe') &&
@@ -1545,24 +1552,24 @@ function sqlJoinSafety(
 
 function sqlJoinPartsSafety(
   expression: Node | undefined,
-  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+  context: SqlSafetyContext,
 ): SqlTextSafety {
   if (!expression) return 'unknown';
   const node = unwrappedStaticExpressionNode(expression);
   if (Node.isArrayLiteralExpression(node)) {
-    return combineSqlTextSafetyForNodes(node.getElements(), scopes);
+    return combineSqlTextSafetyForNodes(node.getElements(), context);
   }
-  if (Node.isIdentifier(node)) return bindingSafety(node, scopes) ?? 'unknown';
-  return requestSourceExpression(node) ? 'tainted' : 'unknown';
+  if (Node.isIdentifier(node)) return bindingSafety(node, context) ?? 'unknown';
+  return requestSourceExpression(node, context) ? 'tainted' : 'unknown';
 }
 
 function combineSqlTextSafetyForNodes(
   nodes: readonly Node[],
-  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
+  context: SqlSafetyContext,
 ): SqlTextSafety {
   let sawSafe = false;
   for (const node of nodes) {
-    const safety = sqlTextSafety(node, scopes);
+    const safety = sqlTextSafety(node, context);
     if (safety === 'tainted') return 'tainted';
     if (safety === 'unknown') return 'unknown';
     if (safety === 'safe') sawSafe = true;
@@ -1577,41 +1584,113 @@ function joinSqlTextSafety(left: SqlTextSafety, right: SqlTextSafety): SqlTextSa
   return 'literal';
 }
 
-function bindingSafety(
-  identifier: Node,
-  scopes: ReadonlyMap<Node, ReadonlyMap<string, SqlTextSafety>>,
-): SqlTextSafety | undefined {
-  let scope: Node | undefined = nearestSqlSafetyScope(identifier);
-  const name = identifier.getText();
-  while (scope) {
-    const binding = scopes.get(scope)?.get(name);
-    if (binding) return binding;
-    scope = nearestSqlSafetyScope(scope.getParent());
-  }
+function bindingSafety(identifier: Node, context: SqlSafetyContext): SqlTextSafety | undefined {
+  const key = sqlSafetySymbolKey(identifier);
+  const binding = key ? context.sqlBindingsBySymbolKey.get(key) : undefined;
+  if (binding) return binding;
+
+  const provenance = symbolProvenanceForExpression(identifier, context.provenance);
+  if (provenance.kind === 'literal') return 'literal';
+  if (sqlRequestInputProvenance(provenance)) return 'tainted';
   return undefined;
 }
 
-function nearestSqlSafetyScope(node: Node | undefined): Node {
-  let current = node;
-  while (current) {
-    if (
-      Node.isFunctionDeclaration(current) ||
-      Node.isFunctionExpression(current) ||
-      Node.isArrowFunction(current) ||
-      Node.isSourceFile(current)
-    ) {
-      return current;
-    }
-    current = current.getParent();
-  }
-  return node?.getSourceFile() ?? (undefined as never);
+function assignSqlSafetyBinding(
+  node: Node,
+  safety: SqlTextSafety,
+  context: SqlSafetyContext,
+): void {
+  const key = sqlSafetySymbolKey(node);
+  if (key) context.sqlBindingsBySymbolKey.set(key, safety);
 }
 
-function requestSourceExpression(expression: Node): boolean {
-  const text = expression.getText();
+function sqlSafetySymbolKey(node: Node): string | undefined {
+  if (!Node.isIdentifier(node)) return resolvedSymbolKey(node.getSymbol());
+  return resolvedSymbolKey(symbolForIdentifierReference(node) ?? node.getSymbol());
+}
+
+function sqlSafetyContextForSourceFile(sourceFile: SourceFile): SqlSafetyContext {
+  return {
+    // SPEC §6.6/§10.2/§11.1: request-derived SQL text is proven by AST symbol
+    // provenance, not by source text/regex matching.
+    provenance: symbolProvenanceContextForNodes([sourceFile], {
+      inputRootPaths: sqlRequestInputRootPaths(sourceFile),
+    }),
+    sqlBindingsBySymbolKey: new Map(),
+  };
+}
+
+function sqlRequestInputRootPaths(sourceFile: SourceFile): SymbolProvenanceRoot[] {
+  const roots: SymbolProvenanceRoot[] = [];
+  for (const parameter of sourceFile.getDescendantsOfKind(SyntaxKind.Parameter)) {
+    const name = parameter.getNameNode();
+    appendSqlRequestInputRootPath(name, roots);
+  }
+  return roots;
+}
+
+function appendSqlRequestInputRootPath(
+  name: Node,
+  roots: SymbolProvenanceRoot[],
+  prefix = '',
+): void {
+  if (Node.isIdentifier(name)) {
+    const text = name.getText();
+    if (text === 'req') {
+      roots.push({ node: name, path: 'req' });
+      return;
+    }
+    if (text === 'input' || text === 'form' || text === 'headers' || text === 'cookies') {
+      roots.push({ node: name, path: text });
+      return;
+    }
+    if (
+      prefix === 'req' &&
+      (text === 'search' || text === 'params' || text === 'headers' || text === 'cookies')
+    ) {
+      roots.push({ node: name, path: `req.${text}` });
+    }
+    return;
+  }
+
+  if (!Node.isObjectBindingPattern(name)) return;
+  for (const element of name.getElements()) {
+    const property = element.getPropertyNameNode();
+    const field = property ? propertyNameText(property) : objectBindingElementPropertyName(element);
+    const child = element.getNameNode();
+    if (!field) continue;
+    if (field === 'search' || field === 'params' || field === 'headers' || field === 'cookies') {
+      appendSqlRequestInputRootPath(child, roots, 'req');
+      if (Node.isIdentifier(child)) roots.push({ node: child, path: `req.${field}` });
+    }
+  }
+}
+
+function requestSourceExpression(expression: Node, context: SqlSafetyContext): boolean {
+  return sqlRequestInputProvenance(symbolProvenanceForExpression(expression, context.provenance));
+}
+
+function sqlRequestInputProvenance(provenance: SymbolProvenance): boolean {
+  if (provenance.kind !== 'input') return false;
+  const path = provenance.path;
   return (
-    /\b(input|form|headers|cookies)\b/.test(text) ||
-    /\breq\.(search|params|headers|cookies)\b/.test(text)
+    path === undefined ||
+    path === 'input' ||
+    path.startsWith('input.') ||
+    path === 'form' ||
+    path.startsWith('form.') ||
+    path === 'headers' ||
+    path.startsWith('headers.') ||
+    path === 'cookies' ||
+    path.startsWith('cookies.') ||
+    path === 'req.search' ||
+    path.startsWith('req.search.') ||
+    path === 'req.params' ||
+    path.startsWith('req.params.') ||
+    path === 'req.headers' ||
+    path.startsWith('req.headers.') ||
+    path === 'req.cookies' ||
+    path.startsWith('req.cookies.')
   );
 }
 
@@ -1632,20 +1711,22 @@ function extractTouchGraphFromPreparedFiles(
   functionsForFile: (file: SourceFileInput) => ExtractedFunction[],
   sourceContext: SourceModuleContext,
   extraUnresolvedIdentifiers: ReadonlySet<string> = new Set(),
+  tablesForContextFile: (file: SourceFileInput) => ReturnType<typeof tablesForFile> = (file) =>
+    tablesForFile(file, sourceContext),
 ): TouchGraph {
   const unresolvedIdentifiers = new Set<string>(extraUnresolvedIdentifiers);
   const graph: Record<string, TouchGraphEntry> = {};
   const graphSummaries = new Map<string, FunctionTouchSummary>();
 
   for (const file of files) {
-    const fileTables = tablesForFile(file, sourceContext);
+    const fileTables = tablesForContextFile(file);
     for (const identifier of extractUnresolvedConditionalIdentifiers(file, fileTables)) {
       unresolvedIdentifiers.add(identifier);
     }
   }
 
   for (const file of files) {
-    const fileTables = tablesForFile(file, sourceContext);
+    const fileTables = tablesForContextFile(file);
     const functions = functionsForFile(file);
     const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
     const rawTablesByMutation = rawTablesByMutationHandler(file);
@@ -1736,15 +1817,13 @@ function extractTouchGraphFromPreparedFiles(
 /** @internal */ export function extractTouchGraphFromProjectExtraction(
   extraction: ProjectExtraction,
 ): TouchGraph {
-  const sourceContext = projectSourceModuleContext(extraction);
-  const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
+  return extractTouchGraphFromAnalysisContext(createDrizzleAnalysisContext(extraction));
+}
 
-  return extractTouchGraphFromPreparedFiles(
-    extraction.files,
-    (file) => projectFunctionsForFile(file, projectFunctionExtractions),
-    sourceContext,
-    projectUnresolvedConditionalTableExpressions(extraction),
-  );
+/** @internal */ export function extractTouchGraphFromAnalysisContext(
+  context: DrizzleAnalysisContext,
+): TouchGraph {
+  return context.facts.touchGraph();
 }
 
 /** @internal */
@@ -1765,44 +1844,13 @@ function extractTouchGraphFromPreparedFiles(
 /** @internal */ export function extractQueryFactsFromProjectExtraction(
   extraction: ProjectExtraction,
 ): QueryFact[] {
-  const sourceContext = projectSourceModuleContext(extraction);
-  const contextFiles = projectContextFiles(extraction);
-  const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
-  const relationTargetTableNames = projectRelationTargetTableNamesByProperty(
-    extraction.sourceFiles,
-    extraction.tableNamesBySymbol,
-  );
-  const relationCardinalities = projectRelationCardinalitiesByProperty(extraction.sourceFiles);
-  return extractQueryFactsFromPreparedFiles(
-    extraction.files,
-    (file) => {
-      const index = extraction.files.findIndex((candidate) => candidate.fileName === file.fileName);
-      const sourceFile = extraction.sourceFiles[index];
-      if (!sourceFile) return [];
+  return extractQueryFactsFromAnalysisContext(createDrizzleAnalysisContext(extraction));
+}
 
-      return extractProjectQueryDefinitions(sourceFile, {
-        ...(file.columnShapes ? { columnShapes: file.columnShapes } : {}),
-        localFunctionReceiverParameters: functionReceiverParametersByKey(
-          (projectFunctionExtractions.get(file.fileName) ?? new Map()).values(),
-        ),
-        namespaceTableNames: projectNamespaceTableNamesByLocal(
-          sourceFile,
-          extraction.tableNamesBySymbol,
-        ),
-        relationalTableNames: projectRelationalTableNamesByProperty(
-          sourceFile,
-          extraction.tableNamesBySymbol,
-        ),
-        relationCardinalities,
-        relationTargetTableNames,
-        unmodeledRelationNamesBySymbol: extraction.unmodeledRelationNamesBySymbol,
-        tableNamesBySymbol: extraction.tableNamesBySymbol,
-      });
-    },
-    contextFiles,
-    sourceContext,
-    (file) => projectFunctionsForFile(file, projectFunctionExtractions),
-  );
+/** @internal */ export function extractQueryFactsFromAnalysisContext(
+  context: DrizzleAnalysisContext,
+): QueryFact[] {
+  return [...context.facts.queryFacts()];
 }
 
 /**
@@ -1837,16 +1885,39 @@ function extractTouchGraphFromPreparedFiles(
   ownerDomains: OwnerDomainFact[];
   scopeAudits: ScopeAuditFact[];
 } {
-  const writes = writeFacts ?? extractWriteScopeFactsFromProjectExtraction(extraction);
-  const queryFacts = queries ?? extractQueryFactsFromProjectExtraction(extraction);
-  const ownerDomains = ownerDomainsFromProjectExtraction(extraction);
+  return extractOwnerAuditFromAnalysisContext(
+    createDrizzleAnalysisContext(extraction),
+    queries,
+    writeFacts,
+  );
+}
+
+/** @internal */ export function extractOwnerAuditFromAnalysisContext(
+  context: DrizzleAnalysisContext,
+  queries?: readonly QueryFact[],
+  writeFacts?: readonly WriteScopeFact[],
+): {
+  ownerDomains: OwnerDomainFact[];
+  scopeAudits: ScopeAuditFact[];
+} {
+  if (!queries && !writeFacts) {
+    const audit = context.facts.ownerAudit();
+    return {
+      ownerDomains: [...audit.ownerDomains],
+      scopeAudits: [...audit.scopeAudits],
+    };
+  }
+
+  const writes = writeFacts ?? context.facts.writeScopeFacts();
+  const queryFacts = queries ?? context.facts.queryFacts();
+  const ownerDomains = context.facts.ownerDomains();
   // SPEC §10.3 / KV414: "a query OR write" reaching an owner table. Reads and writes
   // are both audited (A1 added the write half, which the framework never produced).
   const scopeAudits = [
     ...scopeAuditsFromQueryFacts(queryFacts, ownerDomains),
     ...scopeAuditsFromWriteFacts(writes, ownerDomains),
   ];
-  return { ownerDomains, scopeAudits };
+  return { ownerDomains: [...ownerDomains], scopeAudits };
 }
 
 /**
@@ -1875,35 +1946,13 @@ function extractTouchGraphFromPreparedFiles(
 /** @internal */ export function extractWriteScopeFactsFromProjectExtraction(
   extraction: ProjectExtraction,
 ): WriteScopeFact[] {
-  const sourceContext = projectSourceModuleContext(extraction);
-  const contextFiles = projectContextFiles(extraction);
-  const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
-  const facts: WriteScopeFact[] = [];
+  return extractWriteScopeFactsFromAnalysisContext(createDrizzleAnalysisContext(extraction));
+}
 
-  for (const file of contextFiles) {
-    const fileTables = tablesForFile(file, sourceContext);
-    const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
-    const rawTablesByMutation = rawTablesByMutationHandler(file);
-    const rawWriteTrustByDomainWrite = rawWriteSqlTrustByDomainWriteCallback(file);
-    const rawWriteTrustByMutation = rawWriteSqlTrustByMutationHandler(file);
-    for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
-      if (fn.summaryOnly) continue;
-      const rawTables = mergedRawTables(
-        rawTablesByDomainWrite.get(fn.name),
-        rawTablesByMutation.get(fn.name),
-      );
-      const rawWriteTrust = mergedRawWriteSqlTrust(
-        rawWriteTrustByDomainWrite.get(fn.name),
-        rawWriteTrustByMutation.get(fn.name),
-      );
-      facts.push(...writeScopeFactsForFunction(fn, fileTables));
-      facts.push(...rawWriteScopeFactsForFunction(fn, fileTables, rawTables, rawWriteTrust));
-    }
-  }
-
-  return facts.sort(
-    (left, right) => left.name.localeCompare(right.name) || left.site.localeCompare(right.site),
-  );
+/** @internal */ export function extractWriteScopeFactsFromAnalysisContext(
+  context: DrizzleAnalysisContext,
+): WriteScopeFact[] {
+  return [...context.facts.writeScopeFacts()];
 }
 
 function writeScopeFactsForFunction(
@@ -2192,14 +2241,7 @@ function ownerDomainsFromProject(options: TouchGraphProjectOptions): OwnerDomain
 }
 
 function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): OwnerDomainFact[] {
-  const sourceContext = projectSourceModuleContext(extraction);
-  const tables: ExtractedTable[] = [];
-  for (const file of projectContextFiles(extraction)) {
-    for (const entries of tablesForFile(file, sourceContext).values()) {
-      tables.push(...entries);
-    }
-  }
-  return ownerDomainsFromTables(tables);
+  return [...createDrizzleAnalysisContext(extraction).facts.ownerDomains()];
 }
 
 /** @internal */
@@ -2210,30 +2252,19 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
   return runWithSourceFileParseCache(() => {
     const extraction = createProjectExtraction(options);
     try {
-      const sourceContext = projectSourceModuleContext(extraction);
-      const contextFiles = projectContextFiles(extraction);
-      const projectFunctionExtractions = projectFunctionExtractionsByFileName(extraction);
-      const facts: MaterializedViewRefreshFact[] = [];
-
-      for (const file of contextFiles) {
-        const fileTables = tablesForFile(file, sourceContext);
-        for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
-          if (fn.summaryOnly) continue;
-          facts.push(...materializedViewRefreshFactsForFunction(fn, file, fileTables));
-        }
-      }
-
-      return facts.sort(
-        (left, right) =>
-          left.mutation.localeCompare(right.mutation) ||
-          left.view.localeCompare(right.view) ||
-          left.domain.localeCompare(right.domain) ||
-          left.site.localeCompare(right.site),
+      return extractMaterializedViewRefreshFactsFromAnalysisContext(
+        createDrizzleAnalysisContext(extraction),
       );
     } finally {
       extraction.dispose();
     }
   });
+}
+
+/** @internal */ export function extractMaterializedViewRefreshFactsFromAnalysisContext(
+  context: DrizzleAnalysisContext,
+): MaterializedViewRefreshFact[] {
+  return [...context.facts.materializedViewRefreshFacts()];
 }
 
 /** @internal */ export interface StaticBuildAnalysisFacts {
@@ -2245,6 +2276,327 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
   sqlSafetyDiagnostics: readonly TouchGraphDiagnostic[];
   toctouFacts: readonly ToctouFact[];
   touchGraph: TouchGraph;
+}
+
+/** @internal */ export interface DrizzleAnalysisContext {
+  extraction: ProjectExtraction;
+  facts: DrizzleFactStore;
+}
+
+/** @internal */ export interface DrizzleFactStore {
+  contextFiles(): readonly SourceFileInput[];
+  functionExtractionsByFileName(): ReturnType<typeof projectFunctionExtractionsByFileName>;
+  massAssignmentFacts(): readonly MassAssignmentFact[];
+  materializedViewRefreshFacts(): readonly MaterializedViewRefreshFact[];
+  ownerAudit(): {
+    ownerDomains: readonly OwnerDomainFact[];
+    scopeAudits: readonly ScopeAuditFact[];
+  };
+  ownerDomains(): readonly OwnerDomainFact[];
+  queryFacts(): readonly QueryFact[];
+  queryWriteReachability(): readonly QueryWriteReachabilityFact[];
+  relationCardinalities(): ReturnType<typeof projectRelationCardinalitiesByProperty>;
+  relationTargetTableNames(): ReturnType<typeof projectRelationTargetTableNamesByProperty>;
+  sourceContext(): SourceModuleContext;
+  sqlSafetyDiagnostics(): readonly TouchGraphDiagnostic[];
+  staticBuildAnalysisFacts(): StaticBuildAnalysisFacts;
+  tablesForFile(file: SourceFileInput): ReturnType<typeof tablesForFile>;
+  toctouFacts(): readonly ToctouFact[];
+  touchGraph(): TouchGraph;
+  writeScopeFacts(): readonly WriteScopeFact[];
+}
+
+class LazyDrizzleFactStore implements DrizzleFactStore {
+  private readonly extraction: ProjectExtraction;
+  private cachedMassAssignmentFacts: readonly MassAssignmentFact[] | undefined;
+  private cachedMaterializedViewRefreshFacts: readonly MaterializedViewRefreshFact[] | undefined;
+  private cachedOwnerAudit:
+    | {
+        ownerDomains: readonly OwnerDomainFact[];
+        scopeAudits: readonly ScopeAuditFact[];
+      }
+    | undefined;
+  private cachedOwnerDomains: readonly OwnerDomainFact[] | undefined;
+  private cachedQueryFacts: readonly QueryFact[] | undefined;
+  private cachedQueryWriteReachability: readonly QueryWriteReachabilityFact[] | undefined;
+  private cachedRelationCardinalities:
+    | ReturnType<typeof projectRelationCardinalitiesByProperty>
+    | undefined;
+  private cachedRelationTargetTableNames:
+    | ReturnType<typeof projectRelationTargetTableNamesByProperty>
+    | undefined;
+  private cachedSourceContext: SourceModuleContext | undefined;
+  private cachedSqlSafetyDiagnostics: readonly TouchGraphDiagnostic[] | undefined;
+  private cachedStaticBuildAnalysisFacts: StaticBuildAnalysisFacts | undefined;
+  private cachedToctouFacts: readonly ToctouFact[] | undefined;
+  private cachedTouchGraph: TouchGraph | undefined;
+  private cachedWriteScopeFacts: readonly WriteScopeFact[] | undefined;
+  private readonly namespaceTableNamesByFileName = new Map<
+    string,
+    ReturnType<typeof projectNamespaceTableNamesByLocal>
+  >();
+  private readonly queryDefinitionsByFileName = new Map<
+    string,
+    readonly ExtractedQueryDefinition[]
+  >();
+  private readonly relationalTableNamesByFileName = new Map<
+    string,
+    ReturnType<typeof projectRelationalTableNamesByProperty>
+  >();
+  private readonly tablesByFileName = new Map<string, ReturnType<typeof tablesForFile>>();
+
+  constructor(extraction: ProjectExtraction) {
+    this.extraction = extraction;
+  }
+
+  contextFiles(): readonly SourceFileInput[] {
+    return projectContextFiles(this.extraction);
+  }
+
+  functionExtractionsByFileName(): ReturnType<typeof projectFunctionExtractionsByFileName> {
+    return projectFunctionExtractionsByFileName(this.extraction);
+  }
+
+  sourceContext(): SourceModuleContext {
+    this.cachedSourceContext ??= projectSourceModuleContext(this.extraction);
+    return this.cachedSourceContext;
+  }
+
+  relationTargetTableNames(): ReturnType<typeof projectRelationTargetTableNamesByProperty> {
+    this.cachedRelationTargetTableNames ??= projectRelationTargetTableNamesForExtraction(
+      this.extraction,
+    );
+    return this.cachedRelationTargetTableNames;
+  }
+
+  relationCardinalities(): ReturnType<typeof projectRelationCardinalitiesByProperty> {
+    this.cachedRelationCardinalities ??= projectRelationCardinalitiesByProperty(
+      this.extraction.sourceFiles,
+    );
+    return this.cachedRelationCardinalities;
+  }
+
+  tablesForFile(file: SourceFileInput): ReturnType<typeof tablesForFile> {
+    const cached = this.tablesByFileName.get(file.fileName);
+    if (cached) return cached;
+    const tables = tablesForFile(file, this.sourceContext());
+    this.tablesByFileName.set(file.fileName, tables);
+    return tables;
+  }
+
+  queryFacts(): readonly QueryFact[] {
+    if (this.cachedQueryFacts) return this.cachedQueryFacts;
+    const functions = this.functionExtractionsByFileName();
+    this.cachedQueryFacts = extractQueryFactsFromPreparedFiles(
+      this.extraction.files,
+      (file) => this.queryDefinitionsForFile(file),
+      this.contextFiles(),
+      this.sourceContext(),
+      (file) => projectFunctionsForFile(file, functions),
+      (file) => this.tablesForFile(file),
+    );
+    return this.cachedQueryFacts;
+  }
+
+  writeScopeFacts(): readonly WriteScopeFact[] {
+    if (this.cachedWriteScopeFacts) return this.cachedWriteScopeFacts;
+    const contextFiles = this.contextFiles();
+    const functions = this.functionExtractionsByFileName();
+    const facts: WriteScopeFact[] = [];
+
+    for (const file of contextFiles) {
+      const fileTables = this.tablesForFile(file);
+      const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
+      const rawTablesByMutation = rawTablesByMutationHandler(file);
+      const rawWriteTrustByDomainWrite = rawWriteSqlTrustByDomainWriteCallback(file);
+      const rawWriteTrustByMutation = rawWriteSqlTrustByMutationHandler(file);
+      for (const fn of projectFunctionsForFile(file, functions)) {
+        if (fn.summaryOnly) continue;
+        const rawTables = mergedRawTables(
+          rawTablesByDomainWrite.get(fn.name),
+          rawTablesByMutation.get(fn.name),
+        );
+        const rawWriteTrust = mergedRawWriteSqlTrust(
+          rawWriteTrustByDomainWrite.get(fn.name),
+          rawWriteTrustByMutation.get(fn.name),
+        );
+        facts.push(...writeScopeFactsForFunction(fn, fileTables));
+        facts.push(...rawWriteScopeFactsForFunction(fn, fileTables, rawTables, rawWriteTrust));
+      }
+    }
+
+    this.cachedWriteScopeFacts = facts.sort(
+      (left, right) => left.name.localeCompare(right.name) || left.site.localeCompare(right.site),
+    );
+    return this.cachedWriteScopeFacts;
+  }
+
+  ownerDomains(): readonly OwnerDomainFact[] {
+    if (this.cachedOwnerDomains) return this.cachedOwnerDomains;
+    const tables: ExtractedTable[] = [];
+    for (const file of this.contextFiles()) {
+      for (const entries of this.tablesForFile(file).values()) tables.push(...entries);
+    }
+    this.cachedOwnerDomains = ownerDomainsFromTables(tables);
+    return this.cachedOwnerDomains;
+  }
+
+  ownerAudit(): {
+    ownerDomains: readonly OwnerDomainFact[];
+    scopeAudits: readonly ScopeAuditFact[];
+  } {
+    if (this.cachedOwnerAudit) return this.cachedOwnerAudit;
+    const ownerDomains = this.ownerDomains();
+    this.cachedOwnerAudit = {
+      ownerDomains,
+      scopeAudits: [
+        ...scopeAuditsFromQueryFacts(this.queryFacts(), ownerDomains),
+        ...scopeAuditsFromWriteFacts(this.writeScopeFacts(), ownerDomains),
+      ],
+    };
+    return this.cachedOwnerAudit;
+  }
+
+  sqlSafetyDiagnostics(): readonly TouchGraphDiagnostic[] {
+    if (this.cachedSqlSafetyDiagnostics) return this.cachedSqlSafetyDiagnostics;
+    this.cachedSqlSafetyDiagnostics = this.contextFiles()
+      .flatMap((file, index) => {
+        const sourceFile = this.extraction.sourceFiles[index];
+        return sourceFile ? sqlSafetyDiagnosticsForSourceFile(file, sourceFile) : [];
+      })
+      .sort((left, right) => left.site.localeCompare(right.site));
+    return this.cachedSqlSafetyDiagnostics;
+  }
+
+  touchGraph(): TouchGraph {
+    if (this.cachedTouchGraph) return this.cachedTouchGraph;
+    const functions = this.functionExtractionsByFileName();
+    this.cachedTouchGraph = extractTouchGraphFromPreparedFiles(
+      this.extraction.files,
+      (file) => projectFunctionsForFile(file, functions),
+      this.sourceContext(),
+      projectUnresolvedConditionalTableExpressions(this.extraction),
+      (file) => this.tablesForFile(file),
+    );
+    return this.cachedTouchGraph;
+  }
+
+  materializedViewRefreshFacts(): readonly MaterializedViewRefreshFact[] {
+    if (this.cachedMaterializedViewRefreshFacts) return this.cachedMaterializedViewRefreshFacts;
+    const facts: MaterializedViewRefreshFact[] = [];
+    const functions = this.functionExtractionsByFileName();
+
+    for (const file of this.contextFiles()) {
+      const fileTables = this.tablesForFile(file);
+      for (const fn of projectFunctionsForFile(file, functions)) {
+        if (fn.summaryOnly) continue;
+        facts.push(...materializedViewRefreshFactsForFunction(fn, file, fileTables));
+      }
+    }
+
+    this.cachedMaterializedViewRefreshFacts = facts.sort(
+      (left, right) =>
+        left.mutation.localeCompare(right.mutation) ||
+        left.view.localeCompare(right.view) ||
+        left.domain.localeCompare(right.domain) ||
+        left.site.localeCompare(right.site),
+    );
+    return this.cachedMaterializedViewRefreshFacts;
+  }
+
+  massAssignmentFacts(): readonly MassAssignmentFact[] {
+    this.cachedMassAssignmentFacts ??= extractMassAssignmentFromProjectExtraction(this.extraction);
+    return this.cachedMassAssignmentFacts;
+  }
+
+  queryWriteReachability(): readonly QueryWriteReachabilityFact[] {
+    this.cachedQueryWriteReachability ??= extractQueryWriteReachabilityFromProjectExtraction(
+      this.extraction,
+    );
+    return this.cachedQueryWriteReachability;
+  }
+
+  toctouFacts(): readonly ToctouFact[] {
+    this.cachedToctouFacts ??= extractToctouFromProjectExtraction(this.extraction);
+    return this.cachedToctouFacts;
+  }
+
+  staticBuildAnalysisFacts(): StaticBuildAnalysisFacts {
+    if (this.cachedStaticBuildAnalysisFacts) return this.cachedStaticBuildAnalysisFacts;
+    const queries = this.queryFacts();
+    const ownerAudit = this.ownerAudit();
+    this.cachedStaticBuildAnalysisFacts = {
+      massAssignmentFacts: this.massAssignmentFacts(),
+      ownerDomains: ownerAudit.ownerDomains,
+      queries,
+      queryWriteReachability: this.queryWriteReachability(),
+      scopeAudits: ownerAudit.scopeAudits,
+      sqlSafetyDiagnostics: [...this.sqlSafetyDiagnostics(), ...diagnosticsForQueryFacts(queries)],
+      toctouFacts: this.toctouFacts(),
+      touchGraph: this.touchGraph(),
+    };
+    return this.cachedStaticBuildAnalysisFacts;
+  }
+
+  private queryDefinitionsForFile(file: SourceFileInput): readonly ExtractedQueryDefinition[] {
+    const cached = this.queryDefinitionsByFileName.get(file.fileName);
+    if (cached) return cached;
+
+    const index = this.extraction.files.findIndex(
+      (candidate) => candidate.fileName === file.fileName,
+    );
+    const sourceFile = this.extraction.sourceFiles[index];
+    if (!sourceFile) return [];
+
+    const definitions = extractProjectQueryDefinitions(sourceFile, {
+      ...(file.columnShapes ? { columnShapes: file.columnShapes } : {}),
+      localFunctionReceiverParameters: functionReceiverParametersByKey(
+        (this.functionExtractionsByFileName().get(file.fileName) ?? new Map()).values(),
+      ),
+      namespaceTableNames: this.namespaceTableNamesForSourceFile(sourceFile, file.fileName),
+      relationalTableNames: this.relationalTableNamesForSourceFile(sourceFile, file.fileName),
+      relationCardinalities: this.relationCardinalities(),
+      relationTargetTableNames: this.relationTargetTableNames(),
+      unmodeledRelationNamesBySymbol: this.extraction.unmodeledRelationNamesBySymbol,
+      tableNamesBySymbol: this.extraction.tableNamesBySymbol,
+    });
+    this.queryDefinitionsByFileName.set(file.fileName, definitions);
+    return definitions;
+  }
+
+  private namespaceTableNamesForSourceFile(
+    sourceFile: SourceFile,
+    fileName: string,
+  ): ReturnType<typeof projectNamespaceTableNamesByLocal> {
+    const cached = this.namespaceTableNamesByFileName.get(fileName);
+    if (cached) return cached;
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(
+      sourceFile,
+      this.extraction.tableNamesBySymbol,
+    );
+    this.namespaceTableNamesByFileName.set(fileName, namespaceTableNames);
+    return namespaceTableNames;
+  }
+
+  private relationalTableNamesForSourceFile(
+    sourceFile: SourceFile,
+    fileName: string,
+  ): ReturnType<typeof projectRelationalTableNamesByProperty> {
+    const cached = this.relationalTableNamesByFileName.get(fileName);
+    if (cached) return cached;
+    const relationalTableNames = projectRelationalTableNamesByProperty(
+      sourceFile,
+      this.extraction.tableNamesBySymbol,
+    );
+    this.relationalTableNamesByFileName.set(fileName, relationalTableNames);
+    return relationalTableNames;
+  }
+}
+
+/** @internal */ export function createDrizzleAnalysisContext(
+  extraction: ProjectExtraction,
+): DrizzleAnalysisContext {
+  return { extraction, facts: new LazyDrizzleFactStore(extraction) };
 }
 
 /**
@@ -2263,30 +2615,19 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
   return runWithSourceFileParseCache(() => {
     const extraction = createProjectExtraction(options);
     try {
-      const writeScopeFacts = extractWriteScopeFactsFromProjectExtraction(extraction);
-      const queries = extractQueryFactsFromProjectExtraction(extraction);
-      const ownerAudit = extractOwnerAuditFromProjectExtraction(
-        extraction,
-        queries,
-        writeScopeFacts,
+      return extractStaticBuildAnalysisFactsFromAnalysisContext(
+        createDrizzleAnalysisContext(extraction),
       );
-      return {
-        massAssignmentFacts: extractMassAssignmentFromProjectExtraction(extraction),
-        ownerDomains: ownerAudit.ownerDomains,
-        queries,
-        queryWriteReachability: extractQueryWriteReachabilityFromProjectExtraction(extraction),
-        scopeAudits: ownerAudit.scopeAudits,
-        sqlSafetyDiagnostics: [
-          ...analyzeSqlSafetyFromProjectExtraction(extraction),
-          ...diagnosticsForQueryFacts(queries),
-        ],
-        toctouFacts: extractToctouFromProjectExtraction(extraction),
-        touchGraph: extractTouchGraphFromProjectExtraction(extraction),
-      };
     } finally {
       extraction.dispose();
     }
   });
+}
+
+/** @internal */ export function extractStaticBuildAnalysisFactsFromAnalysisContext(
+  context: DrizzleAnalysisContext,
+): StaticBuildAnalysisFacts {
+  return context.facts.staticBuildAnalysisFacts();
 }
 
 // SPEC.md §11.1 (v1 scope): query-fact extraction requires project-mode ts-morph type
@@ -2299,16 +2640,19 @@ function extractQueryFactsFromPreparedFiles(
   contextFiles: readonly SourceFileInput[],
   sourceContext: SourceModuleContext,
   functionsForFile: (file: SourceFileInput) => ExtractedFunction[],
+  tablesForContextFile: (file: SourceFileInput) => ReturnType<typeof tablesForFile> = (file) =>
+    tablesForFile(file, sourceContext),
 ): QueryFact[] {
   const facts: QueryFact[] = [];
   const unresolvedIdentifiers = unresolvedConditionalIdentifiersForFiles(
     contextFiles,
     sourceContext,
+    tablesForContextFile,
   );
 
   for (const [index, file] of files.entries()) {
     const contextFile = contextFiles[index] ?? file;
-    const fileTables = tablesForFile(contextFile, sourceContext);
+    const fileTables = tablesForContextFile(contextFile);
     const helperSummaries = functionTouchSummariesForFile(
       file,
       functionsForFile(file),
@@ -2593,11 +2937,13 @@ function queryShapeContainsSecret(shape: QueryShape): boolean {
 function unresolvedConditionalIdentifiersForFiles(
   files: readonly SourceFileInput[],
   sourceContext: SourceModuleContext,
+  tablesForContextFile: (file: SourceFileInput) => ReturnType<typeof tablesForFile> = (file) =>
+    tablesForFile(file, sourceContext),
 ): Set<string> {
   const unresolvedIdentifiers = new Set<string>();
 
   for (const file of files) {
-    const fileTables = tablesForFile(file, sourceContext);
+    const fileTables = tablesForContextFile(file);
     for (const identifier of extractUnresolvedConditionalIdentifiers(file, fileTables)) {
       unresolvedIdentifiers.add(identifier);
     }
@@ -3680,6 +4026,7 @@ import {
   createProjectExtraction,
   projectContextFiles,
   projectFunctionExtractionsByFileName,
+  projectRelationTargetTableNamesForExtraction,
   projectSourceFileName,
   type ProjectExtraction,
 } from './static/project-setup.js';
@@ -3961,6 +4308,7 @@ export {
 export {
   createProjectExtraction,
   projectContextFiles,
+  projectRelationTargetTableNamesForExtraction,
   projectSourceFileName,
   type ProjectExtraction,
 } from './static/project-setup.js';
@@ -3986,6 +4334,7 @@ export {
   type SymbolProvenanceContext,
   type SymbolProvenanceContextOptions,
   type SymbolProvenanceKind,
+  type SymbolProvenanceRoot,
 } from './static/symbol-provenance.js';
 /** @internal */
 export {

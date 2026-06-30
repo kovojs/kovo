@@ -68,6 +68,9 @@ import type { SourceModuleContext } from './tables.js';
 interface ProjectExtractionMemo {
   contextFiles?: SourceFileInput[] | undefined;
   functionExtractionsByFileName?: Map<string, Map<string, ExtractedFunction>> | undefined;
+  relationTargetTableNamesByProperty?:
+    | ReturnType<typeof projectRelationTargetTableNamesByProperty>
+    | undefined;
   sourceModuleContext?: SourceModuleContext | undefined;
 }
 
@@ -131,6 +134,7 @@ interface ProjectExtractionMemo {
       // are released with the forgotten ts-morph source files instead of outliving them.
       memo.contextFiles = undefined;
       memo.functionExtractionsByFileName = undefined;
+      memo.relationTargetTableNamesByProperty = undefined;
       memo.sourceModuleContext = undefined;
     },
     files: options.files,
@@ -175,6 +179,19 @@ interface ProjectExtractionMemo {
   return contextFiles;
 }
 
+/** @internal */ export function projectRelationTargetTableNamesForExtraction(
+  extraction: ProjectExtraction,
+): ReturnType<typeof projectRelationTargetTableNamesByProperty> {
+  const cached = extraction.memo.relationTargetTableNamesByProperty;
+  if (cached) return cached;
+  const relationTargetTableNames = projectRelationTargetTableNamesByProperty(
+    extraction.sourceFiles,
+    extraction.tableNamesBySymbol,
+  );
+  extraction.memo.relationTargetTableNamesByProperty = relationTargetTableNames;
+  return relationTargetTableNames;
+}
+
 /** @internal */ export function projectFunctionExtractionsByFileName(
   extraction: ProjectExtraction,
 ): Map<string, Map<string, ExtractedFunction>> {
@@ -187,10 +204,7 @@ interface ProjectExtractionMemo {
   if (cached) return cached;
 
   const extractionsByFile = new Map<string, Map<string, ExtractedFunction>>();
-  const relationTargetTableNames = projectRelationTargetTableNamesByProperty(
-    extraction.sourceFiles,
-    extraction.tableNamesBySymbol,
-  );
+  const relationTargetTableNames = projectRelationTargetTableNamesForExtraction(extraction);
 
   extraction.sourceFiles.forEach((sourceFile, index) => {
     const file = extraction.files[index];

@@ -136,6 +136,29 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     );
   });
 
+  it('uses symbol provenance for destructured request values in SQL text', () => {
+    const diagnostics = diagnosticsFor(`
+      import { sql } from '@kovojs/drizzle';
+      export async function report(
+        input: { clause: string },
+        req: { search: { sort: string } },
+        db: any
+      ) {
+        const { sort } = req.search;
+        const { clause } = input;
+        await db.execute("select * from products order by " + sort);
+        await db.execute(sql.raw(clause));
+      }
+    `);
+
+    expect(diagnostics.map(({ message }) => message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('execute() receives request-derived SQL text'),
+        expect.stringContaining('sql.raw(...) receives request-derived text'),
+      ]),
+    );
+  });
+
   it('allows branded tags, separated parameter carriers, and allowlisted identifiers', () => {
     const diagnostics = diagnosticsFor(`
       import { sql, staticSql, trustedSql } from '@kovojs/drizzle';
