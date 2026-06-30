@@ -18,6 +18,7 @@ import {
 } from './mutation.js';
 import { query } from './query.js';
 import { s, type Schema } from './schema.js';
+import { task, type TaskSchedulingRequest } from './task.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 declare module '@kovojs/core' {
@@ -75,6 +76,59 @@ describe('server mutation lifecycle', () => {
     });
 
     return handle(state.rows);
+  }
+
+  function createTransactionalTaskDb() {
+    const state = {
+      commits: 0,
+      jobs: [] as Array<{ args: unknown; task: string }>,
+      rollbacks: 0,
+      rows: [] as string[],
+    };
+
+    const handle = (
+      rows: string[],
+      jobs: Array<{ args: unknown; task: string }>,
+      transactionScoped: boolean,
+    ) => ({
+      enqueueJob(job: { args: unknown; task: string }) {
+        jobs.push(job);
+      },
+      get commits() {
+        return state.commits;
+      },
+      insert(id: string) {
+        rows.push(id);
+      },
+      get jobs() {
+        return jobs;
+      },
+      get rollbacks() {
+        return state.rollbacks;
+      },
+      get rows() {
+        return rows;
+      },
+      get transactionScoped() {
+        return transactionScoped;
+      },
+      async transaction<Result>(callback: (tx: ReturnType<typeof handle>) => Promise<Result>) {
+        const transactionRows = [...state.rows];
+        const transactionJobs = [...state.jobs];
+        try {
+          const result = await callback(handle(transactionRows, transactionJobs, true));
+          state.rows.splice(0, state.rows.length, ...transactionRows);
+          state.jobs.splice(0, state.jobs.length, ...transactionJobs);
+          state.commits += 1;
+          return result;
+        } catch (error) {
+          state.rollbacks += 1;
+          throw error;
+        }
+      },
+    });
+
+    return handle(state.rows, state.jobs, false);
   }
 
   it('types inline optimistic transforms from mutation key and input schema', () => {
@@ -413,6 +467,174 @@ describe('server mutation lifecycle', () => {
     expect(db.rows).toEqual([]);
     expect(db.commits).toBe(0);
     expect(db.rollbacks).toBe(1);
+  });
+
+  it('schedules durable tasks through the transaction-scoped mutation request', async () => {
+    const db = createTransactionalTaskDb();
+    const sendReceipt = task('receipt/send', {
+      input: s.object({ orderId: s.string() }),
+      run() {
+        return 'sent';
+      },
+    });
+    const schedulerRequests: boolean[] = [];
+    const checkout = mutation('checkout/complete', {
+      input: s.object({ orderId: s.string() }),
+      async handler(
+        input,
+        request: { db: ReturnType<typeof createTransactionalTaskDb> } & TaskSchedulingRequest,
+      ) {
+        request.db.insert(input.orderId);
+        const handle = await request.schedule(sendReceipt, { orderId: input.orderId });
+        const typedTask: 'receipt/send' = handle.task;
+        return typedTask;
+      },
+    });
+
+    await expect(
+      runMutation(checkout, { orderId: 'o1' }, { db }, {
+        taskScheduler: {
+          schedule(request, definition, args) {
+            const db = (request as { db: ReturnType<typeof createTransactionalTaskDb> }).db;
+            schedulerRequests.push(db.transactionScoped);
+            db.enqueueJob({ args, task: definition.key });
+            return { id: 'job-1', task: definition.key };
+          },
+          cancel() {
+            return false;
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: 'receipt/send',
+    });
+    expect(schedulerRequests).toEqual([true]);
+    expect(db.rows).toEqual(['o1']);
+    expect(db.jobs).toEqual([{ args: { orderId: 'o1' }, task: 'receipt/send' }]);
+    expect(db.commits).toBe(1);
+    expect(db.rollbacks).toBe(0);
+  });
+
+  it('validates durable task args before scheduling from a mutation handler', async () => {
+    const sendReceipt = task('receipt/send-invalid', {
+      input: s.object({ orderId: s.string() }),
+      run() {
+        return 'sent';
+      },
+    });
+    const calls: unknown[] = [];
+    const checkout = mutation('checkout/invalid-task', {
+      input: s.object({ orderId: s.string() }),
+      async handler(input, request) {
+        return request.schedule(sendReceipt, { orderId: input.orderId.length });
+      },
+    });
+
+    await expect(
+      runMutation(checkout, { orderId: 'o1' }, {}, {
+        taskScheduler: {
+          schedule(_request, _definition, args) {
+            calls.push(args);
+            return { id: 'job-1', task: 'receipt/send-invalid' };
+          },
+          cancel() {
+            return false;
+          },
+        },
+      }),
+    ).rejects.toThrow('Expected string');
+    expect(calls).toEqual([]);
+  });
+
+  it('rolls back transaction-local durable task writes when the mutation handler throws', async () => {
+    const db = createTransactionalTaskDb();
+    const sendReceipt = task('receipt/rollback', {
+      input: s.object({ orderId: s.string() }),
+      run() {
+        return 'sent';
+      },
+    });
+    const checkout = mutation('checkout/rollback-task', {
+      input: s.object({ orderId: s.string() }),
+      async handler(
+        input,
+        request: { db: ReturnType<typeof createTransactionalTaskDb> } & TaskSchedulingRequest,
+      ) {
+        request.db.insert(input.orderId);
+        await request.schedule(sendReceipt, { orderId: input.orderId });
+        throw new Error('boom');
+      },
+    });
+
+    await expect(
+      runMutation(checkout, { orderId: 'o1' }, { db }, {
+        taskScheduler: {
+          schedule(request, definition, args) {
+            (request as { db: ReturnType<typeof createTransactionalTaskDb> }).db.enqueueJob({
+              args,
+              task: definition.key,
+            });
+            return { id: 'job-1', task: definition.key };
+          },
+          cancel() {
+            return false;
+          },
+        },
+      }),
+    ).rejects.toThrow('boom');
+    expect(db.rows).toEqual([]);
+    expect(db.jobs).toEqual([]);
+    expect(db.commits).toBe(0);
+    expect(db.rollbacks).toBe(1);
+  });
+
+  it('fails loudly when a direct mutation caller schedules without a task scheduler', async () => {
+    const sendReceipt = task('receipt/no-scheduler', {
+      input: s.object({ orderId: s.string() }),
+      run() {
+        return 'sent';
+      },
+    });
+    const checkout = mutation('checkout/no-scheduler', {
+      input: s.object({ orderId: s.string() }),
+      handler(input, request) {
+        return request.schedule(sendReceipt, { orderId: input.orderId });
+      },
+    });
+
+    await expect(runMutation(checkout, { orderId: 'o1' }, {})).rejects.toThrow(
+      'request.schedule(task, args) requires a durable task scheduler',
+    );
+  });
+
+  it('delegates durable task cancellation to the mutation task scheduler', async () => {
+    const handle = { id: 'job-1', task: 'receipt/cancel' };
+    const calls: unknown[] = [];
+    const cancelReceipt = mutation('checkout/cancel-receipt', {
+      input: s.object({}),
+      handler(_input, request) {
+        return request.cancel(handle);
+      },
+    });
+
+    await expect(
+      runMutation(cancelReceipt, {}, { marker: 'request-1' }, {
+        taskScheduler: {
+          schedule() {
+            throw new Error('not used');
+          },
+          cancel(request, taskHandle) {
+            calls.push({ marker: (request as { marker: string }).marker, taskHandle });
+            return true;
+          },
+        },
+      }),
+    ).resolves.toMatchObject({
+      ok: true,
+      value: true,
+    });
+    expect(calls).toEqual([{ marker: 'request-1', taskHandle: handle }]);
   });
 
   it('types transaction callbacks with the mutation request shape', async () => {

@@ -14,6 +14,13 @@ import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
 import type { JsonSerializable } from '../json-boundary.js';
+import type {
+  TaskDefinition,
+  TaskHandle,
+  TaskInput,
+  TaskScheduleOptions,
+  TaskSchedulingRequest,
+} from '../task.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
 
 /**
@@ -280,7 +287,7 @@ export interface MutationDefinition<
   guard?: Guard<Request, GuardedRequest>;
   handler: (
     input: InferSchema<InputSchema>,
-    request: GuardedRequest,
+    request: GuardedRequest & TaskSchedulingRequest,
     context: MutationContext<Errors>,
   ) => Promise<Value | MutationFail> | Value | MutationFail;
   input: InputSchema;
@@ -366,6 +373,19 @@ export interface RunMutationOptions<
    * `guardResolved`; direct callers omit it and `runMutation` parses `rawInput` itself.
    */
   preParsedInput?: { value: unknown };
+  /** @internal Transaction-scoped durable task scheduler used by request.schedule/cancel (SPEC §9.6). */
+  taskScheduler?: TaskScheduler;
+}
+
+/** @internal Runtime adapter implemented by the durable task queue/runner integration. */
+export interface TaskScheduler {
+  cancel(request: unknown, handle: TaskHandle): Promise<boolean> | boolean;
+  schedule<const Task extends TaskDefinition<string, Schema<unknown>, any>>(
+    request: unknown,
+    definition: Task,
+    args: TaskInput<Task>,
+    options?: TaskScheduleOptions,
+  ): Promise<TaskHandle<Task['key']>> | TaskHandle<Task['key']>;
 }
 
 /** App-scoped mutation factory. `createApp()` uses this to contextually type handlers from configured request providers (SPEC §9.5/§10.3). */

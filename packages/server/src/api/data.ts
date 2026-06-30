@@ -104,6 +104,7 @@ export type {
   TaskRunnableQueryInput,
   TaskRunContext,
   TaskScheduleOptions,
+  TaskSchedulingRequest,
 } from '../task.js';
 // SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle. `Reader<Db>`
 // is the read-only loader-handle type mirror; `KovoReadonlyHandleError` is the fail-closed runtime

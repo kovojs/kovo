@@ -55,6 +55,7 @@ import {
   type NoJsMutationResponse,
 } from './mutation-wire.js';
 import type { GeneratedFragmentRenderable } from './renderable.js';
+import type { TaskInput, TaskSchedulingRequest } from './task.js';
 import {
   commitReservedMutationReplay,
   canonicalRequestFingerprint,
@@ -88,6 +89,7 @@ import type {
   MutationResult,
   MutationSuccess,
   RunMutationOptions,
+  TaskScheduler,
 } from './mutation/definition.js';
 import { isStaleVersionError, staleVersionConflict } from './mutation/stale-version.js';
 export {
@@ -114,6 +116,7 @@ export type {
   MutationSuccess,
   QueryRerun,
   RunMutationOptions,
+  TaskScheduler,
   WriteDefinition,
 } from './mutation/definition.js';
 // KV429 (SPEC §10.3/§11.1): stale-version conflict signal for optimistic-concurrency mutations.
@@ -465,7 +468,11 @@ export async function runMutation<
     setSessionRevocationClearSiteData: () => void;
   };
   const runHandler = async (handlerRequest: GuardedRequest): Promise<Value> => {
-    const handlerValue = await definition.handler(input, handlerRequest, context);
+    const scheduledHandlerRequest = requestWithTaskScheduling(
+      handlerRequest,
+      options.taskScheduler,
+    );
+    const handlerValue = await definition.handler(input, scheduledHandlerRequest, context);
 
     if (isMutationFail(handlerValue)) {
       throw new MutationRollback(handlerValue);
@@ -536,6 +543,82 @@ function transactionCapableRequestDb(request: unknown): TransactionCapableReques
 function requestWithTransactionDb(request: unknown, transactionDb: unknown): unknown {
   if (!isRecord(request)) return request;
   return { ...request, db: transactionDb };
+}
+
+function requestWithTaskScheduling<Request>(
+  request: Request,
+  scheduler: TaskScheduler | undefined,
+): Request & TaskSchedulingRequest {
+  let scheduledRequest: Request & TaskSchedulingRequest;
+
+  const schedule: TaskSchedulingRequest['schedule'] = async (definition, args, options) => {
+    if (!scheduler) {
+      throw new Error(
+        'request.schedule(task, args) requires a durable task scheduler. Direct runMutation callers must pass RunMutationOptions.taskScheduler before calling request.schedule().',
+      );
+    }
+
+    const parsedArgs = (await parseSchemaAsync(definition.input, args)) as TaskInput<
+      typeof definition
+    >;
+    return scheduler.schedule(scheduledRequest, definition, parsedArgs, options);
+  };
+
+  const cancel: TaskSchedulingRequest['cancel'] = async (handle) => {
+    if (!scheduler) {
+      throw new Error(
+        'request.cancel(handle) requires a durable task scheduler. Direct runMutation callers must pass RunMutationOptions.taskScheduler before calling request.cancel().',
+      );
+    }
+
+    return scheduler.cancel(scheduledRequest, handle);
+  };
+
+  scheduledRequest = requestWithTaskSchedulingProperties(request, schedule, cancel);
+  return scheduledRequest;
+}
+
+function requestWithTaskSchedulingProperties<Request>(
+  request: Request,
+  schedule: TaskSchedulingRequest['schedule'],
+  cancel: TaskSchedulingRequest['cancel'],
+): Request & TaskSchedulingRequest {
+  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
+    return { cancel, schedule } as Request & TaskSchedulingRequest;
+  }
+
+  return new Proxy(request as object, {
+    get(target, property) {
+      if (property === 'schedule') return schedule;
+      if (property === 'cancel') return cancel;
+
+      const targetValue = Reflect.get(target, property, target) as unknown;
+      return typeof targetValue === 'function' ? targetValue.bind(target) : targetValue;
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (property === 'schedule' || property === 'cancel') {
+        return {
+          configurable: true,
+          enumerable: true,
+          value: property === 'schedule' ? schedule : cancel,
+          writable: false,
+        };
+      }
+
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+    has(target, property) {
+      return property === 'schedule' || property === 'cancel' || property in target;
+    },
+    ownKeys(target) {
+      const keys = Reflect.ownKeys(target);
+      return [
+        ...keys,
+        ...(keys.includes('schedule') ? [] : ['schedule']),
+        ...(keys.includes('cancel') ? [] : ['cancel']),
+      ];
+    },
+  }) as Request & TaskSchedulingRequest;
 }
 
 function mutationLifecycleOptionsWithSqlPolicy<

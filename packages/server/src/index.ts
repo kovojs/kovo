@@ -314,6 +314,7 @@ export type {
   TaskRunnableQueryInput,
   TaskRunContext,
   TaskScheduleOptions,
+  TaskSchedulingRequest,
   UnsafeRegexBrand,
   UnsafeRegexFact,
   UnverifiedAcceptance,

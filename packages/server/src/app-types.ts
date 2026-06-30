@@ -16,7 +16,7 @@ import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
-import type { TaskDefinition, TaskFactory } from './task.js';
+import type { TaskDefinition, TaskFactory, TaskSchedulingRequest } from './task.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 
@@ -51,7 +51,7 @@ export interface AppAuthoringContext<AppRequest> {
   /** Define a query whose `load`/`guard` callbacks see the app lifecycle request. */
   query: QueryFactory<AppRequest>;
   /** Define a mutation whose `handler`/`guard`/`transaction` callbacks see the app lifecycle request. */
-  mutation: MutationFactory<AppRequest>;
+  mutation: MutationFactory<AppRequest & TaskSchedulingRequest>;
   /** Define a route whose `guard`/`page` callbacks see the app lifecycle request. */
   route: RouteFactory<AppRequest>;
   /** Define a durable task registry entry (SPEC §9.6). */

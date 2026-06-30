@@ -20,6 +20,16 @@ export interface TaskScheduleOptions {
   coalesce?: 'debounce' | 'throttle';
 }
 
+/** Mutation request helpers for durable task scheduling (SPEC §9.6). */
+export interface TaskSchedulingRequest {
+  cancel(handle: TaskHandle): Promise<boolean>;
+  schedule<const Task extends TaskDefinition<string, Schema<unknown>, any>>(
+    definition: Task,
+    args: TaskInput<Task>,
+    options?: TaskScheduleOptions,
+  ): Promise<TaskHandle<Task['key']>>;
+}
+
 /** Minimal public shape of a mutation accepted by `TaskRunContext.runMutation(...)`. */
 export interface TaskRunnableMutation<Input = unknown> {
   input: Schema<Input>;
