@@ -21,7 +21,7 @@ const kovoServerQueryTypes = {
   fileName: 'kovo-server-query-types.d.ts',
   source: [
     'declare module "@kovojs/server" {',
-    '  export type Reader<Db> = Db;',
+    '  export type Reader<Db> = Omit<Db, "insert" | "update" | "delete" | "execute" | "run" | "batch">;',
     '  export interface QueryLoadContext<Request = unknown, Db = unknown> {',
     '    db?: Reader<Db>;',
     '    request: Request;',
@@ -1090,6 +1090,66 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         key: 'arg:id',
         kind: 'query',
         name: 'note/non-null-context-db',
+        scope: 'args',
+        site: 'note.queries.ts:14',
+      },
+    ]);
+  });
+
+  it('keeps Kovo Reader context.db reads when Drizzle declarations are unresolved', () => {
+    const files = [
+      kovoServerQueryTypes,
+      {
+        fileName: 'note.queries.ts',
+        source: [
+          'import { eq } from "drizzle-orm";',
+          'import type { QueryLoadContext } from "@kovojs/server";',
+          'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+          '',
+          'type AppDb = PgAsyncDatabase<any, any>;',
+          'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
+          '',
+          'export const notes = pgTable("notes", {',
+          '  id: text("id").primaryKey(),',
+          '  ownerId: text("owner_id").notNull(),',
+          '  title: text("title").notNull(),',
+          '}, kovo({ domain: "note", key: "id", owner: "ownerId" }));',
+          '',
+          'export const noteQuery = query("note/unresolved-reader-context-db", {',
+          '  load(input: { id: string }, context?: AppQueryLoadContext) {',
+          '    const db = context!.db!;',
+          '    return db.select({ id: notes.id, title: notes.title }).from(notes).where(eq(notes.id, input.id));',
+          '  },',
+          '});',
+        ].join('\n'),
+      },
+    ];
+
+    const facts = extractQueryFactsFromProject({ files });
+    expect(facts).toEqual([
+      {
+        hasClientArgPredicate: true,
+        instanceKey: {
+          domain: 'note',
+          key: 'arg:id',
+        },
+        query: 'note/unresolved-reader-context-db',
+        reads: ['note'],
+        shape: {
+          id: 'string',
+          title: 'string',
+        },
+        site: 'note.queries.ts:14',
+      },
+    ]);
+
+    const ownerAudit = extractOwnerAuditFromProject({ files });
+    expect(ownerAudit.scopeAudits).toEqual([
+      {
+        domain: 'note',
+        key: 'arg:id',
+        kind: 'query',
+        name: 'note/unresolved-reader-context-db',
         scope: 'args',
         site: 'note.queries.ts:14',
       },

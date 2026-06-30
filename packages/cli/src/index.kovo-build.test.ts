@@ -1228,6 +1228,7 @@ export default createApp({
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
       expect(errorOutput).toContain('ERROR KV414 QUERY accountById');
+      expect(errorOutput).toContain('ERROR KV414 QUERY inlineContextAccountById');
       expect(errorOutput).toContain('ERROR KV438 WRITE updateRole');
       expect(errorOutput).toContain('ERROR KV433 QUERY badRead');
       expect(errorOutput).toContain('ERROR KV429 WRITE decrementStock');
@@ -2889,12 +2890,24 @@ function writeSecurityPreflightStaticSources(root: string): void {
     [
       'import { eq, sql } from "drizzle-orm";',
       'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+      'import type { QueryLoadContext } from "@kovojs/server";',
       'import { query, s } from "@kovojs/server";',
       'import { accounts } from "./schema";',
+      '',
+      'type AppDb = PgAsyncDatabase<any, any>;',
+      'type AppQueryLoadContext = QueryLoadContext<unknown, AppDb>;',
       '',
       'export const accountById = query("accountById", {',
       '  output: s.object({ id: s.string() }),',
       '  async load(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
+      '    return db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, input.id));',
+      '  },',
+      '});',
+      '',
+      'export const inlineContextAccountById = query("inlineContextAccountById", {',
+      '  output: s.object({ id: s.string() }),',
+      '  async load(input: { id: string }, context?: AppQueryLoadContext) {',
+      '    const db = context!.db!;',
       '    return db.select({ id: accounts.id }).from(accounts).where(eq(accounts.id, input.id));',
       '  },',
       '});',

@@ -321,7 +321,25 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
     return false;
   }
 
-  return type.getAliasTypeArguments().some((argument) => isDrizzleDatabaseType(argument));
+  return type
+    .getAliasTypeArguments()
+    .some(
+      (argument) =>
+        isDrizzleDatabaseType(argument) || isUnresolvedDrizzleDatabaseTypeAlias(argument),
+    );
+}
+
+function isUnresolvedDrizzleDatabaseTypeAlias(type: MorphType): boolean {
+  // SPEC §9.4/§11.1: build preflight runs before artifact emission even in fixture/temp apps whose
+  // Drizzle package declarations may be absent. For a Kovo-owned `Reader<Db>` only, preserve the
+  // same blessed-name fallback that direct `db: PgAsyncDatabase` annotations use, but do not promote
+  // local aliases with declarations.
+  return [type.getAliasSymbol(), type.getSymbol(), type.getApparentType().getSymbol()].some(
+    (symbol) =>
+      symbol !== undefined &&
+      isDrizzleDatabaseTypeName(symbol.getName()) &&
+      symbol.getDeclarations().length === 0,
+  );
 }
 
 function isNullishType(type: MorphType): boolean {

@@ -98,6 +98,8 @@ interface ProjectExtractionMemo {
       lib: ['lib.es2022.d.ts'],
       moduleResolution: ts.ModuleResolutionKind.Bundler,
       noEmit: true,
+      baseUrl: join(DRIZZLE_STATIC_PROJECT_ROOT, '../../..'),
+      paths: kovoWorkspacePackagePaths(),
       skipLibCheck: true,
       strict: true,
       target: ts.ScriptTarget.ESNext,
@@ -142,6 +144,21 @@ interface ProjectExtractionMemo {
     sourceFiles,
     tableNamesBySymbol,
     unmodeledRelationNamesBySymbol,
+  };
+}
+
+function kovoWorkspacePackagePaths(): NonNullable<CompilerOptions['paths']> {
+  return {
+    '@kovojs/browser': ['packages/browser/src/index.ts'],
+    '@kovojs/browser/*': ['packages/browser/src/*'],
+    '@kovojs/core': ['packages/core/src/index.ts'],
+    '@kovojs/core/*': ['packages/core/src/*'],
+    '@kovojs/drizzle': ['packages/drizzle/src/runtime.ts'],
+    '@kovojs/drizzle/*': ['packages/drizzle/src/*'],
+    '@kovojs/server': ['packages/server/src/index.ts'],
+    '@kovojs/server/*': ['packages/server/src/*'],
+    '@kovojs/style': ['packages/style/src/index.ts'],
+    '@kovojs/style/*': ['packages/style/src/*'],
   };
 }
 
