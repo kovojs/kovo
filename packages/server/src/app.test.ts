@@ -1513,6 +1513,33 @@ describe('server createApp request shell', () => {
     });
   });
 
+  it('D1: logs default-config endpoint exceptions to stderr without changing the stable 500', async () => {
+    const thrown = new Error('private endpoint detail');
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const statusEndpoint = endpoint('/status', {
+      handler() {
+        throw thrown;
+      },
+      method: 'GET',
+      reason: 'default endpoint error logging',
+      response: rawJsonResponse,
+    });
+    const handler = createRequestHandler(createApp({ endpoints: [statusEndpoint] }));
+
+    try {
+      const response = await handler(new Request('https://example.test/status?check=true'));
+
+      expect(response.status).toBe(500);
+      await expect(response.json()).resolves.toEqual({ code: 'SERVER_ERROR', payload: {} });
+      expect(errorSpy).toHaveBeenCalledWith(
+        expect.stringContaining('[kovo] app-request failed url=/status?check=true'),
+        thrown,
+      );
+    } finally {
+      errorSpy.mockRestore();
+    }
+  });
+
   it('reports thrown JSON endpoint exceptions as stable JSON 500 responses', async () => {
     const thrown = new Error('private JSON endpoint detail');
     const onError = vi.fn();

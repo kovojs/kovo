@@ -44,13 +44,33 @@ export function reportServerError(
   error: unknown,
   context: ServerErrorDiagnosticContext,
 ): void {
-  if (!onError) return;
+  if (!onError) {
+    reportServerErrorToStderr(error, context);
+    return;
+  }
 
   try {
     const result = onError(error, context);
     if (result && typeof result === 'object' && 'then' in result) {
       void result.catch((_diagnosticError) => undefined);
     }
+  } catch (_diagnosticError) {
+    void _diagnosticError;
+    // Diagnostics must not change SPEC §9.2's stable server-error responses.
+  }
+}
+
+function reportServerErrorToStderr(error: unknown, context: ServerErrorDiagnosticContext): void {
+  try {
+    const details = [
+      `[kovo] ${context.operation} failed`,
+      context.url === undefined ? undefined : `url=${context.url}`,
+      context.routePath === undefined ? undefined : `route=${context.routePath}`,
+      context.queryKey === undefined ? undefined : `query=${context.queryKey}`,
+      context.mutationKey === undefined ? undefined : `mutation=${context.mutationKey}`,
+      context.status === undefined ? undefined : `status=${context.status}`,
+    ].filter((part): part is string => part !== undefined);
+    console.error(details.join(' '), error);
   } catch (_diagnosticError) {
     void _diagnosticError;
     // Diagnostics must not change SPEC §9.2's stable server-error responses.
