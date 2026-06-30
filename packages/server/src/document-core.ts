@@ -18,7 +18,6 @@ import {
   renderDeferredStream,
   renderDeferredStreamingResponse,
   type DeferredStreamChunk,
-  type DeferredStreamChunkInput,
 } from './deferred-stream.js';
 import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
 import { renderShellAttributes, type DocumentConfig } from './document-structured.js';
@@ -98,7 +97,7 @@ export interface DocumentAssemblyOptions {
 /** @internal */
 export interface DocumentRoutePageResponse extends DocumentRouteResponseBase {
   /** @internal Deferred route-region chunks streamed after the initial document shell. */
-  deferredChunks?: readonly DeferredStreamChunkInput[];
+  deferredChunks?: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[];
 }
 
 /**
@@ -526,7 +525,7 @@ function routeDocumentResult(
 }
 
 function deferredChunkPromises(
-  chunks: readonly DeferredStreamChunkInput[],
+  chunks: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[],
 ): readonly Promise<DeferredStreamChunk>[] | undefined {
   return chunks.some(isPromiseLike) ? chunks.map((chunk) => Promise.resolve(chunk)) : undefined;
 }

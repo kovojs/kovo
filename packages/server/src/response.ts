@@ -1,4 +1,4 @@
-import type { DeferredStreamChunkInput } from './deferred-stream.js';
+import type { DeferredStreamChunk } from './deferred-stream.js';
 import type { StorageCapability } from '@kovojs/core';
 import {
   blessSink,
@@ -102,7 +102,7 @@ export interface RoutePageResponse extends ServerResponseBase<
   RouteResponseStatus
 > {
   /** @internal Deferred route-region chunks streamed after the initial document shell. */
-  deferredChunks?: readonly DeferredStreamChunkInput[];
+  deferredChunks?: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[];
   /** @internal The request after the route lifecycle resolved session/db (SPEC §6.5). */
   lifecycleRequest?: unknown;
 }

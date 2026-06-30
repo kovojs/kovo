@@ -47,9 +47,6 @@ export interface DeferredStreamChunk {
   queries?: readonly DeferredQueryChunk[];
 }
 
-/** @internal A route response may carry realized chunks or pending region renders. */
-export type DeferredStreamChunkInput = DeferredStreamChunk | Promise<DeferredStreamChunk>;
-
 /** @internal */
 export interface DeferredStreamResponse extends ServerResponseBase<
   string,
