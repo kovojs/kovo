@@ -1,41 +1,32 @@
+#!/usr/bin/env node
 import assert from 'node:assert/strict';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 
-import { compileComponentModule } from '../dist/compiler/src/index.mjs';
+import { generatedProdEmitInput, validateGeneratedEmitContract } from './generated-artifacts.mjs';
 
-const result = compileComponentModule({
-  fileName: 'routes/products/product-card.tsx',
-  source: `
-import { component } from '@kovojs/core';
-
-export const ProductCard = component({
-  render: () => (
-    <article>
-      <button onClick={() => addToCart(product.id)}>Add</button>
-    </article>
-  ),
-});
-`,
-});
-
-const fileNames = result.files.map((file) => file.fileName);
-assert.deepEqual(fileNames, [
-  'routes/products/product-card.server.js',
-  'routes/products/product-card.client.js',
-  'generated/registries.d.ts',
-]);
-
-const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
-const clientSource = result.files.find((file) => file.kind === 'client')?.source ?? '';
-
-assert.match(
-  serverSource,
-  /on:click="\/c\/__v\/[0-9a-f]{16}-[0-9a-f]{8}\/routes\/products\/product-card\.client\.js#ProductCard\$button_click"/,
-);
-assert.match(clientSource, /export const ProductCard\$button_click = handler/);
-
-for (const fileName of fileNames) {
-  assert.doesNotMatch(fileName, /chunk|[a-f0-9]{8,}/i);
+export async function loadCompileComponentModule() {
+  const { compileComponentModule } = await import('../dist/compiler/src/index.mjs');
+  return compileComponentModule;
 }
 
-console.log('prod-emit-check/v1');
-console.log('OK');
+export async function runProdEmitCheck({ compileComponentModule, stdout = process.stdout } = {}) {
+  const compile = compileComponentModule ?? (await loadCompileComponentModule());
+  const result = compile(generatedProdEmitInput);
+  assert.deepEqual(validateGeneratedEmitContract(result.files), []);
+  stdout.write('prod-emit-check/v1\n');
+  stdout.write('OK\n');
+  return 0;
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {
+  runProdEmitCheck().then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (error) => {
+      console.error(error);
+      process.exitCode = 1;
+    },
+  );
+}
