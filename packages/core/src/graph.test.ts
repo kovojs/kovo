@@ -76,4 +76,20 @@ describe('kovo graph input validation', () => {
       }),
     ).toEqual([]);
   });
+
+  it('accepts durable task facts as graph arrays', () => {
+    expect(
+      validateKovoExplainInput({
+        tasks: [
+          {
+            cron: '0 2 * * *',
+            key: 'email/send-receipt',
+            runMutations: ['order/mark-sent'],
+            runQueries: ['order/by-id'],
+            schedules: ['email/send-receipt'],
+          },
+        ],
+      }),
+    ).toEqual([]);
+  });
 });

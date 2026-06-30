@@ -11,6 +11,7 @@ import {
   mutationHandlers,
   parseComponentModule,
   soleJsxExpressionChild,
+  taskRunHandlers,
 } from './parse.js';
 
 describe('compiler scan parser helpers', () => {
@@ -356,6 +357,30 @@ export const save = mutation({
     const [handler] = mutationHandlers(parseComponentModule('cart.mutation.ts', source));
 
     expect(handler?.paramNames).toEqual(['db']);
+  });
+
+  it('records durable task run handlers and composition edges', () => {
+    const source = `
+export const sendReceipt = task('email/send-receipt', {
+  cron: '0 2 * * *',
+  input: receiptInput,
+  async run(args, ctx) {
+    await ctx.runQuery(orderQuery, { id: args.orderId });
+    await ctx.runMutation(markSent, { id: args.orderId });
+    await ctx.schedule(sendReceipt, args, { afterMs: 1000 });
+  },
+});
+`;
+    const [handler] = taskRunHandlers(parseComponentModule('tasks.ts', source));
+
+    expect(handler).toMatchObject({
+      cron: '0 2 * * *',
+      key: 'email/send-receipt',
+      paramNames: ['args', 'ctx'],
+      runMutationEdges: ['ctx.runMutation'],
+      runQueryEdges: ['ctx.runQuery'],
+      scheduleEdges: ['ctx.schedule'],
+    });
   });
 
   it('records zero-argument JSX arrow attribute body facts', () => {
