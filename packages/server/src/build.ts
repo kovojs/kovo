@@ -538,7 +538,15 @@ function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
         }),
   };
 
-  return new Request(nodeRequestUrl(nodeRequest, options), init);
+  const request = new Request(nodeRequestUrl(nodeRequest, options), init);
+  const peerAddress = nodeRequest.socket?.remoteAddress?.trim();
+  if (peerAddress) {
+    Object.defineProperty(request, '__kovoPeerAddress', {
+      configurable: true,
+      value: peerAddress,
+    });
+  }
+  return request;
 }
 
 function nodeRequestUrl(nodeRequest, options) {
@@ -908,7 +916,15 @@ function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
         }),
   };
 
-  return new Request(nodeRequestUrl(nodeRequest, options), init);
+  const request = new Request(nodeRequestUrl(nodeRequest, options), init);
+  const peerAddress = nodeRequest.socket?.remoteAddress?.trim();
+  if (peerAddress) {
+    Object.defineProperty(request, '__kovoPeerAddress', {
+      configurable: true,
+      value: peerAddress,
+    });
+  }
+  return request;
 }
 
 function nodeRequestUrl(nodeRequest, options) {

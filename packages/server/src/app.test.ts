@@ -1045,6 +1045,7 @@ describe('server createApp request shell', () => {
     const app = createApp({
       mutations: [addToCart],
       requestLimits: {
+        clientIp: (request) => request.headers.get('x-kovo-test-ip') ?? undefined,
         global: false,
         maxBodyBytes: false,
         perIp: false,
@@ -1056,7 +1057,7 @@ describe('server createApp request shell', () => {
     const request = () =>
       new Request('https://example.test/_m/cart/add-rate-limited', {
         body: new URLSearchParams({ quantity: '2' }),
-        headers: { 'X-Forwarded-For': '203.0.113.9' },
+        headers: { 'X-Kovo-Test-Ip': '203.0.113.9' },
         method: 'POST',
       });
 
@@ -1102,11 +1103,39 @@ describe('server createApp request shell', () => {
 
     const untrusted = makeHandler(false);
     expect((await untrusted(request('cart/proxy-untrusted', '203.0.113.1'))).status).toBe(303);
-    expect((await untrusted(request('cart/proxy-untrusted', '203.0.113.2'))).status).toBe(429);
+    expect((await untrusted(request('cart/proxy-untrusted', '203.0.113.2'))).status).toBe(303);
 
     const trusted = makeHandler(true);
     expect((await trusted(request('cart/proxy-trusted', '203.0.113.1'))).status).toBe(303);
     expect((await trusted(request('cart/proxy-trusted', '203.0.113.2'))).status).toBe(303);
+  });
+
+  it('disables per-ip pre-dispatch limiting when no trustworthy client key is available', async () => {
+    const addToCart = mutation('cart/no-client-ip-key', {
+      csrf: false,
+      handler: () => ({ ok: true }),
+      input: s.object({}),
+    });
+    const app = createApp({
+      mutations: [addToCart],
+      requestLimits: {
+        global: false,
+        maxBodyBytes: false,
+        mutations: { global: false, perIp: { max: 1, windowMs: 60_000 } },
+        perIp: false,
+        queries: { global: false, perIp: false },
+      },
+    });
+    const handler = createRequestHandler(app);
+    const request = () =>
+      new Request('https://example.test/_m/cart/no-client-ip-key', {
+        body: new URLSearchParams(),
+        method: 'POST',
+      });
+
+    expect((await handler(request())).status).toBe(303);
+    expect((await handler(request())).status).toBe(303);
+    expect(appRateLimitKeyCounts(app).perIp).toBe(0);
   });
 
   it('uses the rightmost forwarded IP behind a trusted proxy', async () => {

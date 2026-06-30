@@ -35,6 +35,7 @@ export type NodeRequestHandler = (
 ) => Promise<void> | void;
 
 const bodylessMethods = new Set(['GET', 'HEAD']);
+const requestPeerAddressProperty = '__kovoPeerAddress';
 
 /**
  * Adapt a Web-standard `RequestHandler` (from `createRequestHandler`) to a Node
@@ -128,7 +129,15 @@ export function nodeRequestToWebRequest(
         }),
   };
 
-  return new Request(nodeRequestUrl(nodeRequest, options), init);
+  const request = new Request(nodeRequestUrl(nodeRequest, options), init);
+  const peerAddress = nodeRequest.socket?.remoteAddress?.trim();
+  if (peerAddress) {
+    Object.defineProperty(request, requestPeerAddressProperty, {
+      configurable: true,
+      value: peerAddress,
+    });
+  }
+  return request;
 }
 
 export async function writeWebResponseToNode(
