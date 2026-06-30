@@ -151,7 +151,7 @@ export function addDurableTaskProofs(root: string): void {
       '    const attempt = (flakyTaskAttempts.get(input.proofId) ?? 0) + 1;',
       '    flakyTaskAttempts.set(input.proofId, attempt);',
       '    if (attempt <= input.failTimes) {',
-      "      throw new Error(`durable flaky proof failed attempt ${attempt}`);",
+      '      throw new Error(`durable flaky proof failed attempt ${attempt}`);',
       '    }',
       '    await context.runMutation(recordTaskEffect, { proofId: input.proofId });',
       '  },',

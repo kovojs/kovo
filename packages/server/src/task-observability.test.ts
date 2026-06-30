@@ -7,7 +7,7 @@ import {
 import { MemoryDurableTaskQueue } from './task-queue.js';
 
 describe('durable task observability (SPEC §9.6)', () => {
-  it('lists failed jobs without exposing serialized args by default', async () => {
+  it('lists dead-lettered jobs without exposing serialized args by default', async () => {
     const store = new MemoryDurableTaskQueue();
     const handle = await store.enqueue({
       args: { email: 'buyer@example.test', token: 'secret-token' },
@@ -21,7 +21,7 @@ describe('durable task observability (SPEC §9.6)', () => {
     await expect(status.get(handle)).resolves.toMatchObject({
       id: handle.id,
       task: 'email.send',
-      status: 'failed',
+      status: 'dead',
       attempts: 1,
       lastError: 'smtp down',
     });
