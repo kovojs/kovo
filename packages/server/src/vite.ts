@@ -5,16 +5,11 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import type { DiagnosticDocumentDiagnostic } from './document-diagnostics.js';
 import type { StylesheetAsset } from './hints.js';
-import {
-  collectCompilerQueryShapeFacts as collectSharedCompilerQueryShapeFacts,
-  collectDataPlaneAnalysis as collectSharedDataPlaneAnalysis,
-  collectDataPlaneErrorDiagnostics as collectSharedDataPlaneErrorDiagnostics,
-  collectRuntimeRegistryFacts,
-  type DataPlaneDiagnostic,
-  isDataPlaneSourceFile as isSharedDataPlaneSourceFile,
-  type DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
-  type QueryShapeFact as CompilerQueryShapeFact,
-} from './internal/data-plane-static-analysis.js';
+import type {
+  DataPlaneDiagnostic,
+  DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
+  QueryShapeFact as CompilerQueryShapeFact,
+} from '@kovojs/server/internal/data-plane-static-analysis';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
 
 /** Options for the public Kovo Vite plugin (SPEC.md §9.5). */
@@ -188,9 +183,10 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
 
   // SPEC.md §11.4: re-run the whole-project gate at most once per debounce window when an app
   // data-plane source file changes — never on every per-file transform/HMR keystroke.
-  const scheduleDevDataPlaneGate = (file: string): void => {
+  const scheduleDevDataPlaneGate = async (file: string): Promise<void> => {
     if (viteCommand !== 'serve') return;
-    if (!isSharedDataPlaneSourceFile(file, dirname(appEntryFileName(app, root)))) return;
+    const adapter = await importKovoDataPlaneStaticAnalysisModule();
+    if (!adapter.isDataPlaneSourceFile(file, dirname(appEntryFileName(app, root)))) return;
     compilerQueryShapeFacts = undefined;
     if (devDataPlaneDebounce) clearTimeout(devDataPlaneDebounce);
     devDataPlaneDebounce = setTimeout(() => {
@@ -329,7 +325,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     async handleHotUpdate(context) {
       // SPEC.md §9.5.1 / §11.4: an app data-plane file changed — re-run the project-level gate
       // (debounced) so dev teaching diagnostics stay current without per-keystroke analysis.
-      scheduleDevDataPlaneGate(context.file);
+      void scheduleDevDataPlaneGate(context.file).catch(() => {});
 
       const appShellResult = await appShellPlugin?.handleHotUpdate?.(context);
       if (appShellResult !== undefined) return appShellResult;
@@ -342,6 +338,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
 }
 
 let compilerSourceResolutionHooksRegistered = false;
+let dataPlaneStaticAnalysisModulePromise:
+  | Promise<typeof import('@kovojs/server/internal/data-plane-static-analysis')>
+  | undefined;
 
 function authoredAppEntry(app: string): string {
   if (typeof app !== 'string' || app.trim() === '') {
@@ -459,6 +458,15 @@ async function importKovoCompilerPackageStylesModule(): Promise<Record<string, u
   }
 }
 
+async function importKovoDataPlaneStaticAnalysisModule(): Promise<
+  typeof import('@kovojs/server/internal/data-plane-static-analysis')
+> {
+  registerCompilerSourceResolutionHooks();
+  dataPlaneStaticAnalysisModulePromise ??=
+    import('@kovojs/server/internal/data-plane-static-analysis');
+  return dataPlaneStaticAnalysisModulePromise;
+}
+
 async function importOptionalModule(specifier: string): Promise<Record<string, unknown>> {
   return (await import(specifier)) as Record<string, unknown>;
 }
@@ -500,14 +508,16 @@ async function collectDataPlaneErrorDiagnostics(
   root: string,
   app: string,
 ): Promise<DataPlaneDiagnostic[]> {
-  return collectSharedDataPlaneErrorDiagnostics({
+  const adapter = await importKovoDataPlaneStaticAnalysisModule();
+  return adapter.collectDataPlaneErrorDiagnostics({
     appSourceDir: dirname(appEntryFileName(app, root)),
     root,
   });
 }
 
 async function collectRuntimeRegistry(root: string, app: string): Promise<RuntimeRegistryFacts> {
-  return collectRuntimeRegistryFacts({
+  const adapter = await importKovoDataPlaneStaticAnalysisModule();
+  return adapter.collectRuntimeRegistryFacts({
     appSourceDir: dirname(appEntryFileName(app, root)),
     root,
   });
@@ -517,14 +527,15 @@ async function collectCompilerQueryShapeFacts(
   root: string,
   app: string,
 ): Promise<readonly CompilerQueryShapeFact[]> {
+  const adapter = await importKovoDataPlaneStaticAnalysisModule();
   if (process.env.KOVO_BUILD_GRAPH_DERIVATION === '1') {
-    await collectSharedDataPlaneAnalysis({
+    await adapter.collectDataPlaneAnalysis({
       appSourceDir: dirname(appEntryFileName(app, root)),
       root,
       skipStaticFacts: true,
     });
   }
-  return collectSharedCompilerQueryShapeFacts({
+  return adapter.collectCompilerQueryShapeFacts({
     appSourceDir: dirname(appEntryFileName(app, root)),
     root,
   });
