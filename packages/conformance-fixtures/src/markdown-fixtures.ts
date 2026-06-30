@@ -257,16 +257,18 @@ export function normativeDocsGateFact<T extends NormativeDocsCompileResult>(opti
   assertRenderEquivalence: (result: T) => void;
   collectCssAssetManifest: (result: T, options: { baseHref: string }) => NormativeDocsCssManifest;
   compileComponentModule: (input: { fileName: string; source: string }) => T;
+  compilerSpec?: string;
   compilerRules: string;
   constitution: string;
   openDesignAreas: string;
   spec: string;
 }): NormativeDocsGateFact {
+  const compilerSpec = options.compilerSpec ?? options.spec;
   const constitutionRows = markdownTableRows(
     markdownSection(options.spec, '2. The Constitution (Design Tests)'),
   );
   const specHardRuleTitles = markdownNumberedListTitles(
-    markdownSection(options.spec, '5.2 Hard rules (normative)'),
+    markdownSection(compilerSpec, '5.2 Hard rules (normative)'),
   );
   const compilerRuleTitles = markdownCanonicalSpecRuleTitles(
     markdownNumberedListTitles(options.compilerRules),

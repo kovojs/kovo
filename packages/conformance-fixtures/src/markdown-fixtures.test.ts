@@ -164,6 +164,13 @@ describe('@kovojs/test markdown fixture seam', () => {
           '1. **Source-derived names.** Names remain derived.',
           '2. **One-to-one file mapping.** Files remain mapped.',
         ].join('\n'),
+        compilerSpec: [
+          '## 5.2 Hard rules (normative)',
+          '1. **Source-derived names.** Names remain derived.',
+          '2. **One-to-one file mapping.** Files remain mapped.',
+          '3. **Registry atomicity.** Pending.',
+          '4. **TSX-only authoring.** Source only.',
+        ].join('\n'),
         constitution: [
           '1. **Legibility is load-bearing.**',
           '2. **Local code must not require global knowledge.**',
@@ -175,11 +182,6 @@ describe('@kovojs/test markdown fixture seam', () => {
           '| --- | --- |',
           '| 1 | **Legibility is load-bearing.** details |',
           '| 2 | **Local code must not require global knowledge.** details |',
-          '## 5.2 Hard rules (normative)',
-          '1. **Source-derived names.** Names remain derived.',
-          '2. **One-to-one file mapping.** Files remain mapped.',
-          '3. **Registry atomicity.** Pending.',
-          '4. **TSX-only authoring.** Source only.',
         ].join('\n'),
       }),
     ).toEqual({

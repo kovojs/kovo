@@ -545,10 +545,12 @@ void test('P10 normative docs cover the constitution and compiler hard rules', a
   const compilerRules = await readProjectFile('rules/compiler-hard-rules.md');
   const openDesignAreas = await readProjectFile('plans/open-design-areas.md');
   const spec = await readProjectFile('SPEC.md');
+  const compilerSpec = await readProjectFile('spec/05-compiler.md');
   const fact = normativeDocsGateFact({
     assertRenderEquivalence,
     collectCssAssetManifest,
     compileComponentModule,
+    compilerSpec,
     compilerRules,
     constitution,
     openDesignAreas,
