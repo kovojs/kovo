@@ -1429,15 +1429,25 @@ function staticPropertyAccessValue(
   if (!root) return undefined;
 
   if (styleImports.publicTokenNames.has(root)) {
-    return valueAtPath(publicThemeTokens, segments);
+    return publicThemeTokenValue(segments);
   }
 
   if (styleImports.namespaces.has(root) && segments[0] === 'tokens') {
-    return valueAtPath(publicThemeTokens, segments.slice(1));
+    return publicThemeTokenValue(segments.slice(1));
   }
 
   if (!staticValues.has(root)) return undefined;
   return valueAtPath(staticValues.get(root), segments);
+}
+
+function publicThemeTokenValue(segments: readonly string[]): unknown {
+  if (segments[0] === 'customColor') {
+    const [, name, ...rest] = segments;
+    if (!name) return undefined;
+    return valueAtPath(publicThemeTokens.customColor(name), rest);
+  }
+
+  return valueAtPath(publicThemeTokens, segments);
 }
 
 function propertyAccessPath(node: ts.Expression): string[] | null {
@@ -1445,6 +1455,13 @@ function propertyAccessPath(node: ts.Expression): string[] | null {
   if (ts.isPropertyAccessExpression(node)) {
     const prefix = propertyAccessPath(node.expression);
     return prefix ? [...prefix, node.name.text] : null;
+  }
+  if (ts.isCallExpression(node)) {
+    const prefix = propertyAccessPath(node.expression);
+    const [argument] = node.arguments;
+    if (!prefix || node.arguments.length !== 1 || !argument) return null;
+    if (ts.isStringLiteral(argument)) return [...prefix, argument.text];
+    return null;
   }
   if (ts.isElementAccessExpression(node)) {
     const prefix = propertyAccessPath(node.expression);

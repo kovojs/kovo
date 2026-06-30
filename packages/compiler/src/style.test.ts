@@ -267,6 +267,73 @@ export const Button = component({
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('resolves literal customColor token calls in static style.create objects', () => {
+    const result = compileComponentModule({
+      fileName: 'components/warning-callout.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+import { tokens } from '@kovojs/style';
+
+const base = style.create({
+  root: {
+    backgroundColor: style.tokens.customColor('warning').colorContainer,
+    borderColor: tokens.customColor('warning').color,
+    color: style.tokens.customColor('warning').onColorContainer,
+  },
+});
+
+export const WarningCallout = component({
+  render: () => <aside style={base.root}>Check this first</aside>,
+});
+`,
+    });
+
+    const cssSource = result.files.find((file) => file.kind === 'css')?.source ?? '';
+
+    expect(cssSource).toContain(
+      'background-color:var(--kovo-theme-custom-warning-color-container)',
+    );
+    expect(cssSource).toContain('border-color:var(--kovo-theme-custom-warning-color)');
+    expect(cssSource).toContain('color:var(--kovo-theme-custom-warning-on-color-container)');
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('preserves KV236 for dynamic customColor token calls in static style.create objects', () => {
+    const source = `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const name = 'warning';
+
+const base = style.create({
+  root: {
+    backgroundColor: style.tokens.customColor(name).colorContainer,
+  },
+});
+
+export const WarningCallout = component({
+  render: () => <aside style={base.root}>Check this first</aside>,
+});
+`;
+    const result = compileComponentModule({
+      fileName: 'components/warning-callout.tsx',
+      source,
+    });
+
+    expect(result.files.find((file) => file.kind === 'css')).toBeUndefined();
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV236',
+        fileName: 'components/warning-callout.tsx',
+        help: expect.stringContaining(
+          'the style extractor only accepts literals, same-file defineVars/createTheme values, and public @kovojs/style theme token references',
+        ),
+        message: 'Static style extraction could not prove style.create values.',
+      }),
+    );
+  });
+
   it('resolves bounded same-package static token adapters', () => {
     const source = `
 import { component } from '@kovojs/core';
