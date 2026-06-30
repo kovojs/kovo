@@ -105,11 +105,7 @@ export async function handleAppStartupErrorResponse(
     pathname: url.pathname,
     routes: app.routes,
   });
-  reportServerError(app.onError, error, {
-    operation: 'task-runtime-startup',
-    request,
-    url: appRequestUrl(url),
-  });
+  reportAppStartupError(app, request, error);
   if (match.kind === 'endpoint') {
     return endpointServerErrorResponse(match.endpoint.response);
   }
@@ -117,6 +113,15 @@ export async function handleAppStartupErrorResponse(
     await renderAppErrorDocumentResponse(app, request, 500),
     request,
   );
+}
+
+export function reportAppStartupError(app: KovoApp, request: Request, error: unknown): void {
+  const url = new URL(request.url);
+  reportServerError(app.onError, error, {
+    operation: 'task-runtime-startup',
+    request,
+    url: appRequestUrl(url),
+  });
 }
 
 function requestBodyLimitForMatch(

@@ -206,7 +206,7 @@ describe('durable task runtime (SPEC §9.6)', () => {
     ).rejects.toThrow('No durable task is registered for key "unregistered.runtime".');
   });
 
-  it('routes startup failures through app onError and the configured error shell', async () => {
+  it('reports task startup failures without blocking unrelated routes', async () => {
     const onError = vi.fn();
     const startupTask = task('startup.fail', {
       input: s.object({}),
@@ -220,14 +220,23 @@ describe('durable task runtime (SPEC §9.6)', () => {
         },
       },
       onError,
+      routes: [
+        route('/needs-startup', {
+          page() {
+            return trustedHtml('<main>route ok</main>');
+          },
+        }),
+      ],
       tasks: [startupTask],
     });
     const request = new Request('http://localhost/needs-startup');
 
     const response = await createRequestHandler(app)(request);
 
-    expect(response.status).toBe(500);
-    await expect(response.text()).resolves.toContain('<main>startup shell 500</main>');
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toContain('<main>route ok</main>');
+    await Promise.resolve();
+    await Promise.resolve();
     expect(onError).toHaveBeenCalledWith(
       expect.objectContaining({
         message: expect.stringContaining('Postgres-compatible db client'),
@@ -269,10 +278,16 @@ describe('durable task runtime (SPEC §9.6)', () => {
     });
     const handler = createRequestHandler(app);
 
-    await expect(handler(new Request('http://localhost/'))).resolves.toMatchObject({ status: 500 });
+    const firstResponse = await handler(new Request('http://localhost/'));
+    await Promise.resolve();
+    await Promise.resolve();
     const response = await handler(new Request('http://localhost/'));
+    await Promise.resolve();
+    await Promise.resolve();
 
+    expect(firstResponse.status).toBe(200);
     expect(response.status).toBe(200);
     await expect(response.text()).resolves.toContain('ok');
+    expect(calls).toBeGreaterThan(1);
   });
 });
