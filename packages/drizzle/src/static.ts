@@ -907,6 +907,7 @@ function nativeDrizzleSqlReceiverTexts(sourceFile: SourceFile): Set<string> {
   return receivers;
 }
 
+const KOVO_DRIZZLE_MODULE_SPECIFIER = '@kovojs/drizzle';
 const kovoSqlReceiverTextsCache = new WeakMap<SourceFile, Set<string>>();
 
 /**
@@ -925,7 +926,7 @@ function kovoSqlReceiverTextsForSourceFile(sourceFile: SourceFile): Set<string> 
 
   const receivers = new Set<string>(['sql']);
   for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== '@kovojs/drizzle') continue;
+    if (declaration.getModuleSpecifierValue() !== KOVO_DRIZZLE_MODULE_SPECIFIER) continue;
     for (const named of declaration.getNamedImports()) {
       if (named.getName() === 'sql') receivers.add(named.getAliasNode()?.getText() ?? 'sql');
     }
@@ -935,6 +936,45 @@ function kovoSqlReceiverTextsForSourceFile(sourceFile: SourceFile): Set<string> 
 
   kovoSqlReceiverTextsCache.set(sourceFile, receivers);
   return receivers;
+}
+
+/** @internal */
+export function isKovoDrizzleTrustedSqlCall(expression: CallExpression): boolean {
+  return isKovoDrizzleTrustedSqlCallee(expression.getExpression());
+}
+
+function isKovoDrizzleTrustedSqlCallee(callee: Node): boolean {
+  if (Node.isIdentifier(callee)) return identifierImportsKovoDrizzleTrustedSql(callee);
+  if (!Node.isPropertyAccessExpression(callee)) return false;
+  if (callee.getName() !== 'trustedSql') return false;
+  return identifierImportsKovoDrizzleNamespace(callee.getExpression());
+}
+
+function identifierImportsKovoDrizzleTrustedSql(identifier: Node): boolean {
+  if (!Node.isIdentifier(identifier)) return false;
+  const symbols = [identifier.getSymbol(), symbolForIdentifierReference(identifier)];
+  return symbols.some((symbol) =>
+    symbol?.getDeclarations().some((declaration) => {
+      if (!Node.isImportSpecifier(declaration)) return false;
+      if (declaration.getName() !== 'trustedSql') return false;
+      return (
+        declaration.getImportDeclaration().getModuleSpecifierValue() ===
+        KOVO_DRIZZLE_MODULE_SPECIFIER
+      );
+    }),
+  );
+}
+
+function identifierImportsKovoDrizzleNamespace(identifier: Node): boolean {
+  if (!Node.isIdentifier(identifier)) return false;
+  const symbols = [identifier.getSymbol(), symbolForIdentifierReference(identifier)];
+  return symbols.some((symbol) =>
+    symbol?.getDeclarations().some((declaration) => {
+      if (!Node.isNamespaceImport(declaration)) return false;
+      const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
+      return importDeclaration?.getModuleSpecifierValue() === KOVO_DRIZZLE_MODULE_SPECIFIER;
+    }),
+  );
 }
 
 function kovoMutationStreamReceiverTexts(sourceFile: SourceFile): Set<string> {
@@ -1424,8 +1464,7 @@ function sqlTextSafety(expression: Node | undefined, context: SqlSafetyContext):
   if (Node.isTemplateExpression(expression)) return 'tainted';
   if (Node.isCallExpression(expression)) {
     const callExpression = expression.getExpression();
-    if (Node.isIdentifier(callExpression) && callExpression.getText() === 'trustedSql')
-      return 'safe';
+    if (isKovoDrizzleTrustedSqlCall(expression)) return 'safe';
     if (Node.isPropertyAccessExpression(callExpression)) {
       const receiver = callExpression.getExpression();
       // SPEC §10.2/§6.6 (KV422): resolve Kovo `sql` through its aliased/namespace
@@ -2205,10 +2244,7 @@ function isTrustedSqlArgument(call: CallExpression): boolean {
   if (!argument) return false;
   const expression = unwrappedStaticExpressionNode(argument);
   if (!Node.isCallExpression(expression)) return false;
-  const callee = expression.getExpression();
-  return Node.isIdentifier(callee)
-    ? callee.getText() === 'trustedSql'
-    : staticAccessName(callee) === 'trustedSql';
+  return isKovoDrizzleTrustedSqlCall(expression);
 }
 
 function extractedTablesForRawNames(

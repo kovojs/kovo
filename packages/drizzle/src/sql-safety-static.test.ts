@@ -229,6 +229,22 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     ]);
   });
 
+  it('does not let a local trustedSql shadow waive SQL text safety', () => {
+    expect(
+      diagnosticsFor(`
+        function trustedSql<T>(value: T, _options: { justification: string }): T { return value; }
+        export async function report(input: { clause: string }, db: any) {
+          await db.execute(trustedSql("select * from reports where " + input.clause, { justification: "fake local wrapper" }));
+        }
+      `),
+    ).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('execute() receives unknown-provenance SQL text'),
+      },
+    ]);
+  });
+
   it('flags raw string literals on managed handles so staticSql is the visible literal path', () => {
     expect(
       diagnosticsFor(`

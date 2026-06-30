@@ -40,6 +40,7 @@ import {
   isDrizzleWriteCall,
   isFunctionLikeNode,
   isKovoServerCalleeExpression,
+  isKovoDrizzleTrustedSqlCall,
   isOpaqueProjection,
   isProjectDrizzleReceiverIdentifier,
   isSelectQueryCallName,
@@ -1348,10 +1349,7 @@ function isTrustedSqlArgument(call: CallExpression): boolean {
   if (!argument) return false;
   const expression = unwrappedStaticExpressionNode(argument);
   if (!Node.isCallExpression(expression)) return false;
-  const callee = expression.getExpression();
-  return Node.isIdentifier(callee)
-    ? callee.getText() === 'trustedSql'
-    : staticAccessName(callee) === 'trustedSql';
+  return isKovoDrizzleTrustedSqlCall(expression);
 }
 
 function massAssignmentFactsForPayload(
