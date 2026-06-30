@@ -1489,7 +1489,7 @@ function inlineTextBinding(
   expression: JsxIrExpression | null,
   knownQueries: ReadonlySet<string>,
 ): string | null {
-  if (element.selfClosing || hasBindingAttribute(element) || !expression) return null;
+  if (element.selfClosing || hasTextBindingAttribute(element) || !expression) return null;
   const path = expression.expression.solePropertyAccessPath ?? null;
   if (!path) return null;
   return queryPathUsesKnownQuery(path, knownQueries) || isStatePath(path) ? path : null;
@@ -1501,7 +1501,7 @@ function inlineTextDerive(
   model: ComponentModuleModel,
   componentName: string,
 ): InlineStateTextDerive | null {
-  if (element.selfClosing || hasBindingAttribute(element) || !expression) return null;
+  if (element.selfClosing || hasTextBindingAttribute(element) || !expression) return null;
   if (expression.expression.solePropertyAccessPath) return null;
   if (
     !isStateOnlyExpression(reactivePropertyAccessesForJsxExpression(expression.expression, model))
@@ -1522,7 +1522,7 @@ function inlineQueryTextDerive(
   componentName: string,
   knownQueries: ReadonlySet<string>,
 ): InlineQueryTextDerive | null {
-  if (element.selfClosing || hasBindingAttribute(element) || !expression) return null;
+  if (element.selfClosing || hasTextBindingAttribute(element) || !expression) return null;
   if (expression.expression.solePropertyAccessPath) return null;
   const inputs = clockQueryInputsFromAccesses(expression.expression.propertyAccesses, knownQueries);
   if (!inputs) return null;
@@ -1851,8 +1851,16 @@ function hasBindingAttribute(element: JsxIrElement): boolean {
   return element.attributes.some((attribute) => isBindingAttributeName(attribute.name));
 }
 
+function hasTextBindingAttribute(element: JsxIrElement): boolean {
+  return element.attributes.some((attribute) => isTextBindingAttributeName(attribute.name));
+}
+
 function isBindingAttributeName(name: string): boolean {
   return name === 'data-bind' || name.startsWith('data-bind:') || name === 'data-bind-list';
+}
+
+function isTextBindingAttributeName(name: string): boolean {
+  return name === 'data-bind' || name === 'data-derive' || name === 'data-bind-list';
 }
 
 function shouldSkipInlineAttributeDerive(attribute: JsxAttributeModel): boolean {

@@ -160,11 +160,8 @@ function applyRootBindings(
     const boundValue = valueAtPath(value, path.slice(rootName.length + 1));
     const rendered = formatBoundValue(boundValue);
 
-    if (element.value !== undefined) {
-      element.value = rendered;
-    } else {
-      element.textContent = rendered;
-    }
+    // SPEC §4.8: data-bind is a textContent sink; form values use data-bind:value.
+    element.textContent = rendered;
     applied.push(path);
   }
 
@@ -571,11 +568,8 @@ function bindPropAttributes(element: QueryBindingElement): Array<{ name: string;
 }
 
 function writeQueryPlanElement(element: QueryBindingElement, rendered: string): void {
-  if (element.value !== undefined) {
-    element.value = rendered;
-  } else {
-    element.textContent = rendered;
-  }
+  // SPEC §4.8: derive text stamps share data-bind's textContent semantics.
+  element.textContent = rendered;
 }
 
 function removeBoundAttribute(element: QueryBindingElement, name: string): void {

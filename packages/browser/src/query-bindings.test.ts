@@ -20,21 +20,21 @@ import {
 } from './runtime-test-fakes.js';
 
 describe('query binding helpers', () => {
-  it('applies DOM-shaped data-bind text, value, and attribute updates', () => {
+  it('applies DOM-shaped data-bind text and attribute updates', () => {
     const root = new FakeMorphRoot();
     const count = new FakeQueryBindingElement('cart.count', { textContent: '0' });
-    const total = new FakeQueryBindingElement('cart.total', { value: '0' });
     const label = new FakeQueryPlanElement({
       'aria-label': 'old',
       'data-bind:aria-label': 'cart.label',
     });
-    root.bindings.push(count, total);
-    root.planElements.push(label);
+    const total = new FakeQueryPlanElement({ 'data-bind:value': 'cart.total' }, { value: '0' });
+    root.bindings.push(count);
+    root.planElements.push(label, total);
 
     expect(applyQueryBindings(root, 'cart', { count: 3, label: null, total: 1499 })).toEqual([
       'cart.count',
-      'cart.total',
       'cart.label',
+      'cart.total',
     ]);
     expect(count.textContent).toBe('3');
     expect(total.value).toBe('1499');

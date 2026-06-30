@@ -368,6 +368,69 @@ export const DisclosureDemo = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('stamps same-element state conditional text when reactive attributes also derive', () => {
+    const result = compileComponentModule({
+      fileName: 'priority-toggle.tsx',
+      source: `
+export const PriorityToggle = component({
+  state: () => ({ urgentOnly: false }),
+  render: (_queries, state) => (
+    <priority-toggle>
+      <button
+        aria-pressed={state.urgentOnly ? 'true' : 'false'}
+        data-state={state.urgentOnly ? 'urgent' : 'all'}
+      >
+        {state.urgentOnly ? 'all' : 'urgent'}
+      </button>
+    </priority-toggle>
+  ),
+});
+`,
+    });
+    const serverSource = result.files[0]?.source ?? '';
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(serverSource).toContain('data-bind="/c/__v/');
+    expect(serverSource).toContain('#PriorityToggle$button_text_derive');
+    expect(serverSource).toContain('data-bind:aria-pressed="/c/__v/');
+    expect(serverSource).toContain('#PriorityToggle$button_aria_pressed_derive');
+    expect(serverSource).toContain('data-bind:data-state="/c/__v/');
+    expect(serverSource).toContain('#PriorityToggle$button_data_state_derive');
+    expect(clientSource).toContain(
+      `export const PriorityToggle$button_text_derive = derive(["state"], (state) => state.urgentOnly ? 'all' : 'urgent');`,
+    );
+    expect(result.updateCoverage).toEqual(
+      expect.arrayContaining([
+        {
+          componentName: 'PriorityToggle',
+          detail: 'data-bind',
+          position: 'binding',
+          query: 'state.PriorityToggle$button_text_derive',
+          source: 'state',
+          status: 'plan',
+        },
+        {
+          componentName: 'PriorityToggle',
+          detail: 'data-bind:aria-pressed',
+          position: 'attribute',
+          query: 'state.PriorityToggle$button_aria_pressed_derive',
+          source: 'state',
+          status: 'plan',
+        },
+        {
+          componentName: 'PriorityToggle',
+          detail: 'data-bind:data-state',
+          position: 'attribute',
+          query: 'state.PriorityToggle$button_data_state_derive',
+          source: 'state',
+          status: 'plan',
+        },
+      ]),
+    );
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
+
   it('collects typed state derive reference facts before terminal URL versioning', () => {
     const fileName = 'disclosure-demo.tsx';
     const source = `

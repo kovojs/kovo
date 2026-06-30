@@ -311,9 +311,8 @@ function installInlineKovoLoader(im) {
     const val = vp(state, path.slice(root.length + 1));
     if (bt) {
       wa(el, bt, val);
-    } else if (el.value !== undefined) {
-      el.value = fb(val);
     } else {
+      // SPEC §4.8: data-bind is textContent; form values use data-bind:value.
       el.textContent = fb(val);
     }
   };
@@ -325,9 +324,8 @@ function installInlineKovoLoader(im) {
     const val = derive?.run?.(state);
     if (bt) {
       wa(el, bt, val);
-    } else if (el.value !== undefined) {
-      el.value = fb(val);
     } else {
+      // SPEC §4.8: derive text stamps share data-bind's textContent semantics.
       el.textContent = fb(val);
     }
   };

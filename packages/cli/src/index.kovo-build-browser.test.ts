@@ -108,6 +108,59 @@ function authoredIslandRefs(): { click: string; input: string } {
   };
 }
 
+function stateTextIslandSource(): string {
+  return [
+    '/** @jsxImportSource @kovojs/server */',
+    "import { component } from '@kovojs/core';",
+    '',
+    'export const StateTextIsland = component({',
+    '  state: () => ({ urgentOnly: false, clicks: 0 }),',
+    '  render: (_queries, state) => (',
+    '    <section>',
+    '      <button',
+    '        data-testid="priority"',
+    '        type="button"',
+    "        aria-pressed={state.urgentOnly ? 'true' : 'false'}",
+    "        data-state={state.urgentOnly ? 'urgent' : 'all'}",
+    '        onClick={() => {',
+    '          state.urgentOnly = !state.urgentOnly;',
+    '          state.clicks += 1;',
+    '        }}',
+    '      >',
+    "        {state.urgentOnly ? 'all' : 'urgent'}",
+    '      </button>',
+    '      <output data-testid="clicks">{state.clicks}</output>',
+    '    </section>',
+    '  ),',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function stateTextIslandRefs(): {
+  ariaPressed: string;
+  click: string;
+  dataState: string;
+  text: string;
+} {
+  const result = compileComponentModule({
+    fileName: 'src/components/state-text-island.tsx',
+    source: stateTextIslandSource(),
+  });
+  expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
+  const href = result.hmrImpact?.clientHref;
+  if (!href) throw new Error('expected compiled client href for state text island fixture');
+  const click = result.handlerExports.find((name) => name.endsWith('$button_click'));
+  if (!click) throw new Error('expected click handler for state text island fixture');
+
+  return {
+    ariaPressed: `${href}#StateTextIsland$button_aria_pressed_derive`,
+    click: `${href}#${click}`,
+    dataState: `${href}#StateTextIsland$button_data_state_derive`,
+    text: `${href}#StateTextIsland$button_text_derive`,
+  };
+}
+
 async function listen(server: Server): Promise<string> {
   await new Promise<void>((resolve) => {
     server.listen(0, '127.0.0.1', resolve);
@@ -192,6 +245,131 @@ describe('kovo build — browser drive (S1)', () => {
       );
       expect(counterModule, 'loader import()ed the versioned /c/ module').toBeTruthy();
       expect(counterModule?.cacheControl).toContain('immutable');
+    } finally {
+      await browser?.close();
+      if (server) await close(server);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('updates same-element state-derived text and attributes in a prod-built island', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-browser-state-text-'));
+    const appPath = join(root, 'src/app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let server: Server | undefined;
+    let browser: Browser | undefined;
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeRetentionProofConfig(root);
+      mkdirSync(join(root, 'src/components'), { recursive: true });
+      const refs = stateTextIslandRefs();
+      writeFileSync(
+        appPath,
+        [
+          '/** @jsxImportSource @kovojs/server */',
+          "import { createApp, publicAccess, route } from '@kovojs/server';",
+          "import { trustedHtml } from '@kovojs/browser';",
+          "import { StateTextIsland } from './components/state-text-island.tsx';",
+          '',
+          'void StateTextIsland;',
+          '',
+          'export default createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      access: publicAccess('browser state text fixture'),",
+          '      page: () =>',
+          '        trustedHtml(',
+          '          ' +
+            JSON.stringify(
+              `<main><section kovo-c="state-text-island" kovo-state="{&quot;urgentOnly&quot;:false,&quot;clicks&quot;:0}">` +
+                `<button data-testid="priority" type="button" aria-pressed="false" data-state="all" on:click="${refs.click}" data-bind="${refs.text}" data-bind:aria-pressed="${refs.ariaPressed}" data-bind:data-state="${refs.dataState}">urgent</button>` +
+                `<output data-testid="clicks" data-bind="state.clicks">0</output>` +
+                `</section></main>`,
+            ) +
+            ',',
+          '        ),',
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src/components/state-text-island.tsx'),
+        stateTextIslandSource(),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './src/app.tsx', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as { createKovoNodeServer(): Server };
+      server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+
+      browser = await chromium.launch();
+      const page = await browser.newPage();
+      const pageErrors: string[] = [];
+      const consoleErrors: string[] = [];
+      page.on('pageerror', (error) => pageErrors.push(error.message));
+      page.on('console', (message) => {
+        if (message.type() === 'error') consoleErrors.push(message.text());
+      });
+
+      await page.goto(`${origin}/`);
+      const button = page.getByTestId('priority');
+      expect((await button.textContent())?.trim()).toBe('urgent');
+      expect(await button.getAttribute('aria-pressed')).toBe('false');
+      expect(await button.getAttribute('data-state')).toBe('all');
+      expect((await page.getByTestId('clicks').textContent())?.trim()).toBe('0');
+
+      await button.click();
+      await expect
+        .poll(
+          async () =>
+            JSON.stringify({
+              ariaPressed: await button.getAttribute('aria-pressed'),
+              consoleErrors,
+              dataState: await button.getAttribute('data-state'),
+              pageErrors,
+              state: await page.locator('section').getAttribute('kovo-state'),
+              text: (await button.textContent())?.trim(),
+              clicks: (await page.getByTestId('clicks').textContent())?.trim(),
+            }),
+          { timeout: 10_000 },
+        )
+        .toContain(
+          JSON.stringify({
+            ariaPressed: 'true',
+            consoleErrors: [],
+            dataState: 'urgent',
+            pageErrors: [],
+            state: '{"urgentOnly":true,"clicks":1}',
+            text: 'all',
+            clicks: '1',
+          }).slice(1, -1),
+        );
+      expect((await button.textContent())?.trim()).toBe('all');
+      expect(await button.getAttribute('aria-pressed')).toBe('true');
+      expect(await button.getAttribute('data-state')).toBe('urgent');
+      expect((await page.getByTestId('clicks').textContent())?.trim()).toBe('1');
+      expect(pageErrors).toEqual([]);
+      expect(consoleErrors).toEqual([]);
     } finally {
       await browser?.close();
       if (server) await close(server);

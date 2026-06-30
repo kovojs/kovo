@@ -145,8 +145,8 @@ const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
   };
   const write = (element, input) => {
     const rendered = format(input);
-    if (element.value !== undefined) element.value = rendered;
-    else element.textContent = rendered;
+    // SPEC §4.8: data-bind/data-derive text writes are textContent sinks.
+    element.textContent = rendered;
   };
   const bindingOptions = { ...(options.queryKey === undefined ? {} : { queryKey: options.queryKey }) };
   const belongsToQueryKey = (element) => !bindingOptions.queryKey || element.getAttribute?.('data-query-key') === bindingOptions.queryKey;
