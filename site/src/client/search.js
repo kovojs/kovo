@@ -36,12 +36,21 @@ function dialog() {
   return document.getElementById('site-search');
 }
 
-function escapeHtml(value) {
-  return String(value)
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;');
+function safeDocsHref(value) {
+  if (typeof value !== 'string') return null;
+
+  try {
+    const origin = window.location.origin;
+    const url = new URL(value, origin);
+    if (url.origin !== origin) return null;
+    if (url.username || url.password) return null;
+    if (!url.pathname.startsWith('/')) return null;
+    if (url.pathname.startsWith('/c/')) return null;
+    if (url.pathname === '/search-index.json') return null;
+    return `${url.pathname}${url.search}${url.hash}`;
+  } catch {
+    return null;
+  }
 }
 
 /** Rank a result against the query terms. Title (symbol/page name) matches
@@ -66,15 +75,56 @@ function score(entry, terms) {
  * path. API-symbol rows deep-link straight to the symbol anchor. */
 function resultRow(entry, active = false) {
   const badge = entry.kind ? entry.kind : 'page';
-  return `<li${active ? ' data-active="true"' : ''}><a href="${escapeHtml(entry.url)}" data-search-result-link${active ? ' aria-current="true"' : ''}><span data-result-kind="${escapeHtml(badge)}">${escapeHtml(badge)}</span><span data-result-body><span data-result-title>${escapeHtml(entry.title)}</span><span data-result-section>${escapeHtml(entry.section)}</span></span></a></li>`;
+  const item = document.createElement('li');
+  if (active) item.setAttribute('data-active', 'true');
+
+  const link = document.createElement('a');
+  const href = safeDocsHref(entry.url);
+  if (href) link.setAttribute('href', href);
+  link.setAttribute('data-search-result-link', '');
+  if (active) link.setAttribute('aria-current', 'true');
+
+  const kind = document.createElement('span');
+  kind.setAttribute('data-result-kind', String(badge));
+  kind.textContent = String(badge);
+
+  const body = document.createElement('span');
+  body.setAttribute('data-result-body', '');
+
+  const title = document.createElement('span');
+  title.setAttribute('data-result-title', '');
+  title.textContent = String(entry.title);
+
+  const section = document.createElement('span');
+  section.setAttribute('data-result-section', '');
+  section.textContent = String(entry.section);
+
+  body.append(title, section);
+  link.append(kind, body);
+  item.append(link);
+  return item;
+}
+
+function labelRow(text) {
+  const item = document.createElement('li');
+  item.setAttribute('data-search-label', '');
+  item.textContent = text;
+  return item;
+}
+
+function emptyRow(text) {
+  const item = document.createElement('li');
+  item.setAttribute('data-search-empty', '');
+  item.textContent = text;
+  return item;
 }
 
 function renderResults(element, entries, options = {}) {
   selectedIndex = entries.length > 0 ? 0 : -1;
-  const label = options.label ? `<li data-search-label>${escapeHtml(options.label)}</li>` : '';
-  element.innerHTML = `${label}${entries
-    .map((entry, index) => resultRow(entry, index === selectedIndex))
-    .join('')}`;
+  element.replaceChildren(
+    ...(options.label ? [labelRow(options.label)] : []),
+    ...entries.map((entry, index) => resultRow(entry, index === selectedIndex)),
+  );
 }
 
 function renderDefaultResults(element) {
@@ -82,18 +132,18 @@ function renderDefaultResults(element) {
 }
 
 function renderNoResults(element) {
-  element.innerHTML = [
-    '<li data-search-empty>No matching docs found.</li>',
-    '<li data-search-label>Suggested</li>',
+  element.replaceChildren(
+    emptyRow('No matching docs found.'),
+    labelRow('Suggested'),
     ...DEFAULT_ENTRIES.map((entry) => resultRow(entry)),
-  ].join('');
+  );
   selectedIndex = 0;
   setSelectedIndex(0);
 }
 
 function resultItems() {
   return [...(document.getElementById('site-search-results')?.querySelectorAll('li') ?? [])].filter(
-    (item) => item.querySelector('a'),
+    (item) => item.querySelector('a[href]'),
   );
 }
 

@@ -86,7 +86,11 @@ export async function observeSqlEngineSideEffects(
 ): Promise<void> {
   if (!statement || before.size === 0) return;
 
-  const after = await tableObservationSnapshots(target, Object.keys(config.domainByTable));
+  const after = await tableObservationSnapshots(
+    target,
+    Object.keys(config.domainByTable),
+    config.sqlDialect,
+  );
   const explicitWriteTables = new Set(
     explicitOperations
       .filter((operation) => operation.kind === 'write')
@@ -119,16 +123,19 @@ export async function observeSqlEngineSideEffects(
 export async function tableObservationSnapshots(
   target: object,
   tables: readonly string[],
+  sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
 ): Promise<ReadonlyMap<string, TableObservationSnapshot>> {
   const query = tableCountQuery(target);
   if (!query) return new Map();
-  const existing = await existingTables(query);
+  const existing = await existingTables(query, sqlDialect);
   if (!existing) return new Map();
 
   const snapshots = new Map<string, TableObservationSnapshot>();
   for (const table of tables.filter((name) => existing.has(unqualifiedTableName(name)))) {
     try {
-      const rows = resultRows(await query(`select * from ${quoteSqlIdentifier(table)}`));
+      const rows = resultRows(
+        await query(`select * from ${quoteSqlIdentifier(table, sqlDialect)}`),
+      );
       snapshots.set(table, {
         count: rows.length,
         fingerprint: stableRowsFingerprint(rows),
@@ -144,16 +151,19 @@ export async function tableObservationSnapshots(
 export async function tableCounts(
   target: object,
   tables: readonly string[],
+  sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
 ): Promise<ReadonlyMap<string, number>> {
   const query = tableCountQuery(target);
   if (!query) return new Map();
-  const existing = await existingTables(query);
+  const existing = await existingTables(query, sqlDialect);
   if (!existing) return new Map();
 
   const counts = new Map<string, number>();
   for (const table of tables.filter((name) => existing.has(unqualifiedTableName(name)))) {
     try {
-      const rows = await query(`select count(*) as count from ${quoteSqlIdentifier(table)}`);
+      const rows = await query(
+        `select count(*) as count from ${quoteSqlIdentifier(table, sqlDialect)}`,
+      );
       const count = countValue(rows);
       if (count !== undefined) counts.set(table, count);
     } catch {
@@ -165,15 +175,15 @@ export async function tableCounts(
 
 async function existingTables(
   query: (statement: string) => Promise<unknown>,
+  sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
 ): Promise<ReadonlySet<string> | null> {
   try {
-    const rows = await query(
-      "select table_name from information_schema.tables where table_schema = 'public'",
-    );
+    const rows = await query(tableDiscoverySql(sqlDialect));
+    const column = sqlDialect === 'sqlite' ? 'name' : 'table_name';
     return new Set(
       resultRows(rows).flatMap((row): string[] => {
         if (typeof row !== 'object' || row === null) return [];
-        const tableName = (row as Record<string, unknown>).table_name;
+        const tableName = (row as Record<string, unknown>)[column];
         return typeof tableName === 'string' ? [tableName] : [];
       }),
     );
@@ -183,30 +193,16 @@ async function existingTables(
 }
 
 /**
- * @internal Whether a wrapped db exposes an *asynchronous* raw query handle
+ * @internal Whether a wrapped db exposes a raw query handle
  * usable for the row-count net (SPEC.md §11.2 meta-soundness).
  *
- * The count net snapshots row counts before/after a statement across an awaited
- * boundary, so it only applies to a real async DB seam. Synchronous test doubles
- * (whose `query`/`exec` return values directly) cannot be count-netted and must
- * not have count probes dispatched into them, so they are excluded here.
+ * The count/fingerprint net snapshots configured tables before and after a
+ * statement. It accepts both promise-returning handles (PGlite/Postgres) and
+ * synchronous adapter methods (better-sqlite3) by normalizing query results to a
+ * Promise at the boundary.
  */
 export function hasTableCountHandle(target: object): boolean {
-  return isAsyncQueryHandle(rawQueryHandle(target));
-}
-
-function isAsyncQueryHandle(handle: unknown): boolean {
-  return typeof handle === 'function' && handle.constructor?.name === 'AsyncFunction';
-}
-
-function rawQueryHandle(target: object): unknown {
-  const record = target as Record<PropertyKey, unknown>;
-  const pglite = record.pglite;
-  if (typeof pglite === 'object' && pglite !== null) {
-    const query = (pglite as Record<PropertyKey, unknown>).query;
-    if (typeof query === 'function') return query;
-  }
-  return record.query;
+  return tableCountQuery(target) !== null;
 }
 
 function tableCountQuery(target: object): ((statement: string) => Promise<unknown>) | null {
@@ -214,14 +210,34 @@ function tableCountQuery(target: object): ((statement: string) => Promise<unknow
   const pglite = record.pglite;
   if (typeof pglite === 'object' && pglite !== null) {
     const query = (pglite as Record<PropertyKey, unknown>).query;
-    if (typeof query === 'function') return (statement) => query.call(pglite, statement);
+    if (typeof query === 'function') {
+      return (statement) => Promise.resolve(query.call(pglite, statement));
+    }
+  }
+
+  if (typeof record.prepare === 'function') {
+    return (statement) => {
+      const prepared = (record.prepare as Function).call(target, statement);
+      if (typeof prepared !== 'object' || prepared === null) return Promise.resolve([]);
+      const all = (prepared as Record<PropertyKey, unknown>).all;
+      if (typeof all !== 'function') return Promise.resolve([]);
+      return Promise.resolve(all.call(prepared));
+    };
   }
 
   if (typeof record.query === 'function') {
-    return (statement) => (record.query as Function).call(target, statement);
+    return (statement) => Promise.resolve((record.query as Function).call(target, statement));
   }
 
   return null;
+}
+
+function tableDiscoverySql(sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres'): string {
+  if (sqlDialect === 'sqlite') {
+    return "select name from sqlite_schema where type = 'table' and name not like 'sqlite_%'";
+  }
+
+  return "select table_name from information_schema.tables where table_schema = 'public'";
 }
 
 function countValue(result: unknown): number | undefined {
@@ -272,7 +288,10 @@ function unqualifiedTableName(table: string): string {
   return table.split('.').at(-1) ?? table;
 }
 
-function quoteSqlIdentifier(identifier: string): string {
+function quoteSqlIdentifier(
+  identifier: string,
+  _sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
+): string {
   return identifier
     .split('.')
     .map((part) => `"${part.replaceAll('"', '""')}"`)
