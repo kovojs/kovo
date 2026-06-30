@@ -1,8 +1,10 @@
 import {
   dataDisabled,
-  dispatchCancelableChange,
   mergeDataAttributes,
+  openStateFromBeforeToggle,
   openState,
+  setOpenState,
+  toggleOpenState,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
@@ -267,16 +269,7 @@ export function setPopoverOpen(
   reason: PopoverChangeReason,
   options: PopoverChangeOptions = {},
 ): PopoverChangeResult {
-  if (state.disabled || state.open === open) {
-    return { changed: false, open: state.open };
-  }
-
-  const detail = dispatchCancelableChange({ reason, value: open }, options.onOpenChange);
-  if (detail.defaultPrevented) {
-    return { changed: false, detail, open: state.open };
-  }
-
-  return { changed: true, detail, open };
+  return setOpenState(state, open, reason, options);
 }
 
 /**
@@ -301,7 +294,7 @@ export function togglePopover(
   reason: PopoverChangeReason,
   options: PopoverChangeOptions = {},
 ): PopoverChangeResult {
-  return setPopoverOpen(state, !state.open, reason, options);
+  return toggleOpenState(state, reason, options);
 }
 
 /**
@@ -363,9 +356,10 @@ export function popoverBeforeToggle(
   options: PopoverChangeOptions = {},
 ): PopoverChangeResult | undefined {
   if (event.defaultPrevented) return;
-  if (event.newState !== 'open' && event.newState !== 'closed') return;
+  const open = openStateFromBeforeToggle(event);
+  if (open === undefined) return;
 
-  const result = setPopoverOpen(state, event.newState === 'open', 'native-beforetoggle', options);
+  const result = setPopoverOpen(state, open, 'native-beforetoggle', options);
   if (!result.changed) {
     event.preventDefault();
   }

@@ -1,8 +1,9 @@
 import {
   dataDisabled,
-  dispatchCancelableChange,
   mergeDataAttributes,
   openState,
+  setOpenState,
+  toggleOpenState,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
@@ -222,16 +223,7 @@ export function setDisclosureOpen(
   reason: DisclosureChangeReason,
   options: DisclosureChangeOptions = {},
 ): DisclosureChangeResult {
-  if (state.disabled || state.open === open) {
-    return { changed: false, open: state.open };
-  }
-
-  const detail = dispatchCancelableChange({ reason, value: open }, options.onOpenChange);
-  if (detail.defaultPrevented) {
-    return { changed: false, detail, open: state.open };
-  }
-
-  return { changed: true, detail, open };
+  return setOpenState(state, open, reason, options);
 }
 
 /**
@@ -256,7 +248,7 @@ export function toggleDisclosure(
   reason: DisclosureChangeReason,
   options: DisclosureChangeOptions = {},
 ): DisclosureChangeResult {
-  return setDisclosureOpen(state, !state.open, reason, options);
+  return toggleOpenState(state, reason, options);
 }
 
 /**
