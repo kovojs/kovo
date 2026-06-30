@@ -11,8 +11,10 @@ export type { ClockUpdateContext, ClockUpdatePlan, ClockUpdateSpec } from './clo
 export { installKovoLoader } from './loader.js';
 export type { KovoLoader, KovoLoaderOptions } from './loader.js';
 export { applyCompiledQueryUpdatePlan } from './query-bindings.js';
+export { runQueryUpdatePlan } from './query-update-vm.js';
 export type {
   AppliedCompiledQueryUpdatePlan,
+  ApplyCompiledQueryUpdatePlanOptions,
   CompiledQueryDerive,
   CompiledQueryStamp,
   CompiledQueryTemplateStamp,

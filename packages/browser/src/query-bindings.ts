@@ -12,6 +12,7 @@ import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
 import { kovoCreateHTML } from './trusted-types.js';
 import { assertAllowedKovoDynamicImportRef } from './dynamic-import-url.js';
+import { reconcileKeyed } from './keyed-reconciler.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryBindingElement
@@ -306,22 +307,32 @@ function reconcileDomTemplateStamp(host: Element, items: readonly TemplateStampI
   const template = host.querySelector('template[kovo-stamp]');
   if (!isHtmlTemplateElement(template)) return;
 
-  const existingByKey = new Map(
-    [...host.children]
-      .filter((child) => child !== template)
-      .map((child) => [child.getAttribute('kovo-key'), child] as const)
-      .filter((entry): entry is [string, Element] => entry[0] !== null),
-  );
-  const desired = new Set<Element>();
+  const elements = reconcileKeyed(
+    [...host.children].filter((child) => child !== template),
+    items,
+    {
+      create(item) {
+        return domTemplateStampElement(template, item);
+      },
+      currentKey(child) {
+        return child.getAttribute('kovo-key');
+      },
+      match(existing, item) {
+        const next = domTemplateStampElement(template, item);
+        return next ? morphDomElement(existing, next) : existing;
+      },
+      nextKey(item) {
+        return item.key;
+      },
+      preserveUnkeyed: false,
+    },
+  ).filter((element): element is Element => element !== null);
+  const desired = new Set(elements);
 
-  for (const item of items) {
-    const next = domTemplateStampElement(template, item);
-    if (!next) continue;
-
-    const existing = existingByKey.get(item.key);
-    const element = existing ? morphDomElement(existing, next) : next;
+  for (const [index, element] of elements.entries()) {
+    const item = items[index];
+    if (!item) continue;
     applyItemRelativeBindings(element, item.value);
-    desired.add(element);
     host.insertBefore(element, template);
   }
 
