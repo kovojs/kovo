@@ -1,6 +1,7 @@
 import type { ComponentMutationDefinitions, ComponentMutationForms, Form } from './forms-types.js';
 import type { JsonValue } from './json.js';
 import { blessSink } from './internal/sink-policy.js';
+import { buildRoutePatternHref } from './internal/route-pattern.js';
 
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type { JsonValue } from './json.js';
@@ -389,11 +390,8 @@ type RegistryKey<Registry> = keyof Registry extends never
   ? string
   : Extract<keyof Registry, string>;
 
-// H1 (bugs-part4 L6-1): a param name is the whole segment after `:` up to the next
-// `/`, `?`, or `#`. This mirrors the runtime matcher (server match.ts
-// `parseRouteSegment`, which takes the entire segment after `:`) and `buildHref`'s
-// `:([^/?#]+)` substitution, so a hyphen/dot param name (`:user-id`, `:name.json`)
-// is one key across the type extractor, the URL builders, and the matcher.
+// Public signatures cannot reference internal subpath types. Keep this type-level
+// mirror local while runtime href/matching consumes `internal/route-pattern`.
 type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
   ? Rest extends `${infer Param}/${infer Tail}`
     ? Param | PathParamNames<Tail>
@@ -577,28 +575,7 @@ function buildHref(
   path: string,
   options: { params?: Record<string, string>; search?: Record<string, RouteSearchValue> },
 ): string {
-  const params = options.params ?? {};
-  // H1 (bugs-part4 L6-1): the param name is the whole segment after `:` up to the
-  // next `/`, `?`, or `#`, matching both the `PathParamNames` type extractor above
-  // and the runtime matcher (server match.ts `parseRouteSegment`, which takes the
-  // entire segment after `:`). A narrower `\w`-only name dropped hyphen/dot params
-  // (`:user-id` matched only `user`, emitting `/users/-id` instead of `/users/42`).
-  const pathname = path.replace(/:([^/?#]+)/g, (_match, key: string) =>
-    encodeURIComponent(params[key] ?? ''),
-  );
-  const search = new URLSearchParams();
-
-  for (const [key, value] of Object.entries(options.search ?? {})) {
-    if (value === null || value === undefined) continue;
-    search.set(key, searchValueToString(value));
-  }
-
-  const query = search.toString();
-  return query ? `${pathname}?${query}` : pathname;
-}
-
-function searchValueToString(value: JsonValue): string {
-  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+  return buildRoutePatternHref(path, options);
 }
 
 /**

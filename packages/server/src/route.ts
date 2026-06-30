@@ -1,5 +1,6 @@
 import type { JsonValue, Redirect, RouteSearchValue } from '@kovojs/core';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
+import { substituteRoutePatternParams } from '@kovojs/core/internal/route-pattern';
 import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 import { reportServerError } from './diagnostics.js';
@@ -50,12 +51,16 @@ import type {
   CompiledRoutePageMetadata,
 } from './route-ir.js';
 
+// Public signatures cannot reference internal subpath types. Keep this type-level
+// mirror local while runtime URL construction consumes `internal/route-pattern`.
 type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
   ? Rest extends `${infer Param}/${infer Tail}`
     ? Param | PathParamNames<Tail>
     : Rest extends `${infer Param}?${string}`
       ? Param
-      : Rest
+      : Rest extends `${infer Param}#${string}`
+        ? Param
+        : Rest
   : never;
 
 type PathParams<Path extends string> =
@@ -1273,9 +1278,13 @@ function routeCurrentUrl<
   input: RouteRequestInput,
 ): string {
   const routeRequest = parseRouteRequest(definition, input);
-  const pathname = definition.path.replace(/:([A-Za-z_$][\w$]*)/g, (_match, key: string) =>
-    encodeURIComponent(searchParamValue((routeRequest.params as Record<string, unknown>)[key])),
+  const routeParams = Object.fromEntries(
+    Object.entries(routeRequest.params as Record<string, unknown>).map(([key, value]) => [
+      key,
+      searchParamValue(value),
+    ]),
   );
+  const pathname = substituteRoutePatternParams(definition.path, routeParams);
   const search = searchParamsString(routeRequest.search as Record<string, unknown>);
 
   return search ? `${pathname}?${search}` : pathname;

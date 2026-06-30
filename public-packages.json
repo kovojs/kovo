@@ -21,6 +21,7 @@
           "./internal/package-prefix",
           "./internal/query-delta",
           "./internal/render-plan-token",
+          "./internal/route-pattern",
           "./internal/security-url",
           "./internal/semantic-attributes",
           "./internal/sink-policy",

@@ -32,6 +32,29 @@ describe('server static export route plan', () => {
     });
   });
 
+  it('uses the shared route pattern grammar for param route detection and staticPaths', () => {
+    expect(
+      staticExportRoutePlan(
+        createApp({
+          routes: [
+            route('/users/:user-id/files/:name.json', {
+              page: () => trustedHtml('<main>File</main>'),
+              staticPaths: ['/users/u%201/files/report.md'],
+            }),
+          ],
+        }),
+      ),
+    ).toEqual({
+      diagnostics: [],
+      targets: [
+        {
+          path: '/users/u%201/files/report.md',
+          routePath: '/users/:user-id/files/:name.json',
+        },
+      ],
+    });
+  });
+
   it('keeps non-exportable route diagnostics out of replay choreography', () => {
     expect(
       staticExportRoutePlan(

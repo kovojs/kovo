@@ -1,3 +1,5 @@
+import { buildRoutePatternHref } from '@kovojs/core/internal/route-pattern';
+
 import {
   generatedJsxIrAttribute,
   jsxIrAttributeValue,
@@ -113,42 +115,7 @@ function buildStaticHref(
   params: Record<string, string | number | boolean | null>,
   searchValues: Record<string, string | number | boolean | null>,
 ): string {
-  const pathname = substituteStaticRouteParams(path, params);
-  const search = new URLSearchParams();
-  for (const [key, value] of Object.entries(searchValues)) {
-    if (value === null || value === undefined) continue;
-    search.set(key, String(value));
-  }
-  const query = search.toString();
-  return query ? `${pathname}?${query}` : pathname;
-}
-
-// H1 (bugs-part4 L6-1): keep this structural-JSX scanner's `:param` grammar
-// identical to lower/navigation.ts, core's `buildHref`/`PathParamNames`, and the
-// runtime matcher (server match.ts `parseRouteSegment`). A `:param` name is the
-// whole segment after `:` up to the next `/`, `?`, or `#`; a narrower `\w`-only
-// name dropped hyphen/dot params (`:user-id` -> `/users/-id`).
-function substituteStaticRouteParams(
-  path: string,
-  params: Record<string, string | number | boolean | null>,
-): string {
-  let output = '';
-  let index = 0;
-  while (index < path.length) {
-    const char = path[index];
-    const next = path[index + 1];
-    if (char !== ':' || next === undefined || isRouteParamNameTerminator(next)) {
-      output += char;
-      index += 1;
-      continue;
-    }
-    let end = index + 2;
-    while (end < path.length && !isRouteParamNameTerminator(path[end] ?? '')) end += 1;
-    const key = path.slice(index + 1, end);
-    output += encodeURIComponent(String(params[key] ?? ''));
-    index = end;
-  }
-  return output;
+  return buildRoutePatternHref(path, { params, search: searchValues });
 }
 
 function sortHrefFirstForStaticLink(element: JsxIrElement, staticHref: boolean): void {
@@ -161,8 +128,4 @@ function sortHrefFirstForStaticLink(element: JsxIrElement, staticHref: boolean):
 
 function staticStringValue(value: StaticLiteralValue | undefined): string | null {
   return typeof value === 'string' ? value : null;
-}
-
-function isRouteParamNameTerminator(char: string): boolean {
-  return char === '/' || char === '?' || char === '#';
 }
