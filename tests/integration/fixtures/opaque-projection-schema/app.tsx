@@ -1,6 +1,6 @@
 import { createApp, domain, query, route, s, type Schema } from '@kovojs/server';
-import { renderQueryScript } from '@kovojs/server/internal/html';
-import { runQuery } from '@kovojs/server/internal/execution';
+import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
+import { runQuery } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const product = domain('product');

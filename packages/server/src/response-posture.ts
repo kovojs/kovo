@@ -31,25 +31,140 @@ import type {
 
 export type RequestLifecycleSurface = 'document' | 'endpoint' | 'mutation' | 'query' | 'system';
 
-export interface ResolveKovoLifecycleRequestOptions<
-  Request,
+type LifecycleCommonOptions<RawRequest, SessionValue, DbValue> = Pick<
+  RequestLifecycleOptions<RawRequest, SessionValue, DbValue>,
+  'clientIp' | 'db' | 'onError' | 'sessionProvider'
+>;
+
+export interface DocumentLifecyclePolicy<
+  RawRequest,
   SessionValue = unknown,
   DbValue = unknown,
-> extends RequestLifecycleOptions<Request, SessionValue, DbValue> {
-  surface: RequestLifecycleSurface;
+> extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue> {
+  onSessionSetCookie?: RequestLifecycleOptions<
+    RawRequest,
+    SessionValue,
+    DbValue
+  >['onSessionSetCookie'];
+  surface: 'document';
 }
+
+export interface QueryLifecyclePolicy<
+  RawRequest,
+  SessionValue = unknown,
+  DbValue = unknown,
+> extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue> {
+  dbAccess: 'read' | 'write-elevated';
+  surface: 'query';
+}
+
+export interface MutationLifecyclePolicy<
+  RawRequest,
+  SessionValue = unknown,
+  DbValue = unknown,
+> extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue> {
+  csrf: { mode: 'exempt' | 'protected' };
+  idempotency: { mode: 'none' | 'replay-store' };
+  sqlWritePolicy?: RequestLifecycleOptions<RawRequest, SessionValue, DbValue>['sqlWritePolicy'];
+  surface: 'mutation';
+}
+
+export interface EndpointLifecyclePolicy extends Pick<
+  RequestLifecycleOptions<Request, never, never>,
+  'clientIp' | 'onError'
+> {
+  surface: 'endpoint';
+}
+
+export interface SystemLifecyclePolicy {
+  surface: 'system';
+}
+
+export type ResolveKovoLifecycleRequestOptions<
+  RawRequest,
+  SessionValue = unknown,
+  DbValue = unknown,
+> =
+  | DocumentLifecyclePolicy<RawRequest, SessionValue, DbValue>
+  | QueryLifecyclePolicy<RawRequest, SessionValue, DbValue>
+  | MutationLifecyclePolicy<RawRequest, SessionValue, DbValue>
+  | EndpointLifecyclePolicy
+  | SystemLifecyclePolicy;
 
 /** Resolve the request lifecycle from one centralized policy entrypoint. */
 export async function resolveKovoLifecycleRequest<
-  Request,
+  RawRequest,
   SessionValue = unknown,
   DbValue = unknown,
 >(
-  request: Request,
-  options: ResolveKovoLifecycleRequestOptions<Request, SessionValue, DbValue>,
-): Promise<LifecycleRequest<Request, SessionValue, DbValue>> {
-  const { surface: _surface, ...lifecycleOptions } = options;
-  return resolveLifecycleRequest(request, lifecycleOptions);
+  request: RawRequest,
+  options: ResolveKovoLifecycleRequestOptions<RawRequest, SessionValue, DbValue>,
+): Promise<LifecycleRequest<RawRequest, SessionValue, DbValue>> {
+  assertKnownLifecyclePolicy(options);
+
+  switch (options.surface) {
+    case 'document': {
+      const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue> = {
+        dbMode: 'read',
+      };
+      if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
+      if (options.db !== undefined) lifecycleOptions.db = options.db;
+      if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
+      if (options.onSessionSetCookie !== undefined) {
+        lifecycleOptions.onSessionSetCookie = options.onSessionSetCookie;
+      }
+      if (options.sessionProvider !== undefined) {
+        lifecycleOptions.sessionProvider = options.sessionProvider;
+      }
+      return resolveLifecycleRequest(request, lifecycleOptions);
+    }
+    case 'query': {
+      const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue> = {
+        dbMode: options.dbAccess === 'write-elevated' ? 'write' : 'read',
+      };
+      if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
+      if (options.db !== undefined) lifecycleOptions.db = options.db;
+      if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
+      if (options.sessionProvider !== undefined) {
+        lifecycleOptions.sessionProvider = options.sessionProvider;
+      }
+      return resolveLifecycleRequest(request, lifecycleOptions);
+    }
+    case 'mutation': {
+      const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue> = {
+        dbMode: 'write',
+      };
+      if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
+      if (options.db !== undefined) lifecycleOptions.db = options.db;
+      if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
+      if (options.sessionProvider !== undefined) {
+        lifecycleOptions.sessionProvider = options.sessionProvider;
+      }
+      if (options.sqlWritePolicy !== undefined) {
+        lifecycleOptions.sqlWritePolicy = options.sqlWritePolicy;
+      }
+      return resolveLifecycleRequest(request, lifecycleOptions);
+    }
+    case 'endpoint': {
+      assertWebRequest(request, options.surface);
+      const lifecycleOptions: RequestLifecycleOptions<Request, never, never> = {};
+      if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
+      if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
+      return resolveLifecycleRequest(
+        endpointRequestWithoutSession(request),
+        lifecycleOptions,
+      ) as unknown as Promise<LifecycleRequest<RawRequest, SessionValue, DbValue>>;
+    }
+    case 'system': {
+      assertWebRequest(request, options.surface);
+      return resolveLifecycleRequest(
+        endpointRequestWithoutSession(request),
+        {},
+      ) as unknown as Promise<LifecycleRequest<RawRequest, SessionValue, DbValue>>;
+    }
+    default:
+      return assertNeverLifecyclePolicy(options);
+  }
 }
 
 /** Finalize a framework structured response into a Web Response. */
@@ -197,6 +312,69 @@ function endpointHeadersWithoutAmbientAuthority(headers: Headers): Headers {
   const sanitized = new Headers(headers);
   for (const name of AMBIENT_BROWSER_AUTHORITY_HEADERS) sanitized.delete(name);
   return sanitized;
+}
+
+const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>> = {
+  document: new Set([
+    'clientIp',
+    'db',
+    'onError',
+    'onSessionSetCookie',
+    'sessionProvider',
+    'surface',
+  ]),
+  endpoint: new Set(['clientIp', 'onError', 'surface']),
+  mutation: new Set([
+    'clientIp',
+    'csrf',
+    'db',
+    'idempotency',
+    'onError',
+    'sessionProvider',
+    'sqlWritePolicy',
+    'surface',
+  ]),
+  query: new Set(['clientIp', 'db', 'dbAccess', 'onError', 'sessionProvider', 'surface']),
+  system: new Set(['surface']),
+};
+
+function assertKnownLifecyclePolicy(options: unknown): void {
+  if (typeof options !== 'object' || options === null) {
+    throw new Error('Lifecycle policy must be an object.');
+  }
+  const policy = options as { surface?: unknown };
+  if (!isLifecycleSurface(policy.surface)) {
+    throw new Error(`Unknown lifecycle surface "${String(policy.surface)}".`);
+  }
+
+  const allowed = LIFECYCLE_POLICY_KEYS[policy.surface];
+  for (const key of Object.keys(options)) {
+    if (!allowed.has(key)) {
+      throw new Error(`Lifecycle surface "${policy.surface}" does not accept option "${key}".`);
+    }
+  }
+}
+
+function isLifecycleSurface(value: unknown): value is RequestLifecycleSurface {
+  return (
+    value === 'document' ||
+    value === 'endpoint' ||
+    value === 'mutation' ||
+    value === 'query' ||
+    value === 'system'
+  );
+}
+
+function assertWebRequest(
+  value: unknown,
+  surface: 'endpoint' | 'system',
+): asserts value is Request {
+  if (value instanceof Request) return;
+  throw new Error(`Lifecycle surface "${surface}" requires a Web Request.`);
+}
+
+function assertNeverLifecyclePolicy(value: never): never {
+  throw new Error(`Unhandled lifecycle policy ${String(value)}`);
 }
 
 function endpointPostureError(

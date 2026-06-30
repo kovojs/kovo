@@ -66,10 +66,10 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
       ? mergeGraphPages(options.graph?.pages ?? [], derivedRoutePages)
       : undefined;
   // SPEC.md §10.2/§6.6: classify every query/mutation/route-page/endpoint/webhook
-  // surface into a default-deny access fact and populate `graph.access` so the
-  // KV436 consumer (`kovo check`) fires on any surface with no explicit decision,
-  // guard, or machine-auth posture. By-construction: the proof is this static graph
-  // fact, not a TS brand. KV436 proves a decision EXISTS, never that it is correct.
+  // surface from producer-owned access facts and populate `graph.access` so the
+  // KV436 consumer (`kovo check`) fires on any surface with no explicit decision.
+  // By-construction: the proof is this static graph fact, not a TS brand. KV436
+  // proves a decision EXISTS, never that it is correct.
   const pagesForAccess = mergedPages ?? options.graph?.pages;
   const derivedAccess = deriveAccessExplainFacts({
     ...(options.graph?.endpoints === undefined ? {} : { endpoints: options.graph.endpoints }),

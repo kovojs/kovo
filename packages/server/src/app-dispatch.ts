@@ -84,16 +84,13 @@ export async function dispatchMatchedAppRequest({
       return methodNotAllowedWebResponse(request, match.allowedMethods);
     }
 
-    const endpointRequest =
-      app.db === undefined
-        ? request
-        : await resolveKovoLifecycleRequest(request, {
-            db: app.db,
-            surface: 'endpoint',
-          });
+    const endpointRequest = await resolveKovoLifecycleRequest(request, {
+      clientIp: (req) => resolveRequestClientIp(app, req),
+      surface: 'endpoint',
+    });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
     if (authFailure) return finalizeRawWebResponse(authFailure, request);
-    const csrfFailure = await validateEndpointCsrf(match.endpoint, endpointRequest, app.csrf);
+    const csrfFailure = await validateEndpointCsrf(match.endpoint, request, app.csrf);
     if (csrfFailure) return finalizeRawWebResponse(csrfFailure, request);
     return finalizeRawWebResponse(await runEndpoint(match.endpoint, endpointRequest), request);
   }

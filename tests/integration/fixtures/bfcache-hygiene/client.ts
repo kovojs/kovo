@@ -5,13 +5,13 @@ import {
   type TargetCollectorRoot,
   installKovoLoader,
 } from '@kovojs/browser/client';
-import { DomMorphRoot, keyedDomMorph } from '@kovojs/browser/internal/morph';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/test/internal/integration/fixture-browser-abi';
 import {
   applyCompiledQueryUpdatePlan,
   OptimisticRebaser,
   stampPendingQueries,
   submitOptimisticEnhancedMutation,
-} from '@kovojs/browser/internal/mutation';
+} from '@kovojs/test/internal/integration/fixture-browser-abi';
 
 type NavCounter = Record<string, unknown> & {
   value: number;

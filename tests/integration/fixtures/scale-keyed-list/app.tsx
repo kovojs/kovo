@@ -2,7 +2,11 @@
 // a 300-row keyed list reconciled through a fragment patch must keep identity correct at
 // scale — the right row removed, order preserved, no mis-keying or duplicate keys.
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
-import { escapeAttribute, escapeHtml, renderQueryScript } from '@kovojs/server/internal/html';
+import {
+  escapeAttribute,
+  escapeHtml,
+  renderQueryScript,
+} from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const cartDomain = domain('cart');

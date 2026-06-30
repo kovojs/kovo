@@ -5,12 +5,12 @@ import {
   type TargetCollectorRoot,
   installKovoLoader,
 } from '@kovojs/browser/client';
-import { DomMorphRoot, keyedDomMorph } from '@kovojs/browser/internal/morph';
+import { DomMorphRoot, keyedDomMorph } from '@kovojs/test/internal/integration/fixture-browser-abi';
 import {
   applyCompiledQueryUpdatePlan,
   OptimisticRebaser,
   submitOptimisticEnhancedMutation,
-} from '@kovojs/browser/internal/mutation';
+} from '@kovojs/test/internal/integration/fixture-browser-abi';
 
 type CartSummary = Record<string, unknown> & {
   count: number;

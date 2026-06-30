@@ -114,9 +114,9 @@ describe('ci-shards', () => {
     expect(
       includeVitest('packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts'),
     ).toBe(false);
-    expect(
-      includeVitest('packages/create-kovo/src/index.build.prod-artifact.assets.test.ts'),
-    ).toBe(false);
+    expect(includeVitest('packages/create-kovo/src/index.build.prod-artifact.assets.test.ts')).toBe(
+      false,
+    );
     expect(
       includeVitest(
         'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts',

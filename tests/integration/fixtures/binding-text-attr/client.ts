@@ -1,5 +1,5 @@
 import { createQueryStore } from '@kovojs/browser/client';
-import { installInlineQueryEventHydration } from '@kovojs/browser/internal/inline-loader';
+import { installInlineQueryEventHydration } from '@kovojs/test/internal/integration/fixture-browser-abi';
 
 installInlineQueryEventHydration({
   root: document,

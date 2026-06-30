@@ -1545,10 +1545,8 @@ describe('server createApp request shell', () => {
             csrf: false,
             csrfJustification: 'signed provider test endpoint',
             handler(request) {
-              const endpointRequest = request as Request & { db: AppDb; session?: never };
-              expect('session' in endpointRequest).toBe(false);
-              endpointRequest.db.writes.push('endpoint');
-              return new Response(`endpoint:${endpointRequest.db.count}`);
+              expect('session' in request).toBe(false);
+              return new Response(`endpoint-db:${'db' in request}`);
             },
             method: 'POST',
             reason: 'provider webhook db wiring test',
@@ -1617,8 +1615,8 @@ describe('server createApp request shell', () => {
       new Request('https://example.test/webhook', { method: 'POST' }),
     );
     expect(endpointResponse.status).toBe(200);
-    await expect(endpointResponse.text()).resolves.toBe('endpoint:3');
-    expect(db.writes).toEqual(['u1', 'endpoint']);
+    await expect(endpointResponse.text()).resolves.toBe('endpoint-db:false');
+    expect(db.writes).toEqual(['u1']);
   });
 
   it('reruns layout query chunks from generated layout live-target stamps', async () => {

@@ -1,8 +1,8 @@
-import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import { normalizeComponentFileName } from '../shared.js';
+import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
 import type { StaticLiteralValue } from './object.js';
 import type {
   ArrowFunctionPartsModel,
@@ -37,9 +37,7 @@ import type {
 
 export type * from './model.js';
 
-const mutableTs = ts as unknown as Record<string, unknown>;
-if (!('ScriptTarget' in mutableTs))
-  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
+ensureTypescriptRuntime(ts);
 
 /**
  * @internal FN7 (plans/compiler-refactoring.md): the canonical source parse. The scanner uses it,
@@ -290,9 +288,7 @@ function isExportedVariable(node: ts.VariableDeclaration): boolean {
 }
 
 function hasExportModifier(node: ts.FunctionDeclaration | ts.VariableStatement): boolean {
-  return Boolean(
-    ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword),
-  );
+  return hasModifier(node, ts.SyntaxKind.ExportKeyword);
 }
 
 function isExportedRenderSourceFunction(node: ts.Node): node is ts.FunctionDeclaration {

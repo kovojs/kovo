@@ -515,10 +515,12 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   // SPEC §9.4/§10.3 (MARQUEE): the framework owns the handle threaded into the loader. A normal
   // `query()` loader runs in read mode (KV433 read-only proxy); the audited `query.elevated(...)`
   // escape runs in write mode so a GET that must be idempotent-safe-to-repeat can perform its write.
-  const dbMode = definition.elevated ? 'write' : 'read';
   const resolvedRequest = await resolveKovoLifecycleRequest(request, {
-    ...options,
-    dbMode,
+    ...(options.clientIp === undefined ? {} : { clientIp: options.clientIp }),
+    ...(options.db === undefined ? {} : { db: options.db }),
+    dbAccess: definition.elevated ? 'write-elevated' : 'read',
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
+    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
     surface: 'query',
   });
   // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §9.4: thread the query's *validated*
@@ -615,7 +617,13 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   let lifecycleRequest: Request = endpointRequest.request;
   try {
     lifecycleRequest = await resolveKovoLifecycleRequest(endpointRequest.request, {
-      ...endpointRequest,
+      ...(endpointRequest.clientIp === undefined ? {} : { clientIp: endpointRequest.clientIp }),
+      ...(endpointRequest.db === undefined ? {} : { db: endpointRequest.db }),
+      dbAccess: definition.elevated ? 'write-elevated' : 'read',
+      ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),
+      ...(endpointRequest.sessionProvider === undefined
+        ? {}
+        : { sessionProvider: endpointRequest.sessionProvider }),
       surface: 'query',
     });
     result = await runQuery(

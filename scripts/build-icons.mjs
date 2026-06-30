@@ -1,7 +1,7 @@
-import { createRequire } from 'node:module';
 import { existsSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { PRESERVED_TSX, computeIconPlan } from '../packages/icons/scripts/icon-plan.mjs';
 
 /**
  * Generator for `@kovojs/icons` — the Lucide icon set as native Kovo SVG
@@ -33,111 +33,6 @@ const srcDir = path.join(pkgDir, 'src');
 const pkgJsonPath = path.join(pkgDir, 'package.json');
 const manifestPath = path.join(repoRoot, 'public-packages.json');
 
-// Hand-authored source files in src/ the generator must never delete.
-const PRESERVED_TSX = new Set(['index.tsx']);
-const SHADOW_RESTRICTED_NAMES = new Set(['Infinity', 'NaN', 'undefined', 'eval', 'arguments']);
-
-function lucideIconNodes() {
-  // Resolve from the icons package so pnpm's package-local devDependency
-  // (packages/icons/node_modules/lucide-static) is on the lookup path.
-  const require = createRequire(pkgJsonPath);
-  const pkgPath = require.resolve('lucide-static/package.json');
-  const nodesPath = path.join(path.dirname(pkgPath), 'icon-nodes.json');
-  return JSON.parse(readFileSync(nodesPath, 'utf8'));
-}
-
-/** kebab `arrow-right` → PascalCase `ArrowRight`; prefix `Icon` if it would start with a digit. */
-function toSymbol(name) {
-  const symbol = name
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join('');
-  return /^[0-9]/.test(symbol) ? `Icon${symbol}` : symbol;
-}
-
-/** kebab `arrow-right` → `Arrow Right` for the JSDoc summary. */
-function toTitle(name) {
-  return name
-    .split('-')
-    .filter(Boolean)
-    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
-    .join(' ');
-}
-
-function attrValue(value) {
-  const text = String(value);
-  if (/[<>&"]/.test(text)) {
-    throw new Error(`build-icons: unsafe attribute value ${JSON.stringify(text)}`);
-  }
-  return text;
-}
-
-function renderChild(node) {
-  if (!Array.isArray(node) || typeof node[0] !== 'string') {
-    throw new Error(`build-icons: malformed icon node ${JSON.stringify(node)}`);
-  }
-  const [tag, attrs = {}] = node;
-  const attrText = Object.entries(attrs)
-    .map(([key, value]) => ` ${key}="${attrValue(value)}"`)
-    .join('');
-  return `      <${tag}${attrText}></${tag}>`;
-}
-
-function iconSource(name, nodes) {
-  const symbol = toSymbol(name);
-  const lintSuppression = SHADOW_RESTRICTED_NAMES.has(symbol)
-    ? '// eslint-disable-next-line no-shadow-restricted-names -- Generated public Lucide icon export.\n'
-    : '';
-  const children = nodes.map(renderChild).join('\n');
-  const svg =
-    children.length > 0
-      ? `    <svg {...iconRootAttrs(props)}>\n${children}\n    </svg>`
-      : `    <svg {...iconRootAttrs(props)}></svg>`;
-  // Plain SYNCHRONOUS function components: the @kovojs/server JSX runtime calls
-  // `type(props)` directly (jsx-runtime.ts), so a host-element <svg> renders to a
-  // string inline. A `component({ render })` wrapper would render asynchronously
-  // (renderKovoComponent → Promise) and break embedding inside other components'
-  // synchronous render output (e.g. @kovojs/ui composes via `render(...) + ...`).
-  return (
-    `/** @jsxImportSource @kovojs/server */\n` +
-    `import { iconRootAttrs, type IconProps, type IconRenderResult } from './icon-base.js';\n` +
-    `\n` +
-    `/** ${toTitle(name)} icon (Lucide). https://lucide.dev/icons/${name} */\n` +
-    lintSuppression +
-    `export function ${symbol}(props: IconProps = {}): IconRenderResult {\n` +
-    `  return (\n` +
-    `${svg}\n` +
-    `  );\n` +
-    `}\n`
-  );
-}
-
-/** Build the full deterministic plan: per-icon file contents, exports map, manifest public list. */
-function computePlan() {
-  const iconNodes = lucideIconNodes();
-  const names = Object.keys(iconNodes).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
-
-  const files = new Map(); // `${name}.tsx` -> source
-  const bySymbol = new Map(); // symbol -> name (collision guard)
-  for (const name of names) {
-    const symbol = toSymbol(name);
-    if (bySymbol.has(symbol)) {
-      throw new Error(
-        `build-icons: symbol collision ${symbol} from "${name}" and "${bySymbol.get(symbol)}"`,
-      );
-    }
-    bySymbol.set(symbol, name);
-    files.set(`${name}.tsx`, iconSource(name, iconNodes[name]));
-  }
-
-  const exportsMap = { '.': './src/index.tsx' };
-  for (const name of names) exportsMap[`./${name}`] = `./src/${name}.tsx`;
-  const publicSubpaths = ['.', ...names.map((name) => `./${name}`)];
-
-  return { names, files, exportsMap, publicSubpaths };
-}
-
 function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, 'utf8'));
 }
@@ -168,7 +63,7 @@ function upsertManifest(manifest, publicSubpaths) {
 }
 
 function write() {
-  const { names, files, exportsMap, publicSubpaths } = computePlan();
+  const { names, files, exportsMap, publishExports, publicSubpaths } = computeIconPlan();
 
   // Remove stale generated icon files (every src/*.tsx except hand-authored ones).
   for (const file of readdirSync(srcDir)) {
@@ -182,6 +77,12 @@ function write() {
 
   const pkgJson = readJson(pkgJsonPath);
   pkgJson.exports = exportsMap;
+  pkgJson.publishConfig = { ...pkgJson.publishConfig, exports: publishExports };
+  pkgJson.scripts = {
+    ...pkgJson.scripts,
+    'build:dist': 'node ./scripts/build-dist.mjs',
+    prepack: 'pnpm run build:dist',
+  };
   writeJson(pkgJsonPath, pkgJson);
 
   const manifest = readJson(manifestPath);
@@ -193,7 +94,7 @@ function write() {
 }
 
 function check() {
-  const { names, files, exportsMap, publicSubpaths } = computePlan();
+  const { names, files, exportsMap, publishExports, publicSubpaths } = computeIconPlan();
   const drift = [];
 
   const onDisk = new Set(
@@ -210,6 +111,18 @@ function check() {
   const pkgExports = readJson(pkgJsonPath).exports ?? {};
   if (JSON.stringify(pkgExports) !== JSON.stringify(exportsMap)) {
     drift.push('package.json exports out of date');
+  }
+
+  const pkgJson = readJson(pkgJsonPath);
+  const actualPublishExports = pkgJson.publishConfig?.exports ?? {};
+  if (JSON.stringify(actualPublishExports) !== JSON.stringify(publishExports)) {
+    drift.push('package.json publishConfig.exports out of date');
+  }
+  if (pkgJson.scripts?.['build:dist'] !== 'node ./scripts/build-dist.mjs') {
+    drift.push('package.json scripts.build:dist out of date');
+  }
+  if (pkgJson.scripts?.prepack !== 'pnpm run build:dist') {
+    drift.push('package.json scripts.prepack out of date');
   }
 
   const manifest = readJson(manifestPath);

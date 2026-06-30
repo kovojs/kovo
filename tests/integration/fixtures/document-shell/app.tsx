@@ -1,5 +1,5 @@
 import { createApp, route } from '@kovojs/server';
-import { renderQueryScript } from '@kovojs/server/internal/html';
+import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
 const shellQuery = { message: 'Shell ready' };

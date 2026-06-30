@@ -14,6 +14,15 @@ import {
 import type { BrowserTrustedHTML, TrustedHtml } from '@kovojs/browser';
 import ts from 'typescript';
 
+import {
+  galleryPrimitiveActionsImportManifest,
+  galleryHeadlessGeneratedModuleSpecifier,
+  galleryHeadlessPrimitiveModuleSpecifier,
+  galleryRuntimeModuleSpecifier,
+  rebaseGalleryClientModuleManifest,
+  resolveGalleryClientModuleSpecifiers,
+  type GalleryClientModuleManifest,
+} from './client-module-manifest.js';
 import { interactiveGalleryDemos, renderInteractiveGalleryRoute } from './interactive-docs.js';
 
 const headlessUiSourceRoot = fileURLToPath(
@@ -21,10 +30,8 @@ const headlessUiSourceRoot = fileURLToPath(
 );
 const galleryInteractiveClientModules = createMemoryVersionedClientModuleRegistry();
 
-// SPEC.md §4.4: load-bearing import maps are a non-goal — "the compiler and server emit full module
-// URLs". Generated client modules import tiny declaration helpers from `@kovojs/browser/generated`,
-// a bare specifier the browser cannot resolve. Serve a minimal runtime module at a resolvable /c/
-// URL and rewrite the bare import to it so the static export is interactive without an import map.
+// SPEC.md §4.4: load-bearing import maps are a non-goal. Generated client modules carry a manifest
+// of package dependencies; the gallery resolves those entries to served /c/ URLs.
 const galleryRuntimeModulePath = '/c/examples/gallery/src/generated/kovo-runtime.client.js';
 const galleryRuntimeModuleSource = [
   'export const derive = (inputs, run) => ({ inputs, run });',
@@ -99,8 +106,17 @@ export const galleryInteractiveNodeHandler = galleryInteractiveAppShell.nodeHand
 export default galleryInteractiveAppShell.app;
 
 function registerGalleryInteractiveClientModule(demoName: string): string {
-  const { modulePath, source: rawClientSource, version } = galleryInteractiveClientModule(demoName);
-  const generatedClientSource = rewriteGalleryClientImports(rawClientSource);
+  const {
+    manifest,
+    modulePath,
+    source: rawClientSource,
+    version,
+  } = galleryInteractiveClientModule(demoName);
+  const generatedClientSource = resolveGalleryClientModuleSpecifiers(
+    rawClientSource,
+    manifest,
+    resolveGalleryClientModuleSpecifier,
+  );
   const href = galleryInteractiveClientModules.put({
     path: modulePath,
     source: generatedClientSource,
@@ -117,6 +133,7 @@ function registerGalleryInteractiveClientModule(demoName: string): string {
 function galleryInteractiveClientModule(demoName: string): {
   modulePath: string;
   source: string;
+  manifest: GalleryClientModuleManifest;
   version: string;
 } {
   const generatedClientUrl = new URL(
@@ -124,12 +141,17 @@ function galleryInteractiveClientModule(demoName: string): {
     import.meta.url,
   );
   if (existsSync(generatedClientUrl)) {
+    const compiled = compileGalleryInteractiveClientModule(
+      demoName,
+      `src/generated/interactive/${demoName}.tsx`,
+    );
     const generatedServerSource = readFileSync(
       new URL(`./generated/interactive/${demoName}.tsx`, import.meta.url),
       'utf8',
     );
     const { modulePath, version } = parseGalleryCompiledClientRef(demoName, generatedServerSource);
     return {
+      manifest: rebaseMovedGalleryInteractiveClientManifest(compiled.manifest),
       modulePath,
       source: readFileSync(generatedClientUrl, 'utf8'),
       version,
@@ -139,10 +161,24 @@ function galleryInteractiveClientModule(demoName: string): {
   return compileGalleryInteractiveClientModule(demoName, `src/interactive/${demoName}.tsx`);
 }
 
+function rebaseMovedGalleryInteractiveClientManifest(
+  manifest: GalleryClientModuleManifest,
+): GalleryClientModuleManifest {
+  return rebaseGalleryClientModuleManifest(
+    manifest,
+    new Map([['../primitive-actions.js', '../../primitive-actions.js']]),
+  );
+}
+
 function compileGalleryInteractiveClientModule(
   demoName: string,
   fileName: string,
-): { modulePath: string; source: string; version: string } {
+): {
+  manifest: GalleryClientModuleManifest;
+  modulePath: string;
+  source: string;
+  version: string;
+} {
   const source = readFileSync(new URL(`./interactive/${demoName}.tsx`, import.meta.url), 'utf8');
   const result = compileComponentModule({ fileName, source });
   const clientSource = result.files.find((file) => file.kind === 'client')?.source;
@@ -156,7 +192,12 @@ function compileGalleryInteractiveClientModule(
   }
 
   const { modulePath, version } = parseGalleryCompiledClientRef(demoName, serverSource);
-  return { modulePath, source: clientSource, version };
+  return {
+    manifest: result.clientModuleImportManifest,
+    modulePath,
+    source: clientSource,
+    version,
+  };
 }
 
 function registerHeadlessUiClientModules(): ReadonlyMap<string, string> {
@@ -213,7 +254,7 @@ function headlessUiClientModuleSource(sourcePath: string): { modulePath: string;
 function registerPrimitiveActionsClientModule(): string {
   const modulePath = '/c/examples/gallery/src/primitive-actions.js';
   const rawSource = readFileSync(new URL('./primitive-actions.ts', import.meta.url), 'utf8');
-  const source = rewriteGalleryPrimitiveActionsImports(
+  const source = resolveGalleryClientModuleSpecifiers(
     ts.transpileModule(rawSource, {
       compilerOptions: {
         importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
@@ -222,6 +263,8 @@ function registerPrimitiveActionsClientModule(): string {
       },
       fileName: 'primitive-actions.ts',
     }).outputText,
+    galleryPrimitiveActionsImportManifest(),
+    resolveGalleryClientModuleSpecifier,
   );
 
   return galleryInteractiveClientModules.put({
@@ -231,46 +274,22 @@ function registerPrimitiveActionsClientModule(): string {
   });
 }
 
-// SPEC.md §4.4: rewrite bare specifiers to served module URLs so the browser can resolve the
-// generated client module graph without an import map.
-function rewriteGalleryClientImports(source: string): string {
-  return source
-    .replaceAll("from '@kovojs/browser/generated';", `from '${galleryRuntimeModuleHref}';`)
-    .replaceAll("from '@kovojs/browser';", `from '${galleryRuntimeModuleHref}';`)
-    .replace(
-      /from (["'])(?:\.\.\/primitive-actions|\.\.\/\.\.\/primitive-actions)\.js\1;/g,
-      `from '${galleryPrimitiveActionsClientModuleHref}';`,
-    )
-    .replace(
-      /from (["'])@kovojs\/(?:headless-ui|ui)\/([a-z0-9-]+)\1;/g,
-      (_match, _quote: string, family: string) => {
-        const href = galleryHeadlessUiClientModuleHrefMap.get(
-          `/c/packages/headless-ui/src/primitives/${family}.js`,
-        );
-        if (href === undefined) {
-          throw new Error(`Missing gallery headless UI client module for ${family}.`);
-        }
-        return `from '${href}';`;
-      },
-    );
-}
+function resolveGalleryClientModuleSpecifier(moduleSpecifier: string): string {
+  if (moduleSpecifier === galleryRuntimeModuleSpecifier) return galleryRuntimeModuleHref;
+  if (moduleSpecifier === '../primitive-actions.js') return galleryPrimitiveActionsClientModuleHref;
+  if (moduleSpecifier === '../../primitive-actions.js')
+    return galleryPrimitiveActionsClientModuleHref;
+  if (moduleSpecifier === galleryHeadlessGeneratedModuleSpecifier) {
+    return headlessUiClientModuleHref('generated');
+  }
+  if (moduleSpecifier === galleryHeadlessPrimitiveModuleSpecifier) {
+    return headlessUiClientModuleHref('primitive-internal');
+  }
 
-function rewriteGalleryPrimitiveActionsImports(source: string): string {
-  return source
-    .replaceAll(
-      "from '@kovojs/headless-ui/generated';",
-      `from '${headlessUiClientModuleHref('generated')}';`,
-    )
-    .replaceAll(
-      "from '@kovojs/headless-ui/internal/primitive';",
-      `from '${headlessUiClientModuleHref('primitive-internal')}';`,
-    )
-    .replace(
-      /from (["'])@kovojs\/headless-ui\/([a-z0-9-]+)\1;/g,
-      (_match, _quote: string, family: string) => {
-        return `from '${headlessUiClientModuleHref(`primitives/${family}`)}';`;
-      },
-    );
+  const family = moduleSpecifier.match(/^@kovojs\/(?:headless-ui|ui)\/([a-z0-9-]+)$/)?.[1];
+  if (family !== undefined) return headlessUiClientModuleHref(`primitives/${family}`);
+
+  throw new Error(`Missing gallery client module resolver entry for ${moduleSpecifier}.`);
 }
 
 function headlessUiClientModuleHref(sourcePathWithoutExtension: string): string {

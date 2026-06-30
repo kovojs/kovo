@@ -809,6 +809,17 @@ describe('compiler conformance corpus', () => {
                 },
               ],
             },
+            {
+              "domName": "guest-product-grid",
+              "exportName": "GuestProductGrid",
+              "fragments": [
+                "components/product-grid/guest-product-grid",
+              ],
+              "name": "components/product-grid/guest-product-grid",
+              "queries": [
+                "productGrid",
+              ],
+            },
           ],
           "cssAssetCount": 1,
           "diagnostics": [],

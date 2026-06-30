@@ -1,44 +1,128 @@
 export const GENERATED_ARTIFACT_CATEGORIES = Object.freeze({
+  appLocalGeneratedOutput: 'app_local_generated_output',
+  frameworkGeneratedSource: 'framework_generated_source',
+  generatedPackageMetadata: 'generated_package_metadata',
   mustNotCommit: 'must_not_commit',
   mustBeReadable: 'must_be_readable',
+  mustMatchGenerator: 'must_match_generator',
   mustMatchEmitContract: 'must_match_emit_contract',
+});
+
+export const GENERATED_ARTIFACT_GENERATORS = Object.freeze({
+  icons: 'icons',
+  uiRegistry: 'ui-registry',
+  prodEmit: 'prod-emit',
 });
 
 export const generatedArtifactInventory = Object.freeze([
   {
     id: 'example-app-local-generated',
-    categories: Object.freeze([GENERATED_ARTIFACT_CATEGORIES.mustNotCommit]),
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.appLocalGeneratedOutput,
+      GENERATED_ARTIFACT_CATEGORIES.mustNotCommit,
+    ]),
     gitPathspecs: Object.freeze(['examples/*/src/generated/**']),
     pathPatterns: Object.freeze([/^examples\/[^/]+\/src\/generated\//]),
     spec: 'SPEC.md §5.2 rule 8',
   },
   {
     id: 'site-app-local-generated',
-    categories: Object.freeze([GENERATED_ARTIFACT_CATEGORIES.mustNotCommit]),
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.appLocalGeneratedOutput,
+      GENERATED_ARTIFACT_CATEGORIES.mustNotCommit,
+    ]),
     gitPathspecs: Object.freeze(['site/src/generated/**']),
     pathPatterns: Object.freeze([/^site\/src\/generated\//]),
     spec: 'SPEC.md §5.2 rule 8',
   },
   {
     id: 'tutorial-app-local-generated',
-    categories: Object.freeze([GENERATED_ARTIFACT_CATEGORIES.mustNotCommit]),
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.appLocalGeneratedOutput,
+      GENERATED_ARTIFACT_CATEGORIES.mustNotCommit,
+    ]),
     gitPathspecs: Object.freeze(['site/tutorial/steps/*/src/generated/**']),
     pathPatterns: Object.freeze([/^site\/tutorial\/steps\/[^/]+\/src\/generated\//]),
     spec: 'SPEC.md §5.2 rule 8',
   },
   {
     id: 'create-kovo-template-graph',
-    categories: Object.freeze([GENERATED_ARTIFACT_CATEGORIES.mustNotCommit]),
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.appLocalGeneratedOutput,
+      GENERATED_ARTIFACT_CATEGORIES.mustNotCommit,
+    ]),
     gitPathspecs: Object.freeze(['packages/create-kovo/templates/graph.json']),
     pathPatterns: Object.freeze([/^packages\/create-kovo\/templates\/graph\.json$/]),
     spec: 'SPEC.md §5.2 rule 8',
   },
   {
+    id: 'icon-generated-components',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.icons,
+    generatorCheckCommand: Object.freeze([
+      'pnpm',
+      '--filter',
+      '@kovojs/icons',
+      'run',
+      'build:icons',
+      '--',
+      '--check',
+    ]),
+    pathPatterns: Object.freeze([/^packages\/icons\/src\/[^/]+\.tsx$/]),
+    spec: 'SPEC.md §5.2 rules 7-8',
+  },
+  {
+    id: 'icon-generated-package-metadata',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.generatedPackageMetadata,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.icons,
+    generatorCheckCommand: Object.freeze([
+      'pnpm',
+      '--filter',
+      '@kovojs/icons',
+      'run',
+      'build:icons',
+      '--',
+      '--check',
+    ]),
+    pathPatterns: Object.freeze([/^packages\/icons\/package\.json$/, /^public-packages\.json$/]),
+    spec: 'rules/api-surface.md distribution metadata',
+  },
+  {
+    id: 'headless-ui-generated-source',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.uiRegistry,
+    generatorCheckCommand: Object.freeze(['node', 'packages/ui/scripts/build-registry.mjs']),
+    pathPatterns: Object.freeze([/^packages\/headless-ui\/src\/generated\.ts$/]),
+    spec: 'SPEC.md §5.2 rules 7-8',
+  },
+  {
+    id: 'ui-generated-registry',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.generatedPackageMetadata,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.uiRegistry,
+    generatorCheckCommand: Object.freeze(['node', 'packages/ui/scripts/build-registry.mjs']),
+    pathPatterns: Object.freeze([/^packages\/ui\/registry\.json$/]),
+    spec: 'rules/api-surface.md starter/package metadata',
+  },
+  {
     id: 'component-server-module',
     categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
       GENERATED_ARTIFACT_CATEGORIES.mustBeReadable,
       GENERATED_ARTIFACT_CATEGORIES.mustMatchEmitContract,
     ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.prodEmit,
     pathPatterns: Object.freeze([/^.+\.server\.js$/]),
     emitKind: 'server',
     spec: 'SPEC.md §5.2 rules 2-3, 7',
@@ -46,9 +130,11 @@ export const generatedArtifactInventory = Object.freeze([
   {
     id: 'component-client-module',
     categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
       GENERATED_ARTIFACT_CATEGORIES.mustBeReadable,
       GENERATED_ARTIFACT_CATEGORIES.mustMatchEmitContract,
     ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.prodEmit,
     pathPatterns: Object.freeze([/^.+\.client\.js$/]),
     emitKind: 'client',
     spec: 'SPEC.md §5.2 rules 2-3, 7',
@@ -56,9 +142,11 @@ export const generatedArtifactInventory = Object.freeze([
   {
     id: 'generated-registry-declaration',
     categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.generatedPackageMetadata,
       GENERATED_ARTIFACT_CATEGORIES.mustBeReadable,
       GENERATED_ARTIFACT_CATEGORIES.mustMatchEmitContract,
     ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.prodEmit,
     pathPatterns: Object.freeze([/^generated\/registries\.d\.ts$/]),
     emitKind: 'registry',
     spec: 'SPEC.md §5.2 rules 3, 6-8',
@@ -133,6 +221,25 @@ export function generatedArtifactPoliciesForCategory(category) {
   return generatedArtifactInventory.filter((entry) => entry.categories.includes(category));
 }
 
+export function generatedArtifactPoliciesForGenerator(generatorId) {
+  return generatedArtifactInventory.filter((entry) => entry.generatorId === generatorId);
+}
+
+export function generatedArtifactGeneratorCheckCommand(generatorId) {
+  const commandsByKey = new Map();
+  for (const command of generatedArtifactPoliciesForGenerator(generatorId)
+    .map((entry) => entry.generatorCheckCommand)
+    .filter(Boolean)) {
+    commandsByKey.set(JSON.stringify(command), command);
+  }
+  const commands = [...commandsByKey.values()];
+  if (commands.length === 0) return null;
+  if (commands.length > 1) {
+    throw new Error(`Generated artifact generator ${generatorId} has conflicting check commands`);
+  }
+  return commands[0];
+}
+
 export function generatedArtifactPathspecs(category) {
   return generatedArtifactPoliciesForCategory(category).flatMap(
     (entry) => entry.gitPathspecs ?? [],
@@ -154,6 +261,10 @@ export function generatedArtifactCategoriesForPath(fileName) {
 
 export function generatedArtifactPathsInCategory(files, category) {
   return files.filter((file) => generatedArtifactCategoriesForPath(file).includes(category));
+}
+
+export function isGeneratedArtifactPathInCategory(fileName, category) {
+  return generatedArtifactCategoriesForPath(fileName).includes(category);
 }
 
 export function validateGeneratedEmitContract(files, contract = generatedProdEmitContract) {

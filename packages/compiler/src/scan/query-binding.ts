@@ -1,11 +1,9 @@
-import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
+import { ensureTypescriptRuntime } from '../ts-api.js';
 import type { LiveTargetQueryBindingFact } from '../types.js';
 
-const mutableTs = ts as unknown as Record<string, unknown>;
-if (!('ScriptTarget' in mutableTs))
-  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
+ensureTypescriptRuntime(ts);
 
 /**
  * @internal FN7 (plans/compiler-refactoring.md): the query-binding expression parser, relocated

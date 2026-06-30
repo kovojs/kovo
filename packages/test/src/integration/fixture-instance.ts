@@ -2,7 +2,7 @@
 // recreated on `reset()` so each test gets an isolated, freshly-seeded PGlite —
 // the app object closes over a mutable `db` holder, so the same request handler
 // keeps working across resets without rebuilding the Vite module graph.
-import { createRequestHandler, type KovoApp } from '@kovojs/server';
+import type { KovoApp, RequestHandler } from '@kovojs/server';
 
 import { createPgliteTestDb, type PgliteTestDb } from '../pglite.js';
 import { createDbVerifier, type DbVerifier } from '../verifier.js';
@@ -31,12 +31,15 @@ function schemaStatements(schema: string | readonly string[] | undefined): reado
   return typeof schema === 'string' ? [schema] : schema;
 }
 
+export type FixtureRequestHandlerFactory = (app: KovoApp) => RequestHandler;
+
 /**
  * Build a fixture instance: create the database, apply schema + seed, and wire a
  * request handler that attaches the current `db` to every request.
  */
 export async function createFixtureInstance(
   descriptor: KovoFixtureDescriptor,
+  createRequestHandler: FixtureRequestHandlerFactory,
 ): Promise<FixtureInstance> {
   const { definition } = descriptor;
   let rawDb: PgliteTestDb;

@@ -47,11 +47,12 @@ import {
   type LiveTargetRenderer,
   type BufferedMutationWireResponse,
   type MutationEndpointRequest,
+  type MutationEndpointReplayResponse,
   type MutationEndpointResponse,
   type MutationWireRequest,
   type MutationWireResponse,
-  type NoJsMutationReplayStore,
   type NoJsMutationRequest,
+  type NoJsMutationReplayReservation,
   type NoJsMutationResponse,
 } from './mutation-wire.js';
 import type { GeneratedFragmentRenderable } from './renderable.js';
@@ -63,7 +64,6 @@ import {
   mutationReplayContext,
   readMutationReplay,
   reserveMutationReplayBeforeRun,
-  type MutationReplayStore,
 } from './replay.js';
 import {
   formLikeToRecord,
@@ -203,11 +203,31 @@ type ExecuteMutationLifecycleOptions<Request, ReplayResponse> = RunMutationOptio
   replay?: MutationLifecycleReplayPolicy<ReplayResponse>;
 };
 
+type MutationResponseDeliveryMode<Request, Value> =
+  | {
+      csrf: CsrfValidationOptions<Request> | false | undefined;
+      kind: 'enhanced-fragment';
+      mutationKey: string;
+      request: MutationWireRequest<Request>;
+    }
+  | {
+      csrf: CsrfValidationOptions<Request> | false | undefined;
+      kind: 'no-js-prg';
+      mutationKey: string;
+      request: NoJsMutationRequest<Request, Value>;
+    };
+
 type TransactionCapableRequestDb = {
   transaction<Result>(
     callback: (transactionDb: unknown) => Promise<Result> | Result,
   ): Promise<Result> | Result;
 };
+
+function optionalReplayPolicy<Response>(
+  replay: MutationLifecycleReplayPolicy<Response> | undefined,
+): { replay?: MutationLifecycleReplayPolicy<Response> } {
+  return replay === undefined ? {} : { replay };
+}
 
 /**
  * Internal mutation lifecycle state machine shared by enhanced, no-JS, and direct
@@ -720,6 +740,12 @@ export async function renderMutationResponse<
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
   const csrf = mutationCsrfOptions(definition, wireRequest.csrf);
+  const deliveryMode = {
+    csrf,
+    kind: 'enhanced-fragment',
+    mutationKey: definition.key,
+    request: wireRequest,
+  } satisfies MutationResponseDeliveryMode<Request, Value>;
   const lifecycle = await executeMutationLifecycle<
     Key,
     InputSchema,
@@ -731,22 +757,7 @@ export async function renderMutationResponse<
   >(definition, wireRequest.rawInput, wireRequest.request, {
     ...runMutationOptions(wireRequest.csrf, wireRequest),
     catchHandlerErrors: true,
-    replay: {
-      read: () =>
-        readMutationReplay(
-          mutationReplayContext(csrf ?? false, {
-            ...wireRequest,
-            mutationKey: definition.key,
-          }),
-        ),
-      reserve: () =>
-        reserveMutationReplayBeforeRun(
-          mutationReplayContext(csrf ?? false, {
-            ...wireRequest,
-            mutationKey: definition.key,
-          }),
-        ),
-    },
+    ...optionalReplayPolicy(enhancedMutationReplayPolicy(deliveryMode)),
   });
 
   if (lifecycle.kind === 'csrf-failure') {
@@ -790,9 +801,11 @@ export async function renderMutationResponse<
     };
   }
 
-  if (lifecycle.kind === 'replay-conflict') return renderReplayConflictFragment(wireRequest);
-  if (lifecycle.kind === 'replayed') return lifecycle.response;
-  if (lifecycle.kind === 'replay-unavailable') return renderReplayUnavailableFragment(wireRequest);
+  if (isReplayTerminalOutcome(lifecycle)) {
+    return (
+      (await mapReplayOutcomeToModeResponse(deliveryMode, lifecycle)) ?? unreachableReplayOutcome()
+    );
+  }
 
   if (lifecycle.kind === 'handler-error') {
     reportServerError(wireRequest.onError, lifecycle.error, {
@@ -1069,11 +1082,11 @@ export async function renderMutationEndpointResponse<
     // SPEC §10.3:1151 ("atomic reservation … for all mutation paths — the enhanced and no-JS
     // mutation() lifecycle"): thread the same injected replay store into the no-JS POST-redirect-GET
     // branch as the enhanced wire branch so duplicate/concurrent no-JS submits dedup onto one handler
-    // run. The store is adapted to the 303-capable NoJsMutationReplayStore shape (records are
-    // namespaced by `noJsReplayScopeFor` so no-JS 303s never collide with enhanced 200s).
+    // run. Mode-specific replay scopes keep no-JS 303 records separate from enhanced fragment
+    // records while preserving the store's atomic reservation contract.
     ...(endpointRequest.replayStore === undefined
       ? {}
-      : { replayStore: noJsReplayStoreFromMutationStore(endpointRequest.replayStore) }),
+      : { replayStore: endpointRequest.replayStore }),
     ...(endpointRequest.renderFailurePage === undefined
       ? {}
       : { renderFailurePage: endpointRequest.renderFailurePage }),
@@ -1087,38 +1100,6 @@ export async function renderMutationEndpointResponse<
       ? {}
       : { taskScheduler: endpointRequest.taskScheduler }),
   });
-}
-
-/**
- * Adapt the app's enhanced {@link MutationReplayStore} (200/4xx/5xx wire responses, used by the
- * `Kovo-Fragment` path) into a {@link NoJsMutationReplayStore} (303 redirect responses) so the
- * no-JS POST-redirect-GET path shares the same injected idempotency store. SPEC §10.3:1151 requires
- * the atomic-reservation replay floor for ALL mutation paths, including the no-JS `mutation()`
- * lifecycle. Only `get`/`reserve` are used (the no-JS path never calls `set`); the redirect body is
- * a plain string the store treats opaquely, and no-JS records are namespaced (`nojs:` scope, see
- * {@link noJsReplayScopeFor}) so they can never replay across the enhanced/no-JS status boundary.
- */
-function noJsReplayStoreFromMutationStore(
-  store: MutationReplayStore<BufferedMutationWireResponse>,
-): NoJsMutationReplayStore {
-  return {
-    get(scope, idem, fingerprint) {
-      return store.get(scope, idem, fingerprint) as unknown as
-        | Promise<NoJsMutationResponse | undefined>
-        | NoJsMutationResponse
-        | undefined;
-    },
-    reserve(scope, idem, fingerprint) {
-      const reservation = store.reserve(scope, idem, fingerprint);
-      if (!reservation) return undefined;
-      return {
-        ...(reservation.abort === undefined ? {} : { abort: () => reservation.abort?.() }),
-        commit(response) {
-          reservation.commit(response as unknown as BufferedMutationWireResponse);
-        },
-      };
-    },
-  };
 }
 
 function mutationRuntimeRegistryFacts<
@@ -1136,6 +1117,132 @@ function mutationRuntimeRegistryFacts<
     liveTargetRenderers: renderers,
     queries: (definition.registry?.queries ?? []) as RuntimeRegistryFacts<Request>['queries'],
   };
+}
+
+function enhancedMutationReplayPolicy<Request, Value>(
+  mode: Extract<MutationResponseDeliveryMode<Request, Value>, { kind: 'enhanced-fragment' }>,
+): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> {
+  const context = mutationReplayContext(mode.csrf ?? false, {
+    ...mode.request,
+    mutationKey: mode.mutationKey,
+  });
+  return {
+    async read() {
+      return enhancedReplayResponseOrConflict(await readMutationReplay(context));
+    },
+    async reserve() {
+      const result = await reserveMutationReplayBeforeRun(context);
+      if (result.kind === 'replayed') {
+        return {
+          kind: 'replayed',
+          response: enhancedReplayResultOrConflict(result.response),
+        };
+      }
+      if (result.kind !== 'reserved') return result;
+      return {
+        kind: 'reserved',
+        reservation: {
+          ...(result.reservation.abort === undefined
+            ? {}
+            : { abort: () => result.reservation.abort?.() }),
+          commit(response: BufferedMutationWireResponse) {
+            result.reservation.commit(response);
+          },
+        },
+      };
+    },
+  };
+}
+
+function noJsMutationReplayPolicy<Request, Value>(
+  mode: Extract<MutationResponseDeliveryMode<Request, Value>, { kind: 'no-js-prg' }>,
+): MutationLifecycleReplayPolicy<NoJsMutationResponse> | undefined {
+  // A2 (SPEC §10.3:1063/1151): derive the idem from the hidden `Kovo-Idem` form field. A real no-JS
+  // POST arrives as `FormData` (or a pre-parsed record), so the field must be READ via
+  // `formLikeToRecord` (which materializes FormData entries). The explicit `idem` option wins for
+  // callers that supply it directly (tests / pre-resolved tokens).
+  const idem = mode.request.idem ?? readNoJsIdemField(mode.request.rawInput);
+  if (!idem || !mode.request.replayStore) return undefined;
+
+  const scope = noJsReplayScopeFor(mode.csrf, mode.mutationKey, mode.request.request);
+  const fingerprint =
+    mode.request.requestFingerprint ?? canonicalRequestFingerprint(mode.request.rawInput);
+  return {
+    async read() {
+      return noJsReplayResponseOrConflict(
+        await mode.request.replayStore?.get(scope, idem, fingerprint),
+      );
+    },
+    async reserve() {
+      let reservation = mode.request.replayStore?.reserve(scope, idem, fingerprint);
+      if (reservation) {
+        return {
+          kind: 'reserved',
+          reservation: noJsReplayReservation(reservation),
+        };
+      }
+
+      const pending = noJsReplayResponseOrConflict(
+        await mode.request.replayStore?.get(scope, idem, fingerprint),
+      );
+      if (pending) return { kind: 'replayed', response: pending };
+
+      reservation = mode.request.replayStore?.reserve(scope, idem, fingerprint);
+      return reservation
+        ? { kind: 'reserved', reservation: noJsReplayReservation(reservation) }
+        : { kind: 'unavailable' };
+    },
+  };
+}
+
+function enhancedReplayResponseOrConflict(
+  response: MutationEndpointReplayResponse | undefined,
+): BufferedMutationWireResponse | undefined {
+  if (response === undefined) return undefined;
+  return enhancedReplayResultOrConflict(response);
+}
+
+function enhancedReplayResultOrConflict(
+  response: MutationEndpointReplayResponse,
+): BufferedMutationWireResponse {
+  if (isEnhancedReplayResponse(response)) return response;
+  throw new MutationReplayConflictError();
+}
+
+function noJsReplayResponseOrConflict(
+  response: MutationEndpointReplayResponse | undefined,
+): NoJsMutationResponse | undefined {
+  if (response === undefined) return undefined;
+  if (isNoJsReplayResponse(response)) return response;
+  throw new MutationReplayConflictError();
+}
+
+function noJsReplayReservation(
+  reservation: NoJsMutationReplayReservation,
+): MutationLifecycleReplayReservation<NoJsMutationResponse> {
+  return {
+    ...(reservation.abort === undefined ? {} : { abort: () => reservation.abort?.() }),
+    commit(response) {
+      reservation.commit(response);
+    },
+  };
+}
+
+function isReplayTerminalOutcome<Value, Input, ReplayResponse>(
+  outcome: MutationLifecycleOutcome<Value, Input, ReplayResponse>,
+): outcome is Extract<
+  MutationLifecycleOutcome<Value, Input, ReplayResponse>,
+  { kind: 'replay-conflict' } | { kind: 'replay-unavailable' } | { kind: 'replayed' }
+> {
+  return (
+    outcome.kind === 'replay-conflict' ||
+    outcome.kind === 'replay-unavailable' ||
+    outcome.kind === 'replayed'
+  );
+}
+
+function unreachableReplayOutcome(): never {
+  throw new Error('Mutation replay outcome mapper returned no response for a replay outcome.');
 }
 
 /**
@@ -1164,33 +1271,12 @@ export async function renderNoJsMutationResponse<
   noJsRequest: NoJsMutationRequest<Request, Value>,
 ): Promise<NoJsMutationResponse> {
   const csrf = mutationCsrfOptions(definition, noJsRequest.csrf);
-  // A2 (SPEC §10.3:1063/1151): derive the idem from the hidden `Kovo-Idem` form field. A real no-JS
-  // POST arrives as `FormData` (or a pre-parsed record), so the field must be READ via
-  // `formLikeToRecord` (which materializes FormData entries) — the `in` operator never sees FormData
-  // entries and silently disabled this floor for every real submit. The explicit `idem` option wins
-  // for callers that supply it directly (tests / pre-resolved tokens).
-  const idem = noJsRequest.idem ?? readNoJsIdemField(noJsRequest.rawInput);
-  const noJsScope = noJsReplayScopeFor(csrf, definition.key, noJsRequest.request);
-  const requestFingerprint =
-    noJsRequest.requestFingerprint ?? canonicalRequestFingerprint(noJsRequest.rawInput);
-  const replay =
-    idem && noJsRequest.replayStore
-      ? ({
-          read: () => noJsRequest.replayStore?.get(noJsScope, idem, requestFingerprint),
-          async reserve() {
-            let reservation = noJsRequest.replayStore?.reserve(noJsScope, idem, requestFingerprint);
-            if (reservation) return { kind: 'reserved' as const, reservation };
-
-            const pending = await noJsRequest.replayStore?.get(noJsScope, idem, requestFingerprint);
-            if (pending) return { kind: 'replayed' as const, response: pending };
-
-            reservation = noJsRequest.replayStore?.reserve(noJsScope, idem, requestFingerprint);
-            return reservation
-              ? { kind: 'reserved' as const, reservation }
-              : { kind: 'unavailable' as const };
-          },
-        } satisfies MutationLifecycleReplayPolicy<NoJsMutationResponse>)
-      : undefined;
+  const deliveryMode = {
+    csrf,
+    kind: 'no-js-prg',
+    mutationKey: definition.key,
+    request: noJsRequest,
+  } satisfies MutationResponseDeliveryMode<Request, Value>;
   const lifecycle = await executeMutationLifecycle<
     Key,
     InputSchema,
@@ -1202,7 +1288,7 @@ export async function renderNoJsMutationResponse<
   >(definition, noJsRequest.rawInput, noJsRequest.request, {
     ...runMutationOptions(noJsRequest.csrf, noJsRequest),
     catchHandlerErrors: true,
-    ...(replay === undefined ? {} : { replay }),
+    ...optionalReplayPolicy(noJsMutationReplayPolicy(deliveryMode)),
   });
 
   if (lifecycle.kind === 'csrf-failure') {
@@ -1225,9 +1311,11 @@ export async function renderNoJsMutationResponse<
     return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
   }
 
-  if (lifecycle.kind === 'replay-conflict') return renderNoJsReplayConflictPage(noJsRequest);
-  if (lifecycle.kind === 'replayed') return lifecycle.response;
-  if (lifecycle.kind === 'replay-unavailable') return renderNoJsReplayUnavailablePage(noJsRequest);
+  if (isReplayTerminalOutcome(lifecycle)) {
+    return (
+      (await mapReplayOutcomeToModeResponse(deliveryMode, lifecycle)) ?? unreachableReplayOutcome()
+    );
+  }
   if (lifecycle.kind === 'handler-error') {
     reportServerError(noJsRequest.onError, lifecycle.error, {
       mutationKey: definition.key,
@@ -1304,8 +1392,8 @@ function readNoJsIdemField(rawInput: unknown): string | undefined {
  * Scopes by (mutation-key, session-id) when a session is available; for `csrf:false`
  * or sessionless mutations, falls back to a mutation-key namespace so a stable
  * `Kovo-Idem` still dedups duplicate external POSTs. Every scope carries a `nojs:` prefix so
- * no-JS 303 records share a key space with no enhanced 200-wire record when one injected
- * {@link MutationReplayStore} backs both mutation paths (see `noJsReplayStoreFromMutationStore`).
+ * no-JS 303 records share a key space with no enhanced fragment record when one injected
+ * {@link MutationReplayStore} backs both mutation paths.
  */
 function noJsReplayScopeFor<Request>(
   csrf: CsrfValidationOptions<Request> | false | undefined,
@@ -1413,6 +1501,70 @@ async function renderNoJsReplayConflictPage<Request, Value>(
     headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
     status: 422,
   };
+}
+
+function mapReplayOutcomeToModeResponse<Request, Value>(
+  mode: Extract<MutationResponseDeliveryMode<Request, Value>, { kind: 'enhanced-fragment' }>,
+  lifecycle: MutationLifecycleOutcome<unknown, unknown, MutationEndpointReplayResponse>,
+): Promise<MutationWireResponse | undefined>;
+function mapReplayOutcomeToModeResponse<Request, Value>(
+  mode: Extract<MutationResponseDeliveryMode<Request, Value>, { kind: 'no-js-prg' }>,
+  lifecycle: MutationLifecycleOutcome<unknown, unknown, MutationEndpointReplayResponse>,
+): Promise<NoJsMutationResponse | undefined>;
+async function mapReplayOutcomeToModeResponse<Request, Value>(
+  mode: MutationResponseDeliveryMode<Request, Value>,
+  lifecycle: MutationLifecycleOutcome<unknown, unknown, MutationEndpointReplayResponse>,
+): Promise<MutationEndpointResponse | undefined> {
+  if (lifecycle.kind === 'replay-conflict') return replayConflictResponseForMode(mode);
+  if (lifecycle.kind === 'replay-unavailable') return replayUnavailableResponseForMode(mode);
+  if (lifecycle.kind !== 'replayed') return undefined;
+
+  if (replayResponseMatchesMode(mode, lifecycle.response)) return lifecycle.response;
+  return replayConflictResponseForMode(mode);
+}
+
+function replayResponseMatchesMode<Request, Value>(
+  mode: MutationResponseDeliveryMode<Request, Value>,
+  response: MutationEndpointReplayResponse,
+): boolean {
+  return mode.kind === 'no-js-prg'
+    ? isNoJsReplayResponse(response)
+    : isEnhancedReplayResponse(response);
+}
+
+function isNoJsReplayResponse(
+  response: MutationEndpointReplayResponse,
+): response is NoJsMutationResponse {
+  return (
+    response.status === 303 ||
+    String(response.headers['Content-Type'] ?? '').startsWith('text/html;')
+  );
+}
+
+function isEnhancedReplayResponse(
+  response: MutationEndpointReplayResponse,
+): response is BufferedMutationWireResponse {
+  return (
+    response.status !== 303 &&
+    (String(response.headers['Content-Type'] ?? '').startsWith('text/vnd.kovo.fragment+html;') ||
+      typeof response.headers['Kovo-Reauth'] === 'string')
+  );
+}
+
+async function replayConflictResponseForMode<Request, Value>(
+  mode: MutationResponseDeliveryMode<Request, Value>,
+): Promise<MutationEndpointResponse> {
+  return mode.kind === 'enhanced-fragment'
+    ? renderReplayConflictFragment(mode.request)
+    : renderNoJsReplayConflictPage(mode.request);
+}
+
+async function replayUnavailableResponseForMode<Request, Value>(
+  mode: MutationResponseDeliveryMode<Request, Value>,
+): Promise<MutationEndpointResponse> {
+  return mode.kind === 'enhanced-fragment'
+    ? renderReplayUnavailableFragment(mode.request)
+    : renderNoJsReplayUnavailablePage(mode.request);
 }
 
 function replayUnavailableFailure(): MutationFail<'RATE_LIMITED', { reason: string }> {

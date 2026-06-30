@@ -17,7 +17,9 @@
     "./internal/harness-operations": "./src/harness-operations.ts",
     "./internal/html-wire": "./src/internal/html-wire.ts",
     "./internal/integration": "./src/integration/index.ts",
+    "./internal/integration/fixture-browser-abi": "./src/integration/fixture-browser-abi.ts",
     "./internal/integration/define": "./src/integration/define-fixture.ts",
+    "./internal/integration/fixture-abi": "./src/integration/fixture-abi.ts",
     "./internal/integration/optimistic-client": "./src/integration/optimistic-client.ts",
     "./internal/page": "./src/page.ts",
     "./internal/sql-observer": "./src/sql-observer.ts",
@@ -58,9 +60,17 @@
         "types": "./dist/integration/index.d.mts",
         "default": "./dist/integration/index.mjs"
       },
+      "./internal/integration/fixture-browser-abi": {
+        "types": "./dist/integration/fixture-browser-abi.d.mts",
+        "default": "./dist/integration/fixture-browser-abi.mjs"
+      },
       "./internal/integration/define": {
         "types": "./dist/integration/define-fixture.d.mts",
         "default": "./dist/integration/define-fixture.mjs"
+      },
+      "./internal/integration/fixture-abi": {
+        "types": "./dist/integration/fixture-abi.d.mts",
+        "default": "./dist/integration/fixture-abi.mjs"
       },
       "./internal/integration/optimistic-client": {
         "types": "./dist/integration/optimistic-client.d.mts",
@@ -101,7 +111,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/internal/html-wire.ts src/integration/define-fixture.ts src/integration/index.ts src/integration/optimistic-client.ts src/page.ts src/pglite.ts src/sqlite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
+    "build:dist": "vp pack src/assertions.ts src/harness-operations.ts src/harness.ts src/headers.ts src/html-fragment.ts src/internal/html-wire.ts src/integration/define-fixture.ts src/integration/fixture-abi.ts src/integration/fixture-browser-abi.ts src/integration/index.ts src/integration/optimistic-client.ts src/page.ts src/pglite.ts src/sqlite.ts src/sql-observer.ts src/test-case.ts src/verifier-diagnostics.ts src/verifier-sql.ts src/verifier.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {

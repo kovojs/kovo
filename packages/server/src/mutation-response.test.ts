@@ -729,6 +729,54 @@ describe('server mutation primitives', () => {
     });
   });
 
+  it('replays enhanced mutation success responses without rerunning the handler', async () => {
+    const handler = vi.fn((input: { productId: string }) => input);
+    const addToCart = mutation('cart/replay-success', {
+      input: s.object({ productId: s.string() }),
+      handler,
+    });
+    const replayStore = createMemoryMutationReplayStore();
+    const request = {
+      headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': 'idem_enhanced_success_01' },
+      rawInput: { productId: 'p1' },
+      redirectTo: '/cart',
+      replayStore,
+      request: { sessionId: 's1' },
+    };
+
+    const first = await renderMutationEndpointResponse(addToCart, request);
+    const second = await renderMutationEndpointResponse(addToCart, request);
+
+    expect(first).toEqual(second);
+    expect(first.status).toBe(200);
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
+  it('rejects enhanced same Kovo-Idem with a different body as a replay conflict', async () => {
+    const handler = vi.fn((input: { productId: string }) => input);
+    const addToCart = mutation('cart/replay-conflict', {
+      input: s.object({ productId: s.string() }),
+      handler,
+    });
+    const replayStore = createMemoryMutationReplayStore();
+    const submit = (productId: string) =>
+      renderMutationEndpointResponse(addToCart, {
+        headers: { 'Kovo-Fragment': 'true', 'Kovo-Idem': 'idem_enhanced_conflict_01' },
+        rawInput: { productId },
+        redirectTo: '/cart',
+        replayStore,
+        request: { sessionId: 's1' },
+      });
+
+    const first = await submit('p1');
+    const second = await submit('p2');
+
+    expect(first.status).toBe(200);
+    expect(second.status).toBe(422);
+    expect(second.body).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+    expect(handler).toHaveBeenCalledOnce();
+  });
+
   it('renders a defined error when a post-commit rerun query fails', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {

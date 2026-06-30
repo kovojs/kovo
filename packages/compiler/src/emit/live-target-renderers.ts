@@ -1,11 +1,9 @@
-import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
 import type { LiveTargetFact } from '../types.js';
+import { ensureTypescriptRuntime } from '../ts-api.js';
 
-const mutableTs = ts as unknown as Record<string, unknown>;
-if (!('ScriptTarget' in mutableTs))
-  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
+ensureTypescriptRuntime(ts);
 
 const liveTargetWireModule = '@kovojs/server/internal/wire';
 const liveTargetWireImports = [

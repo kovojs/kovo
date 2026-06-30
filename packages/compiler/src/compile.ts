@@ -1,4 +1,3 @@
-import { createRequire } from 'node:module';
 import * as ts from 'typescript';
 
 import {
@@ -21,7 +20,7 @@ import {
 import { deriveComponentNames } from './component-names.js';
 import { deriveMutationKey } from './mutation-names.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
-import { emitClientModule } from './emit/client.js';
+import { emitClientModule, emitClientModuleImportManifest } from './emit/client.js';
 import { removeUnreferencedNamedImports } from './emit/dead-imports.js';
 import { appendLiveTargetRendererExports } from './emit/live-target-renderers.js';
 import { emitRegistryModule } from './emit/registry.js';
@@ -75,6 +74,7 @@ import { collectCompilerDiagnostics } from './validate/pipeline.js';
 import { escapeAttribute, type SourceReplacement } from './shared.js';
 import { collectTrustedHtmlOutputContextFacts } from './security/output-context.js';
 import { compilerEmittedSourceProvenanceToken } from './source-provenance.js';
+import { ensureTypescriptRuntime } from './ts-api.js';
 import type {
   CompileComponentOptions,
   CompileResult,
@@ -97,9 +97,7 @@ import {
   queryShapesFromFacts,
 } from './types.js';
 
-const mutableTs = ts as unknown as Record<string, unknown>;
-if (!('ScriptTarget' in mutableTs))
-  Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
+ensureTypescriptRuntime(ts);
 
 /**
  * Compile a single authored component module (TSX/JSX source) into its lowered-IR
@@ -181,6 +179,7 @@ interface ValidateComponentPhaseResult {
 
 interface EmitClientPhaseResult {
   readonly clientHref: string;
+  readonly clientModuleImportManifest: CompileResult['clientModuleImportManifest'];
   readonly clientSource: string;
   readonly renderPlanFingerprint: string;
   readonly renderPlanFingerprintInput: RenderPlanFingerprintInput;
@@ -364,6 +363,12 @@ function emitClientPhase(
 
   return {
     clientHref,
+    clientModuleImportManifest: emitClientModuleImportManifest(
+      [...validated.handlers],
+      validated.queryUpdatePlans,
+      stateDerives,
+      validated.clockUpdatePlans,
+    ),
     clientSource,
     renderPlanFingerprint,
     renderPlanFingerprintInput,
@@ -636,6 +641,7 @@ function assembleCompileResult(
   );
 
   return {
+    clientModuleImportManifest: client.clientModuleImportManifest,
     componentGraphFacts: facts.componentGraphFacts,
     dependencyFootprint: compileDependencyFootprint(parsed.compileOptions, {
       fileName: parsed.options.fileName,

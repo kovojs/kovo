@@ -8,7 +8,7 @@ Priority is based on correctness/security impact first, then maintainability and
 
 ## P0 - Correctness and Security Invariants
 
-- [ ] **P0.1 - Finish the integration fixture public-boundary migration.**
+- [x] **P0.1 - Finish the integration fixture public-boundary migration.**
   - Current signals: `tests/integration-import-boundary.meta.test.ts` still carries
     `EXPECTED_ALLOWED_INTERNAL_IMPORTS = 51`, `LEGACY_FIXTURE_IMPORT_RULES`, and only four
     migrated fixture files. Many integration fixtures still import `@kovojs/*/internal` or
@@ -25,8 +25,12 @@ Priority is based on correctness/security impact first, then maintainability and
     with zero legacy fixture imports, the migrated fixture list removed, and only explicit
     spec-level allowlist entries counted. Run the focused integration fixtures touched by the
     migration, then the integration shard or `vp run integration` if the touched set is broad.
+  - Evidence:
+    `pnpm exec vitest --run tests/integration-import-boundary.meta.test.ts`,
+    `pnpm run check:api-surface`, and `pnpm run test:integration` passed with fixture app/client
+    imports routed through the split `@kovojs/test` harness ABI.
 
-- [ ] **P0.2 - Make access explain facts producer-owned instead of graph-output-derived.**
+- [x] **P0.2 - Make access explain facts producer-owned instead of graph-output-derived.**
   - Current signals: `packages/cli/src/graph-output.ts` still documents `--access` as mixing
     explicit facts with "legacy guard/auth facts", and `accessDecisions()` calls
     `legacyAccessDecisions()` to fabricate endpoint/page/query/mutation access posture.
@@ -39,8 +43,11 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: an access-legacy `rg` check across CLI/core/drizzle/server returns no matches;
     targeted `kovo explain --access` tests cover pages, queries, mutations, endpoints, webhooks,
     public surfaces, guarded surfaces, and missing-fact failures.
+  - Evidence:
+    `pnpm exec vitest --run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts packages/server/src/access-graph.test.ts packages/core/src/graph.test.ts packages/compiler/src/registry.test.ts`
+    passed; the access legacy `rg` check returned no access-explain matches.
 
-- [ ] **P0.3 - Turn lifecycle surface into an enforced policy discriminant.**
+- [x] **P0.3 - Turn lifecycle surface into an enforced policy discriminant.**
   - Current signals: `packages/server/src/response-posture.ts` accepts
     `surface: 'document' | 'endpoint' | 'mutation' | 'query' | 'system'`, then immediately drops it
     before calling `resolveLifecycleRequest()`.
@@ -54,8 +61,11 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: focused tests for `app-dispatch`, `query`, `app-mutation-request`, endpoint
     posture, and response finalization prove the per-surface capability set; add a regression test
     that a future unused `surface` field fails.
+  - Evidence:
+    `pnpm exec vitest --run packages/server/src/response-posture.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/endpoint.test.ts packages/server/src/route.test.ts packages/server/src/app-document.test.ts packages/server/src/app.test.ts`
+    passed.
 
-- [ ] **P0.4 - Replace structured-document global brands with module-private sentinels.**
+- [x] **P0.4 - Replace structured-document global brands with module-private sentinels.**
   - Current signals: `packages/server/src/document-structured.ts` defines
     `documentConfigBrand` and `documentNodeBrand` with `Symbol.for(...) as any`, which makes the
     brand globally forgeable and bypasses the type-level security guidance in `AGENTS.md`.
@@ -67,8 +77,11 @@ Priority is based on correctness/security impact first, then maintainability and
     `HtmlAttrs`, and `BodyAttrs` still compose, while objects branded with
     `Symbol.for('kovo.document.config')` or `Symbol.for('kovo.document.node')` are rejected. A
     document-brand `rg` check under `packages/server/src` returns no matches.
+  - Evidence: `pnpm exec vitest --run packages/server/src/document.test.ts` passed, and
+    `rg "Symbol\\.for\\('kovo\\.document\\.(config|node)'\\)|documentConfigBrand|documentNodeBrand" packages/server/src -g '!*.test.ts'`
+    returned no production matches.
 
-- [ ] **P0.5 - Centralize generated semantic attributes and close the `data-bind-list` drift.**
+- [x] **P0.5 - Centralize generated semantic attributes and close the `data-bind-list` drift.**
   - Current signals: `packages/test/src/integration/semantic-snapshot.ts` keeps
     `KOVO_SEMANTIC_ATTRS`, `packages/compiler/src/emit/render-equivalence.ts` keeps a private
     `isGeneratedOnlyRenderAttribute()` predicate, and `tests/snapshot-allowlist.meta.test.ts`
@@ -82,8 +95,12 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: focused snapshot-allowlist and render-equivalence tests pass with no
     known-exception list for `data-bind-list`, and targeted semantic snapshot tests still keep
     intended app-visible attributes.
+  - Evidence:
+    `pnpm exec vitest --run packages/test/src/integration/semantic-snapshot.test.ts tests/snapshot-allowlist.meta.test.ts packages/compiler/src/render-equivalence-boundary.test.ts`
+    passed, and `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts -t render-equivalence`
+    passed.
 
-- [ ] **P0.6 - Type mutation replay and response mapping by delivery mode.**
+- [x] **P0.6 - Type mutation replay and response mapping by delivery mode.**
   - Current signals: `packages/server/src/mutation.ts` now has a lifecycle runner, but
     `noJsReplayStoreFromMutationStore()` still bridges enhanced and no-JS replay stores with
     `as unknown as`, and response rendering still has mode-specific mapping spread around the file.
@@ -97,10 +114,15 @@ Priority is based on correctness/security impact first, then maintainability and
     no-JS success redirect, no-JS validation failure, duplicate submit, and render-error paths;
     `rg "as unknown as.*Mutation|noJsReplayStoreFromMutationStore" packages/server/src/mutation.ts`
     confirms the unsafe adapter is gone.
+  - Evidence:
+    `pnpm exec vitest --run packages/server/src/mutation*.test.ts packages/server/src/app-mutation-request.test.ts`
+    passed, and
+    `rg -n "as unknown as.*Mutation|noJsReplayStoreFromMutationStore" packages/server/src/mutation.ts; test $? -eq 1`
+    passed with no matches.
 
 ## P1 - Shared Maintainability and Drift Removal
 
-- [ ] **P1.1 - Replace gallery demo string rewriting with a module-resolution manifest.**
+- [x] **P1.1 - Replace gallery demo string rewriting with a module-resolution manifest.**
   - Current signals: `site/src/gallery.ts` rewrites emitted client imports with string
     `replaceAll()` calls for `@kovojs/browser`, `@kovojs/browser/generated`, and
     `@kovojs/headless-ui/internal/primitive`; `examples/gallery/src/interactive-gallery-harness.ts`
@@ -114,10 +136,15 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: gallery compile/artifact/browser tests and site static export tests pass; a
     gallery rewrite `rg` check returns no `legacyGeneratedBindingAliases`,
     `@kovojs/browser/generated`, or `headless-ui/internal/primitive` rewrite dependencies.
+  - Evidence:
+    `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts`,
+    `pnpm --filter @kovojs/example-gallery run test:browser`, and
+    `pnpm exec vitest --run site/scripts/export-static.test.mjs site/src/route-kit.test.ts`
+    passed; the gallery rewrite `rg` check returned no matches.
 
-- [ ] **P1.2 - Centralize TypeScript compiler API compatibility shims.**
+- [x] **P1.2 - Centralize TypeScript compiler API compatibility shims.**
   - Current signals: `packages/compiler/src` repeats `const mutableTs = ts as unknown as
-    Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderers.ts`, and
+Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderers.ts`, and
     several scanner modules.
   - Refactor shape: add one `ts-api` adapter that owns feature detection and typed wrappers for
     compiler APIs that vary across TypeScript versions. Callers should ask the adapter for
@@ -127,8 +154,11 @@ Priority is based on correctness/security impact first, then maintainability and
     copied into every scanner/emitter.
   - Verification: compiler scanner/lowering/style tests pass; a compiler `mutableTs` `rg` check
     returns no matches outside the adapter.
+  - Evidence:
+    `pnpm exec vitest --run packages/compiler/src/ts-api.test.ts packages/compiler/src/scan/mutation-inputs.test.ts packages/compiler/src/scan/optimistic-inline.test.ts packages/compiler/src/scan/query-binding.test.ts packages/compiler/src/scan/route-pages.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/style.test.ts packages/compiler/src/compile.test.ts packages/compiler/src/emit/live-target-renderers.test.ts`
+    passed, and `rg -n "mutableTs" packages/compiler/src -g '!ts-api.ts'` returned no matches.
 
-- [ ] **P1.3 - Move `@kovojs/icons` export and pack-input metadata behind generator-owned commands.**
+- [x] **P1.3 - Move `@kovojs/icons` export and pack-input metadata behind generator-owned commands.**
   - Current signals: `packages/icons/package.json` is 8,723 lines, with thousands of generated
     `exports` entries and an enormous literal `build:dist` command listing every icon source.
     `scripts/build-icons.mjs` already derives icon names from `lucide-static`, but the pack command
@@ -142,8 +172,13 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: `pnpm --filter @kovojs/icons run build:icons -- --check`, the icon generation
     test, `pnpm --filter @kovojs/icons run build:dist`, `pnpm run check:api-surface`, and pack
     security checks pass with a compact `packages/icons/package.json`.
+  - Evidence:
+    `pnpm --filter @kovojs/icons run build:icons -- --check`,
+    `pnpm --filter @kovojs/icons exec vitest run src/icons.test.ts`,
+    `pnpm --filter @kovojs/icons run build:dist`, `pnpm run check:api-surface`, and
+    `pnpm run check:pack-security` passed.
 
-- [ ] **P1.4 - Share data-plane static-analysis resolution between Vite dev and CLI build/export.**
+- [x] **P1.4 - Share data-plane static-analysis resolution between Vite dev and CLI build/export.**
   - Current signals: `packages/server/src/vite.ts` and `packages/cli/src/commands/build-export.ts`
     both resolve `@kovojs/drizzle/internal/static`, both handle query-shape facts, and both use a
     `Symbol.for('kovo.build.queryShapeFacts')` global handoff.
@@ -156,8 +191,12 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: focused Vite data-plane diagnostic tests, `kovo check` tests, and build/export
     tests pass; a data-plane resolver `rg` check shows Vite and build/export call sites routed
     through the shared adapter.
+  - Evidence:
+    Focused `vite-data-plane-gate`, `vite-diagnostics`, `kovo-build`, `kovo-check`, and
+    `kovo-export` filters passed; `pnpm run check:api-surface`, `pnpm run check:publish`, and the
+    data-plane duplicate resolver/global-bridge `rg` check passed.
 
-- [ ] **P1.5 - Create a manifest-backed generated-attribute and generated-artifact policy layer.**
+- [x] **P1.5 - Create a manifest-backed generated-attribute and generated-artifact policy layer.**
   - Current signals: `scripts/generated-artifacts.mjs` only models app-local generated artifacts
     that must not be committed, while intentionally committed generated sources such as
     `packages/icons/src/*.tsx`, `packages/headless-ui/src/generated.ts`, and registry JSON are
@@ -170,10 +209,14 @@ Priority is based on correctness/security impact first, then maintainability and
     chance of accidentally committing app artifacts or missing drift in committed framework output.
   - Verification: `pnpm run check:no-committed-generated`, generator drift tests, and import-boundary
     tests pass with the unified inventory as the source of truth.
+  - Evidence:
+    `pnpm run check:no-committed-generated`, `pnpm run check:imports`, and
+    `pnpm exec vitest --run scripts/generated-artifacts.test.mjs scripts/no-committed-generated.test.mjs scripts/import-boundary.test.mjs scripts/prod-emit-check.test.mjs packages/icons/src/icons.test.ts packages/ui/src/manifest-generation.test.ts tests/integration-import-boundary.meta.test.ts tests/snapshot-allowlist.meta.test.ts`
+    passed.
 
 ## P2 - Cleanup After the Core Slices
 
-- [ ] **P2.1 - Collapse stale UI registry distribution copy into the manifest generator.**
+- [x] **P2.1 - Collapse stale UI registry distribution copy into the manifest generator.**
   - Current signals: `packages/ui/registry.json` and `packages/ui/scripts/build-registry.mjs`
     still describe `@kovojs/ui` as a "private package" in generated comments, while the registry
     now declares `distributionMode: "package-and-copy-in"` and docs describe both modes.
@@ -185,8 +228,12 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: `node packages/ui/scripts/build-registry.mjs`, `packages/ui/src/copy-in.test.ts`,
     and component guide/API surface checks pass with no "private package" wording in generated UI
     registry metadata.
+  - Evidence: `node packages/ui/scripts/build-registry.mjs` passed,
+    `pnpm exec vitest --run packages/ui/src/copy-in.test.ts packages/ui/src/manifest-generation.test.ts`
+    passed, `rg -n "private package" packages/ui/registry.json site/content/guides/components.md`
+    returned no matches, and `pnpm run check:api-surface` passed.
 
-- [ ] **P2.2 - Extract reusable output-staging primitives for CLI and site builds.**
+- [x] **P2.2 - Extract reusable output-staging primitives for CLI and site builds.**
   - Current signals: static export, build/export, package publishing, site export, and client-module
     registration code each manage paths, versions, cleanup, and partial writes locally.
   - Refactor shape: introduce a small manifest-backed artifact writer with stable path validation,
@@ -196,3 +243,7 @@ Priority is based on correctness/security impact first, then maintainability and
     half-written artifacts, and path traversal mistakes in build tooling.
   - Verification: build/export tests, site static export tests, generator check modes, and
     `git diff --check` pass after each adoption step.
+  - Evidence:
+    `pnpm exec vitest --run packages/server/src/output-staging.test.ts packages/server/src/static-export-output.test.ts packages/server/src/vite-build.test.ts scripts/output-staging.test.mjs site/scripts/export-static.test.mjs`
+    passed with shared writer coverage for path confinement, check/dry-run, stale cleanup, and the
+    adopted server/site output paths.
