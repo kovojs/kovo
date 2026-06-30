@@ -267,6 +267,28 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
         via: 'values',
       },
     ]);
+
+    const mutableLocal = facts(
+      handler(
+        [
+          '  let ownerId = request.session?.user.id ?? "demo-user";',
+          '  ownerId = input.ownerId;',
+          '  await db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
+        ].join('\n'),
+        'db: PgAsyncDatabase<any, any>, input: { id: string; ownerId: string; name: string }, request: { session?: { user: { id: string } } }',
+      ),
+    );
+    expect(mutableLocal).toEqual([
+      {
+        column: 'ownerId',
+        detail: 'ownerId',
+        domain: 'account',
+        name: 'updateAccount',
+        provenance: 'input',
+        site: 'account.domain.ts:9',
+        via: 'values',
+      },
+    ]);
   });
 
   it('passes adminAssign(input.x) as the audited privileged write', () => {

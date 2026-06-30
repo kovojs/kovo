@@ -421,11 +421,14 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
 
   if (Node.isIdentifier(expression)) {
     const alias = privateScopeAliasForIdentifier(expression, context);
-    if (alias) return { kind: alias.kind, path: alias.path };
+    if (alias && isConstVariableBindingDeclaration(alias.declaration)) {
+      return { kind: alias.kind, path: alias.path };
+    }
 
     const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
     const declaration = symbol?.getDeclarations()?.[0];
     if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+    if (!isConstVariableBindingDeclaration(declaration)) return undefined;
     const initializer = declaration.getInitializer();
     return initializer
       ? privateScopeSourceForExpression(initializer, context, depth + 1)
@@ -453,6 +456,17 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
   }
 
   return undefined;
+}
+
+function isConstVariableBindingDeclaration(declaration: Node): boolean {
+  const declarationList = Node.isVariableDeclaration(declaration)
+    ? declaration.getParent()
+    : declaration.getFirstAncestorByKind(SyntaxKind.VariableDeclarationList);
+  return (
+    !!declarationList &&
+    Node.isVariableDeclarationList(declarationList) &&
+    (declarationList.getDeclarationKind?.() ?? 'const') === 'const'
+  );
 }
 
 function privateScopeAliasForIdentifier(
