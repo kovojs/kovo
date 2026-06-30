@@ -93,6 +93,7 @@ export class DurableTaskRunner {
           if (!this.stopped) this.scheduleTick(this.pollIntervalMs);
         });
     }, delayMs);
+    (this.timer as { unref?: () => void }).unref?.();
   }
 
   private async runJob(job: DurableTaskJob): Promise<void> {

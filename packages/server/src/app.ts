@@ -3,6 +3,7 @@ import { handleAppRequest } from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
+import { createAppTaskRuntime, registerAppTaskRuntime } from './task-runtime.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import { mutation } from './mutation.js';
@@ -325,7 +326,13 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
     );
   }
 
-  return (request) => handleAppRequest(app, request);
+  const taskRuntime = createAppTaskRuntime(app);
+  registerAppTaskRuntime(app, taskRuntime);
+
+  return async (request) => {
+    await taskRuntime?.ensureStarted(request);
+    return handleAppRequest(app, request);
+  };
 }
 
 function appAuthoringContext<AppRequest>(): AppAuthoringContext<AppRequest> {

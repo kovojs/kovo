@@ -349,6 +349,176 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
+export function addDurableTaskProofs(root: string): void {
+  const schemaPath = join(root, 'src/schema.ts');
+  writeFileSync(
+    schemaPath,
+    readFileSync(schemaPath, 'utf8').replace(
+      ');\n\n// --- Auth infrastructure',
+      [
+        ');',
+        '',
+        "export const taskProofs = pgTable('task_proofs', {",
+        "  eventId: text('eventId').primaryKey(),",
+        "  proofId: text('proofId').notNull(),",
+        '});',
+        '',
+        '// --- Auth infrastructure',
+      ].join('\n'),
+    ),
+    'utf8',
+  );
+
+  const dbPath = join(root, 'src/db.ts');
+  const db = readFileSync(dbPath, 'utf8')
+    .replace(
+      "import { account, contacts, session, user, verification } from './schema.js';",
+      [
+        'import {',
+        '  account,',
+        '  contacts,',
+        '  session,',
+        '  taskProofs,',
+        '  user,',
+        '  verification,',
+        "} from './schema.js';",
+      ].join('\n'),
+    )
+    .replace(
+      'const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([\n  contacts,\n  user,',
+      [
+        'const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([',
+        '  contacts,',
+        '  taskProofs,',
+        '  user,',
+      ].join('\n'),
+    );
+  writeFileSync(dbPath, db, 'utf8');
+
+  writeFileSync(
+    join(root, 'src/durable-task-proofs.ts'),
+    [
+      "import { eq } from 'drizzle-orm';",
+      "import { domain, endpoint, mutation, publicAccess, s, task, type TaskSchedulingRequest } from '@kovojs/server';",
+      '',
+      "import { appDb } from './db.js';",
+      "import { taskProofs } from './schema.js';",
+      "import type { AppRequest } from './auth.js';",
+      '',
+      "const taskProof = domain('task_proof');",
+      "const publicProof = publicAccess('public durable task regression proof');",
+      '',
+      'export const recordTaskEffect = mutation({',
+      '  access: publicProof,',
+      '  csrf: false,',
+      '  input: s.object({ proofId: s.string() }),',
+      "  registry: { tables: ['task_proofs'], touches: [taskProof] },",
+      '  async handler(input: { proofId: string }, request: AppRequest) {',
+      '    await request.db.insert(taskProofs).values({',
+      '      eventId: crypto.randomUUID(),',
+      '      proofId: input.proofId,',
+      '    });',
+      "    return { status: 'recorded' };",
+      '  },',
+      '});',
+      '',
+      "export const recordDurableTask = task('durable-task-proofs/record', {",
+      '  input: s.object({ proofId: s.string() }),',
+      '  async run(input: { proofId: string }, context) {',
+      '    await context.runMutation(recordTaskEffect, { proofId: input.proofId });',
+      '  },',
+      '});',
+      '',
+      'export const scheduleTaskProof = mutation({',
+      '  access: publicProof,',
+      '  csrf: false,',
+      '  input: s.object({',
+      '    proofId: s.string(),',
+      '    mode: s.string(),',
+      '  }),',
+      "  registry: { tables: ['task_proofs'], touches: [taskProof] },",
+      '  async handler(input: { proofId: string; mode: string }, request: AppRequest & TaskSchedulingRequest) {',
+      "    if (input.mode === 'throw') {",
+      '      await request.schedule(recordDurableTask, { proofId: input.proofId });',
+      "      throw new Error('durable rollback proof');",
+      '    }',
+      "    if (input.mode === 'delay') {",
+      '      await request.schedule(recordDurableTask, { proofId: input.proofId }, { afterMs: 700 });',
+      "      return { status: 'scheduled-delay' };",
+      '    }',
+      "    if (input.mode === 'cancel') {",
+      '      const handle = await request.schedule(recordDurableTask, { proofId: input.proofId }, { afterMs: 5_000 });',
+      '      return { cancelled: await request.cancel(handle) };',
+      '    }',
+      "    if (input.mode === 'replace') {",
+      '      await request.schedule(recordDurableTask, { proofId: `${input.proofId}-old` }, {',
+      '        afterMs: 5_000,',
+      '        key: `durable:${input.proofId}`,',
+      '      });',
+      '      await request.schedule(recordDurableTask, { proofId: `${input.proofId}-new` }, {',
+      '        key: `durable:${input.proofId}`,',
+      '      });',
+      "      return { status: 'scheduled-replacement' };",
+      '    }',
+      '    await request.schedule(recordDurableTask, { proofId: input.proofId });',
+      "    return { status: 'scheduled' };",
+      '  },',
+      '});',
+      '',
+      "export const taskProofCountEndpoint = endpoint('/api/task-proof-count', {",
+      "  auth: { justification: 'public durable task proof count', kind: 'none' },",
+      '  csrf: false,',
+      "  csrfJustification: 'read-only durable task proof count',",
+      '  async handler(request) {',
+      '    const url = new URL(request.url);',
+      "    const proofId = url.searchParams.get('id');",
+      '    const rows = proofId',
+      '      ? await appDb.select().from(taskProofs).where(eq(taskProofs.proofId, proofId))',
+      '      : await appDb.select().from(taskProofs);',
+      "    return Response.json({ count: rows.length }, { headers: { 'Cache-Control': 'no-store' } });",
+      '  },',
+      "  method: 'GET',",
+      "  reason: 'read-only durable task proof count',",
+      "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8')
+    .replace(
+      "import { addContact } from './mutations.js';",
+      [
+        "import { addContact } from './mutations.js';",
+        'import {',
+        '  recordDurableTask,',
+        '  recordTaskEffect,',
+        '  scheduleTaskProof,',
+        '  taskProofCountEndpoint,',
+        "} from './durable-task-proofs.js';",
+      ].join('\n'),
+    )
+    .replace(
+      'endpoints: [healthEndpoint],',
+      'endpoints: [healthEndpoint, taskProofCountEndpoint],',
+    )
+    .replace(
+      'mutations: [addContact, appSignIn, appSignOut],',
+      'mutations: [addContact, recordTaskEffect, scheduleTaskProof, appSignIn, appSignOut],',
+    )
+    .replace(
+      'stylesheets: options.stylesheets ?? [],',
+      'stylesheets: options.stylesheets ?? [],',
+    )
+    .replace(
+      'routes: [',
+      'tasks: [recordDurableTask],\n  routes: [',
+    );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export function addInternalHtmlImportProof(root: string): void {
   writeFileSync(
     join(root, 'src/raw-helper.ts'),

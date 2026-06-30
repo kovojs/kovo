@@ -74,10 +74,11 @@ export function componentLiveTargetRenderer<
     async render(context) {
       const queries = await loadLiveTargetQueries(queryBindings, context);
       const renderOptions = await componentLiveTargetRenderOptions(options, context);
+      const csrf = context.csrf === false ? undefined : context.csrf;
       const html = await runWithJsxRequestContext(
         context.request,
         {
-          ...(context.csrf === undefined ? {} : { csrf: context.csrf }),
+          ...(csrf === undefined ? {} : { csrf }),
           ...(context.failure === undefined || context.mutationKey === undefined
             ? {}
             : {
@@ -94,7 +95,7 @@ export function componentLiveTargetRenderer<
       return stampKovoComponentRoot({
         component: options.component,
         componentName: options.componentId,
-        ...(context.csrf === undefined ? {} : { csrf: context.csrf }),
+        ...(csrf === undefined ? {} : { csrf }),
         html,
         props: context.props,
         request: context.request,

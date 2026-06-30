@@ -15,6 +15,7 @@ const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/core/src/diagnostics.test.ts',
   'packages/core/src/sql-safety.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
+  'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',

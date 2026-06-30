@@ -4,6 +4,7 @@ import {
   KOVO_JOBS_TABLE_SQL,
   MemoryDurableTaskQueue,
   PostgresDurableTaskQueue,
+  createDurableTaskSqlExecutor,
   ensureDurableTaskSchema,
   type DurableTaskSqlExecutor,
   type DurableTaskSqlStatement,
@@ -164,5 +165,46 @@ describe('durable task queue store (SPEC §9.6)', () => {
     ]);
     expect(statements[1]!.text).toContain('for update skip locked');
     expect(statements[1]!.values).toHaveLength(4);
+  });
+
+  it('adapts a root Postgres-compatible client query(text, values)', async () => {
+    const calls: unknown[][] = [];
+    const executor = createDurableTaskSqlExecutor({
+      $client: {
+        async query(text: string, values: readonly unknown[]) {
+          calls.push([text, values]);
+          return { affectedRows: 1, rows: [{ id: values[0] }] };
+        },
+      },
+    });
+
+    const result = await executor.execute({ text: 'select $1::text as id', values: ['job_1'] });
+
+    expect(result).toEqual({ rowCount: 1, rows: [{ id: 'job_1' }] });
+    expect(calls).toEqual([['select $1::text as id', ['job_1']]]);
+  });
+
+  it('adapts a Drizzle PGlite transaction session client before proxied top-level handles', async () => {
+    const sessionCalls: unknown[][] = [];
+    const topLevelCalls: unknown[][] = [];
+    const executor = createDurableTaskSqlExecutor({
+      query: async (text: string, values: readonly unknown[]) => {
+        topLevelCalls.push([text, values]);
+        return { rows: [] };
+      },
+      session: {
+        client: {
+          async query(text: string, values: readonly unknown[]) {
+            sessionCalls.push([text, values]);
+            return { rows: [{ ok: true }] };
+          },
+        },
+      },
+    });
+
+    await expect(executor.execute({ text: 'insert into _kovo_jobs values ($1)', values: ['id'] }))
+      .resolves.toEqual({ rows: [{ ok: true }] });
+    expect(sessionCalls).toEqual([['insert into _kovo_jobs values ($1)', ['id']]]);
+    expect(topLevelCalls).toEqual([]);
   });
 });

@@ -344,7 +344,7 @@ export function validateCsrfToken<Request>(
 
 export function mutationCsrfOptions<Request>(
   definition: { csrf?: CsrfValidationOptions<Request> | false | undefined },
-  defaultOptions?: CsrfValidationOptions<Request>,
+  defaultOptions?: CsrfValidationOptions<Request> | false,
 ): CsrfValidationOptions<Request> | false | undefined {
   if (definition.csrf === false) return false;
   return definition.csrf ?? defaultOptions;

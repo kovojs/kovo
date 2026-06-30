@@ -357,7 +357,7 @@ export interface RunMutationOptions<
   SessionValue = unknown,
   DbValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue, DbValue> {
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfValidationOptions<Request> | false;
   /**
    * When the caller has already evaluated the session-bound guard chain before the replay
    * lookup (A1, SPEC §10.3 "re-evaluate the guard chain before re-serving"), `runMutation` must

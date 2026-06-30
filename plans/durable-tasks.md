@@ -198,15 +198,17 @@ need not starve request serving under load; default = serve-and-poll, scale = ad
       the DB unchanged (per the close-out rule — artifact layer, not a unit proxy).
       Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts`
       passes, proving a production artifact write-then-throw mutation leaves the DB unchanged.
-- [ ] **Phase 1 — `task()` + `request.schedule()` + Postgres queue + node-preset runner (MVP).**
-      Add the `task()` registry primitive (typed `input`, `run(args, ctx)` with the decided composition
-      `ctx` — `runQuery`/`runMutation`/`schedule`/`fetch`/`storage`, no raw db); `request.schedule(task,
-args, { afterMs?, at?, key? })` writing a `_kovo_jobs` row in the mutation tx and **returning a
-      typed handle**; `request.cancel(handle)` + `key` upsert (debounce); the SKIP-LOCKED claim loop +
-      lease reaper + `run_at` scheduling as the in-process node-preset runner. Acceptance: prod-artifact
-      e2e — a mutation that schedules then throws enqueues nothing; on success the task runs exactly once
-      and its effect is observable; a delayed task runs no earlier than `afterMs`; a cancelled/`key`-
-      replaced pending job does not run.
+- [x] **Phase 1 — `task()` + `request.schedule()` + Postgres queue + node-preset runner (MVP).**
+      Added the `task()` registry primitive (typed `input`, `run(args, ctx)` with composition-only
+      `ctx`: `runQuery`/`runMutation`/`schedule`/`fetch`, no raw db); `request.schedule(task, args,
+      { afterMs?, at?, key? })` writes a `_kovo_jobs` row in the mutation tx and returns a typed
+      handle; `request.cancel(handle)` + keyed debounce/throttle are backed by the Postgres queue,
+      SKIP-LOCKED claim loop, lease reaper, and `run_at` scheduling. `ctx.storage` remains deferred
+      under the storage open question below.
+      Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.durable-tasks.test.ts`
+      passes, proving a production artifact schedules-then-throws without enqueueing, runs a
+      successful task exactly once, respects `afterMs`, cancels a pending job, and replaces a keyed
+      pending job.
 - [ ] **Phase 2 — exactly-once, retries, dead-letter, knobs, low-latency.** Dedup via the `Kovo-Idem`
       replay store (SPEC §9.1:1182) with the per-`(schedule-site, args)` idem key, and **expose the job
       id as the external-API idempotency key**; retry/backoff with `max_attempts → dead` dead-letter;

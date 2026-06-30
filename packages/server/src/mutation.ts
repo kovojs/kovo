@@ -1052,6 +1052,9 @@ export async function renderMutationEndpointResponse<
     ...(endpointRequest.sessionProvider === undefined
       ? {}
       : { sessionProvider: endpointRequest.sessionProvider }),
+    ...(endpointRequest.taskScheduler === undefined
+      ? {}
+      : { taskScheduler: endpointRequest.taskScheduler }),
   });
 }
 
@@ -1436,8 +1439,8 @@ async function parseMutationInput<InputSchema extends Schema<unknown>>(
 }
 
 function runMutationOptions<Request>(
-  csrf: CsrfValidationOptions<Request> | undefined,
-  lifecycle?: RequestLifecycleOptions<Request>,
+  csrf: CsrfValidationOptions<Request> | false | undefined,
+  lifecycle?: RequestLifecycleOptions<Request> & { taskScheduler?: TaskScheduler },
 ): RunMutationOptions<Request> {
   return {
     ...(csrf === undefined ? {} : { csrf }),
@@ -1446,6 +1449,7 @@ function runMutationOptions<Request>(
     ...(lifecycle?.sessionProvider === undefined
       ? {}
       : { sessionProvider: lifecycle.sessionProvider }),
+    ...(lifecycle?.taskScheduler === undefined ? {} : { taskScheduler: lifecycle.taskScheduler }),
   };
 }
 

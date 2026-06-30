@@ -22,6 +22,7 @@ import {
 import { matchShellDispatch } from './shell.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
 import { resolveKovoLifecycleRequest } from './response-posture.js';
+import { appTaskScheduler } from './task-runtime.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -109,6 +110,7 @@ export async function handleAppMutationRequest(
   // Derive the build token from the app's client-module registry so it is
   // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
+  const taskScheduler = appTaskScheduler(app);
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
     buildToken,
@@ -149,6 +151,7 @@ export async function handleAppMutationRequest(
         ? {}
         : { renderFailurePage: defaultFailurePageRenderer }),
     request: mutationRequest,
+    ...(taskScheduler === undefined ? {} : { taskScheduler }),
   });
 
   return serverResponseToWebResponse(endpointResponse, mutationRequest);
@@ -176,6 +179,7 @@ async function renderPreBodyCsrfFailure(
     Request
   >;
   const buildToken = app.clientModules.buildToken();
+  const taskScheduler = appTaskScheduler(app);
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
     buildToken,
@@ -192,6 +196,7 @@ async function renderPreBodyCsrfFailure(
       ? {}
       : { renderFailurePage: defaultFailurePageRenderer }),
     request,
+    ...(taskScheduler === undefined ? {} : { taskScheduler }),
   });
 
   return serverResponseToWebResponse(endpointResponse, request);

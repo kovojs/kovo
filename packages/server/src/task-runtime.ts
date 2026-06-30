@@ -1,0 +1,186 @@
+import { runMutation } from './mutation.js';
+import type { TaskScheduler } from './mutation/definition.js';
+import { runQuery } from './query.js';
+import { createDurableTaskRunner, type DurableTaskRunner } from './task-runner.js';
+import {
+  PostgresDurableTaskQueue,
+  createDurableTaskSqlExecutor,
+  ensureDurableTaskSchema,
+  type DurableTaskQueueStore,
+} from './task-queue.js';
+import type { KovoApp } from './app-types.js';
+import type { TaskHandle, TaskScheduleOptions } from './task.js';
+
+export interface AppTaskRuntime {
+  readonly scheduler: TaskScheduler;
+  ensureStarted(request: Request): Promise<void>;
+}
+
+const appTaskRuntimes = new WeakMap<KovoApp, AppTaskRuntime>();
+
+export function createAppTaskRuntime(app: KovoApp): AppTaskRuntime | undefined {
+  if (app.tasks.length === 0) return undefined;
+  if (app.db === undefined) {
+    throw new TypeError(
+      'createRequestHandler() cannot run durable tasks without createApp({ db }). request.schedule() persists jobs in _kovo_jobs (SPEC §9.6).',
+    );
+  }
+  return new DefaultAppTaskRuntime(app);
+}
+
+export function registerAppTaskRuntime(app: KovoApp, runtime: AppTaskRuntime | undefined): void {
+  if (runtime === undefined) {
+    appTaskRuntimes.delete(app);
+    return;
+  }
+  appTaskRuntimes.set(app, runtime);
+}
+
+export function appTaskScheduler(app: KovoApp): TaskScheduler | undefined {
+  return appTaskRuntimes.get(app)?.scheduler;
+}
+
+class DefaultAppTaskRuntime implements AppTaskRuntime {
+  private runner: DurableTaskRunner | undefined;
+  private rootStore: DurableTaskQueueStore | undefined;
+  private startPromise: Promise<void> | undefined;
+
+  readonly scheduler: TaskScheduler = {
+    cancel: async (request, handle) => this.queueForRequest(request).cancel(handle),
+    schedule: async (request, definition, args, options) =>
+      enqueueScheduledTask(this.queueForRequest(request), {
+        args,
+        options,
+        task: definition.key,
+      }) as Promise<TaskHandle<typeof definition.key>>,
+  };
+
+  constructor(private readonly app: KovoApp) {}
+
+  async ensureStarted(request: Request): Promise<void> {
+    if (this.runner !== undefined) return;
+    this.startPromise ??= this.start(request);
+    await this.startPromise;
+  }
+
+  private async start(request: Request): Promise<void> {
+    const db = await this.resolveRootDb(request);
+    const store = new PostgresDurableTaskQueue(createDurableTaskSqlExecutor(db));
+    await ensureDurableTaskSchema(createDurableTaskSqlExecutor(db));
+    this.rootStore = store;
+    this.runner = createDurableTaskRunner({
+      hooks: {
+        runMutation: async (definition, input) => {
+          const result = await runMutation(
+            definition as never,
+            input,
+            taskInternalRequest(request) as never,
+            {
+              csrf: false,
+              ...(this.app.db === undefined ? {} : { db: this.app.db }),
+              ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),
+              ...(this.app.sessionProvider === undefined
+                ? {}
+                : { sessionProvider: this.app.sessionProvider }),
+              taskScheduler: this.scheduler,
+            },
+          );
+          if (!result.ok) {
+            throw new Error(
+              `Durable task runMutation(${definition.key}) failed with ${result.status} ${result.error.code}.`,
+            );
+          }
+          return result.value;
+        },
+        runQuery: async (definition, input) => {
+          const result = await runQuery(
+            definition as never,
+            input,
+            taskInternalRequest(request) as never,
+            {
+              ...(this.app.db === undefined ? {} : { db: this.app.db }),
+              maxListItems: this.app.requestLimits.maxQueryListItems,
+              ...(this.app.onError === undefined ? {} : { onError: this.app.onError }),
+              ...(this.app.sessionProvider === undefined
+                ? {}
+                : { sessionProvider: this.app.sessionProvider }),
+            },
+          );
+          if (!result.ok) {
+            throw new Error(
+              `Durable task runQuery(${definition.key}) failed with ${result.status} ${result.error.code}.`,
+            );
+          }
+          return result.value;
+        },
+        schedule: async (definition, args, options) => {
+          if (this.rootStore === undefined) {
+            throw new Error('Durable task runner is not started.');
+          }
+          return enqueueScheduledTask(this.rootStore, {
+            args,
+            options,
+            task: definition.key,
+          }) as Promise<TaskHandle<typeof definition.key>>;
+        },
+      },
+      owner: `kovo-task-runner:${process.pid}`,
+      pollIntervalMs: 100,
+      store,
+      tasks: this.app.tasks,
+    });
+    this.runner.start();
+  }
+
+  private async resolveRootDb(request: Request): Promise<unknown> {
+    if (this.app.db === undefined) {
+      throw new TypeError(
+        'createRequestHandler() cannot run durable tasks without createApp({ db }) (SPEC §9.6).',
+      );
+    }
+    return this.app.db(request as never);
+  }
+
+  private queueForRequest(request: unknown): DurableTaskQueueStore {
+    if (!isRecord(request) || request.db === undefined) {
+      throw new Error(
+        'request.schedule(task, args) requires a mutation request with request.db so _kovo_jobs writes share the enclosing transaction (SPEC §9.6).',
+      );
+    }
+    return new PostgresDurableTaskQueue(createDurableTaskSqlExecutor(request.db));
+  }
+}
+
+function enqueueScheduledTask(
+  store: DurableTaskQueueStore,
+  input: {
+    args: unknown;
+    options: TaskScheduleOptions | undefined;
+    task: string;
+  },
+): Promise<TaskHandle> {
+  return store.enqueue({
+    args: input.args,
+    task: input.task,
+    runAt: taskRunAt(input.options),
+    ...(input.options?.key === undefined ? {} : { key: input.options.key }),
+    ...(input.options?.coalesce === undefined ? {} : { coalesce: input.options.coalesce }),
+  });
+}
+
+function taskRunAt(options: TaskScheduleOptions | undefined): Date {
+  if (options?.afterMs !== undefined && options.at !== undefined) {
+    throw new TypeError('Task schedule options cannot specify both afterMs and at.');
+  }
+  if (options?.afterMs !== undefined) return new Date(Date.now() + options.afterMs);
+  if (options?.at !== undefined) return new Date(options.at);
+  return new Date();
+}
+
+function taskInternalRequest(seed: Request): Request {
+  return new Request(new URL('/_kovo/task', seed.url), { method: 'POST' });
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return (typeof value === 'object' || typeof value === 'function') && value !== null;
+}

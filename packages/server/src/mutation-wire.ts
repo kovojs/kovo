@@ -5,6 +5,7 @@ import { signingKeyRingFromCsrfSecret, type CsrfValidationOptions } from './csrf
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
+import type { TaskScheduler } from './mutation/definition.js';
 import type { RegisteredQueryDefinition } from './query.js';
 import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import { canonicalRequestFingerprint, type MutationReplayStore } from './replay.js';
@@ -61,7 +62,7 @@ export interface MutationWireRequest<
    * to full rather than applying a delta against a stale base.
    */
   buildToken?: string;
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfValidationOptions<Request> | false;
   currentUrl?: string;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
@@ -83,6 +84,8 @@ export interface MutationWireRequest<
   stream?: boolean;
   submittedFormTarget?: string;
   targets?: readonly string[];
+  /** @internal Transaction-scoped durable task scheduler for request.schedule/cancel (SPEC §9.6). */
+  taskScheduler?: TaskScheduler;
 }
 
 /**
@@ -122,7 +125,7 @@ export interface LiveTargetRenderer<Request = unknown> {
 
 /** @internal Context passed to a generated live-target renderer (SPEC §9.1). */
 export interface LiveTargetRenderContext<Request = unknown> {
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfValidationOptions<Request> | false;
   failure?: MutationFail;
   input: unknown;
   mutationKey?: string;
@@ -174,7 +177,7 @@ export interface MutationWireRequestOptions<
 > extends RequestLifecycleOptions<Request, SessionValue> {
   /** Build-global render-plan version token (SPEC §5.1, §9.1.1). */
   buildToken?: string;
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfValidationOptions<Request> | false;
   currentUrl?: string;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
@@ -189,6 +192,8 @@ export interface MutationWireRequestOptions<
   ) => AwaitableGeneratedFragmentRenderable;
   replayStore?: MutationReplayStore<BufferedMutationWireResponse>;
   request: Request;
+  /** @internal Transaction-scoped durable task scheduler for request.schedule/cancel (SPEC §9.6). */
+  taskScheduler?: TaskScheduler;
 }
 
 /**
@@ -212,7 +217,7 @@ export interface NoJsMutationRequest<
   Value,
   SessionValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue> {
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfValidationOptions<Request> | false;
   currentUrl?: string;
   /**
    * Idempotency key for dedup of no-JS form submissions (A2, SPEC §10.3:1063).
@@ -236,6 +241,8 @@ export interface NoJsMutationRequest<
   /** Replay store for no-JS dedup (A2, SPEC §10.3:1063). Typed as a separate interface to allow 303 responses. */
   replayStore?: NoJsMutationReplayStore;
   request: Request;
+  /** @internal Transaction-scoped durable task scheduler for request.schedule/cancel (SPEC §9.6). */
+  taskScheduler?: TaskScheduler;
 }
 
 /**
@@ -376,6 +383,7 @@ export function mutationWireRequestFromHeaders<Request>(
       : { submittedFormTarget: headers.submittedFormTarget }),
     stream: headers.stream,
     targets: headers.targets,
+    ...(options.taskScheduler === undefined ? {} : { taskScheduler: options.taskScheduler }),
   };
 }
 
@@ -507,12 +515,12 @@ function parseLiveTargetDescriptorEntry(entry: string): MutationLiveTargetDescri
 export function createLiveTargetAttestation<Request>(
   descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
   options: {
-    csrf?: CsrfValidationOptions<Request>;
+    csrf?: CsrfValidationOptions<Request> | false;
     request: Request;
   },
 ): string {
   const payload = liveTargetAttestationPayload(descriptor, options);
-  if (options.csrf === undefined) {
+  if (options.csrf === undefined || options.csrf === false) {
     return createHmac('sha256', liveTargetAttestationSecret()).update(payload).digest('base64url');
   }
   return signingKeyRingFromCsrfSecret(options.csrf.secret).sign({
@@ -551,11 +559,12 @@ function liveTargetAttestationSecret(): string {
 function liveTargetAttestationPayload<Request>(
   descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
   options: {
-    csrf?: CsrfValidationOptions<Request>;
+    csrf?: CsrfValidationOptions<Request> | false;
     request: Request;
   },
 ): string {
-  const principal = options.csrf?.sessionId(options.request) ?? 'anonymous';
+  const principal =
+    options.csrf === false ? 'anonymous' : (options.csrf?.sessionId(options.request) ?? 'anonymous');
   return canonicalJson({
     component: descriptor.component,
     principal,

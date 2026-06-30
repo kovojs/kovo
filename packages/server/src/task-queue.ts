@@ -57,6 +57,46 @@ export interface DurableTaskSqlExecutor {
   ): Promise<DurableTaskSqlResult<Row>>;
 }
 
+export function createDurableTaskSqlExecutor(handle: unknown): DurableTaskSqlExecutor {
+  const client = resolveRawSqlClient(handle);
+  if (client === undefined) {
+    throw new TypeError(
+      'Durable tasks require a Postgres-compatible db client with query(text, values) or execute({ text, values }) so _kovo_jobs can be persisted (SPEC §9.6).',
+    );
+  }
+
+  const query = client.query;
+  if (typeof query === 'function') {
+    return {
+      async execute<Row = Record<string, unknown>>(
+        statement: DurableTaskSqlStatement,
+      ): Promise<DurableTaskSqlResult<Row>> {
+        const result = await query.call(client, statement.text, [...statement.values]);
+        return normalizeSqlResult<Row>(result);
+      },
+    };
+  }
+
+  const execute = client.execute;
+  if (typeof execute === 'function') {
+    return {
+      async execute<Row = Record<string, unknown>>(
+        statement: DurableTaskSqlStatement,
+      ): Promise<DurableTaskSqlResult<Row>> {
+        const result = await execute.call(client, {
+          text: statement.text,
+          values: [...statement.values],
+        });
+        return normalizeSqlResult<Row>(result);
+      },
+    };
+  }
+
+  throw new TypeError(
+    'Durable tasks require a Postgres-compatible db client with query(text, values) or execute({ text, values }) so _kovo_jobs can be persisted (SPEC §9.6).',
+  );
+}
+
 interface DurableTaskJobRow {
   id: string;
   task_key: string;
@@ -398,6 +438,51 @@ function jobFromRow(row: DurableTaskJobRow): DurableTaskJob {
 
 function sqlStatement(text: string, values: readonly unknown[]): DurableTaskSqlStatement {
   return { text, values };
+}
+
+function resolveRawSqlClient(handle: unknown): SqlClientLike | undefined {
+  if (!isRecord(handle)) return undefined;
+
+  const session = handle.session;
+  if (isRecord(session) && isSqlClientLike(session.client)) {
+    return session.client;
+  }
+
+  if (isSqlClientLike(handle.$client)) return handle.$client;
+  if (isSqlClientLike(handle.client)) return handle.client;
+  if (isSqlClientLike(handle)) return handle;
+  return undefined;
+}
+
+interface SqlClientLike {
+  execute?: (...args: unknown[]) => unknown;
+  query?: (...args: unknown[]) => unknown;
+}
+
+function isSqlClientLike(value: unknown): value is SqlClientLike {
+  return (
+    isRecord(value) &&
+    (typeof value.query === 'function' || typeof value.execute === 'function')
+  );
+}
+
+function normalizeSqlResult<Row>(result: unknown): DurableTaskSqlResult<Row> {
+  if (Array.isArray(result)) return { rows: result as readonly Row[] };
+  if (!isRecord(result)) return { rows: [] };
+
+  const rows = Array.isArray(result.rows) ? (result.rows as readonly Row[]) : [];
+  return {
+    rows,
+    ...(typeof result.rowCount === 'number'
+      ? { rowCount: result.rowCount }
+      : typeof result.affectedRows === 'number'
+        ? { rowCount: result.affectedRows }
+        : {}),
+  };
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return (typeof value === 'object' || typeof value === 'function') && value !== null;
 }
 
 function readonlyJob(job: MutableDurableTaskJob): DurableTaskJob {
