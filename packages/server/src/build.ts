@@ -19,6 +19,8 @@ const immutableAssetPathPattern = /^\/assets\/(?:.*\/)?[^/]*-[a-f0-9]{8,}(?:\.[^
  * @experimental
  */
 export interface KovoPreset {
+  /** Build-time capabilities this preset can actually host. */
+  capabilities?: KovoPresetCapabilities;
   /** Emit platform-native output from an already-written neutral build. */
   emit?(build: KovoNeutralBuild, context: PresetContext): Promise<void> | void;
   /** Return target-specific diagnostics before output is emitted. */
@@ -28,6 +30,28 @@ export interface KovoPreset {
   ): Promise<readonly PresetDiagnostic[]> | readonly PresetDiagnostic[];
   /** Stable preset name, such as `node`, `vercel`, or `cloudflare`. */
   name: string;
+}
+
+/**
+ * Deployment capabilities declared by a preset.
+ *
+ * @experimental
+ */
+export interface KovoPresetCapabilities {
+  /** Durable task drainer available to run jobs enqueued by `request.schedule(...)` (SPEC §9.6). */
+  jobRunner?: JobRunnerCapability;
+}
+
+/**
+ * Preset-owned durable task runner capability (SPEC §9.6).
+ *
+ * @experimental
+ */
+export interface JobRunnerCapability {
+  /** Concrete runner adapter owned by the preset. */
+  adapter: 'node-in-process';
+  /** Whether the artifact serves HTTP while draining jobs. */
+  mode: 'serve-and-run';
 }
 
 /**
@@ -106,6 +130,21 @@ export interface DeploySkewPresetOptions {
 export interface NodePresetOptions extends DeploySkewPresetOptions {
   /** Whether the node preset emits a minimal Dockerfile next to `server.mjs`; defaults to true. */
   dockerfile?: boolean;
+  /** Durable task runner mode; defaults to the in-process serve-and-run JobRunner. */
+  jobRunner?: NodeJobRunnerOptions | false;
+}
+
+/**
+ * Node preset durable task runner options (SPEC §9.6).
+ *
+ * @experimental
+ */
+export interface NodeJobRunnerOptions {
+  /**
+   * `serve-and-run` drains jobs inside the HTTP process. `runner-only` is reserved until the neutral
+   * server bundle exposes a runner entrypoint; selecting it currently fails closed at build time.
+   */
+  mode?: 'serve-and-run' | 'runner-only';
 }
 
 /**
@@ -163,12 +202,17 @@ export function defineConfig(config: KovoConfig): KovoConfig {
  * @experimental
  */
 export function node(options: NodePresetOptions = {}): KovoPreset {
+  const jobRunner = nodeJobRunnerCapability(options);
   return {
+    ...(jobRunner === undefined ? {} : { capabilities: { jobRunner } }),
     emit(build, context) {
       return emitNodePreset(build, context, options);
     },
     inspect(build, _context) {
-      const diagnostics = clientModuleRetentionDiagnostics(build, 'node', options);
+      const diagnostics = [
+        ...clientModuleRetentionDiagnostics(build, 'node', options),
+        ...nodeJobRunnerDiagnostics(build, options, jobRunner),
+      ];
       if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
         diagnostics.push({
           code: 'node-missing-handler',
@@ -197,7 +241,10 @@ export function vercel(options: VercelPresetOptions = {}): KovoPreset {
       return emitVercelPreset(build, context, options);
     },
     inspect(build, _context) {
-      const diagnostics = clientModuleRetentionDiagnostics(build, 'vercel', options);
+      const diagnostics = [
+        ...clientModuleRetentionDiagnostics(build, 'vercel', options),
+        ...missingJobRunnerDiagnostics(build, 'vercel'),
+      ];
       if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
         diagnostics.push({
           code: 'vercel-missing-handler',
@@ -225,7 +272,10 @@ export function cloudflare(options: CloudflarePresetOptions = {}): KovoPreset {
       return emitCloudflarePreset(build, context, options);
     },
     async inspect(build, context) {
-      const diagnostics = clientModuleRetentionDiagnostics(build, 'cloudflare', options);
+      const diagnostics = [
+        ...clientModuleRetentionDiagnostics(build, 'cloudflare', options),
+        ...missingJobRunnerDiagnostics(build, 'cloudflare'),
+      ];
       if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
         diagnostics.push({
           code: 'cloudflare-missing-handler',
@@ -373,6 +423,46 @@ function deploySkewRetentionProofSatisfiesFloor(
     retention.immutableClientModules === 'retained' &&
     retention.priorTokenQueryReads === 'retained'
   );
+}
+
+function nodeJobRunnerCapability(options: NodePresetOptions): JobRunnerCapability | undefined {
+  if (options.jobRunner === false) return undefined;
+  if (options.jobRunner?.mode === 'runner-only') return undefined;
+  return { adapter: 'node-in-process', mode: 'serve-and-run' };
+}
+
+function nodeJobRunnerDiagnostics(
+  build: KovoNeutralBuild,
+  options: NodePresetOptions,
+  capability: JobRunnerCapability | undefined,
+): PresetDiagnostic[] {
+  if (options.jobRunner && options.jobRunner.mode === 'runner-only') {
+    return [
+      {
+        code: 'node-runner-only-unsupported',
+        message:
+          'The node preset runner-only JobRunner mode is not emitted yet because the neutral server bundle does not expose a standalone task-runner entrypoint. Use node() or node({ jobRunner: { mode: "serve-and-run" } }) for the in-process JobRunner, or deploy a supported external runner adapter when one is added.',
+        severity: 'error',
+      },
+    ];
+  }
+  if (capability !== undefined) return [];
+  return missingJobRunnerDiagnostics(build, 'node');
+}
+
+function missingJobRunnerDiagnostics(
+  build: KovoNeutralBuild,
+  presetName: string,
+): PresetDiagnostic[] {
+  if (build.tasks.length === 0) return [];
+  const taskList = build.tasks.map((task) => task.key).join(', ');
+  return [
+    {
+      code: 'KV445',
+      message: `The ${presetName} preset declares no JobRunner capability but this build registers durable task(s): ${taskList}. SPEC §9.6 requires presets that support task()/request.schedule() to declare a real drainer; use the node preset's in-process JobRunner, or configure a preset/adapter with a cron-drain or external queue runner before deploying.`,
+      severity: 'error',
+    },
+  ];
 }
 
 function isFrameworkRuntimeClientModule(

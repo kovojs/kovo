@@ -85,6 +85,10 @@ export interface KovoNeutralBuild {
     href: string;
     path: string;
   }[];
+  /** Durable task declarations that require a preset JobRunner capability (SPEC §9.6). */
+  tasks: readonly {
+    key: string;
+  }[];
   /** Fully static output when every route was proven exportable. */
   staticOutput?: {
     /** Absolute path to the neutral static export directory. */
@@ -204,6 +208,7 @@ export async function writeKovoNeutralBuild(
     serverDir,
     ...(serverHandlerPath === undefined ? {} : { serverHandlerPath }),
     staticAssets: buildWithRegisteredClientModules.assets,
+    tasks: buildWithRegisteredClientModules.app.tasks.map((task) => ({ key: task.key })),
     ...(staticOutput === undefined ? {} : { staticOutput }),
     staticOnly: neutralBuildIsStaticOnly(buildWithRegisteredClientModules.app, staticOutput),
     version: neutralBuildVersion,
@@ -215,6 +220,7 @@ export async function writeKovoNeutralBuild(
       ({ source: _source, ...module }) => module,
     ),
     routeHints: buildWithRegisteredClientModules.routeHints,
+    tasks: neutral.tasks,
     version: neutralBuildVersion,
   });
   await writeJson(routesPath, {
@@ -224,6 +230,7 @@ export async function writeKovoNeutralBuild(
   await writeJson(metaPath, {
     hasServerHandler: serverHandlerPath !== undefined,
     staticOnly: neutral.staticOnly,
+    tasks: neutral.tasks,
     version: neutralBuildVersion,
   });
 

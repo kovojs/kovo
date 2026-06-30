@@ -18,6 +18,8 @@ import { route } from './route.js';
 import { cloudflare, node, vercel } from './build.js';
 import { stylesheet } from './hints.js';
 import { writeKovoNeutralBuild } from './neutral-build.js';
+import { s } from './schema.js';
+import { task } from './api/data.js';
 
 const runtimeClientModulePath = /^\/c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
@@ -37,6 +39,12 @@ describe('server build-time deployment API', () => {
     expect(cloudflare({ compatibilityDate: '2026-06-18', name: 'kovo-test' })).toMatchObject({
       name: 'cloudflare',
     });
+    expect(node()).toMatchObject({
+      capabilities: { jobRunner: { adapter: 'node-in-process', mode: 'serve-and-run' } },
+      name: 'node',
+    });
+    expect(node({ jobRunner: false }).capabilities).toBeUndefined();
+    expect(node({ jobRunner: false }).name).toBe('node');
     expect(
       node({
         retention: {
@@ -150,6 +158,7 @@ describe('server build-time deployment API', () => {
             routePath: '/cart',
           },
         ],
+        tasks: [],
         version: 'kovo-neutral-build/v1',
       });
       await expect(readJson(join(outDir, 'routes.json'))).resolves.toEqual({
@@ -167,6 +176,7 @@ describe('server build-time deployment API', () => {
       await expect(readJson(join(outDir, 'meta.json'))).resolves.toEqual({
         hasServerHandler: true,
         staticOnly: true,
+        tasks: [],
         version: 'kovo-neutral-build/v1',
       });
       expect(build).toMatchObject({
@@ -189,6 +199,7 @@ describe('server build-time deployment API', () => {
           routeDocuments: [{ path: '/cart', routePath: '/cart' }],
         },
         staticOnly: true,
+        tasks: [],
         version: 'kovo-neutral-build/v1',
       });
     } finally {
@@ -495,6 +506,86 @@ describe('server build-time deployment API', () => {
           },
         }).inspect!(build, { declaredEnv: [] }),
       ).resolves.toEqual([]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails closed when a task-using build targets a preset without a JobRunner', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-task-preset-runner-'));
+    const sendReceipt = task('receipt/send', {
+      input: s.object({ orderId: s.string() }),
+      async run() {},
+    });
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+          tasks: [sendReceipt],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource:
+          'export default async function handler() { return new Response("ok"); }\n',
+      });
+
+      await expect(readJson(join(root, '.kovo/manifest.json'))).resolves.toMatchObject({
+        tasks: [{ key: 'receipt/send' }],
+      });
+      await expect(readJson(join(root, '.kovo/meta.json'))).resolves.toMatchObject({
+        tasks: [{ key: 'receipt/send' }],
+      });
+      expect(build.tasks).toEqual([{ key: 'receipt/send' }]);
+      expect(node().inspect!(build, { declaredEnv: [] })).toEqual([]);
+      expect(node({ jobRunner: false }).inspect!(build, { declaredEnv: [] })).toEqual([
+        missingJobRunnerError('node', 'receipt/send'),
+      ]);
+      expect(vercel().inspect!(build, { declaredEnv: [] })).toEqual([
+        missingJobRunnerError('vercel', 'receipt/send'),
+      ]);
+      await expect(cloudflare().inspect!(build, { declaredEnv: [] })).resolves.toEqual([
+        missingJobRunnerError('cloudflare', 'receipt/send'),
+      ]);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails closed when node runner-only mode is selected before an emitted runner entrypoint exists', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-runner-only-'));
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page() {
+                return renderedHtml('<main>Home</main>');
+              },
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource:
+          'export default async function handler() { return new Response("ok"); }\n',
+      });
+
+      expect(
+        node({ jobRunner: { mode: 'runner-only' } }).inspect!(build, { declaredEnv: [] }),
+      ).toEqual([
+        {
+          code: 'node-runner-only-unsupported',
+          message:
+            'The node preset runner-only JobRunner mode is not emitted yet because the neutral server bundle does not expose a standalone task-runner entrypoint. Use node() or node({ jobRunner: { mode: "serve-and-run" } }) for the in-process JobRunner, or deploy a supported external runner adapter when one is added.',
+          severity: 'error',
+        },
+      ]);
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -1680,6 +1771,14 @@ function clientModuleRetentionError(presetName: string) {
   return {
     code: 'KV417',
     message: `The ${presetName} preset cannot prove the SPEC §14 deploy-skew retention floor for immutable /c/__v/... modules and prior-token /_q reads. Configure ${presetName}({ retention: { hours: 24, immutableClientModules: 'retained', priorTokenQueryReads: 'retained' } }) only when the serving layer retains prior build artifacts and query-read support for at least 24 hours, or use a preset/adapter that declares that support.`,
+    severity: 'error',
+  };
+}
+
+function missingJobRunnerError(presetName: string, taskList: string) {
+  return {
+    code: 'KV445',
+    message: `The ${presetName} preset declares no JobRunner capability but this build registers durable task(s): ${taskList}. SPEC §9.6 requires presets that support task()/request.schedule() to declare a real drainer; use the node preset's in-process JobRunner, or configure a preset/adapter with a cron-drain or external queue runner before deploying.`,
     severity: 'error',
   };
 }
