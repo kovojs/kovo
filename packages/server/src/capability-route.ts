@@ -116,6 +116,7 @@ export interface StorageDownloadEndpointInfo {
   readonly basePath: string;
   readonly oneTimeReplayStore: boolean;
   readonly secret: SigningSecret;
+  readonly scope?: (request: Request) => string | undefined;
 }
 
 type StorageDownloadEndpointDeclaration = EndpointDeclaration<string, 'GET', 'prefix'> & {
@@ -385,6 +386,7 @@ export function createStorageDownloadEndpoint(
       basePath,
       oneTimeReplayStore: options.replayStore !== undefined,
       secret: options.secret,
+      ...(options.scope === undefined ? {} : { scope: options.scope }),
     } satisfies StorageDownloadEndpointInfo,
   });
   return declaration;

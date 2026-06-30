@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
+import { component } from '@kovojs/core';
 
 import { enhancedNavigationDocumentAcceptHeader } from '@kovojs/core/internal/document-protocol';
 
@@ -21,6 +22,7 @@ import { layout, route } from './route.js';
 import { s } from './schema.js';
 import { stylesheet } from './hints.js';
 import { renderedHtml } from './html.js';
+import { jsx } from './jsx-runtime.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
 
 function attestedLiveTargetHeader(
@@ -286,6 +288,70 @@ describe('framework-owned CSP reporting endpoint (OPP-14)', () => {
 });
 
 describe('server createApp request shell', () => {
+  it('emits Kovo-Warn when SSR component query hydration caps a primary list read', async () => {
+    const contactsQuery = query('contacts', {
+      load: () => ({ items: Array.from({ length: 105 }, (_, index) => ({ id: index })) }),
+      reads: [],
+    });
+    const Contacts = component({
+      queries: { contacts: contactsQuery },
+      render: ({ contacts }) =>
+        jsx('main', {
+          children: String((contacts as { items: unknown[] }).items.length),
+        }),
+    });
+    const app = createApp({
+      requestLimits: { maxQueryListItems: 100 },
+      routes: [route('/', { page: () => jsx(Contacts, {}) })],
+    });
+    const response = await createRequestHandler(app)(new Request('https://example.test/'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('kovo-warn')).toBe('QUERY_LIST_LIMIT $.items;limit=100');
+    expect(await response.text()).toContain('<main>100</main>');
+  });
+
+  it('derives the document BroadcastChannel fingerprint from the stable CSRF signing secret', async () => {
+    const csrf = {
+      secret: 'stable-session-fingerprint-secret-012345',
+      sessionId: () => 'session-1',
+    };
+    const makeApp = () =>
+      createApp({
+        csrf,
+        routes: [route('/', { page: () => renderedHtml('<main>Account</main>') })],
+        sessionProvider: () => ({ id: 'session-1' }),
+      });
+    const first = await createRequestHandler(makeApp())(new Request('https://example.test/'));
+    const second = await createRequestHandler(makeApp())(new Request('https://example.test/'));
+    const differentSecret = await createRequestHandler(
+      createApp({
+        csrf: {
+          ...csrf,
+          secret: 'different-session-fingerprint-secret-012',
+        },
+        routes: [route('/', { page: () => renderedHtml('<main>Account</main>') })],
+        sessionProvider: () => ({ id: 'session-1' }),
+      }),
+    )(new Request('https://example.test/'));
+
+    const firstFingerprint = (await first.text()).match(
+      /<meta name="kovo-session" content="([^"]+)">/,
+    )?.[1];
+    const secondFingerprint = (await second.text()).match(
+      /<meta name="kovo-session" content="([^"]+)">/,
+    )?.[1];
+    const differentFingerprint = (await differentSecret.text()).match(
+      /<meta name="kovo-session" content="([^"]+)">/,
+    )?.[1];
+
+    expect(firstFingerprint).toBeDefined();
+    expect(secondFingerprint).toBe(firstFingerprint);
+    expect(differentFingerprint).toBeDefined();
+    expect(differentFingerprint).not.toBe(firstFingerprint);
+    expect(firstFingerprint).not.toContain('session-1');
+  });
+
   it('stores the closed app registries and options without adding middleware', () => {
     const productRoute = route('/products/:id', {});
     const statusEndpoint = endpoint('/status', {

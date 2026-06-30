@@ -1,4 +1,4 @@
-import { createHmac, randomBytes } from 'node:crypto';
+import { createHmac } from 'node:crypto';
 
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
@@ -9,6 +9,7 @@ import {
   renderRouteDocumentResponse,
 } from './document-core.js';
 import { forwardSetCookie } from './cookies.js';
+import { currentCsrfSecret, type CsrfSecret } from './csrf.js';
 import {
   createSignUrl,
   storageDownloadEndpointInfo,
@@ -35,6 +36,7 @@ import {
 import type { KovoApp } from './app-types.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
+const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
 
 export interface AppRouteDocumentOptions {
   app: KovoApp;
@@ -57,7 +59,7 @@ export async function renderAppRouteDocumentResponse({
   // SPEC §6.6 / §9.1: thread `ctx.signUrl` onto the page context when a storage download endpoint
   // is mounted. The route context must mint with the same configured capability signer that the
   // endpoint verify sink uses; otherwise the documented pairing fails closed as an opaque 404.
-  const storageDownloadSigner = appStorageDownloadSigner(app);
+  const storageDownloadSigner = appStorageDownloadSigner(app, request);
   const signUrlContext =
     storageDownloadSigner.kind === 'absent'
       ? undefined
@@ -65,6 +67,9 @@ export async function renderAppRouteDocumentResponse({
         ? createSignUrl({
             secret: storageDownloadSigner.secret,
             basePath: storageDownloadSigner.basePath,
+            ...(storageDownloadSigner.defaultScope === undefined
+              ? {}
+              : { defaultScope: storageDownloadSigner.defaultScope }),
             oneTimeReplayStore: storageDownloadSigner.oneTimeReplayStore,
           })
         : createUnavailableSignUrl(storageDownloadSigner.message);
@@ -159,6 +164,7 @@ export async function renderAppRouteDocumentResponse({
   // sessionProvider here (it already ran once for the guarded route).
   const sessionFingerprint = sessionFingerprintFromRequest(
     routeResponse.lifecycleRequest instanceof Request ? routeResponse.lifecycleRequest : request,
+    app.csrf?.secret,
   );
 
   // part-4 G1 + bugz-3 L2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a document
@@ -229,6 +235,12 @@ export async function renderAppRouteDocumentResponse({
   if (enhancedNavigationDocument && documentResponse.status === 200) {
     documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');
   }
+  const queryWarningHeader = queryRuntimeWarningHeader(
+    queryRuntimeWarningsFromRequest(routeResponse.lifecycleRequest),
+  );
+  if (queryWarningHeader !== undefined) {
+    appendResponseHeader(documentResponse.headers, 'Kovo-Warn', queryWarningHeader);
+  }
 
   return withRefreshCookies(documentResponse);
 }
@@ -237,20 +249,23 @@ type AppStorageDownloadSigner =
   | {
       kind: 'ready';
       basePath: string;
+      defaultScope?: string;
       oneTimeReplayStore: boolean;
       secret: StorageDownloadEndpointInfo['secret'];
     }
   | { kind: 'absent' }
   | { kind: 'unavailable'; message: string };
 
-function appStorageDownloadSigner(app: KovoApp): AppStorageDownloadSigner {
+function appStorageDownloadSigner(app: KovoApp, request: Request): AppStorageDownloadSigner {
   const endpoints = app.endpoints
     .map((definition) => storageDownloadEndpointInfo(definition))
     .filter((info): info is StorageDownloadEndpointInfo => info !== undefined);
   if (endpoints.length === 1) {
+    const defaultScope = endpoints[0]!.scope?.(request);
     return {
       kind: 'ready',
       basePath: endpoints[0]!.basePath,
+      ...(defaultScope === undefined ? {} : { defaultScope }),
       oneTimeReplayStore: endpoints[0]!.oneTimeReplayStore,
       secret: endpoints[0]!.secret,
     };
@@ -295,7 +310,11 @@ function createUnavailableSignUrl(message: string): ReturnType<typeof createSign
  * The id is HMACed with a server-owned secret to keep raw session/user identifiers out of the
  * BroadcastChannel envelope (SPEC §9.3 "opaque").
  */
-function sessionFingerprintFromRequest(request: Request): string | undefined {
+function sessionFingerprintFromRequest(
+  request: Request,
+  secret: CsrfSecret | undefined,
+): string | undefined {
+  if (secret === undefined) return undefined;
   // 1. Pre-resolved session id fields set by the route lifecycle / adapters.
   const req = request as unknown as {
     session?: { id?: string; user?: { id?: string } };
@@ -308,13 +327,34 @@ function sessionFingerprintFromRequest(request: Request): string | undefined {
       ? req.session.user.id
       : undefined);
 
-  return resolvedId === undefined ? undefined : hmacSessionFingerprint(resolvedId);
+  return resolvedId === undefined ? undefined : hmacSessionFingerprint(resolvedId, secret);
 }
 
-const broadcastFingerprintSecret = randomBytes(32);
+function hmacSessionFingerprint(input: string, secret: CsrfSecret): string {
+  return createHmac('sha256', currentCsrfSecret(secret)).update(input).digest('base64url');
+}
 
-function hmacSessionFingerprint(input: string): string {
-  return createHmac('sha256', broadcastFingerprintSecret).update(input).digest('base64url');
+function queryRuntimeWarningHeader(
+  warnings: readonly QueryRuntimeWarningSignal[] | undefined,
+): string | undefined {
+  if (warnings === undefined || warnings.length === 0) return undefined;
+  const listLimits = warnings
+    .filter((warning) => warning.code === 'QUERY_LIST_LIMIT')
+    .map((warning) => `${warning.path};limit=${warning.limit}`)
+    .join(',');
+  return listLimits ? `QUERY_LIST_LIMIT ${listLimits}` : undefined;
+}
+
+interface QueryRuntimeWarningSignal {
+  code: 'QUERY_LIST_LIMIT';
+  limit: number;
+  path: string;
+}
+
+function queryRuntimeWarningsFromRequest(request: unknown): readonly QueryRuntimeWarningSignal[] {
+  if (typeof request !== 'object' || request === null) return [];
+  const warnings = (request as { [queryRuntimeWarningsKey]?: unknown })[queryRuntimeWarningsKey];
+  return Array.isArray(warnings) ? (warnings as QueryRuntimeWarningSignal[]) : [];
 }
 
 export async function renderAppErrorDocumentResponse(

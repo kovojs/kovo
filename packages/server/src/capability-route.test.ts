@@ -478,6 +478,43 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(await response.text()).toBe('download-without-csrf');
   });
 
+  it('threads createStorageDownloadEndpoint scope into route ctx.signUrl defaultScope', async () => {
+    const key = 'receipts/scoped.txt';
+    const storage = await storageWith(key, 'tenant-download');
+    const app = createApp({
+      endpoints: [
+        createStorageDownloadEndpoint({
+          basePath: '/downloads',
+          scope: (request) => request.headers.get('x-tenant') ?? undefined,
+          secret: SECRET,
+          storage,
+        }),
+      ],
+      routes: [
+        route('/', {
+          async page(context) {
+            if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
+            const signed = await context.signUrl({ key });
+            return renderedHtml(`<a href="${signed.url}">Download</a>`);
+          },
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+
+    const document = await handler(
+      new Request('https://app.example/', { headers: { 'x-tenant': 'tenant_1' } }),
+    );
+    const href = (await document.text()).match(/href="([^"]+)"/)?.[1];
+
+    expect(href?.startsWith('/downloads/receipts/scoped.txt?')).toBe(true);
+    const response = await handler(
+      new Request(`https://app.example${href}`, { headers: { 'x-tenant': 'tenant_1' } }),
+    );
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('tenant-download');
+  });
+
   it('route ctx.signUrl fails clearly when multiple storage download endpoints are mounted', async () => {
     const key = 'receipts/custom.txt';
     const storage = await storageWith(key, 'custom-download');
