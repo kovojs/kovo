@@ -285,8 +285,9 @@ describe('durable task runner (SPEC §9.6)', () => {
       await vi.advanceTimersByTimeAsync(125);
       await firstRun;
       expect(runs).toBe(1);
-      expect(store.snapshot().find((job) => job.args && (job.args as { n: number }).n === 1))
-        .toMatchObject({ status: 'dead' });
+      expect(
+        store.snapshot().find((job) => job.args && (job.args as { n: number }).n === 1),
+      ).toMatchObject({ status: 'dead' });
 
       await expect(runner.runOnce(new Date('2026-06-30T10:00:01.000Z'))).resolves.toEqual([]);
       releaseFirst();

@@ -81,6 +81,7 @@ export type {
   KovoExplainOptions,
   KovoRevealedExplainOptions,
   KovoSourcesSinksExplainOptions,
+  KovoTasksExplainOptions,
   KovoTargetExplainOptions,
   KovoUnguardedExplainOptions,
   KovoUnscopedExplainOptions,

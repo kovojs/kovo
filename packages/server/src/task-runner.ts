@@ -1,5 +1,9 @@
 import type { TaskDefinition, TaskHandle, TaskRunContext, TaskScheduleOptions } from './task.js';
-import type { DurableTaskEnqueueInput, DurableTaskJob, DurableTaskQueueStore } from './task-queue.js';
+import type {
+  DurableTaskEnqueueInput,
+  DurableTaskJob,
+  DurableTaskQueueStore,
+} from './task-queue.js';
 
 export interface DurableTaskRunnerHooks {
   readonly fetch?: typeof globalThis.fetch;

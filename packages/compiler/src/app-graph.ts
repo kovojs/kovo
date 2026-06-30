@@ -203,12 +203,16 @@ function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGra
 
   for (const task of tasks) {
     const previous = byKey.get(task.key);
+    const cron = previous?.cron ?? task.cron;
+    const runMutations = mergeSortedStrings(previous?.runMutations, task.runMutations);
+    const runQueries = mergeSortedStrings(previous?.runQueries, task.runQueries);
+    const schedules = mergeSortedStrings(previous?.schedules, task.schedules);
     byKey.set(task.key, {
+      ...(cron === undefined ? {} : { cron }),
       key: task.key,
-      cron: previous?.cron ?? task.cron,
-      runMutations: mergeSortedStrings(previous?.runMutations, task.runMutations),
-      runQueries: mergeSortedStrings(previous?.runQueries, task.runQueries),
-      schedules: mergeSortedStrings(previous?.schedules, task.schedules),
+      ...(runMutations.length === 0 ? {} : { runMutations }),
+      ...(runQueries.length === 0 ? {} : { runQueries }),
+      ...(schedules.length === 0 ? {} : { schedules }),
     });
   }
 

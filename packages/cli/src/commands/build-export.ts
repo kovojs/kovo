@@ -800,9 +800,7 @@ async function staticBuildCheckGraph(
   };
 }
 
-async function sourceGraphFactsFromFiles(
-  files: readonly BuildCheckSourceFile[],
-): Promise<{
+async function sourceGraphFactsFromFiles(files: readonly BuildCheckSourceFile[]): Promise<{
   components: CoreGraph.ComponentExplain[];
   tasks: CoreGraph.TaskExplain[];
 }> {

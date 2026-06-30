@@ -477,21 +477,19 @@ export function validateDirectDbAccess(
     );
 
     if (directWrite) {
-      found.push(
-        {
-          ...diagnostics.at('KV330', {
-            start: directWrite.start,
-            length: directWrite.path.length,
-          }),
-          help: [
-            'Would lower to: a durable task graph node whose database effects compose through audited mutations.',
-            'Blocked reason: direct DB writes in task.run bypass ctx.runMutation, so KV414/KV438/KV407 write audits cannot see the effect.',
-            'Fixes: move the write into a mutation/domain write and call ctx.runMutation(...) from the task, or expose a statically audited mutation that owns the touch set.',
-            'SPEC §9.6 requires task DB writes to go through ctx.runMutation; SPEC §10.3 makes mutation/domain writes the audited write surface.',
-          ].join('\n'),
-          message: 'Direct db access in a task run body; route through ctx.runMutation.',
-        },
-      );
+      found.push({
+        ...diagnostics.at('KV330', {
+          start: directWrite.start,
+          length: directWrite.path.length,
+        }),
+        help: [
+          'Would lower to: a durable task graph node whose database effects compose through audited mutations.',
+          'Blocked reason: direct DB writes in task.run bypass ctx.runMutation, so KV414/KV438/KV407 write audits cannot see the effect.',
+          'Fixes: move the write into a mutation/domain write and call ctx.runMutation(...) from the task, or expose a statically audited mutation that owns the touch set.',
+          'SPEC §9.6 requires task DB writes to go through ctx.runMutation; SPEC §10.3 makes mutation/domain writes the audited write surface.',
+        ].join('\n'),
+        message: 'Direct db access in a task run body; route through ctx.runMutation.',
+      });
     }
   }
 
