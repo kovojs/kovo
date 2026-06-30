@@ -48,6 +48,7 @@ import {
   pnfExactConjuncts,
   predicatePnf,
   privateScopeForExpression,
+  privateScopeSourceForExpression,
   projectClassStaticMemberCallbacks,
   projectDomainWriteCallbacks,
   projectDrizzleReceivers,
@@ -1321,6 +1322,9 @@ function governedValueVerdict(
       const inner = expression.getArguments()[0];
       // serverValue discharges only a NON-input argument; serverValue(input.x,…) still fails.
       if (!inner) return { ok: true, provenance: 'unknown' };
+      if (privateScopeSourceForExpression(inner, context.sessionContext)) {
+        return { ok: true, provenance: 'unknown' };
+      }
       const innerVerdict = governedValueVerdict(inner, context);
       return innerVerdict.provenance === 'input'
         ? {

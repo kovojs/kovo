@@ -213,6 +213,62 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
   });
 
+  it('passes serverValue(session-derived local) but rejects input and non-session request locals', () => {
+    expect(
+      facts(
+        handler(
+          [
+            '  const ownerId = request.session?.user.id ?? "demo-user";',
+            '  await db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
+          ].join('\n'),
+          'db: PgAsyncDatabase<any, any>, input: { id: string; ownerId: string; name: string }, request: { session?: { user: { id: string } } }',
+        ),
+      ),
+    ).toEqual([]);
+
+    const inputLocal = facts(
+      handler(
+        [
+          '  const ownerId = input.ownerId;',
+          '  await db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
+        ].join('\n'),
+        'db: PgAsyncDatabase<any, any>, input: { id: string; ownerId: string; name: string }, request: { session?: { user: { id: string } } }',
+      ),
+    );
+    expect(inputLocal).toEqual([
+      {
+        column: 'ownerId',
+        detail: 'ownerId',
+        domain: 'account',
+        name: 'updateAccount',
+        provenance: 'input',
+        site: 'account.domain.ts:8',
+        via: 'values',
+      },
+    ]);
+
+    const requestLocal = facts(
+      handler(
+        [
+          '  const ownerId = request.body.ownerId;',
+          '  await db.insert(accounts).values({ id: "account-1", ownerId: serverValue(ownerId, "session owner"), role: "user", balance: 0, name: input.name });',
+        ].join('\n'),
+        'db: PgAsyncDatabase<any, any>, input: { name: string }, request: { session?: { user: { id: string } }; body: { ownerId: string } }',
+      ),
+    );
+    expect(requestLocal).toEqual([
+      {
+        column: 'ownerId',
+        detail: 'body.ownerId',
+        domain: 'account',
+        name: 'updateAccount',
+        provenance: 'input',
+        site: 'account.domain.ts:8',
+        via: 'values',
+      },
+    ]);
+  });
+
   it('passes adminAssign(input.x) as the audited privileged write', () => {
     expect(
       facts(

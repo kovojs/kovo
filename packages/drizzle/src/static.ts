@@ -3716,6 +3716,7 @@ export {
   opaqueAliasReasonForExpression,
   privateScopeForExpression,
   privateScopeKey,
+  privateScopeSourceForExpression,
   sessionProvenanceContextForNodes,
 } from './static/session-provenance.js';
 /** @internal */

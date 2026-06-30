@@ -401,6 +401,89 @@ function bindingElementValueRequiresGuard(element: BindingElement | undefined): 
   return undefined;
 }
 
+/**
+ * KV438's `serverValue(value, reason)` escape asks a narrower question than the
+ * owner-scope audit: did `value` come from framework-owned private request scope
+ * rather than client input? It intentionally ignores guard dominance and accepts
+ * literal fallbacks for optional session reads, while leaving KV414's stricter
+ * `privateScopeForExpression` path unchanged.
+ */
+/** @internal */ export function privateScopeSourceForExpression(
+  node: Node,
+  context: SessionProvenanceContext,
+  depth = 0,
+): PrivateScopeProvenance | undefined {
+  if (depth > 8) return undefined;
+  const expression = unwrappedStaticExpressionNode(node);
+
+  const direct = directPrivateScopeForExpression(expression);
+  if (direct) return { kind: direct.kind, path: direct.path };
+
+  if (Node.isIdentifier(expression)) {
+    const alias = privateScopeAliasForIdentifier(expression, context);
+    if (alias) return { kind: alias.kind, path: alias.path };
+
+    const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+    const declaration = symbol?.getDeclarations()?.[0];
+    if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
+    const initializer = declaration.getInitializer();
+    return initializer
+      ? privateScopeSourceForExpression(initializer, context, depth + 1)
+      : undefined;
+  }
+
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    const objectProperty = localObjectPropertyPrivateScope(expression, context, depth);
+    if (objectProperty) return objectProperty;
+
+    const base = privateScopeSourceForExpression(expression.getExpression(), context, depth + 1);
+    const name = staticAccessName(expression);
+    return base && name
+      ? { kind: base.kind, path: joinPrivateScopePath(base.path, name) }
+      : undefined;
+  }
+
+  if (Node.isBinaryExpression(expression) && isSafePrivateScopeFallbackExpression(expression)) {
+    const left = expression.getLeft();
+    const right = expression.getRight();
+    const leftScope = privateScopeSourceForExpression(left, context, depth + 1);
+    if (leftScope && literalFallbackExpression(right)) return leftScope;
+    const rightScope = privateScopeSourceForExpression(right, context, depth + 1);
+    if (rightScope && literalFallbackExpression(left)) return rightScope;
+  }
+
+  return undefined;
+}
+
+function privateScopeAliasForIdentifier(
+  expression: Node & { getText(): string },
+  context: SessionProvenanceContext,
+): SessionAlias | undefined {
+  const key = resolvedSymbolKey(symbolForIdentifierReference(expression) ?? expression.getSymbol());
+  return (
+    (key ? context.aliases.get(key) : undefined) ??
+    [...context.aliases.values()].find((candidate) => candidate.name === expression.getText())
+  );
+}
+
+function isSafePrivateScopeFallbackExpression(node: Node): boolean {
+  if (!Node.isBinaryExpression(node)) return false;
+  const operator = node.getOperatorToken().getText();
+  return operator === '??' || operator === '||';
+}
+
+function literalFallbackExpression(node: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(node);
+  return (
+    Node.isStringLiteral(expression) ||
+    Node.isNoSubstitutionTemplateLiteral(expression) ||
+    Node.isNumericLiteral(expression) ||
+    expression.getKind() === SyntaxKind.TrueKeyword ||
+    expression.getKind() === SyntaxKind.FalseKeyword ||
+    expression.getKind() === SyntaxKind.NullKeyword
+  );
+}
+
 function localObjectPropertyPrivateScope(
   node: Node,
   context: SessionProvenanceContext,
