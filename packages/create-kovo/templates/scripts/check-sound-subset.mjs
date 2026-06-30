@@ -31,7 +31,7 @@ function sourceFiles(dir) {
       if (stats.isDirectory()) return sourceFiles(path);
       return /\.[cm]?tsx?$/.test(entry) ? [path] : [];
     })
-    .sort();
+    .sort((left, right) => left.localeCompare(right));
 }
 
 async function loadTypeScript() {

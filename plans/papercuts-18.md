@@ -49,12 +49,13 @@ refuted by dev/prod evidence.
 
 ### C. Starter Tooling Noise
 
-- [ ] **C1 — Generated starter `vp check` warns on `scripts/check-sound-subset.mjs`.** (low, template/dev-tooling; found by `t3-auth-session-access-cache`, verified independently)
+- [x] **C1 — Generated starter `vp check` warns on `scripts/check-sound-subset.mjs`.** (low, template/dev-tooling; found by `t3-auth-session-access-cache`, verified independently)
   - Observed behavior: `pnpm exec vp check` exits 0 but prints `typescript(require-array-sort-compare)` for the generated `scripts/check-sound-subset.mjs`.
   - Root cause: the create-kovo template uses comparator-less `.sort()` in `sourceFiles()` (`packages/create-kovo/templates/scripts/check-sound-subset.mjs`).
   - Why it matters: the starter's own verification path should be quiet when green; generated-tooling warnings blur app warnings with framework noise.
   - Repro evidence: independent verifier reran `pnpm exec vp check` and `pnpm run check` in the T3 app; both exited 0 and reported the warning at generated script lines 27-34.
   - Acceptance: the generated script uses a deterministic comparator and fresh starter `vp check` emits no warning.
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.test.ts --run --reporter=dot` proves the template emits the comparator; a fresh linked scaffold at `/Users/mini/kovo-dogfood-exhaustive-20260629-182057/c1-template-warning-check` passed `pnpm exec vp check` with no warnings.
 
 ## Refuted / Not Carried Forward
 

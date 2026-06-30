@@ -261,6 +261,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('scripts/check-sound-subset.mjs')).toContain(
       'SPEC.md §6.6 sound subset bans any',
     );
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
+      '.sort((left, right) => left.localeCompare(right));',
+    );
     expect(files.get('src/endpoint-posture.test.ts')).not.toMatch(/\bas\s+(?!const\b)[A-Za-z_{]/u);
     expect(files.get('src/auth.ts')).toContain(
       'return request.session?.id ?? request.authCsrfId ?? undefined;',
