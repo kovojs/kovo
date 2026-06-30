@@ -1,4 +1,3 @@
-import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import {
   Node,
   SyntaxKind,
@@ -12,6 +11,7 @@ import {
   type Symbol as MorphSymbol,
   type VariableDeclaration,
 } from 'ts-morph';
+import { drizzleDiagnostic } from './diagnostics.js';
 import {
   appendSourceDestructuredReceiverBinding,
   boundReceiverMethodAccessName,
@@ -88,12 +88,11 @@ import {
   if (!projection) {
     return {
       diagnostics: [
-        {
+        drizzleDiagnostic({
           code: 'KV406',
-          message: `${diagnosticDefinitions.KV406.message} Query uses ${selectCallDisplayName(selectCall)} without an explicit projection.`,
-          severity: diagnosticDefinitions.KV406.severity,
-          site: '',
-        },
+          detail: `Query uses ${selectCallDisplayName(selectCall)} without an explicit projection.`,
+          node: selectCall,
+        }),
       ],
       hasTablelessScalar: false,
       opaquePaths: [],
@@ -396,12 +395,11 @@ function appendRelationalProjectionShape(
   }
 
   return [
-    {
+    drizzleDiagnostic({
       code: 'KV406',
-      message: `${diagnosticDefinitions.KV406.message} Query uses Drizzle relational query API without static projection.`,
-      severity: diagnosticDefinitions.KV406.severity,
-      site: '',
-    },
+      detail: 'Query uses Drizzle relational query API without static projection.',
+      node: relationalQueryCallsWithoutStaticProjection(body, receiverReferences)[0] ?? body,
+    }),
   ];
 }
 
@@ -588,12 +586,11 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
     if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
 
     return [
-      {
+      drizzleDiagnostic({
         code: 'KV406' as const,
-        message: `${diagnosticDefinitions.KV406.message} Query uses unclassified Drizzle receiver call ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
-        severity: diagnosticDefinitions.KV406.severity,
-        site: '',
-      },
+        detail: `Query uses unclassified Drizzle receiver call ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
+        node: call,
+      }),
     ];
   });
 }
@@ -618,12 +615,11 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
     if (!isProjectDrizzleReceiverContainerCallReceiver(surface.receiver)) return [];
 
     return [
-      {
+      drizzleDiagnostic({
         code: 'KV406' as const,
-        message: `${diagnosticDefinitions.KV406.message} Query uses project Drizzle receiver container surface ${surface.receiver.getText()}.${surface.name}().`,
-        severity: diagnosticDefinitions.KV406.severity,
-        site: '',
-      },
+        detail: `Query uses project Drizzle receiver container surface ${surface.receiver.getText()}.${surface.name}().`,
+        node: call,
+      }),
     ];
   });
 }
@@ -664,12 +660,11 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
       if (!receiverName) return [];
 
       return [
-        {
+        drizzleDiagnostic({
           code: 'KV406' as const,
-          message: `${diagnosticDefinitions.KV406.message} Query passes Drizzle receiver ${receiverName} to helper ${name}().`,
-          severity: diagnosticDefinitions.KV406.severity,
-          site: '',
-        },
+          detail: `Query passes Drizzle receiver ${receiverName} to helper ${name}().`,
+          node: call,
+        }),
       ];
     },
   );
@@ -753,12 +748,11 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
       }
 
       return [
-        {
+        drizzleDiagnostic({
           code: 'KV406' as const,
-          message: `${diagnosticDefinitions.KV406.message} Query passes Drizzle receiver ${receiverName} to local helper ${staticExpressionPath(expression) ?? expression.getText()}().`,
-          severity: diagnosticDefinitions.KV406.severity,
-          site: '',
-        },
+          detail: `Query passes Drizzle receiver ${receiverName} to local helper ${staticExpressionPath(expression) ?? expression.getText()}().`,
+          node: call,
+        }),
       ];
     },
   );
@@ -771,12 +765,13 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   const isReceiverIdentifier = (node: Node) => isQueryReceiverIdentifier(node, receiverReferences);
 
   return queryCallbackBodies(body, queryReceiverMode(receiverReferences)).flatMap((callbackBody) =>
-    extractReceiverMethodAliasCallsFromBody(callbackBody, isReceiverIdentifier).map((call) => ({
-      code: 'KV406' as const,
-      message: `${diagnosticDefinitions.KV406.message} Query uses detached Drizzle receiver method ${call.name}().`,
-      severity: diagnosticDefinitions.KV406.severity,
-      site: '',
-    })),
+    extractReceiverMethodAliasCallsFromBody(callbackBody, isReceiverIdentifier).map((call) =>
+      drizzleDiagnostic({
+        code: 'KV406' as const,
+        detail: `Query uses detached Drizzle receiver method ${call.name}().`,
+        node: callbackBody,
+      }),
+    ),
   );
 }
 
@@ -794,12 +789,13 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   return queryCallbackBodies(body, 'project').flatMap((callbackBody) =>
     extractSourceReceiverSurfaceCallsFromBody(callbackBody, localFunctionKeys, (node) =>
       isSourceDestructuredReceiverIdentifier(node, receiverReferences),
-    ).map((call) => ({
-      code: 'KV406' as const,
-      message: `${diagnosticDefinitions.KV406.message} Query uses an un-provable destructured Drizzle receiver surface ${call.name}() without project type proof.`,
-      severity: diagnosticDefinitions.KV406.severity,
-      site: '',
-    })),
+    ).map((call) =>
+      drizzleDiagnostic({
+        code: 'KV406' as const,
+        detail: `Query uses an un-provable destructured Drizzle receiver surface ${call.name}() without project type proof.`,
+        node: callbackBody,
+      }),
+    ),
   );
 }
 
@@ -1193,20 +1189,21 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   const diagnostics: TouchGraphDiagnostic[] = [];
   const unresolvedNodes = queryLoadCallbackResolution(body, mode).unresolvedNodes;
 
-  for (let index = 0; index < unresolvedNodes.length; index++) {
-    diagnostics.push(unresolvedQueryLoadCallbackDiagnostic());
+  for (const unresolvedNode of unresolvedNodes) {
+    diagnostics.push(unresolvedQueryLoadCallbackDiagnostic(unresolvedNode));
   }
 
   return diagnostics;
 }
 
-/** @internal */ export function unresolvedQueryLoadCallbackDiagnostic(): TouchGraphDiagnostic {
-  return {
+/** @internal */ export function unresolvedQueryLoadCallbackDiagnostic(
+  node: Node,
+): TouchGraphDiagnostic {
+  return drizzleDiagnostic({
     code: 'KV406',
-    message: `${diagnosticDefinitions.KV406.message} Query load callback could not be statically resolved.`,
-    severity: diagnosticDefinitions.KV406.severity,
-    site: '',
-  };
+    detail: 'Query load callback could not be statically resolved.',
+    node,
+  });
 }
 
 /** @internal */ export function referencedQueryCallbackFunction(
@@ -2328,17 +2325,17 @@ function sourcePosition(node: ts.Node): string {
   // that lets the confidentiality/freshness backstops see it. Suppress KV410 only when both are present.
   if (hasOutput && hasDeclaredReads) return [];
 
-  const definition = diagnosticDefinitions.KV410;
-  const message = diagnosticDefinitionText('KV410', { preferHelp: true });
   const reason = hasOutput
     ? 'without a reads: table set (an opaque projection must declare the tables it reads)'
     : 'without output';
-  return opaquePaths.map((path) => ({
-    code: 'KV410',
-    message: `${message} ${query}.${path} uses sql/raw projection ${reason}.`,
-    severity: definition.severity,
-    site: line,
-  }));
+  return opaquePaths.map((path) =>
+    drizzleDiagnostic({
+      code: 'KV410',
+      detail: `${query}.${path} uses sql/raw projection ${reason}.`,
+      preferHelp: true,
+      site: line,
+    }),
+  );
 }
 
 /** @internal */ export function unresolvedProjectionDiagnostics(
@@ -2347,10 +2344,11 @@ function sourcePosition(node: ts.Node): string {
   site: string,
 ): TouchGraphDiagnostic[] {
   // SPEC §10.2/§11.1: unresolved static facts stay visible instead of guessed.
-  return unresolvedPaths.map((path) => ({
-    code: 'KV406',
-    message: `${diagnosticDefinitions.KV406.message} Query projection ${query}.${path} could not be resolved to a Drizzle column or typed sql<T> expression.`,
-    severity: diagnosticDefinitions.KV406.severity,
-    site,
-  }));
+  return unresolvedPaths.map((path) =>
+    drizzleDiagnostic({
+      code: 'KV406',
+      detail: `Query projection ${query}.${path} could not be resolved to a Drizzle column or typed sql<T> expression.`,
+      site,
+    }),
+  );
 }
