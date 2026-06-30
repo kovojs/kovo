@@ -184,7 +184,7 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
     tests pass; a data-plane resolver `rg` check shows Vite and build/export call sites routed
     through the shared adapter.
 
-- [ ] **P1.5 - Create a manifest-backed generated-attribute and generated-artifact policy layer.**
+- [x] **P1.5 - Create a manifest-backed generated-attribute and generated-artifact policy layer.**
   - Current signals: `scripts/generated-artifacts.mjs` only models app-local generated artifacts
     that must not be committed, while intentionally committed generated sources such as
     `packages/icons/src/*.tsx`, `packages/headless-ui/src/generated.ts`, and registry JSON are
@@ -197,6 +197,10 @@ Record<string, unknown>` in `compile.ts`, `style.ts`, `emit/live-target-renderer
     chance of accidentally committing app artifacts or missing drift in committed framework output.
   - Verification: `pnpm run check:no-committed-generated`, generator drift tests, and import-boundary
     tests pass with the unified inventory as the source of truth.
+  - Evidence:
+    `pnpm run check:no-committed-generated`, `pnpm run check:imports`, and
+    `pnpm exec vitest --run scripts/generated-artifacts.test.mjs scripts/no-committed-generated.test.mjs scripts/import-boundary.test.mjs scripts/prod-emit-check.test.mjs packages/icons/src/icons.test.ts packages/ui/src/manifest-generation.test.ts tests/integration-import-boundary.meta.test.ts tests/snapshot-allowlist.meta.test.ts`
+    passed.
 
 ## P2 - Cleanup After the Core Slices
 
