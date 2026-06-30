@@ -241,6 +241,11 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).not.toContain('void client.exec');
     expect(files.get('src/db.ts')).toContain('export const appDbReady = appDatabase.ready');
     expect(files.get('src/db.ts')).toContain('ON CONFLICT (id) DO NOTHING');
+    expect(files.get('src/app.tsx')).toContain('createMemoryMutationReplayStore');
+    expect(files.get('src/app.tsx')).toContain(
+      'const mutationReplayStore = createMemoryMutationReplayStore();',
+    );
+    expect(files.get('src/app.tsx')).toContain('mutationReplayStore,');
     expect(files.get('src/app.tsx')).toContain("import { appDb, appDbReady } from './db.js'");
     expect(files.get('src/app.tsx')).toContain('await appDbReady');
     expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');

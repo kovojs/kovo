@@ -258,37 +258,48 @@ describe('create-kovo starter (build integration)', () => {
 
       const email = `grace-${Date.now()}@example.com`;
       const idem = fieldValue(addForm, 'Kovo-Idem');
-      const addContact = await fetch(`${origin}/_m/mutations/add-contact`, {
-        body: new URLSearchParams({
-          company: 'Navy',
-          csrf: fieldValue(addForm, 'csrf'),
-          email,
-          'Kovo-Idem': idem,
-          name: 'Grace Hopper',
-        }),
-        headers: {
-          accept: 'text/vnd.kovo.fragment+html',
-          'content-type': 'application/x-www-form-urlencoded',
-          cookie: cookieHeader(jar),
-          'Kovo-Form-Target': target,
-          'Kovo-Fragment': 'true',
-          'Kovo-Idem': idem,
-          'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
-          'Kovo-Targets': `${target}=${deps}`,
-          origin,
-        },
-        method: 'POST',
-      });
-      const body = await addContact.text();
+      const addContactRequest = (): Promise<Response> =>
+        fetch(`${origin}/_m/mutations/add-contact`, {
+          body: new URLSearchParams({
+            company: 'Navy',
+            csrf: fieldValue(addForm, 'csrf'),
+            email,
+            'Kovo-Idem': idem,
+            name: 'Grace Hopper',
+          }),
+          headers: {
+            accept: 'text/vnd.kovo.fragment+html',
+            'content-type': 'application/x-www-form-urlencoded',
+            cookie: cookieHeader(jar),
+            'Kovo-Form-Target': target,
+            'Kovo-Fragment': 'true',
+            'Kovo-Idem': idem,
+            'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
+            'Kovo-Targets': `${target}=${deps}`,
+            origin,
+          },
+          method: 'POST',
+        });
+      const [firstAddContact, duplicateAddContact] = await Promise.all([
+        addContactRequest(),
+        addContactRequest(),
+      ]);
+      const [firstBody, duplicateBody] = await Promise.all([
+        firstAddContact.text(),
+        duplicateAddContact.text(),
+      ]);
 
-      expect(addContact.status).toBe(200);
-      expect(addContact.headers.get('content-type')).toContain('text/vnd.kovo.fragment+html');
-      expect(addContact.headers.get('kovo-changes')).toBe('[{"domain":"model/contact"}]');
-      expect(body).toContain('<kovo-query');
-      expect(body).toContain('<kovo-fragment target="contacts-region"');
-      expect(body).toContain('Grace Hopper');
-      expect(body).toContain(email);
-      expect(body).toContain('4 contacts');
+      for (const response of [firstAddContact, duplicateAddContact]) {
+        expect(response.status).toBe(200);
+        expect(response.headers.get('content-type')).toContain('text/vnd.kovo.fragment+html');
+        expect(response.headers.get('kovo-changes')).toBe('[{"domain":"model/contact"}]');
+      }
+      expect(duplicateBody).toBe(firstBody);
+      expect(firstBody).toContain('<kovo-query');
+      expect(firstBody).toContain('<kovo-fragment target="contacts-region"');
+      expect(firstBody).toContain('Grace Hopper');
+      expect(firstBody).toContain(email);
+      expect(firstBody).toContain('4 contacts');
 
       const updatedHome = await fetch(`${origin}/`, {
         headers: { cookie: cookieHeader(jar) },

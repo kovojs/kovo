@@ -1,6 +1,7 @@
 /** @jsxImportSource @kovojs/server */
 import {
   createApp,
+  createMemoryMutationReplayStore,
   createMemoryVersionedClientModuleRegistry,
   createRequestHandler,
   endpoint,
@@ -39,6 +40,9 @@ await appDbReady;
 await seedDemoUser();
 
 const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;
+// SPEC §9.1: duplicate same-principal enhanced POSTs with the same Kovo-Idem reserve
+// and replay through a process-local store instead of executing independently.
+const mutationReplayStore = createMemoryMutationReplayStore();
 
 const styles = style.create({
   shell: {
@@ -166,6 +170,7 @@ const app = createApp({
   db: () => appDb,
   document: { lang: 'en' },
   endpoints: [healthEndpoint],
+  mutationReplayStore,
   mutations: [addContact, appSignIn, appSignOut],
   queries: [contactsQuery],
   sessionProvider: appSessionProvider,

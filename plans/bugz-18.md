@@ -12,11 +12,12 @@ distinct defects not already carried by earlier bugz/papercuts ledgers.
   - Distinctness: related to earlier island-lowering/deploy ledgers, but this is the post-retention production artifact path: the module is emitted and referenced, yet browser resolution fails.
   - Acceptance: production client modules emitted by `kovo build` use browser-resolvable internal helper code or a served helper URL, and a prod artifact browser test proves island click/input hydrates with no unexpected `/_m` or `/_q` request for local state changes.
 
-- [ ] **B2 — The default create-kovo postgres/PGlite starter stamps idempotency tokens but configures no mutation replay store, so duplicate enhanced POSTs can execute independently.** (high, starter/runtime integration; found by `dogfood-idempotency`)
+- [x] **B2 — The default create-kovo postgres/PGlite starter stamps idempotency tokens but configures no mutation replay store, so duplicate enhanced POSTs can execute independently.** (high, starter/runtime integration; found by `dogfood-idempotency`)
   - Observed behavior: concurrent enhanced mutation POSTs with the same `Kovo-Idem` against a real generated postgres starter produce one success and one independent `409 STALE_VERSION` (`dev`: `[409, 200]`; prod artifact: `[200, 409]`) instead of reserving/coalescing and replaying the settled success.
   - Source pointer: generated `src/app.tsx` and `packages/create-kovo/templates/src/app.tsx` do not pass `mutationReplayStore`; framework replay is disabled without a store (`packages/server/src/replay.ts`), and `packages/server/src/app-mutation-request.ts` only threads replay when configured.
   - Distinctness: `plans/papercuts-super-8.md` recorded concurrency/idempotency as an uncovered gap; earlier replay ledgers covered implementation hardening, not the default starter shipping without replay wiring.
   - Acceptance: a fresh default postgres/PGlite starter configures a durable-enough local mutation replay store for dev/test/prod starter use, and generated-app tests prove duplicate same-idempotency enhanced POSTs coalesce/replay instead of executing twice.
+  - Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts --run --reporter=dot` proves the generated postgres/PGlite prod artifact serves two concurrent same-`Kovo-Idem` enhanced add-contact POSTs as identical replayed 200 responses with one committed contact; `pnpm exec vitest run packages/create-kovo/src/index.test.ts --run --reporter=dot` proves the scaffolded `src/app.tsx` wires `createMemoryMutationReplayStore()`.
 
 ## Latest Verification
 
