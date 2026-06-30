@@ -520,14 +520,13 @@ export async function commerceKeyedOptimisticBehaviorFact(options: {
   });
 
   const productDomain = runtime.domain('product');
-  const productP1 = runtime.query('productDetail', {
-    instanceKey: () => 'product:p1',
-    load: () => ({ id: 'p1', stock: 0 }),
-    reads: [productDomain],
-  });
-  const productP2 = runtime.query('productDetail', {
-    instanceKey: () => 'product:p2',
-    load: () => ({ id: 'p2', stock: 10 }),
+  const productDetail = runtime.query('productDetail', {
+    args: runtime.s.object({ productId: runtime.s.string() }),
+    instanceKey: (input: { productId: string }) => `product:${input.productId}`,
+    load: (input: { productId: string }) => ({
+      id: input.productId,
+      stock: input.productId === 'p2' ? 10 : 0,
+    }),
     reads: [productDomain],
   });
   const reserveProduct = runtime.mutation('product/reserve', {
@@ -539,7 +538,7 @@ export async function commerceKeyedOptimisticBehaviorFact(options: {
     input: runtime.s.object({ productId: runtime.s.string() }),
     registry: {
       inferredTouches: [{ domain: 'product', keys: 'arg:productId' }],
-      queries: [productP1, productP2],
+      queries: [productDetail],
     },
   });
   const mutationResult = await runtime.runMutation(reserveProduct, { productId: 'p1' }, {});

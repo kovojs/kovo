@@ -366,7 +366,7 @@ export interface GeneratedQueryUpdatePlanRuntime {
   }) => {
     appliedFragments: string[];
     chunks: Array<{
-      fragments: Array<{ html: string; mode?: string; target: string }>;
+      fragments: Array<{ html: string | { toString(): string }; mode?: string; target: string }>;
       queries: string[];
     }>;
     queries: string[];
@@ -436,6 +436,10 @@ export interface GeneratedWireDeferredBehaviorFact {
   queryNames: string[];
   storeValues: Record<string, unknown>;
   stylesheetHrefsByTarget: Record<string, string[]>;
+}
+
+function renderedFragmentHtmlContent(html: string | { toString(): string }): string {
+  return typeof html === 'string' ? html : html.toString();
 }
 
 export interface GeneratedMinifierNamePreservationBehaviorFact {
@@ -1264,7 +1268,12 @@ export function generatedServerDeferredBehaviorFact(
 
   return {
     appliedFragments: applied.appliedFragments,
-    chunkFragments: applied.chunks.map((chunk) => chunk.fragments),
+    chunkFragments: applied.chunks.map((chunk) =>
+      chunk.fragments.map((fragment) => ({
+        ...fragment,
+        html: renderedFragmentHtmlContent(fragment.html),
+      })),
+    ),
     chunkQueries: applied.chunks.map((chunk) => chunk.queries),
     fragmentHtmlByTarget: {
       reviews: root.targets.get('reviews')?.html ?? '',

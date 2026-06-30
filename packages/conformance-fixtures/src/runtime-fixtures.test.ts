@@ -165,20 +165,22 @@ describe('@kovojs/test runtime fixture facts', () => {
         const fixtureMutation = mutation as {
           registry: {
             queries: Array<{
-              instanceKey(): string;
+              instanceKey(input: { productId: string }): string;
               key: string;
-              load(): unknown;
+              load(input: { productId: string }): unknown;
             }>;
           };
         };
         const fixtureOptions = options as { rawInput: { productId: string } };
         const query = fixtureMutation.registry.queries.find(
-          (candidate) => candidate.instanceKey() === `product:${fixtureOptions.rawInput.productId}`,
+          (candidate) =>
+            candidate.instanceKey(fixtureOptions.rawInput) ===
+            `product:${fixtureOptions.rawInput.productId}`,
         );
         return {
-          body: `<kovo-query name="${query?.key}" key="${query?.instanceKey()}">${JSON.stringify(
-            query?.load(),
-          )}</kovo-query>`,
+          body: `<kovo-query name="${query?.key}" key="${query?.instanceKey(
+            fixtureOptions.rawInput,
+          )}">${JSON.stringify(query?.load(fixtureOptions.rawInput))}</kovo-query>`,
           headers: {
             'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
             'Kovo-Changes': '[{"domain":"product","keys":["p1"]}]',
