@@ -122,7 +122,13 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [scaffold, prod-artifact, runtime]
+        include:
+          - shard: scaffold
+            file: packages/create-kovo/src/index.build.scaffold.test.ts
+          - shard: prod-artifact
+            file: packages/create-kovo/src/index.build.prod-artifact.test.ts
+          - shard: runtime
+            file: packages/create-kovo/src/index.build.runtime.test.ts
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
@@ -141,9 +147,7 @@ jobs:
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - name: Generated starter proofs (${{ matrix.shard }})
-        run: |
-          pattern="$(vp exec node scripts/starter-build-shards.mjs pattern ${{ matrix.shard }})"
-          vp exec vitest --run packages/create-kovo/src/index.build.test.ts --testNamePattern "$pattern"
+        run: vp exec vitest --run ${{ matrix.file }}
 
   build:
     runs-on: ubuntu-latest
