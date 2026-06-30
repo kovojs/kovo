@@ -369,7 +369,7 @@ test brittleness, and distribution confusion.
     derived from the same schema.
   - SPEC/rules: `SPEC.md` section 11.4; `rules/api-surface.md`; `rules/docs-style.md`.
 
-- [ ] **P2.3 - Centralize generated-artifact policy into one manifest-backed gate.**
+- [x] **P2.3 - Centralize generated-artifact policy into one manifest-backed gate.**
   - Affected: `scripts/no-committed-generated.mjs`, `scripts/prod-emit-check.mjs`,
     compiler/build artifact checks.
   - Why high value: generated-output policy is split across hardcoded globs/regexes and narrow compiler
@@ -381,6 +381,7 @@ test brittleness, and distribution confusion.
     generation contract.
   - Verification: table-driven path classification tests and a broader emit corpus reusing shared
     filename/source assertions.
+  - Evidence: `pnpm exec vitest --run scripts/generated-artifacts.test.mjs scripts/no-committed-generated.test.mjs scripts/prod-emit-check.test.mjs scripts/import-boundary.test.mjs`, `pnpm run check:no-committed-generated`, and `vp run build` pass with the shared generated-artifact policy manifest.
   - SPEC/rules: `SPEC.md` sections 1.3 and 5.2 rules 3, 7, 8; `rules/compiler-hard-rules.md`.
 
 - [ ] **P2.4 - Narrow devtool and headless public seams.**

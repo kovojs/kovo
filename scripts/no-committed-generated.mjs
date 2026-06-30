@@ -1,12 +1,15 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 
-export const inScopeGeneratedPatterns = [
-  'examples/*/src/generated/**',
-  'site/src/generated/**',
-  'site/tutorial/steps/*/src/generated/**',
-  'packages/create-kovo/templates/graph.json',
-];
+import {
+  GENERATED_ARTIFACT_CATEGORIES,
+  generatedArtifactPathsInCategory,
+  generatedArtifactPathspecs,
+} from './generated-artifacts.mjs';
+
+export const inScopeGeneratedPatterns = generatedArtifactPathspecs(
+  GENERATED_ARTIFACT_CATEGORIES.mustNotCommit,
+);
 
 export function committedGeneratedArtifacts({ cwd = process.cwd() } = {}) {
   const output = execFileSync('git', ['ls-files', ...inScopeGeneratedPatterns], {
@@ -20,13 +23,7 @@ export function committedGeneratedArtifacts({ cwd = process.cwd() } = {}) {
 }
 
 export function trackedGeneratedViolations(files) {
-  const matchers = [
-    /^examples\/[^/]+\/src\/generated\//,
-    /^site\/src\/generated\//,
-    /^site\/tutorial\/steps\/[^/]+\/src\/generated\//,
-    /^packages\/create-kovo\/templates\/graph\.json$/,
-  ];
-  return files.filter((file) => matchers.some((matcher) => matcher.test(file)));
+  return generatedArtifactPathsInCategory(files, GENERATED_ARTIFACT_CATEGORIES.mustNotCommit);
 }
 
 export function runNoCommittedGeneratedCheck(options = {}) {
