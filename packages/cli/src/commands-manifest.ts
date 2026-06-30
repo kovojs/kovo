@@ -101,6 +101,10 @@ export interface CommandManifestEntry {
   examples?: readonly string[];
   /** Whether the command is dispatched through `mainAsync` (async) vs `main`. */
   async?: boolean;
+  /** Display rank for `kovo` with no args. */
+  noArgsOrder: number;
+  /** Display rank for unknown-command diagnostics. */
+  unknownOrder: number;
 }
 
 /**
@@ -108,11 +112,13 @@ export interface CommandManifestEntry {
  * command `main`/`mainAsync` dispatches: check, explain, add, build, audit,
  * compile, export, mcp, update-docs.
  */
-export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
+export const COMMANDS_MANIFEST = [
   {
     name: 'check',
+    noArgsOrder: 4,
     summary:
       'Run the consistency and exhaustiveness verifier over an extracted app graph and report findings.',
+    unknownOrder: 5,
     usage: CHECK_USAGE,
     flags: [
       {
@@ -142,7 +148,9 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   },
   {
     name: 'explain',
+    noArgsOrder: 6,
     summary: 'Print the stable graph view for a single subject, or run the security review modes.',
+    unknownOrder: 4,
     usage: EXPLAIN_USAGE,
     flags: [
       { flag: '--optimistic', description: 'Include optimistic-update detail for the subject.' },
@@ -199,7 +207,9 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   },
   {
     name: 'add',
+    noArgsOrder: 1,
     summary: 'Copy a vendored @kovojs/ui component into your project (shadcn-style copy-in).',
+    unknownOrder: 1,
     usage: ADD_USAGE,
     flags: [
       {
@@ -212,8 +222,10 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   },
   {
     name: 'build',
+    noArgsOrder: 3,
     summary:
       'Run TypeScript and kovo-check preflights, then build a Kovo app module into preset production output.',
+    unknownOrder: 2,
     usage: BUILD_USAGE,
     async: true,
     flags: [
@@ -236,8 +248,10 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   },
   {
     name: 'compile',
+    noArgsOrder: 5,
     summary:
       'Emit compiler-backed app artifacts without importing @kovojs/compiler from app scripts.',
+    unknownOrder: 3,
     usage: COMPILE_USAGE,
     async: true,
     flags: [
@@ -295,7 +309,9 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   },
   {
     name: 'audit',
+    noArgsOrder: 2,
     summary: 'Run the security/access audits over an extracted app graph.',
+    unknownOrder: 6,
     usage: AUDIT_USAGE,
     flags: [
       {
@@ -307,7 +323,9 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   },
   {
     name: 'export',
+    noArgsOrder: 7,
     summary: 'Statically export a Kovo app module to disk for hosting.',
+    unknownOrder: 7,
     usage: EXPORT_USAGE,
     async: true,
     flags: [
@@ -349,17 +367,86 @@ export const COMMANDS_MANIFEST: readonly CommandManifestEntry[] = [
   },
   {
     name: 'mcp',
+    noArgsOrder: 8,
     summary:
       'Run the Model Context Protocol server: read newline-delimited JSON-RPC from stdin, write responses to stdout.',
+    unknownOrder: 8,
     usage: MCP_USAGE,
     async: true,
     examples: ['kovo mcp'],
   },
   {
     name: 'update-docs',
+    noArgsOrder: 9,
     summary: 'Refresh AGENTS.md and mirror the latest agent-readable Kovo docs into ./.kovo/docs.',
+    unknownOrder: 9,
     usage: UPDATE_DOCS_USAGE,
     async: true,
     examples: ['kovo update-docs'],
   },
-];
+] as const satisfies readonly CommandManifestEntry[];
+
+/** @internal Command names accepted by the `kovo` dispatcher. */
+export type KovoCommandName = (typeof COMMANDS_MANIFEST)[number]['name'];
+
+/** @internal One concrete command registry entry. */
+export type KovoCommandEntry = (typeof COMMANDS_MANIFEST)[number];
+
+/** @internal One concrete async command registry entry. */
+export type KovoAsyncCommandEntry = Extract<KovoCommandEntry, { async: true }>;
+
+/** @internal One concrete sync command registry entry. */
+export type KovoSyncCommandEntry = Exclude<KovoCommandEntry, KovoAsyncCommandEntry>;
+
+/** @internal Commands that must route through `mainAsync()`. */
+export type KovoAsyncCommandName = KovoAsyncCommandEntry['name'];
+
+/** @internal Commands that can route through `main()`. */
+export type KovoSyncCommandName = KovoSyncCommandEntry['name'];
+
+/** @internal Registry keyed by sub-command name for dispatch and diagnostics. */
+export const COMMAND_REGISTRY: ReadonlyMap<KovoCommandName, (typeof COMMANDS_MANIFEST)[number]> =
+  new Map(COMMANDS_MANIFEST.map((entry) => [entry.name, entry]));
+
+/** @internal Resolve an argv command token to its registry entry. */
+export function resolveCommand(name: string | undefined) {
+  if (name === undefined) return undefined;
+  return COMMAND_REGISTRY.get(name as KovoCommandName);
+}
+
+/** @internal True when a registry entry must route through `mainAsync()`. */
+export function isAsyncCommand(entry: KovoCommandEntry): entry is KovoAsyncCommandEntry {
+  return 'async' in entry && entry.async === true;
+}
+
+function commandNamesByOrder(orderKey: 'noArgsOrder' | 'unknownOrder'): KovoCommandName[] {
+  return [...COMMANDS_MANIFEST]
+    .sort((left, right) => left[orderKey] - right[orderKey] || left.name.localeCompare(right.name))
+    .map((entry) => entry.name);
+}
+
+function sentenceList(values: readonly string[]): string {
+  if (values.length === 0) return '';
+  if (values.length === 1) return values[0] ?? '';
+  return `${values.slice(0, -1).join(', ')}, or ${values[values.length - 1]}`;
+}
+
+/** @internal The command list emitted by `kovo` with no args. */
+export function formatNoArgsCommandList(): string {
+  return commandNamesByOrder('noArgsOrder').join(', ');
+}
+
+/** @internal The complete no-args message emitted by the bin. */
+export function formatNoArgsMessage(): string {
+  return `kovo: ${formatNoArgsCommandList()}\n`;
+}
+
+/** @internal The expected-command phrase emitted by unknown-command diagnostics. */
+export function formatExpectedCommandList(): string {
+  return sentenceList(commandNamesByOrder('unknownOrder'));
+}
+
+/** @internal Unknown-command diagnostic emitted by the bin. */
+export function formatUnknownCommandMessage(command: string): string {
+  return `kovo: unknown command ${JSON.stringify(command)}. expected ${formatExpectedCommandList()}.\n`;
+}

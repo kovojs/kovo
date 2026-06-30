@@ -6,6 +6,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 import { loadPublicPackages } from '../../scripts/public-packages.mjs';
+import { resolveSourceExportTarget } from '../../scripts/package-exports.mjs';
 
 import { slugify } from './md.mjs';
 
@@ -765,16 +766,8 @@ function resolvePackageEntry(pkg, entry) {
   }
   const pkgJson = JSON.parse(ts.sys.readFile(pkgJsonPath) ?? '{}');
   const exportedEntry = pkgJson.exports?.[entry.entryPath];
-  const target =
-    typeof exportedEntry === 'string'
-      ? exportedEntry
-      : exportedEntry && typeof exportedEntry === 'object'
-        ? (exportedEntry.source ??
-          exportedEntry.development ??
-          exportedEntry.import ??
-          exportedEntry.default)
-        : undefined;
-  if (typeof target !== 'string') {
+  const target = resolveSourceExportTarget(exportedEntry);
+  if (target === null) {
     throw new Error(
       `api-ref: ${pkg.name} has no resolvable "${entry.entryPath}" export in package.json`,
     );

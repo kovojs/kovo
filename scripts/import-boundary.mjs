@@ -3,6 +3,8 @@ import { readFile, readdir } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import ts from 'typescript';
+
 const appFacingRoots = [
   'examples',
   'packages/create-kovo/templates',
@@ -51,7 +53,7 @@ export async function collectImportBoundaryViolations({
     const source = await readFile(filePath, 'utf8');
     if (isGeneratedArtifact(relativePath, source)) continue;
 
-    for (const specifier of new Set(importSpecifiers(source))) {
+    for (const specifier of new Set(importSpecifiers(source, { fileName: relativePath }))) {
       const tier = importBoundaryTier(specifier);
       if (tier === null) continue;
       if (tier === 'internal' && isTestFile(relativePath)) continue;
@@ -142,19 +144,74 @@ function explicitImportBoundaryException(tier, allowKey) {
   };
 }
 
-export function importSpecifiers(source) {
+export function importSpecifiers(source, { fileName = 'source.ts' } = {}) {
+  if (path.extname(fileName) === '.md') return markdownImportSpecifiers(source);
+  return sourceImportSpecifiers(source, fileName);
+}
+
+function sourceImportSpecifiers(source, fileName) {
   const specifiers = [];
-  const patterns = [
-    /\bimport\s+(?:type\s+)?(?:[^'"()]*?\s+from\s+)?['"]([^'"]+)['"]/g,
-    /\bexport\s+(?:type\s+)?[^'"()]*?\s+from\s+['"]([^'"]+)['"]/g,
-    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/g,
-  ];
-  for (const pattern of patterns) {
-    for (const match of source.matchAll(pattern)) {
-      if (match[1]) specifiers.push(match[1]);
+  const sourceFile = ts.createSourceFile(
+    fileName,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    scriptKindForFileName(fileName),
+  );
+
+  const pushStringLiteral = (node) => {
+    if (node && ts.isStringLiteralLike(node)) specifiers.push(node.text);
+  };
+
+  const visit = (node) => {
+    if (ts.isImportDeclaration(node) || ts.isExportDeclaration(node)) {
+      pushStringLiteral(node.moduleSpecifier);
+    } else if (ts.isImportTypeNode(node)) {
+      const argument = node.argument;
+      if (ts.isLiteralTypeNode(argument)) pushStringLiteral(argument.literal);
+    } else if (
+      ts.isCallExpression(node) &&
+      node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+      node.arguments.length > 0
+    ) {
+      pushStringLiteral(node.arguments[0]);
+    } else if (ts.isImportEqualsDeclaration(node)) {
+      const reference = node.moduleReference;
+      if (ts.isExternalModuleReference(reference)) pushStringLiteral(reference.expression);
     }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(sourceFile);
+  return specifiers;
+}
+
+function markdownImportSpecifiers(source) {
+  const specifiers = [];
+  const fence = /^```([^\n`]*)\n([\s\S]*?)^```/gm;
+  for (const match of source.matchAll(fence)) {
+    const info = (match[1] ?? '').trim().split(/\s+/)[0] ?? '';
+    const extension = markdownFenceExtension(info);
+    if (extension === null) continue;
+    specifiers.push(...sourceImportSpecifiers(match[2] ?? '', `fence.${extension}`));
   }
   return specifiers;
+}
+
+function markdownFenceExtension(info) {
+  const normalized = info.toLowerCase();
+  if (['js', 'javascript', 'mjs', 'cjs'].includes(normalized)) return 'js';
+  if (['jsx'].includes(normalized)) return 'jsx';
+  if (['ts', 'typescript', 'mts', 'cts'].includes(normalized)) return 'ts';
+  if (['tsx'].includes(normalized)) return 'tsx';
+  return null;
+}
+
+function scriptKindForFileName(fileName) {
+  if (/\.[cm]?tsx$/.test(fileName)) return ts.ScriptKind.TSX;
+  if (fileName.endsWith('.jsx')) return ts.ScriptKind.JSX;
+  if (/\.[cm]?ts$/.test(fileName)) return ts.ScriptKind.TS;
+  return ts.ScriptKind.JS;
 }
 
 function shouldCheckFile(relativePath) {
