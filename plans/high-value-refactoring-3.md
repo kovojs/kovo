@@ -74,7 +74,7 @@ invariant.
     cross-resolve mutation failure placeholders from another render.
   - Evidence: `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts packages/server/src/mutation-response.test.ts packages/server/src/app-mutation-request.test.ts packages/core/src/index.test.ts`, `pnpm run check:vp`, and `git diff --check` passed on 2026-06-30.
 
-- [ ] **P0.6 - Unify route pattern parsing, normalization, and typed href contracts.**
+- [x] **P0.6 - Unify route pattern parsing, normalization, and typed href contracts.**
   - Current signals: `packages/core/src/index.ts` type-level `PathParamNames`/`buildHref()`
     comments require mirroring server parsing, while `packages/server/src/match.ts` separately
     normalizes route patterns, slash runs, dot segments, and parameter matching.
@@ -83,9 +83,7 @@ invariant.
     static export route planning, and ambiguity checks consume the same parser.
   - Risk reduced: typed navigation, server matching, redirects, and static export cannot disagree on
     param names, encoding, dot segments, or canonical path identity.
-  - Verification: route parser corpus covers repeated slashes, dot segments, encoded params,
-    optional/invalid params, static-vs-dynamic ambiguity, and redirect hrefs. Run the focused
-    core/server/browser route contract test set.
+  - Evidence: `pnpm exec vitest --run packages/core/src/internal/route-pattern.test.ts packages/core/src/index.test.ts packages/server/src/match.test.ts packages/server/src/route.test.ts packages/server/src/static-export-route-plan.test.ts packages/compiler/src/navigation-lowering.test.ts scripts/public-packages.test.mjs`, `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/app-graph.test.ts`, `pnpm --filter @kovojs/core run build:dist`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check` passed on 2026-06-30.
 
 ## P1 - Cross-Package Drift and Large Runtime Extraction
 

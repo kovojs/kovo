@@ -26,6 +26,7 @@
     "./internal/package-prefix": "./src/internal/package-prefix.ts",
     "./internal/query-delta": "./src/internal/query-delta.ts",
     "./internal/render-plan-token": "./src/internal/render-plan-token.ts",
+    "./internal/route-pattern": "./src/internal/route-pattern.ts",
     "./internal/security-url": "./src/internal/security-url.ts",
     "./internal/semantic-attributes": "./src/internal/semantic-attributes.ts",
     "./internal/sink-policy": "./src/internal/sink-policy.ts",
@@ -100,6 +101,10 @@
         "types": "./dist/internal/render-plan-token.d.mts",
         "default": "./dist/internal/render-plan-token.mjs"
       },
+      "./internal/route-pattern": {
+        "types": "./dist/internal/route-pattern.d.mts",
+        "default": "./dist/internal/route-pattern.mjs"
+      },
       "./internal/security-url": {
         "types": "./dist/internal/security-url.d.mts",
         "default": "./dist/internal/security-url.mjs"
@@ -131,7 +136,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/event.ts src/internal/fragment-target.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/render-plan-token.ts src/internal/security-url.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/wire-json.ts --dts",
+    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/event.ts src/internal/fragment-target.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-url.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/wire-json.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {

@@ -1,5 +1,5 @@
 import type { KovoApp } from './app-types.js';
-import { matchRoute, normalizePathname } from './match.js';
+import { matchRoute, normalizePathname, parseRoutePattern } from './match.js';
 import {
   staticExportDiagnostic,
   type StaticExportDiagnostic,
@@ -221,7 +221,5 @@ function unsafeStaticExportRouteTargetDiagnostic(
 }
 
 function routeHasParams(path: string): boolean {
-  return normalizePathname(path)
-    .pathname.split('/')
-    .some((segment) => segment.startsWith(':') && segment.length > 1);
+  return parseRoutePattern(path).hasParams;
 }
