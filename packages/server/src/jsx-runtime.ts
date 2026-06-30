@@ -65,6 +65,7 @@ const voidElements = new Set([
 const kovoFormKeyFieldName = 'kovo-form-key';
 const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
 const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
+const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
 
 /** @generated JSX automatic-runtime ABI node type (compiler-emitted). */
 export type JsxNode =
@@ -673,9 +674,32 @@ async function loadComponentQueries(
     if (!result.ok) {
       throw new Error(`Route JSX component query failed: ${resolved.query.key}`);
     }
+    if (result.warnings && result.warnings.length > 0)
+      recordQueryRuntimeWarnings(request, result.warnings);
     values[name] = result.value;
   }
   return values;
+}
+
+function recordQueryRuntimeWarnings(
+  request: unknown,
+  warnings: readonly { code: 'QUERY_LIST_LIMIT'; limit: number; path: string }[],
+): void {
+  if (typeof request !== 'object' || request === null) return;
+  const target = request as {
+    [queryRuntimeWarningsKey]?: { code: 'QUERY_LIST_LIMIT'; limit: number; path: string }[];
+  };
+  const existing = target[queryRuntimeWarningsKey];
+  if (existing === undefined) {
+    Object.defineProperty(target, queryRuntimeWarningsKey, {
+      configurable: true,
+      enumerable: false,
+      value: [...warnings],
+      writable: true,
+    });
+    return;
+  }
+  existing.push(...warnings);
 }
 
 function componentQueryBinding(
