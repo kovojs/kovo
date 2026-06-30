@@ -11,6 +11,8 @@ import { pathToFileURL } from 'node:url';
 import { type Browser, chromium } from '@playwright/test';
 import { describe, expect, it, vi } from 'vitest';
 
+import { compileComponentModule } from '@kovojs/compiler';
+
 import { mainAsync } from './index.js';
 
 const repoRoot = process.cwd();
@@ -53,6 +55,57 @@ function writeClientEntry(root: string): void {
     'utf8',
   );
   writeFileSync(join(root, 'src/style.css'), 'main { color: rebeccapurple; }\n', 'utf8');
+}
+
+function authoredIslandSource(): string {
+  return [
+    '/** @jsxImportSource @kovojs/server */',
+    "import { component } from '@kovojs/core';",
+    '',
+    'export const CounterIsland = component({',
+    "  state: () => ({ count: 0, label: 'ready' }),",
+    '  render: (_queries, state) => (',
+    '    <section>',
+    '      <button',
+    '        data-testid="counter"',
+    '        type="button"',
+    '        onClick={() => {',
+    '          state.count += 1;',
+    '        }}',
+    '      >',
+    '        {state.count}',
+    '      </button>',
+    '      <input',
+    '        aria-label="label"',
+    '        value={state.label}',
+    '        onInput={() => {',
+    "          state.label += '!';",
+    '        }}',
+    '      />',
+    '      <output data-testid="label">{state.label}</output>',
+    '    </section>',
+    '  ),',
+    '});',
+    '',
+  ].join('\n');
+}
+
+function authoredIslandRefs(): { click: string; input: string } {
+  const result = compileComponentModule({
+    fileName: 'src/components/counter-island.tsx',
+    source: authoredIslandSource(),
+  });
+  expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
+  const href = result.hmrImpact?.clientHref;
+  if (!href) throw new Error('expected compiled client href for authored island fixture');
+  const click = result.handlerExports.find((name) => name.endsWith('$button_click'));
+  const input = result.handlerExports.find((name) => name.endsWith('$input_input'));
+  if (!click || !input) throw new Error('expected click and input handlers for island fixture');
+
+  return {
+    click: `${href}#${click}`,
+    input: `${href}#${input}`,
+  };
 }
 
 async function listen(server: Server): Promise<string> {
@@ -139,6 +192,139 @@ describe('kovo build — browser drive (S1)', () => {
       );
       expect(counterModule, 'loader import()ed the versioned /c/ module').toBeTruthy();
       expect(counterModule?.cacheControl).toContain('immutable');
+    } finally {
+      await browser?.close();
+      if (server) await close(server);
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('hydrates compiler-emitted client islands without bare generated ABI imports', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-browser-authored-island-'));
+    const appPath = join(root, 'src/app.tsx');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    let server: Server | undefined;
+    let browser: Browser | undefined;
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeRetentionProofConfig(root);
+      mkdirSync(join(root, 'src/components'), { recursive: true });
+      const refs = authoredIslandRefs();
+      writeFileSync(
+        appPath,
+        [
+          '/** @jsxImportSource @kovojs/server */',
+          "import { createApp, publicAccess, route } from '@kovojs/server';",
+          "import { trustedHtml } from '@kovojs/browser';",
+          "import { CounterIsland } from './components/counter-island.tsx';",
+          '',
+          'void CounterIsland;',
+          '',
+          'export default createApp({',
+          '  routes: [',
+          "    route('/', {",
+          "      access: publicAccess('browser authored island fixture'),",
+          '      page: () =>',
+          '        trustedHtml(',
+          '          ' +
+            JSON.stringify(
+              `<main><section kovo-c="counter-island" kovo-state="{&quot;count&quot;:0,&quot;label&quot;:&quot;ready&quot;}">` +
+                `<button data-testid="counter" type="button" on:click="${refs.click}">bump</button>` +
+                `<output data-testid="count" data-bind="state.count">0</output>` +
+                `<input aria-label="label" value="ready" on:input="${refs.input}" data-bind:value="state.label">` +
+                `<output data-testid="label" data-bind="state.label">ready</output>` +
+                `</section></main>`,
+            ) +
+            ',',
+          '        ),',
+          '    }),',
+          '  ],',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src/components/counter-island.tsx'),
+        authoredIslandSource(),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './src/app.tsx', '--out', './dist']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode, errorOutput).toBe(0);
+
+      const serverModule = (await import(
+        `${pathToFileURL(join(outDir, 'server/server.mjs')).href}?t=${Date.now()}`
+      )) as { createKovoNodeServer(): Server };
+      server = serverModule.createKovoNodeServer();
+      const origin = await listen(server);
+
+      browser = await chromium.launch();
+      const page = await browser.newPage();
+      const pageErrors: string[] = [];
+      const consoleErrors: string[] = [];
+      const reservedRequests: string[] = [];
+      const clientModules: Array<{ source: string; url: string }> = [];
+      page.on('pageerror', (error) => pageErrors.push(error.message));
+      page.on('console', (message) => {
+        if (message.type() === 'error') consoleErrors.push(message.text());
+      });
+      page.on('request', (request) => {
+        const url = new URL(request.url());
+        if (url.pathname.startsWith('/_m') || url.pathname.startsWith('/_q')) {
+          reservedRequests.push(`${request.method()} ${url.pathname}`);
+        }
+      });
+      page.on('response', async (response) => {
+        if (!response.url().includes('/c/__v/') || !response.url().endsWith('.client.js')) return;
+        clientModules.push({ source: await response.text(), url: response.url() });
+      });
+
+      await page.goto(`${origin}/`);
+      await page.getByTestId('counter').click();
+      await expect
+        .poll(
+          async () =>
+            JSON.stringify({
+              clientModuleUrls: clientModules.map((module) => module.url),
+              consoleErrors,
+              moduleSource: clientModules
+                .find((module) => module.url.includes('counter-island.client.js'))
+                ?.source.slice(0, 1000),
+              pageErrors,
+              state: await page.locator('section').getAttribute('kovo-state'),
+              text: (await page.getByTestId('count').textContent())?.trim(),
+            }),
+          { timeout: 10_000 },
+        )
+        .toContain('"text":"1"');
+      await page.getByLabel('label').fill('changed');
+      await page.waitForFunction(
+        () => document.querySelector('[data-testid="label"]')?.textContent?.trim() === 'ready!',
+        undefined,
+        { timeout: 10_000 },
+      );
+
+      const islandModule = clientModules.find((module) =>
+        module.url.includes('counter-island.client.js'),
+      );
+      expect(islandModule?.source).toContain('const handler = (fn) => fn;');
+      expect(islandModule?.source).not.toContain('@kovojs/browser/generated');
+      expect(pageErrors).toEqual([]);
+      expect(consoleErrors).toEqual([]);
+      expect(reservedRequests).toEqual([]);
     } finally {
       await browser?.close();
       if (server) await close(server);

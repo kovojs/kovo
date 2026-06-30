@@ -25,6 +25,7 @@ import {
 import { allComponentOptionObjectEntries, parseComponentModule } from './scan/parse.js';
 import { queryExpressionFromBinding } from './scan/query-binding.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
+import { rewriteClientModuleRuntimeImportsForBrowser } from './emit/client.js';
 import { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
 import type {
   HmrImpactClassification,
@@ -858,6 +859,7 @@ function recordViteCompileResult(
         result.hmrImpact?.clientHref ??
         clientModuleHrefForSourceFile(fileName, clientModuleContentVersion(file.source));
       clientModules.set(href, file.source);
+      const productionSource = rewriteClientModuleRuntimeImportsForBrowser(file.source);
 
       const target = parseVersionedClientModuleTarget(href);
       if (target !== undefined) {
@@ -876,7 +878,7 @@ function recordViteCompileResult(
         ...(result.renderPlanFingerprint
           ? { renderPlanFingerprint: result.renderPlanFingerprint }
           : {}),
-        source: file.source,
+        source: productionSource,
         ...(target?.version === undefined ? {} : { version: target.version }),
       });
       recordedCompiledClientModule = true;

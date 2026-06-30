@@ -21,6 +21,8 @@ import type {
 } from '../types.js';
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
+const RUNTIME_GENERATED_IMPORT_PATTERN =
+  /import\s*\{\s*([^}]+?)\s*\}\s*from\s*['"]@kovojs\/browser\/generated['"];\n\n?/g;
 
 export function emitClientModule(
   handlers: HandlerLowering[],
@@ -66,6 +68,171 @@ export function emitClientModule(
 ${importLine}${dependencyImportLines}${dependencyConstantLines}${exports || '// no client handlers emitted'}
 `;
 }
+
+/**
+ * SPEC §5.2/#8 allows compiler-emitted modules to use the generated browser ABI, but SPEC §9.5
+ * serves production client modules directly from `/c/__v/...` without Vite import rewriting.
+ * Rewrite that compiler-owned ABI import into local helper definitions before production
+ * registration so the browser never sees a bare package specifier in an immutable client module.
+ */
+export function rewriteClientModuleRuntimeImportsForBrowser(source: string): string {
+  return source.replace(RUNTIME_GENERATED_IMPORT_PATTERN, (_match, specifiers: string) =>
+    runtimeGeneratedHelperSource(importedRuntimeGeneratedNames(specifiers)),
+  );
+}
+
+function importedRuntimeGeneratedNames(specifiers: string): readonly string[] {
+  return specifiers
+    .split(',')
+    .map(
+      (specifier) =>
+        specifier
+          .trim()
+          .split(/\s+as\s+/i)[0]
+          ?.trim() ?? '',
+    )
+    .filter(Boolean)
+    .sort();
+}
+
+function runtimeGeneratedHelperSource(names: readonly string[]): string {
+  const helpers: string[] = [];
+  const missing: string[] = [];
+  for (const name of names) {
+    const helper = RUNTIME_GENERATED_HELPERS[name];
+    if (helper === undefined) {
+      missing.push(name);
+      continue;
+    }
+    helpers.push(helper);
+  }
+  if (missing.length > 0) {
+    throw new Error(
+      `Cannot emit browser-resolvable client module helpers for generated ABI import(s): ${missing.join(
+        ', ',
+      )}`,
+    );
+  }
+
+  return `${dedupeBy(helpers, (helper) => helper).join('\n')}\n\n`;
+}
+
+const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
+  applyCompiledQueryUpdatePlan: `const applyCompiledQueryUpdatePlan = (root, queryName, value, plan = {}, options = {}) => {
+  const applied = { bindings: [], derives: [], stamps: [], templateStamps: [] };
+  const qsa = (scope, selector) => Array.from(scope.querySelectorAll?.(selector) ?? []);
+  const pathValue = (input, path) =>
+    path.split('.').reduce((current, segment) => {
+      const key = segment.endsWith('?') ? segment.slice(0, -1) : segment;
+      return current && typeof current === 'object' ? current[key] : undefined;
+    }, input);
+  const format = (input) => input == null ? '' : typeof input === 'object' ? JSON.stringify(input) : String(input);
+  const unsafeUrl = (input) => {
+    const normalized = String(input).replace(/[\\x00-\\x20]/g, '').toLowerCase();
+    return /^[a-z][a-z0-9+.-]*:/.test(normalized) && !/^(https?|ftp|mailto|tel):/.test(normalized);
+  };
+  const writeAttr = (element, name, input) => {
+    if (/^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/i.test(name)) {
+      element.removeAttribute?.(name);
+      return;
+    }
+    const rendered = format(input);
+    if (/^(href|src|action|formaction|poster|background|cite|data|ping|xlink:href)$/i.test(name) && unsafeUrl(rendered)) {
+      element.setAttribute?.(name, '#');
+      return;
+    }
+    element.setAttribute?.(name, rendered);
+  };
+  const write = (element, input) => {
+    const rendered = format(input);
+    if (element.value !== undefined) element.value = rendered;
+    else element.textContent = rendered;
+  };
+  const bindingOptions = { ...(options.queryKey === undefined ? {} : { queryKey: options.queryKey }) };
+  const belongsToQueryKey = (element) => !bindingOptions.queryKey || element.getAttribute?.('data-query-key') === bindingOptions.queryKey;
+  if (plan.bindings !== false) {
+    for (const element of qsa(root, '[data-bind]')) {
+      if (!belongsToQueryKey(element)) continue;
+      const path = element.getAttribute('data-bind');
+      if (!path?.startsWith(queryName + '.')) continue;
+      write(element, pathValue(value, path.slice(queryName.length + 1)));
+      applied.bindings.push(path);
+    }
+    for (const element of qsa(root, '*')) {
+      if (!belongsToQueryKey(element)) continue;
+      for (const attribute of Array.from(element.attributes ?? [])) {
+        if (!attribute.name.startsWith('data-bind:')) continue;
+        const bound = attribute.name.slice('data-bind:'.length);
+        const path = attribute.value;
+        if (!path.startsWith(queryName + '.')) continue;
+        const selected = pathValue(value, path.slice(queryName.length + 1));
+        if (selected == null) element.removeAttribute?.(bound);
+        else writeAttr(element, bound, selected);
+        applied.bindings.push(path);
+      }
+    }
+  }
+  const context = options.queryStore ? { queryStore: options.queryStore } : {};
+  for (const derive of plan.derives ?? []) {
+    const selected = derive.select(value, root, context);
+    for (const element of qsa(root, derive.selector ?? '[data-derive="' + queryName + '.' + derive.name + '"]')) {
+      write(element, selected);
+      applied.derives.push(derive.name);
+    }
+  }
+  for (const stamp of plan.stamps ?? []) {
+    const selected = stamp.select(value, root, context);
+    for (const element of qsa(root, stamp.selector)) {
+      if (selected == null) element.removeAttribute?.(stamp.attr);
+      else writeAttr(element, stamp.attr, selected);
+      applied.stamps.push(stamp.attr);
+    }
+  }
+  for (const stamp of plan.templateStamps ?? []) {
+    const list = pathValue(value, stamp.list);
+    if (!Array.isArray(list)) continue;
+    const items = list.map((item, index) => ({
+      html: stamp.render(item, index),
+      index,
+      key: String(typeof stamp.key === 'function' ? stamp.key(item, index) : pathValue(item, stamp.key)),
+      value: item,
+    }));
+    for (const host of qsa(root, stamp.selector)) {
+      host.reconcileTemplateStamp?.(items);
+      applied.templateStamps.push(stamp.list);
+    }
+  }
+  return applied;
+};`,
+  derive: `const derive = (inputs, fn) => ({ inputs, run: fn });`,
+  handler: `const handler = (fn) => fn;`,
+  installClockUpdatePlans: `const installClockUpdatePlans = (root, plans, context = {}) => {
+  const intervals = [];
+  const intervalMs = (value) => typeof value === 'number' ? value : String(value ?? '').endsWith('s') ? Number(String(value).slice(0, -1)) * 1000 : Number(value);
+  for (const plan of plans) {
+    const entries = Object.entries(plan.clocks ?? {}).filter(([, spec]) => spec?.every);
+    for (const [, spec] of entries) {
+      const ms = intervalMs(spec.every);
+      if (!Number.isFinite(ms) || ms <= 0) continue;
+      const tick = () => plan.update(root, Object.fromEntries(entries.map(([name]) => [name, new Date()])), context);
+      tick();
+      intervals.push(setInterval(tick, ms));
+    }
+  }
+  return () => intervals.forEach((id) => clearInterval(id));
+};`,
+  kovoBoundAttributeValue: `const kovoBoundAttributeValue = (value) => value == null ? null : String(value);`,
+  kovoEscapeHtml: `const kovoEscapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);`,
+  kovoSafeUrl: `const kovoSafeUrl = (value) => {
+  const rendered = String(value ?? '');
+  const normalized = rendered.replace(/[\\x00-\\x20]/g, '').toLowerCase();
+  return /^[a-z][a-z0-9+.-]*:/.test(normalized) && !/^(https?|ftp|mailto|tel):/.test(normalized) ? '#' : rendered;
+};`,
+  kovoStyleProperty: `const kovoStyleProperty = (value) => {
+  const rendered = String(value ?? '');
+  return /\\bexpression\\s*\\(/i.test(rendered) || /-moz-binding\\s*:/i.test(rendered) || /url\\(\\s*(?:"\\s*javascript:|'\\s*javascript:|javascript:)/i.test(rendered) ? '' : rendered;
+};`,
+};
 
 function emitClockUpdatePlanExport(
   componentName: string,
