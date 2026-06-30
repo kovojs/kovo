@@ -9,6 +9,7 @@ import { elementParamNameFromAttribute } from '../types.js';
 import type {
   ClientConstantDependency,
   ClientImportDependency,
+  ClientModuleImportManifestEntry,
   ElementParam,
   HandlerArrowBody,
   HandlerLowering,
@@ -31,21 +32,12 @@ export function emitClientModule(
   componentName: string,
   clockUpdatePlans: readonly ClockUpdatePlanFact[] = [],
 ): string {
-  const imports = [
-    ...(queryUpdatePlans.length > 0 ? ['runQueryUpdatePlan'] : []),
-    ...(stateDerives.length > 0 ||
-    queryUpdatePlans.some(
-      (plan) => (plan.derives?.length ?? 0) > 0 || (plan.stamps?.length ?? 0) > 0,
-    )
-      ? ['derive']
-      : []),
-    ...(queryUpdatePlans.some((plan) => (plan.templateStamps?.length ?? 0) > 0)
-      ? [runtimeOutputHelpers.escapeHtml]
-      : []),
-    ...runtimeOutputHelperImports([...queryUpdatePlans], stateDerives),
-    ...(handlers.length > 0 ? ['handler'] : []),
-    ...(clockUpdatePlans.length > 0 ? ['installClockUpdatePlans'] : []),
-  ].sort();
+  const imports = runtimeGeneratedImportNames(
+    handlers,
+    queryUpdatePlans,
+    stateDerives,
+    clockUpdatePlans,
+  );
   const importLine =
     imports.length > 0
       ? `import { ${imports.join(', ')} } from '${RUNTIME_GENERATED_IMPORT}';\n\n`
@@ -67,6 +59,33 @@ export function emitClientModule(
   return `${compilerIrHeader}
 ${importLine}${dependencyImportLines}${dependencyConstantLines}${exports || '// no client handlers emitted'}
 `;
+}
+
+export function emitClientModuleImportManifest(
+  handlers: readonly HandlerLowering[],
+  queryUpdatePlans: readonly QueryUpdatePlanFact[],
+  stateDerives: readonly StateDeriveFact[],
+  clockUpdatePlans: readonly ClockUpdatePlanFact[] = [],
+): readonly ClientModuleImportManifestEntry[] {
+  const runtimeImports = runtimeGeneratedImportNames(
+    handlers,
+    queryUpdatePlans,
+    stateDerives,
+    clockUpdatePlans,
+  );
+  return clientImportManifestEntries([
+    ...(runtimeImports.length > 0
+      ? [
+          {
+            imports: runtimeImports.map((name) => ({ importedName: name, localName: name })),
+            moduleSpecifier: RUNTIME_GENERATED_IMPORT,
+          },
+        ]
+      : []),
+    ...clientImportDependenciesManifest(
+      handlers.flatMap((handler) => [...(handler.clientImports ?? [])]),
+    ),
+  ]);
 }
 
 /**
@@ -332,6 +351,74 @@ function emitClientImportDependencies(imports: readonly ClientImportDependency[]
       return `import { ${specifiers} } from ${JSON.stringify(moduleSpecifier)};\n\n`;
     })
     .join('');
+}
+
+function clientImportDependenciesManifest(
+  imports: readonly ClientImportDependency[],
+): readonly ClientModuleImportManifestEntry[] {
+  const entriesByModule = new Map<string, ClientImportDependency[]>();
+
+  for (const item of dedupeBy(
+    imports,
+    (entry) => `${entry.moduleSpecifier}\0${entry.importedName}\0${entry.localName}`,
+  )) {
+    const moduleSpecifier = generatedHandlerModuleSpecifier(item);
+    entriesByModule.set(moduleSpecifier, [...(entriesByModule.get(moduleSpecifier) ?? []), item]);
+  }
+
+  return [...entriesByModule]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([moduleSpecifier, entries]) => ({
+      imports: entries
+        .sort((left, right) => left.localName.localeCompare(right.localName))
+        .map((entry) => ({ importedName: entry.importedName, localName: entry.localName })),
+      moduleSpecifier,
+    }));
+}
+
+function clientImportManifestEntries(
+  entries: readonly ClientModuleImportManifestEntry[],
+): readonly ClientModuleImportManifestEntry[] {
+  const merged = new Map<string, Map<string, { importedName: string; localName: string }>>();
+  for (const entry of entries) {
+    const imports = merged.get(entry.moduleSpecifier) ?? new Map();
+    for (const item of entry.imports) {
+      imports.set(`${item.importedName}\0${item.localName}`, item);
+    }
+    merged.set(entry.moduleSpecifier, imports);
+  }
+
+  return [...merged]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([moduleSpecifier, imports]) => ({
+      imports: [...imports.values()].sort((left, right) =>
+        left.localName.localeCompare(right.localName),
+      ),
+      moduleSpecifier,
+    }));
+}
+
+function runtimeGeneratedImportNames(
+  handlers: readonly HandlerLowering[],
+  queryUpdatePlans: readonly QueryUpdatePlanFact[],
+  stateDerives: readonly StateDeriveFact[],
+  clockUpdatePlans: readonly ClockUpdatePlanFact[],
+): readonly string[] {
+  return [
+    ...(queryUpdatePlans.length > 0 ? ['runQueryUpdatePlan'] : []),
+    ...(stateDerives.length > 0 ||
+    queryUpdatePlans.some(
+      (plan) => (plan.derives?.length ?? 0) > 0 || (plan.stamps?.length ?? 0) > 0,
+    )
+      ? ['derive']
+      : []),
+    ...(queryUpdatePlans.some((plan) => (plan.templateStamps?.length ?? 0) > 0)
+      ? [runtimeOutputHelpers.escapeHtml]
+      : []),
+    ...runtimeOutputHelperImports([...queryUpdatePlans], stateDerives),
+    ...(handlers.length > 0 ? ['handler'] : []),
+    ...(clockUpdatePlans.length > 0 ? ['installClockUpdatePlans'] : []),
+  ].sort();
 }
 
 function generatedHandlerModuleSpecifier(item: ClientImportDependency): string {

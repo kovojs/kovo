@@ -119,7 +119,7 @@ Priority is based on correctness/security impact first, then maintainability and
 
 ## P1 - Shared Maintainability and Drift Removal
 
-- [ ] **P1.1 - Replace gallery demo string rewriting with a module-resolution manifest.**
+- [x] **P1.1 - Replace gallery demo string rewriting with a module-resolution manifest.**
   - Current signals: `site/src/gallery.ts` rewrites emitted client imports with string
     `replaceAll()` calls for `@kovojs/browser`, `@kovojs/browser/generated`, and
     `@kovojs/headless-ui/internal/primitive`; `examples/gallery/src/interactive-gallery-harness.ts`
@@ -133,6 +133,11 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: gallery compile/artifact/browser tests and site static export tests pass; a
     gallery rewrite `rg` check returns no `legacyGeneratedBindingAliases`,
     `@kovojs/browser/generated`, or `headless-ui/internal/primitive` rewrite dependencies.
+  - Evidence:
+    `pnpm exec vitest --run packages/compiler/src/compile-component.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts`,
+    `pnpm --filter @kovojs/example-gallery run test:browser`, and
+    `pnpm exec vitest --run site/scripts/export-static.test.mjs site/src/route-kit.test.ts`
+    passed; the gallery rewrite `rg` check returned no matches.
 
 - [x] **P1.2 - Centralize TypeScript compiler API compatibility shims.**
   - Current signals: `packages/compiler/src` repeats `const mutableTs = ts as unknown as

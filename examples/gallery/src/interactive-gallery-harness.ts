@@ -4,6 +4,13 @@ import vm from 'node:vm';
 
 import { compileComponentModule } from '../../../packages/compiler/src/compile.ts';
 import * as primitiveActions from './primitive-actions.js';
+import {
+  createGalleryVmRequire,
+  galleryRuntimeStub,
+  primitiveActionsStub,
+  transpileGalleryClientModuleForVm,
+  type GalleryClientModuleManifest,
+} from './client-module-manifest.js';
 
 export const galleryRoot = resolve(import.meta.dirname, '..');
 const compiledInteractiveDemos = new Map<string, CompiledInteractiveDemo>();
@@ -39,6 +46,7 @@ export interface FakeDocument {
 
 interface CompiledInteractiveDemo {
   readonly client: string;
+  readonly clientModuleImportManifest: GalleryClientModuleManifest;
   readonly server: string;
 }
 
@@ -108,130 +116,17 @@ export function evaluateClientModule(
   fileName: string,
   globals: Record<string, unknown> = {},
 ): ClientExports {
-  const source = readCompiledArtifact(fileName)
-    .replace(/import \{[\s\S]*?\} from ["']@kovojs\/browser(?:\/generated)?["'];\n\n?/g, '')
-    .replace(/import \{[\s\S]*?\} from ["']@kovojs\/headless-ui\/[^"']+["'];\n\n?/g, '')
-    .replace(/import \{[\s\S]*?\} from ["']@kovojs\/ui\/[^"']+["'];\n\n?/g, '')
-    .replace(/import \{[\s\S]*?\} from ["'](?:\.\.\/)?primitive-actions(?:\.js)?["'];\n\n?/g, '')
-    .replaceAll('export const ', 'exports.');
+  const demo = compileInteractiveDemo(fileName);
+  const source = transpileGalleryClientModuleForVm(demo.client);
   const exports: ClientExports = {};
   vm.runInNewContext(source, {
-    derive: (inputs: readonly string[], run: (...values: unknown[]) => unknown) => ({
-      inputs,
-      run,
-    }),
     exports,
-    handler: (fn: ClientExports[string]) => fn,
+    module: { exports },
+    require: createGalleryVmRequire(demo.clientModuleImportManifest, [
+      galleryRuntimeStub(),
+      primitiveActionsStub(primitiveActions),
+    ]),
     setTimeout,
-    ...primitiveActions,
-    _accordionKeyDown: primitiveActions.accordionKeyDown,
-    _accordionTriggerClick: primitiveActions.accordionTriggerClick,
-    _alertDialogActionClick: primitiveActions.alertDialogActionClick,
-    _alertDialogCancel: primitiveActions.alertDialogCancel,
-    _alertDialogCancelClick: primitiveActions.alertDialogCancelClick,
-    _alertDialogTriggerClick: primitiveActions.alertDialogTriggerClick,
-    _autocompleteInput: primitiveActions.autocompleteInput,
-    _autocompleteKeyDown: primitiveActions.autocompleteKeyDown,
-    _autocompleteOptionClick: primitiveActions.autocompleteOptionClick,
-    _autocompleteSuggestions: primitiveActions.autocompleteSuggestions,
-    _checkboxGroupItemClick: primitiveActions.checkboxGroupItemClick,
-    _checkboxTriggerClick: primitiveActions.checkboxTriggerClick,
-    _collapsibleTriggerClick: primitiveActions.collapsibleTriggerClick,
-    _comboboxFilteredItems: primitiveActions.comboboxFilteredItems,
-    _comboboxInput: primitiveActions.comboboxInput,
-    _comboboxKeyDown: primitiveActions.comboboxKeyDown,
-    _comboboxOptionClick: primitiveActions.comboboxOptionClick,
-    _commandCloseClick: primitiveActions.commandCloseClick,
-    _commandFilteredItems: primitiveActions.commandFilteredItems,
-    _commandInput: primitiveActions.commandInput,
-    _commandItemClick: primitiveActions.commandItemClick,
-    _commandKeyDown: primitiveActions.commandKeyDown,
-    _commandTriggerClick: primitiveActions.commandTriggerClick,
-    _contextMenuFocusElement: primitiveActions.contextMenuFocusElement,
-    _contextMenuItemClick: primitiveActions.contextMenuItemClick,
-    _contextMenuItemKeyDown: primitiveActions.contextMenuItemKeyDown,
-    _contextMenuKeyDown: primitiveActions.contextMenuKeyDown,
-    _contextMenuMove: primitiveActions.contextMenuMove,
-    _contextMenuTriggerContextMenu: primitiveActions.contextMenuTriggerContextMenu,
-    _contextMenuTriggerKeyDown: primitiveActions.contextMenuTriggerKeyDown,
-    _contextMenuTypeahead: primitiveActions.contextMenuTypeahead,
-    _disclosureTriggerClick: primitiveActions.disclosureTriggerClick,
-    _dialogCancel: primitiveActions.dialogCancel,
-    _dialogCloseClick: primitiveActions.dialogCloseClick,
-    _dialogTriggerClick: primitiveActions.dialogTriggerClick,
-    _dropdownMenuFocusElement: primitiveActions.dropdownMenuFocusElement,
-    _dropdownMenuItemClick: primitiveActions.dropdownMenuItemClick,
-    _dropdownMenuItemKeyDown: primitiveActions.dropdownMenuItemKeyDown,
-    _dropdownMenuKeyDown: primitiveActions.dropdownMenuKeyDown,
-    _dropdownMenuMove: primitiveActions.dropdownMenuMove,
-    _dropdownMenuTriggerClick: primitiveActions.dropdownMenuTriggerClick,
-    _dropdownMenuTriggerKeyDown: primitiveActions.dropdownMenuTriggerKeyDown,
-    _dropdownMenuTypeahead: primitiveActions.dropdownMenuTypeahead,
-    _hoverCardContentPointerEnter: primitiveActions.hoverCardContentPointerEnter,
-    _hoverCardContentPointerLeave: primitiveActions.hoverCardContentPointerLeave,
-    _hoverCardEscapeKeyDown: primitiveActions.hoverCardEscapeKeyDown,
-    _hoverCardTriggerBlur: primitiveActions.hoverCardTriggerBlur,
-    _hoverCardTriggerFocus: primitiveActions.hoverCardTriggerFocus,
-    _hoverCardTriggerPointerEnter: primitiveActions.hoverCardTriggerPointerEnter,
-    _hoverCardTriggerPointerLeave: primitiveActions.hoverCardTriggerPointerLeave,
-    _menubarFocusElement: primitiveActions.menubarFocusElement,
-    _menubarItemClick: primitiveActions.menubarItemClick,
-    _menubarItemKeyDown: primitiveActions.menubarItemKeyDown,
-    _menubarKeyDown: primitiveActions.menubarKeyDown,
-    _menubarMove: primitiveActions.menubarMove,
-    _menubarSubmenuTriggerClick: primitiveActions.menubarSubmenuTriggerClick,
-    _menubarTypeahead: primitiveActions.menubarTypeahead,
-    _meterValueState: primitiveActions.meterValueState,
-    _navigationMenuFocusElement: primitiveActions.navigationMenuFocusElement,
-    _navigationMenuKeyDown: primitiveActions.navigationMenuKeyDown,
-    _navigationMenuLinkClick: primitiveActions.navigationMenuLinkClick,
-    _navigationMenuMove: primitiveActions.navigationMenuMove,
-    _navigationMenuTriggerClick: primitiveActions.navigationMenuTriggerClick,
-    _navigationMenuTriggerFocus: primitiveActions.navigationMenuTriggerFocus,
-    _navigationMenuTriggerPointerEnter: primitiveActions.navigationMenuTriggerPointerEnter,
-    _navigationMenuTypeahead: primitiveActions.navigationMenuTypeahead,
-    _numberFieldDecrementClick: primitiveActions.numberFieldDecrementClick,
-    _numberFieldIncrementClick: primitiveActions.numberFieldIncrementClick,
-    _numberFieldInput: primitiveActions.numberFieldInput,
-    _numberFieldKeyDown: primitiveActions.numberFieldKeyDown,
-    _otpFieldInput: primitiveActions.otpFieldInput,
-    _otpFieldKeyDown: primitiveActions.otpFieldKeyDown,
-    _otpFieldPaste: primitiveActions.otpFieldPaste,
-    _popoverBeforeToggle: primitiveActions.popoverBeforeToggle,
-    _radioGroupItemClick: primitiveActions.radioGroupItemClick,
-    _radioGroupKeyDown: primitiveActions.radioGroupKeyDown,
-    _scrollAreaScrollTo: primitiveActions.scrollAreaScrollTo,
-    _scrollAreaThumbGeometry: primitiveActions.scrollAreaThumbGeometry,
-    _scrollAreaThumbDrag: primitiveActions.scrollAreaThumbDrag,
-    _scrollAreaThumbDragStart: primitiveActions.scrollAreaThumbDragStart,
-    _scrollAreaTrackPointerDown: primitiveActions.scrollAreaTrackPointerDown,
-    _scrollAreaViewportScroll: primitiveActions.scrollAreaViewportScroll,
-    _selectItemClick: primitiveActions.selectItemClick,
-    _selectKeyDown: primitiveActions.selectKeyDown,
-    _selectMove: primitiveActions.selectMove,
-    _selectTriggerClick: primitiveActions.selectTriggerClick,
-    _sliderKeyDown: primitiveActions.sliderKeyDown,
-    _sliderThumbDrag: primitiveActions.sliderThumbDrag,
-    _sliderThumbDragStart: primitiveActions.sliderThumbDragStart,
-    _sliderTrackPointerDown: primitiveActions.sliderTrackPointerDown,
-    _switchTriggerClick: primitiveActions.switchTriggerClick,
-    _tabsKeyDown: primitiveActions.tabsKeyDown,
-    _tabsTriggerClick: primitiveActions.tabsTriggerClick,
-    _toggleGroupItemClick: primitiveActions.toggleGroupItemClick,
-    _toggleGroupKeyDown: primitiveActions.toggleGroupKeyDown,
-    _toggleTriggerClick: primitiveActions.toggleTriggerClick,
-    _toolbarKeyDown: primitiveActions.toolbarKeyDown,
-    _tooltipEscapeKeyDown: primitiveActions.tooltipEscapeKeyDown,
-    _tooltipTriggerBlur: primitiveActions.tooltipTriggerBlur,
-    _tooltipTriggerFocus: primitiveActions.tooltipTriggerFocus,
-    _tooltipTriggerPointerEnter: primitiveActions.tooltipTriggerPointerEnter,
-    _tooltipTriggerPointerLeave: primitiveActions.tooltipTriggerPointerLeave,
-    _dismissToast: primitiveActions.dismissToast,
-    _toastActionClick: primitiveActions.toastActionClick,
-    _toastAnimationEnd: primitiveActions.toastAnimationEnd,
-    _toastCloseClick: primitiveActions.toastCloseClick,
-    _toastEscapeKeyDown: primitiveActions.toastEscapeKeyDown,
-    _toastViewportKeyDown: primitiveActions.toastViewportKeyDown,
     ...globals,
   });
 
@@ -267,7 +162,11 @@ function compileInteractiveDemo(fileName: string): CompiledInteractiveDemo {
     throw new Error(`${componentFileName} did not emit both server and client artifacts.`);
   }
 
-  const compiled = { client, server };
+  const compiled = {
+    client,
+    clientModuleImportManifest: result.clientModuleImportManifest,
+    server,
+  };
   compiledInteractiveDemos.set(demoName, compiled);
 
   return compiled;
@@ -292,8 +191,6 @@ export function resolveGeneratedBindingName(
   name: string,
 ): string {
   if (exports[name] !== undefined) return name;
-  const aliasedName = legacyGeneratedBindingAliases[name];
-  if (aliasedName !== undefined && exports[aliasedName] !== undefined) return aliasedName;
 
   const legacy = name.match(/^(Gallery[A-Za-z0-9]+Demo)\$[A-Za-z0-9]+_(.+?)(?:_([0-9]+))?$/);
   if (!legacy) return name;
@@ -308,55 +205,6 @@ export function resolveGeneratedBindingName(
 
   return candidates[ordinal - 1] ?? name;
 }
-
-const legacyGeneratedBindingAliases: Record<string, string> = {
-  GalleryContextMenuDemo$button_click_2: 'GalleryContextMenuDemo$ContextMenuItem_click_2',
-  GalleryContextMenuDemo$button_keydown: 'GalleryContextMenuDemo$ContextMenuItem_keydown',
-  GalleryContextMenuDemo$button_keydown_2: 'GalleryContextMenuDemo$ContextMenuItem_keydown_2',
-  GalleryContextMenuDemo$div_keydown: 'GalleryContextMenuDemo$ContextMenuTrigger_keydown',
-  GalleryDropdownMenuDemo$button_click_3: 'GalleryDropdownMenuDemo$DropdownMenuItem_click_2',
-  GalleryDropdownMenuDemo$button_keydown: 'GalleryDropdownMenuDemo$DropdownMenuTrigger_keydown',
-  GalleryDropdownMenuDemo$button_keydown_2: 'GalleryDropdownMenuDemo$DropdownMenuItem_keydown',
-  GalleryDropdownMenuDemo$button_keydown_3: 'GalleryDropdownMenuDemo$DropdownMenuItem_keydown_2',
-  GalleryHoverCardDemo$a_focus: 'GalleryHoverCardDemo$HoverCardTrigger_focus',
-  GalleryHoverCardDemo$a_keydown: 'GalleryHoverCardDemo$HoverCardTrigger_keydown',
-  GalleryHoverCardDemo$a_pointerenter: 'GalleryHoverCardDemo$HoverCardTrigger_pointerenter',
-  GalleryHoverCardDemo$a_pointerleave: 'GalleryHoverCardDemo$HoverCardTrigger_pointerleave',
-  GalleryHoverCardDemo$aside_pointerenter: 'GalleryHoverCardDemo$HoverCardContent_pointerenter',
-  GalleryHoverCardDemo$aside_pointerleave: 'GalleryHoverCardDemo$HoverCardContent_pointerleave',
-  GalleryMenubarDemo$button_click: 'GalleryMenubarDemo$MenubarItem_click',
-  GalleryMenubarDemo$button_click_2: 'GalleryMenubarDemo$MenubarItem_click_2',
-  GalleryMenubarDemo$button_click_3: 'GalleryMenubarDemo$MenubarItem_click_3',
-  GalleryMenubarDemo$button_keydown: 'GalleryMenubarDemo$MenubarItem_keydown',
-  GalleryMenubarDemo$button_keydown_2: 'GalleryMenubarDemo$MenubarItem_keydown_2',
-  GalleryNavigationMenuDemo$a_click: 'GalleryNavigationMenuDemo$NavigationMenuLink_click',
-  GalleryNavigationMenuDemo$a_tabIndex_derive:
-    'GalleryNavigationMenuDemo$NavigationMenuLink_tabIndex_derive',
-  GalleryNavigationMenuDemo$button_click: 'GalleryNavigationMenuDemo$NavigationMenuTrigger_click',
-  GalleryNavigationMenuDemo$button_pointerenter:
-    'GalleryNavigationMenuDemo$NavigationMenuTrigger_pointerenter',
-  GalleryNavigationMenuDemo$button_tabIndex_derive:
-    'GalleryNavigationMenuDemo$NavigationMenuTrigger_tabIndex_derive',
-  GalleryNavigationMenuDemo$section_keydown: 'GalleryNavigationMenuDemo$NavigationMenu_keydown',
-  GalleryScrollAreaDemo$div_pointerdown: 'GalleryScrollAreaDemo$ScrollAreaScrollbar_pointerdown',
-  GalleryScrollAreaDemo$div_scroll: 'GalleryScrollAreaDemo$ScrollAreaViewport_scroll',
-  GalleryScrollAreaDemo$span_pointerdown: 'GalleryScrollAreaDemo$ScrollAreaThumb_pointerdown',
-  GalleryScrollAreaDemo$span_pointermove: 'GalleryScrollAreaDemo$ScrollAreaThumb_pointermove',
-  GalleryScrollAreaDemo$span_pointerup: 'GalleryScrollAreaDemo$ScrollAreaThumb_pointerup',
-  GallerySelectDemo$button_click: 'GallerySelectDemo$SelectTrigger_click',
-  GallerySelectDemo$button_keydown: 'GallerySelectDemo$SelectTrigger_keydown',
-  GallerySelectDemo$div_click: 'GallerySelectDemo$SelectItem_click',
-  GallerySelectDemo$div_click_2: 'GallerySelectDemo$SelectItem_click_2',
-  GallerySelectDemo$div_click_3: 'GallerySelectDemo$SelectItem_click_3',
-  GallerySliderDemo$div_pointerdown: 'GallerySliderDemo$SliderTrack_pointerdown',
-  GallerySliderDemo$span_keydown: 'GallerySliderDemo$SliderThumb_keydown',
-  GallerySliderDemo$span_pointerdown: 'GallerySliderDemo$SliderThumb_pointerdown',
-  GallerySliderDemo$span_pointermove: 'GallerySliderDemo$SliderThumb_pointermove',
-  GallerySliderDemo$span_pointerup: 'GallerySliderDemo$SliderThumb_pointerup',
-  GalleryToastDemo$div_data_state_derive_2: 'GalleryToastDemo$Toast_data_state_derive_2',
-  GalleryToastDemo$div_hidden_derive_2: 'GalleryToastDemo$Toast_hidden_derive_2',
-  GalleryToastDemo$section_keydown: 'GalleryToastDemo$ToastViewport_keydown',
-};
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

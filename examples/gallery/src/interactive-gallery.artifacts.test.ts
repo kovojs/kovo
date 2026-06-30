@@ -194,7 +194,7 @@ describe('compiled interactive gallery demos', () => {
         'utf8',
       );
       expect(tabsClient).toContain("from '/c/__v/");
-      expect(tabsClient).toContain("/examples/gallery/src/primitive-actions.js'");
+      expect(tabsClient).toContain('/examples/gallery/src/primitive-actions.js');
 
       const primitiveActionsClient = readFileSync(
         join(

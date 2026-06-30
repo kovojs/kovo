@@ -343,6 +343,7 @@ export interface CompileArtifactFileNames {
  * hand-write these lowered artifacts (SPEC.md §5.2).
  */
 export interface CompileResult {
+  clientModuleImportManifest: readonly ClientModuleImportManifestEntry[];
   clientExports: readonly string[];
   componentGraphFacts: readonly ComponentGraphFact[];
   cssAssets: readonly ComponentCssAsset[];
@@ -462,6 +463,18 @@ export interface ClientImportDependency {
   moduleSpecifier: string;
 }
 
+/** One generated client-module import dependency emitted from compiler-owned facts. */
+export interface ClientModuleImportManifestEntry {
+  imports: readonly ClientModuleImportSpecifier[];
+  moduleSpecifier: string;
+}
+
+/** One named binding imported by a generated client module. */
+export interface ClientModuleImportSpecifier {
+  importedName: string;
+  localName: string;
+}
+
 export interface ClientConstantDependency {
   name: string;
   source: string;
@@ -540,6 +553,7 @@ export function elementParamNameFromAttribute(attributeName: string): string {
  */
 export function createEmptyCompileResult(): CompileResult {
   return {
+    clientModuleImportManifest: [],
     clientExports: [],
     componentGraphFacts: [],
     cssAssets: [],
