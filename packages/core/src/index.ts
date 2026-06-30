@@ -769,36 +769,26 @@ export interface FormErrorProps<Failure = unknown> {
 
 type MutationFormHelperKind = 'field' | 'form';
 
-interface MutationFormHelperPlaceholder {
-  kind: MutationFormHelperKind;
-  props: Record<string, unknown>;
+interface MutationFormHelperRenderContext {
+  defer(kind: MutationFormHelperKind, props: Record<string, unknown>): unknown;
 }
 
-interface MutationFormHelperRegistry {
-  nextId: number;
-  placeholders: Map<number, MutationFormHelperPlaceholder>;
-}
-
-const mutationFormHelperRegistryKey = Symbol.for('kovo.mutationFormHelperRegistry');
+const mutationFormHelperRenderContextKey = Symbol.for('kovo.mutationFormHelperRenderContext');
 const getRouteFormHelperKindKey = Symbol.for('kovo.getRouteFormHelperKind');
 
-function mutationFormHelperRegistry(): MutationFormHelperRegistry {
+function currentMutationFormHelperRenderContext(): MutationFormHelperRenderContext | undefined {
   const global = globalThis as typeof globalThis & Record<symbol, unknown>;
-  global[mutationFormHelperRegistryKey] ??= {
-    nextId: 0,
-    placeholders: new Map(),
-  };
-  return global[mutationFormHelperRegistryKey] as MutationFormHelperRegistry;
+  const context = global[mutationFormHelperRenderContextKey];
+  if (!isRecord(context) || typeof context.defer !== 'function') return undefined;
+  return context as unknown as MutationFormHelperRenderContext;
 }
 
 function deferMutationFormHelper(
   kind: MutationFormHelperKind,
   props: Record<string, unknown>,
 ): string {
-  const registry = mutationFormHelperRegistry();
-  registry.nextId += 1;
-  registry.placeholders.set(registry.nextId, { kind, props });
-  return `<!--kovo-form-helper:${registry.nextId}-->`;
+  return (currentMutationFormHelperRenderContext()?.defer(kind, props) ??
+    frameworkRenderedHtml('')) as string;
 }
 
 interface SchemaLike<Value> {
