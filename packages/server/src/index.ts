@@ -304,6 +304,7 @@ export type {
   StoredFileUpload,
   StringSchema,
   Tag,
+  TaskCronCatchUp,
   TaskDefinition,
   TaskFactory,
   TaskHandle,

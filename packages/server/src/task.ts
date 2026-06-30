@@ -20,6 +20,9 @@ export interface TaskScheduleOptions {
   coalesce?: 'debounce' | 'throttle';
 }
 
+/** Catch-up policy for task-declared recurring schedules (SPEC §9.6). */
+export type TaskCronCatchUp = 'skip' | 'backfill';
+
 /** Mutation request helpers for durable task scheduling (SPEC §9.6). */
 export interface TaskSchedulingRequest {
   cancel(handle: TaskHandle): Promise<boolean>;
@@ -76,6 +79,12 @@ export interface TaskDefinition<
   InputSchema extends Schema<unknown> = Schema<unknown>,
   Value = unknown,
 > {
+  /** Five-field UTC cron expression for recurring task materialization (SPEC §9.6). */
+  cron?: string;
+  /** Missed-occurrence policy. Defaults to `skip`; `backfill` is bounded by the materializer. */
+  catchUp?: TaskCronCatchUp;
+  /** Serialized args for recurring invocations. Defaults to `{}`. */
+  cronArgs?: InferSchema<InputSchema>;
   input: InputSchema;
   key: Key;
   maxGenerations?: number;
@@ -130,6 +139,7 @@ export function task(
     throw new TypeError('task(key, definition) requires a definition object.');
   }
   assertKnownTaskDefinitionKeys(definition);
+  assertTaskCronOptions(definition);
   return { ...definition, key };
 }
 
@@ -151,9 +161,40 @@ export function assignDerivedTaskKey<Task extends TaskDefinition<string, any, an
 }
 
 function assertKnownTaskDefinitionKeys(definition: object): void {
-  const known = new Set(['input', 'maxGenerations', 'retry', 'run', 'timeoutMs']);
+  const known = new Set([
+    'catchUp',
+    'cron',
+    'cronArgs',
+    'input',
+    'maxGenerations',
+    'retry',
+    'run',
+    'timeoutMs',
+  ]);
   const unknown = Object.keys(definition).filter((key) => !known.has(key));
   if (unknown.length > 0) {
     throw new TypeError(`Unknown task() definition field: ${unknown.join(', ')}`);
+  }
+}
+
+function assertTaskCronOptions(definition: Omit<TaskDefinition<any, any, any>, 'key'>): void {
+  if (definition.cron !== undefined && typeof definition.cron !== 'string') {
+    throw new TypeError('task({ cron }) must be a five-field cron expression string.');
+  }
+  if (definition.cron === '') {
+    throw new TypeError('task({ cron }) must be a non-empty five-field cron expression string.');
+  }
+  if (
+    definition.catchUp !== undefined &&
+    definition.catchUp !== 'skip' &&
+    definition.catchUp !== 'backfill'
+  ) {
+    throw new TypeError("task({ catchUp }) must be 'skip' or 'backfill'.");
+  }
+  if (definition.catchUp !== undefined && definition.cron === undefined) {
+    throw new TypeError('task({ catchUp }) requires task({ cron }).');
+  }
+  if (definition.cronArgs !== undefined && definition.cron === undefined) {
+    throw new TypeError('task({ cronArgs }) requires task({ cron }).');
   }
 }

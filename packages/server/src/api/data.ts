@@ -94,6 +94,7 @@ export { drainElevatedQueryFacts } from '../query.js';
  */
 export const task = taskImplementation as unknown as TaskFactory;
 export type {
+  TaskCronCatchUp,
   TaskDefinition,
   TaskFactory,
   TaskHandle,
