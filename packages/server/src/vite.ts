@@ -10,7 +10,7 @@ import type {
   DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
   QueryShapeFact as CompilerQueryShapeFact,
 } from '@kovojs/server/internal/data-plane-static-analysis';
-import { currentKovoBuildContext } from './internal/build-context.js';
+import { currentKovoBuildContext } from '@kovojs/server/internal/build-context';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
 
 /** Options for the public Kovo Vite plugin (SPEC.md §9.5). */
