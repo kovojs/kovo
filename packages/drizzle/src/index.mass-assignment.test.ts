@@ -213,6 +213,48 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
   });
 
+  it('honors per-row serverValue provenance inside bulk values array literals', () => {
+    const result = facts(
+      handler(
+        [
+          '  await db.insert(accounts).values([',
+          '    { id: serverValue("account-1", "seed id"), ownerId: serverValue(request.session.userId, "session owner"), role: "user", balance: 0, name: input.name },',
+          '    { id: serverValue("account-2", "seed id"), ownerId: serverValue(request.session.userId, "session owner"), role: "user", balance: 0, name: input.name },',
+          '  ]);',
+        ].join('\n'),
+      ),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('still rejects unsafe governed fields inside bulk values array literals', () => {
+    const result = facts(
+      handler(
+        [
+          '  await db.insert(accounts).values([',
+          '    { id: serverValue("account-1", "seed id"), ownerId: input.ownerId, role: input.role, balance: 0, name: input.name },',
+          '    { id: input.id, ownerId: serverValue(request.session.userId, "session owner"), role: "user", balance: input.balance, name: input.name },',
+          '  ]);',
+        ].join('\n'),
+      ),
+    );
+    expect(
+      result
+        .map((fact) => ({
+          column: fact.column,
+          detail: fact.detail,
+          provenance: fact.provenance,
+          via: fact.via,
+        }))
+        .sort((left, right) => left.column.localeCompare(right.column)),
+    ).toEqual([
+      { column: 'balance', detail: 'balance', provenance: 'input', via: 'values' },
+      { column: 'id', detail: 'id', provenance: 'input', via: 'values' },
+      { column: 'ownerId', detail: 'ownerId', provenance: 'input', via: 'values' },
+      { column: 'role', detail: 'role', provenance: 'input', via: 'values' },
+    ]);
+  });
+
   it('passes serverValue(session-derived local) but rejects input and non-session request locals', () => {
     expect(
       facts(

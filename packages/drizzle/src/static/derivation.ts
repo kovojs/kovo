@@ -21,6 +21,7 @@ import {
   Node,
   SyntaxKind,
   ts,
+  type ArrayLiteralExpression,
   type CallExpression,
   type ObjectLiteralExpression,
   type PropertyAssignment,
@@ -1365,6 +1366,10 @@ function massAssignmentFactsForPayload(
   if (!argument) return [];
   const object = unwrappedStaticExpressionNode(argument);
 
+  if (method === 'values' && Node.isArrayLiteralExpression(object)) {
+    return massAssignmentFactsForValuesArray(object, info, site, context, table);
+  }
+
   // `.values(input)` / `.set(input)` — a NON-object-literal payload. The whole row is
   // populated from one expression; if it carries input/unprovable provenance it can set
   // ANY governed column. Fail-closed: reject the spread on a governed table (the design's
@@ -1373,6 +1378,27 @@ function massAssignmentFactsForPayload(
     return spreadMassAssignmentFacts(object, info, site, context, table, method);
   }
   return massAssignmentFactsForObject(object, method, info, site, context, table);
+}
+
+function massAssignmentFactsForValuesArray(
+  array: ArrayLiteralExpression,
+  info: GovernedTableInfo,
+  site: string,
+  context: MassAssignmentCallContext,
+  table: string,
+): MassAssignmentFact[] {
+  const facts: MassAssignmentFact[] = [];
+  for (const element of array.getElements()) {
+    const row = Node.isSpreadElement(element)
+      ? element.getExpression()
+      : unwrappedStaticExpressionNode(element);
+    if (Node.isObjectLiteralExpression(row)) {
+      facts.push(...massAssignmentFactsForObject(row, 'values', info, site, context, table));
+      continue;
+    }
+    facts.push(...spreadMassAssignmentFacts(row, info, site, context, table, 'values'));
+  }
+  return facts;
 }
 
 function massAssignmentFactsForObject(
