@@ -4,6 +4,7 @@ import { createApp } from './app.js';
 import { domain } from './domain.js';
 import { s } from './schema.js';
 import { renderedHtml } from './html.js';
+import type { MutationRequestDb } from './mutation.js';
 import { route } from './route.js';
 
 describe('createApp provider-typed authoring context', () => {
@@ -108,5 +109,53 @@ describe('createApp provider-typed authoring context', () => {
     expect(app.queries.map((query) => query.key)).toEqual(['cart']);
     expect(app.mutations.map((mutation) => mutation.key)).toEqual(['cart/add']);
     expect(app.routes.map((route) => route.path)).toEqual(['/cart']);
+  });
+
+  it('types mutation handler db as transaction-scoped without a public transaction opener', () => {
+    type AppDb = {
+      cart: string[];
+      insert(productId: string): void;
+      transaction<Result>(run: (tx: unknown) => Result): Result;
+    };
+
+    const assertMutationDb = (db: MutationRequestDb<AppDb>) => {
+      db.insert('p1');
+      const cart: string[] = db.cart;
+
+      // @ts-expect-error mutation handler db is already transaction-scoped.
+      db.transaction((tx) => tx);
+
+      return cart;
+    };
+
+    const app = createApp({
+      db: (): AppDb => ({
+        cart: [],
+        insert(productId) {
+          this.cart.push(productId);
+        },
+        transaction(run) {
+          return run({});
+        },
+      }),
+      mutations: ({ mutation }) => [
+        mutation('cart/add-tx-typed', {
+          csrf: false,
+          input: s.object({ productId: s.string() }),
+          handler(input, request) {
+            request.db.insert(input.productId);
+            const cart: string[] = request.db.cart;
+            assertMutationDb(request.db);
+
+            // @ts-expect-error SPEC §10.3: handler db hides the raw transaction opener.
+            request.db.transaction((tx) => tx);
+
+            return { count: cart.length };
+          },
+        }),
+      ],
+    });
+
+    expect(app.mutations.map((mutation) => mutation.key)).toEqual(['cart/add-tx-typed']);
   });
 });
