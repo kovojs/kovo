@@ -103,6 +103,7 @@ describe('vite-fixtures', () => {
         "const viteConfig = await readFile('vite.config.mjs', 'utf8');",
         'const requiredAliases = [',
         "  '@kovojs/core/internal/module-ref',",
+        "  '@kovojs/core/internal/route-pattern',",
         "  '@kovojs/core/internal/wire-json',",
         '];',
         'for (const alias of requiredAliases) {',
