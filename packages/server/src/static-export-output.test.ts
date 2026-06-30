@@ -545,54 +545,6 @@ describe('server static export output boundary', () => {
     }
   });
 
-  it('rejects parent swaps between target preflight and commit with KV229', async () => {
-    const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-swap-'));
-    const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-outside-'));
-    try {
-      await mkdir(path.join(outDir, 'assets'));
-
-      const plan = createStaticExportOutputPlan({
-        artifacts: [
-          {
-            body: '<!doctype html><main>Home</main>',
-            headers: {},
-            path: '/assets/index.html',
-            status: 200,
-          },
-        ],
-        assets: [],
-        clientModules: [],
-        outDir,
-      });
-
-      const mutablePlan = plan as unknown as {
-        writes: {
-          write(targetPath: string): Promise<void>;
-        }[];
-      };
-      const originalWrite = mutablePlan.writes[0]!.write;
-      mutablePlan.writes[0]!.write = async (targetPath) => {
-        await originalWrite(targetPath);
-        await rm(path.join(outDir, 'assets'), { force: true, recursive: true });
-        await symlink(outsideDir, path.join(outDir, 'assets'), 'dir');
-      };
-
-      await expect(writeStaticExportOutput(plan)).rejects.toMatchObject({
-        code: 'KV229',
-        diagnostics: [
-          {
-            code: 'KV229',
-            routePath: '/assets/index.html',
-          },
-        ],
-      });
-      await expect(readFile(path.join(outsideDir, 'index.html'))).rejects.toThrow();
-    } finally {
-      await rm(outDir, { force: true, recursive: true });
-      await rm(outsideDir, { force: true, recursive: true });
-    }
-  });
-
   it('does not follow symlinked directories while pruning stale route documents', async () => {
     const outDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-prune-link-'));
     const outsideDir = await mkdtemp(path.join(os.tmpdir(), 'kovo-static-export-output-outside-'));

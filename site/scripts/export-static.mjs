@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { cp, mkdir, rm } from 'node:fs/promises';
+import { cp, rm } from 'node:fs/promises';
 import { registerHooks } from 'node:module';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import { createServer } from 'vite-plus';
 
 import { runContentPipeline } from './content-pipeline.mjs';
+import { writeScriptArtifacts } from '../../scripts/output-staging.mjs';
 
 registerHooks({
   resolve(specifier, context, nextResolve) {
@@ -170,11 +171,7 @@ export async function buildSiteUiCss(outPath = uiStylesheetPath) {
 }
 
 export async function stageStaticExportReferencedPublicAssets(rootDir = cssDistDir) {
-  for (const asset of STAGED_STATIC_EXPORT_PUBLIC_ASSETS) {
-    const target = path.join(rootDir, asset.path);
-    await mkdir(path.dirname(target), { recursive: true });
-    writeFileSync(target, asset.content);
-  }
+  await writeScriptArtifacts(rootDir, STAGED_STATIC_EXPORT_PUBLIC_ASSETS);
 }
 
 // Resolve the bundled stylesheet from the Vite manifest.
