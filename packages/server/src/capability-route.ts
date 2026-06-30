@@ -114,6 +114,7 @@ const STORAGE_DOWNLOAD_ENDPOINT_INFO = Symbol('kovo.storageDownloadEndpointInfo'
 export interface StorageDownloadEndpointInfo {
   readonly basePath: string;
   readonly oneTimeReplayStore: boolean;
+  readonly secret: SigningSecret;
 }
 
 type StorageDownloadEndpointDeclaration = EndpointDeclaration<string, 'GET', 'prefix'> & {
@@ -383,6 +384,7 @@ export function createStorageDownloadEndpoint(
     value: {
       basePath,
       oneTimeReplayStore: options.replayStore !== undefined,
+      secret: options.secret,
     } satisfies StorageDownloadEndpointInfo,
   });
   return declaration;

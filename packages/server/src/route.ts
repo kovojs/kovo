@@ -190,9 +190,9 @@ export interface RouteRequest<
    * Mint a signed, short-lived, scope-bound capability URL for a stored object (SPEC §6.6 / §9.1).
    * The URL points at the framework-owned download route, whose verify sink runs before any storage
    * read so an object is un-dereferenceable without a token minted for that exact object. Present
-   * only when the app configured a framework signing secret (`createApp({ csrf: { secret } })`);
-   * `undefined` otherwise, so a page must handle its absence. The minted URL is a BEARER credential
-   * (leakage mitigated by short expiry / narrow scope / optional one-time, NOT proven).
+   * only when the app mounts exactly one `createStorageDownloadEndpoint({ secret })`; `undefined`
+   * otherwise, so a page must handle its absence. The minted URL is a BEARER credential (leakage
+   * mitigated by short expiry / narrow scope / optional one-time, NOT proven).
    */
   signUrl?: SignUrlContext['signUrl'];
 }

@@ -55,6 +55,22 @@ export interface CsrfOptions<Request> {
 /** `CsrfOptions` plus the optional form `field` name to validate against. */
 export type CsrfValidationOptions<Request> = CsrfOptions<Request>;
 
+/** A minted CSRF token plus the anonymous binding cookie the response must set, when needed. */
+export interface MintedCsrfToken {
+  /** The synchronizer token to send back in the configured CSRF field. */
+  token: string;
+  /** Set this header on the rendering response when present. */
+  setCookie?: string;
+}
+
+/** A rendered CSRF hidden field plus the anonymous binding cookie the response must set, when needed. */
+export interface MintedCsrfField extends MintedCsrfToken {
+  /** The configured CSRF field name. */
+  field: string;
+  /** Hidden `<input>` HTML carrying {@link token}. */
+  html: string;
+}
+
 /**
  * The mutation a hand-authored CSRF token/field targets (SPEC §6.5/§9.1): either the mutation
  * definition (any object carrying its `key`) or the bare mutation key string. Both resolve to the
@@ -124,6 +140,27 @@ export function csrfToken<Request>(
 }
 
 /**
+ * Mint a CSRF token for a response that can also set the anonymous binding cookie (SPEC §6.6/§9.1).
+ *
+ * Use this for first anonymous raw endpoint forms or JSON bootstraps. Session-bound requests return
+ * only a token. Anonymous requests mint the framework-owned anonymous CSRF cookie and return it in
+ * `setCookie`; the response that exposes the token MUST attach that `Set-Cookie` header or the
+ * first unsafe endpoint request will fail closed.
+ */
+export function mintCsrfToken<Request>(
+  request: Request,
+  options: CsrfOptions<Request>,
+  context: { audience?: string; mutation?: string | { readonly key: string } } = {},
+): MintedCsrfToken {
+  const binding = resolveCsrfBinding(request, options, { mintAnonymous: true });
+  if (!binding) throw new Error('mintCsrfToken requires a session id or anonymous CSRF cookie');
+  return {
+    token: createCsrfToken(binding.value, options.secret, resolveCsrfAudience(options, context)),
+    ...(binding.setCookie === undefined ? {} : { setCookie: binding.setCookie }),
+  };
+}
+
+/**
  * Render a hidden `<input>` carrying a CSRF token, ready to drop inside a form.
  * Forms emitted by the framework include this automatically; use it for
  * hand-written forms (SPEC §6.5/§6.6/§9.1).
@@ -152,6 +189,33 @@ export function csrfField<Request>(
   if (options.audience !== undefined) context.audience = options.audience;
   if (options.mutation !== undefined) context.mutation = options.mutation;
   return `<input type="hidden" name="${escapeAttribute(options.field ?? 'kovo-csrf')}" value="${escapeAttribute(csrfToken(request, options, context))}">`;
+}
+
+/**
+ * Render a CSRF hidden field for a response that can set the anonymous binding cookie.
+ *
+ * This is the supported public path for a first anonymous raw endpoint form. Attach `setCookie` to
+ * the response when it is present, and include `html` in the form. The endpoint POST can then keep
+ * default CSRF enabled instead of using `csrf: false`.
+ */
+export function mintCsrfField<Request>(
+  request: Request,
+  options: CsrfOptions<Request> & {
+    audience?: string;
+    field?: string;
+    mutation?: string | { readonly key: string };
+  },
+): MintedCsrfField {
+  const context: CsrfAudienceContext = {};
+  if (options.audience !== undefined) context.audience = options.audience;
+  if (options.mutation !== undefined) context.mutation = options.mutation;
+  const minted = mintCsrfToken(request, options, context);
+  const field = options.field ?? 'kovo-csrf';
+  return {
+    ...minted,
+    field,
+    html: `<input type="hidden" name="${escapeAttribute(field)}" value="${escapeAttribute(minted.token)}">`,
+  };
 }
 
 /** @internal Render the framework-owned CSRF field for compiler-emitted mutation forms. */

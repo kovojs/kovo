@@ -420,7 +420,10 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     const key = 'receipts/custom.txt';
     const storage = await storageWith(key, 'custom-download', { filename: 'custom.txt' });
     const app = createApp({
-      csrf: { secret: SECRET, sessionId: () => 'anonymous' },
+      csrf: {
+        secret: 'different-app-csrf-secret-at-least-32-characters',
+        sessionId: () => 'anonymous',
+      },
       endpoints: [
         createStorageDownloadEndpoint({ basePath: '/downloads', secret: SECRET, storage }),
       ],
@@ -445,6 +448,34 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Content-Disposition')).toBe('attachment; filename="custom.txt"');
     expect(await response.text()).toBe('custom-download');
+  });
+
+  it('mounts ctx.signUrl from the storage endpoint secret even when app CSRF is not configured', async () => {
+    const key = 'receipts/no-csrf.txt';
+    const storage = await storageWith(key, 'download-without-csrf');
+    const app = createApp({
+      endpoints: [
+        createStorageDownloadEndpoint({ basePath: '/downloads', secret: SECRET, storage }),
+      ],
+      routes: [
+        route('/', {
+          async page(context) {
+            if (context.signUrl === undefined) throw new Error('missing ctx.signUrl');
+            const signed = await context.signUrl({ key });
+            return renderedHtml(`<a href="${signed.url}">Download</a>`);
+          },
+        }),
+      ],
+    });
+    const handler = createRequestHandler(app);
+
+    const document = await handler(new Request('https://app.example/'));
+    const href = (await document.text()).match(/href="([^"]+)"/)?.[1];
+
+    expect(href?.startsWith('/downloads/receipts/no-csrf.txt?')).toBe(true);
+    const response = await handler(new Request(`https://app.example${href}`));
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('download-without-csrf');
   });
 
   it('route ctx.signUrl fails clearly when multiple storage download endpoints are mounted', async () => {

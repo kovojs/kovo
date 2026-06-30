@@ -458,6 +458,8 @@ describe('server app-shell public API barrels', () => {
       // satisfy confidential-at-rest write gates with this authenticated-encryption sink.
       encryptAtRest: confidentialAtRestApi.encryptAtRest,
       createElement: publicApi.createElement,
+      mintCsrfField: dataApi.mintCsrfField,
+      mintCsrfToken: dataApi.mintCsrfToken,
       kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       toNodeHandler: nodeSourceApi.toNodeHandler,

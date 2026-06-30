@@ -14,7 +14,6 @@ import {
   storageDownloadEndpointInfo,
   type StorageDownloadEndpointInfo,
 } from './capability-route.js';
-import { signingKeyRingFromCsrfSecret } from './csrf.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
 import { ensureKovoLoaderRuntimeClientModule } from './loader-runtime-client-module.js';
 import type { PageHintOptions } from './hints.js';
@@ -54,16 +53,16 @@ export async function renderAppRouteDocumentResponse({
   url,
 }: AppRouteDocumentOptions): Promise<RoutePageResponse> {
   const search = searchParamsToRecord(url.searchParams);
-  // SPEC §6.6 / §9.1: thread `ctx.signUrl` onto the page context when a framework signing secret is
-  // configured (the CSRF/anonymous-CSRF HMAC secret). A page can then mint a short-lived, scope-bound
-  // capability URL for a stored object pointing at the framework download route's verify sink.
+  // SPEC §6.6 / §9.1: thread `ctx.signUrl` onto the page context when a storage download endpoint
+  // is mounted. The route context must mint with the same configured capability signer that the
+  // endpoint verify sink uses; otherwise the documented pairing fails closed as an opaque 404.
   const storageDownloadSigner = appStorageDownloadSigner(app);
   const signUrlContext =
-    app.csrf?.secret === undefined
+    storageDownloadSigner.kind === 'absent'
       ? undefined
       : storageDownloadSigner.kind === 'ready'
         ? createSignUrl({
-            secret: signingKeyRingFromCsrfSecret(app.csrf.secret),
+            secret: storageDownloadSigner.secret,
             basePath: storageDownloadSigner.basePath,
             oneTimeReplayStore: storageDownloadSigner.oneTimeReplayStore,
           })
@@ -225,7 +224,13 @@ export async function renderAppRouteDocumentResponse({
 }
 
 type AppStorageDownloadSigner =
-  | { kind: 'ready'; basePath: string; oneTimeReplayStore: boolean }
+  | {
+      kind: 'ready';
+      basePath: string;
+      oneTimeReplayStore: boolean;
+      secret: StorageDownloadEndpointInfo['secret'];
+    }
+  | { kind: 'absent' }
   | { kind: 'unavailable'; message: string };
 
 function appStorageDownloadSigner(app: KovoApp): AppStorageDownloadSigner {
@@ -237,14 +242,12 @@ function appStorageDownloadSigner(app: KovoApp): AppStorageDownloadSigner {
       kind: 'ready',
       basePath: endpoints[0]!.basePath,
       oneTimeReplayStore: endpoints[0]!.oneTimeReplayStore,
+      secret: endpoints[0]!.secret,
     };
   }
   if (endpoints.length === 0) {
     return {
-      kind: 'unavailable',
-      message:
-        'ctx.signUrl() requires a mounted createStorageDownloadEndpoint(). No storage download ' +
-        'endpoint is mounted, so Kovo cannot mint a dereferenceable capability URL (SPEC §6.6).',
+      kind: 'absent',
     };
   }
   return {

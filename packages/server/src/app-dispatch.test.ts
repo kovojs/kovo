@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { createApp } from './app.js';
 import type { KovoApp } from './app-types.js';
 import { dispatchMatchedAppRequest } from './app-dispatch.js';
-import { csrfToken } from './csrf.js';
+import { csrfToken, mintCsrfField, mintCsrfToken } from './csrf.js';
 import { endpoint, type EndpointResponsePosture } from './endpoint.js';
 import { matchShellDispatch, type ShellDispatchMatch } from './shell.js';
 import { mutation } from './mutation.js';
@@ -188,6 +188,75 @@ describe('server app matched dispatch boundary', () => {
     expect(handlerCalls).toBe(1);
     // The raw handler still receives the original, unconsumed JSON body.
     expect(seenBody).toBe(body);
+  });
+
+  it('accepts a first anonymous form POST to a default-CSRF endpoint using mintCsrfField', async () => {
+    let handlerCalls = 0;
+    const upload = endpoint('/files', {
+      async handler(request) {
+        handlerCalls += 1;
+        const body = await request.formData();
+        return new Response(String(body.get('name')));
+      },
+      method: 'POST',
+      reason: 'anonymous browser file metadata form',
+      response: rawTextResponse,
+    });
+    const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => undefined };
+    const app = createApp({ csrf, endpoints: [upload] });
+    const getRequest = new Request('https://shop.example.test/files');
+    const minted = mintCsrfField(getRequest, csrf);
+    const cookiePair = minted.setCookie?.split(';')[0];
+    if (cookiePair === undefined) throw new Error('expected anonymous CSRF Set-Cookie');
+
+    const request = new Request('https://shop.example.test/files', {
+      body: new URLSearchParams({ name: 'first-upload', [minted.field]: minted.token }),
+      headers: { Cookie: cookiePair, Origin: 'https://shop.example.test' },
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('first-upload');
+    expect(handlerCalls).toBe(1);
+  });
+
+  it('accepts a first anonymous JSON POST to a default-CSRF endpoint using mintCsrfToken', async () => {
+    let handlerCalls = 0;
+    let seenBody = '';
+    const upload = endpoint('/files.json', {
+      async handler(request) {
+        handlerCalls += 1;
+        seenBody = await request.text();
+        return new Response('created');
+      },
+      method: 'POST',
+      reason: 'anonymous browser file metadata JSON',
+      response: rawTextResponse,
+    });
+    const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => undefined };
+    const app = createApp({ csrf, endpoints: [upload] });
+    const minted = mintCsrfToken(new Request('https://shop.example.test/files.json'), csrf);
+    const cookiePair = minted.setCookie?.split(';')[0];
+    if (cookiePair === undefined) throw new Error('expected anonymous CSRF Set-Cookie');
+    const body = JSON.stringify({ name: 'first-upload', 'kovo-csrf': minted.token });
+    const request = new Request('https://shop.example.test/files.json', {
+      body,
+      headers: {
+        'Content-Type': 'application/json',
+        Cookie: cookiePair,
+        Origin: 'https://shop.example.test',
+      },
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('created');
+    expect(seenBody).toBe(body);
+    expect(handlerCalls).toBe(1);
   });
 
   it('L15: still fails closed (422) for a JSON endpoint POST missing the kovo-csrf token', async () => {

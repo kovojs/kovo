@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   csrfField,
   csrfToken,
+  mintCsrfField,
+  mintCsrfToken,
   renderMutationCsrfField,
   validateCsrfToken,
   verifyCsrfRequestOriginFloor,
@@ -195,6 +197,47 @@ describe('csrf helpers', () => {
         audience: 'auth/sign-in',
       }),
     ).toBe(false);
+  });
+
+  it('mintCsrfField returns the anonymous Set-Cookie needed for a first raw endpoint form', () => {
+    const anonymousCsrf = {
+      field: 'csrf',
+      secret: ANONYMOUS_CSRF_SECRET,
+      sessionId() {
+        return undefined;
+      },
+    };
+    const getRequest = new Request('https://shop.example.test/files');
+
+    const minted = mintCsrfField(getRequest, { ...anonymousCsrf, audience: 'endpoint:/files' });
+
+    expect(minted.field).toBe('csrf');
+    expect(minted.html).toBe(`<input type="hidden" name="csrf" value="${minted.token}">`);
+    expect(minted.setCookie).toContain('kovo_csrf=');
+    expect(minted.setCookie).toContain('HttpOnly');
+
+    const cookiePair = minted.setCookie!.split(';')[0]!;
+    const postRequest = new Request('https://shop.example.test/files', {
+      headers: { Cookie: cookiePair, Origin: 'https://shop.example.test' },
+      method: 'POST',
+    });
+    expect(
+      validateCsrfToken({ csrf: minted.token }, postRequest, anonymousCsrf, {
+        audience: 'endpoint:/files',
+      }),
+    ).toBe(true);
+  });
+
+  it('mintCsrfToken does not emit Set-Cookie for an existing session binding', () => {
+    const minted = mintCsrfToken(request, csrf, { audience: 'endpoint:/files' });
+
+    expect(minted.token).toMatch(/^v1\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
+    expect(minted.setCookie).toBeUndefined();
+    expect(
+      validateCsrfToken({ 'csrf<input>': minted.token }, request, csrf, {
+        audience: 'endpoint:/files',
+      }),
+    ).toBe(true);
   });
 
   it('reuses one anonymous CSRF cookie across multiple rendered mutation forms', () => {

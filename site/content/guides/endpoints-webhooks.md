@@ -115,7 +115,26 @@ ctx.headers.setCacheControl({ private: true, noStore: true });
 ## Send CSRF tokens to raw endpoints
 
 Default-CSRF unsafe endpoints accept the same token carriers Kovo can parse before the handler runs:
-form fields and JSON bodies. If your protocol needs `text/plain`, `bytes`, or a signed raw body, use
+form fields and JSON bodies. For the first anonymous page, use `mintCsrfField` or `mintCsrfToken` so
+the response can also set Kovo's anonymous CSRF cookie.
+
+```ts
+import { mintCsrfField } from '@kovojs/server';
+
+export async function renderUploadForm(request: Request) {
+  const csrf = mintCsrfField(request, appCsrf);
+
+  return new Response(
+    `<form method="post" action="/files">${csrf.html}<button>Upload</button></form>`,
+    {
+      headers: csrf.setCookie === undefined ? {} : { 'Set-Cookie': csrf.setCookie },
+    },
+  );
+}
+```
+
+For JSON bootstraps, send `mintCsrfToken(request, appCsrf).token` as `kovo-csrf` and set the returned
+cookie when present. If your protocol needs `text/plain`, `bytes`, or a signed raw body, use
 `csrf: false` with a verifier, OAuth state, or another non-browser auth scheme and name the
 justification. Browser credential forms should stay as `mutation()` forms so Kovo owns the CSRF
 field, no-JS response, replay, and typed failure UI.
