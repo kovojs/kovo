@@ -428,7 +428,7 @@ function execStarterCommand(
   options: Parameters<typeof execFileSync>[2],
 ): void {
   try {
-    execFileSync(file, args, options);
+    execFileSync(file, args, { maxBuffer: 128 * 1024 * 1024, ...options });
   } catch (error) {
     throw new Error(
       [

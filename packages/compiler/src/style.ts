@@ -37,6 +37,17 @@ const mutableTs = ts as unknown as Record<string, unknown>;
 if (!('ScriptTarget' in mutableTs))
   Object.assign(mutableTs, createRequire(import.meta.url)('typescript') as typeof ts);
 
+const styleModuleSpecifier = '@kovojs/style';
+const styleTokensExportName = 'tokens';
+const objectIdentifierName = 'Object';
+const objectFreezeMemberName = 'freeze';
+const styleCreateMemberName = 'create';
+const styleDefineVarsMemberName = 'defineVars';
+const styleCreateThemeMemberName = 'createTheme';
+const styleKeyframesMemberName = 'keyframes';
+const themeClassNameMemberName = 'className';
+const undefinedIdentifierName = 'undefined';
+
 /**
  * @internal Result of the conservative StyleX extraction pass. The pass handles
  * static `style.create(...)` calls, static JSX `style={...}` references, and the
@@ -270,13 +281,13 @@ function styleImportsFromSourceFile(sourceFile: ts.SourceFile): StyleImports {
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement)) continue;
     if (!ts.isStringLiteral(statement.moduleSpecifier)) continue;
-    if (statement.moduleSpecifier.text !== '@kovojs/style') continue;
+    if (statement.moduleSpecifier.text !== styleModuleSpecifier) continue;
     const namedBindings = statement.importClause?.namedBindings;
     if (namedBindings && ts.isNamespaceImport(namedBindings))
       namespaces.add(namedBindings.name.text);
     if (namedBindings && ts.isNamedImports(namedBindings)) {
       for (const element of namedBindings.elements) {
-        if ((element.propertyName ?? element.name).text === 'tokens') {
+        if ((element.propertyName ?? element.name).text === styleTokensExportName) {
           publicTokenNames.add(element.name.text);
         }
       }
@@ -598,9 +609,9 @@ function isObjectFreezeCall(node: ts.Expression): node is ts.CallExpression {
   return (
     ts.isCallExpression(node) &&
     ts.isPropertyAccessExpression(node.expression) &&
-    node.expression.name.text === 'freeze' &&
+    node.expression.name.text === objectFreezeMemberName &&
     ts.isIdentifier(node.expression.expression) &&
-    node.expression.expression.text === 'Object'
+    node.expression.expression.text === objectIdentifierName
   );
 }
 
@@ -640,7 +651,7 @@ function isStyleCreateCall(
 ): initializer is ts.CallExpression {
   if (!initializer || !ts.isCallExpression(initializer)) return false;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return false;
-  if (initializer.expression.name.text !== 'create') return false;
+  if (initializer.expression.name.text !== styleCreateMemberName) return false;
   if (!ts.isIdentifier(initializer.expression.expression)) return false;
   return styleNamespaces.has(initializer.expression.expression.text);
 }
@@ -654,7 +665,7 @@ function styleDefineVarsCall(
 } | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
-  if (initializer.expression.name.text !== 'defineVars') return null;
+  if (initializer.expression.name.text !== styleDefineVarsMemberName) return null;
   if (!ts.isIdentifier(initializer.expression.expression)) return null;
   if (!styleNamespaces.has(initializer.expression.expression.text)) return null;
   const [tokensArgument, optionsArgument] = initializer.arguments;
@@ -672,7 +683,7 @@ function styleCreateThemeCall(
 } | null {
   if (!initializer || !ts.isCallExpression(initializer)) return null;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return null;
-  if (initializer.expression.name.text !== 'createTheme') return null;
+  if (initializer.expression.name.text !== styleCreateThemeMemberName) return null;
   if (!ts.isIdentifier(initializer.expression.expression)) return null;
   if (!styleNamespaces.has(initializer.expression.expression.text)) return null;
   const [baseTokens, overridesArgument, optionsArgument] = initializer.arguments;
@@ -720,7 +731,7 @@ function isStyleKeyframesCall(
 ): initializer is ts.CallExpression {
   if (!initializer || !ts.isCallExpression(initializer)) return false;
   if (!ts.isPropertyAccessExpression(initializer.expression)) return false;
-  if (initializer.expression.name.text !== 'keyframes') return false;
+  if (initializer.expression.name.text !== styleKeyframesMemberName) return false;
   if (!ts.isIdentifier(initializer.expression.expression)) return false;
   return styleNamespaces.has(initializer.expression.expression.text);
 }
@@ -1058,7 +1069,7 @@ function staticThemeClassName(
 ): string | null {
   if (!ts.isPropertyAccessExpression(expression)) return null;
   if (!ts.isIdentifier(expression.expression)) return null;
-  if (expression.name.text !== 'className') return null;
+  if (expression.name.text !== themeClassNameMemberName) return null;
   return themeClassBindings.get(`${expression.expression.text}.className`) ?? null;
 }
 
@@ -1408,7 +1419,7 @@ function staticCssValue(
   styleImports: StyleImports,
 ): CssValue | undefined {
   if (node.kind === ts.SyntaxKind.NullKeyword) return null;
-  if (ts.isIdentifier(node) && node.text === 'undefined') return undefined;
+  if (ts.isIdentifier(node) && node.text === undefinedIdentifierName) return undefined;
   return staticPrimitiveValue(node, staticValues, styleImports);
 }
 
