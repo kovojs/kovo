@@ -46,7 +46,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/graph.ts src/index.ts src/internal.ts src/internal/graph.ts src/package-styles.ts src/vite-config.ts --dts",
+    "build:dist": "vp pack src/compile.ts src/graph.ts src/index.ts src/internal.ts src/internal/graph.ts src/package-styles.ts src/vite-config.ts --dts",
     "gen:reactive-attrs": "node scripts/gen-primitive-reactive-attrs.mjs",
     "prepack": "pnpm run build:dist"
   },
@@ -60,5 +60,10 @@
     "@kovojs/headless-ui": "workspace:*",
     "@kovojs/server": "workspace:*",
     "vitest": "4.1.8"
+  },
+  "kovo": {
+    "publishExtraEntries": [
+      "./src/compile.ts"
+    ]
   }
 }

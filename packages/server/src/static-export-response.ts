@@ -1,6 +1,9 @@
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
-import { collectStaticExportServerEndpointRefs } from './static-export-document-refs.js';
 import { staticExportHeaders } from './static-export-headers.js';
+import {
+  scanStaticExportDocumentProtocol,
+  type StaticExportDocumentProtocol,
+} from './static-export-protocol.js';
 import { type StaticExportResponseSnapshot } from './static-export-types.js';
 
 export interface StaticExportRouteDocumentResponseOptions {
@@ -24,18 +27,24 @@ export async function readStaticExportReplayedResponse(
   const { response } = options;
   const contentType = response.headers.get('content-type');
   const body = await response.text();
+  const routeDocumentProtocol =
+    options.kind === 'route-document'
+      ? scanStaticExportDocumentProtocol(body, 'https://kovo.static-export.local')
+      : undefined;
 
   if (options.kind === 'route-document') {
     const routeOutcomeDiagnostics = routeDocumentNonExportableOutcomeDiagnostics(
       options,
       contentType,
-      body,
+      routeDocumentProtocol,
     );
     if (routeOutcomeDiagnostics.length > 0) throw new StaticExportError(routeOutcomeDiagnostics);
   }
 
   if (response.status !== 200 || !isExpectedStaticExportContentType(options, contentType)) {
-    throw new StaticExportError(staticExportReplayResponseDiagnostics(options, contentType, body));
+    throw new StaticExportError(
+      staticExportReplayResponseDiagnostics(options, contentType, routeDocumentProtocol),
+    );
   }
 
   return {
@@ -52,20 +61,20 @@ function staticExportResponsePath(options: StaticExportReplayedResponseReadOptio
 function staticExportReplayResponseDiagnostics(
   options: StaticExportReplayedResponseReadOptions,
   contentType: string | null,
-  body: string,
+  routeDocumentProtocol: StaticExportDocumentProtocol | undefined,
 ) {
   if (options.kind === 'route-document') {
     const routeOutcomeDiagnostics = routeDocumentNonExportableOutcomeDiagnostics(
       options,
       contentType,
-      body,
+      routeDocumentProtocol,
     );
     if (routeOutcomeDiagnostics.length > 0) return routeOutcomeDiagnostics;
 
     const endpointDiagnostics = routeDocumentEndpointDiagnostics(
       options.routePath,
       contentType,
-      body,
+      routeDocumentProtocol,
     );
     if (endpointDiagnostics.length > 0) return endpointDiagnostics;
     // `routePath` here is the concrete replay target (e.g. `/products/p1`), so stamp it as the
@@ -91,7 +100,7 @@ function staticExportReplayResponseDiagnostics(
 function routeDocumentNonExportableOutcomeDiagnostics(
   options: StaticExportRouteDocumentResponseOptions,
   contentType: string | null,
-  body: string,
+  routeDocumentProtocol: StaticExportDocumentProtocol | undefined,
 ) {
   const { response, routePath } = options;
   if (response.status >= 300 && response.status < 400) {
@@ -115,7 +124,7 @@ function routeDocumentNonExportableOutcomeDiagnostics(
     ];
   }
 
-  if (isDeferredRouteDocumentBody(body)) {
+  if ((routeDocumentProtocol?.deferredMarkers.length ?? 0) > 0) {
     return [
       staticExportDiagnostic(
         routePath,
@@ -131,17 +140,16 @@ function routeDocumentNonExportableOutcomeDiagnostics(
 function routeDocumentEndpointDiagnostics(
   routePath: string,
   contentType: string | null,
-  body: string,
+  routeDocumentProtocol: StaticExportDocumentProtocol | undefined,
 ) {
   if (!isHtmlDocumentContentType(contentType)) return [];
 
-  return collectStaticExportServerEndpointRefs(body, 'https://kovo.static-export.local').map(
-    (ref) =>
-      staticExportDiagnostic(
-        routePath,
-        `KV229 static export cannot export route '${routePath}' because replayed HTML attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
-        routePath,
-      ),
+  return (routeDocumentProtocol?.endpointRefs ?? []).map((ref) =>
+    staticExportDiagnostic(
+      routePath,
+      `KV229 static export cannot export route '${routePath}' because replayed HTML attribute '${ref.name}' references server ${ref.phase} endpoint '${ref.path}'. Export is L0/L1 only; serve this route dynamically or replace server-only interaction with an exportable client island.`,
+      routePath,
+    ),
   );
 }
 
@@ -156,19 +164,6 @@ function isExpectedStaticExportContentType(
 
 function isHtmlDocumentContentType(contentType: string | null): boolean {
   return contentType?.toLowerCase().includes('text/html') ?? false;
-}
-
-function isDeferredRouteDocumentBody(body: string): boolean {
-  const scannableBody = bodyWithoutPreformattedCode(body);
-  return (
-    scannableBody.includes('<kovo-defer') ||
-    scannableBody.includes('<kovo-fragment ') ||
-    scannableBody.includes('--kovo-boundary')
-  );
-}
-
-function bodyWithoutPreformattedCode(body: string): string {
-  return body.replace(/<pre\b[\s\S]*?<\/pre>/gi, '');
 }
 
 function isJavaScriptClientModuleContentType(contentType: string | null): boolean {

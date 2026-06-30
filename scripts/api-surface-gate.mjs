@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 import { apiBoundaryTier, publicPackages, repoRoot } from './public-packages.mjs';
+import { normalizePackageExports, resolveSourceExportTarget } from './package-exports.mjs';
 
 /**
  * api-surface gate (plan api-boudnary Phase 1). Makes the public/internal/generated
@@ -31,14 +32,10 @@ function publicEntryFiles() {
     const pkgJson = JSON.parse(
       readFileSync(path.join(repoRoot, 'packages', pkg.dir, 'package.json'), 'utf8'),
     );
-    const exportsMap = pkgJson.exports ?? {};
+    const exportsMap = normalizePackageExports(pkgJson.exports);
     for (const [subpath, target] of Object.entries(exportsMap)) {
-      const resolved =
-        typeof target === 'string'
-          ? target
-          : (target?.source ?? target?.development ?? target?.import ?? target?.default);
-      if (typeof resolved !== 'string') continue;
-      if (!/\.tsx?$/.test(resolved)) continue; // only source entries participate
+      const resolved = resolveSourceExportTarget(target);
+      if (resolved === null) continue; // only source entries participate
       const absPath = path.join(repoRoot, 'packages', pkg.dir, resolved);
       if (!existsSync(absPath)) continue;
       entries.push({ pkg: pkg.name, subpath, absPath, tier: apiBoundaryTier(pkg, subpath) });

@@ -232,7 +232,9 @@ StyleX objects, the public package owns correctness.
 
 The package ships a machine-readable manifest, `packages/ui/registry.json`, listing every component:
 its source file(s), the symbols it exports, and the exact public package symbols it imports (plus
-any sibling components to copy alongside it). This is the data `kovo add <component>` consumes to
+any sibling components to copy alongside it). The registry also records the package's explicit
+`distributionMode` (`package-and-copy-in`) and per-family metadata for copy-in-sensitive wrappers
+such as slots, state inputs, ids, and parts. This is the data `kovo add <component>` consumes to
 copy a component and its dependencies into your app. It is also enforced: a copy-in smoke test
 typechecks a representative component against the public packages alone, so a component can never
 start depending on a non-public symbol without the build catching it.

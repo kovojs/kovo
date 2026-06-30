@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import {
   CookieDowngradeError,
   drainCookieDowngradeFacts,
+  forwardSetCookie,
   normalizeForwardedSetCookie,
   serializeCookie,
   unsafeCookie,
@@ -411,5 +412,27 @@ describe('cookie security floor (SF Phase 5, SPEC §6.6/§9.1)', () => {
     expect(normalized).toContain('SameSite=None');
     expect(normalized).toContain('Secure');
     expect(normalized).toContain('Partitioned');
+  });
+
+  it('forwards raw credential cookies through the server-owned floor', () => {
+    const forwarded = forwardSetCookie(
+      'better-auth.session_token=tok; Expires=Wed, 09 Jun 2099 10:18:14 GMT; Path=/auth; Priority=High; Partitioned; SameSite=None; SameParty',
+      { class: 'session', source: 'better-auth-credential' },
+    );
+
+    expect(forwarded).toBe(
+      'better-auth.session_token=tok; Path=/auth; Expires=Wed, 09 Jun 2099 10:18:14 GMT; HttpOnly; Secure; SameSite=None; SameParty; Priority=High; Partitioned',
+    );
+  });
+
+  it('preserves deletion cookies while applying the credential floor', () => {
+    const forwarded = forwardSetCookie(
+      'better-auth.session_token=; Max-Age=0; Expires=Thu, 01 Jan 1970 00:00:00 GMT; Path=/',
+      { class: 'session', source: 'better-auth-credential' },
+    );
+
+    expect(forwarded).toBe(
+      'better-auth.session_token=; Max-Age=0; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT; HttpOnly; SameSite=Lax',
+    );
   });
 });

@@ -162,6 +162,7 @@ describe('public-packages manifest', () => {
     const ui = manifest.find((pkg) => pkg.name === '@kovojs/ui');
     expect(ui?.visibility).toBe('public');
     expect(ui?.kind).toBe('library');
+    expect(ui?.distributionMode).toBe('package-and-copy-in');
     expect(publicEntrySubpaths(ui)).toEqual(
       expect.arrayContaining(['.', './button', './select', './dialog']),
     );

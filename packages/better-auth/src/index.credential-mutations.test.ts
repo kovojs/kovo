@@ -29,6 +29,12 @@ describe('credential mutation helpers', () => {
     const headers = requestHeaders();
     const signIn = betterAuthSignInEmailMutation(auth, { csrf: false });
 
+    expect(signIn.access).toEqual({
+      kind: 'public',
+      reason: 'better-auth email sign-in credential form',
+    });
+    expect(signIn.registry?.touches?.map((touch) => touch.key)).toEqual(['auth']);
+
     const result = await runMutation(
       signIn,
       {
@@ -93,6 +99,12 @@ describe('credential mutation helpers', () => {
     });
     const headers = requestHeaders();
 
+    expect(signUp.access).toEqual({
+      kind: 'public',
+      reason: 'better-auth email sign-up credential form',
+    });
+    expect(signUp.registry?.touches?.map((touch) => touch.key)).toEqual(['user', 'auth']);
+
     await expect(
       runMutation(
         signUp,
@@ -147,6 +159,12 @@ describe('credential mutation helpers', () => {
     const auth = new FakeCredentialAuth();
     const headers = requestHeaders('kovo_session=session-1');
     const signOut = betterAuthSignOutMutation(auth, { csrf: false });
+
+    expect(signOut.access).toEqual({
+      kind: 'public',
+      reason: 'better-auth current-browser credential revocation form',
+    });
+    expect(signOut.registry?.touches?.map((touch) => touch.key)).toEqual(['auth']);
 
     const result = await runMutation(signOut, {}, { headers });
 

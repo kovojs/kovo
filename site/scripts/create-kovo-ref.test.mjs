@@ -4,12 +4,12 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { CREATE_KOVO_USAGE } from '../../packages/create-kovo/src/index.ts';
+import { CREATE_KOVO_REFERENCE, CREATE_KOVO_USAGE } from '../../packages/create-kovo/src/index.ts';
 
 import { generateCreateKovoReference } from './create-kovo-ref.mjs';
 
 describe('create-kovo reference generator', () => {
-  it('emits the command page and sidebar from the CLI usage source', async () => {
+  it('emits the command page and sidebar from the shared reference schema', async () => {
     const outDir = await mkdtemp(path.join(tmpdir(), 'kovo-create-kovo-ref-'));
     try {
       await generateCreateKovoReference({ outDir });
@@ -19,15 +19,27 @@ describe('create-kovo reference generator', () => {
       );
 
       expect(page).toContain(CREATE_KOVO_USAGE);
-      expect(page).toContain('--disable-git');
-      expect(page).toContain('already inside a Git or Mercurial repository');
-      expect(page).toContain('## Generated project');
+      for (const option of CREATE_KOVO_REFERENCE.options) {
+        expect(page).toContain(`\`${option.flag}\``);
+        expect(page).toContain(option.docsDescription ?? option.description);
+      }
+      for (const example of CREATE_KOVO_REFERENCE.examples) {
+        expect(page).toContain(example);
+      }
+      for (const section of CREATE_KOVO_REFERENCE.sections) {
+        expect(page).toContain(`## ${section.title}`);
+        for (const paragraph of section.body) expect(page).toContain(paragraph);
+      }
       expect(sidebar.package).toBe('create-kovo');
       expect(sidebar.subpaths[0].categories[0].symbols[0]).toMatchObject({
         anchor: 'usage',
         kind: 'command',
         name: 'create-kovo',
       });
+      expect(sidebar.subpaths[0].categories[1].symbols.map((symbol) => symbol.name)).toEqual([
+        'Options',
+        ...CREATE_KOVO_REFERENCE.sections.map((section) => section.title),
+      ]);
     } finally {
       await rm(outDir, { force: true, recursive: true });
     }

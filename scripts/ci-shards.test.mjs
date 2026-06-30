@@ -111,7 +111,9 @@ describe('ci-shards', () => {
 
   it('keeps consolidated CI-owned files out of root Vitest shards', () => {
     expect(includeVitest('packages/create-kovo/src/index.test.ts')).toBe(true);
-    expect(includeVitest('packages/create-kovo/src/index.build.test.ts')).toBe(false);
+    expect(includeVitest('packages/create-kovo/src/index.build.prod-artifact.test.ts')).toBe(false);
+    expect(includeVitest('packages/create-kovo/src/index.build.runtime.test.ts')).toBe(false);
+    expect(includeVitest('packages/create-kovo/src/index.build.scaffold.test.ts')).toBe(false);
     expect(includeVitest('packages/core/src/sql-safety.test.ts')).toBe(false);
     expect(includeVitest('packages/server/src/guards.test.ts')).toBe(false);
   });

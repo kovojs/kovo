@@ -2,9 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   type BetterAuthTable,
   annotateBetterAuthSchemaSource,
-  betterAuthAuthDomain,
   betterAuthCredentialMutationDeclaredTableTouches,
   betterAuthCredentialMutationDefaultKeys,
+  betterAuthCredentialOperationContracts,
   betterAuthCredentialMutationTouchGraph,
   betterAuthCredentialMutationTouches,
   betterAuthDbVerificationConfig,
@@ -77,6 +77,29 @@ describe('schema bridge', () => {
       signInEmail: 'auth/sign-in',
       signOut: 'auth/sign-out',
       signUpEmail: 'auth/sign-up',
+    });
+    expect(betterAuthCredentialOperationContracts).toMatchObject({
+      signInEmail: {
+        access: { kind: 'public', reason: 'better-auth email sign-in credential form' },
+        csrf: 'checked',
+        defaultKey: 'auth/sign-in',
+        tableTouches: [{ table: 'session' }],
+      },
+      signOut: {
+        access: {
+          kind: 'public',
+          reason: 'better-auth current-browser credential revocation form',
+        },
+        csrf: 'checked',
+        defaultKey: 'auth/sign-out',
+        tableTouches: [{ table: 'session' }],
+      },
+      signUpEmail: {
+        access: { kind: 'public', reason: 'better-auth email sign-up credential form' },
+        csrf: 'checked',
+        defaultKey: 'auth/sign-up',
+        tableTouches: [{ table: 'user' }, { table: 'account' }, { table: 'session' }],
+      },
     });
     expect(betterAuthCredentialMutationTouchGraph).toEqual({
       'auth/sign-in': {
@@ -215,13 +238,18 @@ describe('schema bridge', () => {
       unbridgedTables: [],
     });
 
-    for (const [api, touches] of Object.entries(betterAuthCredentialMutationDeclaredTableTouches)) {
+    for (const [api, contract] of Object.entries(betterAuthCredentialOperationContracts)) {
+      const touches =
+        betterAuthCredentialMutationDeclaredTableTouches[
+          api as keyof typeof betterAuthCredentialMutationDeclaredTableTouches
+        ];
       const declaredDomains = new Set(touches.map((touch) => touch.domain));
       const registryDomains = betterAuthCredentialMutationTouches[
         api as keyof typeof betterAuthCredentialMutationTouches
       ].map((touch) => touch.key);
 
       expect([...declaredDomains].sort()).toEqual(registryDomains.sort());
+      expect(touches.map((touch) => ({ table: touch.table }))).toEqual(contract.tableTouches);
       for (const touch of touches) {
         expect(betterAuthTableDomain(touch.table)).toBe(touch.domain);
       }
@@ -442,7 +470,7 @@ describe('schema bridge', () => {
     });
   });
 
-  it('reports mutation registry touches that drift from declared table touches', () => {
+  it('derives mutation registry domains from operation table touches', () => {
     expect(
       validateBetterAuthSchemaBridge(
         {
@@ -452,20 +480,38 @@ describe('schema bridge', () => {
           verification: authTable(),
         },
         {
-          credentialMutationTouches: {
-            signUpEmail: [betterAuthAuthDomain],
+          credentialMutationTableTouches: {
+            signUpEmail: [{ table: 'session' }],
           },
         },
       ),
     ).toEqual({
-      declaredTouchMismatches: [
-        'signUpEmail mutation registry domains [auth] do not match declared table-touch domains [auth, user]',
-      ],
+      declaredTouchMismatches: [],
       keyFieldMismatches: [],
       missingTables: [],
-      ok: false,
+      ok: true,
       pluginTableDegradations: [],
       unbridgedTables: [],
+    });
+    expect(
+      createBetterAuthCredentialMutationTouchGraph({
+        apis: ['signUpEmail'],
+        credentialMutationTableTouches: {
+          signUpEmail: [{ table: 'session' }],
+        },
+      }),
+    ).toEqual({
+      'auth/sign-up': {
+        touches: [
+          {
+            domain: 'auth',
+            keys: null,
+            site: '@kovojs/better-auth:signUpEmail',
+            via: 'session',
+          },
+        ],
+        unresolved: [],
+      },
     });
   });
 
@@ -479,11 +525,8 @@ describe('schema bridge', () => {
           verification: authTable(),
         },
         {
-          credentialMutationDeclaredTableTouches: {
-            signInEmail: [
-              { domain: 'auth', table: 'session' },
-              { domain: 'auth', table: 'twoFactor' },
-            ],
+          credentialMutationTableTouches: {
+            signInEmail: [{ table: 'session' }, { table: 'twoFactor' }],
           },
         },
       ),
@@ -510,11 +553,8 @@ describe('schema bridge', () => {
           webauthnCredential: authTable(['credentialId', 'userId']),
         },
         {
-          credentialMutationDeclaredTableTouches: {
-            signInEmail: [
-              { domain: 'auth', table: 'session' },
-              { domain: 'auth', table: 'webauthnCredential' },
-            ],
+          credentialMutationTableTouches: {
+            signInEmail: [{ table: 'session' }, { table: 'webauthnCredential' }],
           },
         },
       ),
@@ -559,11 +599,8 @@ describe('schema bridge', () => {
 
     expect(
       validateBetterAuthSchemaBridge(tables, {
-        credentialMutationDeclaredTableTouches: {
-          signInEmail: [
-            { domain: 'auth', table: 'session' },
-            { domain: 'auth', table: 'webauthnCredential' },
-          ],
+        credentialMutationTableTouches: {
+          signInEmail: [{ table: 'session' }, { table: 'webauthnCredential' }],
         },
         schemaBridge,
       }),
@@ -750,16 +787,13 @@ describe('schema bridge', () => {
       },
       webauthnCredential: { domain: 'auth', key: 'userId' },
     } as const;
-    const declaredTouches = {
-      signInEmail: [
-        { domain: 'auth', table: 'session' },
-        { domain: 'auth', table: 'webauthnCredential' },
-      ],
+    const tableTouches = {
+      signInEmail: [{ table: 'session' }, { table: 'webauthnCredential' }],
     } as const;
 
     expect(
       validateBetterAuthSchemaBridge(tables, {
-        credentialMutationDeclaredTableTouches: declaredTouches,
+        credentialMutationTableTouches: tableTouches,
         schemaBridge,
       }),
     ).toEqual({
@@ -773,8 +807,9 @@ describe('schema bridge', () => {
     expect(
       createBetterAuthCredentialMutationTouchGraph({
         apis: ['signInEmail'],
-        credentialMutationDeclaredTableTouches: declaredTouches,
+        credentialMutationTableTouches: tableTouches,
         keys: { signInEmail: 'auth/passkey-sign-in' },
+        schemaBridge,
       }),
     ).toMatchObject({
       'auth/passkey-sign-in': {

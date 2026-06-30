@@ -2,11 +2,11 @@ import {
   dataDisabled,
   dataState,
   dispatchCancelableChange,
-  findTypeaheadMatch,
   mergeDataAttributes,
-  moveCollectionIndex,
-  navigationIntentFromKey,
-  nextTypeaheadState,
+  moveCollection,
+  projectCollectionItems,
+  setOpenState,
+  typeaheadCollection,
   openState,
   scheduleDeferred,
   type PrimitiveChangeDetail,
@@ -675,29 +675,18 @@ export function setContextMenuOpen(
   options: ContextMenuChangeOptions = {},
   point?: ContextMenuPoint,
 ): ContextMenuOpenChangeResult {
-  if (state.disabled || state.open === open) {
-    return {
-      changed: false,
-      open: state.open === true,
-      ...(state.point ? { point: state.point } : {}),
-    };
-  }
-
-  const detail = dispatchCancelableChange({ reason, value: open }, options.onOpenChange);
-  if (detail.defaultPrevented) {
-    return {
-      changed: false,
-      detail,
-      open: state.open === true,
-      ...(state.point ? { point: state.point } : {}),
-    };
-  }
+  const result = setOpenState(
+    { disabled: state.disabled, open: state.open === true },
+    open,
+    reason,
+    { onOpenChange: options.onOpenChange },
+  );
 
   return {
-    changed: true,
-    detail,
-    open,
-    ...((point ?? state.point) ? { point: point ?? state.point } : {}),
+    ...result,
+    ...((result.changed ? (point ?? state.point) : state.point)
+      ? { point: result.changed ? (point ?? state.point) : state.point }
+      : {}),
   };
 }
 
@@ -818,23 +807,13 @@ export function contextMenuMove(
   key: string,
   options: { loop?: boolean } = {},
 ): ContextMenuMoveResult | undefined {
-  if (state.disabled) return undefined;
-
-  const intent = navigationIntentFromKey(key, { orientation: 'vertical' });
-  if (intent === undefined) return undefined;
-
-  const items = state.items ?? [];
-  const currentIndex = items.findIndex((item) => item.value === state.highlightedValue);
-  const highlightedIndex = moveCollectionIndex(intent, {
-    currentIndex,
-    items,
-    ...(options.loop === undefined ? {} : { loop: options.loop }),
+  return moveCollection({
+    currentValue: state.highlightedValue,
+    disabled: state.disabled,
+    items: projectCollectionItems(state.items, contextMenuCollectionItem),
+    key,
+    loop: options.loop,
   });
-
-  return {
-    highlightedIndex,
-    highlightedValue: highlightedIndex < 0 ? undefined : items[highlightedIndex]?.value,
-  };
 }
 
 /**
@@ -859,41 +838,20 @@ export function contextMenuTypeahead(
   key: string,
   options: ContextMenuTypeaheadOptions,
 ): ContextMenuTypeaheadResult {
-  const nextState = nextTypeaheadState(
-    state.disabled ? undefined : options.state,
-    key,
-    options.now,
-    options.timeoutMs,
-  );
-  if (state.disabled || nextState.buffer === '') {
-    return {
-      highlightedIndex: -1,
-      highlightedValue: options.currentValue ?? state.highlightedValue,
-      state: nextState,
-    };
-  }
-
-  const items = (state.items ?? []).map((item) => ({
-    ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
-    textValue: item.textValue ?? item.label ?? item.value,
-  }));
-  const currentIndex = (state.items ?? []).findIndex(
-    (item) => item.value === (options.currentValue ?? state.highlightedValue),
-  );
-  const highlightedIndex = findTypeaheadMatch({
-    currentIndex,
-    items,
-    ...(options.loop === undefined ? {} : { loop: options.loop }),
-    search: nextState.buffer,
+  const result = typeaheadCollection(key, {
+    currentValue: options.currentValue ?? state.highlightedValue,
+    disabled: state.disabled,
+    items: projectCollectionItems(state.items, contextMenuCollectionItem),
+    loop: options.loop,
+    now: options.now,
+    state: options.state,
+    timeoutMs: options.timeoutMs,
   });
 
   return {
-    highlightedIndex,
-    highlightedValue:
-      highlightedIndex < 0
-        ? (options.currentValue ?? state.highlightedValue)
-        : state.items?.[highlightedIndex]?.value,
-    state: nextState,
+    highlightedIndex: result.matchIndex,
+    highlightedValue: result.value,
+    state: result.state,
   };
 }
 
@@ -1157,6 +1115,14 @@ function contextMenuItemDisabled(
     state.itemDisabled === true ||
     state.items?.find((item) => item.value === value)?.disabled === true
   );
+}
+
+function contextMenuCollectionItem(item: ContextMenuItem) {
+  return {
+    ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
+    textValue: item.textValue ?? item.label ?? item.value,
+    value: item.value,
+  };
 }
 
 function contextMenuItemActivationKey(key: string): boolean {

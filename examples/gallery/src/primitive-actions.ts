@@ -1,3 +1,4 @@
+// Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.
 // Gallery-local L1 interaction adapter for compiled demos.
 export * from '@kovojs/headless-ui/generated';
 export * from '@kovojs/headless-ui/internal/primitive';
@@ -5,8 +6,8 @@ export * from '@kovojs/headless-ui/accordion';
 export * from '@kovojs/headless-ui/alert-dialog';
 export * from '@kovojs/headless-ui/autocomplete';
 export * from '@kovojs/headless-ui/avatar';
-export * from '@kovojs/headless-ui/checkbox-group';
 export * from '@kovojs/headless-ui/checkbox';
+export * from '@kovojs/headless-ui/checkbox-group';
 export * from '@kovojs/headless-ui/collapsible';
 export * from '@kovojs/headless-ui/combobox';
 export * from '@kovojs/headless-ui/command';
@@ -25,13 +26,13 @@ export * from '@kovojs/headless-ui/popover';
 export * from '@kovojs/headless-ui/progress';
 export * from '@kovojs/headless-ui/radio-group';
 export * from '@kovojs/headless-ui/scroll-area';
-export * from '@kovojs/headless-ui/select';
 export * from '@kovojs/headless-ui/separator';
+export * from '@kovojs/headless-ui/select';
 export * from '@kovojs/headless-ui/slider';
 export * from '@kovojs/headless-ui/switch';
 export * from '@kovojs/headless-ui/tabs';
 export * from '@kovojs/headless-ui/toast';
-export * from '@kovojs/headless-ui/toggle-group';
 export * from '@kovojs/headless-ui/toggle';
+export * from '@kovojs/headless-ui/toggle-group';
 export * from '@kovojs/headless-ui/toolbar';
 export * from '@kovojs/headless-ui/tooltip';

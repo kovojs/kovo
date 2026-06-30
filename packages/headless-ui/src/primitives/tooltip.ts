@@ -1,8 +1,8 @@
 import {
   dataDisabled,
-  dispatchCancelableChange,
   mergeDataAttributes,
   openState,
+  setOpenState,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
 } from '../lib/index.js';
@@ -247,16 +247,7 @@ export function setTooltipOpen(
   reason: TooltipChangeReason,
   options: TooltipChangeOptions = {},
 ): TooltipChangeResult {
-  if (state.disabled || state.open === open) {
-    return { changed: false, open: state.open };
-  }
-
-  const detail = dispatchCancelableChange({ reason, value: open }, options.onOpenChange);
-  if (detail.defaultPrevented) {
-    return { changed: false, detail, open: state.open };
-  }
-
-  return { changed: true, detail, open };
+  return setOpenState(state, open, reason, options);
 }
 
 /**

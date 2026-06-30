@@ -4,7 +4,6 @@ import type { MutationDefinition } from '@kovojs/server';
 
 import {
   betterAuthCredentialMutationErrors,
-  betterAuthCredentialMutationTouches,
   betterAuthSignInEmailInput,
   betterAuthSignOutInput,
   betterAuthSignUpEmailInput,
@@ -74,8 +73,8 @@ export function betterAuthSignInEmailMutation<
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
+        'signInEmail',
         options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
-        betterAuthCredentialMutationTouches.signInEmail,
       ),
       errors: betterAuthCredentialMutationErrors,
       input: betterAuthSignInEmailInput,
@@ -140,8 +139,8 @@ export function betterAuthSignUpEmailMutation<
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
+        'signUpEmail',
         options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
-        betterAuthCredentialMutationTouches.signUpEmail,
       ),
       errors: betterAuthCredentialMutationErrors,
       input: betterAuthSignUpEmailInput,
@@ -207,8 +206,8 @@ export function betterAuthSignOutMutation<
   return assignBetterAuthMutationKey(
     mutation({
       ...credentialMutationDefinitionOptions(
+        'signOut',
         options as BetterAuthCredentialMutationInternalOptions<Key, Request, GuardedRequest>,
-        betterAuthCredentialMutationTouches.signOut,
       ),
       errors: {},
       input: betterAuthSignOutInput,

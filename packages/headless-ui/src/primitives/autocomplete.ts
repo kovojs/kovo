@@ -3,11 +3,11 @@ import {
   dataDisabled,
   dataState,
   dispatchCancelableChange,
-  findTypeaheadMatch,
   mergeDataAttributes,
-  moveCollectionIndex,
-  navigationIntentFromKey,
-  nextTypeaheadState,
+  moveCollection,
+  projectCollectionItems,
+  setOpenState,
+  typeaheadCollection,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
   type TypeaheadState,
@@ -804,16 +804,9 @@ export function setAutocompleteOpen(
   reason: AutocompleteOpenChangeReason,
   options: AutocompleteChangeOptions = {},
 ): AutocompleteOpenChangeResult {
-  if (state.disabled || state.open === open) {
-    return { changed: false, open: state.open === true };
-  }
-
-  const detail = dispatchCancelableChange({ reason, value: open }, options.onOpenChange);
-  if (detail.defaultPrevented) {
-    return { changed: false, detail, open: state.open === true };
-  }
-
-  return { changed: true, detail, open };
+  return setOpenState({ disabled: state.disabled, open: state.open === true }, open, reason, {
+    onOpenChange: options.onOpenChange,
+  });
 }
 
 /**
@@ -908,36 +901,16 @@ export function autocompleteTypeahead(
   key: string,
   options: AutocompleteTypeaheadOptions,
 ): AutocompleteTypeaheadResult {
-  const nextState = nextTypeaheadState(
-    state.disabled ? undefined : options.state,
-    key,
-    options.now,
-    options.timeoutMs,
-  );
-  if (state.disabled || nextState.buffer === '') {
-    return { matchIndex: -1, state: nextState, value: options.currentValue ?? state.value };
-  }
-
-  const items = (state.items ?? []).map((item) => ({
-    ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
-    textValue: autocompleteItemText(item),
-  }));
-  const currentIndex = (state.items ?? []).findIndex(
-    (item) => item.value === (options.currentValue ?? state.highlightedValue ?? state.value),
-  );
-  const matchIndex = findTypeaheadMatch({
-    currentIndex,
-    items,
-    ...(options.loop === undefined ? {} : { loop: options.loop }),
-    search: nextState.buffer,
+  const result = typeaheadCollection(key, {
+    currentValue: options.currentValue ?? state.highlightedValue ?? state.value,
+    disabled: state.disabled,
+    items: projectCollectionItems(state.items, autocompleteCollectionItem),
+    loop: options.loop,
+    now: options.now,
+    state: options.state,
+    timeoutMs: options.timeoutMs,
   });
-
-  return {
-    matchIndex,
-    state: nextState,
-    value:
-      matchIndex < 0 ? (options.currentValue ?? state.value) : state.items?.[matchIndex]?.value,
-  };
+  return result.matchIndex < 0 ? { ...result, value: options.currentValue ?? state.value } : result;
 }
 
 /**
@@ -962,25 +935,13 @@ export function autocompleteMove(
   key: string,
   options: { loop?: boolean } = {},
 ): AutocompleteMoveResult | undefined {
-  if (state.disabled) return undefined;
-
-  const intent = navigationIntentFromKey(key, { orientation: 'vertical' });
-  if (intent === undefined) return undefined;
-
-  const items = autocompleteSuggestions(state);
-  const currentIndex = items.findIndex(
-    (item) => item.value === (state.highlightedValue ?? state.value),
-  );
-  const highlightedIndex = moveCollectionIndex(intent, {
-    currentIndex,
-    items,
-    ...(options.loop === undefined ? {} : { loop: options.loop }),
+  return moveCollection({
+    currentValue: state.highlightedValue ?? state.value,
+    disabled: state.disabled,
+    items: projectCollectionItems(autocompleteSuggestions(state), autocompleteCollectionItem),
+    key,
+    loop: options.loop,
   });
-
-  return {
-    highlightedIndex,
-    highlightedValue: highlightedIndex < 0 ? undefined : items[highlightedIndex]?.value,
-  };
 }
 
 /**
@@ -1217,6 +1178,14 @@ function autocompleteFallbackPrefix(state: {
 
 function autocompleteItemText(item: AutocompleteItem): string {
   return item.textValue ?? item.label ?? item.value;
+}
+
+function autocompleteCollectionItem(item: AutocompleteItem) {
+  return {
+    ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
+    textValue: autocompleteItemText(item),
+    value: item.value,
+  };
 }
 
 function autocompleteDescribedBy(options: {

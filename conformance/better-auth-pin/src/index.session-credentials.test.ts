@@ -470,11 +470,8 @@ describe('Better Auth pinned conformance', () => {
       },
       webauthnCredential: { domain: 'auth', key: 'userId' },
     } as const;
-    const declaredTouches = {
-      signInEmail: [
-        { domain: 'auth', table: 'session' },
-        { domain: 'auth', table: 'webauthnCredential' },
-      ],
+    const tableTouches = {
+      signInEmail: [{ table: 'session' }, { table: 'webauthnCredential' }],
     } as const;
     type PluginVerifierDb = {
       writes: { table: string; value: unknown }[];
@@ -496,8 +493,9 @@ describe('Better Auth pinned conformance', () => {
       },
       touchGraph: createBetterAuthCredentialMutationTouchGraph({
         apis: ['signInEmail'],
-        credentialMutationDeclaredTableTouches: declaredTouches,
+        credentialMutationTableTouches: tableTouches,
         keys: { signInEmail: 'auth/passkey-sign-in' },
+        schemaBridge,
       }),
       verification: createBetterAuthDbVerificationConfig(schemaBridge, tables),
     });

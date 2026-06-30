@@ -5,6 +5,7 @@ import { pathToFileURL } from 'node:url';
 import ts from 'typescript';
 
 import { publicEntrySubpaths, publicPackages, repoRoot } from './public-packages.mjs';
+import { sourceExportEntriesForPackage } from './package-exports.mjs';
 
 const tsconfigPath = path.join(repoRoot, 'tsconfig.json');
 const packagesRoot = path.join(repoRoot, 'packages');
@@ -15,24 +16,6 @@ const duplicateBaselinePath = path.join(
 
 function readJson(filePath) {
   return JSON.parse(readFileSync(filePath, 'utf8'));
-}
-
-function resolveExportTarget(target) {
-  if (typeof target === 'string') return target;
-  if (target === null || typeof target !== 'object') return null;
-  return (
-    target.source ??
-    target.development ??
-    target.types ??
-    target.import ??
-    target.default ??
-    Object.values(target).find((value) => typeof value === 'string') ??
-    null
-  );
-}
-
-function importPathFor(packageName, subpath) {
-  return subpath === '.' ? packageName : `${packageName}/${subpath.slice(2)}`;
 }
 
 function symbolKind(symbol, checker) {
@@ -59,30 +42,15 @@ export function packageExportEntries() {
     const packageJsonPath = path.join(packagesRoot, dir, 'package.json');
     if (!existsSync(packageJsonPath)) continue;
     const packageJson = readJson(packageJsonPath);
-    const exportsMap = packageJson.exports;
-    if (exportsMap === undefined) continue;
-
-    const normalizedExports =
-      typeof exportsMap === 'string' || Array.isArray(exportsMap)
-        ? { '.': exportsMap }
-        : exportsMap;
-    if (normalizedExports === null || typeof normalizedExports !== 'object') continue;
-
-    for (const [subpath, target] of Object.entries(normalizedExports)) {
-      const resolved = resolveExportTarget(target);
-      if (typeof resolved !== 'string') continue;
-      if (!/\.tsx?$/.test(resolved)) continue;
-      const absPath = path.join(packagesRoot, dir, resolved);
-      if (!existsSync(absPath)) continue;
-      entries.push({
-        packageName: packageJson.name,
+    if (packageJson.exports === undefined) continue;
+    entries.push(
+      ...sourceExportEntriesForPackage({
         packageDir: dir,
-        subpath,
-        importPath: importPathFor(packageJson.name, subpath),
-        source: path.relative(repoRoot, absPath),
-        absPath,
-      });
-    }
+        packageJson,
+        packagesRoot,
+        repoRoot,
+      }).filter((entry) => existsSync(entry.absPath)),
+    );
   }
   return entries.sort((left, right) => {
     const byPackage = left.packageName.localeCompare(right.packageName);

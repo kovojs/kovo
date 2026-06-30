@@ -1,3 +1,5 @@
+import { parseKovoModuleRef, type KovoModuleRef } from '@kovojs/core/internal/module-ref';
+
 import { applyBindProp, BIND_PROP_PREFIX } from './bind-prop.js';
 import { domAttributes } from './dom-like.js';
 import type {
@@ -9,7 +11,7 @@ import { morphDomElement, sanitizeDomElementTree } from './morph.js';
 import type { QueryStore } from './query-store.js';
 import { kovoBoundAttributeValue } from './security-output.js';
 import { kovoCreateHTML } from './trusted-types.js';
-import { assertAllowedKovoDynamicImportUrl } from './dynamic-import-url.js';
+import { assertAllowedKovoDynamicImportRef } from './dynamic-import-url.js';
 
 /** Runtime API used by Kovo applications and generated runtime integration. */
 export interface QueryBindingElement
@@ -461,7 +463,7 @@ async function applyStateDeriveBindings(
     const ref = parseDeriveReference(refValue);
     if (!ref) continue;
 
-    assertAllowedKovoDynamicImportUrl(ref.url);
+    assertAllowedKovoDynamicImportRef(ref);
     const mod = await importModule(ref.url);
     const derive = mod[ref.exportName];
     const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
@@ -476,7 +478,7 @@ async function applyStateDeriveBindings(
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
 
-      assertAllowedKovoDynamicImportUrl(ref.url);
+      assertAllowedKovoDynamicImportRef(ref);
       const mod = await importModule(ref.url);
       const derive = mod[ref.exportName];
       const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
@@ -494,7 +496,7 @@ async function applyStateDeriveBindings(
       const ref = parseDeriveReference(attribute.value);
       if (!ref) continue;
 
-      assertAllowedKovoDynamicImportUrl(ref.url);
+      assertAllowedKovoDynamicImportRef(ref);
       const mod = await importModule(ref.url);
       const derive = mod[ref.exportName];
       const value = isRunnableDerive(derive) ? derive.run(state) : undefined;
@@ -512,14 +514,8 @@ function isRunnableDerive(value: unknown): value is { run(value: unknown): unkno
   );
 }
 
-function parseDeriveReference(value: string): { exportName: string; url: string } | null {
-  const hashIndex = value.lastIndexOf('#');
-  if (hashIndex <= 0 || hashIndex === value.length - 1) return null;
-
-  return {
-    exportName: value.slice(hashIndex + 1),
-    url: value.slice(0, hashIndex),
-  };
+function parseDeriveReference(value: string): KovoModuleRef<'derive'> | null {
+  return parseKovoModuleRef(value, 'derive') ?? null;
 }
 
 function elementBelongsToScope(element: QueryBindingElement, scopeRoot: unknown): boolean {

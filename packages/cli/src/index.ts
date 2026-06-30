@@ -15,7 +15,15 @@ import {
   runAddCommand,
   runCompileCommand,
 } from './commands/compile.js';
-import { UPDATE_DOCS_USAGE } from './commands-manifest.js';
+import {
+  formatNoArgsMessage,
+  formatUnknownCommandMessage,
+  isAsyncCommand,
+  resolveCommand,
+  UPDATE_DOCS_USAGE,
+  type KovoAsyncCommandName,
+  type KovoSyncCommandName,
+} from './commands-manifest.js';
 import { runUpdateDocsCommand } from './commands/update-docs.js';
 import {
   compileComponentV1,
@@ -35,7 +43,7 @@ import {
   runGraphCommand,
   writeCheckUsageError,
 } from './graph-output.js';
-import { stableValue, writeCommandResult, writeUsageError } from './shared.js';
+import { writeCommandResult, writeUsageError } from './shared.js';
 import {
   scanSourceSinkDrift,
   sourcesSinksCheckResult,
@@ -79,28 +87,26 @@ export type {
 } from './graph-output.js';
 export type { KovoCheckResult } from './shared.js';
 
-/** @internal Synchronous argv dispatcher for the `kovo` bin; not a public API. */
-export function main(args: readonly string[] = process.argv.slice(2)): number {
-  if (args.length === 0) {
-    process.stdout.write(
-      'kovo: add, audit, build, check, compile, explain, export, mcp, update-docs\n',
+type SyncCommandHandler = (args: readonly string[]) => number;
+type AsyncCommandHandler = (args: readonly string[]) => Promise<number>;
+
+const SYNC_COMMAND_HANDLERS: Record<KovoSyncCommandName, SyncCommandHandler> = {
+  add(args) {
+    const parsed = parseAddArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(runAddCommand(parsed.options));
+  },
+  audit(args) {
+    const parsed = parseAuditArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(
+      runGraphCommand(parsed.inputPath, (input) =>
+        kovoAudit(input, { failOnFindings: parsed.failOnFindings }),
+      ),
     );
-    return 0;
-  }
-
-  if (args[0] === 'compile' && args.length === 1) return writeUsageError(compileUsage());
-  if (
-    args[0] === 'build' ||
-    args[0] === 'compile' ||
-    args[0] === 'export' ||
-    args[0] === 'mcp' ||
-    args[0] === 'update-docs'
-  ) {
-    throw new Error(`kovo ${args[0]} is asynchronous; call mainAsync() instead.`);
-  }
-
-  if (args[0] === 'check') {
-    const parsed = parseCheckArgs(args.slice(1));
+  },
+  check(args) {
+    const parsed = parseCheckArgs(args);
     if (!parsed.ok) return writeCheckUsageError(parsed);
     const { family, inputPath } = parsed;
     if (family === 'sources-sinks') {
@@ -113,61 +119,74 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
       return writeCommandResult(sourcesSinksCheckResult(outputVersion, { driftScan }));
     }
     return writeCommandResult(runGraphCommand(inputPath, (input) => kovoCheck(input, { family })));
-  }
-
-  if (args[0] === 'add') {
-    const parsed = parseAddArgs(args.slice(1));
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(runAddCommand(parsed.options));
-  }
-
-  if (args[0] === 'audit') {
-    const parsed = parseAuditArgs(args.slice(1));
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(
-      runGraphCommand(parsed.inputPath, (input) =>
-        kovoAudit(input, { failOnFindings: parsed.failOnFindings }),
-      ),
-    );
-  }
-
-  if (args[0] === 'explain') {
-    const parsed = parseExplainArgs(args.slice(1));
+  },
+  explain(args) {
+    const parsed = parseExplainArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
     if ('sourcesSinks' in parsed.options) writeSourcesSinksArtifact();
     return writeCommandResult(
       runGraphCommand(parsed.inputPath, (input) => kovoExplain(input, parsed.options)),
     );
+  },
+};
+
+const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> = {
+  async build(args) {
+    const parsed = parseBuildArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runBuildCommand(parsed.options));
+  },
+  async compile(args) {
+    const parsed = parseCompileArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runCompileCommand(parsed.options));
+  },
+  async export(args) {
+    const parsed = parseExportArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runExportCommand(parsed.options));
+  },
+  async mcp(args) {
+    return runMcpCommand(args);
+  },
+  async 'update-docs'(args) {
+    if (args.length > 0) return writeUsageError(UPDATE_DOCS_USAGE);
+    return writeCommandResult(await runUpdateDocsCommand());
+  },
+};
+
+/** @internal Dispatcher keys kept exportable for registry drift tests only. */
+export const CLI_COMMAND_DISPATCHER_NAMES = {
+  async: Object.keys(ASYNC_COMMAND_HANDLERS).sort(),
+  sync: Object.keys(SYNC_COMMAND_HANDLERS).sort(),
+} as const;
+
+/** @internal Synchronous argv dispatcher for the `kovo` bin; not a public API. */
+export function main(args: readonly string[] = process.argv.slice(2)): number {
+  if (args.length === 0) {
+    process.stdout.write(formatNoArgsMessage());
+    return 0;
   }
 
-  process.stderr.write(
-    `kovo: unknown command ${stableValue(args[0])}. expected add, build, compile, explain, check, audit, export, mcp, or update-docs.\n`,
-  );
-  return 1;
+  const command = resolveCommand(args[0]);
+  if (command === undefined) {
+    process.stderr.write(formatUnknownCommandMessage(args[0] ?? ''));
+    return 1;
+  }
+
+  if (command.name === 'compile' && args.length === 1) return writeUsageError(compileUsage());
+  if (isAsyncCommand(command)) {
+    throw new Error(`kovo ${command.name} is asynchronous; call mainAsync() instead.`);
+  }
+
+  return SYNC_COMMAND_HANDLERS[command.name](args.slice(1));
 }
 
 /** @internal Async argv dispatcher (export/mcp) for the `kovo` bin; not a public API. */
 export async function mainAsync(args: readonly string[] = process.argv.slice(2)): Promise<number> {
-  if (args[0] === 'mcp') return runMcpCommand(args.slice(1));
-  if (args[0] === 'update-docs') {
-    if (args.length > 1) return writeUsageError(UPDATE_DOCS_USAGE);
-    return writeCommandResult(await runUpdateDocsCommand());
-  }
-  if (args[0] === 'build') {
-    const parsed = parseBuildArgs(args.slice(1));
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runBuildCommand(parsed.options));
-  }
-  if (args[0] === 'compile') {
-    const parsed = parseCompileArgs(args.slice(1));
-    if (!parsed.ok) return writeUsageError(parsed.message);
-    return writeCommandResult(await runCompileCommand(parsed.options));
-  }
-  if (args[0] !== 'export') return main(args);
-
-  const parsed = parseExportArgs(args.slice(1));
-  if (!parsed.ok) return writeUsageError(parsed.message);
-  return writeCommandResult(await runExportCommand(parsed.options));
+  const command = resolveCommand(args[0]);
+  if (!command || !isAsyncCommand(command)) return main(args);
+  return ASYNC_COMMAND_HANDLERS[command.name](args.slice(1));
 }
 
 /**

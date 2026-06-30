@@ -38,6 +38,15 @@ export interface PropertyAccessPathModel {
   terminalName: string;
 }
 
+export interface ConditionalExpressionModel {
+  condition: string;
+  conditionEnd: number;
+  conditionPropertyAccesses: readonly PropertyAccessPathModel[];
+  conditionStart: number;
+  end: number;
+  start: number;
+}
+
 export interface TemporalReadModel {
   end: number;
   kind: 'Date.now' | 'new Date';
@@ -126,6 +135,7 @@ export interface JsxAttributeModel {
   expressionIsBareIdentifier?: boolean;
   expressionBareIdentifierName?: string;
   expressionObjectEntries?: readonly ObjectLiteralEntry[];
+  expressionConditionalFacts?: readonly ConditionalExpressionModel[];
   expressionPropertyAccesses?: readonly PropertyAccessPathModel[];
   expressionReferences?: readonly string[];
   expressionStart?: number;

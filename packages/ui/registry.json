@@ -1,5 +1,6 @@
 {
-  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. This is the data a future `kovo add <component>` consumes. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
+  "$comment": "shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. Component membership/order comes from packages/ui/scripts/primitive-component-manifest.mjs; dependency metadata is derived from source. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.",
+  "distributionMode": "package-and-copy-in",
   "registryDependencies": [
     "@kovojs/headless-ui",
     "@kovojs/style",
@@ -9,6 +10,12 @@
   ],
   "components": [
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "accordion",
       "title": "Accordion",
       "files": ["src/accordion.tsx"],
@@ -35,6 +42,30 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
+      "name": "alert",
+      "title": "Alert",
+      "files": ["src/alert.tsx"],
+      "exports": ["Alert"],
+      "dependencies": {
+        "@kovojs/headless-ui": [],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": ["theme"]
+    },
+    {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "alert-dialog",
       "title": "AlertDialog",
       "files": ["src/alert-dialog.tsx"],
@@ -65,18 +96,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
-      "name": "alert",
-      "title": "Alert",
-      "files": ["src/alert.tsx"],
-      "exports": ["Alert"],
-      "dependencies": {
-        "@kovojs/headless-ui": [],
-        "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
       },
-      "uiComponents": ["theme"]
-    },
-    {
       "name": "autocomplete",
       "title": "Autocomplete",
       "files": ["src/autocomplete.tsx"],
@@ -103,6 +128,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "avatar",
       "title": "Avatar",
       "files": ["src/avatar.tsx"],
@@ -120,6 +151,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "badge",
       "title": "Badge",
       "files": ["src/badge.tsx"],
@@ -132,6 +169,12 @@
       "uiComponents": ["theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "breadcrumb",
       "title": "Breadcrumb",
       "files": ["src/breadcrumb.tsx"],
@@ -144,6 +187,12 @@
       "uiComponents": ["pass-through", "safe-url", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "button",
       "title": "Button",
       "files": ["src/button.tsx"],
@@ -156,6 +205,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "card",
       "title": "Card",
       "files": ["src/card.tsx"],
@@ -168,6 +223,30 @@
       "uiComponents": ["theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
+      "name": "checkbox",
+      "title": "Checkbox",
+      "files": ["src/checkbox.tsx"],
+      "exports": ["Checkbox"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["CheckboxCheckedState", "checkboxRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": ["pass-through", "theme"]
+    },
+    {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "checkbox-group",
       "title": "CheckboxGroup",
       "files": ["src/checkbox-group.tsx"],
@@ -191,18 +270,12 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
-      "name": "checkbox",
-      "title": "Checkbox",
-      "files": ["src/checkbox.tsx"],
-      "exports": ["Checkbox"],
-      "dependencies": {
-        "@kovojs/headless-ui": ["CheckboxCheckedState", "checkboxRootAttributes"],
-        "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
       },
-      "uiComponents": ["pass-through", "theme"]
-    },
-    {
       "name": "collapsible",
       "title": "Collapsible",
       "files": ["src/collapsible.tsx"],
@@ -219,6 +292,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "combobox",
       "title": "Combobox",
       "files": ["src/combobox.tsx"],
@@ -245,6 +324,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "command",
       "title": "Command",
       "files": ["src/command.tsx"],
@@ -279,6 +364,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "context-menu",
       "title": "ContextMenu",
       "files": ["src/context-menu.tsx"],
@@ -307,6 +398,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "dialog",
       "title": "Dialog",
       "files": ["src/dialog.tsx"],
@@ -333,6 +430,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "disclosure",
       "title": "Disclosure",
       "files": ["src/disclosure.tsx"],
@@ -349,6 +452,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "drawer",
       "title": "Drawer",
       "files": ["src/drawer.tsx"],
@@ -376,6 +485,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "dropdown-menu",
       "title": "DropdownMenu",
       "files": ["src/dropdown-menu.tsx"],
@@ -403,6 +518,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "field",
       "title": "Field",
       "files": ["src/field.tsx"],
@@ -434,6 +555,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "hover-card",
       "title": "HoverCard",
       "files": ["src/hover-card.tsx"],
@@ -450,6 +577,12 @@
       "uiComponents": ["pass-through", "safe-url", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "kbd",
       "title": "Kbd",
       "files": ["src/kbd.tsx"],
@@ -462,6 +595,12 @@
       "uiComponents": ["theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "menubar",
       "title": "Menubar",
       "files": ["src/menubar.tsx"],
@@ -481,6 +620,12 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "meter",
       "title": "Meter",
       "files": ["src/meter.tsx"],
@@ -493,6 +638,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "navigation-menu",
       "title": "NavigationMenu",
       "files": ["src/navigation-menu.tsx"],
@@ -525,6 +676,12 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "number-field",
       "title": "NumberField",
       "files": ["src/number-field.tsx"],
@@ -549,6 +706,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "otp-field",
       "title": "OtpField",
       "files": ["src/otp-field.tsx"],
@@ -566,6 +729,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "popover",
       "title": "Popover",
       "files": ["src/popover.tsx"],
@@ -582,6 +751,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "progress",
       "title": "Progress",
       "files": ["src/progress.tsx"],
@@ -594,6 +769,25 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": ["controlId", "descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["item", "label", "radio", "radioControl", "root"],
+        "slots": ["item", "label", "radio", "radioControl", "root"],
+        "state": [
+          "descriptionId",
+          "dir",
+          "disabled",
+          "errorId",
+          "form",
+          "invalid",
+          "items",
+          "loop",
+          "name",
+          "orientation",
+          "required",
+          "value"
+        ]
+      },
       "name": "radio-group",
       "title": "RadioGroup",
       "files": ["src/radio-group.tsx"],
@@ -612,6 +806,12 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "scroll-area",
       "title": "ScrollArea",
       "files": ["src/scroll-area.tsx"],
@@ -639,6 +839,24 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": ["descriptionId", "errorId", "id", "labelledBy", "listboxId"],
+        "parts": ["content", "hiddenInput", "item", "root", "trigger", "value"],
+        "slots": ["content", "hiddenInput", "item", "root", "trigger", "value"],
+        "state": [
+          "disabled",
+          "form",
+          "highlightedValue",
+          "invalid",
+          "items",
+          "listboxId",
+          "name",
+          "open",
+          "placeholder",
+          "required",
+          "value"
+        ]
+      },
       "name": "select",
       "title": "Select",
       "files": ["src/select.tsx"],
@@ -667,6 +885,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "separator",
       "title": "Separator",
       "files": ["src/separator.tsx"],
@@ -679,6 +903,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "sheet",
       "title": "Sheet",
       "files": ["src/sheet.tsx"],
@@ -706,6 +936,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "skeleton",
       "title": "Skeleton",
       "files": ["src/skeleton.tsx"],
@@ -718,6 +954,12 @@
       "uiComponents": ["theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "slider",
       "title": "Slider",
       "files": ["src/slider.tsx"],
@@ -737,6 +979,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "switch",
       "title": "Switch",
       "files": ["src/switch.tsx"],
@@ -749,6 +997,12 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": ["body", "caption", "cell", "head", "headerCell", "row", "table", "wrapper"],
+        "slots": ["body", "caption", "cell", "head", "headerCell", "row", "table", "wrapper"],
+        "state": []
+      },
       "name": "table",
       "title": "Table",
       "files": ["src/table.tsx"],
@@ -761,6 +1015,12 @@
       "uiComponents": ["theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "tabs",
       "title": "Tabs",
       "files": ["src/tabs.tsx"],
@@ -780,6 +1040,12 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "toast",
       "title": "ToastViewport",
       "files": ["src/toast.tsx"],
@@ -810,6 +1076,30 @@
       "uiComponents": ["pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
+      "name": "toggle",
+      "title": "Toggle",
+      "files": ["src/toggle.tsx"],
+      "exports": ["Toggle"],
+      "dependencies": {
+        "@kovojs/headless-ui": ["toggleRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
+      },
+      "uiComponents": ["pass-through", "theme"]
+    },
+    {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "toggle-group",
       "title": "ToggleGroup",
       "files": ["src/toggle-group.tsx"],
@@ -829,18 +1119,12 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
-      "name": "toggle",
-      "title": "Toggle",
-      "files": ["src/toggle.tsx"],
-      "exports": ["Toggle"],
-      "dependencies": {
-        "@kovojs/headless-ui": ["toggleRootAttributes"],
-        "@kovojs/style": ["*"],
-        "@kovojs/core": ["component"]
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
       },
-      "uiComponents": ["pass-through", "theme"]
-    },
-    {
       "name": "toolbar",
       "title": "Toolbar",
       "files": ["src/toolbar.tsx"],
@@ -859,6 +1143,12 @@
       "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
+      "family": {
+        "ids": [],
+        "parts": [],
+        "slots": [],
+        "state": []
+      },
       "name": "tooltip",
       "title": "Tooltip",
       "files": ["src/tooltip.tsx"],

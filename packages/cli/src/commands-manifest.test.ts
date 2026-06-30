@@ -16,7 +16,11 @@ import {
   EXPORT_USAGE,
   MCP_USAGE,
   UPDATE_DOCS_USAGE,
+  formatNoArgsMessage,
+  formatUnknownCommandMessage,
+  resolveCommand,
 } from './commands-manifest.js';
+import { CLI_COMMAND_DISPATCHER_NAMES, main } from './index.js';
 
 /**
  * Drift guard for the shared CLI command manifest. The manifest is the single
@@ -27,7 +31,6 @@ import {
  *   (b) each manifest usage string is the literal the CLI actually emits.
  */
 describe('commands manifest', () => {
-  const indexSource = readFileSync(fileURLToPath(new URL('./index.ts', import.meta.url)), 'utf8');
   const cliCommandSource = [
     './index.ts',
     './commands/build-export.ts',
@@ -38,22 +41,17 @@ describe('commands manifest', () => {
     .map((file) => readFileSync(fileURLToPath(new URL(file, import.meta.url)), 'utf8'))
     .join('\n');
 
-  it('covers exactly the commands the bin dispatches', () => {
-    // Commands dispatched in main()/mainAsync() are matched on `args[0] === '<cmd>'`.
-    const dispatched = new Set(
-      [...indexSource.matchAll(/args\[0\]\s*===\s*'([a-z-]+)'/g)].map((m) => m[1]),
-    );
-    const manifestNames = new Set(COMMANDS_MANIFEST.map((entry) => entry.name));
+  it('is the command registry used by the bin dispatch tables', () => {
+    const manifestNames = COMMANDS_MANIFEST.map((entry) => entry.name);
+    const syncNames = COMMANDS_MANIFEST.filter((entry) => !entry.async).map((entry) => entry.name);
+    const asyncNames = COMMANDS_MANIFEST.filter((entry) => entry.async).map((entry) => entry.name);
 
-    // Every dispatched command must be documented in the manifest.
-    for (const command of dispatched) {
-      expect(manifestNames, `manifest missing dispatched command "${command}"`).toContain(command);
-    }
-    // And the manifest must not document commands the bin does not dispatch.
+    expect(CLI_COMMAND_DISPATCHER_NAMES.sync).toEqual([...syncNames].sort());
+    expect(CLI_COMMAND_DISPATCHER_NAMES.async).toEqual([...asyncNames].sort());
     for (const name of manifestNames) {
-      expect(dispatched, `manifest documents undispatched command "${name}"`).toContain(name);
+      expect(resolveCommand(name)?.name).toBe(name);
     }
-    // Explicit belt-and-suspenders: the full known command surface.
+    expect(resolveCommand('missing')).toBeUndefined();
     expect([...manifestNames].sort()).toEqual(
       [
         'add',
@@ -67,6 +65,25 @@ describe('commands manifest', () => {
         'update-docs',
       ].sort(),
     );
+  });
+
+  it('drives no-args and unknown-command diagnostics from the registry', () => {
+    expect(formatNoArgsMessage()).toBe(
+      'kovo: add, audit, build, check, compile, explain, export, mcp, update-docs\n',
+    );
+    expect(formatUnknownCommandMessage('nope')).toBe(
+      'kovo: unknown command "nope". expected add, build, compile, explain, check, audit, export, mcp, or update-docs.\n',
+    );
+
+    const noArgs = captureWrites(() => main([]));
+    expect(noArgs.result).toBe(0);
+    expect(noArgs.stdout).toBe(formatNoArgsMessage());
+    expect(noArgs.stderr).toBe('');
+
+    const unknown = captureWrites(() => main(['nope']));
+    expect(unknown.result).toBe(1);
+    expect(unknown.stdout).toBe('');
+    expect(unknown.stderr).toBe(formatUnknownCommandMessage('nope'));
   });
 
   it('marks the async-dispatched commands (build, compile, export, mcp, update-docs) as async', () => {
@@ -145,3 +162,24 @@ describe('commands manifest', () => {
     }
   });
 });
+
+function captureWrites(run: () => number) {
+  const stdoutWrite = process.stdout.write;
+  const stderrWrite = process.stderr.write;
+  let stdout = '';
+  let stderr = '';
+  process.stdout.write = ((chunk: unknown) => {
+    stdout += String(chunk);
+    return true;
+  }) as typeof process.stdout.write;
+  process.stderr.write = ((chunk: unknown) => {
+    stderr += String(chunk);
+    return true;
+  }) as typeof process.stderr.write;
+  try {
+    return { result: run(), stderr, stdout };
+  } finally {
+    process.stdout.write = stdoutWrite;
+    process.stderr.write = stderrWrite;
+  }
+}

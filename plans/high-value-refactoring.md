@@ -21,7 +21,7 @@ test brittleness, and distribution confusion.
 
 ## P0 - Security And Freshness Source Of Truth
 
-- [ ] **P0.1 - Unify mutation execution into a single lifecycle state machine.**
+- [x] **P0.1 - Unify mutation execution into a single lifecycle state machine.**
   - Affected: `packages/server/src/mutation.ts`,
     `packages/server/src/app-mutation-request.ts`, `packages/server/src/mutation/*`.
   - Why high value: CSRF validation, body parsing, arg-aware guards, replay reservation,
@@ -38,6 +38,7 @@ test brittleness, and distribution confusion.
     CSRF, invalid body, guard revocation after replay, stale token, rate limit, handler throw, render
     throw, streaming success/error; run `packages/server/src/mutation*.test.ts`,
     `packages/server/src/app-mutation-request.test.ts`, and replay tests.
+  - Evidence: `pnpm exec vitest --run packages/server/src/mutation*.test.ts packages/server/src/app-mutation-request.test.ts` passes with `executeMutationLifecycle()` mapping typed outcomes across enhanced, no-JS, and direct mutation paths.
   - SPEC: sections 6.3, 6.6, 9.1, 10.3, 11.1.
 
 - [ ] **P0.2 - Centralize request lifecycle and response posture finalization.**
@@ -115,7 +116,7 @@ test brittleness, and distribution confusion.
     property tests.
   - SPEC: sections 4.4, 4.7, 4.8, 4.9, 5.2, 9.1, 9.1.1, 13.2.
 
-- [ ] **P0.5 - Consolidate Drizzle static analysis into one fact pipeline and reuse symbol provenance for SQL safety.**
+- [x] **P0.5 - Consolidate Drizzle static analysis into one fact pipeline and reuse symbol provenance for SQL safety.**
   - Affected: `packages/drizzle/src/static.ts`,
     `packages/drizzle/src/static/project-setup.ts`,
     `packages/drizzle/src/static/summaries.ts`,
@@ -138,9 +139,10 @@ test brittleness, and distribution confusion.
     composition of individual projections; KV422 tests for helper returns, destructured request values,
     namespace imports, `sql.join`, and allowlist laundering; run `packages/drizzle/src`,
     `conformance/drizzle-pin`, and `packages/conformance-fixtures/src`.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src conformance/drizzle-pin/src packages/conformance-fixtures/src` passes after `DrizzleAnalysisContext`/`DrizzleFactStore` centralize project-level projections and SQL safety consumes shared symbol provenance.
   - SPEC: sections 2, 6.6, 10.1, 10.2, 10.3, 10.5, 11.1, 11.2, 11.3.
 
-- [ ] **P0.6 - Move wire JSON and module-reference parsing to structured core contracts.**
+- [x] **P0.6 - Move wire JSON and module-reference parsing to structured core contracts.**
   - Affected: `packages/server/src/wire-html.ts`, `packages/server/src/query.ts`,
     `packages/server/src/document-core.ts`, `packages/browser/src/wire-parser.ts`,
     `packages/browser/src/query-bindings.ts`, `packages/browser/src/dynamic-import-url.ts`,
@@ -159,11 +161,12 @@ test brittleness, and distribution confusion.
     query deltas, document query scripts, and `/_q/`; `packages/browser/src/dynamic-import-url.test.ts`,
     `packages/browser/src/inline-loader-delegated.test.ts`,
     `packages/compiler/src/handler-lowering.test.ts`, and compiler conformance diagnostics.
+  - Evidence: `pnpm exec vitest run packages/core/src/internal/wire-json.test.ts packages/core/src/internal/module-ref.test.ts packages/browser/src/json.test.ts packages/browser/src/dynamic-import-url.test.ts packages/browser/src/query-bindings.test.ts packages/browser/src/inline-loader-delegated.test.ts packages/compiler/src/handler-lowering.test.ts packages/compiler/src/query-bindings.test.ts packages/server/src/wire-html.test.ts packages/server/src/static-export-client-module-refs.test.ts`, `pnpm run check:api-surface`, and `pnpm run check:imports` pass after moving wire JSON and module refs into core contracts.
   - SPEC: sections 4.3, 4.4, 4.7, 6.1, 9.1.1, 9.4, 9.5.
 
 ## P1 - Cross-Package Contract Drift And Generation
 
-- [ ] **P1.1 - Add a typed compiler fact ledger and finish post-parse typed-fact cleanup.**
+- [x] **P1.1 - Add a typed compiler fact ledger and finish post-parse typed-fact cleanup.**
   - Affected: `packages/compiler/src/lowering-pipeline.ts`,
     `packages/compiler/src/model-pipeline.ts`, `packages/compiler/src/compile-result.ts`,
     `packages/compiler/src/app-graph.ts`, `packages/compiler/src/style.ts`,
@@ -181,6 +184,7 @@ test brittleness, and distribution confusion.
   - Verification: `packages/compiler/src/lowering-pipeline.test.ts`,
     `packages/compiler/src/hmr-impact.test.ts`, `packages/compiler/src/cache-identity.test.ts`,
     style tests, app graph/registry tests, compiler conformance, golden output, and fact-hash snapshots.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/compile-fact-ledger.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/hmr-impact.test.ts packages/compiler/src/cache-identity.test.ts packages/compiler/src/style.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities.test.ts packages/compiler/src/output-context-facts.test.ts packages/compiler/src/package-styles.test.ts packages/conformance-fixtures/src/source-fixtures.test.ts` passes with typed compiler fact-ledger snapshots and the widened post-parse source-string guard.
   - SPEC: sections 1.3, 5.2 rule 10, 9.1, 11.3.
 
 - [ ] **P1.2 - Normalize runtime generated registry facts once.**
@@ -200,7 +204,7 @@ test brittleness, and distribution confusion.
     no-JS failure rerender, and query endpoint paths.
   - SPEC: sections 1.2, 4.1, 6.1, 9.1, 10.2, 10.3.
 
-- [ ] **P1.3 - Replace static-export string scans with parsed protocol extraction.**
+- [x] **P1.3 - Replace static-export string scans with parsed protocol extraction.**
   - Affected: `packages/server/src/static-export-document.ts`,
     `packages/server/src/static-export-response.ts`,
     `packages/server/src/static-export-route-plan.ts`, related static export diagnostics.
@@ -215,9 +219,10 @@ test brittleness, and distribution confusion.
   - Verification: fixture corpus for quoted/unquoted attrs, entities, uppercase tags, `<template>`,
     `<pre>`, mutation forms, client modules, deferred fragments, endpoint refs, and malicious encoded
     paths; rerun static export test suites.
+  - Evidence: `pnpm exec vitest --run packages/server/src/static-export-protocol.test.ts packages/server/src/static-export-document.test.ts packages/server/src/static-export-response.test.ts packages/server/src/static-export-client-module-refs.test.ts packages/server/src/static-export-endpoints.test.ts packages/server/src/static-export-route-plan.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-replay.test.ts` passes with parsed static-export protocol facts.
   - SPEC: sections 9.1, 9.5, KV229.
 
-- [ ] **P1.4 - Replace Better Auth schema string surgery with structured codegen.**
+- [x] **P1.4 - Replace Better Auth schema string surgery with structured codegen.**
   - Affected: `packages/better-auth/src/internal.ts`,
     `packages/better-auth/src/index.schema-materialize.test.ts`,
     `conformance/better-auth-pin/src/index.plugin-tables.test.ts`.
@@ -230,9 +235,10 @@ test brittleness, and distribution confusion.
     drift, and hidden plugin schema changes.
   - Verification: existing materialization tests plus idempotence, alias/import collision, plugin-table,
     and SQLite generation cases.
+  - Evidence: `pnpm exec vitest --run packages/better-auth/src/index.schema-materialize.test.ts packages/better-auth/src/index.schema-bridge.test.ts` and `pnpm --filter @kovojs/conformance-better-auth-pin test -- src/index.plugin-tables.test.ts` pass after the structured schema IR/codegen refactor.
   - SPEC: sections 1.3, 4.8, 10.1, 11.2.
 
-- [ ] **P1.5 - Make Better Auth operation contracts, graph facts, and cookie forwarding single-source.**
+- [x] **P1.5 - Make Better Auth operation contracts, graph facts, and cookie forwarding single-source.**
   - Affected: `packages/better-auth/src/internal.ts`,
     `packages/better-auth/src/mutations.ts`, `packages/better-auth/src/mount.ts`,
     `packages/better-auth/src/credential-options.ts`,
@@ -254,9 +260,10 @@ test brittleness, and distribution confusion.
     domains match bridge domains; conformance tests for `csrf:false`, guarded mutations, and `mount()`
     explain output; cookie tests for folded cookies, `Expires`, `Partitioned`, `Priority`,
     `SameSite=None`, deletion cookies, session refresh, and sign-out clearing.
+  - Evidence: `pnpm exec vitest --run packages/server/src/cookies.test.ts packages/better-auth/src/index.schema-bridge.test.ts packages/better-auth/src/index.credential-mutations.test.ts packages/better-auth/src/index.session.test.ts packages/server/src/mutation.test.ts packages/server/src/app-document.test.ts` and `pnpm --filter @kovojs/conformance-better-auth-pin test -- src/index.session-credentials.test.ts src/index.plugin-tables.test.ts` pass with operation contracts deriving touches/keys/access facts and server-owned `forwardSetCookie()` enforcing cookie forwarding posture.
   - SPEC: sections 6.5, 6.6, 9.1, 9.1.1, 10.1, 10.3, 11.2, 11.3.
 
-- [ ] **P1.6 - Make CLI and API tooling manifests executable sources of truth.**
+- [x] **P1.6 - Make CLI and API tooling manifests executable sources of truth.**
   - Affected: `packages/cli/src/index.ts`,
     `packages/cli/src/commands-manifest.ts`, `site/scripts/cli-ref.mjs`,
     `scripts/api-surface-gate.mjs`, `scripts/exported-symbols.mjs`,
@@ -279,9 +286,10 @@ test brittleness, and distribution confusion.
     API-surface, api-ref, exported-symbols, and build-publish tests; import-boundary fixtures for
     `export type`, multiline imports, dynamic imports, comments, string literals, markdown fences, and
     stale exceptions.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs scripts/package-exports.test.mjs scripts/import-boundary.test.mjs scripts/api-surface-gate.test.mjs scripts/exported-symbols.test.mjs site/scripts/api-ref.test.mjs --reporter=verbose`, `pnpm run check:api-surface`, and `pnpm run check:imports` pass with command and package-export registries driving dispatch/docs/tooling.
   - SPEC/rules: `SPEC.md` sections 5.2 rules 8 and 10, 11.4; `rules/api-surface.md`.
 
-- [ ] **P1.7 - Extract shared headless UI collection and openable-state cores.**
+- [x] **P1.7 - Extract shared headless UI collection and openable-state cores.**
   - Affected: `packages/headless-ui/src/primitives/select.ts`,
     `autocomplete.ts`, `dropdown-menu.ts`, `navigation-menu.ts`, `combobox.ts`,
     `context-menu.ts`, `menubar.ts`, `command.ts`, `accordion.ts`, `tabs.ts`,
@@ -300,9 +308,10 @@ test brittleness, and distribution confusion.
   - Verification: shared unit matrices across primitive families; rerun headless primitive tests and
     gallery browser suites for dialog, popover, hover-card, tooltip, menu, select, tabs, toolbar, and
     command surfaces.
+  - Evidence: `pnpm exec vitest --run packages/headless-ui/src/lib/collection-controller.test.ts packages/headless-ui/src/lib/open-state.test.ts packages/headless-ui/src/primitives/disclosure.test.ts packages/headless-ui/src/primitives/dialog.test.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/popover.test.ts packages/headless-ui/src/primitives/tooltip.test.ts packages/headless-ui/src/primitives/menubar.test.ts packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/alert-dialog.test.ts packages/headless-ui/src/primitives/hover-card.test.ts packages/headless-ui/src/primitives/collapsible.test.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/select.test.ts examples/gallery/src/interactive-gallery.compile.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts` passes with shared collection and open-state cores.
   - SPEC: section 4.6.
 
-- [ ] **P1.8 - Replace UI/headless/gallery/copy-in registries with one generated manifest.**
+- [x] **P1.8 - Replace UI/headless/gallery/copy-in registries with one generated manifest.**
   - Affected: `packages/headless-ui/src/generated.ts`,
     `packages/ui/scripts/build-registry.mjs`, `packages/ui/registry.json`,
     `examples/gallery/src/primitive-actions.ts`, `examples/gallery/src/demo-fixtures.tsx`,
@@ -317,6 +326,7 @@ test brittleness, and distribution confusion.
     behavior.
   - Verification: generator round-trip tests, existing parity tests, fixture-count assertions, gallery
     artifact tests, and `packages/ui/src/copy-in.test.ts`.
+  - Evidence: `node packages/ui/scripts/build-registry.mjs` reports generated artifacts up to date, and `pnpm exec vitest --run packages/ui/src/manifest-generation.test.ts packages/ui/src/copy-in.test.ts packages/ui/src/headless-subpath-parity.test.ts examples/gallery/src/component-catalog.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts examples/gallery/src/interactive-gallery.compile.test.ts` passes with the shared primitive/component manifest driving UI registry, headless generated handlers, and gallery fixtures.
   - Rules: `rules/api-surface.md`.
 
 - [ ] **P1.9 - Build cross-package oracle fixtures for compiler/browser/runtime/data contracts.**
@@ -342,7 +352,7 @@ test brittleness, and distribution confusion.
 
 ## P2 - Public Surface, Distribution, And Test Harness Hygiene
 
-- [ ] **P2.1 - Make `create-kovo` starter tests prove published package shape.**
+- [x] **P2.1 - Make `create-kovo` starter tests prove published package shape.**
   - Affected: `packages/create-kovo/src/index.test-support.ts`,
     `packages/create-kovo/src/index.build.test.ts`, `scripts/link-local-kovo.mjs`,
     publish/package scripts.
@@ -354,9 +364,10 @@ test brittleness, and distribution confusion.
   - Risk reduced: false-green scaffold coverage that bypasses actual distribution shape.
   - Verification: packed-install smoke per supported dialect, production build/run smoke, and one
     `vp check` lane through the shared harness.
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.scaffold.test.ts packages/create-kovo/src/index.test.ts packages/cli/src/index.kovo-add.test.ts packages/compiler/src/vite-config.test.ts scripts/package-exports.test.mjs` and `node scripts/build-publish.mjs` pass with packed starter smokes and publish target verification.
   - SPEC/rules: `SPEC.md` sections 1.3 and 5.2 rules 8-9; `rules/api-surface.md`.
 
-- [ ] **P2.2 - Generate CLI and `create-kovo` reference docs from structured schemas.**
+- [x] **P2.2 - Generate CLI and `create-kovo` reference docs from structured schemas.**
   - Affected: `packages/create-kovo/src/index.ts`,
     `site/scripts/create-kovo-ref.mjs`, `site/scripts/cli-ref.mjs`.
   - Why high value: reference docs currently duplicate option/command behavior and rewrite markdown by
@@ -366,9 +377,10 @@ test brittleness, and distribution confusion.
   - Risk reduced: stale command docs, stale option tables, and fragile generated-doc transforms.
   - Verification: docs/sidebar snapshots and drift tests asserting `--help` output and rendered docs are
     derived from the same schema.
+  - Evidence: `pnpm exec vitest --run site/scripts/create-kovo-ref.test.mjs site/scripts/cli-ref.test.mjs packages/create-kovo/src/index.test.ts packages/cli/src/commands-manifest.test.ts` passes with `create-kovo` help/docs rendered from `CREATE_KOVO_REFERENCE` and CLI docs rendered from structured command/frontmatter metadata.
   - SPEC/rules: `SPEC.md` section 11.4; `rules/api-surface.md`; `rules/docs-style.md`.
 
-- [ ] **P2.3 - Centralize generated-artifact policy into one manifest-backed gate.**
+- [x] **P2.3 - Centralize generated-artifact policy into one manifest-backed gate.**
   - Affected: `scripts/no-committed-generated.mjs`, `scripts/prod-emit-check.mjs`,
     compiler/build artifact checks.
   - Why high value: generated-output policy is split across hardcoded globs/regexes and narrow compiler
@@ -380,9 +392,10 @@ test brittleness, and distribution confusion.
     generation contract.
   - Verification: table-driven path classification tests and a broader emit corpus reusing shared
     filename/source assertions.
+  - Evidence: `pnpm exec vitest --run scripts/generated-artifacts.test.mjs scripts/no-committed-generated.test.mjs scripts/prod-emit-check.test.mjs scripts/import-boundary.test.mjs`, `pnpm run check:no-committed-generated`, and `vp run build` pass with the shared generated-artifact policy manifest.
   - SPEC/rules: `SPEC.md` sections 1.3 and 5.2 rules 3, 7, 8; `rules/compiler-hard-rules.md`.
 
-- [ ] **P2.4 - Narrow devtool and headless public seams.**
+- [x] **P2.4 - Narrow devtool and headless public seams.**
   - Affected: `packages/devtool/src/index.mjs`, `packages/devtool/package.json`,
     `packages/headless-ui/src/types.ts`, `packages/headless-ui/package.json`,
     `public-packages.json`, `site/content/guides/components.md`.
@@ -397,9 +410,10 @@ test brittleness, and distribution confusion.
     support cost for low-signal generic types.
   - Verification: plain-Node import smoke for devtool subpaths, dependency-boundary assertion, repo
     import search, `pnpm run check:api-surface`, and API ref diffs.
+  - Evidence: `pnpm exec vitest --run packages/devtool/src/dependency-boundary.test.mjs packages/headless-ui/src/types-boundary.test.ts packages/devtool/src/render.test.mjs --reporter=verbose`, `pnpm run check:api-surface`, and exact `rg "@kovojs/headless-ui/types"` import search pass after narrowing the public seams.
   - Rules: `rules/api-surface.md`.
 
-- [ ] **P2.5 - Make `@kovojs/ui` family metadata and distribution mode explicit.**
+- [x] **P2.5 - Make `@kovojs/ui` family metadata and distribution mode explicit.**
   - Affected: `packages/ui/src/*.tsx`, `packages/ui/src/theme.ts`,
     `packages/style/src/theme.ts`, `packages/ui/scripts/build-registry.mjs`,
     `packages/ui/registry.json`, `public-packages.json`, docs for component install/copy-in.
@@ -416,4 +430,5 @@ test brittleness, and distribution confusion.
   - Verification: API ref diffs, `packages/ui/src/copy-in.test.ts`, representative style snapshots,
     `packages/style/src/index.test.ts`, `packages/ui/src/theme-contract.test.tsx`, and negative tests for
     non-static token references.
+  - Evidence: `pnpm exec vitest --run packages/ui/src/copy-in.test.ts packages/ui/src/theme-contract.test.tsx packages/style/src/index.test.ts packages/ui/src/select.stylex.test.tsx packages/ui/src/radio-group.stylex.test.tsx packages/ui/src/table.stylex.test.tsx packages/ui/src/index.inputs.test.tsx packages/ui/src/index.form-controls.test.tsx packages/ui/src/index.markup.test.tsx scripts/public-packages.test.mjs site/scripts/api-ref.test.mjs scripts/exported-symbols.test.mjs packages/ui/src/manifest-generation.test.ts`, `node packages/ui/scripts/build-registry.mjs`, and `pnpm run check:api-surface` pass with explicit UI distribution mode, registry family metadata, and internal component-token access.
   - SPEC/rules: `SPEC.md` sections 6.1.1 and 13.1; `rules/api-surface.md`.

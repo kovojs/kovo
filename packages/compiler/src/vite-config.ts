@@ -4,7 +4,10 @@ import { registerHooks } from 'node:module';
 import { createKovoVitePlugin } from './vite.ts';
 import type { KovoVitePlugin, KovoVitePluginOptions } from './vite.ts';
 
-const compileModuleUrl = new URL('./compile.ts', import.meta.url).href;
+const compileModuleUrl = new URL(
+  import.meta.url.endsWith('/dist/vite-config.mjs') ? './compile.mjs' : './compile.ts',
+  import.meta.url,
+).href;
 let sourceResolutionHooksRegistered = false;
 
 /**

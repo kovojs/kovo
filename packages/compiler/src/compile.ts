@@ -6,13 +6,11 @@ import {
   type RenderPlanFingerprintInput,
 } from '@kovojs/core/internal/render-plan-token';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
-import {
-  dedupeOutputContextFacts,
-  mergeQueryUpdatePlans,
-  mergeStyleUpdateCoverage,
-} from './compile-result.js';
+import { mergeQueryUpdatePlans, mergeStyleUpdateCoverage } from './compile-result.js';
+import { createCompileFactLedger, type CompileFactSnapshot } from './compile-fact-ledger.js';
 import type { CompilerDiagnostic } from './diagnostics.js';
 import {
   componentCssAssetForFile,
@@ -597,17 +595,24 @@ function assembleCompileResult(
   server: EmitServerPhaseResult,
   verified: VerifyComponentPhaseResult,
 ): CompileResult {
+  const facts = componentCompileFactSnapshot(
+    lowered,
+    validated,
+    client,
+    registryCss,
+    server,
+    parsed.originalModel,
+  );
+
   return {
-    componentGraphFacts: registryCss.componentGraphFacts,
+    componentGraphFacts: facts.componentGraphFacts,
     dependencyFootprint: compileDependencyFootprint(parsed.compileOptions, {
       fileName: parsed.options.fileName,
-      fragmentTargets: registryCss.fragmentTargets,
+      fragmentTargets: facts.fragmentTargetFacts.map((fact) => fact.target),
       model: lowered.model,
       mutationForms: registryCss.mutationForms,
-      queryUpdatePlans: validated.queryUpdatePlans,
-      viewTransitionNames: lowered.lowering.structuralLowering.viewTransitionStamps.map(
-        (stamp) => stamp.name,
-      ),
+      queryUpdatePlans: facts.queryUpdatePlans,
+      viewTransitionNames: facts.viewTransitions.map((stamp) => stamp.name),
     }),
     diagnostics: verified.diagnostics,
     files: [
@@ -634,17 +639,17 @@ function assembleCompileResult(
     ],
     clientExports: [
       ...client.versionedHandlers.map((handler) => handler.exportName),
-      ...client.stateDerives.map((derive) => derive.exportName),
+      ...facts.stateDerives.map((derive) => derive.exportName),
     ],
-    cssAssets: registryCss.cssAssets,
+    cssAssets: facts.componentCssAssets,
     handlerExports: client.versionedHandlers.map((handler) => handler.exportName),
     hmrImpact: createComponentHmrImpactMetadata({
       clientHref: client.clientHref,
-      componentGraphFacts: registryCss.componentGraphFacts,
-      cssAssets: registryCss.cssAssets,
+      componentGraphFacts: facts.componentGraphFacts,
+      cssAssets: facts.componentCssAssets,
       diagnostics: verified.diagnostics,
-      liveTargetFacts: registryCss.liveTargetFacts,
-      queryUpdatePlans: validated.queryUpdatePlans,
+      liveTargetFacts: facts.liveTargetFacts,
+      queryUpdatePlans: facts.queryUpdatePlans,
       renderEquivalenceChecks: verified.renderEquivalenceChecks,
       sourceFileName: parsed.options.fileName,
       ...(registryCss.cssSource
@@ -656,22 +661,69 @@ function assembleCompileResult(
         : {}),
     }),
     loweredSource: server.serverRenderedSource,
-    outputContextFacts: dedupeOutputContextFacts([
-      ...lowered.lowering.structuralLowering.outputContexts,
-      ...server.serverRender.outputContexts,
-      ...lowered.lowering.styleExtraction.outputContexts,
-      ...collectTrustedHtmlOutputContextFacts(parsed.originalModel),
-      ...validated.queryUpdatePlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
-      ...client.stateDerives.map((derive) => derive.outputContext),
-    ]),
-    platformSubstitutions: lowered.lowering.structuralLowering.platformSubstitutions,
-    publishToClientFacts: validated.clientCaptureAnalysis.publishFacts,
-    queryUpdatePlans: validated.queryUpdatePlans,
+    outputContextFacts: facts.outputContexts,
+    platformSubstitutions: facts.platformSubstitutions,
+    publishToClientFacts: facts.publishToClientFacts,
+    queryUpdatePlans: facts.queryUpdatePlans,
     renderEquivalenceChecks: verified.renderEquivalenceChecks,
     renderPlanFingerprint: client.renderPlanFingerprint,
-    updateCoverage: validated.updateCoverage,
-    viewTransitions: lowered.lowering.structuralLowering.viewTransitionStamps,
+    updateCoverage: facts.queryUpdateCoverage,
+    viewTransitions: facts.viewTransitions,
   };
+}
+
+function componentCompileFactSnapshot(
+  lowered: LowerComponentPhaseResult,
+  validated: ValidateComponentPhaseResult,
+  client: EmitClientPhaseResult,
+  registryCss: EmitRegistryCssPhaseResult,
+  server: EmitServerPhaseResult,
+  originalModel: ComponentModuleModel,
+): CompileFactSnapshot {
+  const ledger = createCompileFactLedger();
+  ledger.merge(lowered.lowering.factSnapshot, { phase: 'lower', pass: 'lowering-pipeline' });
+  ledger.append('clockUpdatePlans', { phase: 'validate', pass: 'clock-update-plans' }, [
+    ...validated.clockUpdatePlans,
+  ]);
+  ledger.append('queryUpdateCoverage', { phase: 'validate', pass: 'query-update-coverage' }, [
+    ...validated.updateCoverage,
+  ]);
+  ledger.append('queryUpdatePlans', { phase: 'validate', pass: 'query-update-plans' }, [
+    ...validated.queryUpdatePlans,
+  ]);
+  ledger.append('publishToClientFacts', { phase: 'validate', pass: 'client-capture' }, [
+    ...validated.clientCaptureAnalysis.publishFacts,
+  ]);
+  ledger.append('stateDerives', { phase: 'emit', pass: 'client-module' }, [...client.stateDerives]);
+  ledger.append('componentCssAssets', { phase: 'emit', pass: 'registry-css' }, [
+    ...registryCss.cssAssets,
+  ]);
+  ledger.append('componentGraphFacts', { phase: 'graph', pass: 'component-graph' }, [
+    ...registryCss.componentGraphFacts,
+  ]);
+  ledger.append('fragmentTargetFacts', { phase: 'graph', pass: 'fragment-targets' }, [
+    ...registryCss.fragmentTargetFacts,
+  ]);
+  ledger.append('liveTargetFacts', { phase: 'graph', pass: 'live-targets' }, [
+    ...registryCss.liveTargetFacts,
+  ]);
+  ledger.append('outputContexts', { phase: 'emit', pass: 'server-render' }, [
+    ...server.serverRender.outputContexts,
+  ]);
+  ledger.append('outputContexts', { phase: 'validate', pass: 'trusted-html' }, [
+    ...collectTrustedHtmlOutputContextFacts(originalModel),
+  ]);
+  ledger.append(
+    'outputContexts',
+    { phase: 'validate', pass: 'query-update-plans' },
+    validated.queryUpdatePlans.flatMap((plan) => [...(plan.outputContexts ?? [])]),
+  );
+  ledger.append(
+    'outputContexts',
+    { phase: 'emit', pass: 'state-derives' },
+    client.stateDerives.map((derive) => derive.outputContext),
+  );
+  return ledger.snapshot();
 }
 
 function registryFileName(parsed: ParsedComponentPhaseResult): string {
@@ -1025,7 +1077,7 @@ export function collectStateDeriveReferenceFacts(
         exportName: derive.exportName,
         placeholder: derive.placeholder,
         target: { end: attribute.end, start: attribute.start },
-        value: `${clientHref}#${derive.exportName}`,
+        value: formatKovoModuleRef(kovoModuleRef(clientHref, derive.exportName, 'derive')),
         writer: 'state derive URL versioning',
       });
     }

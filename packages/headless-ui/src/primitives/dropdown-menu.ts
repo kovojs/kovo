@@ -2,13 +2,14 @@ import {
   dataDisabled,
   dataState,
   dispatchCancelableChange,
-  findTypeaheadMatch,
   mergeDataAttributes,
-  moveCollectionIndex,
-  navigationIntentFromKey,
-  nextTypeaheadState,
+  moveCollection,
+  projectCollectionItems,
+  typeaheadCollection,
   openState,
   scheduleDeferred,
+  setOpenState,
+  toggleOpenState,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
   type TypeaheadState,
@@ -630,16 +631,9 @@ export function setDropdownMenuOpen(
   reason: DropdownMenuOpenChangeReason,
   options: DropdownMenuChangeOptions = {},
 ): DropdownMenuOpenChangeResult {
-  if (state.disabled || state.open === open) {
-    return { changed: false, open: state.open === true };
-  }
-
-  const detail = dispatchCancelableChange({ reason, value: open }, options.onOpenChange);
-  if (detail.defaultPrevented) {
-    return { changed: false, detail, open: state.open === true };
-  }
-
-  return { changed: true, detail, open };
+  return setOpenState({ disabled: state.disabled, open: state.open === true }, open, reason, {
+    onOpenChange: options.onOpenChange,
+  });
 }
 
 /**
@@ -664,7 +658,9 @@ export function toggleDropdownMenu(
   reason: DropdownMenuOpenChangeReason,
   options: DropdownMenuChangeOptions = {},
 ): DropdownMenuOpenChangeResult {
-  return setDropdownMenuOpen(state, !(state.open === true), reason, options);
+  return toggleOpenState({ disabled: state.disabled, open: state.open === true }, reason, {
+    onOpenChange: options.onOpenChange,
+  });
 }
 
 /**
@@ -749,23 +745,13 @@ export function dropdownMenuMove(
   key: string,
   options: { loop?: boolean } = {},
 ): DropdownMenuMoveResult | undefined {
-  if (state.disabled) return undefined;
-
-  const intent = navigationIntentFromKey(key, { orientation: 'vertical' });
-  if (intent === undefined) return undefined;
-
-  const items = state.items ?? [];
-  const currentIndex = items.findIndex((item) => item.value === state.highlightedValue);
-  const highlightedIndex = moveCollectionIndex(intent, {
-    currentIndex,
-    items,
-    ...(options.loop === undefined ? {} : { loop: options.loop }),
+  return moveCollection({
+    currentValue: state.highlightedValue,
+    disabled: state.disabled,
+    items: projectCollectionItems(state.items, dropdownMenuCollectionItem),
+    key,
+    loop: options.loop,
   });
-
-  return {
-    highlightedIndex,
-    highlightedValue: highlightedIndex < 0 ? undefined : items[highlightedIndex]?.value,
-  };
 }
 
 /**
@@ -790,41 +776,20 @@ export function dropdownMenuTypeahead(
   key: string,
   options: DropdownMenuTypeaheadOptions,
 ): DropdownMenuTypeaheadResult {
-  const nextState = nextTypeaheadState(
-    state.disabled ? undefined : options.state,
-    key,
-    options.now,
-    options.timeoutMs,
-  );
-  if (state.disabled || nextState.buffer === '') {
-    return {
-      highlightedIndex: -1,
-      highlightedValue: options.currentValue ?? state.highlightedValue,
-      state: nextState,
-    };
-  }
-
-  const items = (state.items ?? []).map((item) => ({
-    ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
-    textValue: item.textValue ?? item.label ?? item.value,
-  }));
-  const currentIndex = (state.items ?? []).findIndex(
-    (item) => item.value === (options.currentValue ?? state.highlightedValue),
-  );
-  const highlightedIndex = findTypeaheadMatch({
-    currentIndex,
-    items,
-    ...(options.loop === undefined ? {} : { loop: options.loop }),
-    search: nextState.buffer,
+  const result = typeaheadCollection(key, {
+    currentValue: options.currentValue ?? state.highlightedValue,
+    disabled: state.disabled,
+    items: projectCollectionItems(state.items, dropdownMenuCollectionItem),
+    loop: options.loop,
+    now: options.now,
+    state: options.state,
+    timeoutMs: options.timeoutMs,
   });
 
   return {
-    highlightedIndex,
-    highlightedValue:
-      highlightedIndex < 0
-        ? (options.currentValue ?? state.highlightedValue)
-        : state.items?.[highlightedIndex]?.value,
-    state: nextState,
+    highlightedIndex: result.matchIndex,
+    highlightedValue: result.value,
+    state: result.state,
   };
 }
 
@@ -1065,6 +1030,14 @@ function dropdownMenuItemDisabled(
     state.itemDisabled === true ||
     state.items?.find((item) => item.value === value)?.disabled === true
   );
+}
+
+function dropdownMenuCollectionItem(item: DropdownMenuItem) {
+  return {
+    ...(item.disabled === undefined ? {} : { disabled: item.disabled }),
+    textValue: item.textValue ?? item.label ?? item.value,
+    value: item.value,
+  };
 }
 
 function dropdownMenuItemActivationKey(key: string): boolean {

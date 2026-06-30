@@ -2,7 +2,7 @@ import { mkdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { CREATE_KOVO_USAGE } from '../../packages/create-kovo/src/index.ts';
+import { CREATE_KOVO_REFERENCE } from '../../packages/create-kovo/src/index.ts';
 
 /**
  * Command reference for the standalone `create-kovo` bin.
@@ -19,14 +19,23 @@ const siteRoot = fileURLToPath(new URL('../', import.meta.url));
 const SOURCE_HREF = 'https://github.com/kovojs/kovo/blob/main/packages/create-kovo/src/index.ts';
 
 function page() {
+  const optionsRows = [
+    '| Option | Description |',
+    '| --- | --- |',
+    '| `<target-directory>` | Required output directory. The command creates it when it does not exist and refuses to write into a non-empty directory. |',
+    ...CREATE_KOVO_REFERENCE.options.map(
+      (option) => `| \`${option.flag}\` | ${option.docsDescription ?? option.description} |`,
+    ),
+  ];
+
   return [
     '---',
-    'title: "create-kovo"',
+    `title: "${CREATE_KOVO_REFERENCE.title}"`,
     'description: Scaffold a new Kovo app with Postgres or SQLite templates, local secrets, tests, and CI wiring.',
     'order: 11',
     '---',
     '',
-    '# create-kovo',
+    `# ${CREATE_KOVO_REFERENCE.title}`,
     '',
     '`create-kovo` scaffolds a new Kovo application from the maintained starter templates. It is a public CLI package, not an app import surface.',
     '',
@@ -35,38 +44,25 @@ function page() {
     '## Usage',
     '',
     '```sh',
-    CREATE_KOVO_USAGE,
+    CREATE_KOVO_REFERENCE.usage,
     '```',
     '',
     '## Options',
     '',
-    '| Option | Description |',
-    '| --- | --- |',
-    '| `<target-directory>` | Required output directory. The command creates it when it does not exist and refuses to write into a non-empty directory. |',
-    '| `--name <package-name>` | Override the generated `package.json` name. Names are normalized to lowercase npm-compatible words and dashes. |',
-    '| `--dialect postgres\\|sqlite` | Select the database starter. Defaults to `postgres`. |',
-    '| `--postgres` | Alias for `--dialect postgres`. |',
-    '| `--sqlite` | Alias for `--dialect sqlite`. |',
-    '| `--disable-git` | Skip Git repository initialization. By default, `create-kovo` runs `git init` unless the target is already inside a Git or Mercurial repository. |',
-    '| `--help`, `-h` | Print usage and exit without writing files. |',
+    ...optionsRows,
     '',
     '## Examples',
     '',
     '```sh',
-    'create-kovo my-app',
-    'create-kovo my-app --name acme-contacts --dialect sqlite',
-    'create-kovo my-app --postgres',
+    ...CREATE_KOVO_REFERENCE.examples,
     '```',
     '',
-    '## Generated project',
-    '',
-    'The scaffold writes the application source, Vite+/Kovo config, test files, README, CI workflow, and database-specific schema/auth/database files for the selected dialect. It also writes `.env`, `.env.example`, and `.gitignore`. By default, it initializes a Git repository after writing files; pass `--disable-git` to skip that step. If the target already sits under a Git or Mercurial repository, `create-kovo` leaves version control to the parent repository.',
-    '',
-    'The `.env` file contains a per-project random `KOVO_CSRF_SECRET`; `.env` is gitignored, while `.env.example` keeps the deployment placeholder visible. The starter auth module fails closed when the secret is missing or still set to the placeholder.',
-    '',
-    '## Write safety',
-    '',
-    'The command resolves every template destination under the target root before writing and rejects path traversal. Existing non-empty directories and non-directory targets fail before any scaffold file is written.',
+    ...CREATE_KOVO_REFERENCE.sections.flatMap((section) => [
+      `## ${section.title}`,
+      '',
+      ...section.body,
+      '',
+    ]),
     '',
     '## Related docs',
     '',
@@ -78,6 +74,14 @@ function page() {
 }
 
 function sidebar() {
+  const referenceSections = CREATE_KOVO_REFERENCE.sections.map((section) => ({
+    name: section.title,
+    anchor: section.anchor,
+    kind: 'section',
+    documented: true,
+    sourceHref: SOURCE_HREF,
+  }));
+
   return {
     package: 'create-kovo',
     slug: 'create-kovo',
@@ -111,20 +115,7 @@ function sidebar() {
                 documented: true,
                 sourceHref: SOURCE_HREF,
               },
-              {
-                name: 'Generated project',
-                anchor: 'generated-project',
-                kind: 'section',
-                documented: true,
-                sourceHref: SOURCE_HREF,
-              },
-              {
-                name: 'Write safety',
-                anchor: 'write-safety',
-                kind: 'section',
-                documented: true,
-                sourceHref: SOURCE_HREF,
-              },
+              ...referenceSections,
             ],
           },
         ],

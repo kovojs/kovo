@@ -3,13 +3,19 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { COMMANDS_MANIFEST } from '../../packages/cli/src/commands-manifest.ts';
+import {
+  COMMANDS_MANIFEST,
+  formatNoArgsMessage,
+} from '../../packages/cli/src/commands-manifest.ts';
 
-import { slugify } from './md.mjs';
+import { parseFrontmatter, slugify } from './md.mjs';
 
 // Source link for command rows in the API sidebar: the bin's dispatch file. A
 // fixed ref keeps the generated manifest deterministic.
 const CLI_SOURCE_HREF = 'https://github.com/kovojs/kovo/blob/main/packages/cli/src/index.ts';
+const CLI_REFERENCE_TITLE = '@kovojs/cli';
+const CLI_REFERENCE_DESCRIPTION =
+  'Command-line interface for the Kovo toolchain. Generated from the shared command manifest and public TypeScript source.';
 
 /**
  * Command-first `/api/cli/` generator.
@@ -76,43 +82,78 @@ function renderCommand(entry) {
   ];
 }
 
-/**
- * Split the api-ref-generated `cli.md` into its frontmatter and the body that
- * follows the `# kovo` title + "Generated from …" intro line. We keep the
- * frontmatter verbatim (title/order must stay so the page keeps its slot in the
- * API section) and re-emit a command-first body, demoting the programmatic
- * sections under `## Programmatic API`.
- */
-function transform(source) {
-  const fmMatch = /^---\n([\s\S]*?)\n---\n/.exec(source);
-  if (!fmMatch) {
+function formatFrontmatter(data) {
+  return [
+    '---',
+    ...Object.entries(data).map(([key, value]) =>
+      typeof value === 'string' ? `${key}: ${JSON.stringify(value)}` : `${key}: ${value}`,
+    ),
+    '---',
+  ].join('\n');
+}
+
+function findFirstTopLevelSection(body) {
+  let fence = null;
+  let offset = 0;
+  for (const line of body.split('\n')) {
+    const trimmed = line.trimStart();
+    if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+      const marker = trimmed.slice(0, 3);
+      fence = fence === marker ? null : marker;
+    }
+    if (fence === null && line.startsWith('## ')) return offset;
+    offset += line.length + 1;
+  }
+  return -1;
+}
+
+function shiftMarkdownHeadings(markdown, depth) {
+  let fence = null;
+  return markdown
+    .split('\n')
+    .map((line) => {
+      const trimmed = line.trimStart();
+      if (trimmed.startsWith('```') || trimmed.startsWith('~~~')) {
+        const marker = trimmed.slice(0, 3);
+        fence = fence === marker ? null : marker;
+        return line;
+      }
+      if (fence !== null) return line;
+      const match = /^(#{1,6})\s/.exec(line);
+      if (!match) return line;
+      return `${'#'.repeat(Math.min(6, match[1].length + depth))}${line.slice(match[1].length)}`;
+    })
+    .join('\n');
+}
+
+function extractProgrammaticReference(source) {
+  if (!source.startsWith('---\n')) {
     throw new Error('cli-ref: cli.md is missing YAML frontmatter; run api-ref first.');
   }
-  const frontmatter = fmMatch[0].replace(/\n$/, '');
-  const afterFrontmatter = source.slice(fmMatch[0].length);
-
-  // The programmatic content is everything from the first `## ` heading onward.
-  const firstSection = afterFrontmatter.indexOf('\n## ');
+  const { body, data } = parseFrontmatter(source);
+  const firstSection = findFirstTopLevelSection(body);
   if (firstSection === -1) {
     throw new Error('cli-ref: cli.md has no `## ` sections to demote.');
   }
-  // Demote the top-level api-ref sections (`## Functions`, `## Types & interfaces`,
-  // `## Constants`) to `### ` so they nest under the new `## Programmatic API`.
-  // Symbol entries are already `### `; bump those to `#### ` to preserve hierarchy.
-  const programmaticRaw = afterFrontmatter.slice(firstSection + 1);
-  const programmatic = programmaticRaw
-    .split('\n')
-    .map((line) => {
-      if (line.startsWith('### ')) return `#${line}`; // ### `kovoCheck` -> #### `kovoCheck`
-      if (line.startsWith('## ')) return `#${line}`; // ## Functions     -> ### Functions
-      return line;
-    })
-    .join('\n');
 
+  return {
+    frontmatter: data,
+    markdown: shiftMarkdownHeadings(body.slice(firstSection).trim(), 1),
+  };
+}
+
+function renderReferencePage({ frontmatter, programmatic }) {
   const commandSection = COMMANDS_MANIFEST.flatMap((entry) => renderCommand(entry));
+  const pageFrontmatter = {
+    ...frontmatter,
+    title: CLI_REFERENCE_TITLE,
+    description: CLI_REFERENCE_DESCRIPTION,
+  };
 
-  const body = [
-    '# @kovojs/cli',
+  return [
+    formatFrontmatter(pageFrontmatter),
+    '',
+    `# ${CLI_REFERENCE_TITLE}`,
     '',
     'Command-line interface for the Kovo toolchain. Generated from the shared',
     '`@kovojs/cli` command manifest (`packages/cli/src/commands-manifest.ts`) and the',
@@ -121,7 +162,7 @@ function transform(source) {
     'Run `kovo` with no arguments to list the available commands:',
     '',
     '```sh',
-    'kovo: explain, check, audit, export, mcp',
+    formatNoArgsMessage().trimEnd(),
     '```',
     '',
     '## Commands',
@@ -134,9 +175,10 @@ function transform(source) {
     '(SPEC.md §11.4). This reference is generated from `packages/cli/src/api.ts`.',
     '',
     programmatic,
-  ].join('\n');
-
-  return `${frontmatter}\n\n${body}\n`.replace(/\n{3,}/g, '\n\n');
+    '',
+  ]
+    .join('\n')
+    .replace(/\n{3,}/g, '\n\n');
 }
 
 /**
@@ -170,8 +212,15 @@ function transformSidebar(manifest) {
 export async function generateCliReference({ outDir = path.join(siteRoot, 'gen/api') } = {}) {
   const cliPath = path.join(outDir, 'cli.md');
   const source = await readFile(cliPath, 'utf8');
-  const transformed = transform(source);
-  await writeFile(cliPath, transformed, 'utf8');
+  const programmatic = extractProgrammaticReference(source);
+  await writeFile(
+    cliPath,
+    renderReferencePage({
+      frontmatter: programmatic.frontmatter,
+      programmatic: programmatic.markdown,
+    }),
+    'utf8',
+  );
 
   // Keep the API navigation in step with the command-first page.
   const sidebarPath = path.join(outDir, 'cli.sidebar.json');

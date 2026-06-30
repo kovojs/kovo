@@ -20,9 +20,11 @@ import { describe, expect, it, vi } from 'vitest';
 
 import {
   CREATE_KOVO_HELP,
+  CREATE_KOVO_REFERENCE,
   createKovoProject,
   demoPasswordEnvVar,
   main,
+  renderCreateKovoHelp,
   writeKovoProject,
 } from './index.js';
 import { linkStarterBuildDependencies, resolveDependencyRoot } from './index.test-support.js';
@@ -547,6 +549,7 @@ describe('create-kovo starter (CLI)', () => {
       expect(main(['--help'])).toBe(0);
       expect(stderr).not.toHaveBeenCalled();
       expect(stdout).toHaveBeenCalledWith(CREATE_KOVO_HELP);
+      expect(CREATE_KOVO_HELP).toBe(renderCreateKovoHelp(CREATE_KOVO_REFERENCE));
       expect(CREATE_KOVO_HELP).toContain('Create a new Kovo application.');
       expect(CREATE_KOVO_HELP).toContain('Default: normalized target directory name.');
       expect(CREATE_KOVO_HELP).toContain('Default: postgres.');

@@ -1,5 +1,10 @@
 import { navigationStandaloneHrefLowering } from './lower/navigation.js';
 import { lowerStructuralJsx } from './lower/structural-jsx.js';
+import {
+  createCompileFactLedger,
+  type CompileFactLedger,
+  type CompileFactSnapshot,
+} from './compile-fact-ledger.js';
 import { applyModelPatchPlanPass, type ComponentPipelineState } from './model-pipeline.js';
 import { parseComponentModule, type ComponentModuleModel } from './scan/parse.js';
 import {
@@ -29,6 +34,7 @@ interface LoweringPipelineContext {
   readonly componentName: string;
   readonly options: CompileComponentOptions;
   state: ComponentPipelineState<ComponentModuleModel>;
+  ledger: CompileFactLedger;
   pending: SourceReplacementAccumulator;
   readonly offsetMaps: SourceOffsetMap[];
   styleSpanProbe?: StyleExtraction;
@@ -95,6 +101,26 @@ export const LOWERING_PASSES: readonly LoweringPass[] = [
         ...ctx.options,
         skipInlineAttributeDeriveSpans: styleSpanProbe.handledSpans,
       });
+      ctx.ledger.append(
+        'outputContexts',
+        { phase: 'lower', pass: 'structural-jsx' },
+        ctx.structuralLowering.outputContexts,
+      );
+      ctx.ledger.append(
+        'platformSubstitutions',
+        { phase: 'lower', pass: 'structural-jsx' },
+        ctx.structuralLowering.platformSubstitutions,
+      );
+      ctx.ledger.append(
+        'stateDerives',
+        { phase: 'lower', pass: 'structural-jsx' },
+        ctx.structuralLowering.stateDerives,
+      );
+      ctx.ledger.append(
+        'viewTransitions',
+        { phase: 'lower', pass: 'structural-jsx' },
+        ctx.structuralLowering.viewTransitionStamps,
+      );
       addPendingReplacements(ctx, 'structural-jsx', ctx.structuralLowering.replacements);
     },
   },
@@ -130,6 +156,31 @@ export const LOWERING_PASSES: readonly LoweringPass[] = [
         ctx.componentName,
         ctx.options,
       );
+      ctx.ledger.append(
+        'outputContexts',
+        { phase: 'lower', pass: 'style-extraction' },
+        ctx.styleExtraction.outputContexts,
+      );
+      ctx.ledger.append(
+        'queryUpdateCoverage',
+        { phase: 'lower', pass: 'style-extraction' },
+        ctx.styleExtraction.updateCoverage,
+      );
+      ctx.ledger.append(
+        'queryUpdatePlans',
+        { phase: 'lower', pass: 'style-extraction' },
+        ctx.styleExtraction.queryUpdatePlans,
+      );
+      ctx.ledger.append(
+        'stateDerives',
+        { phase: 'lower', pass: 'style-extraction' },
+        ctx.styleExtraction.stateDerives,
+      );
+      ctx.ledger.append(
+        'styleRuleUsages',
+        { phase: 'lower', pass: 'style-extraction' },
+        ctx.styleExtraction.ruleUsages,
+      );
       addPendingReplacements(ctx, 'style-extraction', ctx.styleExtraction.replacements);
     },
   },
@@ -159,6 +210,7 @@ export interface LoweringPipelineResult {
   model: ComponentModuleModel;
   validationOffsetMap: SourceOffsetMap;
   terminalState: ComponentPipelineState<ComponentModuleModel>;
+  factSnapshot: CompileFactSnapshot;
   styleSpanProbe: StyleExtraction;
   structuralLowering: StructuralLowering;
   styleExtraction: StyleExtraction;
@@ -180,6 +232,7 @@ export function runLoweringPipeline(
     componentName,
     options,
     state: originalState,
+    ledger: createCompileFactLedger(),
     pending: new SourceReplacementAccumulator(),
     offsetMaps: [],
   };
@@ -200,6 +253,7 @@ export function runLoweringPipeline(
       requireOffsetMap(ctx, 1, 'final validation offset map'),
     ),
     terminalState: ctx.state,
+    factSnapshot: ctx.ledger.snapshot(),
     styleSpanProbe: requireStyleSpanProbe(ctx, 'final result'),
     structuralLowering: requireStructuralLowering(ctx, 'final result'),
     styleExtraction: requireStyleExtraction(ctx, 'final result'),
