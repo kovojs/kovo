@@ -44,7 +44,7 @@ Priority is based on correctness/security impact first, then maintainability and
     targeted `kovo explain --access` tests cover pages, queries, mutations, endpoints, webhooks,
     public surfaces, guarded surfaces, and missing-fact failures.
 
-- [ ] **P0.3 - Turn lifecycle surface into an enforced policy discriminant.**
+- [x] **P0.3 - Turn lifecycle surface into an enforced policy discriminant.**
   - Current signals: `packages/server/src/response-posture.ts` accepts
     `surface: 'document' | 'endpoint' | 'mutation' | 'query' | 'system'`, then immediately drops it
     before calling `resolveLifecycleRequest()`.
@@ -58,6 +58,9 @@ Priority is based on correctness/security impact first, then maintainability and
   - Verification: focused tests for `app-dispatch`, `query`, `app-mutation-request`, endpoint
     posture, and response finalization prove the per-surface capability set; add a regression test
     that a future unused `surface` field fails.
+  - Evidence:
+    `pnpm exec vitest --run packages/server/src/response-posture.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/endpoint.test.ts packages/server/src/route.test.ts packages/server/src/app-document.test.ts packages/server/src/app.test.ts`
+    passed.
 
 - [x] **P0.4 - Replace structured-document global brands with module-private sentinels.**
   - Current signals: `packages/server/src/document-structured.ts` defines

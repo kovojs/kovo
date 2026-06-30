@@ -137,6 +137,45 @@ describe('server app mutation request boundary', () => {
     expect(response.headers.get('location')).toBe('/account');
   });
 
+  it('dispatches mutations with write lifecycle db handles', async () => {
+    const writes: string[] = [];
+    const db = {
+      insert(value: string) {
+        writes.push(value);
+      },
+    };
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      redirectTo: '/cart',
+      handler(input, request: Request & { db: typeof db; session?: never }) {
+        expect('session' in request).toBe(false);
+        request.db.insert(input.productId);
+        return input;
+      },
+    });
+    const app = createApp({
+      db: () => db,
+      mutations: [addToCart],
+      sessionProvider() {
+        return { user: { id: 'u1' } };
+      },
+    });
+    const form = new FormData();
+    form.set('productId', 'p1');
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: form,
+      headers: { Cookie: 'sid=victim' },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+
+    expect(response.status).toBe(303);
+    expect(response.headers.get('location')).toBe('/cart');
+    expect(writes).toEqual(['p1']);
+  });
+
   it('inherits app and source-route stylesheets into enhanced live-target fragments', async () => {
     const cart = domain('cart');
     const cartQuery = query('cart', {

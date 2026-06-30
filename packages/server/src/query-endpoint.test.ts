@@ -167,6 +167,33 @@ describe('query endpoints', () => {
     });
   });
 
+  it('runs ordinary query loaders with read-only lifecycle db handles', async () => {
+    const writes: string[] = [];
+    const db = {
+      insert() {
+        writes.push('insert');
+      },
+      read() {
+        return 'ok';
+      },
+    };
+    const productQuery = query('productLifecycle', {
+      load(_input, context?: { request: { db: typeof db } }) {
+        expect(context?.request.db.read()).toBe('ok');
+        expect(() => context?.request.db.insert()).toThrow(/loaders are read-only|cannot insert/);
+        return { ok: true };
+      },
+      reads: [],
+    });
+
+    await expect(runQuery(productQuery, undefined, {}, { db: () => db })).resolves.toEqual({
+      input: undefined,
+      ok: true,
+      value: { ok: true },
+    });
+    expect(writes).toEqual([]);
+  });
+
   it('runs query endpoints through args schemas, guards, and request context', async () => {
     type ProductQueryInput = { id: string; max: number };
     type ProductQueryRequest = { session?: { userId?: string } | null };

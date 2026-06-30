@@ -58,6 +58,8 @@ export async function handleAppMutationRequest(
     ...(app.sessionProvider === undefined || csrfExempt
       ? {}
       : { sessionProvider: app.sessionProvider }),
+    csrf: { mode: csrfExempt ? 'exempt' : 'protected' },
+    idempotency: { mode: app.mutationReplayStore === undefined ? 'none' : 'replay-store' },
     surface: 'mutation',
   });
   const currentUrl = appRequestUrl(url);
