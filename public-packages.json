@@ -2092,6 +2092,7 @@
       "dir": "ui",
       "visibility": "public",
       "kind": "library",
+      "distributionMode": "package-and-copy-in",
       "apiBoundary": {
         "public": [
           ".",

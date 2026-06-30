@@ -19,6 +19,7 @@ const repoRoot = path.resolve(pkgRoot, '../..');
 const uiSrcDir = path.join(pkgRoot, 'src');
 const headlessRoot = path.join(repoRoot, 'packages/headless-ui');
 const galleryRoot = path.join(repoRoot, 'examples/gallery');
+const publicPackagesPath = path.join(repoRoot, 'public-packages.json');
 
 const generatedSourceComment =
   '// Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.';
@@ -45,6 +46,7 @@ if (unknownArg) {
 
 const writeMode = process.argv.includes('--write');
 const manifestComponents = componentManifestEntries();
+const uiDistributionMode = uiPackageDistributionMode();
 const generatedTargets = [
   {
     compare: 'json',
@@ -127,6 +129,17 @@ function componentManifestEntries() {
   }));
 }
 
+function uiPackageDistributionMode() {
+  const manifest = JSON.parse(readFileSync(publicPackagesPath, 'utf8'));
+  const uiPackage = manifest.packages?.find((entry) => entry.name === '@kovojs/ui');
+  if (uiPackage?.distributionMode !== 'package-and-copy-in') {
+    throw new Error(
+      'public-packages.json must declare @kovojs/ui distributionMode "package-and-copy-in"',
+    );
+  }
+  return uiPackage.distributionMode;
+}
+
 function generateUiRegistryJson() {
   const components = [];
   const findings = [];
@@ -199,6 +212,12 @@ function generateUiRegistryJson() {
     }
 
     components.push({
+      family: entry.family ?? {
+        ids: [],
+        parts: [],
+        slots: [],
+        state: [],
+      },
       name,
       title: exportedComponents[0] ?? pascalCase(name),
       files: [`src/${file}`],
@@ -223,6 +242,7 @@ function generateUiRegistryJson() {
     {
       $comment:
         'shadcn-style copy-in registry for @kovojs/ui (private package). External apps copy a component .tsx into their own app (e.g. src/components/ui/) rather than installing @kovojs/ui. The copied source imports only PUBLIC, versioned packages: @kovojs/headless-ui (behavior), @kovojs/style (StyleX fork), @kovojs/core (component()), @kovojs/server (escape helpers), and optionally @kovojs/icons (Lucide SVG icon components). `dependencies` lists, per public package, the exact symbols a component imports; `uiComponents` lists sibling ui files to copy alongside it. Component membership/order comes from packages/ui/scripts/primitive-component-manifest.mjs; dependency metadata is derived from source. Regenerate with `node packages/ui/scripts/build-registry.mjs --write`. See site/content/guides/components.md and plans/api-cleanup.md Phase 7.',
+      distributionMode: uiDistributionMode,
       registryDependencies: [
         '@kovojs/headless-ui',
         '@kovojs/style',

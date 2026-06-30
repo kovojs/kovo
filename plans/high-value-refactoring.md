@@ -411,7 +411,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm exec vitest --run packages/devtool/src/dependency-boundary.test.mjs packages/headless-ui/src/types-boundary.test.ts packages/devtool/src/render.test.mjs --reporter=verbose`, `pnpm run check:api-surface`, and exact `rg "@kovojs/headless-ui/types"` import search pass after narrowing the public seams.
   - Rules: `rules/api-surface.md`.
 
-- [ ] **P2.5 - Make `@kovojs/ui` family metadata and distribution mode explicit.**
+- [x] **P2.5 - Make `@kovojs/ui` family metadata and distribution mode explicit.**
   - Affected: `packages/ui/src/*.tsx`, `packages/ui/src/theme.ts`,
     `packages/style/src/theme.ts`, `packages/ui/scripts/build-registry.mjs`,
     `packages/ui/registry.json`, `public-packages.json`, docs for component install/copy-in.
@@ -428,4 +428,5 @@ test brittleness, and distribution confusion.
   - Verification: API ref diffs, `packages/ui/src/copy-in.test.ts`, representative style snapshots,
     `packages/style/src/index.test.ts`, `packages/ui/src/theme-contract.test.tsx`, and negative tests for
     non-static token references.
+  - Evidence: `pnpm exec vitest --run packages/ui/src/copy-in.test.ts packages/ui/src/theme-contract.test.tsx packages/style/src/index.test.ts packages/ui/src/select.stylex.test.tsx packages/ui/src/radio-group.stylex.test.tsx packages/ui/src/table.stylex.test.tsx packages/ui/src/index.inputs.test.tsx packages/ui/src/index.form-controls.test.tsx packages/ui/src/index.markup.test.tsx scripts/public-packages.test.mjs site/scripts/api-ref.test.mjs scripts/exported-symbols.test.mjs packages/ui/src/manifest-generation.test.ts`, `node packages/ui/scripts/build-registry.mjs`, and `pnpm run check:api-surface` pass with explicit UI distribution mode, registry family metadata, and internal component-token access.
   - SPEC/rules: `SPEC.md` sections 6.1.1 and 13.1; `rules/api-surface.md`.

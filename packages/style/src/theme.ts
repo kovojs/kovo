@@ -203,9 +203,8 @@ export interface ThemeSystemOverrides {
   readonly shape?: Partial<ThemeShapeValues>;
 }
 
-/** Typed `var(...)` references for Kovo theme tokens used inside `style.create(...)`. */
+/** Typed public `var(...)` references for app-authored `style.create(...)` objects (SPEC.md §13.1). */
 export interface ThemeTokens {
-  readonly component: (name: string) => string;
   readonly customColor: (name: string) => ThemeCustomColorGroup;
   readonly ref: {
     readonly palette: ThemeReferencePalettes;
@@ -214,6 +213,11 @@ export interface ThemeTokens {
     readonly color: ThemeSystemColorValues;
     readonly shape: ThemeShapeValues;
   };
+}
+
+/** @internal Typed theme token refs that also expose derived component tokens. */
+export interface InternalThemeTokens extends ThemeTokens {
+  readonly component: (name: string) => string;
 }
 
 const DEFAULT_VARIANT: ThemeVariant = 'tonal-spot';
@@ -288,8 +292,7 @@ const SHAPE_DEFAULTS = {
 } as const satisfies ThemeShapeValues;
 
 /** Theme token references for authored styles; generated CSS supplies the values. */
-export const tokens = Object.freeze({
-  component: (name: string) => `var(${themeVar('component', name)})`,
+const publicThemeTokens = Object.freeze({
   customColor: (name: string) =>
     ({
       color: `var(${themeVar('custom', name, 'color')})`,
@@ -305,6 +308,15 @@ export const tokens = Object.freeze({
     shape: shapeTokenVars(),
   },
 }) satisfies ThemeTokens;
+
+/** Typed public token refs for app-authored source (SPEC.md §13.1). */
+export const tokens = publicThemeTokens;
+
+/** @internal Internal theme tokens include derived component vars for generated/repo-owned code only. */
+export const internalThemeTokens = Object.freeze({
+  ...publicThemeTokens,
+  component: (name: string) => `var(${themeVar('component', name)})`,
+}) satisfies InternalThemeTokens;
 
 /**
  * @internal Generate a Kovo theme from one seed color. Color math is build-time

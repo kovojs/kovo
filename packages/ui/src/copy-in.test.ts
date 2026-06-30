@@ -24,6 +24,8 @@ import { describe, expect, it } from 'vitest';
 const srcDir = dirname(fileURLToPath(import.meta.url)); // packages/ui/src
 const pkgRoot = dirname(srcDir); // packages/ui
 const repoRoot = dirname(dirname(pkgRoot)); // packages/ui -> repo root
+const componentsGuidePath = join(repoRoot, 'site', 'content', 'guides', 'components.md');
+const publicPackagesManifestPath = join(repoRoot, 'public-packages.json');
 
 /** Resolve a CLI bin from the repo's pnpm-linked node_modules. */
 function resolveBin(name: string): string {
@@ -135,12 +137,23 @@ describe('@kovojs/ui copy-in model', () => {
 
   it('registry.json pins only PUBLIC @kovojs deps for every component', () => {
     const registry = JSON.parse(readFileSync(join(pkgRoot, 'registry.json'), 'utf8')) as {
+      distributionMode: string;
       components: {
         name: string;
         dependencies: Record<string, unknown>;
+        family: {
+          ids: string[];
+          parts: string[];
+          slots: string[];
+          state: string[];
+        };
         uiComponents: string[];
       }[];
     };
+    const publicPackages = JSON.parse(readFileSync(publicPackagesManifestPath, 'utf8')) as {
+      packages: { distributionMode?: string; name: string }[];
+    };
+    const uiPackage = publicPackages.packages.find((entry) => entry.name === '@kovojs/ui');
     const PUBLIC = new Set([
       '@kovojs/core',
       '@kovojs/headless-ui',
@@ -149,6 +162,8 @@ describe('@kovojs/ui copy-in model', () => {
       '@kovojs/style',
     ]);
 
+    expect(registry.distributionMode).toBe('package-and-copy-in');
+    expect(uiPackage?.distributionMode).toBe(registry.distributionMode);
     expect(registry.components.length).toBeGreaterThan(0);
     for (const component of registry.components) {
       for (const dep of Object.keys(component.dependencies)) {
@@ -156,5 +171,70 @@ describe('@kovojs/ui copy-in model', () => {
         expect(PUBLIC.has(dep), `${component.name} depends on non-public "${dep}"`).toBe(true);
       }
     }
+  });
+
+  it('records explicit family metadata for copy-in-sensitive component families', () => {
+    const registry = JSON.parse(readFileSync(join(pkgRoot, 'registry.json'), 'utf8')) as {
+      components: {
+        family: {
+          ids: string[];
+          parts: string[];
+          slots: string[];
+          state: string[];
+        };
+        name: string;
+      }[];
+    };
+    const byName = new Map(registry.components.map((entry) => [entry.name, entry.family]));
+
+    expect(byName.get('select')).toEqual({
+      ids: ['descriptionId', 'errorId', 'id', 'labelledBy', 'listboxId'],
+      parts: ['content', 'hiddenInput', 'item', 'root', 'trigger', 'value'],
+      slots: ['content', 'hiddenInput', 'item', 'root', 'trigger', 'value'],
+      state: [
+        'disabled',
+        'form',
+        'highlightedValue',
+        'invalid',
+        'items',
+        'listboxId',
+        'name',
+        'open',
+        'placeholder',
+        'required',
+        'value',
+      ],
+    });
+    expect(byName.get('radio-group')).toEqual({
+      ids: ['controlId', 'descriptionId', 'errorId', 'id', 'labelledBy'],
+      parts: ['item', 'label', 'radio', 'radioControl', 'root'],
+      slots: ['item', 'label', 'radio', 'radioControl', 'root'],
+      state: [
+        'descriptionId',
+        'dir',
+        'disabled',
+        'errorId',
+        'form',
+        'invalid',
+        'items',
+        'loop',
+        'name',
+        'orientation',
+        'required',
+        'value',
+      ],
+    });
+    expect(byName.get('table')).toEqual({
+      ids: [],
+      parts: ['body', 'caption', 'cell', 'head', 'headerCell', 'row', 'table', 'wrapper'],
+      slots: ['body', 'caption', 'cell', 'head', 'headerCell', 'row', 'table', 'wrapper'],
+      state: [],
+    });
+  });
+
+  it('keeps the components guide aligned with the explicit UI distribution mode', () => {
+    const guide = readFileSync(componentsGuidePath, 'utf8');
+
+    expect(guide).toContain('package-and-copy-in');
   });
 });
