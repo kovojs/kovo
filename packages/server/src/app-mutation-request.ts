@@ -1,13 +1,10 @@
-import { resolveLifecycleRequest } from './guards.js';
 import {
   renderMutationEndpointResponse,
   type MutationDefinition,
   type MutationFail,
-  type MutationRegistry,
 } from './mutation.js';
 import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
 import { mutationCsrfOptions } from './csrf.js';
-import type { RegisteredQueryDefinition } from './query.js';
 import { methodNotAllowedWebResponse, serverResponseToWebResponse } from './response.js';
 import type { Schema } from './schema.js';
 import type {
@@ -24,6 +21,7 @@ import {
 } from './app-document.js';
 import { matchShellDispatch } from './shell.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
+import { resolveKovoLifecycleRequest } from './response-posture.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -50,7 +48,7 @@ export async function handleAppMutationRequest(
   // mutation a compile error; this runtime floor makes the exemption sound even if a graph fact
   // is stale or missing, so `req.session` is genuinely absent rather than the victim's cookie.
   const csrfExempt = !mutationRequiresPreBodyCsrf(mutation, app);
-  const mutationRequest = await resolveLifecycleRequest(request, {
+  const mutationRequest = await resolveKovoLifecycleRequest(request, {
     // SPEC §9.5: attach the trustworthy client IP so a `guards.rateLimit({ per: 'ip' })` on this
     // mutation (e.g. a credential mutation) keys by IP. Reuses the coarse limiter's trusted source
     // (`resolveRequestClientIp`), never a raw header read in the guard.
@@ -59,6 +57,7 @@ export async function handleAppMutationRequest(
     ...(app.sessionProvider === undefined || csrfExempt
       ? {}
       : { sessionProvider: app.sessionProvider }),
+    surface: 'mutation',
   });
   const currentUrl = appRequestUrl(url);
   const sourceUrl = mutationSourceUrl(request, url);
@@ -101,15 +100,12 @@ export async function handleAppMutationRequest(
     mutation.key,
     rawInput,
   );
-  const requestMutation = mutationWithAppQueries(
-    mutation as unknown as MutationDefinition<
-      string,
-      Schema<unknown>,
-      Record<string, Schema<unknown>>,
-      Request
-    >,
-    app.queries as readonly RegisteredQueryDefinition[],
-  );
+  const requestMutation = mutation as unknown as MutationDefinition<
+    string,
+    Schema<unknown>,
+    Record<string, Schema<unknown>>,
+    Request
+  >;
   // Derive the build token from the app's client-module registry so it is
   // identical for the page render and this mutation response (SPEC §5.1, §9.1.1).
   const buildToken = app.clientModules.buildToken();
@@ -173,15 +169,12 @@ async function renderPreBodyCsrfFailure(
     mutation.key,
     {},
   );
-  const requestMutation = mutationWithAppQueries(
-    mutation as unknown as MutationDefinition<
-      string,
-      Schema<unknown>,
-      Record<string, Schema<unknown>>,
-      Request
-    >,
-    app.queries as readonly RegisteredQueryDefinition[],
-  );
+  const requestMutation = mutation as unknown as MutationDefinition<
+    string,
+    Schema<unknown>,
+    Record<string, Schema<unknown>>,
+    Request
+  >;
   const buildToken = app.clientModules.buildToken();
 
   const endpointResponse = await renderMutationEndpointResponse(requestMutation, {
@@ -296,37 +289,6 @@ async function resolveMutationResponsePolicy(
 ): Promise<AppMutationResponseOptions | undefined> {
   if (policy === undefined) return undefined;
   return typeof policy === 'function' ? policy(context) : policy;
-}
-
-function mutationWithAppQueries<Request>(
-  mutation: MutationDefinition<string, Schema<unknown>, Record<string, Schema<unknown>>, Request>,
-  queries: readonly RegisteredQueryDefinition[],
-): MutationDefinition<string, Schema<unknown>, Record<string, Schema<unknown>>, Request> {
-  if (queries.length === 0) return mutation;
-
-  return {
-    ...mutation,
-    registry: mergeMutationRegistryQueries(mutation.registry, queries),
-  };
-}
-
-function mergeMutationRegistryQueries(
-  registry: MutationRegistry | undefined,
-  appQueries: readonly RegisteredQueryDefinition[],
-): MutationRegistry {
-  const queriesByKey = new Map<string, RegisteredQueryDefinition>();
-
-  for (const query of registry?.queries ?? []) {
-    queriesByKey.set(query.key, query);
-  }
-  for (const query of appQueries) {
-    if (!queriesByKey.has(query.key)) queriesByKey.set(query.key, query);
-  }
-
-  return {
-    ...registry,
-    queries: [...queriesByKey.values()],
-  };
 }
 
 type MutationRequestBodyResult = { ok: true; value: unknown } | { ok: false; reason: string };

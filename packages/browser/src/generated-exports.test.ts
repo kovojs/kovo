@@ -6,6 +6,7 @@ import { derive } from './derive.js';
 import { handler } from './handlers.js';
 import { installKovoLoader } from './loader.js';
 import { applyCompiledQueryUpdatePlan } from './query-bindings.js';
+import { runQueryUpdatePlan } from './query-update-vm.js';
 import { createQueryStore } from './query-store.js';
 import { kovoEscapeHtml, kovoStyleProperty } from './security-output.js';
 
@@ -17,6 +18,7 @@ describe('runtime generated exports', () => {
       applyDeferredStreamResponseToRuntime,
     );
     expect(generated.applyCompiledQueryUpdatePlan).toBe(applyCompiledQueryUpdatePlan);
+    expect(generated.runQueryUpdatePlan).toBe(runQueryUpdatePlan);
     expect(generated.createQueryStore).toBe(createQueryStore);
     expect(generated.derive).toBe(derive);
     expect(generated.handler).toBe(handler);

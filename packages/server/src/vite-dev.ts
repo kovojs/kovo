@@ -18,6 +18,7 @@ import { renderLiveTargetChunks } from './mutation.js';
 import { readMutationWireHeaders } from './mutation-wire.js';
 import { readHeader, routeResponseToWebResponse, type RoutePageResponse } from './response.js';
 import { matchShellDispatch } from './shell.js';
+import { generatedFragmentHtml } from './html.js';
 import { renderFragmentWireHtml } from './wire-html.js';
 import type { ServerErrorDiagnosticContext } from './diagnostics.js';
 
@@ -1034,7 +1035,7 @@ export function renderKovoAppShellViteDevDiagnosticResponse(
 
     return {
       body: renderFragmentWireHtml({
-        html: document.body,
+        html: generatedFragmentHtml(document.body),
         target: firstMutationDiagnosticTarget(request.headers),
       }),
       headers: {

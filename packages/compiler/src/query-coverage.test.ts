@@ -263,7 +263,7 @@ export const ClockLabel = component({
       { cadence: 'renderOnce', name: 'pub' },
     ]);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive, installClockUpdatePlans } from '@kovojs/browser/generated';",
+      "import { derive, installClockUpdatePlans, runQueryUpdatePlan } from '@kovojs/browser/generated';",
     );
     expect(clientSource).toContain('export const ClockLabel$clockUpdatePlans = [{');
     expect(clientSource).toContain("clocks: { \"ago\": { ['every']: '1s' } }");
@@ -300,7 +300,7 @@ export const ClockLabel = component({
     expect(clientSource).toContain('context?.queryStore?.get(input)');
     expect(clientSource).toContain('return ClockLabel$queryUpdatePlans.now(root, now, context);');
     expect(clientSource).toContain(
-      'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [{ name: "ClockLabel$value", selector: "[data-derive=\\"now.ClockLabel$value\\"]", select(value, root, context) { return ClockLabel$value.run(...kovoDeriveValues(["now","cart"], "cart", value, context)); } }]',
+      'return runQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [{ name: "ClockLabel$value", selector: "[data-derive=\\"now.ClockLabel$value\\"]", select(value, root, context) { return ClockLabel$value.run(...kovoDeriveValues(["now","cart"], "cart", value, context)); } }]',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });
@@ -440,7 +440,7 @@ export const CartBadge = component({
       ]
     `);
     expect(clientSource).toContain(
-      "import { applyCompiledQueryUpdatePlan, derive } from '@kovojs/browser/generated';",
+      "import { derive, runQueryUpdatePlan } from '@kovojs/browser/generated';",
     );
     expect(clientSource).toContain(
       'export const CartBadge$button_disabled_derive = derive(["cart"], (cart) => cart.count === 0);',
@@ -603,7 +603,7 @@ export const CartBadge = component({
     ]);
     expect(result.diagnostics).toEqual([]);
     expect(clientSource).toContain(
-      'return applyCompiledQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryStore: context.queryStore });',
+      'return runQueryUpdatePlan(root, "cart", value, { bindings: true, derives: [], stamps: [], templateStamps: [] }, { queryStore: context.queryStore });',
     );
     expect(() => assertFixpoint(result)).not.toThrow();
   });

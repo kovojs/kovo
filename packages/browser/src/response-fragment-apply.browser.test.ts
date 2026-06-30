@@ -1,4 +1,8 @@
-import { decideRuntimeAttributeWrite } from '@kovojs/core/internal/sink-policy';
+import {
+  createRenderedFragmentHtml,
+  decideRuntimeAttributeWrite,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installInlineKovoLoader } from './inline-loader.js';
@@ -48,6 +52,8 @@ function readSanitizedAttribute(element: Element | null, name: string): string |
   return element?.getAttribute(name) ?? element?.getAttribute(name.toLowerCase()) ?? null;
 }
 
+const fragmentHtml = (html: string): RenderedFragmentHtml => createRenderedFragmentHtml(html);
+
 describe('browser response fragment apply', () => {
   it('morphs the fragment root instead of leading stylesheet links', () => {
     const target = document.createElement('div');
@@ -58,7 +64,9 @@ describe('browser response fragment apply', () => {
     const applied = applyHtmlResponseFragments(
       [
         {
-          html: '<link rel="stylesheet" href="/assets/app.css"><div kovo-fragment-target="cart-badge"><span>new</span></div>',
+          html: fragmentHtml(
+            '<link rel="stylesheet" href="/assets/app.css"><div kovo-fragment-target="cart-badge"><span>new</span></div>',
+          ),
           target: 'cart-badge',
         },
       ],
@@ -118,15 +126,17 @@ describe('browser response fragment apply', () => {
     const applied = applyHtmlResponseFragments(
       [
         {
-          html: [
-            '<article kovo-fragment-target="promo"',
-            ' onclick="alert(1)" innerHTML="<img src=x onerror=alert(1))" style="background:url(javascript:alert(1))">',
-            '<a href="java\tscript:alert(1)"',
-            ' srcdoc="<script>bad()</script>"',
-            ' srcset="/safe.png 1x, javascript:alert(1) 2x">new</a>',
-            '<span style="min-height: 120px">safe style</span>',
-            '</article>',
-          ].join(''),
+          html: fragmentHtml(
+            [
+              '<article kovo-fragment-target="promo"',
+              ' onclick="alert(1)" innerHTML="<img src=x onerror=alert(1))" style="background:url(javascript:alert(1))">',
+              '<a href="java\tscript:alert(1)"',
+              ' srcdoc="<script>bad()</script>"',
+              ' srcset="/safe.png 1x, javascript:alert(1) 2x">new</a>',
+              '<span style="min-height: 120px">safe style</span>',
+              '</article>',
+            ].join(''),
+          ),
           target: 'promo',
         },
       ],
@@ -156,14 +166,16 @@ describe('browser response fragment apply', () => {
     const applied = applyHtmlResponseFragments(
       [
         {
-          html: [
-            '<li kovo-key="new">',
-            '<a href="javascript:alert(1)" onclick="alert(1)" innerHTML="<img src=x onerror=alert(1))"',
-            ' srcdoc="<script>bad()</script>"',
-            ' srcset="/safe.png 1x, javascript:alert(1) 2x"',
-            ' style="background:url(javascript:alert(1))">new</a>',
-            '</li>',
-          ].join(''),
+          html: fragmentHtml(
+            [
+              '<li kovo-key="new">',
+              '<a href="javascript:alert(1)" onclick="alert(1)" innerHTML="<img src=x onerror=alert(1))"',
+              ' srcdoc="<script>bad()</script>"',
+              ' srcset="/safe.png 1x, javascript:alert(1) 2x"',
+              ' style="background:url(javascript:alert(1))">new</a>',
+              '</li>',
+            ].join(''),
+          ),
           mode: 'append',
           target: 'feed',
         },
@@ -198,7 +210,9 @@ describe('browser response fragment apply', () => {
       applyHtmlResponseFragments(
         [
           {
-            html: renderFragmentAttributeCase(testCase.name, testCase.name, testCase.value),
+            html: fragmentHtml(
+              renderFragmentAttributeCase(testCase.name, testCase.name, testCase.value),
+            ),
             target: testCase.name,
           },
         ],
@@ -297,7 +311,7 @@ describe('browser prepend (load-older) fragment apply', () => {
 
     // Older page includes a duplicate (m6) plus genuinely older rows (m3, m4).
     applyHtmlResponseFragments(
-      [{ html: olderRows('m6', 'm3', 'm4'), mode: 'prepend', target: 'chat-log' }],
+      [{ html: fragmentHtml(olderRows('m6', 'm3', 'm4')), mode: 'prepend', target: 'chat-log' }],
       (name) => document.querySelector(`[kovo-fragment-target="${name}"]`),
     );
 

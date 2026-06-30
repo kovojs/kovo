@@ -1,9 +1,20 @@
+import {
+  createRenderedFragmentHtml,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
-import { expectInlineResponseApplyParity } from './inline-loader-response-apply-fixture.js';
+import {
+  expectInlineOracleResponseApplyContract,
+  expectInlineResponseApplyParity,
+} from './inline-loader-response-apply-fixture.js';
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
 import type { HtmlResponseFragmentApplyTarget } from './response-fragment-apply.js';
+
+function fragmentHtml(html: string): RenderedFragmentHtml {
+  return createRenderedFragmentHtml(html);
+}
 
 // SPEC.md §4.4/§9.1: the helper extracted into the inline loader owns the tiny
 // response-apply step that applies fragment patches after the inline bootstrap
@@ -65,10 +76,14 @@ describe('inline loader response apply runtime', () => {
       const appliedFragments = applyInlineMutationResponseChunks(
         {
           fragments: [
-            { html: '<p>replace</p>', target: 'replace-target' },
-            { html: '<p>second</p>', mode: 'append', target: 'append-second-target' },
-            { html: '<li>new</li>', mode: 'append', target: 'append-target' },
-            { html: '<p>ignored</p>', target: 'missing-target' },
+            { html: fragmentHtml('<p>replace</p>'), target: 'replace-target' },
+            {
+              html: fragmentHtml('<p>second</p>'),
+              mode: 'append',
+              target: 'append-second-target',
+            },
+            { html: fragmentHtml('<li>new</li>'), mode: 'append', target: 'append-target' },
+            { html: fragmentHtml('<p>ignored</p>'), target: 'missing-target' },
           ],
           queries: [{ attrs: ' name="cart"', content: 'decoded query', end: 12, start: 1 }],
         },
@@ -85,5 +100,9 @@ describe('inline loader response apply runtime', () => {
     } finally {
       globalRecord.document = originalDocument;
     }
+  });
+
+  it('applies the shared cross-package oracle response through modular and inline fragment paths', () => {
+    expectInlineOracleResponseApplyContract({ expect });
   });
 });

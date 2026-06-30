@@ -1,8 +1,12 @@
 import { hasUnsafeUrlScheme, isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
+  createFragmentHtml,
   decideRuntimeAttributeWrite,
   drainRuntimeSinkSecurityEvent,
+  fragmentHtmlContent,
+  isFragmentHtml,
   type RuntimeSinkSecurityEvent,
+  type FragmentHtml,
 } from '@kovojs/core/internal/sink-policy';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 
@@ -65,6 +69,44 @@ export function isRenderedHtml(value: unknown): value is RenderedHtml {
     (value as Partial<RenderedHtml>)[kovoRenderedHtml] === true &&
     typeof (value as { html?: unknown }).html === 'string'
   );
+}
+
+export type { FragmentHtml } from '@kovojs/core/internal/sink-policy';
+
+/** @internal Convert framework-rendered JSX or explicit trustedHtml() into fragment wire HTML. */
+export function fragmentHtml(value: RenderedHtml | object): FragmentHtml {
+  if (isRenderedHtml(value)) return createFragmentHtml(value.html);
+  const trusted = kovoTrustedHtmlContent(value);
+  return createFragmentHtml(trusted);
+}
+
+/**
+ * @internal Audited escape for compiler-generated renderers and in-repo wire fixtures.
+ *
+ * SPEC.md §§4.8/5.2/9.1: app-authored raw strings must not call privileged fragment sinks
+ * directly. Existing generated renderers still materialize HTML as a string after compiler-owned
+ * contextual escaping; this helper is the narrow conversion point while generated render return
+ * types are migrated to {@link RenderedHtml}.
+ */
+export function generatedFragmentHtml(html: string): FragmentHtml {
+  return createFragmentHtml(html);
+}
+
+/** @internal Accept an already-branded/generated/trusted value and mint fragment wire HTML. */
+export function generatedFragmentHtmlValue(value: unknown): FragmentHtml {
+  if (isFragmentHtml(value)) return value;
+  if (isRenderedHtml(value)) return createFragmentHtml(value.html);
+  if (typeof value === 'object' && value !== null) {
+    const trusted = kovoTrustedHtmlContent(value);
+    if (trusted !== '') return createFragmentHtml(trusted);
+  }
+  if (typeof value === 'string') return generatedFragmentHtml(value);
+  return generatedFragmentHtml('');
+}
+
+/** @internal Unwrap server fragment HTML at the final wire emitter. */
+export function renderFragmentHtmlValue(value: FragmentHtml): string {
+  return fragmentHtmlContent(value);
 }
 
 /**

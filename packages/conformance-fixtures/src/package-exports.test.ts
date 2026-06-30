@@ -406,6 +406,11 @@ import {
   type ProjectTouchGraphBehaviorFact,
 } from '@kovojs/conformance-fixtures/source-fixtures';
 import {
+  crossPackageOracleFixture,
+  oracleSchemaTableFixture,
+  type CrossPackageOracleFixture,
+} from '@kovojs/conformance-fixtures/oracle-fixtures';
+import {
   executeStarterClientTemplate,
   runPnpmFilterTaskCommand,
   runStarterTemplateGraphAssertions,
@@ -518,6 +523,8 @@ describe('@kovojs/test package subpath exports', () => {
     expect(serverCommerceTransactionBehaviorFact).toBeTypeOf('function');
     expect(serverCommerceStylesheetBehaviorFact).toBeTypeOf('function');
     expect(serverCommerceAdoptDontInventBehaviorFact).toBeTypeOf('function');
+    expect(crossPackageOracleFixture).toBeTypeOf('function');
+    expect(oracleSchemaTableFixture).toBeTypeOf('function');
     expect(serverPageHintsBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([
       'sid=1; Path=/',
@@ -872,6 +879,9 @@ describe('@kovojs/test package subpath exports', () => {
     expectTypeOf<ProjectTouchGraphBehaviorFact>()
       .toHaveProperty('touches')
       .toMatchTypeOf<readonly unknown[]>();
+    expectTypeOf<CrossPackageOracleFixture>()
+      .toHaveProperty('component')
+      .toMatchTypeOf<Record<string, unknown>>();
     expectTypeOf<ForbiddenBrowserArchitectureProjectFact>()
       .toHaveProperty('violations')
       .toEqualTypeOf<ForbiddenBrowserArchitectureFact[]>();

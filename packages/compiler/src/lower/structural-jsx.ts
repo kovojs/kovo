@@ -1847,10 +1847,6 @@ function insertJsxIrAttributeAtSource(
   markJsxIrChanged(element);
 }
 
-function hasBindingAttribute(element: JsxIrElement): boolean {
-  return element.attributes.some((attribute) => isBindingAttributeName(attribute.name));
-}
-
 function hasTextBindingAttribute(element: JsxIrElement): boolean {
   return element.attributes.some((attribute) => isTextBindingAttributeName(attribute.name));
 }

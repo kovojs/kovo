@@ -1,16 +1,14 @@
 import { mergeVaryHeader } from './document-core.js';
-import {
-  blessRedirectResponse,
-  isBlessedRedirectResponse,
-  redirectLocationHeaderValue,
-} from './response.js';
-import type { ResponseHeaders, ResponseHeaderValue } from './response.js';
+import { blessRedirectResponse } from './response.js';
+import type { ResponseHeaders, ResponseHeaderValue, WebResponseBody } from './response.js';
+import { finalizeServerResponse } from './response-posture.js';
 
 export type AppSystemResponseSurface = 'mutation' | 'query' | 'other';
 
 interface AppSystemResponseInit {
   buildToken?: string | undefined;
   headers?: HeadersInit | ResponseHeaders | undefined;
+  method?: string | undefined;
   status: number;
   surface: AppSystemResponseSurface;
 }
@@ -22,7 +20,10 @@ interface AppSystemResponseInit {
  *
  * @internal
  */
-export function appSystemResponse(body: BodyInit | null, init: AppSystemResponseInit): Response {
+export function appSystemResponse(
+  body: WebResponseBody | null,
+  init: AppSystemResponseInit,
+): Response {
   const response = {
     body,
     headers: appSystemResponseHeaders(init.headers, {
@@ -35,14 +36,7 @@ export function appSystemResponse(body: BodyInit | null, init: AppSystemResponse
   if (response.status >= 300 && response.status < 400 && readHeader(response.headers, 'Location')) {
     blessRedirectResponse(response);
   }
-  return new Response(body, {
-    headers: recordToHeaders(
-      response.headers,
-      response.status,
-      isBlessedRedirectResponse(response),
-    ),
-    status: init.status,
-  });
+  return finalizeServerResponse(response, { method: init.method ?? 'GET' });
 }
 
 function appSystemResponseHeaders(
@@ -79,27 +73,6 @@ function headersInitToRecord(
     record[name] = value;
   });
   return record;
-}
-
-function recordToHeaders(
-  headers: ResponseHeaders,
-  status: number,
-  blessedRedirect: boolean,
-): Headers {
-  const result = new Headers();
-  for (const [name, value] of Object.entries(headers)) {
-    if (status >= 300 && status < 400 && name.toLowerCase() === 'location') {
-      result.set(name, redirectLocationHeaderValue(value, blessedRedirect));
-      continue;
-    }
-
-    if (Array.isArray(value)) {
-      for (const entry of value) result.append(name, entry);
-    } else {
-      result.set(name, value);
-    }
-  }
-  return result;
 }
 
 function isHeaderRecord(

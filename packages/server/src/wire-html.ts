@@ -1,7 +1,13 @@
 import type { QueryDelta, QueryListDelta } from '@kovojs/core/internal/query-delta';
 import { stringifyWireValue as stringifyKovoWireValue } from '@kovojs/core/internal/wire-json';
 
-import { escapeAttribute, escapeHtml, escapeScriptJson } from './html.js';
+import {
+  escapeAttribute,
+  escapeHtml,
+  escapeScriptJson,
+  renderFragmentHtmlValue,
+  type FragmentHtml,
+} from './html.js';
 import { renderStylesheetLinks, type StylesheetAsset } from './hints.js';
 
 export {
@@ -36,7 +42,7 @@ export interface QueryScriptRenderOptions {
 
 export interface FragmentWireRenderOptions {
   errorBoundary?: string | undefined;
-  html: string;
+  html: FragmentHtml;
   /**
    * Patch mode for the `<kovo-fragment>` chunk (SPEC §9.3). `'append'` adds the
    * rows to the END of the target (pagination "load more", streams); `'prepend'`
@@ -155,7 +161,7 @@ export function renderFragmentWireHtml(options: FragmentWireRenderOptions): stri
       ? ''
       : ` error-boundary="${escapeAttribute(options.errorBoundary)}"`;
 
-  const html = `${renderStylesheetLinks(options.stylesheets ?? [])}${options.html}`;
+  const html = `${renderStylesheetLinks(options.stylesheets ?? [])}${renderFragmentHtmlValue(options.html)}`;
 
   return `<kovo-fragment target="${escapeAttribute(options.target)}"${modeAttribute}${priorityAttribute}${errorBoundaryAttribute}>${html}</kovo-fragment>`;
 }

@@ -41,7 +41,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm exec vitest --run packages/server/src/mutation*.test.ts packages/server/src/app-mutation-request.test.ts` passes with `executeMutationLifecycle()` mapping typed outcomes across enhanced, no-JS, and direct mutation paths.
   - SPEC: sections 6.3, 6.6, 9.1, 10.3, 11.1.
 
-- [ ] **P0.2 - Centralize request lifecycle and response posture finalization.**
+- [x] **P0.2 - Centralize request lifecycle and response posture finalization.**
   - Affected: `packages/server/src/app-dispatch.ts`, `app-document.ts`,
     `app-mutation-request.ts`, `query.ts`, `endpoint.ts`, `response.ts`, `app-request.ts`.
   - Why high value: route, query, mutation, endpoint, document, and system responses each set cache,
@@ -60,9 +60,10 @@ test brittleness, and distribution confusion.
   - Verification: response matrix tests across route HTML, file/stream, query success/error/redirect,
     mutation success/failure, endpoint success/error, normalization redirect, and HEAD; lifecycle
     tests asserting exact `session`, `db`, `clientIp`, `args`, and cookie visibility per surface.
+  - Evidence: `pnpm exec vitest --run packages/server/src/response-posture.test.ts packages/server/src/response.test.ts packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app.test.ts` passes with centralized response finalization and endpoint ambient-authority posture coverage.
   - SPEC: sections 5.2.1, 6.6, 9.1, 9.4, 9.5, 10.3.
 
-- [ ] **P0.3 - Make contextual output safety one cross-package policy plus branded fragment sinks.**
+- [x] **P0.3 - Make contextual output safety one cross-package policy plus branded fragment sinks.**
   - Affected: `packages/core/src/internal/sink-policy.ts`,
     `packages/compiler/src/output-context-facts.ts`,
     `packages/compiler/src/security/output-context.ts`,
@@ -89,9 +90,10 @@ test brittleness, and distribution confusion.
     `packages/browser/src/inline-loader-trusted-types-routing.test.ts`; type tests that raw strings
     cannot reach fragment sinks; runtime tests for trusted HTML, generated component HTML, streaming
     fragments, and malicious fragment content.
+  - Evidence: `pnpm run check:inline-loader && pnpm run check:inline-loader:trusted-types && pnpm run check:imports && pnpm run check:sink-policy` and `pnpm exec vitest --run packages/compiler/src/output-context-security.test.ts packages/compiler/src/server-emit-security.test.ts packages/compiler/src/security-output.test.ts packages/browser/src/inline-loader-security.test.ts packages/browser/src/inline-loader-trusted-types-routing.test.ts packages/browser/src/response-fragment-apply.test.ts packages/server/src/wire-html.test.ts packages/server/src/mutation-response.test.ts packages/server/src/html.test.ts packages/server/src/response.test.ts packages/server/src/wire-fixtures.test.ts packages/server/src/replay.test.ts packages/core/src/security-url.test.ts packages/core/src/sink-policy.test.ts` pass with shared sink-policy and branded fragment sink coverage.
   - SPEC: sections 2, 4.8, 5.2 rule 10, 6.6, 9.1.
 
-- [ ] **P0.4 - Replace generated query-update helper duplication with one runtime VM and one keyed reconciler core.**
+- [x] **P0.4 - Replace generated query-update helper duplication with one runtime VM and one keyed reconciler core.**
   - Affected: `packages/compiler/src/emit/client.ts`,
     `packages/compiler/src/analyze/query-updates.ts`,
     `packages/browser/src/query-bindings.ts`, `query-apply.ts`, `morph.ts`,
@@ -114,6 +116,7 @@ test brittleness, and distribution confusion.
     `packages/browser/src/morph.test.ts`,
     `packages/browser/src/response-fragment-apply.browser.test.ts`, plus keyed reorder/insert/remove
     property tests.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/query-coverage.test.ts packages/compiler/src/compile-component.test.ts packages/compiler/src/query-update-plans.test.ts packages/compiler/src/output-context-payloads.test.ts packages/browser/src/generated-exports.test.ts packages/browser/src/index-exports.test.ts packages/browser/src/query-bindings.test.ts packages/browser/src/keyed-reconciler.test.ts packages/browser/src/mutation-response-dom.test.ts packages/browser/src/morph.test.ts packages/browser/src/response-fragment-apply.test.ts` and `vp run browser` pass with the generated query-update VM, generated export contract, keyed reconciler, mutation DOM path, modular fragment path, and inline-loader/browser coverage.
   - SPEC: sections 4.4, 4.7, 4.8, 4.9, 5.2, 9.1, 9.1.1, 13.2.
 
 - [x] **P0.5 - Consolidate Drizzle static analysis into one fact pipeline and reuse symbol provenance for SQL safety.**
@@ -187,7 +190,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm exec vitest --run packages/compiler/src/compile-fact-ledger.test.ts packages/compiler/src/lowering-pipeline.test.ts packages/compiler/src/model-pipeline.test.ts packages/compiler/src/hmr-impact.test.ts packages/compiler/src/cache-identity.test.ts packages/compiler/src/style.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/registry-identities.test.ts packages/compiler/src/output-context-facts.test.ts packages/compiler/src/package-styles.test.ts packages/conformance-fixtures/src/source-fixtures.test.ts` passes with typed compiler fact-ledger snapshots and the widened post-parse source-string guard.
   - SPEC: sections 1.3, 5.2 rule 10, 9.1, 11.3.
 
-- [ ] **P1.2 - Normalize runtime generated registry facts once.**
+- [x] **P1.2 - Normalize runtime generated registry facts once.**
   - Affected: `packages/server/src/app.ts`, `packages/server/src/mutation.ts`,
     `packages/server/src/app-mutation-request.ts`,
     `packages/server/src/mutation/targets.ts`, generated query/mutation registries.
@@ -202,6 +205,7 @@ test brittleness, and distribution confusion.
   - Verification: tests where facts arrive through live targets, app queries, generated mutation
     registries, and duplicate keys; assert identical rerun/fragment selection for enhanced mutation,
     no-JS failure rerender, and query endpoint paths.
+  - Evidence: `pnpm exec vitest --run packages/server/src/registry-facts.test.ts packages/server/src/app.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/query-endpoint.test.ts` passes with normalized runtime registry facts covering generated touches, live-target queries, duplicate query keys, enhanced mutation, no-JS failure rerender, and `/_q` paths.
   - SPEC: sections 1.2, 4.1, 6.1, 9.1, 10.2, 10.3.
 
 - [x] **P1.3 - Replace static-export string scans with parsed protocol extraction.**
@@ -329,7 +333,7 @@ test brittleness, and distribution confusion.
   - Evidence: `node packages/ui/scripts/build-registry.mjs` reports generated artifacts up to date, and `pnpm exec vitest --run packages/ui/src/manifest-generation.test.ts packages/ui/src/copy-in.test.ts packages/ui/src/headless-subpath-parity.test.ts examples/gallery/src/component-catalog.test.ts examples/gallery/src/demo-fixtures.test.ts examples/gallery/src/interactive-gallery.artifacts.test.ts examples/gallery/src/interactive-gallery.compile.test.ts` passes with the shared primitive/component manifest driving UI registry, headless generated handlers, and gallery fixtures.
   - Rules: `rules/api-surface.md`.
 
-- [ ] **P1.9 - Build cross-package oracle fixtures for compiler/browser/runtime/data contracts.**
+- [x] **P1.9 - Build cross-package oracle fixtures for compiler/browser/runtime/data contracts.**
   - Affected: `packages/compiler/src/test-support.ts`,
     `packages/compiler/src/diagnostic-coverage-matrix.data.ts`,
     `packages/browser/src/inline-loader-response-apply-fixture.ts`,
@@ -348,6 +352,7 @@ test brittleness, and distribution confusion.
   - Verification: new `compiler-browser-contract.test.ts`-style suite; fixture package tests; Drizzle and
     Better Auth pin suites; existing compiler conformance, render-equivalence, inline-loader parity, and
     browser DOM tests.
+  - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/oracle-fixtures.test.ts packages/conformance-fixtures/src/compiler-browser-contract.test.ts packages/conformance-fixtures/src/package-exports.test.ts packages/browser/src/inline-loader-response-apply-runtime.test.ts packages/browser/src/wire-response-scanner.test.ts packages/compiler/src/compiler-conformance.test.ts packages/compiler/src/render-equivalence-boundary.test.ts`, `pnpm --filter @kovojs/conformance-drizzle-pin test -- src/index.oracle-fixtures.test.ts`, and `pnpm --filter @kovojs/conformance-better-auth-pin test -- src/index.oracle-fixtures.test.ts` pass with the shared oracle fixture exercised through compiler output, modular browser runtime, inline-loader response apply, Drizzle pin, and Better Auth pin coverage.
   - SPEC: sections 1.3, 4.4, 4.8, 5.2, 9.1, 10, 11.1, 11.2.
 
 ## P2 - Public Surface, Distribution, And Test Harness Hygiene

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createRenderedFragmentHtml,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
+import {
   applyHtmlResponseFragments,
   applyResponseFragment,
   applyResponseFragments,
@@ -10,6 +14,8 @@ import {
 interface TestFragmentTarget {
   html: string;
 }
+
+const fragmentHtml = (html: string): RenderedFragmentHtml => createRenderedFragmentHtml(html);
 
 // SPEC §9.3/§13.2: a minimal DOM stand-in so the inline `p` prepend branch (insert
 // keyed rows at the START, deduped by kovo-key, with the scroll-anchor guarantee) is
@@ -69,6 +75,23 @@ function installFakeDocument(): () => void {
 }
 
 describe('response fragment apply primitive', () => {
+  it('types decoded fragment HTML as a browser-side capability', () => {
+    expect(() =>
+      applyResponseFragment(
+        {
+          // @ts-expect-error SPEC.md §9.1 decoded fragment apply requires RenderedFragmentHtml.
+          html: '<p>raw</p>',
+          target: 'target',
+        },
+        {
+          appendFragment() {},
+          findFragmentTarget: () => ({}),
+          replaceFragment() {},
+        },
+      ),
+    ).toBeTypeOf('function');
+  });
+
   it('applies replace and append fragment modes through supplied target operations', () => {
     // SPEC.md §9.1: kovo-fragment patches share one decoded apply primitive
     // across modular morph and the generated inline loader closure.
@@ -77,25 +100,34 @@ describe('response fragment apply primitive', () => {
       ['cart-list', { html: '<li>existing</li>' }],
     ] satisfies [string, TestFragmentTarget][]);
     const options = {
-      appendFragment(target: TestFragmentTarget, html: string) {
-        target.html += html;
+      appendFragment(target: TestFragmentTarget, html: RenderedFragmentHtml) {
+        target.html += html.toString();
       },
       findFragmentTarget(target: string) {
         return targets.get(target) ?? null;
       },
-      replaceFragment(target: TestFragmentTarget, html: string) {
-        target.html = html;
+      replaceFragment(target: TestFragmentTarget, html: RenderedFragmentHtml) {
+        target.html = html.toString();
       },
     };
 
     expect(
-      applyResponseFragment({ html: '<cart-badge>1</cart-badge>', target: 'cart-badge' }, options),
+      applyResponseFragment(
+        { html: fragmentHtml('<cart-badge>1</cart-badge>'), target: 'cart-badge' },
+        options,
+      ),
     ).toBe(true);
     expect(
-      applyResponseFragment({ html: '<li>new</li>', mode: 'append', target: 'cart-list' }, options),
+      applyResponseFragment(
+        { html: fragmentHtml('<li>new</li>'), mode: 'append', target: 'cart-list' },
+        options,
+      ),
     ).toBe(true);
     expect(
-      applyResponseFragment({ html: '<aside>ignored</aside>', target: 'missing' }, options),
+      applyResponseFragment(
+        { html: fragmentHtml('<aside>ignored</aside>'), target: 'missing' },
+        options,
+      ),
     ).toBe(false);
 
     expect(targets.get('cart-badge')?.html).toBe('<cart-badge>1</cart-badge>');
@@ -112,19 +144,19 @@ describe('response fragment apply primitive', () => {
 
     const applied = applyResponseFragments<TestFragmentTarget>(
       [
-        { html: '<p>new</p>', target: 'replace-target' },
-        { html: '<li>new</li>', mode: 'append', target: 'append-target' },
-        { html: '<aside>ignored</aside>', target: 'missing-target' },
+        { html: fragmentHtml('<p>new</p>'), target: 'replace-target' },
+        { html: fragmentHtml('<li>new</li>'), mode: 'append', target: 'append-target' },
+        { html: fragmentHtml('<aside>ignored</aside>'), target: 'missing-target' },
       ],
       {
         appendFragment(target, html) {
-          target.html += html;
+          target.html += html.toString();
         },
         findFragmentTarget(target) {
           return targets.get(target) ?? null;
         },
         replaceFragment(target, html) {
-          target.html = html;
+          target.html = html.toString();
         },
       },
     );
@@ -139,25 +171,28 @@ describe('response fragment apply primitive', () => {
     // sink routes to it; one without degrades to append (still an ordered insert).
     const withPrepend = {
       log: [] as string[],
-      appendFragment(_t: TestFragmentTarget, html: string) {
+      appendFragment(_t: TestFragmentTarget, html: RenderedFragmentHtml) {
         this.log.push(`append:${html}`);
       },
-      prependFragment(_t: TestFragmentTarget, html: string) {
+      prependFragment(_t: TestFragmentTarget, html: RenderedFragmentHtml) {
         this.log.push(`prepend:${html}`);
       },
       findFragmentTarget() {
         return {} as TestFragmentTarget;
       },
-      replaceFragment(_t: TestFragmentTarget, html: string) {
+      replaceFragment(_t: TestFragmentTarget, html: RenderedFragmentHtml) {
         this.log.push(`replace:${html}`);
       },
     };
-    applyResponseFragment({ html: '<li>older</li>', mode: 'prepend', target: 't' }, withPrepend);
+    applyResponseFragment(
+      { html: fragmentHtml('<li>older</li>'), mode: 'prepend', target: 't' },
+      withPrepend,
+    );
     expect(withPrepend.log).toEqual(['prepend:<li>older</li>']);
 
     const noPrepend = {
       log: [] as string[],
-      appendFragment(_t: TestFragmentTarget, html: string) {
+      appendFragment(_t: TestFragmentTarget, html: RenderedFragmentHtml) {
         this.log.push(`append:${html}`);
       },
       findFragmentTarget() {
@@ -165,7 +200,10 @@ describe('response fragment apply primitive', () => {
       },
       replaceFragment() {},
     };
-    applyResponseFragment({ html: '<li>older</li>', mode: 'prepend', target: 't' }, noPrepend);
+    applyResponseFragment(
+      { html: fragmentHtml('<li>older</li>'), mode: 'prepend', target: 't' },
+      noPrepend,
+    );
     expect(noPrepend.log).toEqual(['append:<li>older</li>']);
   });
 
@@ -179,7 +217,9 @@ describe('response fragment apply primitive', () => {
       const applied = applyHtmlResponseFragments(
         [
           {
-            html: '<article kovo-key="m4"></article><article kovo-key="m1"></article><article kovo-key="m2"></article>',
+            html: fragmentHtml(
+              '<article kovo-key="m4"></article><article kovo-key="m1"></article><article kovo-key="m2"></article>',
+            ),
             mode: 'prepend',
             target: 'chat-log',
           },

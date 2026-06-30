@@ -1,3 +1,7 @@
+import {
+  createRenderedFragmentHtml,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { __resetKovoTrustedTypePolicyForTest, kovoCreateHTML } from './trusted-types.js';
@@ -19,6 +23,8 @@ import { applyHtmlResponseFragments } from './response-fragment-apply.js';
 
 const hasTrustedTypes =
   typeof (globalThis as { trustedTypes?: unknown }).trustedTypes !== 'undefined';
+
+const fragmentHtml = (html: string): RenderedFragmentHtml => createRenderedFragmentHtml(html);
 
 function enforcingFrame(): Promise<HTMLIFrameElement> {
   return new Promise((resolve) => {
@@ -97,7 +103,12 @@ describe('Trusted Types default-on enforcement (SF Tier 3, Chromium-only)', () =
       host.innerHTML = '<span>old</span>';
       document.body.append(host);
       const applied = applyHtmlResponseFragments(
-        [{ html: '<div kovo-fragment-target="f"><span>new</span></div>', target: 'f' }],
+        [
+          {
+            html: fragmentHtml('<div kovo-fragment-target="f"><span>new</span></div>'),
+            target: 'f',
+          },
+        ],
         (name) => document.querySelector(`[kovo-fragment-target="${name}"]`),
       );
       expect(applied).toEqual(['f']);

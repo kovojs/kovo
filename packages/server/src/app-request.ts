@@ -46,6 +46,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
     return appSystemResponse(null, {
       buildToken,
       headers: { Location: redirectLocationHeader(`${url.pathname}${url.search}${url.hash}`) },
+      method: request.method,
       status: match.normalization.redirect.status,
       surface,
     });
@@ -72,6 +73,7 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
       return appSystemResponse('Payload Too Large', {
         buildToken,
         headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+        method: request.method,
         status: 413,
         surface,
       });

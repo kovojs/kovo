@@ -15,8 +15,8 @@ import {
   renderAppRouteDocumentResponse,
 } from './app-document.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
-import { resolveLifecycleRequest } from './guards.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
+import { finalizeRawWebResponse, resolveKovoLifecycleRequest } from './response-posture.js';
 
 export interface MatchedAppDispatchOptions {
   app: KovoApp;
@@ -85,12 +85,17 @@ export async function dispatchMatchedAppRequest({
     }
 
     const endpointRequest =
-      app.db === undefined ? request : await resolveLifecycleRequest(request, { db: app.db });
+      app.db === undefined
+        ? request
+        : await resolveKovoLifecycleRequest(request, {
+            db: app.db,
+            surface: 'endpoint',
+          });
     const authFailure = await runEndpointAuth(match.endpoint, endpointRequest);
-    if (authFailure) return authFailure;
+    if (authFailure) return finalizeRawWebResponse(authFailure, request);
     const csrfFailure = await validateEndpointCsrf(match.endpoint, endpointRequest, app.csrf);
-    if (csrfFailure) return csrfFailure;
-    return runEndpoint(match.endpoint, endpointRequest);
+    if (csrfFailure) return finalizeRawWebResponse(csrfFailure, request);
+    return finalizeRawWebResponse(await runEndpoint(match.endpoint, endpointRequest), request);
   }
 
   if (match.kind === 'route') {

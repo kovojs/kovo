@@ -12,6 +12,7 @@ import type { StylesheetAsset } from './hints.js';
 import type { MutationFactory, MutationFail, MutationSuccess } from './mutation.js';
 import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryFactory } from './query.js';
+import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
@@ -323,7 +324,10 @@ export interface AppMutationResponseOptions {
    * {@link Redirect} value (SPEC §6.4), or a function of the result returning either form.
    */
   redirectTo?: string | Redirect | ((result: MutationSuccess<unknown>) => string | Redirect);
-  renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
+  renderFailureFragment?: (
+    failure: MutationFail,
+    rawInput: unknown,
+  ) => AwaitableGeneratedFragmentRenderable;
   renderFailurePage?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
 }
 

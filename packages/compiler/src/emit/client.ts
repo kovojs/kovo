@@ -32,7 +32,7 @@ export function emitClientModule(
   clockUpdatePlans: readonly ClockUpdatePlanFact[] = [],
 ): string {
   const imports = [
-    ...(queryUpdatePlans.length > 0 ? ['applyCompiledQueryUpdatePlan'] : []),
+    ...(queryUpdatePlans.length > 0 ? ['runQueryUpdatePlan'] : []),
     ...(stateDerives.length > 0 ||
     queryUpdatePlans.some(
       (plan) => (plan.derives?.length ?? 0) > 0 || (plan.stamps?.length ?? 0) > 0,
@@ -98,7 +98,7 @@ function importedRuntimeGeneratedNames(specifiers: string): readonly string[] {
 function runtimeGeneratedHelperSource(names: readonly string[]): string {
   const helpers: string[] = [];
   const missing: string[] = [];
-  for (const name of names) {
+  for (const name of runtimeGeneratedHelperNames(names)) {
     const helper = RUNTIME_GENERATED_HELPERS[name];
     if (helper === undefined) {
       missing.push(name);
@@ -117,8 +117,17 @@ function runtimeGeneratedHelperSource(names: readonly string[]): string {
   return `${dedupeBy(helpers, (helper) => helper).join('\n')}\n\n`;
 }
 
+function runtimeGeneratedHelperNames(names: readonly string[]): readonly string[] {
+  const expanded = new Set(names);
+  if (expanded.has('applyCompiledQueryUpdatePlan')) expanded.add('runQueryUpdatePlan');
+  return [...expanded].sort();
+}
+
 const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
   applyCompiledQueryUpdatePlan: `const applyCompiledQueryUpdatePlan = (root, queryName, value, plan = {}, options = {}) => {
+  return runQueryUpdatePlan(root, queryName, value, plan, options);
+};`,
+  runQueryUpdatePlan: `const runQueryUpdatePlan = (root, queryName, value, plan = {}, options = {}) => {
   const applied = { bindings: [], derives: [], stamps: [], templateStamps: [] };
   const qsa = (scope, selector) => Array.from(scope.querySelectorAll?.(selector) ?? []);
   const pathValue = (input, path) =>
@@ -131,9 +140,34 @@ const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
     const normalized = String(input).replace(/[\\x00-\\x20]/g, '').toLowerCase();
     return /^[a-z][a-z0-9+.-]*:/.test(normalized) && !/^(https?|ftp|mailto|tel):/.test(normalized);
   };
+  const bindPropName = (name) => ({
+    checked: 'checked',
+    indeterminate: 'indeterminate',
+    open: 'open',
+    scrollleft: 'scrollLeft',
+    scrolltop: 'scrollTop',
+    selected: 'selected',
+    value: 'value',
+  })[String(name).toLowerCase()] ?? null;
+  const writeProp = (element, name, input) => {
+    const prop = bindPropName(name);
+    if (!prop || element[prop] === undefined) return;
+    if (/^(checked|indeterminate|open|selected)$/.test(prop)) {
+      element[prop] = input != null && input !== false;
+    } else if (prop === 'scrollLeft' || prop === 'scrollTop') {
+      element[prop] = Number(input) || 0;
+    } else {
+      element[prop] = input == null ? '' : typeof input === 'object' ? JSON.stringify(input) : String(input);
+    }
+  };
   const writeAttr = (element, name, input) => {
     if (/^on[^:]|^(srcdoc|dangerouslysetinnerhtml|innerhtml|outerhtml|inserthtml|insertadjacenthtml)$/i.test(name)) {
       element.removeAttribute?.(name);
+      return;
+    }
+    if (/^(checked|disabled|hidden|indeterminate|multiple|open|readonly|required|selected)$/i.test(name)) {
+      if (input != null && input !== false) element.setAttribute?.(name, '');
+      else element.removeAttribute?.(name);
       return;
     }
     const rendered = format(input);
@@ -168,6 +202,14 @@ const RUNTIME_GENERATED_HELPERS: Readonly<Record<string, string>> = {
         const selected = pathValue(value, path.slice(queryName.length + 1));
         if (selected == null) element.removeAttribute?.(bound);
         else writeAttr(element, bound, selected);
+        applied.bindings.push(path);
+      }
+      for (const attribute of Array.from(element.attributes ?? [])) {
+        if (!attribute.name.startsWith('data-bind-prop:')) continue;
+        const prop = attribute.name.slice('data-bind-prop:'.length);
+        const path = attribute.value;
+        if (!path.startsWith(queryName + '.')) continue;
+        writeProp(element, prop, pathValue(value, path.slice(queryName.length + 1)));
         applied.bindings.push(path);
       }
     }
@@ -444,7 +486,7 @@ function emitQueryUpdatePlanExport(
   const entries = queryUpdatePlans
     .map(
       (plan) =>
-        `  ${JSON.stringify(plan.query)}(root, value, context = {}) {\n    return applyCompiledQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [${plan.derives?.map(emitDerivePlan).join(', ') ?? ''}], stamps: [${plan.stamps?.map(emitStampPlan).join(', ') ?? ''}], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] }, { queryStore: context.queryStore });\n  },`,
+        `  ${JSON.stringify(plan.query)}(root, value, context = {}) {\n    return runQueryUpdatePlan(root, ${JSON.stringify(plan.query)}, value, { bindings: true, derives: [${plan.derives?.map(emitDerivePlan).join(', ') ?? ''}], stamps: [${plan.stamps?.map(emitStampPlan).join(', ') ?? ''}], templateStamps: [${plan.templateStamps?.map(emitTemplateStampPlan).join(', ') ?? ''}] }, { queryStore: context.queryStore });\n  },`,
     )
     .join('\n');
 

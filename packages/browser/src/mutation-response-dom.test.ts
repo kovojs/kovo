@@ -1,3 +1,7 @@
+import {
+  renderedFragmentHtmlContent,
+  type RenderedFragmentHtml,
+} from '@kovojs/core/internal/sink-policy';
 import { describe, expect, it, vi } from 'vitest';
 
 import { applyMutationResponseBodyToRuntime } from './apply-mutation-response.js';
@@ -8,6 +12,25 @@ import {
   FakeQueryBindingElement,
   FakeQueryPlanElement,
 } from './runtime-test-fakes.js';
+
+type FragmentSnapshot = {
+  html: string;
+  mode?: 'append' | 'prepend' | 'replace';
+  target: string;
+};
+
+function fragmentSnapshots(
+  fragments: readonly {
+    html: RenderedFragmentHtml;
+    mode?: 'append' | 'prepend' | 'replace';
+    target: string;
+  }[],
+): FragmentSnapshot[] {
+  return fragments.map((fragment) => ({
+    ...fragment,
+    html: renderedFragmentHtmlContent(fragment.html),
+  }));
+}
 
 describe('mutation response DOM apply', () => {
   it('keeps store-only and DOM apply on the same keyed query path', () => {
@@ -25,7 +48,9 @@ describe('mutation response DOM apply', () => {
 
     expect(domStore.get('cart', 'cart:c1')).toEqual(storeOnly.get('cart', 'cart:c1'));
     expect(domApplied.queries).toEqual(storeOnlyApplied.queries);
-    expect(domApplied.fragments).toEqual(storeOnlyApplied.fragments);
+    expect(fragmentSnapshots(domApplied.fragments)).toEqual(
+      fragmentSnapshots(storeOnlyApplied.fragments),
+    );
   });
 
   it('reuses one attribute binding scan across multi-query DOM apply', () => {
@@ -177,9 +202,12 @@ describe('mutation response DOM apply', () => {
     expect(root.targets.get('cart-badge')?.html).toBe('<cart-badge>3</cart-badge>');
     expect(applied).toEqual({
       appliedFragments: ['cart-badge'],
-      fragments: [{ html: '<cart-badge>3</cart-badge>', target: 'cart-badge' }],
+      fragments: expect.any(Array),
       queries: ['cart'],
     });
+    expect(fragmentSnapshots(applied.fragments)).toEqual([
+      { html: '<cart-badge>3</cart-badge>', target: 'cart-badge' },
+    ]);
     expect(onError).toHaveBeenCalledWith(expect.any(Error));
     expect(String(onError.mock.calls[0]?.[0].message)).toContain('Malformed kovo-fragment chunk');
   });
@@ -222,9 +250,12 @@ describe('mutation response DOM apply', () => {
 
     expect(applied).toEqual({
       appliedFragments: ['cart-badge'],
-      fragments: [{ html: '<cart-badge>ready</cart-badge>', target: 'cart-badge' }],
+      fragments: expect.any(Array),
       queries: ['cart'],
     });
+    expect(fragmentSnapshots(applied.fragments)).toEqual([
+      { html: '<cart-badge>ready</cart-badge>', target: 'cart-badge' },
+    ]);
     expect(store.get('cart')).toEqual({ count: 15 });
     expect(count.textContent).toBe('15');
     expect(summary.textContent).toBe('15 items');

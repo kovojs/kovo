@@ -6,6 +6,7 @@ import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
 import type { RegisteredQueryDefinition } from './query.js';
+import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import { canonicalRequestFingerprint, type MutationReplayStore } from './replay.js';
 import {
   readHeader,
@@ -28,7 +29,7 @@ export interface FragmentRenderer {
    * (default DOM-morph).
    */
   mode?: 'append' | 'prepend' | 'replace';
-  render(input: unknown): string | Promise<string>;
+  render(input: unknown): AwaitableGeneratedFragmentRenderable;
   stylesheets?: readonly (string | StylesheetAsset)[];
   target: string;
   updateCoverage?: 'fragment' | 'plan';
@@ -40,7 +41,7 @@ export interface FragmentRenderer {
  * app authors.
  */
 export interface ErrorBoundaryRenderer {
-  render(error: unknown, input: unknown): string | Promise<string>;
+  render(error: unknown, input: unknown): AwaitableGeneratedFragmentRenderable;
   target?: string;
 }
 
@@ -71,7 +72,10 @@ export interface MutationWireRequest<
   liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
   liveTargets?: readonly MutationLiveTarget[];
   mutationKey?: string;
-  renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
+  renderFailureFragment?: (
+    failure: MutationFail,
+    rawInput: unknown,
+  ) => AwaitableGeneratedFragmentRenderable;
   replayStore?: MutationReplayStore<BufferedMutationWireResponse>;
   requestFingerprint?: string;
   rawInput: unknown;
@@ -112,7 +116,7 @@ export interface LiveTargetRenderer<Request = unknown> {
   errorBoundary?: ErrorBoundaryRenderer;
   queries?: readonly string[];
   queryDefinitions?: readonly RegisteredQueryDefinition[];
-  render(context: LiveTargetRenderContext<Request>): string | Promise<string>;
+  render(context: LiveTargetRenderContext<Request>): AwaitableGeneratedFragmentRenderable;
   stylesheets?: readonly (string | StylesheetAsset)[];
 }
 
@@ -179,7 +183,10 @@ export interface MutationWireRequestOptions<
   liveTargetRenderers?: readonly LiveTargetRenderer<Request>[];
   mutationKey?: string;
   rawInput: unknown;
-  renderFailureFragment?: (failure: MutationFail, rawInput: unknown) => string | Promise<string>;
+  renderFailureFragment?: (
+    failure: MutationFail,
+    rawInput: unknown,
+  ) => AwaitableGeneratedFragmentRenderable;
   replayStore?: MutationReplayStore<BufferedMutationWireResponse>;
   request: Request;
 }

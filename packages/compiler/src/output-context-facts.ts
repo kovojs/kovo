@@ -1,4 +1,4 @@
-import { isUrlAttributeName } from '@kovojs/core/internal/security-url';
+import { contextualOutputSinkFamilyForAttribute } from '@kovojs/core/internal/sink-policy';
 
 import type { ComponentModuleModel } from './scan/parse.js';
 
@@ -75,7 +75,7 @@ export function outputContextForAttribute(name: string): OutputContext {
  * (FN8, plans/compiler-refactoring.md; SPEC §5.2 rule 10).
  */
 export function isUrlAttribute(name: string): boolean {
-  return isUrlAttributeName(name);
+  return contextualOutputSinkFamilyForAttribute(name) === 'url';
 }
 
 const BOOLEAN_ATTRIBUTES = new Set([

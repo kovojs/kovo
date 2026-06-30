@@ -1,9 +1,8 @@
-import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
-
 import { reportServerError } from '../diagnostics.js';
 import type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
-import { isRenderedHtml } from '../html.js';
+import { generatedFragmentHtmlValue, type FragmentHtml } from '../html.js';
 import type { BufferedMutationWireResponse, MutationWireResponse } from '../mutation-wire.js';
+import type { ServerFragmentRenderable } from '../renderable.js';
 import type { MutationReplayReservation } from '../replay.js';
 import {
   renderDoneWireHtml,
@@ -14,10 +13,10 @@ import {
 import type { MutationSuccess } from './definition.js';
 
 /**
- * Opaque rendered JSX or explicit trusted HTML accepted by `stream.fragment()` (SPEC §9.1, KV236).
- * Runtime validation accepts only the framework-rendered HTML brand or a `trustedHtml()` witness.
+ * Rendered JSX or explicit trusted HTML accepted by `stream.fragment()` (SPEC §9.1, KV236).
+ * Plain strings belong in `stream.text()` so the server escapes them as text.
  */
-export type MutationStreamFragmentHtml = unknown;
+export type MutationStreamFragmentHtml = ServerFragmentRenderable;
 
 /** A server-rendered fragment chunk for a SPEC §9.1 streaming mutation response. */
 export interface MutationStreamFragmentChunk {
@@ -365,9 +364,6 @@ function renderMutationStreamChunk(chunk: MutationStreamChunk): string {
   }
 }
 
-function renderMutationStreamFragmentHtml(html: MutationStreamFragmentHtml): string {
-  if (isRenderedHtml(html)) return html.html;
-  const trustedHtml = kovoTrustedHtmlContent(html);
-  if (trustedHtml !== '') return trustedHtml;
-  return '';
+function renderMutationStreamFragmentHtml(html: MutationStreamFragmentHtml): FragmentHtml {
+  return generatedFragmentHtmlValue(html);
 }

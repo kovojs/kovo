@@ -38,8 +38,14 @@ describe('inline loader Trusted Types routing gate', () => {
 
   it('fails when inline raw-HTML sinks stop routing through the Trusted Types shim', () => {
     const unroutedApply = inlineResponseApplyReadableSource
-      .replace('t.innerHTML = trustedHtml(x.html)', 't.innerHTML = x.html')
-      .replace('t.innerHTML = trustedHtml(h)', 't.innerHTML = h');
+      .replace(
+        't.innerHTML = trustedHtml(renderedFragmentHtmlContent(x.html))',
+        't.innerHTML = renderedFragmentHtmlContent(x.html)',
+      )
+      .replace(
+        't.innerHTML = trustedHtml(renderedFragmentHtmlContent(h))',
+        't.innerHTML = renderedFragmentHtmlContent(h)',
+      );
     const readableInstaller = buildInlineKovoLoaderInstallerReadableSource(
       inlineWireParserReadableSource,
       unroutedApply,

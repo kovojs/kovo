@@ -1,6 +1,9 @@
+import { renderedFragmentHtmlContent } from '@kovojs/core/internal/sink-policy';
+
 import { abortRemovedIslandSignals, defaultIslandSignalScope } from './handler-context.js';
 import type { IslandSignalScope } from './handler-context.js';
 import { findFragmentTargetElement, type FragmentTargetRoot } from './fragment-targets.js';
+import { reconcileKeyed } from './keyed-reconciler.js';
 import { applyResponseFragments } from './response-fragment-apply.js';
 import { kovoSetSafeAttribute } from './security-output.js';
 import { kovoCreateHTML } from './trusted-types.js';
@@ -60,17 +63,21 @@ export class DomMorphTarget implements MorphTarget {
     // preserve the scroll anchor — the target is treated as the scroll container, so
     // its scrollTop is shifted by the inserted height to keep existing ("load older")
     // content visually fixed (no jump). Inert-until-touched holds as for append.
-    const present = new Set<string>();
-    for (const child of this.element.children) {
-      const key = domMorphKey(child);
-      if (key !== null) present.add(key);
-    }
-    const insert: Element[] = [];
-    for (const node of Array.from(template.content.children)) {
-      const key = domMorphKey(node);
-      if (key !== null && present.has(key)) continue;
-      insert.push(node);
-    }
+    const insert = reconcileKeyed([...this.element.children], [...template.content.children], {
+      create(node) {
+        return node;
+      },
+      currentKey(child) {
+        return domMorphKey(child);
+      },
+      match(current) {
+        return current;
+      },
+      nextKey(node) {
+        return domMorphKey(node);
+      },
+      preserveUnkeyed: false,
+    }).filter((node) => !this.element.contains(node));
     const scrollTop = this.element.scrollTop;
     const scrollHeight = this.element.scrollHeight;
     this.element.prepend(...insert);
@@ -167,12 +174,15 @@ export function applyFragments(
   islandSignalScope: IslandSignalScope = defaultIslandSignalScope,
 ): string[] {
   return applyResponseFragments<MorphTarget>(fragments, {
-    appendFragment: (target, html) => appendFragment(target, html, morph),
+    appendFragment: (target, html) =>
+      appendFragment(target, renderedFragmentHtmlContent(html), morph),
     findFragmentTarget: (target) => root.findFragmentTarget(target),
-    prependFragment: (target, html) => prependFragment(target, html, morph),
+    prependFragment: (target, html) =>
+      prependFragment(target, renderedFragmentHtmlContent(html), morph),
     replaceFragment(target, html) {
-      abortRemovedIslandSignals(target.readHtml?.() ?? '', html, islandSignalScope);
-      morph(target, html);
+      const content = renderedFragmentHtmlContent(html);
+      abortRemovedIslandSignals(target.readHtml?.() ?? '', content, islandSignalScope);
+      morph(target, content);
     },
   });
 }
@@ -305,55 +315,21 @@ function morphStructuralChildren(
   currentChildren: readonly StructuralMorphNode[],
   nextChildren: readonly StructuralMorphNode[],
 ): StructuralMorphNode[] {
-  const currentByKey = indexStructuralKeys(currentChildren, 'current');
-  indexStructuralKeys(nextChildren, 'next');
-
-  const used = new Set<StructuralMorphNode>();
-  let unkeyedCursor = 0;
-
-  function takeNextUnkeyedCurrent(): StructuralMorphNode | undefined {
-    while (unkeyedCursor < currentChildren.length) {
-      const candidate = currentChildren[unkeyedCursor];
-      unkeyedCursor += 1;
-
-      if (!candidate || candidate.key != null || used.has(candidate)) continue;
-
-      return candidate;
-    }
-
-    return undefined;
-  }
-
-  return nextChildren.map((nextChild) => {
-    const matched =
-      nextChild.key == null ? takeNextUnkeyedCurrent() : currentByKey.get(nextChild.key);
-
-    if (!matched || used.has(matched)) {
-      return cloneStructuralNode(nextChild);
-    }
-
-    used.add(matched);
-    return morphStructuralTree(matched, nextChild);
+  return reconcileKeyed(currentChildren, nextChildren, {
+    create: cloneStructuralNode,
+    currentKey(child) {
+      return child.key;
+    },
+    match(current, next) {
+      return morphStructuralTree(current, next);
+    },
+    nextKey(child) {
+      return child.key;
+    },
+    onDuplicateKey(side, key) {
+      throw new Error(`Duplicate ${side} structural morph key: ${String(key)}`);
+    },
   });
-}
-
-function indexStructuralKeys(
-  children: readonly StructuralMorphNode[],
-  side: 'current' | 'next',
-): Map<StructuralMorphKey, StructuralMorphNode> {
-  const byKey = new Map<StructuralMorphKey, StructuralMorphNode>();
-
-  for (const child of children) {
-    if (child.key == null) continue;
-
-    if (byKey.has(child.key)) {
-      throw new Error(`Duplicate ${side} structural morph key: ${String(child.key)}`);
-    }
-
-    byKey.set(child.key, child);
-  }
-
-  return byKey;
 }
 
 function cloneStructuralNode(node: StructuralMorphNode): StructuralMorphNode {
@@ -482,31 +458,35 @@ function restoreDomScrollStates(states: ReturnType<typeof captureDomScrollStates
 }
 
 function morphDomChildren(current: Element, next: Element): void {
-  const currentByKey = new Map(
-    [...current.children]
-      .map((child) => [domMorphKey(child), child] as const)
-      .filter((entry): entry is [string, Element] => entry[0] !== null),
-  );
   const nextChildren = [...next.childNodes];
-  const desiredNodes: ChildNode[] = [];
+  const desiredNodes = reconcileKeyed([...current.childNodes], nextChildren, {
+    create(nextChild) {
+      return cloneDomChildNode(nextChild);
+    },
+    currentKey(child) {
+      return child instanceof Element ? domMorphKey(child) : null;
+    },
+    match(currentChild, nextChild) {
+      if (currentChild instanceof Element && nextChild instanceof Element) {
+        return morphDomElement(currentChild, nextChild);
+      }
+      return cloneDomChildNode(nextChild);
+    },
+    nextKey(child) {
+      return child instanceof Element ? domMorphKey(child) : null;
+    },
+  });
 
-  for (const [index, nextChild] of nextChildren.entries()) {
-    let desiredNode: ChildNode;
-    if (!(nextChild instanceof Element)) {
-      desiredNode = nextChild.cloneNode(true) as ChildNode;
-    } else {
-      const key = domMorphKey(nextChild);
-      const existing = key ? currentByKey.get(key) : undefined;
-      desiredNode = existing
-        ? morphDomElement(existing, nextChild)
-        : sanitizeDomElementTree(nextChild.cloneNode(true) as Element);
-    }
-
-    desiredNodes.push(desiredNode);
+  for (const [index, desiredNode] of desiredNodes.entries()) {
     current.insertBefore(desiredNode, current.childNodes[index] ?? null);
   }
 
   for (const child of Array.from(current.childNodes)) {
     if (!desiredNodes.includes(child)) child.remove();
   }
+}
+
+function cloneDomChildNode(child: ChildNode): ChildNode {
+  if (child instanceof Element) return sanitizeDomElementTree(child.cloneNode(true) as Element);
+  return child.cloneNode(true) as ChildNode;
 }
