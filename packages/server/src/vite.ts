@@ -14,6 +14,8 @@ import type { DiagnosticDocumentDiagnostic } from './document-diagnostics.js';
 import type { StylesheetAsset } from './hints.js';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
 
+const KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL = Symbol.for('kovo.build.queryShapeFacts');
+
 /** Options for the public Kovo Vite plugin (SPEC.md §9.5). */
 export interface KovoVitePluginOptions {
   /** Authored app module id to load in Vite dev; it must default-export a KovoApp. */
@@ -730,6 +732,9 @@ async function collectCompilerQueryShapeFacts(
   root: string,
   app: string,
 ): Promise<readonly CompilerQueryShapeFact[]> {
+  const buildSeed = seededBuildCompilerQueryShapeFacts();
+  if (buildSeed !== undefined) return buildSeed;
+
   const analysis = await collectDataPlaneAnalysis(root, app);
   if (analysis.files.length === 0) return [];
 
@@ -748,6 +753,15 @@ async function collectCompilerQueryShapeFacts(
     (left, right) =>
       left.query.localeCompare(right.query) || left.source.localeCompare(right.source),
   );
+}
+
+function seededBuildCompilerQueryShapeFacts(): readonly CompilerQueryShapeFact[] | undefined {
+  const value = (globalThis as Record<symbol, unknown>)[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL];
+  if (value === undefined) return undefined;
+  // `kovo build` already ran the authoritative static analysis. Reuse that build-only
+  // seed for app-authored Vite configs so artifact compilation cannot silently fall
+  // back to an empty query-shape set (SPEC §5.2 / §10.2).
+  return Array.isArray(value) ? compilerQueryShapeFacts(value) : [];
 }
 
 function mergeCompilerQueryShapeFact(

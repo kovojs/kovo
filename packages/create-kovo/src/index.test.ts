@@ -252,6 +252,36 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
   });
 
+  it('classifies Better Auth credential columns as secret in scaffolded schema', () => {
+    const defaultProject = createKovoProject({ name: 'Auth Secret Proof' });
+    const defaultFiles = new Map(defaultProject.files.map((file) => [file.path, file.source]));
+    const sqliteProject = createKovoProject({
+      dialect: 'sqlite',
+      name: 'Sqlite Auth Secret Proof',
+    });
+    const sqliteFiles = new Map(sqliteProject.files.map((file) => [file.path, file.source]));
+
+    for (const schemaSource of [
+      defaultFiles.get('src/schema.ts'),
+      sqliteFiles.get('src/schema.ts'),
+    ]) {
+      // SPEC.md §6.6 / §10.1: classification is carried by the schema annotation the
+      // compiler reads, not by TypeScript-only branding. KV435 rejects projections from
+      // these columns once the build graph ingests this starter schema.
+      expect(schemaSource).toContain("kovo({ domain: 'auth', key: 'userId', secret: ['token'] })");
+      expect(schemaSource).toContain("domain: 'auth'");
+      expect(schemaSource).toContain("key: 'userId'");
+      expect(schemaSource).toContain(
+        "secret: ['password', 'accessToken', 'refreshToken', 'idToken']",
+      );
+      expect(schemaSource).toContain("password: text('password'),");
+      expect(schemaSource).toContain("accessToken: text('accessToken'),");
+      expect(schemaSource).toContain("refreshToken: text('refreshToken'),");
+      expect(schemaSource).toContain("idToken: text('idToken'),");
+      expect(schemaSource).toContain("token: text('token').notNull().unique(),");
+    }
+  });
+
   it('emits SPEC §6.6 sound-subset policy and framework anonymous CSRF binding', () => {
     const project = createKovoProject({ name: 'Policy Proof' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));

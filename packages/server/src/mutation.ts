@@ -48,12 +48,14 @@ import {
   type MutationEndpointResponse,
   type MutationWireRequest,
   type MutationWireResponse,
+  type NoJsMutationReplayReservation,
   type NoJsMutationReplayStore,
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from './mutation-wire.js';
 import {
   commitReservedMutationReplay,
+  canonicalRequestFingerprint,
   MutationReplayConflictError,
   mutationReplayContext,
   readMutationReplay,
@@ -660,7 +662,7 @@ function renderReplayConflictFragment<Request>(
       target: mutationFailureTarget(wireRequest),
     }),
     headers: mutationWireResponseHeaders(wireRequest),
-    status: 409,
+    status: 422,
   };
 }
 
@@ -725,6 +727,9 @@ export async function renderMutationEndpointResponse<
     ...(endpointRequest.currentUrl === undefined ? {} : { currentUrl: endpointRequest.currentUrl }),
     rawInput: endpointRequest.rawInput,
     redirectTo: endpointRequest.redirectTo,
+    ...(wireRequest.requestFingerprint === undefined
+      ? {}
+      : { requestFingerprint: wireRequest.requestFingerprint }),
     // SPEC §10.3:1151 ("atomic reservation … for all mutation paths — the enhanced and no-JS
     // mutation() lifecycle"): thread the same injected replay store into the no-JS POST-redirect-GET
     // branch as the enhanced wire branch so duplicate/concurrent no-JS submits dedup onto one handler
@@ -758,14 +763,14 @@ function noJsReplayStoreFromMutationStore(
   store: MutationReplayStore<BufferedMutationWireResponse>,
 ): NoJsMutationReplayStore {
   return {
-    get(scope, idem) {
-      return store.get(scope, idem) as unknown as
+    get(scope, idem, fingerprint) {
+      return store.get(scope, idem, fingerprint) as unknown as
         | Promise<NoJsMutationResponse | undefined>
         | NoJsMutationResponse
         | undefined;
     },
-    reserve(scope, idem) {
-      const reservation = store.reserve(scope, idem);
+    reserve(scope, idem, fingerprint) {
+      const reservation = store.reserve(scope, idem, fingerprint);
       if (!reservation) return undefined;
       return {
         ...(reservation.abort === undefined ? {} : { abort: () => reservation.abort?.() }),
@@ -959,16 +964,45 @@ export async function renderNoJsMutationResponse<
   // For `csrf:false` mutations with no session, use the mutation key as the scope
   // so a stable Kovo-Idem still dedups duplicate external POSTs (SPEC §10.3:1062-1066).
   const noJsScope = noJsReplayScopeFor(csrf, definition.key, noJsRequest.request);
+  const requestFingerprint =
+    noJsRequest.requestFingerprint ?? canonicalRequestFingerprint(noJsRequest.rawInput);
 
   if (idem && noJsRequest.replayStore) {
-    const replayed = await noJsRequest.replayStore.get(noJsScope, idem);
+    let replayed: NoJsMutationResponse | undefined;
+    try {
+      replayed = await noJsRequest.replayStore.get(noJsScope, idem, requestFingerprint);
+    } catch (error) {
+      if (error instanceof MutationReplayConflictError)
+        return renderNoJsReplayConflictPage(noJsRequest);
+      throw error;
+    }
     if (replayed) return replayed;
 
-    let reservation = noJsRequest.replayStore.reserve(noJsScope, idem);
+    let reservation: NoJsMutationReplayReservation | undefined;
+    try {
+      reservation = noJsRequest.replayStore.reserve(noJsScope, idem, requestFingerprint);
+    } catch (error) {
+      if (error instanceof MutationReplayConflictError)
+        return renderNoJsReplayConflictPage(noJsRequest);
+      throw error;
+    }
     if (!reservation) {
-      const pending = await noJsRequest.replayStore.get(noJsScope, idem);
+      let pending: NoJsMutationResponse | undefined;
+      try {
+        pending = await noJsRequest.replayStore.get(noJsScope, idem, requestFingerprint);
+      } catch (error) {
+        if (error instanceof MutationReplayConflictError)
+          return renderNoJsReplayConflictPage(noJsRequest);
+        throw error;
+      }
       if (pending) return pending;
-      reservation = noJsRequest.replayStore.reserve(noJsScope, idem);
+      try {
+        reservation = noJsRequest.replayStore.reserve(noJsScope, idem, requestFingerprint);
+      } catch (error) {
+        if (error instanceof MutationReplayConflictError)
+          return renderNoJsReplayConflictPage(noJsRequest);
+        throw error;
+      }
       if (!reservation) return renderNoJsReplayUnavailablePage(noJsRequest);
     }
 
@@ -1182,6 +1216,23 @@ async function renderNoJsReplayUnavailablePage<Request, Value>(
       'Retry-After': '1',
     },
     status: 429,
+  };
+}
+
+async function renderNoJsReplayConflictPage<Request, Value>(
+  noJsRequest: NoJsMutationRequest<Request, Value>,
+): Promise<NoJsMutationResponse> {
+  const failure: MutationFail = {
+    error: { code: 'IDEMPOTENCY_CONFLICT', payload: {} },
+    ok: false,
+    status: 422,
+  };
+  return {
+    body: noJsRequest.renderFailurePage
+      ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
+      : renderDefaultFailurePage(failure),
+    headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
+    status: 422,
   };
 }
 

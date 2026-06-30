@@ -407,4 +407,36 @@ describe('no-JS mutation responses', () => {
     expect(handlerCalls).toBe(1);
     expect(third.status).toBe(303);
   });
+
+  it('rejects no-JS same Kovo-Idem with a different body as a 422 conflict', async () => {
+    const writes: string[] = [];
+    const addContact = mutation('contacts/add', {
+      input: s.object({ email: s.string() }),
+      handler(input) {
+        writes.push(input.email);
+        return input;
+      },
+    });
+    const replayStore = createMemoryMutationReplayStore();
+    const submit = (email: string) => {
+      const form = new FormData();
+      form.set('email', email);
+      form.set(KOVO_IDEM_FIELD_NAME, 'idem_nojs_conflict_01');
+      return renderMutationEndpointResponse(addContact, {
+        headers: new Headers(),
+        rawInput: form,
+        redirectTo: '/contacts',
+        replayStore,
+        request: { sessionId: 's1' },
+      });
+    };
+
+    const first = await submit('silent-a@example.test');
+    const second = await submit('silent-b@example.test');
+
+    expect(first.status).toBe(303);
+    expect(second.status).toBe(422);
+    expect(second.body).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+    expect(writes).toEqual(['silent-a@example.test']);
+  });
 });

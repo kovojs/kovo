@@ -313,6 +313,113 @@ describe('create-kovo starter (build integration)', () => {
     }
   }, 120_000);
 
+  it('rejects no-JS add-contact idempotency token collisions from the production artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-nojs-idem-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod NoJS Idem Proof' });
+      linkStarterBuildDependencies(root);
+
+      execFileSync('pnpm', ['run', 'build:prod'], {
+        cwd: root,
+        env: withRepoBinOnPath(),
+        stdio: 'pipe',
+      });
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+      const jar = new Map<string, string>();
+
+      await signInDemoUser(root, origin, jar, output);
+      const homeResponse = await fetch(`${origin}/`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const homeHtml = await homeResponse.text();
+      const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
+      const csrf = fieldValue(addForm, 'csrf');
+      const idem = fieldValue(addForm, 'Kovo-Idem');
+      expect(csrf).toBeTruthy();
+      expect(idem).toBeTruthy();
+
+      const submitNoJs = (name: string, email: string): Promise<Response> =>
+        fetch(`${origin}/_m/mutations/add-contact`, {
+          body: new URLSearchParams({
+            company: 'Integrity Lab',
+            csrf,
+            email,
+            'Kovo-Idem': idem,
+            name,
+          }),
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            cookie: cookieHeader(jar),
+            origin,
+          },
+          method: 'POST',
+          redirect: 'manual',
+        });
+
+      const first = await submitNoJs('First Idem Contact', 'first-idem@example.com');
+      const second = await submitNoJs('Second Idem Contact', 'second-idem@example.com');
+      const secondBody = await second.text();
+
+      expect(first.status).toBe(303);
+      expect(second.status).toBe(422);
+      expect(secondBody).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+
+      const updatedHome = await fetch(`${origin}/`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const updatedHtml = await updatedHome.text();
+      expect(updatedHtml).toContain('First Idem Contact');
+      expect(updatedHtml).not.toContain('Second Idem Contact');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('blocks starter Better Auth credential projections from the production build artifact', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-auth-secret-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Auth Secret Proof' });
+      linkStarterBuildDependencies(root);
+      addAuthSecretLeakProof(root);
+
+      try {
+        execFileSync('pnpm', ['run', 'build:prod'], {
+          cwd: root,
+          env: withRepoBinOnPath(),
+          stdio: 'pipe',
+        });
+        throw new Error('Expected build:prod to fail with KV435.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV435');
+        expect(output).toContain('Secret query value reaches the client wire');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('serves component-scoped FormError as a real no-JS 422 output from the production artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -703,6 +810,156 @@ function addNoJsFailureProof(root: string): void {
       ].join('\n'),
     );
   writeFileSync(appPath, app, 'utf8');
+}
+
+function addAuthSecretLeakProof(root: string): void {
+  const queriesPath = join(root, 'src/queries.ts');
+  const queries = readFileSync(queriesPath, 'utf8')
+    .replace(
+      "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      [
+        "import { domain, query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+        "import { eq } from 'drizzle-orm';",
+      ].join('\n'),
+    )
+    .replace(
+      "import { contacts } from './schema.js';",
+      "import { account, contacts } from './schema.js';",
+    )
+    .replace(
+      'export interface ContactListResult {\n  items: ContactRow[];\n}',
+      [
+        'export interface ContactListResult {',
+        '  items: ContactRow[];',
+        '}',
+        '',
+        'export interface AuthSecretLeakResult {',
+        '  items: { accessToken: string | null; password: string | null }[];',
+        '}',
+      ].join('\n'),
+    )
+    .replace(
+      '// SPEC §9.4 (MARQUEE): the framework provides `context.db` as the read-only managed handle.',
+      [
+        'export const authSecretLeakQuery = query({',
+        '  guard: appAuthed,',
+        "  reads: [domain('auth')],",
+        '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<AuthSecretLeakResult> {',
+        '    const db = requireDb(context);',
+        "    const userId = context?.request.session?.user.id ?? '';",
+        '    const items = await db',
+        '      .select({',
+        '        accessToken: account.accessToken,',
+        '        password: account.password,',
+        '      })',
+        '      .from(account)',
+        '      .where(eq(account.userId, userId))',
+        '      .limit(1);',
+        '    return { items };',
+        '  },',
+        '});',
+        '',
+        '// SPEC §9.4 (MARQUEE): the framework provides `context.db` as the read-only managed handle.',
+      ].join('\n'),
+    );
+  writeFileSync(queriesPath, queries, 'utf8');
+
+  writeFileSync(
+    join(root, 'src/app.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      "import { createApp, createRequestHandler, domain, mutation, publicAccess, route, s, type RequestHandler } from '@kovojs/server';",
+      '',
+      "import { appSessionProvider } from './auth.js';",
+      "import { appDb, appDbReady } from './db.js';",
+      "import { authSecretLeakQuery } from './queries.js';",
+      '',
+      'await appDbReady;',
+      "const authDomain = domain('auth');",
+      'const touchAuth = mutation({',
+      "  access: publicAccess('build-only auth touch graph proof'),",
+      '  csrf: false,',
+      '  input: s.object({}),',
+      "  optimistic: { [authSecretLeakQuery.key]: 'await-fragment' },",
+      '  registry: { touches: [authDomain] },',
+      '  handler() {',
+      "    return { status: 'ok' };",
+      '  },',
+      '});',
+      "touchAuth.key = 'auth/secret-touch';",
+      '',
+      'export const AuthSecretLeakProof = component({',
+      '  queries: { secrets: authSecretLeakQuery },',
+      '  render(_props: { secrets: { accessToken: string | null; password: string | null }[] }) {',
+      '    return <main>credential projection proof</main>;',
+      '  },',
+      '});',
+      '',
+      'const app = createApp({',
+      '  db: () => appDb,',
+      '  mutations: [touchAuth],',
+      '  queries: [authSecretLeakQuery],',
+      '  sessionProvider: appSessionProvider,',
+      '  routes: [',
+      "    route('/', {",
+      "      access: publicAccess('public auth secret build proof'),",
+      '      page: () => <AuthSecretLeakProof />,',
+      '    }),',
+      '  ],',
+      '});',
+      '',
+      'export const requestHandler: RequestHandler = createRequestHandler(app);',
+      'export default app;',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+}
+
+async function signInDemoUser(
+  root: string,
+  origin: string,
+  jar: Map<string, string>,
+  output: () => string,
+): Promise<void> {
+  await fetchTextWhenReady(`${origin}/login`, output);
+  const loginResponse = await fetch(`${origin}/login`);
+  mergeCookies(jar, loginResponse.headers.getSetCookie());
+  const loginHtml = await loginResponse.text();
+  const loginCsrf = fieldValue(loginHtml, 'csrf');
+  const demoPassword =
+    new RegExp(`^${demoPasswordEnvVar}=(.+)$`, 'm').exec(
+      readFileSync(join(root, '.env'), 'utf8'),
+    )?.[1] ?? '';
+  expect(loginCsrf).toBeTruthy();
+  expect(demoPassword).toBeTruthy();
+
+  const signIn = await fetch(`${origin}/_m/auth/sign-in`, {
+    body: new URLSearchParams({
+      csrf: loginCsrf,
+      email: 'demo@example.com',
+      next: '/',
+      password: demoPassword,
+    }),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieHeader(jar),
+      origin,
+    },
+    method: 'POST',
+    redirect: 'manual',
+  });
+  mergeCookies(jar, signIn.headers.getSetCookie());
+  expect(signIn.status).toBe(303);
+}
+
+function execFileSyncErrorOutput(error: unknown): string {
+  if (typeof error !== 'object' || error === null) return String(error);
+  const maybeOutput = error as { message?: unknown; stderr?: unknown; stdout?: unknown };
+  return [maybeOutput.stdout, maybeOutput.stderr, maybeOutput.message]
+    .map((value) => (Buffer.isBuffer(value) ? value.toString('utf8') : String(value ?? '')))
+    .join('\n');
 }
 
 async function waitForTcpPort(host: string, port: number, output: () => string): Promise<void> {

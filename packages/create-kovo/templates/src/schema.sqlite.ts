@@ -21,9 +21,11 @@ export const contacts = sqliteTable(
 );
 
 // --- Auth infrastructure -------------------------------------------------------
-// The four tables Better Auth manages. They are not app domains, so they carry no
-// `kovo()` annotation. The column names match the fields Better Auth expects
-// (introspectable via `getAuthTables(auth.options)`); `src/db.ts` creates them.
+// The four tables Better Auth manages. The credential-bearing tables are owner-scoped
+// and classify raw credential columns as `secret` so KV435 keeps password hashes and
+// bearer/OAuth tokens off the client wire (SPEC.md §6.6, §10.1). The column names match
+// the fields Better Auth expects (introspectable via `getAuthTables(auth.options)`);
+// `src/db.ts` creates them.
 export const user = sqliteTable('user', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
@@ -34,36 +36,48 @@ export const user = sqliteTable('user', {
   updatedAt: integer('updatedAt', { mode: 'timestamp_ms' }).notNull(),
 });
 
-export const session = sqliteTable('session', {
-  id: text('id').primaryKey(),
-  expiresAt: integer('expiresAt', { mode: 'timestamp_ms' }).notNull(),
-  token: text('token').notNull().unique(),
-  createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updatedAt', { mode: 'timestamp_ms' }).notNull(),
-  ipAddress: text('ipAddress'),
-  userAgent: text('userAgent'),
-  userId: text('userId')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-});
+export const session = sqliteTable(
+  'session',
+  {
+    id: text('id').primaryKey(),
+    expiresAt: integer('expiresAt', { mode: 'timestamp_ms' }).notNull(),
+    token: text('token').notNull().unique(),
+    createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updatedAt', { mode: 'timestamp_ms' }).notNull(),
+    ipAddress: text('ipAddress'),
+    userAgent: text('userAgent'),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+  },
+  kovo({ domain: 'auth', key: 'userId', secret: ['token'] }),
+);
 
-export const account = sqliteTable('account', {
-  id: text('id').primaryKey(),
-  accountId: text('accountId').notNull(),
-  providerId: text('providerId').notNull(),
-  userId: text('userId')
-    .notNull()
-    .references(() => user.id, { onDelete: 'cascade' }),
-  accessToken: text('accessToken'),
-  refreshToken: text('refreshToken'),
-  idToken: text('idToken'),
-  accessTokenExpiresAt: integer('accessTokenExpiresAt', { mode: 'timestamp_ms' }),
-  refreshTokenExpiresAt: integer('refreshTokenExpiresAt', { mode: 'timestamp_ms' }),
-  scope: text('scope'),
-  password: text('password'),
-  createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull(),
-  updatedAt: integer('updatedAt', { mode: 'timestamp_ms' }).notNull(),
-});
+export const account = sqliteTable(
+  'account',
+  {
+    id: text('id').primaryKey(),
+    accountId: text('accountId').notNull(),
+    providerId: text('providerId').notNull(),
+    userId: text('userId')
+      .notNull()
+      .references(() => user.id, { onDelete: 'cascade' }),
+    accessToken: text('accessToken'),
+    refreshToken: text('refreshToken'),
+    idToken: text('idToken'),
+    accessTokenExpiresAt: integer('accessTokenExpiresAt', { mode: 'timestamp_ms' }),
+    refreshTokenExpiresAt: integer('refreshTokenExpiresAt', { mode: 'timestamp_ms' }),
+    scope: text('scope'),
+    password: text('password'),
+    createdAt: integer('createdAt', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updatedAt', { mode: 'timestamp_ms' }).notNull(),
+  },
+  kovo({
+    domain: 'auth',
+    key: 'userId',
+    secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
+  }),
+);
 
 export const verification = sqliteTable('verification', {
   id: text('id').primaryKey(),
