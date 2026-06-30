@@ -126,7 +126,7 @@ invariant.
   - Verification: add aliases/wrapper fixtures for components, route file/stream returns, and route
     queries. Run `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-route-outcomes.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/app-graph.test.ts`.
 
-- [ ] **P1.4 - Require Drizzle diagnostic construction through a source-site builder.**
+- [x] **P1.4 - Require Drizzle diagnostic construction through a source-site builder.**
   - Current signals: `packages/drizzle/src/static.ts`, `packages/drizzle/src/static/query-shapes.ts`,
     and `packages/drizzle/src/static/summaries.ts` still create diagnostics with `site: ''` and later
     patch or contextualize locations; other paths format source sites inline.
@@ -135,7 +135,7 @@ invariant.
     sites except for a named no-site diagnostic variant.
   - Risk reduced: SQL/query-shape diagnostics cannot silently lose location, severity, or KV message
     consistency as analyzers are split.
-  - Verification: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/sql-safety-static.test.ts packages/drizzle/src/static-analysis-context.test.ts`; an `rg "site: ''" packages/drizzle/src` check returns no production diagnostics.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.query-loader-config.test.ts packages/drizzle/src/sql-safety-static.test.ts packages/drizzle/src/static-analysis-context.test.ts`, `rg "site: ''" packages/drizzle/src`, and `git diff --check` passed on 2026-06-30.
 
 - [x] **P1.5 - Share static host header policy across build and export emitters.**
   - Current signals: `packages/server/src/static-export-output.ts` notes immutable asset headers are
