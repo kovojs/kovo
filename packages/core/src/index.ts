@@ -748,6 +748,7 @@ type MutationFormHelperKind = 'field' | 'form';
 
 interface MutationFormHelperRenderContext {
   defer(kind: MutationFormHelperKind, props: Record<string, unknown>): unknown;
+  renderHtml?(html: string): unknown;
 }
 
 const mutationFormHelperRenderContextKey = Symbol.for('kovo.mutationFormHelperRenderContext');
@@ -1022,6 +1023,9 @@ function escapeHtmlText(value: string): string {
 }
 
 function frameworkRenderedHtml(html: string): string {
+  const contextualRenderedHtml = currentMutationFormHelperRenderContext()?.renderHtml?.(html);
+  if (contextualRenderedHtml !== undefined) return contextualRenderedHtml as string;
+
   const rendered: FrameworkRenderedHtml = {
     html,
     [Symbol.toPrimitive]() {
