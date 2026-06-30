@@ -18,30 +18,33 @@ by independent skeptical sub-agents before being carried forward.
 
 ### A. Mutation Failure Rendering
 
-- [ ] **A1 — Component-scoped `FormError` renders as escaped text on no-JS 422 failure pages.** (med, framework; found by `t5-ui-style-a11y`, independently verified)
+- [x] **A1 — Component-scoped `FormError` renders as escaped text on no-JS 422 failure pages.** (med, framework; found by `t5-ui-style-a11y`, independently verified)
   - Observed behavior: a component-scoped mutation form returns HTTP 422 for a declared failure, but the full-page failure response contains escaped literal `&lt;output role="alert" ... data-error-code="BLOCKED_TITLE"&gt;...&lt;/output&gt;`; there is no real `output[data-error-code="BLOCKED_TITLE"]`.
   - Root cause: `packages/core/src/index.ts:1017` returns `FormError` markup as a raw string; component JSX children in `packages/server/src/jsx-runtime.ts:601` flow through `renderServerRenderable`, and `packages/server/src/renderable.ts:21,46` preserves only `RenderedHtml`/trusted HTML while escaping scalar strings.
   - Why it matters: `SPEC.md` §6.3/§9.2 describe declared mutation failures as normal TSX rendered through `FormError`/`FieldError`; escaping removes `role="alert"`, the error code marker, and accessible no-JS error UI.
   - Repro evidence: verifier ran the production node artifact for `/Users/mini/kovo-dogfood-exhaustive-20260629-192219/t5-ui-style-a11y`, submitted a valid-CSRF no-JS POST with `title=blocked launch`, and observed status 422, `realOutputCount=0`, `escapedOutputCount=1`.
   - Acceptance: declared `FormError`/`FieldError` helpers render as real elements on full-page no-JS failure responses; regression should assert the 422 production response has an actual `output[role="alert"][data-error-code]` and no escaped helper markup.
+  - Fixed evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.test.ts --testNamePattern "component-scoped FormError" --reporter=dot` passed; the production artifact returns HTTP 422 with a real `output[data-error-code="BLOCKED_TITLE"]` and no escaped helper markup.
 
 ### B. Styling Token Extraction
 
-- [ ] **B1 — `style.tokens.customColor(name)` is documented and typed, but `style.create(...)` cannot extract it.** (med, framework; found by `t5-ui-style-a11y`, independently verified)
+- [x] **B1 — `style.tokens.customColor(name)` is documented and typed, but `style.create(...)` cannot extract it.** (med, framework; found by `t5-ui-style-a11y`, independently verified)
   - Observed behavior: replacing raw `var(--kovo-theme-custom-warning-*)` strings with `style.tokens.customColor('warning').colorContainer`/`color`/`onColorContainer` in an app `style.create(...)` rule fails `build:prod` with KV236, despite the app theme defining `warning`.
   - Root cause: `packages/style/src/theme.ts:206-209,291-299,693-698` exposes and emits custom color token refs, but `packages/compiler/src/style.ts:1421-1458` recognizes public tokens only as property-access paths and cannot prove call expressions such as `style.tokens.customColor('warning').colorContainer`, so `packages/compiler/src/style.ts:1381-1390` emits KV236.
   - Why it matters: `SPEC.md` §13.1 allows compiler-known imported theme token references, and the public style API provides `customColor(name)` as the typed semantic-color path; app authors hit a hard production build wall unless they fall back to raw CSS variable strings.
   - Repro evidence: verifier made a disposable edit in `/Users/mini/kovo-dogfood-exhaustive-20260629-192219/t5-ui-style-a11y/src/components/t5-lab.tsx`, ran `pnpm run build:prod`, and captured `KV236 src/components/t5-lab.tsx:57:7 Static style extraction could not prove style.create values`; the edit was reverted.
   - Acceptance: `style.create(...)` accepts literal custom-color token calls from `@kovojs/style` while preserving KV236 for unprovable dynamic token names; focused compiler/style tests should cover accepted literal calls and rejected dynamic calls.
+  - Fixed evidence: `pnpm exec vitest run packages/compiler/src/style.test.ts --reporter=dot` passed; tests cover literal `customColor('warning')`, dynamic token-name rejection, and non-token local call rejection.
 
 ### C. Drizzle Provenance Ergonomics
 
-- [ ] **C1 — KV438 still flags governed owner columns after wrapping a session-derived local in `serverValue(...)`.** (med, framework; found by `t2-data-optimistic`, independently verified)
+- [x] **C1 — KV438 still flags governed owner columns after wrapping a session-derived local in `serverValue(...)`.** (med, framework; found by `t2-data-optimistic`, independently verified)
   - Observed behavior: `build:prod` reports KV438 on `ownerId` writes even though the app assigns `const ownerId = request.session?.user.id ?? 'demo-user'` and passes `serverValue(ownerId, 'session owner')` into owner-annotated inserts.
   - Root cause: the `serverValue` gate at `packages/drizzle/src/static/derivation.ts:1320-1331` rejects the wrapped value because local alias provenance is not recovered as server/session-derived before that check (`packages/drizzle/src/static/derivation.ts:859-862,991-993`; session alias limits in `packages/drizzle/src/static/session-provenance.ts:171-175`).
   - Why it matters: `SPEC.md` §10.3/§11.1 make `serverValue` the author-facing discharge for governed values proven not request input. The diagnostic recommends the escape hatch, but ordinary session-derived locals still fail the deploy gate.
   - Repro evidence: verifier ran `pnpm run build:prod` in `/Users/mini/kovo-dogfood-exhaustive-20260629-192219/t2-data-optimistic` and captured KV438 diagnostics for project/task/activity `ownerId` values wrapped in `serverValue(ownerId, 'session owner')`.
   - Acceptance: `serverValue(sessionDerivedLocal, reason)` clears KV438 when provenance traces to `request.session`, while `serverValue(input.x, reason)` and other request-derived locals still fail; regression should cover both paths.
+  - Fixed evidence: `pnpm exec vitest run packages/drizzle/src/index.mass-assignment.test.ts --reporter=dot` passed; tests cover session-derived const locals, input locals, non-session request locals, and reassigned mutable locals.
 
 ## Refuted / Duplicates
 
@@ -56,3 +59,4 @@ by independent skeptical sub-agents before being carried forward.
 
 - Baseline scaffold under `/Users/mini/kovo-dogfood-exhaustive-20260629-192219/base`: `pnpm run check`, `pnpm run test`, `pnpm run build:prod`, and dev HTTP smoke passed.
 - Root repair after multi-app dogfood: `pnpm install` and `node -p "require.resolve('@material/material-color-utilities', { paths: ['/Users/mini/kovo/packages/style'] })"` passed.
+- Focused fix suite on local `main`: `pnpm exec vitest run packages/core/src/index.test.ts packages/server/src/component-render.test.tsx packages/server/src/mutation-no-js-jsx.test.tsx packages/create-kovo/src/index.build.test.ts packages/compiler/src/style.test.ts packages/drizzle/src/index.mass-assignment.test.ts --testNamePattern "component-scoped FormError|renders compiler-bound field|escapes field|no-JS mutation JSX|literal customColor|dynamic customColor|local static object calls|serverValue" --reporter=dot` passed.

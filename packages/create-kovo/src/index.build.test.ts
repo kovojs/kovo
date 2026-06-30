@@ -687,7 +687,7 @@ function addNoJsFailureProof(root: string): void {
       '  mutations: [addContact, blockTitle, appSignIn, appSignOut],',
     )
     .replace(
-      '  routes: [\n    route(\'/\', {',
+      "  routes: [\n    route('/', {",
       [
         '  routes: [',
         "    route('/no-js-failure-proof', {",
