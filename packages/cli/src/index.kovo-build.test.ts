@@ -27,6 +27,7 @@ import { renderedHtml } from '@kovojs/server/internal/html';
 import { kovo } from '@kovojs/server/vite';
 
 import { installEgressFloorSync } from '../../server/src/egress-bootstrap.js';
+import { createLiveTargetAttestation } from '../../server/src/mutation-wire.js';
 
 import { main, mainAsync } from './index.js';
 
@@ -573,22 +574,26 @@ export default createApp({
         createKovoNodeServer(): Server;
       };
       const server = serverModule.createKovoNodeServer();
+      const addContactKey = fixtureDerivedRegistryKey(appPath, 'addContact');
+      const contactsQueryKey = fixtureDerivedRegistryKey(
+        join(root, 'src/contacts-query.ts'),
+        'contactsQuery',
+      );
       await withEnv({ KOVO_LIVE_TARGET_SECRET: 'kovo-build-test-live-target-secret' }, async () => {
         const origin = await listen(server);
 
         try {
-          const liveTarget = await textById(
-            origin,
-            '/__test/contacts-live-target',
-            'contacts-live-target',
-          );
-          const mutationResponse = await fetch(`${origin}/_m/contacts/add`, {
+          const liveTarget = liveTargetHeader({
+            component: 'components/contacts-region/contacts-region',
+            target: 'contacts-region',
+          });
+          const mutationResponse = await fetch(`${origin}/_m/${addContactKey}`, {
             body: new URLSearchParams(),
             headers: {
               'Content-Type': 'application/x-www-form-urlencoded',
               'Kovo-Fragment': 'true',
               'Kovo-Live-Targets': liveTarget,
-              'Kovo-Targets': 'contacts-region=contacts',
+              'Kovo-Targets': `contacts-region=${contactsQueryKey}`,
               Referer: `${origin}/`,
             },
             method: 'POST',
@@ -596,7 +601,9 @@ export default createApp({
           const mutationBody = await mutationResponse.text();
           expect(mutationResponse.status, mutationBody).toBe(200);
           expect(mutationBody.length).toBeGreaterThan(0);
-          expect(mutationBody).toContain('<kovo-query name="contacts">{"count":1}</kovo-query>');
+          expect(mutationBody).toContain(
+            `<kovo-query name="${contactsQueryKey}">{"count":1}</kovo-query>`,
+          );
           expect(mutationBody).toContain('<kovo-fragment target="contacts-region">');
           expect(mutationBody).toContain('<strong data-bind="contacts.count">1</strong>');
         } finally {
@@ -1749,7 +1756,10 @@ export async function resetFixture() {
         const origin = await listen(server);
 
         try {
-          const homePanelLiveTarget = await homePanelLiveTargetHeader(origin);
+          const homePanelLiveTarget = liveTargetHeader({
+            component: 'home-panel/home-panel',
+            target: 'home-panel',
+          });
           const loginMutationResponse = await fetch(`${origin}/_m/home/touch`, {
             body: new URLSearchParams(),
             headers: {
@@ -2427,15 +2437,14 @@ function registryWrappedFragmentBuildAppSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
 import { createApp, mutation, route, s } from '@kovojs/server';
-import { createLiveTargetAttestation } from '@kovojs/server/internal/wire';
 import { ContactsRegion } from './components/contacts-region.js';
 import { contactDomain, contactsDb, contactsQuery } from './contacts-query.js';
 
-const addContact = mutation('contacts/add', {
+export const addContact = mutation({
   access: { kind: 'public', reason: 'build fixture mutation' },
   csrf: false,
   input: s.object({}),
-  optimistic: { contacts: 'await-fragment' },
+  optimistic: { [contactsQuery.key]: 'await-fragment' },
   registry: {
     queries: [contactsQuery],
     touches: [contactDomain],
@@ -2446,14 +2455,6 @@ const addContact = mutation('contacts/add', {
   },
 });
 
-function contactsLiveTargetHeader() {
-  const target = 'contacts-region';
-  const component = 'components/contacts-region/contacts-region';
-  const props = {};
-  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
-  return target + '#' + component + '@' + token + ':' + JSON.stringify(props);
-}
-
 export default createApp({
   mutations: [addContact],
   queries: [contactsQuery],
@@ -2461,10 +2462,6 @@ export default createApp({
     route('/', {
       access: { kind: 'public', reason: 'fragment build fixture' },
       page: () => <main><ContactsRegion /></main>,
-    }),
-    route('/__test/contacts-live-target', {
-      access: { kind: 'public', reason: 'fragment build fixture' },
-      page: () => <code id="contacts-live-target">{contactsLiveTargetHeader()}</code>,
     }),
   ],
 });
@@ -2475,9 +2472,9 @@ function registryWrappedContactsQuerySource(): string {
   return `
 import { domain, query, s } from '@kovojs/server';
 
-export const contactDomain = domain('contact');
+export const contactDomain = domain();
 export const contactsDb = { count: 0 };
-export const contactsQuery = query('contacts', {
+export const contactsQuery = query({
   access: { kind: 'public', reason: 'build fixture query' },
   load: () => ({ count: contactsDb.count }),
   output: s.object({ count: s.number() }),
@@ -2503,20 +2500,28 @@ export const ContactsRegion = component({
 `;
 }
 
-async function homePanelLiveTargetHeader(origin: string): Promise<string> {
-  const response = await fetch(`${origin}/__test/home-live-target`);
-  const html = await response.text();
-  const match = /<code id="home-live-target">([^<]+)<\/code>/.exec(html);
-  if (!match?.[1]) throw new Error(`Expected test live-target header in ${html.slice(-800)}`);
-  return match[1];
+function liveTargetHeader(input: { component: string; target: string }): string {
+  const props = {};
+  const token = createLiveTargetAttestation(
+    { component: input.component, props, target: input.target },
+    { request: {} },
+  );
+  return `${input.target}#${input.component}@${token}:${JSON.stringify(props)}`;
 }
 
-async function textById(origin: string, path: string, id: string): Promise<string> {
-  const response = await fetch(`${origin}${path}`);
-  const html = await response.text();
-  const match = new RegExp(`<[^>]+id="${id}"[^>]*>([^<]+)<\\/[^>]+>`).exec(html);
-  if (!match?.[1]) throw new Error(`Expected #${id} text in ${html.slice(-800)}`);
-  return match[1];
+function fixtureDerivedRegistryKey(fileName: string, exportedBinding: string): string {
+  const normalized = fileName.replaceAll('\\', '/').replace(/\.[^./]+$/, '');
+  const parts = normalized.split('/').filter(Boolean);
+  const srcRoot = parts.lastIndexOf('src');
+  const relative = srcRoot === -1 ? parts : parts.slice(srcRoot + 1);
+  return [...relative, exportedBinding].map(kebabCaseFixturePart).join('/');
+}
+
+function kebabCaseFixturePart(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/_/g, '-')
+    .toLowerCase();
 }
 
 function dynamicAppModuleSource(): string {
@@ -2700,20 +2705,11 @@ function mutationFragmentStylesheetAppModuleSource(): string {
   return `
 /** @jsxImportSource @kovojs/server */
 import { createApp, domain, mutation, query, route, s, stylesheet } from '@kovojs/server';
-import { createLiveTargetAttestation } from '@kovojs/server/internal/wire';
 import { HomePanel } from './src/home-panel.js';
 import { LoginPanel } from './src/login-panel.js';
 import { SharedCard } from './src/shared-card.js';
 
 import { trustedHtml } from '@kovojs/browser';
-
-function homeLiveTargetHeader() {
-  const target = 'home-panel';
-  const component = 'home-panel/home-panel';
-  const props = {};
-  const token = createLiveTargetAttestation({ component, props, target }, { request: {} });
-  return target + '#' + component + '@' + token + ':' + JSON.stringify(props);
-}
 
 const home = domain('home');
 const homeQuery = query('home', {
@@ -2749,10 +2745,6 @@ export default createApp({
     route('/', {
       access: { kind: 'public', reason: 'build fixture route' },
       page: () => <main><SharedCard /><HomePanel /></main>,
-    }),
-    route('/__test/home-live-target', {
-      access: { kind: 'public', reason: 'build fixture route' },
-      page: () => trustedHtml('<code id="home-live-target">' + homeLiveTargetHeader() + '</code>'),
     }),
     route('/login', {
       access: { kind: 'public', reason: 'build fixture route' },
