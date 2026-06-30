@@ -10,6 +10,7 @@ import {
   resolveSourceExportTarget,
   sourceStem,
 } from './package-exports.mjs';
+import { computeIconPlan, iconPublishExports } from '../packages/icons/scripts/icon-plan.mjs';
 
 /**
  * Publish-build generator for the public packages (plan `plans/api-cleanup.md`
@@ -51,6 +52,15 @@ import {
  * publish plan: the distinct build entry list and the `publishConfig`.
  */
 export function derivePublishPlan(pkgJson) {
+  if (pkgJson.name === '@kovojs/icons') {
+    const plan = computeIconPlan();
+    return {
+      entries: [...plan.packEntries].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+      publishConfig: { exports: iconPublishExports() },
+      targetFiles: [...plan.distTargets].sort((a, b) => (a < b ? -1 : a > b ? 1 : 0)),
+    };
+  }
+
   const entries = new Set(); // distinct ./src/<path>.ts(x) build entries
   const stemBySubpath = new Map(); // subpath -> dist stem
   const extraStems = new Set(); // package-owned dist entries that are not exported subpaths
@@ -150,7 +160,8 @@ function readPackageJson(pkg) {
 }
 
 /** The `vp pack <entries> --dts` build command for a package. */
-function buildCommand(plan) {
+function buildCommand(plan, pkgJson) {
+  if (pkgJson.name === '@kovojs/icons') return 'node ./scripts/build-dist.mjs';
   return `vp pack ${plan.entries.join(' ')} --dts`;
 }
 
@@ -165,7 +176,7 @@ function write() {
     // `build` (e.g. @kovojs/browser's `build` = inline-loader generation).
     pkgJson.scripts = {
       ...pkgJson.scripts,
-      'build:dist': buildCommand(plan),
+      'build:dist': buildCommand(plan, pkgJson),
       prepack: 'pnpm run build:dist',
     };
     pkgJson.publishConfig = plan.publishConfig;

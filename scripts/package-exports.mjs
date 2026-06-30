@@ -1,4 +1,8 @@
 import path from 'node:path';
+import {
+  computeIconPlan,
+  iconSourceTargetForSubpath,
+} from '../packages/icons/scripts/icon-plan.mjs';
 
 export const SOURCE_EXPORT_CONDITIONS = ['source', 'development', 'import', 'default', 'types'];
 
@@ -90,6 +94,24 @@ export function sourceExportEntriesForPackage({
   repoRoot,
   tierForSubpath,
 }) {
+  if (packageJson.name === '@kovojs/icons') {
+    const plan = computeIconPlan();
+    return plan.publicSubpaths.map((subpath) => {
+      const resolved = iconSourceTargetForSubpath(subpath);
+      const absPath = path.join(packagesRoot, packageDir, resolved);
+      return {
+        packageName: packageJson.name,
+        packageDir,
+        subpath,
+        importPath: importPathForPackageSubpath(packageJson.name, subpath),
+        source: path.relative(repoRoot, absPath),
+        absPath,
+        target: resolved,
+        ...(tierForSubpath ? { tier: tierForSubpath(subpath) } : {}),
+      };
+    });
+  }
+
   const entries = [];
   for (const [subpath, target] of Object.entries(normalizePackageExports(packageJson.exports))) {
     const resolved = resolveSourceExportTarget(target);
@@ -107,4 +129,11 @@ export function sourceExportEntriesForPackage({
     });
   }
   return entries;
+}
+
+export function declaredPackageExportSubpaths(packageJson) {
+  if (packageJson.name === '@kovojs/icons') {
+    return computeIconPlan().publicSubpaths;
+  }
+  return Object.keys(normalizePackageExports(packageJson.exports));
 }
