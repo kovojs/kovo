@@ -580,6 +580,13 @@ function installInlineKovoLoader(im) {
   const an = nav.navigate;
   const inav = nav.handleClick;
   const sf = nav.saveScroll;
+  const ng = (href) => {
+    if (globalThis.history?.scrollRestoration !== undefined) {
+      globalThis.history.scrollRestoration = 'auto';
+    }
+    if (location.assign) location.assign(href);
+    else location.href = href;
+  };
   for (const el of qa(
     doc,
     'input[type="checkbox"][aria-checked="mixed"],input[type="checkbox"][data-state="indeterminate"]',
