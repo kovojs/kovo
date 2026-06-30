@@ -2363,6 +2363,7 @@ function bundledUndiciRuntimeVitePlugin(): {
   load(id: string): null | string;
   name: string;
   resolveId(source: string, importer?: string): null | string;
+  transform(code: string): null | { code: string; map: null };
 } {
   return {
     enforce: 'pre',
@@ -2389,6 +2390,19 @@ function bundledUndiciRuntimeVitePlugin(): {
       return `export { Agent, getGlobalDispatcher, setGlobalDispatcher } from ${JSON.stringify(
         pathToFileURL(requireFromCli.resolve('undici')).href,
       )};\n`;
+    },
+    transform(code) {
+      const rewritten = code.replace(
+        /const undici = createRequire\(import\.meta\.url\)\(["']undici["']\);\s*const Agent = undici\.Agent;\s*const getGlobalDispatcher = undici\.getGlobalDispatcher;\s*const setGlobalDispatcher = undici\.setGlobalDispatcher;/,
+        '',
+      );
+      if (rewritten === code) return null;
+      return {
+        code: `import { Agent, getGlobalDispatcher, setGlobalDispatcher } from ${JSON.stringify(
+          pathToFileURL(requireFromCli.resolve('undici')).href,
+        )};\n${rewritten}`,
+        map: null,
+      };
     },
   };
 }
