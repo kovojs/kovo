@@ -1346,7 +1346,9 @@ export default async function handler(request) {
       expect(immutableAssetResponse.headers.get('cache-control')).toBe(
         'public, max-age=31536000, immutable',
       );
-      expect(immutableAssetResponse.headers.get('cross-origin-resource-policy')).toBe('same-origin');
+      expect(immutableAssetResponse.headers.get('cross-origin-resource-policy')).toBe(
+        'same-origin',
+      );
       expect(immutableAssetResponse.headers.get('x-content-type-options')).toBe('nosniff');
       expect(immutableAssetResponse.headers.get('access-control-allow-origin')).toBeNull();
       expect(immutableAssetResponse.headers.get('vary')).toBeNull();

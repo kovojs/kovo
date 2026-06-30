@@ -165,13 +165,20 @@ async function stylesheetReferencedStaticAssetPaths(
       continue;
     }
 
-    const cssUrlBase = `https://kovo.local${path.posix.dirname(asset.path).replace(/\/+$/, '')}/`;
+    const assetDirectory = path.posix.dirname(asset.path).replace(/\/+$/, '') || '/';
+    const cssUrlBase = `https://kovo.local${assetDirectory}/`;
     for (const rawHref of cssUrlUrls(css)) {
       const hrefPath = staticExportPublicHrefPath(rawHref, base, cssUrlBase);
-      if (hrefPath !== undefined) paths.add(hrefPath);
+      if (hrefPath !== undefined && !isConfiguredAssetNamespaceHref(hrefPath, assetDirectory)) {
+        paths.add(hrefPath);
+      }
     }
   }
   return [...paths].sort();
+}
+
+function isConfiguredAssetNamespaceHref(hrefPath: string, assetDirectory: string): boolean {
+  return assetDirectory !== '/' && hrefPath.startsWith(`${assetDirectory}/`);
 }
 
 function htmlAttributeUrls(html: string): string[] {

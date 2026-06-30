@@ -1665,7 +1665,7 @@ export async function resetFixture() {
         await expect(assetResponse.text()).resolves.toContain('color:#639');
         expect(assetResponse.status).toBe(200);
         expect(assetResponse.headers.get('cache-control')).toBe(
-          'public, max-age=31536000, immutable',
+          'public, max-age=0, must-revalidate',
         );
         expect(assetResponse.headers.get('content-type')).toBe('text/css; charset=utf-8');
       } finally {
@@ -1742,7 +1742,7 @@ export async function resetFixture() {
         await expect(assetResponse.text()).resolves.toContain('color:#639');
         expect(assetResponse.status).toBe(200);
         expect(assetResponse.headers.get('cache-control')).toBe(
-          'public, max-age=31536000, immutable',
+          'public, max-age=0, must-revalidate',
         );
       } finally {
         stdout.mockRestore();

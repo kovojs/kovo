@@ -152,7 +152,10 @@ export function endpoint<
   definition: EndpointDefinition<Method, Mount>,
 ): EndpointDeclaration<Path, Method, Mount> {
   const mount = (definition.mount ?? 'exact') as Mount;
-  const reason = 'reason' in definition ? definition.reason : definition.purpose;
+  const reason = definition.reason ?? definition.purpose;
+  if (reason === undefined) {
+    throw new TypeError('endpoint() requires either reason or purpose');
+  }
 
   return {
     ...(definition.access === undefined ? {} : { access: definition.access }),

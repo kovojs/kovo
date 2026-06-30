@@ -80,8 +80,8 @@ export default defineConfig({
 
 Use the same `retention` option with `vercel()` or `cloudflare()` when your platform setup keeps old
 `/c/__v/...` files and prior-token `/_q` reads reachable for the window. Without that declaration,
-`kovo build` fails with `KV417` as soon as the app emits a versioned client island. The build cannot
-infer CDN or object-store retention from the app source.
+`kovo build` fails as soon as the app emits a versioned client island. The build cannot infer CDN or
+object-store retention from the app source.
 
 A CDN or object store in front of `/c/*` makes this nearly free: deploys upload new versions and
 touch nothing else.

@@ -408,7 +408,10 @@ function appendMutationHandlerCallbacks(
   if (!initializer) return;
 
   const expression = unwrappedStaticExpressionNode(initializer);
-  if (!isProjectDrizzleReceiverIdentifier(expression, receivers) && !isDrizzleReceiver(expression)) {
+  if (
+    !isProjectDrizzleReceiverIdentifier(expression, receivers) &&
+    !isDrizzleReceiver(expression)
+  ) {
     return;
   }
 
