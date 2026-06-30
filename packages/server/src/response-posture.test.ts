@@ -10,6 +10,7 @@ import {
   endpointRequestWithoutSession,
   finalizeRawWebResponse,
   finalizeServerResponse,
+  resolveKovoLifecycleRequest,
 } from './response-posture.js';
 
 describe('central response posture finalization', () => {
@@ -115,5 +116,78 @@ describe('central response posture finalization', () => {
     expect(endpointRequest.headers.get('authorization')).toBe('Bearer machine-token');
     expect(endpointRequest.headers.get('x-signature')).toBe('sig_123');
     expect(endpointRequest.clone().headers.get('cookie')).toBeNull();
+  });
+
+  it('enforces per-surface lifecycle capabilities instead of treating surface as pass-through', async () => {
+    const db = {
+      insert: () => 'wrote',
+      read: () => 'read',
+    };
+
+    const documentRequest = await resolveKovoLifecycleRequest(
+      new Request('https://example.test/account'),
+      {
+        db: () => db,
+        sessionProvider: () => ({ user: { id: 'u1' } }),
+        surface: 'document',
+      },
+    );
+
+    expect(documentRequest.session).toEqual({ user: { id: 'u1' } });
+    expect(documentRequest.db.read()).toBe('read');
+    expect(() => documentRequest.db.insert()).toThrow(/loaders are read-only|cannot insert/);
+
+    const mutationRequest = await resolveKovoLifecycleRequest(
+      new Request('https://example.test/_m/cart/add', { method: 'POST' }),
+      {
+        csrf: { mode: 'protected' },
+        db: () => db,
+        idempotency: { mode: 'replay-store' },
+        sessionProvider: () => ({ user: { id: 'u1' } }),
+        surface: 'mutation',
+      },
+    );
+
+    expect(mutationRequest.session).toEqual({ user: { id: 'u1' } });
+    expect(mutationRequest.db.insert()).toBe('wrote');
+  });
+
+  it('strips endpoint and system lifecycle requests of app authority', async () => {
+    const request = new Request('https://example.test/status', {
+      headers: { Cookie: 'sid=victim' },
+    });
+    Object.defineProperty(request, 'session', {
+      configurable: true,
+      value: { user: { id: 'u1' } },
+    });
+
+    const endpointRequest = await resolveKovoLifecycleRequest(request, {
+      clientIp: () => '192.0.2.10',
+      surface: 'endpoint',
+    });
+    expect('session' in endpointRequest).toBe(false);
+    expect(endpointRequest.headers.get('cookie')).toBeNull();
+    expect((endpointRequest as unknown as { clientIp?: string }).clientIp).toBe('192.0.2.10');
+
+    const systemRequest = await resolveKovoLifecycleRequest(request, { surface: 'system' });
+    expect('session' in systemRequest).toBe(false);
+    expect(systemRequest.headers.get('cookie')).toBeNull();
+    expect('db' in systemRequest).toBe(false);
+  });
+
+  it('fails closed when a lifecycle surface carries an unused pass-through option', async () => {
+    await expect(
+      resolveKovoLifecycleRequest(new Request('https://example.test/_q/cart'), {
+        currentUrl: '/cart',
+        dbAccess: 'read',
+        surface: 'query',
+      } as never),
+    ).rejects.toThrow('Lifecycle surface "query" does not accept option "currentUrl"');
+
+    await expect(
+      resolveKovoLifecycleRequest(new Request('https://example.test/internal'), {
+        surface: 'future',
+      } as never),
+    ).rejects.toThrow('Unknown lifecycle surface "future"');
   });
 });

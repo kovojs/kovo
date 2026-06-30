@@ -93,6 +93,27 @@ describe('server app matched dispatch boundary', () => {
     await expect(response.text()).resolves.toBe('session:false');
   });
 
+  it('owns SPEC §9.5 raw endpoint dispatch without app db leakage', async () => {
+    const status = endpoint('/status', {
+      handler(request) {
+        return new Response(`db:${'db' in request}`);
+      },
+      method: 'GET',
+      reason: 'status endpoint db isolation test',
+      response: rawTextResponse,
+    });
+    const app = createApp({
+      db: () => ({ writes: [] }),
+      endpoints: [status],
+    });
+    const request = new Request('https://shop.example.test/status');
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('db:false');
+  });
+
   it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
     'enforces default endpoint CSRF before %s handler dispatch',
     async (method) => {

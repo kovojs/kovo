@@ -5,7 +5,6 @@ import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
 import { reportServerError } from './diagnostics.js';
 import {
   renderHttpGuardFailureResponse,
-  resolveLifecycleRequest,
   runGuard,
   sanitizeNext,
   withGuardParams,
@@ -35,6 +34,7 @@ import {
   type RoutePageResponse,
   type RouteResponseOutcome,
 } from './response.js';
+import { resolveKovoLifecycleRequest } from './response-posture.js';
 import { isSchemaValidationError, type Schema, type ValidationFailurePayload } from './schema.js';
 import {
   escapeAttribute,
@@ -557,7 +557,16 @@ async function runRoutePageInternal<
   // Gated on a declared `params` schema (the validated path, mirroring `runQuery`'s `args` gate) so
   // a paramless route never fabricates a `req.params` key. The page/regions/layouts then see the
   // same coerced `req.params` the guards saw.
-  const resolvedRequest = await resolveLifecycleRequest(request, options);
+  const resolvedRequest = await resolveKovoLifecycleRequest(request, {
+    ...(options.clientIp === undefined ? {} : { clientIp: options.clientIp }),
+    ...(options.db === undefined ? {} : { db: options.db }),
+    ...(options.onError === undefined ? {} : { onError: options.onError }),
+    ...(options.onSessionSetCookie === undefined
+      ? {}
+      : { onSessionSetCookie: options.onSessionSetCookie }),
+    ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
+    surface: 'document',
+  });
   const lifecycleRequest =
     definition.params === undefined
       ? resolvedRequest
@@ -1079,7 +1088,18 @@ export async function renderRoutePageResponse<
   let lifecycleRequest: Request = request;
   const deferredRegions = createDeferredRegionChunkCollector();
   try {
-    lifecycleRequest = await resolveLifecycleRequest(request, options);
+    lifecycleRequest = await resolveKovoLifecycleRequest(request, {
+      ...(options.clientIp === undefined ? {} : { clientIp: options.clientIp }),
+      ...(options.db === undefined ? {} : { db: options.db }),
+      ...(options.onError === undefined ? {} : { onError: options.onError }),
+      ...(options.onSessionSetCookie === undefined
+        ? {}
+        : { onSessionSetCookie: options.onSessionSetCookie }),
+      ...(options.sessionProvider === undefined
+        ? {}
+        : { sessionProvider: options.sessionProvider }),
+      surface: 'document',
+    });
     result = await runRoutePageInternal(
       definition,
       input,
