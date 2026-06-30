@@ -16,6 +16,7 @@
     "./kovo-export-fixtures": "./src/kovo-export-fixtures.ts",
     "./markdown-fixtures": "./src/markdown-fixtures.ts",
     "./mcp-fixtures": "./src/mcp-fixtures.ts",
+    "./oracle-fixtures": "./src/oracle-fixtures.ts",
     "./runtime-fixtures": "./src/runtime-fixtures.ts",
     "./server-fixtures": "./src/server-fixtures.ts",
     "./source-fixtures": "./src/source-fixtures.ts",

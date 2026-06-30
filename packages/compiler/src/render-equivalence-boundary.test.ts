@@ -4,6 +4,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
+import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle-fixtures.js';
 import { compileComponentModule } from './index.js';
 import { authoredStaticTextEquivalenceCheck } from './emit/render-equivalence.js';
 import { parseComponentModule } from './scan/parse.js';
@@ -136,5 +137,19 @@ export const X = component({ queries: { q: {} }, render: ({ q }) => (<p>Hello <s
     expect(
       authoredStaticTextEquivalenceCheck('components/pipeline.tsx', authored, lowered).ok,
     ).toBe(true);
+  });
+
+  it('keeps the shared cross-package oracle fixture render-equivalent', () => {
+    const oracle = crossPackageOracleFixture();
+    const result = compileComponentModule({
+      fileName: oracle.component.fileName,
+      queryShapes: oracle.component.queryShapes,
+      registryFacts: oracle.component.registryFacts,
+      source: oracle.component.source,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.renderEquivalenceChecks).toHaveLength(1);
+    expect(result.renderEquivalenceChecks[0]?.ok).toBe(true);
   });
 });

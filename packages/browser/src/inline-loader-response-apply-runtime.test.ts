@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { expectInlineResponseApplyParity } from './inline-loader-response-apply-fixture.js';
+import {
+  expectInlineOracleResponseApplyContract,
+  expectInlineResponseApplyParity,
+} from './inline-loader-response-apply-fixture.js';
 import { inlineSourceInstallCases } from './inline-loader-test-utils.js';
 import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
 import type { HtmlResponseFragmentApplyTarget } from './response-fragment-apply.js';
@@ -85,5 +88,9 @@ describe('inline loader response apply runtime', () => {
     } finally {
       globalRecord.document = originalDocument;
     }
+  });
+
+  it('applies the shared cross-package oracle response through modular and inline fragment paths', () => {
+    expectInlineOracleResponseApplyContract({ expect });
   });
 });

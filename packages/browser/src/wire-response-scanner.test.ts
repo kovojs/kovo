@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle-fixtures.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
 import {
   readElementChunks,
@@ -237,5 +238,22 @@ describe('wire response scanner', () => {
     ]);
     expect(chunks[0]?.start).toBe(0);
     expect(chunks[0]?.end).toBeGreaterThan(chunks[0]?.start ?? 0);
+  });
+
+  it('scans the shared cross-package oracle response through modular and inline readers', () => {
+    const fixture = crossPackageOracleFixture();
+    const modular = readMutationResponseBodyChunks(fixture.runtime.body);
+    const inline = readInlineMutationResponseBodyChunks(fixture.runtime.body);
+
+    expect(modular.queries.map((query) => query.name)).toEqual(['cart', 'product']);
+    expect(modular.fragments).toEqual([
+      {
+        html: fixture.runtime.fragmentHtml,
+        mode: 'append',
+        target: fixture.component.fragmentTarget,
+      },
+    ]);
+    expect(inline.queries.map((query) => query.attrs)).toEqual([' name="cart"', ' name="product"']);
+    expect(inline.fragments).toEqual(modular.fragments);
   });
 });

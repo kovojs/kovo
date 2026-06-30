@@ -1,9 +1,12 @@
 import { applyMutationResponseChunksToRuntime } from './apply-mutation-response.js';
 import { createQueryStore } from './client.js';
 import type { InlineSourceInstall } from './inline-loader-test-utils.js';
+import { applyInlineMutationResponseChunks } from './inline-response-apply.js';
 import { applyInlineQueryEventToRuntime } from './query-events.js';
 import type { InlineQueryEvent } from './query-events.js';
 import { readMutationResponseBodyChunks } from './wire-parser.js';
+import { readInlineMutationResponseBodyChunks } from './wire-response-scanner.js';
+import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle-fixtures.js';
 
 interface InlineResponseApplyAssertions {
   expect: typeof import('vitest').expect;
@@ -327,5 +330,99 @@ export async function expectInlineResponseApplyParity(
     } else {
       globalRecord.__kovoInlineImport = originals.importModule;
     }
+  }
+}
+
+export function expectInlineOracleResponseApplyContract(
+  assertions: Pick<InlineResponseApplyAssertions, 'expect'>,
+): void {
+  const { expect } = assertions;
+  const fixture = crossPackageOracleFixture();
+  const globalRecord = globalThis as unknown as { document?: unknown };
+  const originalDocument = globalRecord.document;
+  const modularTargets = new Map([
+    [
+      fixture.component.fragmentTarget,
+      {
+        html: '',
+        appendHtml(html: string) {
+          this.html += html;
+        },
+        replaceWithHtml(html: string) {
+          this.html = html;
+        },
+      },
+    ],
+  ]);
+  const modularStore = createQueryStore();
+  const modularResult = applyMutationResponseChunksToRuntime(
+    readMutationResponseBodyChunks(fixture.runtime.body),
+    {
+      root: {
+        findFragmentTarget(target: string) {
+          return modularTargets.get(target) ?? null;
+        },
+      } as never,
+      store: modularStore,
+    },
+  );
+  const inlineTargets = new Map([
+    [
+      fixture.component.fragmentTarget,
+      {
+        html: '',
+        append(...nodes: unknown[]) {
+          this.html += nodes.join('');
+        },
+        insertAdjacentHTML(_position: string, html: string) {
+          this.html += html;
+        },
+      },
+    ],
+  ]);
+
+  try {
+    globalRecord.document = {
+      createElement(name: string) {
+        if (name !== 'template') throw new Error(`unexpected inline test element: ${name}`);
+        const template = {
+          content: { childNodes: [] as unknown[], children: [] as unknown[] },
+          set innerHTML(value: string) {
+            const element = {
+              attributes: [] as Array<{ name: string; value: string }>,
+              outerHTML: value,
+              querySelectorAll() {
+                return [];
+              },
+              toString() {
+                return value;
+              },
+            };
+            this.content.childNodes = [element];
+            this.content.children = [element];
+          },
+        };
+        return template;
+      },
+    };
+    const inlineResult = applyInlineMutationResponseChunks(
+      readInlineMutationResponseBodyChunks(fixture.runtime.body),
+      {
+        findFragmentTarget(target) {
+          return inlineTargets.get(target) ?? null;
+        },
+      },
+    );
+
+    expect(modularResult.appliedFragments).toEqual(fixture.runtime.expectedAppliedFragments);
+    expect(inlineResult).toEqual(fixture.runtime.expectedAppliedFragments);
+    expect(modularTargets.get(fixture.component.fragmentTarget)?.html).toBe(
+      fixture.runtime.fragmentHtml,
+    );
+    expect(inlineTargets.get(fixture.component.fragmentTarget)?.html).toBe(
+      fixture.runtime.fragmentHtml,
+    );
+  } finally {
+    globalRecord.document = originalDocument;
   }
 }

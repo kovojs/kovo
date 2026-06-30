@@ -9,6 +9,7 @@ import {
   runQueryUpdatePlan,
 } from '@kovojs/browser/generated';
 import { describe, expect, it } from 'vitest';
+import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle-fixtures.js';
 
 import {
   assertFixpoint,
@@ -887,6 +888,28 @@ describe('compiler conformance corpus', () => {
         },
       ]
     `);
+  });
+
+  it('keeps the shared cross-package oracle fixture green through compiler conformance gates', () => {
+    const oracle = crossPackageOracleFixture();
+    const result = compileComponentModule({
+      fileName: oracle.component.fileName,
+      queryShapes: oracle.component.queryShapes,
+      registryFacts: oracle.component.registryFacts,
+      source: oracle.component.source,
+    });
+
+    assertFixpoint(result);
+    assertRenderEquivalence(result);
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.componentGraphFacts.map((fact) => ({
+        fragments: [...(fact.fragments ?? [])],
+        name: fact.name,
+        queries: [...(fact.queries ?? [])].sort(),
+      })),
+    ).toEqual(oracle.graph.componentGraphFacts);
+    expect(result.queryUpdatePlans.map((plan) => plan.query).sort()).toEqual(['cart', 'product']);
   });
 
   it('executes generated query update plans against a browser-free DOM fixture', () => {
