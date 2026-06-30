@@ -34,6 +34,7 @@ describe('Better Auth pinned conformance', () => {
       betterAuthSchemaSourceFixture(Object.keys(tables)),
       tables,
     );
+    const rerun = annotateBetterAuthSchemaSource(result.source, tables);
 
     expect(Object.keys(tables).sort()).toEqual([
       'account',
@@ -88,6 +89,15 @@ describe('Better Auth pinned conformance', () => {
     expect(result.source).toContain(
       "export const twoFactor = pgTable('twoFactor', {}, kovo({ domain: 'auth', key: 'userId', secret: ['secret', 'backupCodes'] }));",
     );
+    expect(rerun.source).toBe(result.source);
+    expect(rerun.annotatedTables).toEqual([]);
+    expect(rerun.alreadyAnnotatedTables).toEqual([
+      'account',
+      'session',
+      'twoFactor',
+      'user',
+      'verification',
+    ]);
   });
 
   it('pins two-factor OTP and backup-code provider metadata under the same table bridge', () => {

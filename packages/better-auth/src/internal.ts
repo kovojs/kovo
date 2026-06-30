@@ -360,8 +360,9 @@ export function annotateBetterAuthSchemaSource(
     Object.keys(tables).filter((table) => isBetterAuthSchemaTable(table, schemaBridge)),
   );
   const metadataTableByPhysicalName = betterAuthMetadataTableByPhysicalName(tables, schemaBridge);
-  const sourceTableCandidates = findSchemaTableCallCandidates(source);
-  const sourceTables = findDrizzleTableCalls(source, options.tableFactories);
+  const sourceIr = parseBetterAuthSchemaSourceIr(source, options.tableFactories);
+  const sourceTableCandidates = sourceIr.tableCallCandidates;
+  const sourceTables = sourceIr.drizzleTableCalls;
   const unrecognizedSourceTables = unrecognizedBetterAuthSourceTableDeclarations(
     sourceTableCandidates,
     sourceTables,
@@ -383,8 +384,13 @@ export function annotateBetterAuthSchemaSource(
   const annotatedTables: string[] = [];
   const alreadyAnnotatedTables: string[] = [];
   const existingExtraConfigTables: string[] = [];
-  const annotationCallee = options.annotationCallee ?? 'kovo';
-  const hasRequiredImport = hasNamedImportLocal(source, '@kovojs/drizzle', annotationCallee);
+  const annotationImport = resolveBetterAuthSchemaAnnotationImport(
+    source,
+    sourceIr,
+    options.annotationCallee,
+  );
+  const annotationCallee = annotationImport.localName;
+  const hasRequiredImport = annotationImport.hasRequiredImport;
 
   for (const call of sourceTables) {
     const table = metadataTableByPhysicalName.get(call.tableName);
@@ -407,11 +413,9 @@ export function annotateBetterAuthSchemaSource(
       continue;
     }
 
-    replacements.push({
-      end: call.closeParen,
-      start: call.closeParen,
-      value: `, ${betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge)}`,
-    });
+    replacements.push(
+      betterAuthSchemaTableAnnotationReplacement(call, table, annotationCallee, schemaBridge),
+    );
     annotatedTables.push(call.tableName);
   }
 
@@ -541,11 +545,14 @@ export function generateBetterAuthSchemaSource(
     const exportName = uniqueBetterAuthSchemaExportName(table, exportNames);
     generatedTables.push({ exportName, physicalTable, table });
     declarations.push(
-      [
-        `export const ${exportName} = ${tableFactory}(${quoteTsString(physicalTable)}, {`,
-        ...columns.lines.map((line) => `  ${line}`),
-        `}, ${betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge)});`,
-      ].join('\n'),
+      renderBetterAuthGeneratedSchemaDeclaration({
+        annotationCall: betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge),
+        columns: columns.columns,
+        dialect,
+        exportName,
+        physicalTable,
+        tableFactory,
+      }),
     );
   }
 
@@ -966,25 +973,60 @@ function betterAuthTableOrder(metadata: unknown): number {
   return typeof order === 'number' ? order : Number.POSITIVE_INFINITY;
 }
 
+interface BetterAuthSchemaSourceArgument {
+  end: number;
+  start: number;
+  text: string;
+}
+
 interface DrizzleTableCall {
+  arguments: BetterAuthSchemaSourceArgument[];
+  callEnd: number;
+  callStart: number;
   callee: string;
   closeParen: number;
   extraConfigText: null | string;
   tableName: string;
 }
 
-type BetterAuthGeneratedSchemaFieldBuilder = 'boolean' | 'integer' | 'text' | 'timestamp';
+interface BetterAuthSchemaSourceIr {
+  drizzleTableCalls: DrizzleTableCall[];
+  localBindings: Set<string>;
+  tableCallCandidates: DrizzleTableCall[];
+}
 
-interface BetterAuthGeneratedSchemaColumns {
+type BetterAuthGeneratedSchemaFieldBuilder = 'boolean' | 'integer' | 'text' | 'timestamp';
+type BetterAuthGeneratedSchemaFieldType = 'boolean' | 'date' | 'number' | 'string';
+
+interface BetterAuthGeneratedSchemaColumnIr {
+  builder: BetterAuthGeneratedSchemaFieldBuilder;
+  columnName: string;
+  field: string;
+  fieldType: BetterAuthGeneratedSchemaFieldType;
+  primaryKey: boolean;
+  propertyName: string;
+  required: boolean;
+}
+
+interface BetterAuthGeneratedSchemaColumnsIr {
   builders: Set<BetterAuthGeneratedSchemaFieldBuilder>;
-  lines: string[];
+  columns: BetterAuthGeneratedSchemaColumnIr[];
+}
+
+interface BetterAuthGeneratedSchemaDeclarationIr {
+  annotationCall: string;
+  columns: BetterAuthGeneratedSchemaColumnIr[];
+  dialect: BetterAuthSchemaSourceDialect;
+  exportName: string;
+  physicalTable: string;
+  tableFactory: string;
 }
 
 function betterAuthGeneratedSchemaColumns(
   table: string,
   metadata: unknown,
   dialect: BetterAuthSchemaSourceDialect,
-): BetterAuthGeneratedSchemaColumns | { degradation: BetterAuthGeneratedSchemaTableDegradation } {
+): BetterAuthGeneratedSchemaColumnsIr | { degradation: BetterAuthGeneratedSchemaTableDegradation } {
   const fields = betterAuthTableFields(metadata);
   const physicalTable = betterAuthPhysicalTableName(table, metadata);
 
@@ -1007,7 +1049,7 @@ function betterAuthGeneratedSchemaColumns(
 
   if ('degradation' in idColumn) return idColumn;
 
-  const lines = [`id: ${idColumn.expression},`];
+  const columns = [idColumn.column];
   const builders = new Set<BetterAuthGeneratedSchemaFieldBuilder>([idColumn.builder]);
 
   for (const [field, fieldMetadata] of Object.entries(fields)) {
@@ -1024,10 +1066,10 @@ function betterAuthGeneratedSchemaColumns(
     if ('degradation' in column) return column;
 
     builders.add(column.builder);
-    lines.push(`${betterAuthSchemaObjectPropertyName(field)}: ${column.expression},`);
+    columns.push(column.column);
   }
 
-  return { builders, lines };
+  return { builders, columns };
 }
 
 function betterAuthGeneratedSchemaIdColumn(
@@ -1038,21 +1080,29 @@ function betterAuthGeneratedSchemaIdColumn(
 ):
   | {
       builder: BetterAuthGeneratedSchemaFieldBuilder;
-      expression: string;
+      column: BetterAuthGeneratedSchemaColumnIr;
     }
   | { degradation: BetterAuthGeneratedSchemaTableDegradation } {
   if (metadata === undefined) {
     return {
       builder: 'text',
-      expression: "text('id').primaryKey()",
+      column: {
+        builder: 'text',
+        columnName: 'id',
+        field: 'id',
+        fieldType: 'string',
+        primaryKey: true,
+        propertyName: 'id',
+        required: true,
+      },
     };
   }
 
   const type = betterAuthFieldType(metadata);
-  const builder = betterAuthGeneratedSchemaFieldBuilder(type, dialect);
+  const mapping = betterAuthGeneratedSchemaFieldMapping(type, dialect);
   const fieldNames = betterAuthTableFieldNames({ fields: { id: metadata } });
 
-  if (builder === null) {
+  if (mapping === null) {
     return {
       degradation: generatedSchemaTableDegradation({
         field: 'id',
@@ -1073,13 +1123,16 @@ function betterAuthGeneratedSchemaIdColumn(
   const columnName = betterAuthFieldName('id', metadata);
 
   return {
-    builder,
-    expression: `${betterAuthGeneratedSchemaColumnExpression(
-      builder,
+    builder: mapping.builder,
+    column: {
+      builder: mapping.builder,
       columnName,
-      type,
-      dialect,
-    )}.primaryKey()`,
+      field: 'id',
+      fieldType: mapping.fieldType,
+      primaryKey: true,
+      propertyName: 'id',
+      required: true,
+    },
   };
 }
 
@@ -1092,14 +1145,14 @@ function betterAuthGeneratedSchemaColumn(
 ):
   | {
       builder: BetterAuthGeneratedSchemaFieldBuilder;
-      expression: string;
+      column: BetterAuthGeneratedSchemaColumnIr;
     }
   | { degradation: BetterAuthGeneratedSchemaTableDegradation } {
   const type = betterAuthFieldType(metadata);
-  const builder = betterAuthGeneratedSchemaFieldBuilder(type, dialect);
+  const mapping = betterAuthGeneratedSchemaFieldMapping(type, dialect);
   const fieldNames = betterAuthTableFieldNames({ fields: { [field]: metadata } });
 
-  if (builder === null) {
+  if (mapping === null) {
     return {
       degradation: generatedSchemaTableDegradation({
         field,
@@ -1119,16 +1172,18 @@ function betterAuthGeneratedSchemaColumn(
 
   const columnName = betterAuthFieldName(field, metadata);
   const required = betterAuthFieldRequired(metadata);
-  const notNull = required ? '.notNull()' : '';
 
   return {
-    builder,
-    expression: `${betterAuthGeneratedSchemaColumnExpression(
-      builder,
+    builder: mapping.builder,
+    column: {
+      builder: mapping.builder,
       columnName,
-      type,
-      dialect,
-    )}${notNull}`,
+      field,
+      fieldType: mapping.fieldType,
+      primaryKey: false,
+      propertyName: betterAuthSchemaObjectPropertyName(field),
+      required,
+    },
   };
 }
 
@@ -1150,22 +1205,81 @@ function betterAuthFieldType(metadata: unknown): string | null {
   return typeof type === 'string' ? type : null;
 }
 
-function betterAuthGeneratedSchemaFieldBuilder(
+const betterAuthGeneratedSchemaFieldMappings = {
+  boolean: {
+    postgres: { builder: 'boolean' },
+    sqlite: { builder: 'integer' },
+  },
+  date: {
+    postgres: { builder: 'timestamp' },
+    sqlite: { builder: 'text' },
+  },
+  number: {
+    postgres: { builder: 'integer' },
+    sqlite: { builder: 'integer' },
+  },
+  string: {
+    postgres: { builder: 'text' },
+    sqlite: { builder: 'text' },
+  },
+} as const satisfies Record<
+  BetterAuthGeneratedSchemaFieldType,
+  Record<BetterAuthSchemaSourceDialect, { builder: BetterAuthGeneratedSchemaFieldBuilder }>
+>;
+
+function betterAuthGeneratedSchemaFieldMapping(
   type: string | null,
   dialect: BetterAuthSchemaSourceDialect,
-): BetterAuthGeneratedSchemaFieldBuilder | null {
-  if (type === 'boolean') return dialect === 'sqlite' ? 'integer' : 'boolean';
-  if (type === 'date') return dialect === 'sqlite' ? 'text' : 'timestamp';
-  if (type === 'number') return 'integer';
-  if (type === 'string') return 'text';
+): {
+  builder: BetterAuthGeneratedSchemaFieldBuilder;
+  fieldType: BetterAuthGeneratedSchemaFieldType;
+} | null {
+  if (!isBetterAuthGeneratedSchemaFieldType(type)) return null;
 
-  return null;
+  return {
+    builder: betterAuthGeneratedSchemaFieldMappings[type][dialect].builder,
+    fieldType: type,
+  };
+}
+
+function isBetterAuthGeneratedSchemaFieldType(
+  type: string | null,
+): type is BetterAuthGeneratedSchemaFieldType {
+  return type === 'boolean' || type === 'date' || type === 'number' || type === 'string';
+}
+
+function renderBetterAuthGeneratedSchemaDeclaration(
+  declaration: BetterAuthGeneratedSchemaDeclarationIr,
+): string {
+  return [
+    `export const ${declaration.exportName} = ${declaration.tableFactory}(${quoteTsString(
+      declaration.physicalTable,
+    )}, {`,
+    ...declaration.columns.map(
+      (column) => `  ${renderBetterAuthGeneratedSchemaColumn(column, declaration.dialect)}`,
+    ),
+    `}, ${declaration.annotationCall});`,
+  ].join('\n');
+}
+
+function renderBetterAuthGeneratedSchemaColumn(
+  column: BetterAuthGeneratedSchemaColumnIr,
+  dialect: BetterAuthSchemaSourceDialect,
+): string {
+  const suffix = column.primaryKey ? '.primaryKey()' : column.required ? '.notNull()' : '';
+
+  return `${column.propertyName}: ${betterAuthGeneratedSchemaColumnExpression(
+    column.builder,
+    column.columnName,
+    column.fieldType,
+    dialect,
+  )}${suffix},`;
 }
 
 function betterAuthGeneratedSchemaColumnExpression(
   builder: BetterAuthGeneratedSchemaFieldBuilder,
   columnName: string,
-  fieldType: string | null,
+  fieldType: BetterAuthGeneratedSchemaFieldType,
   dialect: BetterAuthSchemaSourceDialect,
 ): string {
   if (dialect === 'sqlite' && fieldType === 'boolean') {
@@ -1539,6 +1653,68 @@ function isBetterAuthSchemaAnnotationText(
   );
 }
 
+function betterAuthSchemaTableAnnotationReplacement(
+  call: DrizzleTableCall,
+  table: string,
+  annotationCallee: string,
+  schemaBridge: BetterAuthSchemaBridgeExtensions = betterAuthSchemaBridge,
+): { end: number; start: number; value: string } {
+  return {
+    end: call.callEnd,
+    start: call.callStart,
+    value: renderBetterAuthSchemaSourceTableCall(call, [
+      ...call.arguments.map((argument) => argument.text.trim()),
+      betterAuthSchemaAnnotationCall(table, annotationCallee, schemaBridge),
+    ]),
+  };
+}
+
+function renderBetterAuthSchemaSourceTableCall(
+  call: DrizzleTableCall,
+  args: readonly string[],
+): string {
+  return `${call.callee}(${args.join(', ')})`;
+}
+
+function resolveBetterAuthSchemaAnnotationImport(
+  source: string,
+  sourceIr: BetterAuthSchemaSourceIr,
+  requestedLocalName: string | undefined,
+): { hasRequiredImport: boolean; localName: string } {
+  if (requestedLocalName !== undefined) {
+    return {
+      hasRequiredImport: hasNamedImportLocal(source, '@kovojs/drizzle', 'kovo', requestedLocalName),
+      localName: requestedLocalName,
+    };
+  }
+
+  const existingLocalName = findNamedImportLocal(source, '@kovojs/drizzle', 'kovo');
+
+  if (existingLocalName !== null) {
+    return { hasRequiredImport: true, localName: existingLocalName };
+  }
+
+  return {
+    hasRequiredImport: false,
+    localName: uniqueBetterAuthSchemaAnnotationLocalName(sourceIr.localBindings),
+  };
+}
+
+function uniqueBetterAuthSchemaAnnotationLocalName(localBindings: ReadonlySet<string>): string {
+  if (!localBindings.has('kovo')) return 'kovo';
+
+  const baseName = 'kovoSchema';
+  let localName = baseName;
+  let index = 2;
+
+  while (localBindings.has(localName)) {
+    localName = `${baseName}${index}`;
+    index += 1;
+  }
+
+  return localName;
+}
+
 function betterAuthSchemaImportStatement(localName: string): string {
   const specifier = localName === 'kovo' ? 'kovo' : `kovo as ${localName}`;
 
@@ -1574,16 +1750,34 @@ function betterAuthSchemaImportReplacement(
   };
 }
 
-function hasNamedImportLocal(source: string, moduleName: string, localName: string): boolean {
+function hasNamedImportLocal(
+  source: string,
+  moduleName: string,
+  importedName: string,
+  localName: string,
+): boolean {
+  return findNamedImportLocal(source, moduleName, importedName, localName) !== null;
+}
+
+function findNamedImportLocal(
+  source: string,
+  moduleName: string,
+  importedName: string,
+  preferredLocalName?: string,
+): string | null {
   for (const namedImport of findNamedImports(source)) {
     if (stringLiteralValue(namedImport.moduleText) !== moduleName) continue;
 
     for (const specifier of namedImport.specifiersText.split(',')) {
-      if (namedImportSpecifier(specifier.trim())?.local === localName) return true;
+      const parsed = namedImportSpecifier(specifier.trim());
+      if (parsed?.imported !== importedName) continue;
+      if (preferredLocalName !== undefined && parsed.local !== preferredLocalName) continue;
+
+      return parsed.local;
     }
   }
 
-  return false;
+  return null;
 }
 
 interface NamedImportMatch {
@@ -1603,7 +1797,7 @@ function findNamedImportFromModule(source: string, moduleName: string): NamedImp
 
 function findNamedImports(source: string): NamedImportMatch[] {
   const imports: NamedImportMatch[] = [];
-  const importPattern = /import\s*\{(?<specifiers>[^}]+)\}\s*from\s*(?<module>['"][^'"]+['"])/g;
+  const importPattern = /import\s*\{(?<specifiers>[^}]*)\}\s*from\s*(?<module>['"][^'"]+['"])/g;
 
   for (const match of source.matchAll(importPattern)) {
     const openBrace = match[0].indexOf('{');
@@ -1664,17 +1858,74 @@ function namedImportSpecifier(specifier: string): NamedImportSpecifier | null {
   };
 }
 
-function findDrizzleTableCalls(
+function parseBetterAuthSchemaSourceIr(
   source: string,
   factories: readonly string[] = [],
-): DrizzleTableCall[] {
+): BetterAuthSchemaSourceIr {
+  const tableCallCandidates = findSchemaTableCallCandidates(source);
   const factoryCallees = drizzleTableFactoryCallees(source, factories);
-
-  return findSchemaTableCallCandidates(source).filter((call) =>
+  const drizzleTableCalls = tableCallCandidates.filter((call) =>
     call.callee.includes('.')
       ? factoryCallees.members.has(call.callee)
       : factoryCallees.identifiers.has(call.callee),
   );
+
+  return {
+    drizzleTableCalls,
+    localBindings: sourceLocalBindingNames(source),
+    tableCallCandidates,
+  };
+}
+
+function sourceLocalBindingNames(source: string): Set<string> {
+  const names = new Set<string>();
+
+  for (const namedImport of findNamedImports(source)) {
+    for (const specifierText of namedImport.specifiersText.split(',')) {
+      const specifier = namedImportSpecifier(specifierText.trim());
+      if (specifier !== null) names.add(specifier.local);
+    }
+  }
+
+  for (const namespaceImport of findNamespaceImports(source)) {
+    names.add(namespaceImport.localName);
+  }
+
+  for (const defaultImport of findDefaultImportLocalNames(source)) {
+    names.add(defaultImport);
+  }
+
+  for (const declaration of findTopLevelDeclarationLocalNames(source)) {
+    names.add(declaration);
+  }
+
+  return names;
+}
+
+function findDefaultImportLocalNames(source: string): string[] {
+  const names: string[] = [];
+  const importPattern =
+    /import\s+(?!type\b)(?<local>[A-Za-z_$][0-9A-Za-z_$]*)\s*(?:,|\s+from\s*['"][^'"]+['"])/g;
+
+  for (const match of source.matchAll(importPattern)) {
+    const localName = match.groups?.local;
+    if (localName !== undefined) names.push(localName);
+  }
+
+  return names;
+}
+
+function findTopLevelDeclarationLocalNames(source: string): string[] {
+  const names: string[] = [];
+  const declarationPattern =
+    /(?:^|[\n;])\s*(?:export\s+)?(?:const|let|var|function|class|enum|type|interface)\s+(?<local>[A-Za-z_$][0-9A-Za-z_$]*)/g;
+
+  for (const match of source.matchAll(declarationPattern)) {
+    const localName = match.groups?.local;
+    if (localName !== undefined) names.push(localName);
+  }
+
+  return names;
 }
 
 function findSchemaTableCallCandidates(source: string): DrizzleTableCall[] {
@@ -1713,6 +1964,9 @@ function findSchemaTableCallCandidates(source: string): DrizzleTableCall[] {
 
     if (tableName !== null) {
       calls.push({
+        arguments: args,
+        callEnd: closeParen + 1,
+        callStart: calleeStart,
         callee: memberCallee?.value ?? identifier.value,
         closeParen,
         extraConfigText: args[2]?.text.trim() ?? null,

@@ -217,7 +217,7 @@ test brittleness, and distribution confusion.
     paths; rerun static export test suites.
   - SPEC: sections 9.1, 9.5, KV229.
 
-- [ ] **P1.4 - Replace Better Auth schema string surgery with structured codegen.**
+- [x] **P1.4 - Replace Better Auth schema string surgery with structured codegen.**
   - Affected: `packages/better-auth/src/internal.ts`,
     `packages/better-auth/src/index.schema-materialize.test.ts`,
     `conformance/better-auth-pin/src/index.plugin-tables.test.ts`.
@@ -230,6 +230,7 @@ test brittleness, and distribution confusion.
     drift, and hidden plugin schema changes.
   - Verification: existing materialization tests plus idempotence, alias/import collision, plugin-table,
     and SQLite generation cases.
+  - Evidence: `pnpm exec vitest --run packages/better-auth/src/index.schema-materialize.test.ts packages/better-auth/src/index.schema-bridge.test.ts` and `pnpm --filter @kovojs/conformance-better-auth-pin test -- src/index.plugin-tables.test.ts` pass after the structured schema IR/codegen refactor.
   - SPEC: sections 1.3, 4.8, 10.1, 11.2.
 
 - [ ] **P1.5 - Make Better Auth operation contracts, graph facts, and cookie forwarding single-source.**
