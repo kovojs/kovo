@@ -115,7 +115,7 @@ test brittleness, and distribution confusion.
     property tests.
   - SPEC: sections 4.4, 4.7, 4.8, 4.9, 5.2, 9.1, 9.1.1, 13.2.
 
-- [ ] **P0.5 - Consolidate Drizzle static analysis into one fact pipeline and reuse symbol provenance for SQL safety.**
+- [x] **P0.5 - Consolidate Drizzle static analysis into one fact pipeline and reuse symbol provenance for SQL safety.**
   - Affected: `packages/drizzle/src/static.ts`,
     `packages/drizzle/src/static/project-setup.ts`,
     `packages/drizzle/src/static/summaries.ts`,
@@ -138,6 +138,7 @@ test brittleness, and distribution confusion.
     composition of individual projections; KV422 tests for helper returns, destructured request values,
     namespace imports, `sql.join`, and allowlist laundering; run `packages/drizzle/src`,
     `conformance/drizzle-pin`, and `packages/conformance-fixtures/src`.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src conformance/drizzle-pin/src packages/conformance-fixtures/src` passes after `DrizzleAnalysisContext`/`DrizzleFactStore` centralize project-level projections and SQL safety consumes shared symbol provenance.
   - SPEC: sections 2, 6.6, 10.1, 10.2, 10.3, 10.5, 11.1, 11.2, 11.3.
 
 - [x] **P0.6 - Move wire JSON and module-reference parsing to structured core contracts.**

@@ -90,6 +90,30 @@ describe('@kovojs/drizzle symbol provenance', () => {
     });
   });
 
+  it('seeds input roots with stable path prefixes for sink-specific consumers', () => {
+    const sourceFile = source(`
+      export function handler(req: { search: { sort: string }, session: { userId: string } }) {
+        const { sort } = req.search;
+        const sessionUserId = req.session.userId;
+        return { sort, sessionUserId };
+      }
+    `);
+    const body = functionBody(sourceFile, 'handler');
+    const req = parameter(sourceFile, 'handler', 'req');
+    const context = symbolProvenanceContextForNodes([body], {
+      inputRootPaths: [{ node: req.getNameNode(), path: 'req' }],
+    });
+
+    expect(provenance(sourceFile, context, 'sort')).toEqual({
+      kind: 'input',
+      path: 'req.search.sort',
+    });
+    expect(provenance(sourceFile, context, 'sessionUserId')).toEqual({
+      kind: 'input',
+      path: 'req.session.userId',
+    });
+  });
+
   it('feeds symbolic write effects through aliased and destructured input provenance', () => {
     const effects = extractSymbolicEffectsFromProject({
       files: [
