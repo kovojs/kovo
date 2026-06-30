@@ -41,7 +41,7 @@ test brittleness, and distribution confusion.
   - Evidence: `pnpm exec vitest --run packages/server/src/mutation*.test.ts packages/server/src/app-mutation-request.test.ts` passes with `executeMutationLifecycle()` mapping typed outcomes across enhanced, no-JS, and direct mutation paths.
   - SPEC: sections 6.3, 6.6, 9.1, 10.3, 11.1.
 
-- [ ] **P0.2 - Centralize request lifecycle and response posture finalization.**
+- [x] **P0.2 - Centralize request lifecycle and response posture finalization.**
   - Affected: `packages/server/src/app-dispatch.ts`, `app-document.ts`,
     `app-mutation-request.ts`, `query.ts`, `endpoint.ts`, `response.ts`, `app-request.ts`.
   - Why high value: route, query, mutation, endpoint, document, and system responses each set cache,
@@ -60,6 +60,7 @@ test brittleness, and distribution confusion.
   - Verification: response matrix tests across route HTML, file/stream, query success/error/redirect,
     mutation success/failure, endpoint success/error, normalization redirect, and HEAD; lifecycle
     tests asserting exact `session`, `db`, `clientIp`, `args`, and cookie visibility per surface.
+  - Evidence: `pnpm exec vitest --run packages/server/src/response-posture.test.ts packages/server/src/response.test.ts packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app.test.ts` passes with centralized response finalization and endpoint ambient-authority posture coverage.
   - SPEC: sections 5.2.1, 6.6, 9.1, 9.4, 9.5, 10.3.
 
 - [ ] **P0.3 - Make contextual output safety one cross-package policy plus branded fragment sinks.**

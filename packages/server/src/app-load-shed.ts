@@ -134,6 +134,7 @@ export function preDispatchLoadShedResponse(
       'Content-Type': 'text/plain; charset=utf-8',
       'Retry-After': String(rateLimited.retryAfterSeconds),
     },
+    method: request.method,
     status: 429,
     surface,
   });
@@ -192,6 +193,7 @@ function requestBodySizeFailure(
   return appSystemResponse('Payload Too Large', {
     buildToken,
     headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+    method: request.method,
     status: 413,
     surface,
   });

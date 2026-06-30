@@ -7,6 +7,7 @@ import {
 } from '@kovojs/core/internal/sink-policy';
 
 import { InlineUnverifiedUploadError, sniffUploadBytes } from './upload-sniff.js';
+import { finalizeServerResponse } from './response-posture.js';
 
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
@@ -415,15 +416,7 @@ export function serverResponseToWebResponse(
   response: ServerResponseBase<WebResponseBody, ResponseHeaders>,
   request: Pick<Request, 'method'>,
 ): Response {
-  const body = request.method === 'HEAD' || response.status === 304 ? null : response.body;
-  return new Response(webResponseBodyToBodyInit(body), {
-    headers: webResponseHeaders(
-      response.headers,
-      response.status,
-      isBlessedRedirectResponse(response),
-    ),
-    status: response.status,
-  });
+  return finalizeServerResponse(response, request);
 }
 
 /**
@@ -613,47 +606,6 @@ function requestHeader(request: unknown, name: string): string | undefined {
 
   if (isHeaderSource(request)) return readHeader(request, name);
   return undefined;
-}
-
-function webResponseBodyToBodyInit(body: WebResponseBody): BodyInit | null {
-  if (body === null) return null;
-  if (typeof body === 'string') return body;
-  if (body instanceof ReadableStream) return body;
-  if (body instanceof ArrayBuffer) return body;
-
-  if (body.buffer instanceof ArrayBuffer) {
-    return body.buffer.slice(body.byteOffset, body.byteOffset + body.byteLength);
-  }
-
-  const copy = new Uint8Array(body.byteLength);
-  copy.set(body);
-  return copy.buffer;
-}
-
-function webResponseHeaders(
-  headers: ResponseHeaders,
-  status: number,
-  blessedRedirect: boolean,
-): Headers {
-  const webHeaders = new Headers();
-  for (const [name, value] of Object.entries(headers)) {
-    if (isRedirectStatus(status) && name.toLowerCase() === 'location') {
-      webHeaders.set(name, redirectLocationHeaderValue(value, blessedRedirect));
-      continue;
-    }
-
-    if (Array.isArray(value)) {
-      for (const entry of value) webHeaders.append(name, entry);
-    } else {
-      webHeaders.set(name, value);
-    }
-  }
-
-  return webHeaders;
-}
-
-function isRedirectStatus(status: number): boolean {
-  return status >= 300 && status < 400;
 }
 
 function sanitizeRedirectLocation(target: string): string {

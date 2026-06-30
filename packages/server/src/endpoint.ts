@@ -1,5 +1,9 @@
 import type { WebhookVerifier } from '@kovojs/core';
 import type { AccessDecision } from './access.js';
+import {
+  assertEndpointResponsePosture,
+  endpointRequestWithoutSession,
+} from './response-posture.js';
 
 /** HTTP method for an endpoint; arbitrary strings are allowed for custom verbs. */
 export type EndpointMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | (string & {});
@@ -252,55 +256,7 @@ export function endpointMatches(
   return input.pathname === definition.path;
 }
 
-/**
- * Inbound header carrying ambient *browser* authority that a cross-site page can make
- * the browser auto-attach with the victim's credentials. Per SPEC.md §9.1 ("cookies are
- * not interpreted ... A CSRF exemption is sound only because endpoint/webhook auth does
- * not ride ambient browser authority") this is the Cookie header. Explicit machine
- * credentials (`Authorization`, API-key headers, webhook signatures) are NOT browser-
- * ambient — a cross-site page cannot force them with the victim's secret — and remain the
- * endpoint's declared auth surface, so they are deliberately preserved.
- */
-const AMBIENT_BROWSER_AUTHORITY_HEADERS: readonly string[] = ['cookie'];
-
-function endpointHeadersWithoutAmbientAuthority(headers: Headers): Headers {
-  const sanitized = new Headers(headers);
-  for (const name of AMBIENT_BROWSER_AUTHORITY_HEADERS) sanitized.delete(name);
-  return sanitized;
-}
-
-export function endpointRequestWithoutSession(request: Request): EndpointRequest {
-  // bugz-3 L16 / SPEC.md §9.1: raw endpoints "do not receive the app session request
-  // extension" AND "cookies are not interpreted". A `csrf: false` endpoint (and every
-  // webhook()) skips the synchronizer-token check and the Origin floor, so the exemption
-  // is sound only if the handler cannot ride ambient browser authority. Stripping the
-  // session property alone left the raw Cookie header readable, letting a cookie-trusting
-  // exempt handler act as a confused deputy with the caller's browser credentials —
-  // exactly the unsoundness mutations reject at compile time with KV418. Neutralize the
-  // Cookie header here so the exemption is sound by construction. (The framework's own
-  // CSRF cookie is consumed by validateEndpointCsrf on the ORIGINAL request before the
-  // handler runs, so this does not affect default-CSRF validation.)
-  const sanitizedHeaders = endpointHeadersWithoutAmbientAuthority(request.headers);
-
-  return new Proxy(request, {
-    get(target, property) {
-      if (property === 'session') return undefined;
-      if (property === 'headers') return sanitizedHeaders;
-      // A handler could otherwise recover the Cookie header via request.clone(); re-wrap
-      // the clone so the neutralization holds across clones too.
-      if (property === 'clone') {
-        return () => endpointRequestWithoutSession(target.clone());
-      }
-
-      const value = Reflect.get(target, property, target) as unknown;
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-    has(target, property) {
-      if (property === 'session') return false;
-      return property in target;
-    },
-  }) as EndpointRequest;
-}
+export { endpointRequestWithoutSession };
 
 function endpointAuthFailureResponse(): Response {
   return new Response('Unauthorized', {
@@ -308,121 +264,3 @@ function endpointAuthFailureResponse(): Response {
     status: 401,
   });
 }
-
-function assertEndpointResponsePosture(
-  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
-  response: Response,
-): void {
-  if (process.env.NODE_ENV !== 'development' && process.env.KOVO_VERIFY_ENDPOINT_POSTURE !== '1') {
-    return;
-  }
-  const failures: string[] = [];
-  const cacheControl = response.headers.get('cache-control') ?? '';
-  if (definition.response.cache === 'no-store' && !/\bno-store\b/i.test(cacheControl)) {
-    failures.push('declared cache=no-store but response lacks Cache-Control: no-store');
-  }
-  if (definition.response.cache === 'private' && !/\bprivate\b/i.test(cacheControl)) {
-    failures.push('declared cache=private but response lacks Cache-Control: private');
-  }
-  if (definition.response.cache === 'public' && !/\bpublic\b/i.test(cacheControl)) {
-    failures.push('declared cache=public but response lacks Cache-Control: public');
-  }
-  const bodyPosture = endpointResponseBodyPostures(definition.response.body);
-  if (bodyPosture.includes('redirect') && response.status >= 300 && response.status < 400) {
-    assertEndpointReservedHeaders(definition, response, failures);
-    if (failures.length === 0) return;
-    throw new Error(
-      `Endpoint ${definition.method} ${definition.path} response posture mismatch: ${failures.join(
-        '; ',
-      )}.`,
-    );
-  }
-  if (
-    bodyPosture.length === 1 &&
-    bodyPosture[0] === 'redirect' &&
-    (response.status < 300 || response.status >= 400)
-  ) {
-    failures.push('declared body=redirect but response status is not 3xx');
-  }
-  const contentType = response.headers.get('content-type') ?? '';
-  if (!endpointResponseBodyMatchesContentType(bodyPosture, contentType)) {
-    failures.push(endpointResponseBodyMismatchMessage(definition.response.body));
-  }
-  assertEndpointReservedHeaders(definition, response, failures);
-  if (failures.length === 0) return;
-  throw new Error(
-    `Endpoint ${definition.method} ${definition.path} response posture mismatch: ${failures.join(
-      '; ',
-    )}.`,
-  );
-}
-
-function endpointResponseBodyPostures(
-  body: EndpointResponseBodyPosture,
-): readonly EndpointResponseBody[] {
-  return typeof body === 'string' ? [body] : body;
-}
-
-function endpointResponseBodyPostureLabel(body: EndpointResponseBodyPosture): string {
-  return typeof body === 'string' ? body : body.join('|');
-}
-
-function endpointResponseBodyMismatchMessage(body: EndpointResponseBodyPosture): string {
-  if (body === 'json') return 'declared body=json but response content type is not JSON';
-  if (body === 'html') return 'declared body=html but response content type is not HTML';
-  return `declared body=${endpointResponseBodyPostureLabel(
-    body,
-  )} but response content type does not match`;
-}
-
-function endpointResponseBodyMatchesContentType(
-  bodyPosture: readonly EndpointResponseBody[],
-  contentType: string,
-): boolean {
-  const inspected = bodyPosture.filter((body) => body === 'json' || body === 'html');
-  if (inspected.length === 0) return true;
-  if (inspected.includes('json') && /\bjson\b/i.test(contentType)) return true;
-  if (inspected.includes('html') && /\bhtml\b/i.test(contentType)) return true;
-  if (bodyPosture.includes('text') && /\btext\//i.test(contentType)) return true;
-  return false;
-}
-
-function assertEndpointReservedHeaders(
-  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
-  response: Response,
-  failures: string[],
-): void {
-  const allowed = new Set(
-    (definition.response.reservedHeaders ?? []).map((header) => header.toLowerCase()),
-  );
-  for (const [header] of response.headers) {
-    const reserved = endpointReservedHeader(header);
-    if (reserved === undefined) continue;
-    if (allowed.has(header.toLowerCase()) || allowed.has(reserved.toLowerCase())) continue;
-    failures.push(
-      `reserved response header ${reserved} was written without response.reservedHeaders declaration`,
-    );
-  }
-}
-
-function endpointReservedHeader(header: string): string | undefined {
-  const lower = header.toLowerCase();
-  if (lower.startsWith('kovo-')) return 'Kovo-*';
-  if (lower === 'set-cookie') return 'Set-Cookie';
-  if (lower === 'location') return 'Location';
-  if (ENDPOINT_SECURITY_HEADERS.has(lower)) return header;
-  return undefined;
-}
-
-const ENDPOINT_SECURITY_HEADERS = new Set([
-  'content-security-policy',
-  'content-security-policy-report-only',
-  'cross-origin-embedder-policy',
-  'cross-origin-opener-policy',
-  'cross-origin-resource-policy',
-  'permissions-policy',
-  'referrer-policy',
-  'strict-transport-security',
-  'x-content-type-options',
-  'x-frame-options',
-]);

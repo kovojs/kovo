@@ -507,6 +507,40 @@ describe('server endpoints', () => {
     }
   });
 
+  it('enforces declared response posture in production by default', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    const previousVerify = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    process.env.NODE_ENV = 'production';
+    delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    try {
+      const mismatched = endpoint('/machine/production-posture-bad', {
+        csrf: false,
+        csrfJustification: 'runtime posture verification test',
+        handler: () =>
+          new Response('{"ok":true}', {
+            headers: { 'Cache-Control': 'public', 'Content-Type': 'text/plain' },
+          }),
+        method: 'POST',
+        reason: 'runtime posture production verification test',
+        response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+      });
+
+      await expect(
+        runEndpoint(
+          mismatched,
+          new Request('https://example.test/machine/production-posture-bad', {
+            method: 'POST',
+          }),
+        ),
+      ).rejects.toThrow(/response posture mismatch/u);
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+      if (previousVerify === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previousVerify;
+    }
+  });
+
   it('matches exact and prefix endpoint mounts without routing side effects', () => {
     const exact = endpoint('/downloads/orders.bin', {
       handler: () => new Response('orders'),

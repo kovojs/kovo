@@ -4,7 +4,6 @@ import type { Domain } from './domain.js';
 import type { AccessDecision } from './access.js';
 import {
   renderHttpGuardFailureResponse,
-  resolveLifecycleRequest,
   runGuard,
   withGuardArgs,
   type GuardFailureResponseOptions,
@@ -12,6 +11,7 @@ import {
   type RequestLifecycleOptions,
   type ResolvedGuardFailure,
 } from './guards.js';
+import { resolveKovoLifecycleRequest } from './response-posture.js';
 import {
   blessRedirectResponse,
   isBlessedRedirectResponse,
@@ -516,7 +516,11 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   // `query()` loader runs in read mode (KV433 read-only proxy); the audited `query.elevated(...)`
   // escape runs in write mode so a GET that must be idempotent-safe-to-repeat can perform its write.
   const dbMode = definition.elevated ? 'write' : 'read';
-  const resolvedRequest = await resolveLifecycleRequest(request, { ...options, dbMode });
+  const resolvedRequest = await resolveKovoLifecycleRequest(request, {
+    ...options,
+    dbMode,
+    surface: 'query',
+  });
   // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)") + §9.4: thread the query's *validated*
   // args onto the request BEFORE the guard chain so an ownership guard (`guards.owns` reading
   // `req.args`) can authorize a client-visible key and discharge KV414 — without this merge
@@ -610,7 +614,10 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
   let result: QueryEndpointResult<Value, Input>;
   let lifecycleRequest: Request = endpointRequest.request;
   try {
-    lifecycleRequest = await resolveLifecycleRequest(endpointRequest.request, endpointRequest);
+    lifecycleRequest = await resolveKovoLifecycleRequest(endpointRequest.request, {
+      ...endpointRequest,
+      surface: 'query',
+    });
     result = await runQuery(
       definition,
       rawInput,
