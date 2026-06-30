@@ -126,9 +126,12 @@ security finding in `bugz-N.md` and leave a one-line pointer in the papercuts le
 ## Exhaustive Workflow (multi-app, orchestrated)
 
 Use this when the user asks for breadth/advanced features/comprehensiveness. It scales coverage with
-independent agents and defends against false findings with an adversarial verification pass. The
-shape is **baseline → author fan-out → adversarial verify → synthesize**. Steps 0/1/4 run inline on
-the main thread; steps 2–3 run as one `Workflow` (a `pipeline` of author→verify).
+independent agents and defends against false findings with an adversarial verification pass. **If
+sub-agent tools are available, exhaustive mode MUST spawn multiple sub-agents in parallel: one
+authoring sub-agent per track, plus independent skeptical verifier sub-agents as each track returns
+candidates.** The shape is **baseline → author fan-out → adversarial verify → synthesize**. Steps
+0/1/4 run inline on the main thread; steps 2–3 run through the available orchestration mechanism
+(`Workflow`/pipeline where available, otherwise explicit sub-agent fan-out).
 
 ### Step 0 — Baseline (inline, main worktree)
 
@@ -152,7 +155,8 @@ fresh app at `<workspace>/<track-id>` exercising that surface up to its ceiling.
 
 ### Step 2 — Author fan-out (workflow)
 
-One agent per track. Each agent: scaffolds + links + installs its own app under a **real path**;
+One sub-agent per track when sub-agent tools are available. Each agent: scaffolds + links + installs
+its own app under a **real path**;
 studies the cited SPEC sections + the closest example; authors the feature for real; runs the gates
 (`check`/`test`/`build:prod`/dev-smoke); root-causes each rough edge in framework source; and
 returns **structured output** (use a JSON schema so results are machine-mergeable), capped at its

@@ -70,6 +70,15 @@ Read enough before editing to judge behavior correctly:
 - Use GitHub task-list checkboxes for every actionable item. Avoid free-form open items.
 - Mark `[x]` only after the same session verifies the exact claim with a named file, artifact, or
   command. If evidence is weaker than the checkbox, leave it open and note the gap.
+- **Close at the bug's own layer, not an adjacent proxy.** The closing evidence MUST be the ledger
+  item's own `Acceptance:`/`Repro` clause, executed at the layer where the bug is observable. A
+  passing unit test that asserts build-graph/renderer internals does NOT close an item whose symptom
+  is in the deployed artifact (a `kovo build` output served by `node dist/server/server.mjs`). For
+  any item observable end-to-end (mutation success body, island deploy/hydrate, response headers,
+  static-export output, streaming), the close-out must run the prod-artifact e2e
+  (`packages/create-kovo/src/index.build.test.ts`, the CI `starter` job) GREEN — and add the item's
+  repro there as a new `it()` when it is not already covered. Do not merge or push a batch while that
+  e2e is red.
 - Keep active ledgers compact. Replace stale evidence with current proof; do not append long command
   transcripts or historical logs.
 - When integrating a branch forked before ledger cleanup, preserve the compact main-thread ledger

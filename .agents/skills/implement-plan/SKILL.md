@@ -180,6 +180,15 @@ Work from the active plan's unchecked task list.
 - Emit app components as TSX/JSX source. Inspect lowered IR, stamps, and generated server/client
   modules as artifacts only.
 - Update active plan checkboxes only when the exact claim is verified in this session.
+- **Close at the bug's own layer, not an adjacent proxy.** The closing evidence MUST be the plan
+  item's own `Acceptance:`/`Repro` clause, executed at the layer where the bug is observable. A
+  passing unit test that asserts build-graph/renderer internals does NOT close an item whose symptom
+  is in the deployed artifact (a `kovo build` output served by `node dist/server/server.mjs`). For
+  any item observable end-to-end (mutation success body, island deploy/hydrate, response headers,
+  static-export output, streaming), the close-out must run the prod-artifact e2e
+  (`packages/create-kovo/src/index.build.test.ts`, the CI `starter` job) GREEN — and add the item's
+  repro there as a new `it()` when it is not already covered. Do not merge to local `main` or push a
+  batch while that e2e is red.
 - Keep plan evidence concise: one focused command or authoritative file/artifact per completed
   checkbox is usually enough.
 - Replace stale plan evidence with current proof instead of appending transcripts.
