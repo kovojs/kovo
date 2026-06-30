@@ -20,7 +20,7 @@ import {
 import { deriveComponentNames } from './component-names.js';
 import { deriveMutationKey } from './mutation-names.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
-import { emitClientModule } from './emit/client.js';
+import { emitClientModule, emitClientModuleImportManifest } from './emit/client.js';
 import { removeUnreferencedNamedImports } from './emit/dead-imports.js';
 import { appendLiveTargetRendererExports } from './emit/live-target-renderers.js';
 import { emitRegistryModule } from './emit/registry.js';
@@ -179,6 +179,7 @@ interface ValidateComponentPhaseResult {
 
 interface EmitClientPhaseResult {
   readonly clientHref: string;
+  readonly clientModuleImportManifest: CompileResult['clientModuleImportManifest'];
   readonly clientSource: string;
   readonly renderPlanFingerprint: string;
   readonly renderPlanFingerprintInput: RenderPlanFingerprintInput;
@@ -362,6 +363,12 @@ function emitClientPhase(
 
   return {
     clientHref,
+    clientModuleImportManifest: emitClientModuleImportManifest(
+      [...validated.handlers],
+      validated.queryUpdatePlans,
+      stateDerives,
+      validated.clockUpdatePlans,
+    ),
     clientSource,
     renderPlanFingerprint,
     renderPlanFingerprintInput,
@@ -634,6 +641,7 @@ function assembleCompileResult(
   );
 
   return {
+    clientModuleImportManifest: client.clientModuleImportManifest,
     componentGraphFacts: facts.componentGraphFacts,
     dependencyFootprint: compileDependencyFootprint(parsed.compileOptions, {
       fileName: parsed.options.fileName,
