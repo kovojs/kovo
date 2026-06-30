@@ -171,13 +171,23 @@ export const cart = domain({
 ```
 (pre-dispatch shell: max-body-size → 413 · coarse per-IP/global rate → 429 — §9.5)
 CSRF validation → replay reservation by (principal, derived mutation identity, idem-token) → parse+coerce input (schema)
-→ guard chain → BEGIN tx → handler (receives Tx-typed db; escaping the tx is a type error)
+→ guard chain → BEGIN tx → handler (receives a transaction-scoped db whose public type hides raw transaction openers)
 → COMMIT (settle reservation, store response) → re-run invalidated queries (post-commit, same request context)
 → render <kovo-query>/<kovo-fragment> → respond
                     ⇘ on fail(): ROLLBACK → typed error fragment, 422
 ```
 
 This ordering closes the read-your-writes hazard: responses can never render pre-commit data (which would visibly revert the user's optimistic update). A replay hit does not bypass authorization: the runtime MUST re-evaluate the session-bound guard chain against the **current** principal before re-serving a stored response, so a replay never re-serves a private response after the principal's authorization changed (role revoked, ownership lost). The replay store is keyed on (principal ∧ source-derived mutation identity ∧ idem-token), so a replay can only ever return to the same principal that produced it.
+
+The handler `request.db` type is a defense-in-depth authoring guardrail, not the security proof:
+it preserves the configured DB provider's read/write surface while hiding public transaction
+openers such as `.transaction()`, so nested transaction/open-handle misuse is a TypeScript error
+on the normal `createApp({ mutations })` path. TypeScript cannot prove arbitrary object lifetime
+or reject every closure/module-scope capture of a handler parameter; runtime transaction ownership,
+rollback-on-throw, SQL provenance gates, and fail-closed sinks remain authoritative. External I/O
+inside a mutation handler is not a mutation-specific type or KV-gate error; it is governed by the
+uniform outbound-egress floor (§6.6). Durable tasks (§9.6) are the framework primitive for
+retryable/idempotent after-commit effects, not the only syntactically legal place to call `fetch`.
 
 **Replay is an atomic reservation, not a lookup (normative).** The replay step MUST atomically claim the `(principal, source-derived mutation identity, idem-token)` triple before the guard chain — an `INSERT … ON CONFLICT` against the replay store (or an equivalent unique-key claim) inside the same serialization boundary that the commit settles. A submit that wins the claim proceeds; a concurrent or sequential submit carrying the same triple MUST block on the in-flight reservation and then replay the settled response, never re-execute the handler. This holds for **all** mutation paths — the enhanced and no-JS `mutation()` lifecycle, `webhook()` (§9.1, keyed by provider event id), and the streaming path — so concurrency, not merely strictly-sequential retries, is deduplicated. The store is scoped to the current principal (a different `req.session` identity never replays a prior principal's response) and to the specific mutation, so an idem-token reused across mutations cannot cross-replay.
 

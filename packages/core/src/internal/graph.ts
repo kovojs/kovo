@@ -42,6 +42,7 @@ export type {
   SqlSafetyDiagnosticFact,
   SqlSafetyExplainFact,
   StaticDiagnosticFact,
+  TaskExplain,
   ToctouFact,
   TouchGraph,
   TouchGraphEntry,

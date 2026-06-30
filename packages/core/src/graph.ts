@@ -76,6 +76,7 @@ export interface KovoCheckInput {
   scopeAudits?: readonly ScopeAuditFact[];
   sqlSafety?: readonly SqlSafetyExplainFact[];
   sqlSafetyDiagnostics?: readonly SqlSafetyDiagnosticFact[];
+  tasks?: readonly TaskExplain[];
   toctouFacts?: readonly ToctouFact[];
   touchGraph?: TouchGraph;
   trustEscapes?: readonly TrustEscapeExplain[];
@@ -91,6 +92,15 @@ export interface KovoExplainInput extends KovoCheckInput {
   mutations?: readonly MutationExplain[];
   packageComponentPrefixes?: readonly PackageComponentPrefixExplain[];
   pages?: readonly PageExplain[];
+}
+
+/** @internal */
+export interface TaskExplain {
+  cron?: string;
+  key: string;
+  runMutations?: readonly string[];
+  runQueries?: readonly string[];
+  schedules?: readonly string[];
 }
 
 /** @internal */
@@ -786,6 +796,7 @@ const arrayFields = [
   'revealed',
   'scopeAudits',
   'sqlSafety',
+  'tasks',
   'toctouFacts',
   'trustEscapes',
   'unregisteredSinks',

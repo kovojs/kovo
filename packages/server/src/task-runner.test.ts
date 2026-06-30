@@ -164,6 +164,25 @@ describe('durable task runner (SPEC §9.6)', () => {
     );
   });
 
+  it('persists structured diagnostics for non-Error task throws', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const throwsObject = task('throws.object', {
+      input: s.object({}),
+      async run() {
+        throw { code: 'PAYLOAD_INVALID', detail: { field: 'email' } };
+      },
+    });
+    await store.enqueue({ task: throwsObject.key, args: {} });
+    const runner = createDurableTaskRunner({ store, tasks: [throwsObject] });
+
+    await runner.runOnce(new Date());
+
+    expect(store.snapshot()[0]).toMatchObject({
+      status: 'dead',
+      lastError: '{"code":"PAYLOAD_INVALID","detail":{"field":"email"}}',
+    });
+  });
+
   it('times out hung tasks at the hard ceiling and retries without pinning the runner', async () => {
     vi.useFakeTimers();
     try {
@@ -216,9 +235,9 @@ describe('durable task runner (SPEC §9.6)', () => {
         order.push(`low:${args.n}`);
       },
     });
-    await store.enqueue({ task: low.key, args: { n: 1 }, priority: low.priority });
-    await store.enqueue({ task: high.key, args: { n: 1 }, priority: high.priority });
-    await store.enqueue({ task: high.key, args: { n: 2 }, priority: high.priority });
+    await store.enqueue({ task: low.key, args: { n: 1 }, priority: 1 });
+    await store.enqueue({ task: high.key, args: { n: 1 }, priority: 10 });
+    await store.enqueue({ task: high.key, args: { n: 2 }, priority: 10 });
 
     const runner = createDurableTaskRunner({
       store,
@@ -235,6 +254,50 @@ describe('durable task runner (SPEC §9.6)', () => {
     ).toMatchObject({
       status: 'ready',
     });
+  });
+
+  it('keeps a timed-out task in the concurrency slot until the abandoned body settles', async () => {
+    vi.useFakeTimers();
+    try {
+      vi.setSystemTime(new Date('2026-06-30T10:00:00.000Z'));
+      const store = new MemoryDurableTaskQueue();
+      let releaseFirst!: () => void;
+      let runs = 0;
+      const slow = task('slow.exclusive', {
+        input: s.object({ n: s.number() }),
+        concurrency: 1,
+        timeoutMs: 100,
+        run(args) {
+          runs += 1;
+          if (args.n === 1) return new Promise<void>((resolve) => (releaseFirst = resolve));
+        },
+      });
+      await store.enqueue({ task: slow.key, args: { n: 1 } });
+      await store.enqueue({ task: slow.key, args: { n: 2 } });
+      const runner = createDurableTaskRunner({
+        store,
+        tasks: [slow],
+        hardTimeoutMs: 100,
+        leaseMs: 1000,
+      });
+
+      const firstRun = runner.runOnce(new Date('2026-06-30T10:00:00.000Z'));
+      await vi.advanceTimersByTimeAsync(125);
+      await firstRun;
+      expect(runs).toBe(1);
+      expect(
+        store.snapshot().find((job) => job.args && (job.args as { n: number }).n === 1),
+      ).toMatchObject({ status: 'dead' });
+
+      await expect(runner.runOnce(new Date('2026-06-30T10:00:01.000Z'))).resolves.toEqual([]);
+      releaseFirst();
+      await Promise.resolve();
+      await Promise.resolve();
+      await expect(runner.runOnce(new Date('2026-06-30T10:00:01.000Z'))).resolves.toHaveLength(1);
+      expect(runs).toBe(2);
+    } finally {
+      vi.useRealTimers();
+    }
   });
 
   it('applies the self-reschedule delay floor and dead-letters past maxGenerations', async () => {
@@ -279,6 +342,32 @@ describe('durable task runner (SPEC §9.6)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('rejects ctx.schedule for tasks outside the runner registry', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const registered = task('registered.parent', {
+      input: s.object({}),
+      async run(_, ctx) {
+        await ctx.schedule(unregistered, {});
+      },
+    });
+    const unregistered = task('unregistered.child', {
+      input: s.object({}),
+      run() {},
+    });
+    await store.enqueue({ task: registered.key, args: {} });
+    const runner = createDurableTaskRunner({ store, tasks: [registered] });
+
+    await runner.runOnce(new Date());
+
+    expect(store.snapshot()).toEqual([
+      expect.objectContaining({
+        task: 'registered.parent',
+        status: 'dead',
+        lastError: 'No durable task is registered for key "unregistered.child".',
+      }),
+    ]);
   });
 
   it('is stoppable when started as a polling helper', async () => {

@@ -966,7 +966,7 @@ export default createApp({
       writeFileSync(
         appPath,
         `
-import { createApp, domain, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
+import { createApp, domain, mutation, publicAccess, query, route, s, task, trustedHtml } from '@kovojs/server';
 
 const contactDomain = domain('model/contact');
 
@@ -990,9 +990,17 @@ const addContact = mutation('mutations/add-contact', {
   },
 });
 
+const recordContactTask = task('tasks/record-contact', {
+  input: s.object({ name: s.string() }),
+  async run(input, ctx) {
+    await ctx.runMutation(addContact, input);
+  },
+});
+
 export default createApp({
   mutations: [addContact],
   queries: [contactsQuery],
+  tasks: [recordContactTask],
   routes: [
     route('/contacts', {
       access: publicAccess('source-derived consumer fixture'),
@@ -1040,10 +1048,15 @@ export const ContactsRegion = component({
 
       const graph = JSON.parse(readFileSync(join(outDir, '.kovo/graph.json'), 'utf8')) as {
         components?: { queries?: string[] }[];
+        tasks?: { key: string; runMutations?: string[] }[];
       };
       expect(graph.components?.flatMap((component) => component.queries ?? [])).toContain(
         'queries/contacts-query',
       );
+      expect(graph.tasks).toContainEqual({
+        key: 'tasks/record-contact',
+        runMutations: ['addContact'],
+      });
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();

@@ -197,6 +197,44 @@ describe('kovo explain', () => {
     });
   });
 
+  it('explains durable task graph edges', () => {
+    const graph = {
+      tasks: [
+        {
+          cron: '0 2 * * *',
+          key: 'email/send-receipt',
+          runMutations: ['order/mark-sent'],
+          runQueries: ['order/by-id'],
+          schedules: ['email/send-receipt'],
+        },
+      ],
+    };
+
+    expect(kovoExplain(graph, { tasks: true })).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'TASKS',
+        'TASK email/send-receipt cron=0 2 * * * runMutations=order/mark-sent runQueries=order/by-id schedules=email/send-receipt',
+        'SUMMARY total=1',
+        '',
+      ].join('\n'),
+    });
+
+    expect(kovoExplain(graph, { kind: 'task', target: 'email/send-receipt' })).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'TASK email/send-receipt',
+        'cron: 0 2 * * *',
+        'run-mutations: order/mark-sent',
+        'run-queries: order/by-id',
+        'schedules: email/send-receipt',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('explains missing optimistic coverage as derived UNHANDLED rows and ignores unrelated statuses', () => {
     expect(
       kovoExplain(

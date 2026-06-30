@@ -154,6 +154,7 @@ export { toNodeHandler } from './node.js';
 export { exportStaticApp } from './static-export.js';
 export { StaticExportError } from './static-export-diagnostics.js';
 export { createDurableTaskStatus } from './task-observability.js';
+export { createDurableTaskSqlExecutor } from './task-queue.js';
 export type {
   DurableTaskObservedStatus,
   DurableTaskStatusFilters,
@@ -276,9 +277,11 @@ export type {
   MutationFail,
   MutationFormAttributes,
   MutationFormDefinition,
+  MutationHandlerRequest,
   MintedCsrfField,
   MintedCsrfToken,
   MutationQueue,
+  MutationRequestDb,
   MutationReplayReservation,
   MutationReplayStore,
   MutationResult,

@@ -62,6 +62,7 @@ import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
 import * as taskObservabilityApi from '../task-observability.js';
+import * as taskQueueApi from '../task-queue.js';
 import * as viteApi from '../vite.js';
 import * as viteDevApi from '../vite-dev.js';
 import * as internalWireApi from '../internal/wire.js';
@@ -463,6 +464,7 @@ describe('server app-shell public API barrels', () => {
       mintCsrfToken: dataApi.mintCsrfToken,
       kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
+      createDurableTaskSqlExecutor: taskQueueApi.createDurableTaskSqlExecutor,
       createDurableTaskStatus: taskObservabilityApi.createDurableTaskStatus,
       toNodeHandler: nodeSourceApi.toNodeHandler,
     }).filter((key) => !renderingSubpathOnlyValues.has(key));
@@ -490,6 +492,7 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
       internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
     );
+    expect(publicApi.createDurableTaskSqlExecutor).toBe(taskQueueApi.createDurableTaskSqlExecutor);
     expect(publicApi.createDurableTaskStatus).toBe(taskObservabilityApi.createDurableTaskStatus);
     // SPEC.md §9.5: dev integration/plugin are public at the root barrel (create-kovo
     // starter template vite.config.ts) and share the vite-dev source values.

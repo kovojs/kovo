@@ -26,6 +26,27 @@ describe('durable recurring task materialization (SPEC §9.6)', () => {
     expect(nightly.cron).toBe('0 2 * * *');
     expect(nightly.catchUp).toBeUndefined();
     expect(() =>
+      task('bad.six-field', {
+        input: s.object({}),
+        cron: '0 0 2 * * *',
+        run() {},
+      }),
+    ).toThrow('task({ cron }) expects a five-field cron expression');
+    expect(() =>
+      task('bad.nickname', {
+        input: s.object({}),
+        cron: '@daily',
+        run() {},
+      }),
+    ).toThrow('task({ cron }) expects a five-field cron expression');
+    expect(() =>
+      task('bad.field', {
+        input: s.object({}),
+        cron: '*/nope * * * *',
+        run() {},
+      }),
+    ).toThrow('Invalid cron minute field');
+    expect(() =>
       task('bad.catchup', {
         input: s.object({}),
         catchUp: 'backfill',
@@ -98,6 +119,53 @@ describe('durable recurring task materialization (SPEC §9.6)', () => {
     expect(result.occurrences.at(-1)).toEqual(new Date('2026-06-30T20:00:00.000Z'));
     expect(store.snapshot()).toHaveLength(DEFAULT_TASK_CRON_BACKFILL_LIMIT);
     expect(store.snapshot()[0]).toMatchObject({ args: { kind: 'hourly' } });
+  });
+
+  it('uses standard step values that begin at N and repeat through the field range', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const materializer = createRecurringTaskMaterializer({
+      store,
+      tasks: [
+        task('quarter-hour-offset', {
+          input: s.object({}),
+          cron: '5/15 * * * *',
+          catchUp: 'backfill',
+          run() {},
+        }),
+      ],
+    });
+
+    const result = await materializer.materializeDue({
+      now: new Date('2026-06-30T00:50:00.000Z'),
+      backfillLimit: 4,
+    });
+
+    expect(result.occurrences).toEqual([
+      new Date('2026-06-30T00:05:00.000Z'),
+      new Date('2026-06-30T00:20:00.000Z'),
+      new Date('2026-06-30T00:35:00.000Z'),
+      new Date('2026-06-30T00:50:00.000Z'),
+    ]);
+  });
+
+  it('matches day-of-month and day-of-week with POSIX OR when both fields are restricted', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const materializer = createRecurringTaskMaterializer({
+      store,
+      tasks: [
+        task('monthly-or-monday', {
+          input: s.object({}),
+          cron: '0 0 1 * 1',
+          run() {},
+        }),
+      ],
+    });
+
+    const result = await materializer.materializeDue({
+      now: new Date('2026-06-08T00:00:00.000Z'),
+    });
+
+    expect(result.occurrences).toEqual([new Date('2026-06-08T00:00:00.000Z')]);
   });
 
   it('lets multiple runner nodes race without duplicating an occurrence', async () => {

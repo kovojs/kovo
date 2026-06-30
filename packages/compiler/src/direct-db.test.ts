@@ -149,4 +149,48 @@ export const addToCart = mutation({
 
     expect(result.diagnostics).toEqual([]);
   });
+
+  it('reports KV330 when task run bodies write through module-level db handles', () => {
+    const result = compileComponentModule({
+      fileName: 'tasks.ts',
+      source: `
+export const sendReceipt = task({
+  input: receiptInput,
+  async run(args, ctx) {
+    await appDb.insert(ownerTable).values({ ownerId: args.userId });
+    await ctx.runMutation(recordReceipt, args);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV330',
+        fileName: 'tasks.ts',
+        message: 'Direct db access in a task run body; route through ctx.runMutation.',
+        severity: kv330.severity,
+        start: { column: 11, line: 5 },
+        length: 12,
+      },
+    ]);
+  });
+
+  it('does not report KV330 for task bodies that compose through ctx', () => {
+    const result = compileComponentModule({
+      fileName: 'tasks.ts',
+      source: `
+export const sendReceipt = task({
+  input: receiptInput,
+  async run(args, ctx) {
+    await ctx.runQuery(orderQuery, { id: args.orderId });
+    await ctx.runMutation(recordReceipt, args);
+    await ctx.schedule(sendReceipt, args);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
 });

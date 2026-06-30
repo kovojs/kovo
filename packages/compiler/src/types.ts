@@ -62,6 +62,9 @@ export type ComponentGraphFact = Pick<
   | 'styleRules'
 >;
 
+/** @internal Durable task graph fact emitted from scanned `task().run` handlers (SPEC §9.6). */
+export type TaskGraphFact = CoreGraph.TaskExplain;
+
 /**
  * @internal A component's fragment-target fact (target name + props type) used when building
  * the registry. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
@@ -191,6 +194,7 @@ export type RegistryGraphInput = Pick<
   // drizzle-static` (analyzeSqlSafetyFromProject) through `deriveAppGraph` into the real-app-build
   // check graph so `kovo check` fires end-to-end, not only at the `compile drizzle-static` gate.
   | 'sqlSafetyDiagnostics'
+  | 'tasks'
   // SPEC §6.6: trust escapes (KV426 `--trust`, audit-only) and app dangerous-sink writes (KV424,
   // error-severity) ride from `compile drizzle-static` through `deriveAppGraph` into the check graph.
   | 'trustEscapes'
@@ -208,6 +212,7 @@ export interface CompileAppGraphOptions {
   components?: readonly {
     componentGraphFacts: readonly ComponentGraphFact[];
     publishToClientFacts?: readonly PublishToClientFact[];
+    taskGraphFacts?: readonly TaskGraphFact[];
   }[];
   graph?: RegistryGraphInput;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
@@ -359,6 +364,7 @@ export interface CompileResult {
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   renderPlanFingerprint?: string | null;
   renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
+  taskGraphFacts: readonly TaskGraphFact[];
   updateCoverage: readonly QueryUpdateCoverageFact[];
   viewTransitions: readonly ViewTransitionStamp[];
 }
@@ -569,6 +575,7 @@ export function createEmptyCompileResult(): CompileResult {
     queryUpdatePlans: [],
     renderPlanFingerprint: null,
     renderEquivalenceChecks: [],
+    taskGraphFacts: [],
     updateCoverage: [],
     viewTransitions: [],
   };

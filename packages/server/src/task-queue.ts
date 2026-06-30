@@ -1,4 +1,9 @@
 import type { TaskHandle, TaskScheduleOptions } from './task.js';
+import type {
+  DurableTaskStatusSqlExecutor,
+  DurableTaskStatusSqlResult,
+  DurableTaskStatusSqlStatement,
+} from './task-observability.js';
 
 export type DurableTaskJobStatus =
   | 'ready'
@@ -80,23 +85,30 @@ export interface DurableTaskQueueStore {
   reapExpiredLeases(now?: Date): Promise<number>;
 }
 
+/** Parameterized SQL statement executed by the durable task queue/status helpers. */
 export interface DurableTaskSqlStatement {
   readonly text: string;
   readonly values: readonly unknown[];
 }
 
+/** Row result returned by a durable-task SQL executor (SPEC §9.6). */
 export interface DurableTaskSqlResult<Row = Record<string, unknown>> {
   readonly rows: readonly Row[];
   readonly rowCount?: number;
 }
 
+/** Minimal Postgres-compatible SQL executor consumed by the durable task queue. */
 export interface DurableTaskSqlExecutor {
   execute<Row = Record<string, unknown>>(
     statement: DurableTaskSqlStatement,
   ): Promise<DurableTaskSqlResult<Row>>;
 }
 
-export function createDurableTaskSqlExecutor(handle: unknown): DurableTaskSqlExecutor {
+/**
+ * Adapt a framework-managed or raw Postgres-compatible client into the parameterized
+ * SQL executor shape used by durable-task queue/status helpers (SPEC §9.6).
+ */
+export function createDurableTaskSqlExecutor(handle: unknown): DurableTaskStatusSqlExecutor {
   const client = resolveRawSqlClient(handle);
   if (client === undefined) {
     throw new TypeError(
@@ -108,8 +120,8 @@ export function createDurableTaskSqlExecutor(handle: unknown): DurableTaskSqlExe
   if (typeof query === 'function') {
     return {
       async execute<Row = Record<string, unknown>>(
-        statement: DurableTaskSqlStatement,
-      ): Promise<DurableTaskSqlResult<Row>> {
+        statement: DurableTaskStatusSqlStatement,
+      ): Promise<DurableTaskStatusSqlResult<Row>> {
         const result = await query.call(client, statement.text, [...statement.values]);
         return normalizeSqlResult<Row>(result);
       },
@@ -120,8 +132,8 @@ export function createDurableTaskSqlExecutor(handle: unknown): DurableTaskSqlExe
   if (typeof execute === 'function') {
     return {
       async execute<Row = Record<string, unknown>>(
-        statement: DurableTaskSqlStatement,
-      ): Promise<DurableTaskSqlResult<Row>> {
+        statement: DurableTaskStatusSqlStatement,
+      ): Promise<DurableTaskStatusSqlResult<Row>> {
         const result = await execute.call(client, {
           text: statement.text,
           values: [...statement.values],
@@ -722,7 +734,15 @@ function createLeaseToken(): string {
 }
 
 function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
+  try {
+    const json = JSON.stringify(error);
+    if (typeof json === 'string') return json;
+  } catch (_jsonError) {
+    void _jsonError;
+  }
+  return String(error);
 }
 
 function normalizePriority(value: number | undefined): number {
