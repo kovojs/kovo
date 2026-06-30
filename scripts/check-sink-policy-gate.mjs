@@ -48,6 +48,7 @@ export const defaultSqlSafetyInvariantFiles = [
   'packages/core/src/diagnostics.ts',
   'packages/core/src/internal/sql-safety.ts',
   'packages/drizzle/src/static.ts',
+  'packages/drizzle/src/static/diagnostics.ts',
   'packages/cli/src/commands/compile.ts',
   'packages/cli/src/graph-output.ts',
   'packages/server/src/sql-safe-handle.ts',
@@ -416,11 +417,22 @@ export function sqlSafetyInvariantFindings(filePath, text) {
 
   if (filePath.endsWith('packages/drizzle/src/static.ts')) {
     if (
+      !/\bdrizzleDiagnostic\s*\(\s*\{[\s\S]{0,240}\bcode\s*:\s*['"]KV422['"][\s\S]{0,480}\bsite\s*:/.test(
+        source,
+      ) &&
       !/\bcode\s*:\s*['"]KV422['"][\s\S]{0,240}\bseverity\s*:\s*diagnosticDefinitions\s*\.\s*KV422\s*\.\s*severity/.test(
         source,
       )
     ) {
       findings.push(`${filePath}: Drizzle static SQL-safety diagnostics must use KV422 severity`);
+    }
+  }
+
+  if (filePath.endsWith('packages/drizzle/src/static/diagnostics.ts')) {
+    if (!/\bseverity\s*:\s*definition\s*\.\s*severity/.test(source)) {
+      findings.push(
+        `${filePath}: Drizzle diagnostic builder must preserve registry severity for KV diagnostics`,
+      );
     }
   }
 

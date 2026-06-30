@@ -1470,6 +1470,38 @@ describe('sink-policy gate', () => {
         `,
       ),
     ).toEqual([]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/drizzle/src/static.ts',
+        `
+          diagnostics.push(
+            drizzleDiagnostic({
+              code: 'KV422',
+              detail: 'unsafe SQL',
+              site: sourceSite,
+            }),
+          );
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/drizzle/src/static/diagnostics.ts',
+        `
+          export function drizzleDiagnostic(input) {
+            const definition = diagnosticDefinitions[input.code];
+            return {
+              code: input.code,
+              message: definition.message,
+              severity: definition.severity,
+              site: sourceSiteForNode(input.node),
+            };
+          }
+        `,
+      ),
+    ).toEqual([]);
   });
 
   it('flags SQL-safety invariant drift toward warn or pass-through', () => {
@@ -1510,6 +1542,34 @@ describe('sink-policy gate', () => {
       ),
     ).toEqual([
       'packages/server/src/sql-safe-handle.ts: managed DB handle must throw on failed SQL validation',
+    ]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/drizzle/src/static.ts',
+        `diagnostics.push({ code: 'KV422', message: 'unsafe SQL', site });`,
+      ),
+    ).toEqual([
+      'packages/drizzle/src/static.ts: Drizzle static SQL-safety diagnostics must use KV422 severity',
+    ]);
+
+    expect(
+      sqlSafetyInvariantFindings(
+        'packages/drizzle/src/static/diagnostics.ts',
+        `
+          export function drizzleDiagnostic(input) {
+            const definition = diagnosticDefinitions[input.code];
+            return {
+              code: input.code,
+              message: definition.message,
+              severity: 'warn',
+              site: sourceSiteForNode(input.node),
+            };
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/drizzle/src/static/diagnostics.ts: Drizzle diagnostic builder must preserve registry severity for KV diagnostics',
     ]);
   });
 
