@@ -26,7 +26,15 @@ import type {
   StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
 
-import { BUILD_USAGE, EXPORT_USAGE } from '../commands-manifest.js';
+import {
+  BUILD_ARGV_SPEC,
+  BUILD_USAGE,
+  EXPORT_ARGV_SPEC,
+  EXPORT_USAGE,
+  parsedBooleanOption,
+  parsedStringOption,
+  parseCommandArgv,
+} from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
 import {
   buildOutputVersion,
@@ -115,91 +123,42 @@ interface SelectedKovoBuildPreset {
 }
 
 export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
-  let appModulePath: string | undefined;
-  let cache = true;
-  let check = false;
-  let outDir = 'dist';
-  let preset: KovoBuildPresetName | undefined;
+  const parsed = parseCommandArgv(args, BUILD_ARGV_SPEC);
+  if (!parsed.ok) return buildArgvError(parsed);
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-
-    if (arg === '--help' || arg === '-h') {
-      return { message: buildUsage(), ok: false };
-    }
-    if (arg === '--no-cache') {
-      cache = false;
-      continue;
-    }
-    if (arg === '--check') {
-      check = true;
-      continue;
-    }
-
-    if (arg === '--out') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: build --out requires a directory.\n', ok: false };
-      outDir = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--out=')) {
-      outDir = arg.slice('--out='.length);
-      if (!outDir) return { message: 'kovo: build --out requires a directory.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--preset') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: build --preset requires a preset name.\n', ok: false };
-      const parsedPreset = parseKovoBuildPresetName(value);
-      if (!parsedPreset) {
-        return { message: `kovo: unsupported build preset ${stableValue(value)}.\n`, ok: false };
-      }
-      preset = parsedPreset;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--preset=')) {
-      const value = arg.slice('--preset='.length);
-      if (!value) return { message: 'kovo: build --preset requires a preset name.\n', ok: false };
-      const parsedPreset = parseKovoBuildPresetName(value);
-      if (!parsedPreset) {
-        return { message: `kovo: unsupported build preset ${stableValue(value)}.\n`, ok: false };
-      }
-      preset = parsedPreset;
-      continue;
-    }
-
-    if (arg.startsWith('-')) {
-      return {
-        message: `kovo: unknown build option ${stableValue(arg)}.\n${buildUsage()}`,
-        ok: false,
-      };
-    }
-
-    if (appModulePath) {
-      return { message: `kovo: build accepts one app module path.\n${buildUsage()}`, ok: false };
-    }
-
-    appModulePath = arg;
-  }
-
+  const [appModulePath, extraPath] = parsed.value.positionals;
+  if (extraPath)
+    return { message: `kovo: build accepts one app module path.\n${buildUsage()}`, ok: false };
   if (!appModulePath)
     return { message: `kovo: build requires an app module path.\n${buildUsage()}`, ok: false };
+
+  const presetValue = parsedStringOption(parsed.value, '--preset');
+  const preset = presetValue === undefined ? undefined : parseKovoBuildPresetName(presetValue);
+  if (presetValue !== undefined && preset === undefined) {
+    return { message: `kovo: unsupported build preset ${stableValue(presetValue)}.\n`, ok: false };
+  }
 
   return {
     ok: true,
     options: {
       appModulePath,
-      cache,
-      check,
-      outDir,
+      cache: !parsedBooleanOption(parsed.value, '--no-cache'),
+      check: parsedBooleanOption(parsed.value, '--check'),
+      outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
       ...(preset === undefined ? {} : { preset }),
     },
+  };
+}
+
+function buildArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
+  message: string;
+  ok: false;
+} {
+  if (error.error === 'help') return { message: buildUsage(), ok: false };
+  if (error.error === 'missing-value') return { message: error.message, ok: false };
+  return {
+    message: `kovo: unknown build option ${stableValue(error.option)}.\n${buildUsage()}`,
+    ok: false,
   };
 }
 
@@ -212,152 +171,25 @@ function buildUsage(): string {
 }
 
 export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
-  let appModulePath: string | undefined;
-  let assetBase: string | undefined;
-  let distDir: string | undefined;
-  let manifestFile: string | undefined;
-  let origin: string | undefined;
-  let outDir = 'dist';
-  let onNonExportable: 'error' | 'skip' | undefined;
-  let root: string | undefined;
-  let stylesheetEnv: string | undefined;
-  let vite = false;
+  const parsed = parseCommandArgv(args, EXPORT_ARGV_SPEC);
+  if (!parsed.ok) return exportArgvError(parsed);
 
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (!arg) continue;
-
-    if (arg === '--help' || arg === '-h') {
-      return { message: exportUsage(), ok: false };
-    }
-
-    if (arg === '--out') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --out requires a directory.\n', ok: false };
-      outDir = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--out=')) {
-      outDir = arg.slice('--out='.length);
-      if (!outDir) return { message: 'kovo: export --out requires a directory.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--dist') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --dist requires a directory.\n', ok: false };
-      distDir = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--dist=')) {
-      distDir = arg.slice('--dist='.length);
-      if (!distDir) return { message: 'kovo: export --dist requires a directory.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--manifest') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --manifest requires a file.\n', ok: false };
-      manifestFile = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--manifest=')) {
-      manifestFile = arg.slice('--manifest='.length);
-      if (!manifestFile)
-        return { message: 'kovo: export --manifest requires a file.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--asset-base') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --asset-base requires a URL path.\n', ok: false };
-      assetBase = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--asset-base=')) {
-      assetBase = arg.slice('--asset-base='.length);
-      if (!assetBase)
-        return { message: 'kovo: export --asset-base requires a URL path.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--stylesheet-env') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --stylesheet-env requires a name.\n', ok: false };
-      stylesheetEnv = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--stylesheet-env=')) {
-      stylesheetEnv = arg.slice('--stylesheet-env='.length);
-      if (!stylesheetEnv)
-        return { message: 'kovo: export --stylesheet-env requires a name.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--origin') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --origin requires a URL.\n', ok: false };
-      origin = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg === '--root') {
-      const value = args[index + 1];
-      if (!value) return { message: 'kovo: export --root requires a directory.\n', ok: false };
-      root = value;
-      index += 1;
-      continue;
-    }
-
-    if (arg.startsWith('--root=')) {
-      root = arg.slice('--root='.length);
-      if (!root) return { message: 'kovo: export --root requires a directory.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--vite') {
-      vite = true;
-      continue;
-    }
-
-    if (arg.startsWith('--origin=')) {
-      origin = arg.slice('--origin='.length);
-      if (!origin) return { message: 'kovo: export --origin requires a URL.\n', ok: false };
-      continue;
-    }
-
-    if (arg === '--skip-non-exportable') {
-      onNonExportable = 'skip';
-      continue;
-    }
-
-    if (arg.startsWith('-')) {
-      return {
-        message: `kovo: unknown export option ${stableValue(arg)}.\n${exportUsage()}`,
-        ok: false,
-      };
-    }
-
-    if (appModulePath) {
-      return { message: `kovo: export accepts one app module path.\n${exportUsage()}`, ok: false };
-    }
-
-    appModulePath = arg;
-  }
-
+  const [appModulePath, extraPath] = parsed.value.positionals;
+  if (extraPath)
+    return { message: `kovo: export accepts one app module path.\n${exportUsage()}`, ok: false };
   if (!appModulePath)
     return { message: `kovo: export requires an app module path.\n${exportUsage()}`, ok: false };
+
+  const assetBase = parsedStringOption(parsed.value, '--asset-base');
+  const distDir = parsedStringOption(parsed.value, '--dist');
+  const manifestFile = parsedStringOption(parsed.value, '--manifest');
+  const origin = parsedStringOption(parsed.value, '--origin');
+  const root = parsedStringOption(parsed.value, '--root');
+  const stylesheetEnv = parsedStringOption(parsed.value, '--stylesheet-env');
+  const vite = parsedBooleanOption(parsed.value, '--vite');
+  const onNonExportable = parsedBooleanOption(parsed.value, '--skip-non-exportable')
+    ? ('skip' as const)
+    : undefined;
 
   return {
     ok: true,
@@ -368,11 +200,23 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
       ...(manifestFile === undefined ? {} : { manifestFile }),
       ...(onNonExportable === undefined ? {} : { onNonExportable }),
       ...(origin === undefined ? {} : { origin }),
-      outDir,
+      outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
       ...(root === undefined ? {} : { root }),
       ...(stylesheetEnv === undefined ? {} : { stylesheetEnv }),
       ...(vite ? { vite } : {}),
     },
+  };
+}
+
+function exportArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>): {
+  message: string;
+  ok: false;
+} {
+  if (error.error === 'help') return { message: exportUsage(), ok: false };
+  if (error.error === 'missing-value') return { message: error.message, ok: false };
+  return {
+    message: `kovo: unknown export option ${stableValue(error.option)}.\n${exportUsage()}`,
+    ok: false,
   };
 }
 

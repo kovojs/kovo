@@ -167,7 +167,7 @@ invariant.
     pack metadata drift.
   - Evidence: `node packages/ui/scripts/build-registry.mjs`, `pnpm --filter @kovojs/headless-ui run lint:primitives`, `pnpm --filter @kovojs/headless-ui run build:dist`, `pnpm run check:api-surface`, and `git diff --check` passed on 2026-06-30 after generating the headless facades/package exports/API boundary/pack inputs from `packages/ui/scripts/primitive-component-manifest.mjs`.
 
-- [ ] **P2.2 - Centralize CLI argv parsing from command manifests.**
+- [x] **P2.2 - Centralize CLI argv parsing from command manifests.**
   - Current signals: `packages/cli/src/commands/build-export.ts` hand-rolls separate build/export arg
     parsers, `packages/cli/src/commands/compile.ts` still has stale build/export declarations, and
     `packages/cli/src/commands-manifest.ts` separately owns usage examples and option docs.
@@ -175,7 +175,7 @@ invariant.
     export, and compile commands. Delete stale build/export option declarations from compile.
   - Risk reduced: parser behavior, help text, docs, and tests stop drifting on missing values,
     `--flag=value` handling, aliases, and default options.
-  - Verification: `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-export.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts` plus `pnpm run check:api-surface`.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-export.test.ts packages/cli/src/index.kovo-compile.test.ts packages/cli/src/commands-manifest.test.ts`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check` passed on 2026-06-30; `rg "startsWith\\('--|startsWith\\(\"--|arg === '--|arg === \"--|for \\(let index = 0; index < args\\.length" packages/cli/src/commands/compile.ts packages/cli/src/commands/build-export.ts` found no remaining hand-rolled command option loops.
 
 - [x] **P2.3 - Replace site search `innerHTML` rendering with DOM construction and URL validation.**
   - Current signals: `site/src/client/search.js` fetches `search-index.json`, escapes text with a local
