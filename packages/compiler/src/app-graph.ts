@@ -52,6 +52,10 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.components ?? []),
     ...(options.components ?? []).flatMap((component) => component.componentGraphFacts),
   ]);
+  const tasks = mergeTaskExplainFacts([
+    ...(options.graph?.tasks ?? []),
+    ...(options.components ?? []).flatMap((component) => component.taskGraphFacts ?? []),
+  ]);
   const routePages = (options.routePages ?? []).flatMap((routePage) => routePage.routePageFacts);
   const publishToClientCapabilities = (options.components ?? []).flatMap((component) =>
     publishToClientCapabilitiesFromFacts(component.publishToClientFacts ?? []),
@@ -85,6 +89,7 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     components,
     ...(mergedPages === undefined ? {} : { pages: mergedPages }),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
+    ...(tasks.length > 0 ? { tasks } : {}),
     // SPEC §10.2/§11.2: preserve KV422 SQL-safety diagnostics from `compile drizzle-static`
     // (analyzeSqlSafetyFromProject) so the build→graph.json the `kovo check` consumer reads carries
     // them and the check fails end-to-end. By-construction at `kovo check`: an error-severity finding
@@ -169,6 +174,10 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
     .flatMap((component) => component.componentGraphFacts)
     .map((fact) => factHash(fact))
     .sort();
+  const taskHashes = (options.components ?? [])
+    .flatMap((component) => component.taskGraphFacts ?? [])
+    .map((fact) => factHash(fact))
+    .sort();
   const routeHashes = (options.routePages ?? [])
     .flatMap((routePage) => routePage.routePageFacts)
     .map((fact) => factHash(fact))
@@ -181,11 +190,50 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
     previousRegistryFacts: options.previousRegistryFacts ?? null,
     registryTypes: options.registryTypes ?? null,
     routes: routeHashes,
+    tasks: taskHashes,
     publishToClientFacts: (options.components ?? [])
       .flatMap((component) => component.publishToClientFacts ?? [])
       .map((fact) => factHash(fact))
       .sort(),
   });
+}
+
+function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGraph.TaskExplain[] {
+  const byKey = new Map<string, CoreGraph.TaskExplain>();
+
+  for (const task of tasks) {
+    const previous = byKey.get(task.key);
+    byKey.set(task.key, {
+      key: task.key,
+      cron: previous?.cron ?? task.cron,
+      runMutations: mergeSortedStrings(previous?.runMutations, task.runMutations),
+      runQueries: mergeSortedStrings(previous?.runQueries, task.runQueries),
+      schedules: mergeSortedStrings(previous?.schedules, task.schedules),
+    });
+  }
+
+  return [...byKey.values()]
+    .map((task) => ({
+      ...(task.cron === undefined ? {} : { cron: task.cron }),
+      key: task.key,
+      ...(task.runMutations === undefined || task.runMutations.length === 0
+        ? {}
+        : { runMutations: task.runMutations }),
+      ...(task.runQueries === undefined || task.runQueries.length === 0
+        ? {}
+        : { runQueries: task.runQueries }),
+      ...(task.schedules === undefined || task.schedules.length === 0
+        ? {}
+        : { schedules: task.schedules }),
+    }))
+    .sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function mergeSortedStrings(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+): readonly string[] {
+  return [...new Set([...(left ?? []), ...(right ?? [])])].sort();
 }
 
 function publishToClientCapabilitiesFromFacts(

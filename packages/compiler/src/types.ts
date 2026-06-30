@@ -62,6 +62,9 @@ export type ComponentGraphFact = Pick<
   | 'styleRules'
 >;
 
+/** @internal Durable task graph fact emitted from scanned `task().run` handlers (SPEC §9.6). */
+export type TaskGraphFact = CoreGraph.TaskExplain;
+
 /**
  * @internal A component's fragment-target fact (target name + props type) used when building
  * the registry. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
@@ -209,6 +212,7 @@ export interface CompileAppGraphOptions {
   components?: readonly {
     componentGraphFacts: readonly ComponentGraphFact[];
     publishToClientFacts?: readonly PublishToClientFact[];
+    taskGraphFacts?: readonly TaskGraphFact[];
   }[];
   graph?: RegistryGraphInput;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
@@ -360,6 +364,7 @@ export interface CompileResult {
   queryUpdatePlans: readonly QueryUpdatePlanFact[];
   renderPlanFingerprint?: string | null;
   renderEquivalenceChecks: readonly RenderEquivalenceCheck[];
+  taskGraphFacts: readonly TaskGraphFact[];
   updateCoverage: readonly QueryUpdateCoverageFact[];
   viewTransitions: readonly ViewTransitionStamp[];
 }
@@ -570,6 +575,7 @@ export function createEmptyCompileResult(): CompileResult {
     queryUpdatePlans: [],
     renderPlanFingerprint: null,
     renderEquivalenceChecks: [],
+    taskGraphFacts: [],
     updateCoverage: [],
     viewTransitions: [],
   };

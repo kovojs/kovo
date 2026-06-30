@@ -88,6 +88,7 @@ import type {
   RenderEquivalenceCheck,
   StateDeriveFact,
   StateDeriveReferenceFact,
+  TaskGraphFact,
   RegistryFacts,
 } from './types.js';
 import {
@@ -704,6 +705,7 @@ function assembleCompileResult(
     queryUpdatePlans: facts.queryUpdatePlans,
     renderEquivalenceChecks: verified.renderEquivalenceChecks,
     renderPlanFingerprint: client.renderPlanFingerprint,
+    taskGraphFacts: facts.taskGraphFacts,
     updateCoverage: facts.queryUpdateCoverage,
     viewTransitions: facts.viewTransitions,
   };
@@ -738,6 +740,9 @@ function componentCompileFactSnapshot(
   ledger.append('componentGraphFacts', { phase: 'graph', pass: 'component-graph' }, [
     ...registryCss.componentGraphFacts,
   ]);
+  ledger.append('taskGraphFacts', { phase: 'graph', pass: 'task-graph' }, [
+    ...taskGraphFactsFromModel(originalModel),
+  ]);
   ledger.append('fragmentTargetFacts', { phase: 'graph', pass: 'fragment-targets' }, [
     ...registryCss.fragmentTargetFacts,
   ]);
@@ -761,6 +766,16 @@ function componentCompileFactSnapshot(
     client.stateDerives.map((derive) => derive.outputContext),
   );
   return ledger.snapshot();
+}
+
+function taskGraphFactsFromModel(model: ComponentModuleModel): TaskGraphFact[] {
+  return model.taskRunHandlers.map((handler) => ({
+    ...(handler.cron === undefined ? {} : { cron: handler.cron }),
+    key: handler.key,
+    ...(handler.runMutationEdges.length === 0 ? {} : { runMutations: handler.runMutationEdges }),
+    ...(handler.runQueryEdges.length === 0 ? {} : { runQueries: handler.runQueryEdges }),
+    ...(handler.scheduleEdges.length === 0 ? {} : { schedules: handler.scheduleEdges }),
+  }));
 }
 
 function registryFileName(parsed: ParsedComponentPhaseResult): string {

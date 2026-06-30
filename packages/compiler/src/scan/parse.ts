@@ -1067,17 +1067,24 @@ function taskRunHandlerModels(
   const cron = staticStringObjectProperty(definition, 'cron');
 
   return definition.properties.flatMap((property) => {
-    const bodyModel = runBodyModel(sourceFile, source, property);
-    if (!bodyModel) return [];
+    const handler = runHandlerModel(sourceFile, source, property);
+    if (!handler) return [];
+    const ctxParam = handler.model.paramNames[1];
 
     return [
       {
-        ...bodyModel,
+        ...handler.model,
         ...(cron === undefined ? {} : { cron }),
         key,
-        runMutationEdges: taskCompositionEdges(bodyModel, 'runMutation'),
-        runQueryEdges: taskCompositionEdges(bodyModel, 'runQuery'),
-        scheduleEdges: taskCompositionEdges(bodyModel, 'schedule'),
+        runMutationEdges: taskCompositionEdges(
+          sourceFile,
+          source,
+          handler.body,
+          ctxParam,
+          'runMutation',
+        ),
+        runQueryEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'runQuery'),
+        scheduleEdges: taskCompositionEdges(sourceFile, source, handler.body, ctxParam, 'schedule'),
       },
     ];
   });
@@ -1097,14 +1104,17 @@ function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
   return sourceFile.fileName;
 }
 
-function runBodyModel(
+function runHandlerModel(
   sourceFile: ts.SourceFile,
   source: string,
   property: ts.ObjectLiteralElementLike,
-): MutationHandlerModel | null {
+): { body: ts.ConciseBody; model: MutationHandlerModel } | null {
   if (ts.isMethodDeclaration(property) && propertyNameText(property.name) === 'run') {
     if (!property.body) return null;
-    return functionBodyModel(sourceFile, source, property.body, property.parameters);
+    return {
+      body: property.body,
+      model: functionBodyModel(sourceFile, source, property.body, property.parameters),
+    };
   }
 
   if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== 'run') return null;
@@ -1112,7 +1122,10 @@ function runBodyModel(
   const initializer = property.initializer;
   if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) return null;
 
-  return functionBodyModel(sourceFile, source, initializer.body, initializer.parameters);
+  return {
+    body: initializer.body,
+    model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
+  };
 }
 
 function functionBodyModel(
@@ -1143,14 +1156,44 @@ function staticStringObjectProperty(
   return initializer && ts.isStringLiteralLike(initializer) ? initializer.text : undefined;
 }
 
-function taskCompositionEdges(handler: MutationHandlerModel, method: string): string[] {
-  return [
-    ...new Set(
-      handler.bodyPropertyAccesses
-        .filter((access) => access.terminalName === method)
-        .map((access) => access.path),
-    ),
-  ].sort();
+function taskCompositionEdges(
+  sourceFile: ts.SourceFile,
+  source: string,
+  body: ts.ConciseBody,
+  ctxParam: string | undefined,
+  method: 'runMutation' | 'runQuery' | 'schedule',
+): string[] {
+  const edges = new Set<string>();
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
+      const receiver = node.expression.expression;
+      const receiverText = source.slice(receiver.getStart(sourceFile), receiver.getEnd()).trim();
+      if (
+        node.expression.name.text === method &&
+        (ctxParam === undefined || receiverText === ctxParam)
+      ) {
+        edges.add(taskCompositionTarget(sourceFile, source, node.arguments[0]) ?? `${method}:?`);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(body);
+  return [...edges].sort();
+}
+
+function taskCompositionTarget(
+  sourceFile: ts.SourceFile,
+  source: string,
+  expression: ts.Expression | undefined,
+): string | undefined {
+  if (!expression) return undefined;
+  if (ts.isStringLiteralLike(expression)) return expression.text;
+  return source
+    .slice(expression.getStart(sourceFile), expression.getEnd())
+    .replace(/\s+/g, ' ')
+    .trim();
 }
 
 function parameterName(name: ts.BindingName): string | undefined {

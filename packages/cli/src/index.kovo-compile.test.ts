@@ -147,7 +147,15 @@ export const CartBadge = component({
         sourcePath,
         `
 import { component } from '@kovojs/core';
+import { task } from '@kovojs/server';
 import { removeItem } from './actions';
+
+export const RecordRemoval = task('tasks/record-removal', {
+  input: taskInput,
+  async run(args, ctx) {
+    await ctx.runMutation(removeItem, args);
+  },
+});
 
 export const CartActions = component({
   render: () => <button onClick={removeItem}>Remove</button>,
@@ -175,6 +183,12 @@ export const CartActions = component({
       expect(readFileSync(clientPath, 'utf8')).toContain('CartActions$removeItem');
       expect(JSON.parse(readFileSync(factsPath, 'utf8'))).toMatchObject({
         componentGraphFacts: [{ exportName: 'CartActions' }],
+        taskGraphFacts: [
+          {
+            key: 'tasks/record-removal',
+            runMutations: ['removeItem'],
+          },
+        ],
       });
       expect(stdout.mock.calls.map(([chunk]) => String(chunk)).join('')).toContain(
         `WRITE client path=${JSON.stringify(clientPath)}`,

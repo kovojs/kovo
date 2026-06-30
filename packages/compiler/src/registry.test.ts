@@ -1284,6 +1284,42 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('derives durable task facts from compiled task source', () => {
+    const result = compileComponentModule({
+      fileName: 'src/durable-task-proofs.ts',
+      source: `
+export const recordDurableTask = task('durable-task-proofs/record', {
+  cron: '0 2 * * *',
+  input: s.object({ proofId: s.string() }),
+  async run(input, context) {
+    await context.runQuery(taskProofQuery, { proofId: input.proofId });
+    await context.runMutation(recordTaskEffect, { proofId: input.proofId });
+    await context.schedule(recordDurableTask, input);
+  },
+});
+`,
+    });
+    const derived = deriveAppGraph({
+      components: [
+        {
+          componentGraphFacts: result.componentGraphFacts,
+          taskGraphFacts: result.taskGraphFacts,
+        },
+      ],
+    });
+
+    expect(result.taskGraphFacts).toEqual([
+      {
+        cron: '0 2 * * *',
+        key: 'durable-task-proofs/record',
+        runMutations: ['recordTaskEffect'],
+        runQueries: ['taskProofQuery'],
+        schedules: ['recordDurableTask'],
+      },
+    ]);
+    expect(derived.graph.tasks).toEqual(result.taskGraphFacts);
+  });
+
   it('derives page access facts from compiled JSX route pages', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',

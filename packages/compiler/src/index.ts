@@ -43,6 +43,7 @@ export type {
   RoutePageComponentFact,
   RoutePageComponentPropFact,
   RoutePageFact,
+  TaskGraphFact,
 } from './types.js';
 export {
   assertFixpoint,

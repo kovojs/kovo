@@ -752,12 +752,15 @@ async function staticBuildCheckGraph(
   const { buildCheckSourceFiles, buildCompilerQueryShapeFacts, staticDataPlaneBuildFacts } =
     await import('@kovojs/server/internal/data-plane-static-analysis');
   const files = buildCheckSourceFiles(appModulePath);
-  const [drizzleFacts, components] =
+  const [drizzleFacts, sourceGraphFacts] =
     files.length === 0
-      ? [emptyStaticDataPlaneBuildFacts(), [] as CoreGraph.ComponentExplain[]]
+      ? [
+          emptyStaticDataPlaneBuildFacts(),
+          { components: [] as CoreGraph.ComponentExplain[], tasks: [] as CoreGraph.TaskExplain[] },
+        ]
       : await Promise.all([
           staticDataPlaneBuildFacts(files, { cache: options.cache }),
-          componentQueryConsumers(files),
+          sourceGraphFactsFromFiles(files),
         ]);
   const queryShapeFacts = buildCompilerQueryShapeFacts(
     files,
@@ -783,7 +786,10 @@ async function staticBuildCheckGraph(
         ? {}
         : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
       ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
-      ...(components.length === 0 ? {} : { components }),
+      ...(sourceGraphFacts.components.length === 0
+        ? {}
+        : { components: sourceGraphFacts.components }),
+      ...(sourceGraphFacts.tasks.length === 0 ? {} : { tasks: sourceGraphFacts.tasks }),
       endpoints: [...app.endpoints.map(endpointCheckFact), ...routeOutcomeFacts],
       mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
       optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
@@ -794,9 +800,12 @@ async function staticBuildCheckGraph(
   };
 }
 
-async function componentQueryConsumers(
+async function sourceGraphFactsFromFiles(
   files: readonly BuildCheckSourceFile[],
-): Promise<CoreGraph.ComponentExplain[]> {
+): Promise<{
+  components: CoreGraph.ComponentExplain[];
+  tasks: CoreGraph.TaskExplain[];
+}> {
   const {
     allComponentOptionObjectEntries,
     deriveRegistryIdentity,
@@ -804,42 +813,55 @@ async function componentQueryConsumers(
     queryExpressionFromBinding,
   } = await import('@kovojs/compiler/internal');
   const components: CoreGraph.ComponentExplain[] = [];
+  const tasks: CoreGraph.TaskExplain[] = [];
 
   for (const file of files) {
-    if (!file.source.includes('component(') || !file.source.includes('queries')) continue;
-
     const model = parseComponentModule(file.fileName, file.source);
-    const queries = allComponentOptionObjectEntries(model, 'queries').flatMap((entry) => {
-      const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
-      return uniqueSorted(
-        [
-          entry.key,
-          ...(queryExpression
-            ? [
-                queryExpression,
-                derivedImportedQueryKey(
-                  file.fileName,
-                  model.namedImports,
-                  queryExpression,
-                  deriveRegistryIdentity,
-                ),
-              ]
-            : []),
-        ].filter(isString),
-      );
-    });
-    if (queries.length === 0) continue;
 
-    for (const component of model.components) {
-      if (!component.localName) continue;
-      components.push({
-        name: deriveRegistryIdentity(file.fileName, component.localName).key,
-        queries: uniqueSorted(queries),
+    if (file.source.includes('component(') && file.source.includes('queries')) {
+      const queries = allComponentOptionObjectEntries(model, 'queries').flatMap((entry) => {
+        const queryExpression = entry.value ? queryExpressionFromBinding(entry.value) : null;
+        return uniqueSorted(
+          [
+            entry.key,
+            ...(queryExpression
+              ? [
+                  queryExpression,
+                  derivedImportedQueryKey(
+                    file.fileName,
+                    model.namedImports,
+                    queryExpression,
+                    deriveRegistryIdentity,
+                  ),
+                ]
+              : []),
+          ].filter(isString),
+        );
+      });
+
+      if (queries.length > 0) {
+        for (const component of model.components) {
+          if (!component.localName) continue;
+          components.push({
+            name: deriveRegistryIdentity(file.fileName, component.localName).key,
+            queries: uniqueSorted(queries),
+          });
+        }
+      }
+    }
+
+    for (const task of model.taskRunHandlers) {
+      tasks.push({
+        ...(task.cron === undefined ? {} : { cron: task.cron }),
+        key: task.key,
+        ...(task.runMutationEdges.length === 0 ? {} : { runMutations: task.runMutationEdges }),
+        ...(task.runQueryEdges.length === 0 ? {} : { runQueries: task.runQueryEdges }),
+        ...(task.scheduleEdges.length === 0 ? {} : { schedules: task.scheduleEdges }),
       });
     }
   }
 
-  return components;
+  return { components, tasks };
 }
 
 function derivedImportedQueryKey(

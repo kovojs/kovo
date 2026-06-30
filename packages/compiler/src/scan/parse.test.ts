@@ -377,9 +377,9 @@ export const sendReceipt = task('email/send-receipt', {
       cron: '0 2 * * *',
       key: 'email/send-receipt',
       paramNames: ['args', 'ctx'],
-      runMutationEdges: ['ctx.runMutation'],
-      runQueryEdges: ['ctx.runQuery'],
-      scheduleEdges: ['ctx.schedule'],
+      runMutationEdges: ['markSent'],
+      runQueryEdges: ['orderQuery'],
+      scheduleEdges: ['sendReceipt'],
     });
   });
 

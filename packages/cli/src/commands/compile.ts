@@ -1397,6 +1397,7 @@ async function runCompileComponentCommand(
         {
           componentGraphFacts: result.componentGraphFacts,
           publishToClientFacts: result.publishToClientFacts,
+          taskGraphFacts: result.taskGraphFacts,
         },
         null,
         2,

@@ -13,6 +13,7 @@ import type {
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
   StateDeriveFact,
+  TaskGraphFact,
   ViewTransitionStamp,
 } from './types.js';
 
@@ -39,6 +40,7 @@ export interface CompileFactFamilyMap {
   readonly queryUpdatePlans: QueryUpdatePlanFact;
   readonly stateDerives: StateDeriveFact;
   readonly styleRuleUsages: StyleRuleUsage;
+  readonly taskGraphFacts: TaskGraphFact;
   readonly viewTransitions: ViewTransitionStamp;
 }
 
@@ -70,6 +72,7 @@ const compileFactFamilies = [
   'queryUpdatePlans',
   'stateDerives',
   'styleRuleUsages',
+  'taskGraphFacts',
   'viewTransitions',
 ] as const satisfies readonly CompileFactFamily[];
 
@@ -108,6 +111,7 @@ export class CompileFactLedger {
       queryUpdatePlans: mergeQueryUpdatePlans(this.#facts('queryUpdatePlans')),
       stateDerives: dedupeByKey(this.#facts('stateDerives'), (derive) => derive.exportName),
       styleRuleUsages: dedupeByJson(this.#facts('styleRuleUsages')),
+      taskGraphFacts: dedupeByKey(this.#facts('taskGraphFacts'), (task) => task.key),
       viewTransitions: dedupeByKey(this.#facts('viewTransitions'), (stamp) => stamp.name),
     } satisfies {
       readonly [Family in CompileFactFamily]: readonly CompileFactFamilyMap[Family][];
