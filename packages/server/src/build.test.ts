@@ -543,6 +543,14 @@ describe('server build-time deployment API', () => {
       });
       expect(build.tasks).toEqual([{ key: 'receipt/send' }]);
       expect(node().inspect!(build, { declaredEnv: [] })).toEqual([]);
+      expect(
+        node().inspect!(build, {
+          declaredEnv: [],
+          readServerHandlerSource() {
+            return "import Database from 'better-sqlite3';\n";
+          },
+        }),
+      ).toEqual([sqliteDurableTaskStoreError('node', 'receipt/send')]);
       expect(node({ jobRunner: false }).inspect!(build, { declaredEnv: [] })).toEqual([
         missingJobRunnerError('node', 'receipt/send'),
       ]);
@@ -1779,6 +1787,14 @@ function missingJobRunnerError(presetName: string, taskList: string) {
   return {
     code: 'KV445',
     message: `The ${presetName} preset declares no JobRunner capability but this build registers durable task(s): ${taskList}. SPEC §9.6 requires presets that support task()/request.schedule() to declare a real drainer; use the node preset's in-process JobRunner, or configure a preset/adapter with a cron-drain or external queue runner before deploying.`,
+    severity: 'error',
+  };
+}
+
+function sqliteDurableTaskStoreError(presetName: string, taskList: string) {
+  return {
+    code: 'KV446',
+    message: `The ${presetName} preset's default JobRunner persists durable task(s) in the Postgres _kovo_jobs store, but this build registers durable task(s): ${taskList} and the server bundle uses SQLite/better-sqlite3. SPEC §9.6 requires the node JobRunner's Postgres durable-task store; use a Postgres-compatible app db for durable tasks or remove task()/request.schedule() until a supported SQLite durable queue adapter exists.`,
     severity: 'error',
   };
 }

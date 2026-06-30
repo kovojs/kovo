@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createApp } from './app.js';
+import { createApp, createRequestHandler } from './app.js';
 import { s } from './schema.js';
 import { task } from './task.js';
 import { createAppTaskRuntime } from './task-runtime.js';
@@ -117,5 +117,39 @@ describe('durable task runtime (SPEC §9.6)', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('routes startup failures through app onError and the configured error shell', async () => {
+    const onError = vi.fn();
+    const startupTask = task('startup.fail', {
+      input: s.object({}),
+      run() {},
+    });
+    const app = createApp({
+      db: () => ({}),
+      errorShells: {
+        serverError({ status }) {
+          return `<main>startup shell ${status}</main>`;
+        },
+      },
+      onError,
+      tasks: [startupTask],
+    });
+    const request = new Request('http://localhost/needs-startup');
+
+    const response = await createRequestHandler(app)(request);
+
+    expect(response.status).toBe(500);
+    await expect(response.text()).resolves.toContain('<main>startup shell 500</main>');
+    expect(onError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        message: expect.stringContaining('Postgres-compatible db client'),
+      }),
+      {
+        operation: 'task-runtime-startup',
+        request,
+        url: '/needs-startup',
+      },
+    );
   });
 });

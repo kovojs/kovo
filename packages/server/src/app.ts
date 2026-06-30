@@ -1,5 +1,5 @@
 import { createMemoryVersionedClientModuleRegistry } from './client-modules.js';
-import { handleAppRequest } from './app-request.js';
+import { handleAppRequest, handleAppStartupErrorResponse } from './app-request.js';
 import { routePrefetchGuardDiagnostics, routeTableDiagnostics } from './app-diagnostics.js';
 import { isKovoApp } from './app-guards.js';
 import { normalizeAppRequestLimits } from './app-load-shed.js';
@@ -330,7 +330,11 @@ export function createRequestHandler(app: KovoApp): RequestHandler {
   registerAppTaskRuntime(app, taskRuntime);
 
   return async (request) => {
-    await taskRuntime?.ensureStarted(request);
+    try {
+      await taskRuntime?.ensureStarted(request);
+    } catch (error) {
+      return handleAppStartupErrorResponse(app, request, error);
+    }
     return handleAppRequest(app, request);
   };
 }

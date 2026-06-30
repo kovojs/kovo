@@ -93,6 +93,32 @@ export async function handleAppRequest(app: KovoApp, request: Request): Promise<
   }
 }
 
+export async function handleAppStartupErrorResponse(
+  app: KovoApp,
+  request: Request,
+  error: unknown,
+): Promise<Response> {
+  const url = new URL(request.url);
+  const match = matchShellDispatch({
+    endpoints: app.endpoints,
+    method: request.method,
+    pathname: url.pathname,
+    routes: app.routes,
+  });
+  reportServerError(app.onError, error, {
+    operation: 'task-runtime-startup',
+    request,
+    url: appRequestUrl(url),
+  });
+  if (match.kind === 'endpoint') {
+    return endpointServerErrorResponse(match.endpoint.response);
+  }
+  return routeResponseToWebResponse(
+    await renderAppErrorDocumentResponse(app, request, 500),
+    request,
+  );
+}
+
 function requestBodyLimitForMatch(
   app: KovoApp,
   match: ShellDispatchMatch<KovoApp['routes'][number], KovoApp['endpoints'][number]>,
