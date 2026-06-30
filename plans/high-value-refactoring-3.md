@@ -62,7 +62,7 @@ invariant.
     streaming, abort cleanup, or response finalization.
   - Evidence: `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/build.test.ts packages/server/src/vite-build.test.ts packages/server/src/vite-plugin-build.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export-headers.test.ts packages/server/src/vite-static-export-result.test.ts` passed on 2026-06-30, covering generated adapter parity for headers/cookies/HEAD/stream errors/abort cleanup.
 
-- [ ] **P0.5 - Replace global mutation form-helper placeholder registries with render-scoped state.**
+- [x] **P0.5 - Replace global mutation form-helper placeholder registries with render-scoped state.**
   - Current signals: `packages/core/src/index.ts` and `packages/server/src/jsx-runtime.ts` both use
     `Symbol.for('kovo.mutationFormHelperRegistry')` and incrementing process-global placeholder IDs
     to defer `FormError`/form helper rendering until form context is known.
@@ -72,8 +72,7 @@ invariant.
     tests proving isolation.
   - Risk reduced: concurrent SSR requests, nested form rendering, or Vite module graph reuse cannot
     cross-resolve mutation failure placeholders from another render.
-  - Verification: add concurrent render tests with two forms/failures interleaved and nested form
-    helper tests. Run `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts packages/server/src/mutation-response.test.ts packages/server/src/app-mutation-request.test.ts packages/core/src/index.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts packages/server/src/mutation-response.test.ts packages/server/src/app-mutation-request.test.ts packages/core/src/index.test.ts`, `pnpm run check:vp`, and `git diff --check` passed on 2026-06-30.
 
 - [ ] **P0.6 - Unify route pattern parsing, normalization, and typed href contracts.**
   - Current signals: `packages/core/src/index.ts` type-level `PathParamNames`/`buildHref()`

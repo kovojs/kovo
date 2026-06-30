@@ -1,4 +1,5 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
+import { randomUUID } from 'node:crypto';
 
 import type { CsrfValidationOptions } from './csrf.js';
 import type { DeferredStreamChunk } from './deferred-stream.js';
@@ -18,6 +19,7 @@ export interface JsxFrameworkContext {
   csrf?: CsrfValidationOptions<any>;
   deferredRegions?: DeferredRegionCollector;
   maxListItems?: number;
+  mutationFormHelpers: JsxMutationFormHelperRegistry;
   mutationFailure?: JsxMutationFailureContext;
   onCsrfSetCookie?: (rawSetCookie: string) => void;
   request: unknown;
@@ -31,6 +33,19 @@ export interface DeferredRegionCollector {
   add(chunk: Promise<DeferredStreamChunk> | DeferredStreamChunk): void;
 }
 
+export type JsxMutationFormHelperKind = 'field' | 'form';
+
+export interface JsxMutationFormHelperPlaceholder {
+  kind: JsxMutationFormHelperKind;
+  props: Record<string, unknown>;
+}
+
+export interface JsxMutationFormHelperRegistry {
+  nextId: number;
+  placeholders: Map<number, JsxMutationFormHelperPlaceholder>;
+  token: string;
+}
+
 const jsxRequestContext = new AsyncLocalStorage<JsxFrameworkContext>();
 
 export function currentJsxRequestContext(): unknown {
@@ -41,22 +56,39 @@ export function currentJsxFrameworkContext(): JsxFrameworkContext | undefined {
   return jsxRequestContext.getStore();
 }
 
+export function currentJsxMutationFormHelperRegistry(): JsxMutationFormHelperRegistry | undefined {
+  return jsxRequestContext.getStore()?.mutationFormHelpers;
+}
+
 export function runWithJsxRequestContext<Value>(
   request: unknown,
   render: () => MaybePromise<Value>,
 ): MaybePromise<Value>;
 export function runWithJsxRequestContext<Value>(
   request: unknown,
-  options: Omit<JsxFrameworkContext, 'request'>,
+  options: Omit<JsxFrameworkContext, 'mutationFormHelpers' | 'request'>,
   render: () => MaybePromise<Value>,
 ): MaybePromise<Value>;
 export function runWithJsxRequestContext<Value>(
   request: unknown,
-  optionsOrRender: Omit<JsxFrameworkContext, 'request'> | (() => MaybePromise<Value>),
+  optionsOrRender:
+    | Omit<JsxFrameworkContext, 'mutationFormHelpers' | 'request'>
+    | (() => MaybePromise<Value>),
   maybeRender?: () => MaybePromise<Value>,
 ): MaybePromise<Value> {
   const options = typeof optionsOrRender === 'function' ? {} : optionsOrRender;
   const render = typeof optionsOrRender === 'function' ? optionsOrRender : maybeRender;
   if (!render) throw new Error('runWithJsxRequestContext requires a render callback');
-  return jsxRequestContext.run({ ...options, request }, render);
+  return jsxRequestContext.run(
+    { ...options, mutationFormHelpers: createMutationFormHelperRegistry(), request },
+    render,
+  );
+}
+
+function createMutationFormHelperRegistry(): JsxMutationFormHelperRegistry {
+  return {
+    nextId: 0,
+    placeholders: new Map(),
+    token: randomUUID(),
+  };
 }

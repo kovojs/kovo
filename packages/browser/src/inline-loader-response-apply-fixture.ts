@@ -15,7 +15,11 @@ import { readInlineMutationResponseBodyChunks } from './wire-response-scanner.js
 import { crossPackageOracleFixture } from '../../conformance-fixtures/src/oracle-fixtures.js';
 
 interface InlineResponseApplyAssertions {
-  expect: typeof import('vitest').expect;
+  expect: (actual: unknown) => {
+    toBe(expected: unknown): unknown;
+    toContainEqual(expected: unknown): unknown;
+    toEqual(expected: unknown): unknown;
+  };
   vi: { fn: <T extends (...args: never[]) => unknown>(implementation?: T) => T };
 }
 
