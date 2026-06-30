@@ -8,7 +8,11 @@ import {
   ensureRecurringTaskSchema,
   type RecurringTaskMaterializer,
 } from './task-cron.js';
-import { createDurableTaskRunner, type DurableTaskRunner } from './task-runner.js';
+import {
+  createDurableTaskRunner,
+  durableTaskScheduleInput,
+  type DurableTaskRunner,
+} from './task-runner.js';
 import {
   PostgresDurableTaskQueue,
   createDurableTaskSqlExecutor,
@@ -59,20 +63,26 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
 
   readonly scheduler: TaskScheduler = {
     cancel: async (request, handle) => this.queueForRequest(request).cancel(handle),
-    schedule: async (request, definition, args, options) =>
-      enqueueScheduledTask(this.queueForRequest(request), {
+    schedule: async (request, definition, args, options) => {
+      const enqueueInput = scheduledTaskInput(this.app.tasks, {
         args,
-        priority: definition.priority,
+        definition,
         options,
-        task: definition.key,
-      }) as Promise<TaskHandle<typeof definition.key>>,
+      });
+      return this.queueForRequest(request).enqueue(enqueueInput) as Promise<
+        TaskHandle<typeof definition.key>
+      >;
+    },
   };
 
   constructor(private readonly app: KovoApp) {}
 
   async ensureStarted(request: Request): Promise<void> {
     if (this.runner !== undefined) return;
-    this.startPromise ??= this.start(request);
+    this.startPromise ??= this.start(request).catch((error: unknown) => {
+      this.startPromise = undefined;
+      throw error;
+    });
     await this.startPromise;
   }
 
@@ -136,17 +146,6 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
             );
           }
           return result.value;
-        },
-        schedule: async (definition, args, options) => {
-          if (this.rootStore === undefined) {
-            throw new Error('Durable task runner is not started.');
-          }
-          return enqueueScheduledTask(this.rootStore, {
-            args,
-            priority: definition.priority,
-            options,
-            task: definition.key,
-          }) as Promise<TaskHandle<typeof definition.key>>;
         },
       },
       owner: `kovo-task-runner:${process.pid}`,
@@ -219,30 +218,30 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
 
 function enqueueScheduledTask(
   store: DurableTaskQueueStore,
+  registeredTasks: readonly KovoApp['tasks'][number][],
   input: {
     args: unknown;
+    definition: KovoApp['tasks'][number];
     options: TaskScheduleOptions | undefined;
-    priority: number | undefined;
-    task: string;
   },
 ): Promise<TaskHandle> {
-  return store.enqueue({
-    args: input.args,
-    task: input.task,
-    runAt: taskRunAt(input.options),
-    ...(input.priority === undefined ? {} : { priority: input.priority }),
-    ...(input.options?.key === undefined ? {} : { key: input.options.key }),
-    ...(input.options?.coalesce === undefined ? {} : { coalesce: input.options.coalesce }),
-  });
+  return store.enqueue(scheduledTaskInput(registeredTasks, input));
 }
 
-function taskRunAt(options: TaskScheduleOptions | undefined): Date {
-  if (options?.afterMs !== undefined && options.at !== undefined) {
-    throw new TypeError('Task schedule options cannot specify both afterMs and at.');
-  }
-  if (options?.afterMs !== undefined) return new Date(Date.now() + options.afterMs);
-  if (options?.at !== undefined) return new Date(options.at);
-  return new Date();
+function scheduledTaskInput(
+  registeredTasks: readonly KovoApp['tasks'][number][],
+  input: {
+    args: unknown;
+    definition: KovoApp['tasks'][number];
+    options: TaskScheduleOptions | undefined;
+  },
+) {
+  return durableTaskScheduleInput({
+    args: input.args,
+    definition: input.definition,
+    options: input.options,
+    registeredTasks,
+  });
 }
 
 function taskInternalRequest(seed: Request): Request {
