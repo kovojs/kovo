@@ -126,7 +126,7 @@ export function createDeferredRegionChunkCollector(): DeferredRegionChunkCollect
       // SPEC §8: a deferred region render can itself discover more deferred regions. The document
       // stream consumes this live queue so nested regions registered while a chunk settles are not
       // stranded behind their fallback placeholders.
-      Object.defineProperty(chunks, deferredStreamInitialChunkCount, {
+      void Object.defineProperty(chunks, deferredStreamInitialChunkCount, {
         configurable: true,
         value: chunks.length,
       });
