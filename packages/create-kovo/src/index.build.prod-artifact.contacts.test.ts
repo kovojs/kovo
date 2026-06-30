@@ -161,6 +161,74 @@ describe('create-kovo starter (build integration: production contact artifacts)'
     }
   }, 120_000);
 
+  it('serves generated SQLite add-contact mutations from the production build artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-add-contact-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Add Contact Proof' });
+      linkStarterBuildDependencies(root);
+
+      buildProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+      const jar = new Map<string, string>();
+
+      await signInDemoUser(root, origin, jar, output);
+      const homeResponse = await fetch(`${origin}/`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const homeHtml = await homeResponse.text();
+      const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
+      const email = `sqlite-${Date.now()}@example.com`;
+
+      const addContact = await fetch(`${origin}/_m/mutations/add-contact`, {
+        body: new URLSearchParams({
+          company: 'SQLite Lab',
+          csrf: fieldValue(addForm, 'csrf'),
+          email,
+          'Kovo-Idem': fieldValue(addForm, 'Kovo-Idem'),
+          name: 'SQLite Ada',
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      mergeCookies(jar, addContact.headers.getSetCookie());
+      await addContact.text();
+      expect(addContact.status).toBe(303);
+
+      const updatedHome = await fetch(`${origin}/`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const updatedHtml = await updatedHome.text();
+      expect(updatedHtml).toContain('SQLite Ada');
+      expect(updatedHtml).toContain(email);
+      expect(updatedHtml).toContain('4 contacts');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('rejects no-JS add-contact idempotency token collisions from the production artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });

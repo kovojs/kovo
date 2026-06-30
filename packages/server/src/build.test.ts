@@ -552,6 +552,14 @@ describe('server build-time deployment API', () => {
           },
         }),
       ).toEqual([sqliteDurableTaskStoreError('node', 'receipt/send')]);
+      await expect(
+        node().inspect!(build, {
+          declaredEnv: [],
+          async readServerHandlerSource() {
+            return "import Database from 'better-sqlite3';\n";
+          },
+        }),
+      ).resolves.toEqual([sqliteDurableTaskStoreError('node', 'receipt/send')]);
       expect(node({ jobRunner: false }).inspect!(build, { declaredEnv: [] })).toEqual([
         missingJobRunnerError('node', 'receipt/send'),
       ]);

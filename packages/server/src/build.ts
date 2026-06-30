@@ -209,18 +209,14 @@ export function node(options: NodePresetOptions = {}): KovoPreset {
       return emitNodePreset(build, context, options);
     },
     inspect(build, context) {
-      const diagnostics = [
-        ...clientModuleRetentionDiagnostics(build, 'node', options),
-        ...nodeJobRunnerDiagnostics(build, options, jobRunner, context),
-      ];
-      if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
-        diagnostics.push({
-          code: 'node-missing-handler',
-          message: 'The node preset requires a neutral build with server/handler.mjs.',
-          severity: 'error',
-        });
-      }
-      return diagnostics;
+      const retentionDiagnostics = clientModuleRetentionDiagnostics(build, 'node', options);
+      const runnerDiagnostics = nodeJobRunnerDiagnostics(build, options, jobRunner, context);
+      const appendNodeDiagnostics = (
+        jobRunnerDiagnostics: readonly PresetDiagnostic[],
+      ): readonly PresetDiagnostic[] =>
+        nodePresetDiagnostics(build, [...retentionDiagnostics, ...jobRunnerDiagnostics]);
+      if (isPromiseLike(runnerDiagnostics)) return runnerDiagnostics.then(appendNodeDiagnostics);
+      return appendNodeDiagnostics(runnerDiagnostics);
     },
     name: 'node',
   };
@@ -442,7 +438,7 @@ function nodeJobRunnerDiagnostics(
   options: NodePresetOptions,
   capability: JobRunnerCapability | undefined,
   context: PresetInspectContext,
-): PresetDiagnostic[] {
+): Promise<readonly PresetDiagnostic[]> | readonly PresetDiagnostic[] {
   if (options.jobRunner && options.jobRunner.mode === 'runner-only') {
     return [
       {
@@ -454,10 +450,13 @@ function nodeJobRunnerDiagnostics(
     ];
   }
   if (capability === undefined) return missingJobRunnerDiagnostics(build, 'node');
-  const source = synchronousServerHandlerSourceForInspection(context);
-  const storeDiagnostics = durableTaskStoreDiagnostics(build, 'node', source);
-  if (storeDiagnostics.length > 0) return storeDiagnostics;
-  return [];
+  const source = context.readServerHandlerSource?.();
+  if (isPromiseLike(source)) {
+    return source.then((serverHandlerSource) =>
+      durableTaskStoreDiagnostics(build, 'node', serverHandlerSource),
+    );
+  }
+  return durableTaskStoreDiagnostics(build, 'node', source);
 }
 
 function durableTaskStoreDiagnostics(
@@ -498,11 +497,27 @@ function missingJobRunnerDiagnostics(
   ];
 }
 
-function synchronousServerHandlerSourceForInspection(
-  context: PresetInspectContext,
-): string | undefined {
-  const source = context.readServerHandlerSource?.();
-  return typeof source === 'string' ? source : undefined;
+function nodePresetDiagnostics(
+  build: KovoNeutralBuild,
+  diagnostics: PresetDiagnostic[],
+): readonly PresetDiagnostic[] {
+  if (build.serverHandlerPath === undefined && build.staticOutput === undefined) {
+    diagnostics.push({
+      code: 'node-missing-handler',
+      message: 'The node preset requires a neutral build with server/handler.mjs.',
+      severity: 'error',
+    });
+  }
+  return diagnostics;
+}
+
+function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    'then' in value &&
+    typeof value.then === 'function'
+  );
 }
 
 function serverHandlerUsesSqliteDurableIncompatibleStore(source: string): boolean {
