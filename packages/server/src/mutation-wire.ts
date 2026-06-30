@@ -215,6 +215,11 @@ export interface NoJsMutationRequest<
   idem?: string;
   rawInput: unknown;
   /**
+   * Canonical request/body fingerprint used to distinguish true duplicate submits from
+   * same-token/different-body integrity faults (SPEC §9.1).
+   */
+  requestFingerprint?: string;
+  /**
    * POST-redirect-GET success target (SPEC §9.1). Accepts a plain `string`, a typed `redirect()`
    * {@link Redirect} value (SPEC §6.4), or a function of the result returning either (the
    * create-then-navigate form). Resolved by `mutationRedirectLocation`.
@@ -246,8 +251,13 @@ export interface NoJsMutationReplayStore {
   get(
     scope: string,
     idem: string,
+    fingerprint?: string,
   ): Promise<NoJsMutationResponse | undefined> | NoJsMutationResponse | undefined;
-  reserve(scope: string, idem: string): NoJsMutationReplayReservation | undefined;
+  reserve(
+    scope: string,
+    idem: string,
+    fingerprint?: string,
+  ): NoJsMutationReplayReservation | undefined;
 }
 
 /** @internal Reservation handle for a no-JS replay record. */

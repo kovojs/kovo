@@ -4,7 +4,7 @@
  * SPEC §10.3/§11.1 (KV429): when a mutation handler throws a `StaleVersionError`
  * (e.g. after a compareAndSet returns CasConflict), the mutation lifecycle must:
  *  1. Return a typed `{ ok: false, status: 409, error: { code: 'STALE_VERSION' } }`
- *     from `runMutation` — distinct from the IDEMPOTENCY_CONFLICT 409 produced by the
+ *     from `runMutation` — distinct from the IDEMPOTENCY_CONFLICT 422 produced by the
  *     replay-idempotency path.
  *  2. Render a HTTP 409 fragment wire response from `renderMutationResponse`, abandoning
  *     the replay reservation so the client can refetch the fresh version and retry.
@@ -109,7 +109,7 @@ describe('renderMutationResponse — StaleVersionError → HTTP 409 fragment (KV
     expect(response.body).toContain('STALE_VERSION');
   });
 
-  it('409 stale-version response is distinct from 409 replay-conflict response', async () => {
+  it('409 stale-version response is distinct from replay-conflict responses', async () => {
     // Replay-conflict fragment uses code "IDEMPOTENCY_CONFLICT"; stale-version uses "STALE_VERSION"
     const staleResponse = await renderMutationResponse(staleVersionMutation, {
       buildToken: 'test-build-token',

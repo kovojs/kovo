@@ -145,13 +145,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         reads: [],
         tables: ['cart_items'],
         touches: [],
-        unresolved: [
-          {
-            code: 'KV406',
-            message: 'Statically un-analyzable write site; manual touches required.',
-            site: 'cart.domain.ts:7',
-          },
-        ],
+        unresolved: [],
       },
     });
   });

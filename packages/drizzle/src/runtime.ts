@@ -1,4 +1,4 @@
-import { sql as drizzleSql } from 'drizzle-orm';
+import { sql as drizzleSql, type SQL } from 'drizzle-orm';
 import {
   mergeSqlSafetyMetadata,
   stampParameterizedSql,
@@ -40,7 +40,14 @@ export type { CasConflict, CasResult, CasSuccess, DrizzleUpdateResult } from './
  *
  * Produced by {@link sql}; scalar interpolations are bound parameters rather than SQL text.
  */
-export interface KovoParameterizedSql {
+export interface KovoParameterizedSql<T = unknown> extends SQL<T> {
+  /**
+   * Version-tolerant Drizzle `SQLWrapper` bridge. Apps may resolve a different
+   * Drizzle minor than this package's dev dependency; returning `any` keeps the
+   * wrapper structurally accepted by those sinks while runtime still returns the
+   * concrete Drizzle SQL object produced below.
+   */
+  getSQL(): any;
   readonly __kovoSqlBrand?: 'parameterized';
 }
 
@@ -49,7 +56,9 @@ export interface KovoParameterizedSql {
  *
  * Produced by {@link staticSql}, {@link sql.identifier}, and {@link sql.allow}.
  */
-export interface KovoStaticSql {
+export interface KovoStaticSql<T = unknown> extends SQL<T> {
+  /** See {@link KovoParameterizedSql.getSQL}. */
+  getSQL(): any;
   readonly __kovoSqlBrand?: 'static';
 }
 
@@ -59,7 +68,9 @@ export interface KovoStaticSql {
  * Produced only by {@link trustedSql}; use it for reviewed raw-SQL escape hatches with a
  * source-visible justification.
  */
-export interface KovoTrustedSql {
+export interface KovoTrustedSql<T = unknown> extends SQL<T> {
+  /** See {@link KovoParameterizedSql.getSQL}. */
+  getSQL(): any;
   readonly __kovoSqlBrand?: 'trusted';
 }
 
@@ -69,7 +80,7 @@ export interface KovoTrustedSql {
  * Produced by {@link sql.identifier}; dynamic values are grammar-checked and may be constrained
  * by an allowlist before the witness is minted.
  */
-export interface KovoSqlIdentifier extends KovoStaticSql {
+export interface KovoSqlIdentifier<T = unknown> extends KovoStaticSql<T> {
   readonly __kovoSqlIdentifierBrand?: 'identifier';
 }
 
@@ -78,15 +89,21 @@ export interface KovoSqlIdentifier extends KovoStaticSql {
  *
  * Produced by {@link sql.allow}; the value must match the supplied static allowlist.
  */
-export interface KovoSqlKeyword extends KovoStaticSql {
+export interface KovoSqlKeyword<T = unknown> extends KovoStaticSql<T> {
   readonly __kovoSqlKeywordBrand?: 'keyword';
 }
 
-type SqlTag = ((strings: TemplateStringsArray, ...values: unknown[]) => KovoParameterizedSql) & {
-  allow(value: string, allow: readonly string[]): KovoSqlKeyword;
-  identifier(value: string, options?: { allow?: readonly string[] }): KovoSqlIdentifier;
-  join(parts: readonly unknown[], separator?: unknown): KovoParameterizedSql;
-  raw(value: string): KovoStaticSql;
+type SqlTag = (<T = unknown>(
+  strings: TemplateStringsArray,
+  ...values: unknown[]
+) => KovoParameterizedSql<T>) & {
+  allow<T = unknown>(value: string, allow: readonly string[]): KovoSqlKeyword<T>;
+  identifier<T = unknown>(
+    value: string,
+    options?: { allow?: readonly string[] },
+  ): KovoSqlIdentifier<T>;
+  join<T = unknown>(parts: readonly unknown[], separator?: unknown): KovoParameterizedSql<T>;
+  raw<T = unknown>(value: string): KovoStaticSql<T>;
 };
 
 /**
@@ -94,33 +111,33 @@ type SqlTag = ((strings: TemplateStringsArray, ...values: unknown[]) => KovoPara
  * serializer; Kovo stamps the resulting SQL object so managed DB guards can reject raw strings
  * while still accepting parameterized builders (SPEC §10.2/§10.3 SQL safety).
  */
-export const sql = ((strings: TemplateStringsArray, ...values: unknown[]) => {
-  const statement = drizzleSql(strings, ...values);
+export const sql = (<T = unknown>(strings: TemplateStringsArray, ...values: unknown[]) => {
+  const statement = drizzleSql<T>(strings, ...values);
   return stampParameterizedSql(statement, mergeSqlSafetyMetadata(values));
 }) as unknown as SqlTag;
 
-sql.raw = (value: string) => {
-  const raw = drizzleSql.raw(value);
+sql.raw = <T = unknown>(value: string) => {
+  const raw = drizzleSql.raw(value) as SQL<T>;
   stampRawSqlChunk(raw);
   return stampStaticSql(raw, { containsRawChunk: true });
 };
 
-sql.identifier = (value: string, options: { allow?: readonly string[] } = {}) => {
+sql.identifier = <T = unknown>(value: string, options: { allow?: readonly string[] } = {}) => {
   const identifier = validateSqlIdentifier(value, options.allow);
   const factory = (drizzleSql as unknown as { identifier?: (value: string) => object }).identifier;
   const statement =
     typeof factory === 'function'
       ? factory(identifier)
       : drizzleSql.raw(quoteSqlIdentifier(identifier));
-  return stampSqlIdentifier(statement);
+  return stampSqlIdentifier(statement) as KovoSqlIdentifier<T>;
 };
 
-sql.allow = (value: string, allow: readonly string[]) => {
+sql.allow = <T = unknown>(value: string, allow: readonly string[]) => {
   const fragment = validateSqlAllow(value, allow);
-  return stampSqlKeyword(drizzleSql.raw(fragment));
+  return stampSqlKeyword(drizzleSql.raw(fragment)) as KovoSqlKeyword<T>;
 };
 
-sql.join = (parts: readonly unknown[], separator: unknown = drizzleSql.raw(', ')) => {
+sql.join = <T = unknown>(parts: readonly unknown[], separator: unknown = drizzleSql.raw(', ')) => {
   const factory = (
     drizzleSql as unknown as { join?: (parts: unknown[], separator?: unknown) => object }
   ).join;
@@ -132,18 +149,24 @@ sql.join = (parts: readonly unknown[], separator: unknown = drizzleSql.raw(', ')
           items.push(part);
           return items;
         }, [])}`;
-  return stampParameterizedSql(statement, mergeSqlSafetyMetadata([...parts, separator]));
+  return stampParameterizedSql(
+    statement,
+    mergeSqlSafetyMetadata([...parts, separator]),
+  ) as KovoParameterizedSql<T>;
 };
 
 /**
  * Literal-only SQL text. Use this for static DDL or prepared statement text; interpolations are
  * intentionally rejected so dynamic values must flow through `sql` placeholders instead.
  */
-export function staticSql(strings: TemplateStringsArray, ...values: never[]): KovoStaticSql {
+export function staticSql<T = unknown>(
+  strings: TemplateStringsArray,
+  ...values: never[]
+): KovoStaticSql<T> {
   if (values.length > 0) {
     throw new Error('staticSql accepts literal-only SQL text; use sql`...` for parameters.');
   }
-  return stampStaticSql(drizzleSql.raw(strings.join('')));
+  return stampStaticSql(drizzleSql.raw(strings.join('')) as SQL<T>);
 }
 
 /**
@@ -153,11 +176,12 @@ export function staticSql(strings: TemplateStringsArray, ...values: never[]): Ko
 export function trustedSql<T extends object>(
   statement: T,
   options: { justification: string },
-): T & KovoTrustedSql {
+): T & KovoTrustedSql<T extends SQL<infer TResult> ? TResult : unknown> {
   if (!options.justification.trim()) {
     throw new Error('trustedSql requires a non-empty justification.');
   }
-  return stampTrustedSql(statement, options.justification);
+  return stampTrustedSql(statement, options.justification) as T &
+    KovoTrustedSql<T extends SQL<infer TResult> ? TResult : unknown>;
 }
 
 function quoteSqlIdentifier(identifier: string): string {

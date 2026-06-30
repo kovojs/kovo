@@ -139,6 +139,8 @@ export interface QueryRerun {
 export interface MutationRegistry {
   inferredTouches?: readonly MutationTouchSite[];
   queries?: readonly import('../query.js').RegisteredQueryDefinition[];
+  /** Raw-SQL write table allowlist for opaque mutation writes (SPEC §10.3). */
+  tables?: readonly string[];
   touches?: readonly Domain[];
 }
 

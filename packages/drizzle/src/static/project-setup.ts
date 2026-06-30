@@ -516,6 +516,35 @@ interface ProjectExtractionMemo {
         extractionsByFunction,
       );
     }
+    for (const callback of mutationHandlerCallbacks) {
+      const extraction = extractionsByFunction.get(callback.key);
+      if (!extraction) continue;
+      const receivers = projectDrizzleReceivers(callback.fn);
+      const carrierSymbolKeys = receiverCarrierSymbolKeysForBody(callback.body, (node) =>
+        isProjectDrizzleReceiverIdentifier(node, receivers),
+      );
+      extraction.localCalls = extractLocalFunctionCallsFromBody(
+        callback.body,
+        localFunctionNames,
+        extractionsByFunction,
+        (argument) =>
+          projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys) !==
+            undefined || isDrizzleReceiver(argument),
+      ).concat(
+        extractTransactionCallbackLocalFunctionCallsFromBody(
+          callback.body,
+          localFunctionNames,
+          extractionsByFunction,
+          (node) => isProjectDrizzleReceiverIdentifier(node, receivers),
+        ),
+      );
+      extraction.unresolvedCalls = extractProjectUnresolvedCalls(
+        callback.body,
+        receivers,
+        localFunctionNames,
+        extractionsByFunction,
+      );
+    }
     for (const callback of objectCallbacks) {
       const extraction = extractionsByFunction.get(callback.key);
       if (!extraction) continue;

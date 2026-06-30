@@ -213,7 +213,7 @@ describe('server mutation response replay', () => {
         'Kovo-Idem': 'idem_reused_body',
         Vary: 'Cookie',
       },
-      status: 409,
+      status: 422,
     });
   });
 
@@ -250,11 +250,11 @@ describe('server mutation response replay', () => {
       rawInput: secondBody,
     });
 
-    // The handler ran exactly once; the divergent second multipart body is a 409 conflict,
+    // The handler ran exactly once; the divergent second multipart body is a 422 conflict,
     // NOT a silent replay of the first response.
     expect(writes).toBe(1);
     expect(first.status).toBe(200);
-    expect(second.status).toBe(409);
+    expect(second.status).toBe(422);
     expect(second.body).toContain('IDEMPOTENCY_CONFLICT');
   });
 

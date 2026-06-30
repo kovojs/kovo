@@ -1648,6 +1648,7 @@ function extractTouchGraphFromPreparedFiles(
     const fileTables = tablesForFile(file, sourceContext);
     const functions = functionsForFile(file);
     const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
+    const rawTablesByMutation = rawTablesByMutationHandler(file);
     const summaries = functionTouchSummariesForFile(
       file,
       functions,
@@ -1688,14 +1689,26 @@ function extractTouchGraphFromPreparedFiles(
         unresolved: [],
         writes: [],
       };
-      const rawTables = [...(rawTablesByDomainWrite.get(fn.name) ?? [])];
-      if (reads.length > 0 || writes.length > 0 || unresolved.length > 0 || rawTables.length > 0) {
+      const rawTables = mergedRawTables(
+        rawTablesByDomainWrite.get(fn.name),
+        rawTablesByMutation.get(fn.name),
+      );
+      const visibleUnresolved =
+        rawTables.length > 0
+          ? unresolved.filter((site) => site.operation !== 'execute')
+          : unresolved;
+      if (
+        reads.length > 0 ||
+        writes.length > 0 ||
+        visibleUnresolved.length > 0 ||
+        rawTables.length > 0
+      ) {
         const graphSummary = graphSummaries.get(fn.name) ?? {
           reads: [],
           unresolved: [],
           writes: [],
         };
-        mergeSummary(graphSummary, { rawTables, reads, unresolved, writes });
+        mergeSummary(graphSummary, { rawTables, reads, unresolved: visibleUnresolved, writes });
         graphSummaries.set(fn.name, graphSummary);
         graph[fn.name] = createTouchGraphEntry(graphSummary);
       }
@@ -1869,9 +1882,22 @@ function extractTouchGraphFromPreparedFiles(
 
   for (const file of contextFiles) {
     const fileTables = tablesForFile(file, sourceContext);
+    const rawTablesByDomainWrite = rawTablesByDomainWriteCallback(file);
+    const rawTablesByMutation = rawTablesByMutationHandler(file);
+    const rawWriteTrustByDomainWrite = rawWriteSqlTrustByDomainWriteCallback(file);
+    const rawWriteTrustByMutation = rawWriteSqlTrustByMutationHandler(file);
     for (const fn of projectFunctionsForFile(file, projectFunctionExtractions)) {
       if (fn.summaryOnly) continue;
+      const rawTables = mergedRawTables(
+        rawTablesByDomainWrite.get(fn.name),
+        rawTablesByMutation.get(fn.name),
+      );
+      const rawWriteTrust = mergedRawWriteSqlTrust(
+        rawWriteTrustByDomainWrite.get(fn.name),
+        rawWriteTrustByMutation.get(fn.name),
+      );
       facts.push(...writeScopeFactsForFunction(fn, fileTables));
+      facts.push(...rawWriteScopeFactsForFunction(fn, fileTables, rawTables, rawWriteTrust));
     }
   }
 
@@ -1923,6 +1949,234 @@ function writeScopeFactsForFunction(
   }
 
   return facts;
+}
+
+function rawWriteScopeFactsForFunction(
+  fn: ExtractedFunction,
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  rawTables: readonly string[],
+  trust: RawWriteSqlTrust | undefined,
+): WriteScopeFact[] {
+  if (rawTables.length === 0 || !trust?.hasExecute || trust.trusted) return [];
+
+  const domains = new Set<string>();
+  for (const table of extractedTablesForRawNames(tables, rawTables)) {
+    if (isDomainExtractedTableAnnotation(table.annotation)) {
+      domains.add(extractedDomainKey(table.annotation.domain));
+    }
+  }
+  if (domains.size === 0) return [];
+
+  return [
+    {
+      argScopedWrites: [],
+      name: fn.name,
+      reads: [...domains].sort(),
+      sessionAnchoredWrites: [],
+      site: trust.site ?? '',
+    },
+  ];
+}
+
+interface RawWriteSqlTrust {
+  hasExecute: boolean;
+  site?: string;
+  trusted: boolean;
+}
+
+function rawWriteSqlTrustByDomainWriteCallback(
+  file: SourceFileInput,
+): ReadonlyMap<string, RawWriteSqlTrust> {
+  return withParsedSourceFile(file, (sourceFile) => {
+    const trustByWrite = new Map<string, RawWriteSqlTrust>();
+
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const domainName = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!Node.isIdentifier(domainName) || !initializer) continue;
+      const domainCall = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isCallExpression(domainCall)) continue;
+      const expression = domainCall.getExpression();
+      if (!isKovoServerCalleeExpression(expression, 'domain')) continue;
+
+      const domainObject = domainWriteObject(domainCall.getArguments()[0]);
+      if (!domainObject.body) continue;
+
+      for (const property of domainWriteProperties(domainObject.body)) {
+        if (rawTablesFromWriteInitializer(property.initializer).length === 0) continue;
+        const callback = writeActionCallbackFunction(property.initializer);
+        if (!callback) continue;
+        const trust = rawExecuteTrustForCallback(callback, file);
+        if (trust.hasExecute) {
+          trustByWrite.set(`${domainName.getText()}.${property.memberName}`, trust);
+        }
+      }
+    }
+
+    return trustByWrite;
+  });
+}
+
+function rawTablesByMutationHandler(file: SourceFileInput): ReadonlyMap<string, readonly string[]> {
+  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
+    const rawTables = new Map<string, string[]>();
+
+    forEachMutationConfig(sourceFile, (key, config) => {
+      const tables = rawTablesFromMutationRegistry(config);
+      if (tables.length > 0) rawTables.set(key, tables);
+    });
+
+    return rawTables;
+  });
+}
+
+function rawWriteSqlTrustByMutationHandler(
+  file: SourceFileInput,
+): ReadonlyMap<string, RawWriteSqlTrust> {
+  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
+    const trustByMutation = new Map<string, RawWriteSqlTrust>();
+
+    forEachMutationConfig(sourceFile, (key, config) => {
+      if (rawTablesFromMutationRegistry(config).length === 0) return;
+      const callback = mutationHandlerCallback(config);
+      if (!callback) return;
+      const trust = rawExecuteTrustForCallback(callback, file);
+      if (trust.hasExecute) trustByMutation.set(key, trust);
+    });
+
+    return trustByMutation;
+  });
+}
+
+function projectSourceFileInput(file: SourceFileInput): SourceFileInput {
+  const fileName = projectSourceFileName(file.fileName);
+  return fileName === file.fileName ? file : { ...file, fileName };
+}
+
+function forEachMutationConfig(
+  sourceFile: SourceFile,
+  visit: (key: string, config: ObjectLiteralExpression) => void,
+): void {
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const call = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(call)) continue;
+    const mutation = staticMutationDeclarationFromCall(declaration, call);
+    if (!mutation || !Node.isObjectLiteralExpression(mutation.bodyArgument)) continue;
+    visit(mutation.key, mutation.bodyArgument);
+  }
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)) continue;
+    if (!isKovoServerCalleeExpression(call.getExpression(), 'mutation')) continue;
+
+    const [keyArgument, configArgument] = call.getArguments();
+    if (
+      !(
+        (Node.isStringLiteral(keyArgument) || Node.isNoSubstitutionTemplateLiteral(keyArgument)) &&
+        Node.isObjectLiteralExpression(configArgument)
+      )
+    ) {
+      continue;
+    }
+
+    visit(keyArgument.getLiteralText(), configArgument);
+  }
+}
+
+function rawTablesFromMutationRegistry(config: ObjectLiteralExpression): string[] {
+  const registry = objectPropertyInitializer(config, 'registry');
+  if (!registry) return [];
+  const registryObject = unwrappedStaticExpressionNode(registry);
+  if (!Node.isObjectLiteralExpression(registryObject)) return [];
+  return stringArrayPropertyFromObject(registryObject, 'tables');
+}
+
+function mutationHandlerCallback(config: ObjectLiteralExpression): Node | undefined {
+  for (const property of config.getProperties()) {
+    if (Node.isMethodDeclaration(property)) {
+      if (propertyNameText(property.getNameNode()) === 'handler') return property;
+      continue;
+    }
+
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== 'handler') continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) continue;
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
+      return expression;
+    }
+  }
+
+  return undefined;
+}
+
+function mergedRawTables(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+): string[] {
+  return [...new Set([...(left ?? []), ...(right ?? [])])];
+}
+
+function mergedRawWriteSqlTrust(
+  left: RawWriteSqlTrust | undefined,
+  right: RawWriteSqlTrust | undefined,
+): RawWriteSqlTrust | undefined {
+  if (!left) return right;
+  if (!right) return left;
+
+  return {
+    hasExecute: left.hasExecute || right.hasExecute,
+    ...(left.site || right.site ? { site: left.site ?? right.site } : {}),
+    trusted: (!left.hasExecute || left.trusted) && (!right.hasExecute || right.trusted),
+  };
+}
+
+function rawExecuteTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {
+  const executeCalls = callback
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .filter((call) => directDrizzleReceiverCallSurface(call)?.name === 'execute');
+  const firstUntrusted = executeCalls.find((call) => !isTrustedSqlArgument(call));
+  const siteCall = firstUntrusted ?? executeCalls[0];
+
+  return {
+    hasExecute: executeCalls.length > 0,
+    ...(siteCall
+      ? { site: `${file.fileName}:${lineForIndex(file.source, siteCall.getStart())}` }
+      : {}),
+    trusted: executeCalls.length > 0 && !firstUntrusted,
+  };
+}
+
+function isTrustedSqlArgument(call: CallExpression): boolean {
+  const argument = call.getArguments()[0];
+  if (!argument) return false;
+  const expression = unwrappedStaticExpressionNode(argument);
+  if (!Node.isCallExpression(expression)) return false;
+  const callee = expression.getExpression();
+  return Node.isIdentifier(callee)
+    ? callee.getText() === 'trustedSql'
+    : staticAccessName(callee) === 'trustedSql';
+}
+
+function extractedTablesForRawNames(
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+  rawTables: readonly string[],
+): ExtractedTable[] {
+  const rawNames = new Set(rawTables);
+  const found = new Map<string, ExtractedTable>();
+
+  for (const entries of tables.values()) {
+    for (const table of entries) {
+      if (!rawNames.has(table.annotation.name)) continue;
+      found.set(JSON.stringify(table.annotation), table);
+    }
+  }
+
+  return [...found.values()];
 }
 
 function ownerDomainsFromProject(options: TouchGraphProjectOptions): OwnerDomainFact[] {

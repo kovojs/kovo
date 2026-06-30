@@ -20,7 +20,10 @@ import { promisify } from 'node:util';
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import type { lowerStandaloneSourceDerivedRegistryDeclarations } from '@kovojs/compiler/internal';
+import type {
+  lowerStandaloneSourceDerivedRegistryDeclarations,
+  QueryShapeFact,
+} from '@kovojs/compiler/internal';
 import type { KovoApp, StaticExportCompileDiagnostic, StylesheetAsset } from '@kovojs/server';
 import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
@@ -39,6 +42,7 @@ import {
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 
 const execFileAsync = promisify(execFile);
+const KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL = Symbol.for('kovo.build.queryShapeFacts');
 
 function isKovoServerHandlerExternalDependency(id: string): boolean {
   return id === '@node-rs/argon2' || id.startsWith('@node-rs/argon2-');
@@ -414,15 +418,16 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
         ]),
       );
       const app = appFromModule(appModule, options.appModulePath);
-      const checkGraph = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
+      const buildCheck = await runKovoBuildCheckPreflight(app, resolvedAppModulePath, {
         cache: options.cache,
       });
       return {
         app,
         buildStylesheetCss,
-        checkGraph,
+        checkGraph: buildCheck.graph,
         cloudflare,
         node,
+        queryShapeFacts: buildCheck.queryShapeFacts,
         vercel,
         writeKovoNeutralBuild,
       };
@@ -436,24 +441,37 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     // writeKovoBuildGraphArtifact) stays strictly after this join, so any failure emits ZERO artifacts.
     await typeScriptPreflight;
     if (!loadAndCheck.ok) throw loadAndCheck.error;
-    const { app, buildStylesheetCss, checkGraph, cloudflare, node, vercel, writeKovoNeutralBuild } =
-      loadAndCheck.value;
+    const {
+      app,
+      buildStylesheetCss,
+      checkGraph,
+      cloudflare,
+      node,
+      queryShapeFacts,
+      vercel,
+      writeKovoNeutralBuild,
+    } = loadAndCheck.value;
     const outDir = resolve(options.outDir);
-    const clientBuild = await buildKovoClientManifest(
-      join(outDir, '.kovo-client'),
-      kovoClientBuildRoot(resolvedAppModulePath),
-      resolvedAppModulePath,
-      { cache: options.cache },
+    const clientBuild = await withKovoBuildQueryShapeFacts(queryShapeFacts, () =>
+      buildKovoClientManifest(
+        join(outDir, '.kovo-client'),
+        kovoClientBuildRoot(resolvedAppModulePath),
+        resolvedAppModulePath,
+        { cache: options.cache, queryShapeFacts },
+      ),
     );
     const buildCssAssets = mergeKovoBuildStylesheetAssets([
       buildStylesheetCss.assets,
       clientBuild.assets,
     ]);
     const buildApp = appWithBuildStylesheetAssets(app, buildCssAssets);
-    const serverHandlerBuild = await bundleKovoServerHandler(resolvedAppModulePath, {
-      runtimeRegistry: runtimeRegistryFromBuildGraph(checkGraph),
-      stylesheetAssets: buildCssAssets,
-    });
+    const serverHandlerBuild = await withKovoBuildQueryShapeFacts(queryShapeFacts, () =>
+      bundleKovoServerHandler(resolvedAppModulePath, {
+        queryShapeFacts,
+        runtimeRegistry: runtimeRegistryFromBuildGraph(checkGraph),
+        stylesheetAssets: buildCssAssets,
+      }),
+    );
     const clientModules = uniqueKovoCompiledClientModules([
       ...clientBuild.clientModules,
       ...serverHandlerBuild.clientModules,
@@ -591,12 +609,17 @@ async function runKovoBuildCheckPreflight(
   app: KovoApp,
   appModulePath: string,
   options: { cache: boolean },
-): Promise<CoreGraph.KovoCheckInput> {
-  const graph = await buildCheckGraph(app, appModulePath, options);
-  const result = kovoCheck(graph);
-  if (result.exitCode === 0) return graph;
+): Promise<KovoBuildCheckArtifacts> {
+  const artifacts = await buildCheckGraph(app, appModulePath, options);
+  const result = kovoCheck(artifacts.graph);
+  if (result.exitCode === 0) return artifacts;
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+}
+
+interface KovoBuildCheckArtifacts {
+  graph: CoreGraph.KovoCheckInput;
+  queryShapeFacts: readonly QueryShapeFact[];
 }
 
 function writeKovoBuildGraphArtifact(
@@ -691,12 +714,13 @@ async function buildCheckGraph(
   app: KovoApp,
   appModulePath: string,
   options: { cache: boolean },
-): Promise<CoreGraph.KovoCheckInput> {
+): Promise<KovoBuildCheckArtifacts> {
   const [{ accessFactsFromApp }, { deriveAppGraph }] = await Promise.all([
     import('@kovojs/server/internal/execution'),
     import('@kovojs/compiler/graph'),
   ]);
-  const graph = await staticBuildCheckGraph(app, appModulePath, options);
+  const staticArtifacts = await staticBuildCheckGraph(app, appModulePath, options);
+  const graph = staticArtifacts.graph;
   const result = deriveAppGraph({
     graph: {
       ...graph,
@@ -705,27 +729,30 @@ async function buildCheckGraph(
   });
   if (result.diagnostics.length > 0) {
     return {
-      ...result.graph,
-      diagnostics: [
-        ...(graph.diagnostics ?? []),
-        ...result.diagnostics.map((diagnostic) => ({
-          code: diagnostic.code,
-          message: diagnostic.message,
-          severity: diagnostic.severity ?? 'error',
-          site: diagnostic.fileName,
-          ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
-        })),
-      ],
+      graph: {
+        ...result.graph,
+        diagnostics: [
+          ...(graph.diagnostics ?? []),
+          ...result.diagnostics.map((diagnostic) => ({
+            code: diagnostic.code,
+            message: diagnostic.message,
+            severity: diagnostic.severity ?? 'error',
+            site: diagnostic.fileName,
+            ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+          })),
+        ],
+      },
+      queryShapeFacts: staticArtifacts.queryShapeFacts,
     };
   }
-  return result.graph;
+  return { graph: result.graph, queryShapeFacts: staticArtifacts.queryShapeFacts };
 }
 
 async function staticBuildCheckGraph(
   app: KovoApp,
   appModulePath: string,
   options: { cache: boolean },
-): Promise<CoreGraph.KovoCheckInput> {
+): Promise<KovoBuildCheckArtifacts> {
   const files = buildCheckSourceFiles(appModulePath);
   const [drizzleFacts, components] =
     files.length === 0
@@ -738,25 +765,30 @@ async function staticBuildCheckGraph(
   const routeOutcomeFacts = routeFileStreamEndpointFacts(app.routes, files);
 
   return {
-    ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
-    ...(drizzleFacts.sqlSafetyDiagnostics.length === 0
-      ? {}
-      : { sqlSafetyDiagnostics: drizzleFacts.sqlSafetyDiagnostics }),
-    ...(drizzleFacts.ownerDomains.length === 0 ? {} : { ownerDomains: drizzleFacts.ownerDomains }),
-    ...(drizzleFacts.scopeAudits.length === 0 ? {} : { scopeAudits: drizzleFacts.scopeAudits }),
-    ...(drizzleFacts.massAssignmentFacts.length === 0
-      ? {}
-      : { massAssignmentFacts: drizzleFacts.massAssignmentFacts }),
-    ...(drizzleFacts.queryWriteReachability.length === 0
-      ? {}
-      : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
-    ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
-    ...(components.length === 0 ? {} : { components }),
-    endpoints: [...app.endpoints.map(endpointCheckFact), ...routeOutcomeFacts],
-    mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
-    optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
-    pages: app.routes.map(routeCheckFact),
-    queries: queryReadSets,
+    graph: {
+      ...(drizzleFacts.touchGraph === undefined ? {} : { touchGraph: drizzleFacts.touchGraph }),
+      ...(drizzleFacts.sqlSafetyDiagnostics.length === 0
+        ? {}
+        : { sqlSafetyDiagnostics: drizzleFacts.sqlSafetyDiagnostics }),
+      ...(drizzleFacts.ownerDomains.length === 0
+        ? {}
+        : { ownerDomains: drizzleFacts.ownerDomains }),
+      ...(drizzleFacts.scopeAudits.length === 0 ? {} : { scopeAudits: drizzleFacts.scopeAudits }),
+      ...(drizzleFacts.massAssignmentFacts.length === 0
+        ? {}
+        : { massAssignmentFacts: drizzleFacts.massAssignmentFacts }),
+      ...(drizzleFacts.queryWriteReachability.length === 0
+        ? {}
+        : { queryWriteReachability: drizzleFacts.queryWriteReachability }),
+      ...(drizzleFacts.toctouFacts.length === 0 ? {} : { toctouFacts: drizzleFacts.toctouFacts }),
+      ...(components.length === 0 ? {} : { components }),
+      endpoints: [...app.endpoints.map(endpointCheckFact), ...routeOutcomeFacts],
+      mutations: app.mutations.map((mutation) => mutationCheckFact(mutation, queryReadSets)),
+      optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
+      pages: app.routes.map(routeCheckFact),
+      queries: queryReadSets,
+    },
+    queryShapeFacts: drizzleFacts.queryShapeFacts,
   };
 }
 
@@ -839,6 +871,8 @@ interface BuildCheckSourceFile {
 interface QueryReadFactLike {
   readOnlyDomains?: readonly string[];
   reads?: readonly string[];
+  shape?: QueryShapeFact['shape'];
+  site?: string;
   query?: string;
 }
 
@@ -846,6 +880,7 @@ interface StaticDrizzleBuildFacts {
   massAssignmentFacts: readonly CoreGraph.MassAssignmentFact[];
   ownerDomains: readonly CoreGraph.OwnerDomainFact[];
   queries: readonly QueryReadFactLike[];
+  queryShapeFacts: readonly QueryShapeFact[];
   queryWriteReachability: readonly CoreGraph.QueryWriteReachabilityFact[];
   scopeAudits: readonly CoreGraph.ScopeAuditFact[];
   sqlSafetyDiagnostics: readonly CoreGraph.SqlSafetyDiagnosticFact[];
@@ -858,6 +893,7 @@ function emptyStaticDrizzleBuildFacts(): StaticDrizzleBuildFacts {
     massAssignmentFacts: [],
     ownerDomains: [],
     queries: [],
+    queryShapeFacts: [],
     queryWriteReachability: [],
     scopeAudits: [],
     sqlSafetyDiagnostics: [],
@@ -891,13 +927,16 @@ async function staticDrizzleBuildFacts(
 
   const facts = extractStaticBuildAnalysisFactsFromProject({ files: analysisFiles });
   const queryReadFacts = facts.queries as readonly QueryReadFactLike[];
+  const queryShapeFacts = queryShapeFactsFromQueryReadFacts(queryReadFacts);
   const diagnostics = facts.sqlSafetyDiagnostics.flatMap(sqlSafetyDiagnosticFact);
   // SPEC §5.2 requires `kovo build` to preflight the full verifier graph. These
-  // static security facts feed KV414/KV438/KV433/KV429 in the production build path.
+  // static security facts feed KV414/KV438/KV433/KV429 and query-shape KV435 in
+  // the production build path.
   const result = {
     massAssignmentFacts: facts.massAssignmentFacts,
     ownerDomains: facts.ownerDomains,
     queries: queryReadFacts,
+    queryShapeFacts,
     queryWriteReachability: facts.queryWriteReachability,
     scopeAudits: facts.scopeAudits,
     sqlSafetyDiagnostics: diagnostics,
@@ -908,7 +947,32 @@ async function staticDrizzleBuildFacts(
   return result;
 }
 
-const STATIC_DRIZZLE_BUILD_FACTS_CACHE_VERSION = '2026-06-29.fast-check.v2-portable';
+function queryShapeFactsFromQueryReadFacts(facts: readonly QueryReadFactLike[]): QueryShapeFact[] {
+  return facts.flatMap((fact) => {
+    if (typeof fact.query !== 'string' || fact.shape === undefined) return [];
+    return [{ query: fact.query, shape: fact.shape, source: fact.site ?? fact.query }];
+  });
+}
+
+async function withKovoBuildQueryShapeFacts<T>(
+  facts: readonly QueryShapeFact[],
+  fn: () => Promise<T>,
+): Promise<T> {
+  // packages/server/src/vite.ts reads this build-only seed so app-authored Vite
+  // configs reuse the CLI's authoritative static analysis instead of re-running
+  // or compiling with empty query-shape facts (SPEC §5.2 / §10.2).
+  const globalFacts = globalThis as Record<symbol, unknown>;
+  const previous = globalFacts[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL];
+  globalFacts[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL] = facts;
+  try {
+    return await fn();
+  } finally {
+    if (previous === undefined) delete globalFacts[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL];
+    else globalFacts[KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL] = previous;
+  }
+}
+
+const STATIC_DRIZZLE_BUILD_FACTS_CACHE_VERSION = '2026-06-29.fast-check.v3-query-shapes-portable';
 
 /**
  * Project-relative, OS-independent cache path for a source file. plans/fast-kovo-check2.md #B:
@@ -1018,6 +1082,7 @@ function isStaticDrizzleBuildFacts(value: unknown): value is StaticDrizzleBuildF
     Array.isArray(value.massAssignmentFacts) &&
     Array.isArray(value.ownerDomains) &&
     Array.isArray(value.queries) &&
+    Array.isArray(value.queryShapeFacts) &&
     Array.isArray(value.queryWriteReachability) &&
     Array.isArray(value.scopeAudits) &&
     Array.isArray(value.sqlSafetyDiagnostics) &&
@@ -1834,7 +1899,7 @@ async function buildKovoClientManifest(
   outDir: string,
   root: string,
   appModulePath: string,
-  options: { cache: boolean },
+  options: { cache: boolean; queryShapeFacts: readonly QueryShapeFact[] },
 ): Promise<KovoClientManifestBuild> {
   const [
     { kovoVitePlugin },
@@ -1847,7 +1912,10 @@ async function buildKovoClientManifest(
     import('@kovojs/compiler/package-styles'),
     import('vite-plus'),
   ]);
-  const viteAssetPlugin = kovoVitePlugin({ cache: options.cache });
+  const viteAssetPlugin = kovoVitePlugin({
+    cache: options.cache,
+    queryShapeFacts: options.queryShapeFacts,
+  });
   const routeTargets = extractAppRouteCssTargets({
     fileName: appModulePath,
     packagePrefixDiscoveryRoot: dirname(appModulePath),
@@ -1903,7 +1971,7 @@ async function buildKovoClientManifest(
 async function buildKovoComponentClientModules(
   appModulePath: string,
   root: string,
-  options: { cache: boolean },
+  options: { cache: boolean; queryShapeFacts: readonly QueryShapeFact[] },
 ): Promise<{
   getClientModules?: () => readonly KovoAppShellCompiledClientModule[];
   getCssAssetManifest?: ReturnType<
@@ -1917,6 +1985,7 @@ async function buildKovoComponentClientModules(
   const kovoPlugin = kovoVitePlugin({
     cache: options.cache,
     include: [kovoBuildAppSourceFilter(appModulePath, root)],
+    queryShapeFacts: options.queryShapeFacts,
   });
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-client-modules-'));
   const entryPath = join(tempDir, 'entry.ts');
@@ -2118,6 +2187,7 @@ function kovoClientBuildRoot(appModulePath: string): string {
 async function bundleKovoServerHandler(
   appModulePath: string,
   options: {
+    queryShapeFacts: readonly QueryShapeFact[];
     runtimeRegistry: KovoBuildRuntimeRegistryFacts;
     stylesheetAssets?: KovoBuildStylesheetAssets;
   },
@@ -2131,6 +2201,7 @@ async function bundleKovoServerHandler(
   ]);
   const kovoPlugin = kovoVitePlugin({
     include: [kovoBuildAppSourceFilter(appModulePath, process.cwd())],
+    queryShapeFacts: options.queryShapeFacts,
   });
   const stylesheetAssets = options.stylesheetAssets ?? emptyKovoBuildStylesheetAssets();
   const tempDir = mkdtempSync(join(tmpdir(), 'kovo-build-'));
@@ -2165,9 +2236,17 @@ async function bundleKovoServerHandler(
         target: 'node22',
       },
       configFile: false,
+      define: {
+        'process.env.NODE_ENV': JSON.stringify('production'),
+      },
+      esbuild: {
+        jsxDev: false,
+      },
       logLevel: 'silent',
+      mode: 'production',
       oxc: {
         jsx: {
+          development: false,
           importSource: '@kovojs/server',
           runtime: 'automatic',
         },
@@ -2194,7 +2273,9 @@ async function bundleKovoServerHandler(
       ssr: { external: ['@node-rs/argon2'], noExternal: [/^@kovojs\//] },
     });
 
-    const source = await readFile(join(outDir, 'handler.mjs'), 'utf8');
+    const source = stableKovoServerHandlerSource(
+      await readFile(join(outDir, 'handler.mjs'), 'utf8'),
+    );
     assertNoUnloweredKovoClientIslandHooks(source);
     return {
       clientModules: kovoPlugin.getClientModules?.() ?? [],
@@ -2203,6 +2284,13 @@ async function bundleKovoServerHandler(
   } finally {
     rmSync(tempDir, { force: true, recursive: true });
   }
+}
+
+function stableKovoServerHandlerSource(source: string): string {
+  return source
+    .split('\n')
+    .filter((line) => !/^\/\/#(?:end)?region(?:\s|$)/.test(line))
+    .join('\n');
 }
 
 function kovoBuildLoweringVitePlugin<T extends { enforce?: unknown }>(
