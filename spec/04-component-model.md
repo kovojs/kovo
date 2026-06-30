@@ -1,4 +1,5 @@
 # Component Model & Authoring (SPEC §4, §13.1-§13.2)
+
 This file is incorporated by reference from [../SPEC.md](../SPEC.md) and is normative for Kovo framework behavior.
 The root spec remains the entry point and cross-reference index; this module owns the detailed contract below.
 Owns component identity, authored TSX, rendered IR, handler loading, composition, primitive merging, update coverage, registry-bounded dynamic rendering, StyleX/theme-token extraction, and keyed runtime identity.

@@ -1,4 +1,5 @@
 # Compiler (SPEC §5)
+
 This file is incorporated by reference from [../SPEC.md](../SPEC.md) and is normative for Kovo framework behavior.
 The root spec remains the entry point and cross-reference index; this module owns the detailed contract below.
 

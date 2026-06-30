@@ -46,6 +46,8 @@ describe('split normative spec content', () => {
       '<a href="spec/04-component-model.md">components</a>',
       '<a href="./spec/11-diagnostics.md">diagnostics</a>',
       '<a href="spec/04-component-model.md#4-8">binding</a>',
+      '<a href="../SPEC.md">root spec</a>',
+      '<a href="../SPEC.md#4-8-2">root fragment</a>',
       '<a href="/spec/#4-8-2">nearest existing section</a>',
     ].join('');
 
@@ -54,6 +56,8 @@ describe('split normative spec content', () => {
         '<a href="/spec/#4">components</a>',
         '<a href="/spec/#11-3">diagnostics</a>',
         '<a href="/spec/#4-8">binding</a>',
+        '<a href="/spec/">root spec</a>',
+        '<a href="/spec/#4-8">root fragment</a>',
         '<a href="/spec/#4-8">nearest existing section</a>',
       ].join(''),
     );

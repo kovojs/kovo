@@ -44,7 +44,7 @@ describe('diagnostics registry source', () => {
       ].join('\n'),
     );
 
-    expect([...codes].sort()).toEqual(['KV201', 'KV210']);
+    expect([...codes].sort((a, b) => a.localeCompare(b))).toEqual(['KV201', 'KV210']);
   });
 
   it('prefers spec/11-diagnostics.md over the legacy root SPEC section', async () => {

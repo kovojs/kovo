@@ -335,12 +335,25 @@ function resolveSpecModuleLinks(
   );
 }
 
+function resolveSpecRootLinks(html: string, specIds: Set<string>): string {
+  return html.replace(
+    /href="(?:\.\.\/|\.\/)?SPEC\.md(?:#([^"]+))?"/g,
+    (_match, fragment: string | undefined) => {
+      const resolved = fragment ? nearestSpecAnchor(fragment, specIds) : undefined;
+      return `href="/spec/${resolved ? `#${resolved}` : ''}"`;
+    },
+  );
+}
+
 function resolveSpecLinks(
   html: string,
   specIds: Set<string>,
   moduleAnchors: ReadonlyMap<string, string>,
 ): string {
-  return resolveSpecAnchors(resolveSpecModuleLinks(html, specIds, moduleAnchors), specIds);
+  return resolveSpecAnchors(
+    resolveSpecRootLinks(resolveSpecModuleLinks(html, specIds, moduleAnchors), specIds),
+    specIds,
+  );
 }
 
 export function rewriteRenderedSpecLinksForTest(
