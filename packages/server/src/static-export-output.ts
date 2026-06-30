@@ -11,6 +11,7 @@ import {
 } from './static-export-output-targets.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 import { createStaticExportHeaderSink } from './static-export-headers.js';
+import { staticHostHeaders, type StaticHostHeaderPolicyKind } from './static-host-header-policy.js';
 import {
   type StaticExportArtifact,
   type StaticExportAssetArtifact,
@@ -276,21 +277,6 @@ function staticExportPlannedWrite(
 }
 
 /**
- * @internal bugz-3 L8 / SPEC §6.6: the immutable-asset security floor that every server
- * preset applies to versioned client modules (`/c/…`) and static assets (`/assets/…`).
- * Kept in lockstep with `immutableStaticHeaders()` in `build.ts` (the Vercel/Cloudflare
- * Worker presets); a bare static file cannot carry HTTP headers, so the Netlify/Cloudflare-
- * Pages `_headers` sidecar must materialize this floor or public JS/CSS ships without
- * `x-content-type-options: nosniff`, `cross-origin-resource-policy: same-origin`, or
- * immutable caching — a DiD regression vs all server presets.
- */
-const STATIC_EXPORT_IMMUTABLE_ASSET_HEADERS: Readonly<Record<string, string>> = {
-  'cache-control': 'public, max-age=31536000, immutable',
-  'cross-origin-resource-policy': 'same-origin',
-  'x-content-type-options': 'nosniff',
-};
-
-/**
  * @internal Builds the content of a Netlify-style `_headers` file from the captured
  * per-document security headers (SPEC §6.6 DiD floor; bugz M4). Each route-document path
  * gets a stanza associating it with its full header set. Headers are already filtered by
@@ -334,10 +320,10 @@ function buildNetlifyHeadersSidecar(plan: StaticExportOutputArtifacts): string {
   // `assertStaticExportClientModuleTarget`); static assets under `/assets/` follow the
   // preset convention. Carry the immutable-asset floor on those public file trees.
   if (plan.clientModules.length > 0) {
-    appendStaticExportImmutableHeaderStanza(lines, '/c/*');
+    appendStaticExportHeaderPolicyStanza(lines, '/c/*', 'clientModule');
   }
   if (plan.assets.some((asset) => asset.path.startsWith('/assets/'))) {
-    appendStaticExportImmutableHeaderStanza(lines, '/assets/*');
+    appendStaticExportHeaderPolicyStanza(lines, '/assets/*', 'immutableAsset');
   }
 
   lines.push('');
@@ -369,10 +355,14 @@ function commonStaticExportDocumentHeaders(
   );
 }
 
-function appendStaticExportImmutableHeaderStanza(lines: string[], pathPattern: string): void {
+function appendStaticExportHeaderPolicyStanza(
+  lines: string[],
+  pathPattern: string,
+  policy: StaticHostHeaderPolicyKind,
+): void {
   lines.push('');
   lines.push(pathPattern);
-  for (const [name, value] of Object.entries(STATIC_EXPORT_IMMUTABLE_ASSET_HEADERS)) {
+  for (const [name, value] of Object.entries(staticHostHeaders(policy))) {
     lines.push(`  ${name}: ${value}`);
   }
 }

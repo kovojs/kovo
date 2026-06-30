@@ -8,10 +8,12 @@ import {
 
 import { resolvedFileSystemPath } from './vite-build-assets.js';
 import type { KovoNeutralBuild } from './neutral-build.js';
+import {
+  staticHostHeaders,
+  staticHostImmutableAssetPathPattern,
+} from './static-host-header-policy.js';
 
-const immutableCacheControl = 'public, max-age=31536000, immutable';
-const revalidatingAssetCacheControl = 'public, max-age=0, must-revalidate';
-const immutableAssetPathPattern = /^\/assets\/(?:.*\/)?[^/]*-[a-f0-9]{8,}(?:\.[^/.]+)+$/i;
+const immutableAssetPathPattern = staticHostImmutableAssetPathPattern;
 
 /**
  * Build-time preset descriptor consumed by `kovo build` and deployment tooling.
@@ -307,6 +309,7 @@ async function emitNodePreset(
     await cp(build.staticOutput.dir, path.join(outDir, 'static'), { recursive: true });
   }
   await cp(build.serverDir, path.join(outDir, 'server'), { recursive: true });
+  await writeFile(path.join(outDir, 'node-adapter.mjs'), nodeAdapterRuntimeSource(), 'utf8');
   await writeFile(path.join(outDir, 'server.mjs'), nodeServerSource(), 'utf8');
   await emitNodeRuntimePackage(outDir);
 
@@ -341,6 +344,7 @@ async function emitVercelPreset(
   await copyPresetStaticFiles(build, path.join(outDir, 'static'));
   await mkdir(functionDir, { recursive: true });
   await copyFile(build.serverHandlerPath, path.join(functionDir, 'handler.mjs'));
+  await writeFile(path.join(functionDir, 'node-adapter.mjs'), nodeAdapterRuntimeSource(), 'utf8');
   await writeFile(path.join(functionDir, 'index.cjs'), vercelFunctionSource(), 'utf8');
   await writeJson(path.join(functionDir, '.vc-config.json'), {
     handler: 'index.cjs',
@@ -545,22 +549,22 @@ function vercelBuildOutputConfig(): unknown {
     routes: [
       {
         continue: true,
-        headers: immutableStaticHeaders(),
+        headers: staticHostHeaders('clientModule'),
         src: '/c/(.*)',
       },
       {
         continue: true,
-        headers: immutableStaticHeaders(),
+        headers: staticHostHeaders('immutableAsset'),
         src: '/assets/(?:.*\\/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+',
       },
       {
         continue: true,
-        headers: revalidatingAssetHeaders(),
+        headers: staticHostHeaders('revalidatingAsset'),
         src: '/assets/(.*)',
       },
       {
         continue: true,
-        headers: documentStaticHeaders(),
+        headers: staticHostHeaders('document'),
         src: '/(.*)',
       },
       { handle: 'filesystem' },
@@ -575,22 +579,22 @@ function vercelStaticBuildOutputConfig(): unknown {
     routes: [
       {
         continue: true,
-        headers: immutableStaticHeaders(),
+        headers: staticHostHeaders('clientModule'),
         src: '/c/(.*)',
       },
       {
         continue: true,
-        headers: immutableStaticHeaders(),
+        headers: staticHostHeaders('immutableAsset'),
         src: '/assets/(?:.*\\/)?[^/]*-[a-f0-9]{8,}(?:\\.[^/.]+)+',
       },
       {
         continue: true,
-        headers: revalidatingAssetHeaders(),
+        headers: staticHostHeaders('revalidatingAsset'),
         src: '/assets/(.*)',
       },
       {
         continue: true,
-        headers: documentStaticHeaders(),
+        headers: staticHostHeaders('document'),
         src: '/(.*)',
       },
       { handle: 'filesystem' },
@@ -599,66 +603,13 @@ function vercelStaticBuildOutputConfig(): unknown {
   };
 }
 
-function immutableStaticHeaders(): Record<string, string> {
-  return {
-    'cache-control': immutableCacheControl,
-    'cross-origin-resource-policy': 'same-origin',
-    'x-content-type-options': 'nosniff',
-  };
-}
+function nodeAdapterRuntimeSource(): string {
+  return `import { Readable } from 'node:stream';
+import { pipeline } from 'node:stream/promises';
 
-function revalidatingAssetHeaders(): Record<string, string> {
-  return {
-    'cache-control': revalidatingAssetCacheControl,
-    'cross-origin-resource-policy': 'same-origin',
-    'x-content-type-options': 'nosniff',
-  };
-}
+const bodylessMethods = new Set(['GET', 'HEAD']);
 
-// SPEC §6.6 / bugz M4: Vercel/Cloudflare `config.json` route headers carry the full
-// security-header floor for every document path, matching the floor that dynamic dispatch
-// emits. These headers are host-config complements to the per-document `_headers` sidecar
-// (which Netlify/Cloudflare Pages read) and share the same invariants: no CSP nonce (static
-// exports do not use nonce-based CSP), clickjacking denied, cross-origin isolation, no
-// microphone/camera/payment/geolocation delegation, strict referrer.
-function documentStaticHeaders(): Record<string, string> {
-  return {
-    'cross-origin-opener-policy': 'same-origin-allow-popups',
-    'permissions-policy': 'camera=(), microphone=(), geolocation=(), payment=(), usb=()',
-    'referrer-policy': 'strict-origin-when-cross-origin',
-    'x-content-type-options': 'nosniff',
-    'x-frame-options': 'DENY',
-  };
-}
-
-function vercelFunctionSource(): string {
-  return `const { Readable } = require('node:stream');
-const { pipeline } = require('node:stream/promises');
-
-let handlerPromise;
-
-module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
-  try {
-    const handler = await loadHandler();
-    const request = nodeRequestToWebRequest(nodeRequest, {}, nodeResponse);
-    const response = await handler(request);
-    await writeWebResponseToNode(response, nodeResponse, request.method);
-  } catch {
-    if (nodeResponse.headersSent) {
-      nodeResponse.destroy();
-    } else {
-      nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
-      nodeResponse.end('Internal Server Error');
-    }
-  }
-};
-
-async function loadHandler() {
-  handlerPromise ||= import('./handler.mjs').then((module) => module.default);
-  return handlerPromise;
-}
-
-function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
+export function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
   const method = nodeRequest.method ?? 'GET';
   const headers = nodeHeadersToWebHeaders(nodeRequest);
   const controller = new AbortController();
@@ -681,7 +632,7 @@ function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
     headers,
     method,
     signal: controller.signal,
-    ...(method === 'GET' || method === 'HEAD'
+    ...(bodylessMethods.has(method)
       ? {}
       : {
           body: Readable.toWeb(nodeRequest),
@@ -700,25 +651,7 @@ function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
   return request;
 }
 
-function nodeRequestUrl(nodeRequest, options) {
-  const rawUrl = nodeRequest.url ?? '/';
-  const origin = options.origin ?? defaultOrigin(nodeRequest);
-  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) {
-    const absolute = new URL(rawUrl);
-    return new URL(absolute.pathname + absolute.search + absolute.hash, origin).href;
-  }
-
-  const pathOnly = rawUrl.startsWith('//') ? '/' + rawUrl.replace(/^\\/+/, '') : rawUrl;
-  return new URL(pathOnly, origin).href;
-}
-
-function defaultOrigin(nodeRequest) {
-  const pseudoHeaders = nodeRequest.headers;
-  const host = nodeRequest.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
-  return 'https://' + host;
-}
-
-async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
+export async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
   const headers = responseHeadersToNodeHeaders(response.headers);
 
   nodeResponse.writeHead(response.status, response.statusText, headers);
@@ -728,6 +661,37 @@ async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
   }
 
   await pipeline(Readable.fromWeb(response.body), nodeResponse);
+}
+
+function nodeRequestUrl(nodeRequest, options) {
+  const rawUrl = nodeRequest.url ?? '/';
+  const origin =
+    typeof options.origin === 'function'
+      ? options.origin(nodeRequest)
+      : (options.origin ?? defaultOrigin(nodeRequest, options));
+
+  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) {
+    const absolute = new URL(rawUrl);
+    return new URL(absolute.pathname + absolute.search + absolute.hash, origin).href;
+  }
+
+  const pathOnly = rawUrl.startsWith('//') ? '/' + rawUrl.replace(/^\\/+/, '') : rawUrl;
+  return new URL(pathOnly, origin).href;
+}
+
+function defaultOrigin(nodeRequest, options) {
+  const pseudoHeaders = nodeRequest.headers;
+  const host = nodeRequest.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
+  const forwardedProto = options.trustedProxy
+    ? firstHeaderValue(nodeRequest.headers['x-forwarded-proto'])
+    : undefined;
+  const pseudoScheme = firstHeaderValue(pseudoHeaders[':scheme']);
+  const proto =
+    forwardedProto ??
+    pseudoScheme ??
+    (nodeRequest.socket && nodeRequest.socket.encrypted ? 'https' : 'http');
+
+  return proto + '://' + host;
 }
 
 function nodeHeadersToWebHeaders(nodeRequest) {
@@ -758,6 +722,39 @@ function responseHeadersToNodeHeaders(headers) {
 function firstHeaderValue(value) {
   return Array.isArray(value) ? value[0] : value;
 }
+`;
+}
+
+function vercelFunctionSource(): string {
+  return `let handlerPromise;
+let nodeAdapterPromise;
+
+module.exports = async function kovoVercelFunction(nodeRequest, nodeResponse) {
+  try {
+    const handler = await loadHandler();
+    const { nodeRequestToWebRequest, writeWebResponseToNode } = await loadNodeAdapter();
+    const request = nodeRequestToWebRequest(nodeRequest, {}, nodeResponse);
+    const response = await handler(request);
+    await writeWebResponseToNode(response, nodeResponse, request.method);
+  } catch {
+    if (nodeResponse.headersSent) {
+      nodeResponse.destroy();
+    } else {
+      nodeResponse.writeHead(500, { 'content-type': 'text/plain; charset=utf-8' });
+      nodeResponse.end('Internal Server Error');
+    }
+  }
+};
+
+async function loadHandler() {
+  handlerPromise ||= import('./handler.mjs').then((module) => module.default);
+  return handlerPromise;
+}
+
+async function loadNodeAdapter() {
+  nodeAdapterPromise ||= import('./node-adapter.mjs');
+  return nodeAdapterPromise;
+}
 function isImmutableStaticAssetPath(pathname) {
   return pathname.startsWith('/c/') || ${immutableAssetPathPattern}.test(pathname);
 }
@@ -767,14 +764,11 @@ function isImmutableStaticAssetPath(pathname) {
 function cloudflareWorkerSource(): string {
   return `import handler from './server/handler.mjs';
 
-const immutableStaticHeaders = ${JSON.stringify(immutableStaticHeaders())};
-const revalidatingAssetHeaders = ${JSON.stringify(revalidatingAssetHeaders())};
-const documentStaticHeaders = ${JSON.stringify(documentStaticHeaders())};
-const staticErrorHeaders = {
-  'cache-control': 'no-store',
-  'cross-origin-resource-policy': 'same-origin',
-  'x-content-type-options': 'nosniff',
-};
+const clientModuleHeaders = ${JSON.stringify(staticHostHeaders('clientModule'))};
+const immutableAssetHeaders = ${JSON.stringify(staticHostHeaders('immutableAsset'))};
+const revalidatingAssetHeaders = ${JSON.stringify(staticHostHeaders('revalidatingAsset'))};
+const documentStaticHeaders = ${JSON.stringify(staticHostHeaders('document'))};
+const staticErrorHeaders = ${JSON.stringify(staticHostHeaders('errorDocument'))};
 const bodylessMethods = new Set(['GET', 'HEAD']);
 
 export default {
@@ -786,8 +780,10 @@ export default {
         const headers = new Headers(assetResponse.headers);
         if (assetResponse.status >= 400) {
           applyHeaders(headers, staticErrorHeaders);
+        } else if (url.pathname.startsWith('/c/')) {
+          applyHeaders(headers, clientModuleHeaders);
         } else if (isImmutableStaticAssetPath(url.pathname)) {
-          applyHeaders(headers, immutableStaticHeaders);
+          applyHeaders(headers, immutableAssetHeaders);
         } else if (url.pathname.startsWith('/assets/') || url.pathname.startsWith('/c/')) {
           applyHeaders(headers, revalidatingAssetHeaders);
         } else {
@@ -905,13 +901,16 @@ import { basename, extname, isAbsolute, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
+import { nodeRequestToWebRequest, writeWebResponseToNode } from './node-adapter.mjs';
 import handler from './server/handler.mjs';
 
 const clientRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'client');
 const staticRoot = resolve(fileURLToPath(new URL('.', import.meta.url)), 'static');
-const immutableStaticHeaders = ${JSON.stringify(immutableStaticHeaders())};
-const revalidatingAssetHeaders = ${JSON.stringify(revalidatingAssetHeaders())};
-const documentStaticHeaders = ${JSON.stringify(documentStaticHeaders())};
+const clientModuleHeaders = ${JSON.stringify(staticHostHeaders('clientModule'))};
+const immutableAssetHeaders = ${JSON.stringify(staticHostHeaders('immutableAsset'))};
+const revalidatingAssetHeaders = ${JSON.stringify(staticHostHeaders('revalidatingAsset'))};
+const documentStaticHeaders = ${JSON.stringify(staticHostHeaders('document'))};
+const staticErrorDocumentHeaders = ${JSON.stringify(staticHostHeaders('errorDocument'))};
 const bodylessMethods = new Set(['GET', 'HEAD']);
 const headersTimeoutMs = 10_000;
 const requestTimeoutMs = 30_000;
@@ -970,9 +969,11 @@ async function maybeServeStatic(nodeRequest, nodeResponse) {
 
   let outcome = await serveRootedStaticFile(root, relativePath, {
     ...(clientAsset
-      ? immutableAsset
-        ? immutableStaticHeaders
-        : revalidatingAssetHeaders
+      ? pathname.startsWith('/c/')
+        ? clientModuleHeaders
+        : immutableAsset
+          ? immutableAssetHeaders
+          : revalidatingAssetHeaders
       : documentStaticHeaders),
   });
   if (!clientAsset && outcome === undefined) {
@@ -1172,116 +1173,6 @@ async function writeRouteOutcomeBody(body, nodeResponse) {
   await pipeline(Readable.fromWeb(body), nodeResponse);
 }
 
-function nodeRequestToWebRequest(nodeRequest, options = {}, nodeResponse) {
-  const method = nodeRequest.method ?? 'GET';
-  const headers = nodeHeadersToWebHeaders(nodeRequest);
-  const controller = new AbortController();
-  const abort = () => {
-    if (!controller.signal.aborted) controller.abort();
-  };
-  const socket = nodeRequest.socket;
-  nodeRequest.once('aborted', abort);
-  nodeRequest.once('close', abort);
-  socket?.once('close', abort);
-  if (nodeResponse) {
-    const cleanup = () => {
-      nodeRequest.off('aborted', abort);
-      nodeRequest.off('close', abort);
-      socket?.off('close', abort);
-    };
-    nodeResponse.once('close', cleanup);
-  }
-  const init = {
-    headers,
-    method,
-    signal: controller.signal,
-    ...(bodylessMethods.has(method)
-      ? {}
-      : {
-          body: Readable.toWeb(nodeRequest),
-          duplex: 'half',
-        }),
-  };
-
-  const request = new Request(nodeRequestUrl(nodeRequest, options), init);
-  const peerAddress = nodeRequest.socket?.remoteAddress?.trim();
-  if (peerAddress) {
-    Object.defineProperty(request, '__kovoPeerAddress', {
-      configurable: true,
-      value: peerAddress,
-    });
-  }
-  return request;
-}
-
-function nodeRequestUrl(nodeRequest, options) {
-  const rawUrl = nodeRequest.url ?? '/';
-  const origin =
-    typeof options.origin === 'function'
-      ? options.origin(nodeRequest)
-      : (options.origin ?? defaultOrigin(nodeRequest, options));
-
-  if (/^[a-z][a-z0-9+.-]*:/i.test(rawUrl)) {
-    const absolute = new URL(rawUrl);
-    return new URL(absolute.pathname + absolute.search + absolute.hash, origin).href;
-  }
-
-  const pathOnly = rawUrl.startsWith('//') ? '/' + rawUrl.replace(/^\\/+/, '') : rawUrl;
-  return new URL(pathOnly, origin).href;
-}
-
-function defaultOrigin(nodeRequest, options) {
-  const pseudoHeaders = nodeRequest.headers;
-  const host = nodeRequest.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
-  const forwardedProto = options.trustedProxy
-    ? firstHeaderValue(nodeRequest.headers['x-forwarded-proto'])
-    : undefined;
-  const pseudoScheme = firstHeaderValue(pseudoHeaders[':scheme']);
-  const proto =
-    forwardedProto ??
-    pseudoScheme ??
-    (nodeRequest.socket && nodeRequest.socket.encrypted ? 'https' : 'http');
-
-  return proto + '://' + host;
-}
-
-async function writeWebResponseToNode(response, nodeResponse, method = 'GET') {
-  const headers = responseHeadersToNodeHeaders(response.headers);
-
-  nodeResponse.writeHead(response.status, response.statusText, headers);
-  if (method === 'HEAD' || response.body === null) {
-    nodeResponse.end();
-    return;
-  }
-
-  await pipeline(Readable.fromWeb(response.body), nodeResponse);
-}
-
-function nodeHeadersToWebHeaders(nodeRequest) {
-  const headers = new Headers();
-  for (const [name, value] of Object.entries(nodeRequest.headers)) {
-    if (value === undefined) continue;
-    if (name.startsWith(':')) continue;
-    if (Array.isArray(value)) {
-      for (const entry of value) headers.append(name, entry);
-    } else {
-      headers.set(name, value);
-    }
-  }
-  return headers;
-}
-
-function responseHeadersToNodeHeaders(headers) {
-  const nodeHeaders = {};
-  const setCookies = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : [];
-  if (setCookies.length > 0) nodeHeaders['set-cookie'] = setCookies;
-  headers.forEach((value, name) => {
-    if (name === 'set-cookie') return;
-    nodeHeaders[name] = value;
-  });
-  return nodeHeaders;
-}
-
 function contentType(filePath) {
   switch (extname(filePath).toLowerCase()) {
     case '.css':
@@ -1304,15 +1195,9 @@ function contentType(filePath) {
 
 function staticErrorHeaders() {
   return {
-    'cache-control': 'no-store',
     'content-type': 'text/plain; charset=utf-8',
-    'cross-origin-resource-policy': 'same-origin',
-    'x-content-type-options': 'nosniff',
+    ...staticErrorDocumentHeaders,
   };
-}
-
-function firstHeaderValue(value) {
-  return Array.isArray(value) ? value[0] : value;
 }
 
 function isImmutableStaticAssetPath(pathname) {
