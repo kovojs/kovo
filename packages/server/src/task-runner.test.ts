@@ -126,6 +126,7 @@ describe('durable task runner (SPEC §9.6)', () => {
 
   it('dead-letters permanently failing tasks at maxAttempts', async () => {
     const store = new MemoryDurableTaskQueue();
+    const onError = vi.fn();
     const alwaysFails = task('always.fail', {
       input: s.object({}),
       retry: { maxAttempts: 2, backoff: 'exponential' },
@@ -138,7 +139,11 @@ describe('durable task runner (SPEC §9.6)', () => {
       args: {},
       runAt: new Date('2026-06-30T10:00:00.000Z'),
     });
-    const runner = createDurableTaskRunner({ store, tasks: [alwaysFails] });
+    const runner = createDurableTaskRunner({
+      hooks: { onError },
+      store,
+      tasks: [alwaysFails],
+    });
 
     await runner.runOnce(new Date('2026-06-30T10:00:00.000Z'));
     await runner.runOnce(new Date(Date.now() + 5000));
@@ -148,6 +153,15 @@ describe('durable task runner (SPEC §9.6)', () => {
       attempts: 2,
       lastError: 'nope',
     });
+    expect(onError).toHaveBeenCalledTimes(2);
+    expect(onError).toHaveBeenLastCalledWith(
+      expect.any(Error),
+      expect.objectContaining({
+        job: expect.objectContaining({ task: 'always.fail' }),
+        phase: 'task-run',
+        task: alwaysFails,
+      }),
+    );
   });
 
   it('times out hung tasks at the hard ceiling and retries without pinning the runner', async () => {

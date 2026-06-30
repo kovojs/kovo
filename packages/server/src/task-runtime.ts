@@ -1,6 +1,7 @@
 import { runMutation } from './mutation.js';
 import type { TaskScheduler } from './mutation/definition.js';
 import { runQuery } from './query.js';
+import { reportServerError } from './diagnostics.js';
 import {
   PostgresRecurringTaskOccurrenceStore,
   createRecurringTaskMaterializer,
@@ -16,6 +17,7 @@ import {
 } from './task-queue.js';
 import type { KovoApp } from './app-types.js';
 import type { TaskHandle, TaskScheduleOptions } from './task.js';
+import type { DurableTaskRunnerErrorContext } from './task-runner.js';
 
 const TASK_CRON_POLL_INTERVAL_MS = 30_000;
 
@@ -89,6 +91,9 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     await this.materializeRecurringTasks();
     this.runner = createDurableTaskRunner({
       hooks: {
+        onError: async (error, context) => {
+          this.reportTaskError(error, context, request);
+        },
         runMutation: async (definition, input) => {
           const result = await runMutation(
             definition as never,
@@ -168,6 +173,29 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
 
   private async materializeRecurringTasks(): Promise<void> {
     await this.cronMaterializer?.materializeDue();
+  }
+
+  private reportTaskError(
+    error: unknown,
+    context: DurableTaskRunnerErrorContext,
+    request: Request,
+  ): void {
+    if (this.app.onError !== undefined) {
+      reportServerError(this.app.onError, error, {
+        operation: 'task-runner',
+        request: taskInternalRequest(request),
+        taskJobId: context.job.id,
+        taskKey: context.task?.key ?? context.job.task,
+        url: new URL('/_kovo/task', request.url).toString(),
+      });
+      return;
+    }
+    console.error('[kovo] durable task failed', {
+      error,
+      jobId: context.job.id,
+      phase: context.phase,
+      task: context.task?.key ?? context.job.task,
+    });
   }
 
   private async resolveRootDb(request: Request): Promise<unknown> {

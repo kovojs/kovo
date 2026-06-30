@@ -3,9 +3,16 @@ import type { DurableTaskJob, DurableTaskQueueStore } from './task-queue.js';
 
 export interface DurableTaskRunnerHooks {
   readonly fetch?: typeof globalThis.fetch;
+  onError?: (error: unknown, context: DurableTaskRunnerErrorContext) => Promise<void> | void;
   runMutation?: TaskRunContext['runMutation'];
   runQuery?: TaskRunContext['runQuery'];
   schedule?: TaskRunContext['schedule'];
+}
+
+export interface DurableTaskRunnerErrorContext {
+  readonly job: DurableTaskJob;
+  readonly phase: 'unknown-task' | 'task-run';
+  readonly task?: TaskDefinition<string, any, any>;
 }
 
 export interface DurableTaskRunnerOptions {
@@ -156,10 +163,12 @@ export class DurableTaskRunner {
   private async runJob(job: DurableTaskJob): Promise<void> {
     const task = this.tasks.get(job.task);
     if (task === undefined) {
-      await this.options.store.markFailed(job.id, new UnknownDurableTaskError(job.task), {
+      const error = new UnknownDurableTaskError(job.task);
+      await this.options.store.markFailed(job.id, error, {
         ...completionOptions(job),
         maxAttempts: 1,
       });
+      await this.reportError(error, { job, phase: 'unknown-task' });
       return;
     }
 
@@ -173,6 +182,16 @@ export class DurableTaskRunner {
         maxAttempts: taskMaxAttempts(task),
         retryAt: retryRunAt(job, task),
       });
+      await this.reportError(error, { job, phase: 'task-run', task });
+    }
+  }
+
+  private async reportError(error: unknown, context: DurableTaskRunnerErrorContext): Promise<void> {
+    try {
+      await this.hooks.onError?.(error, context);
+    } catch (_diagnosticError) {
+      void _diagnosticError;
+      // Task diagnostics must not kill the runner loop or hide persisted job state.
     }
   }
 

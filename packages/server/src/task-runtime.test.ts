@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import { createApp } from './app.js';
 import { s } from './schema.js';
@@ -49,5 +49,73 @@ describe('durable task runtime (SPEC §9.6)', () => {
     expect(enqueue?.values[2]).toBe('{}');
     expect(enqueue?.values[3]).toBe('cron:nightly.cleanup:2026-06-30T02:00:00.000Z');
     expect(enqueue?.values[4]).toEqual(new Date('2026-06-30T02:00:00.000Z'));
+  });
+
+  it('reports task failures through the app onError hook', async () => {
+    vi.useFakeTimers();
+    try {
+      const onError = vi.fn();
+      let claimed = false;
+      const db = {
+        async query(text: string, values: readonly unknown[]) {
+          if (text === 'select now() as now') {
+            return { rows: [{ now: '2026-06-30T07:15:30.000Z' }] };
+          }
+          if (text.includes('with claimed as')) {
+            if (claimed) return { rows: [] };
+            claimed = true;
+            return {
+              rows: [
+                {
+                  args: {},
+                  attempts: 1,
+                  created_at: '2026-06-30T07:15:30.000Z',
+                  generation: 0,
+                  id: 'job_fail',
+                  last_error: null,
+                  lease_owner: values[2],
+                  lease_token: values[4],
+                  leased_until: '2026-06-30T07:16:00.000Z',
+                  lineage: 'job_fail',
+                  logical_key: null,
+                  priority: 0,
+                  run_at: '2026-06-30T07:15:30.000Z',
+                  status: 'running',
+                  task_key: 'fail.task',
+                  updated_at: '2026-06-30T07:15:30.000Z',
+                },
+              ],
+            };
+          }
+          return { rowCount: text.includes('set status = case') ? 1 : 0, rows: [] };
+        },
+      };
+      const failing = task('fail.task', {
+        input: s.object({}),
+        run() {
+          throw new Error('task exploded');
+        },
+      });
+      const app = createApp({
+        db: () => db,
+        onError,
+        tasks: [failing],
+      });
+
+      await createAppTaskRuntime(app)?.ensureStarted(new Request('http://localhost/request'));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(onError).toHaveBeenCalledWith(
+        expect.any(Error),
+        expect.objectContaining({
+          operation: 'task-runner',
+          taskJobId: 'job_fail',
+          taskKey: 'fail.task',
+          url: 'http://localhost/_kovo/task',
+        }),
+      );
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

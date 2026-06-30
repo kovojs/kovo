@@ -6,6 +6,8 @@
  */
 export interface ServerErrorDiagnosticContext {
   mutationKey?: string;
+  taskJobId?: string;
+  taskKey?: string;
   operation:
     | 'app-request'
     | 'client-module'
@@ -14,6 +16,7 @@ export interface ServerErrorDiagnosticContext {
     | 'mutation-render'
     | 'no-js-mutation-handler'
     | 'query-endpoint'
+    | 'task-runner'
     | 'route-page'
     | 'route-render';
   queryKey?: string;
