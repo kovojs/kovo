@@ -61,6 +61,62 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ]);
   });
 
+  it('uses read provenance for KV414 and fails closed when owner provenance is missing', () => {
+    const facts: QueryFact[] = [
+      {
+        query: 'orderFromProvenance',
+        readProvenance: [
+          {
+            columns: [],
+            domain: 'order',
+            keys: null,
+            scope: { key: 'arg:id', kind: 'arg' },
+            site: 'q.ts:10',
+            source: 'select',
+            via: 'orders',
+          },
+        ],
+        reads: ['order'],
+        shape: {},
+        site: 'q.ts:10',
+      },
+      {
+        query: 'orderMissingProvenance',
+        readProvenance: [
+          {
+            columns: [],
+            domain: 'profile',
+            keys: null,
+            scope: { kind: 'unscoped' },
+            site: 'q.ts:20',
+            source: 'select',
+            via: 'profiles',
+          },
+        ],
+        reads: ['order', 'profile'],
+        shape: {},
+        site: 'q.ts:20',
+      },
+    ];
+
+    expect(
+      scopeAuditsFromQueryFacts(facts, [{ domain: 'order', owner: 'userId' }]).map((audit) => ({
+        domain: audit.domain,
+        key: audit.key,
+        name: audit.name,
+        scope: audit.scope,
+      })),
+    ).toEqual([
+      { domain: 'order', key: 'arg:id', name: 'orderFromProvenance', scope: 'args' },
+      {
+        domain: 'order',
+        key: undefined,
+        name: 'orderMissingProvenance',
+        scope: 'unknown',
+      },
+    ]);
+  });
+
   // End-to-end producer: project source -> ownerDomains + scopeAudits.
   it('extracts ownerDomains + scopeAudits from a project, flagging arg-keyed and unproven owner reads', () => {
     const audit = extractOwnerAuditFromProject(
