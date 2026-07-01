@@ -323,9 +323,16 @@ check:api-surface`, and `pnpm run check:vp`.
 ## Final Completion Gate
 
 - [ ] **Before marking this plan complete, run and record the final broad gates.**
-  - [ ] `node scripts/fundamental-fixes-inventory.mjs`
-  - [ ] `pnpm run check:vp`
-  - [ ] `pnpm run check:api-surface`
-  - [ ] Focused B/D/F/A/C/E test commands from the completed checklist items.
-  - [ ] Relevant create-kovo prod-artifact tests for every artifact-observable contract.
+  - [x] `node scripts/fundamental-fixes-inventory.mjs`
+        Evidence: reports 28 syntactic recognition candidates, 23 literal comparisons, 5 import-specifier
+        comparisons, 1,823 AST-kind gates, and 99 KV406/fail-closed sites.
+  - [x] `pnpm run check:vp`
+        Evidence: passed.
+  - [x] `pnpm run check:api-surface`
+        Evidence: passed with public-exports-needing-attention=0 and recursive-publicness baseline 832.
+  - [x] Focused B/D/F/A/C/E test commands from the completed checklist items.
+        Evidence: focused compiler/Drizzle/CLI/server suites, conformance metamorphic fixtures, Drizzle-pin
+        conformance, and webhook idempotency Playwright test passed in this session.
+  - [x] Relevant create-kovo prod-artifact tests for every artifact-observable contract.
+        Evidence: serialized `pnpm exec vitest run packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts packages/create-kovo/src/index.build.prod-artifact.defer.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts packages/create-kovo/src/index.build.scaffold.typecheck.test.ts packages/create-kovo/src/index.test.ts --no-file-parallelism` passed.
   - [ ] Push from local `main` and monitor GitHub CI to completion.
