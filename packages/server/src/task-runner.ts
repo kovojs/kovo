@@ -1,3 +1,4 @@
+import { frameworkEgressFetch } from './egress.js';
 import type { TaskDefinition, TaskHandle, TaskRunContext, TaskScheduleOptions } from './task.js';
 import type {
   DurableTaskEnqueueInput,
@@ -253,7 +254,7 @@ export class DurableTaskRunner {
     return {
       jobId: job.id,
       idempotencyKey: job.id,
-      fetch: this.hooks.fetch ?? globalThis.fetch.bind(globalThis),
+      fetch: this.hooks.fetch ?? frameworkEgressFetch,
       runMutation:
         this.hooks.runMutation ??
         (async () => {
