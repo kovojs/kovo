@@ -295,7 +295,7 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     provenance-checked `declare off-wire` escape.
   - Verify: the arrow-closure laundering + the mutation-handler secret-return both fail closed; a legitimate non-secret
     literal return stays green (DEC10 corpus).
-- [ ] **N — Source-derived census + enroll new surfaces (closes `papercuts-24` P1).**
+- [x] **N — Source-derived census + enroll new surfaces (closes `papercuts-24` P1).**
   - Problem: `node scripts/fundamental-fixes-census-gate.mjs --require-complete` reports `complete: true` with ZERO
     durable-task rows, because it enforces a required-SET only for `resolver-expression-kind` + `dialect-sink`; the
     `write-capable-handle`/`output-wire-sink` denominators are hand-authored (`PLAN_CENSUS_SECTIONS`) and
@@ -306,6 +306,7 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     `request.schedule`/`TaskRunContext.*`/`_kovo_jobs`), mutation-handler wire, `createDurableTaskStatus.lastError`;
     **N.4** add a committed un-enrolled branded-sink canary the gate MUST flag (M11).
   - Verify: `--require-complete` FAILS on a source-discovered handle/channel with no row; the canary is caught.
+  - Evidence: `pnpm exec vitest --run scripts/fundamental-fixes-census-gate.test.mjs`, `node scripts/fundamental-fixes-census-gate.mjs --require-complete`, `pnpm run check:security-gate-mutations`, touched-file `vp check`, and `git diff --check` passed after the census gate derived 8 write-handle classifiers and 27 wire emitters from branded source calls and required manifest `sourceDecisions` enrollment for each.
 - [ ] **P.2 / P.3 — Wire-output + egress chokes (DEC5/DEC6, M8; P.2 after S4/S5).**
   - P.2: route every response-emitting path through `emitToWire()`; structural test that no channel writes a
     `Response`/document/header outside it. P.3: route task `ctx.fetch` + webhook + agent-tool egress through the egress

@@ -64,6 +64,28 @@ const PLAN_CENSUS_SECTIONS = [
   },
 ];
 
+export const SOURCE_DECISION_SCOPES = [
+  {
+    files: ['packages/server/src/sql-safe-handle.ts', 'packages/server/src/sql-write-allowlist.ts'],
+    kind: 'write-capable-handle',
+    wrapper: 'securityClassifier',
+  },
+  {
+    files: [
+      'packages/server/src/response.ts',
+      'packages/server/src/query.ts',
+      'packages/server/src/mutation/wire-response.ts',
+      'packages/server/src/mutation/streaming.ts',
+      'packages/server/src/document-core.ts',
+      'packages/server/src/app-system-response.ts',
+      'packages/server/src/capability-url.ts',
+      'packages/server/src/static-export-headers.ts',
+    ],
+    kind: 'output-wire-sink',
+    wrapper: 'wireEmitter',
+  },
+];
+
 export function loadCensusManifest(manifestPath = path.join(repoRoot, defaultManifestPath)) {
   return JSON.parse(readFileSync(manifestPath, 'utf8'));
 }
@@ -99,6 +121,32 @@ export function extractPlanCensusRows(planText) {
   return rows;
 }
 
+export function extractSourceDecisionRows({
+  root = repoRoot,
+  readText = (relativePath) => readFileSync(path.join(root, relativePath), 'utf8'),
+  scopes = SOURCE_DECISION_SCOPES,
+} = {}) {
+  const rows = [];
+  for (const scope of scopes) {
+    for (const file of scope.files) {
+      const text = readText(file);
+      const pattern = new RegExp(`${scope.wrapper}\\(\\s*['"]([^'"]+)['"]`, 'gu');
+      for (const match of text.matchAll(pattern)) {
+        rows.push({
+          file,
+          kind: scope.kind,
+          line: lineNumberAtOffset(text, match.index ?? 0),
+          sourceDecision: match[1],
+          wrapper: scope.wrapper,
+        });
+      }
+    }
+  }
+  return rows.sort((left, right) =>
+    `${left.kind}\0${left.sourceDecision}`.localeCompare(`${right.kind}\0${right.sourceDecision}`),
+  );
+}
+
 export function planCensusRowId(label) {
   return label
     .replace(/`([^`]+)`/gu, '$1')
@@ -113,6 +161,7 @@ export function evaluateFundamentalFixesCensus({
   planPath = defaultPlanPath,
   planText = loadPlanText(path.join(repoRoot, planPath)),
   requireComplete = false,
+  sourceRows = extractSourceDecisionRows(),
 } = {}) {
   const violations = [];
   const rows = Array.isArray(manifest?.rows) ? manifest.rows : [];
@@ -149,6 +198,7 @@ export function evaluateFundamentalFixesCensus({
   validateParentRows(rows, rowsById, violations);
   validateResolverRows(rows, violations);
   validateDialectMatrixRows(rows, violations);
+  validateSourceDerivedRows(rows, sourceRows, violations);
 
   for (const row of rows) {
     if (!row || typeof row !== 'object') continue;
@@ -162,6 +212,9 @@ export function evaluateFundamentalFixesCensus({
     dialectMatrixRows: rows.filter((row) => row?.kind === 'dialect-sink').length,
     outputWireSinkRows: rows.filter((row) => row?.kind === 'output-wire-sink').length,
     resolverExpressionKindRows: rows.filter((row) => row?.kind === 'resolver-expression-kind')
+      .length,
+    sourceOutputWireSinkRows: sourceRows.filter((row) => row.kind === 'output-wire-sink').length,
+    sourceWriteCapableHandleRows: sourceRows.filter((row) => row.kind === 'write-capable-handle')
       .length,
     writeCapableHandleRows: rows.filter((row) => row?.kind === 'write-capable-handle').length,
   };
@@ -284,6 +337,20 @@ function validateRowShape(row, evidenceBundleIds, violations) {
         }
         if (!evidenceBundleIds.has(bundleId)) {
           violations.push(`${label}: references missing evidence bundle ${bundleId}`);
+        }
+      }
+    }
+  }
+  if (row.sourceDecision !== undefined && typeof row.sourceDecision !== 'string') {
+    violations.push(`${label}: sourceDecision must be a string when present`);
+  }
+  if (row.sourceDecisions !== undefined) {
+    if (!Array.isArray(row.sourceDecisions)) {
+      violations.push(`${label}: sourceDecisions must be an array when present`);
+    } else {
+      for (const sourceDecision of row.sourceDecisions) {
+        if (typeof sourceDecision !== 'string' || sourceDecision.length === 0) {
+          violations.push(`${label}: sourceDecisions entries must be non-empty strings`);
         }
       }
     }
@@ -428,6 +495,44 @@ function validateDialectMatrixRows(rows, violations) {
           `${defaultManifestPath}: missing dialect x sink matrix row ${dialect}/${sink}`,
         );
       }
+    }
+  }
+}
+
+function validateSourceDerivedRows(rows, sourceRows, violations) {
+  const sourceByKindAndDecision = new Map(
+    sourceRows.map((row) => [`${row.kind}:${row.sourceDecision}`, row]),
+  );
+  const enrolledByKindAndDecision = new Map();
+
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    const sourceDecisions = [
+      ...(typeof row.sourceDecision === 'string' ? [row.sourceDecision] : []),
+      ...(Array.isArray(row.sourceDecisions) ? row.sourceDecisions : []),
+    ];
+    for (const sourceDecision of sourceDecisions) {
+      const key = `${row.kind}:${sourceDecision}`;
+      if (enrolledByKindAndDecision.has(key)) {
+        violations.push(
+          `${row.id}: duplicate source decision enrollment ${sourceDecision}; already enrolled by ${enrolledByKindAndDecision.get(
+            key,
+          )}`,
+        );
+      }
+      enrolledByKindAndDecision.set(key, row.id);
+      if (!sourceByKindAndDecision.has(key)) {
+        violations.push(`${row.id}: source decision ${sourceDecision} is not source-discovered`);
+      }
+    }
+  }
+
+  for (const sourceRow of sourceRows) {
+    const key = `${sourceRow.kind}:${sourceRow.sourceDecision}`;
+    if (!enrolledByKindAndDecision.has(key)) {
+      violations.push(
+        `${defaultManifestPath}: missing manifest enrollment for ${sourceRow.kind} source decision ${sourceRow.sourceDecision} (${sourceRow.file}:${sourceRow.line})`,
+      );
     }
   }
 }

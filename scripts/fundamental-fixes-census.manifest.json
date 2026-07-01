@@ -33,7 +33,8 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB failed-validation and dialect-matrix/census enforcement mutants"
-      }
+      },
+      "sourceDecisions": ["server.sql.read-only-statement"]
     },
     {
       "id": "readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime",
@@ -175,7 +176,13 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
-      }
+      },
+      "sourceDecisions": [
+        "server.sql.enforce-managed-sql",
+        "server.sql.managed-safety-mode",
+        "server.sql.parse-managed-write-tables",
+        "server.sql.write-table-allowlist"
+      ]
     },
     {
       "id": "write-mode-declared-table-statements-pass-and-cross-table-statements-fail-closed",
@@ -566,7 +573,12 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
-      }
+      },
+      "sourceDecisions": [
+        "server.sql.classify-write-statement",
+        "server.sql.parse-write-tables",
+        "server.sql.unparsed-sqlite-write"
+      ]
     },
     {
       "id": "unknown-method-with-a-sql-carrier-is-parsed-before-execution",
@@ -680,7 +692,12 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations"
-      }
+      },
+      "sourceDecisions": [
+        "server.wire.route-document",
+        "server.wire.route-to-document-response",
+        "server.wire.ssr-document"
+      ]
     },
     {
       "id": "ssr-route-render-text-is-escaped-in-the-production-document",
@@ -763,7 +780,14 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping"
-      }
+      },
+      "sourceDecisions": [
+        "server.wire.query-cache-headers",
+        "server.wire.query-endpoint",
+        "server.wire.query-endpoint-chunk",
+        "server.wire.query-json-headers",
+        "server.wire.query-registry-endpoint"
+      ]
     },
     {
       "id": "q-query-response-body-escapes-client-visible-html",
@@ -846,7 +870,14 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations"
-      }
+      },
+      "sourceDecisions": [
+        "server.wire.mutation-failure",
+        "server.wire.mutation-headers",
+        "server.wire.mutation-lifecycle",
+        "server.wire.mutation-reauth",
+        "server.wire.mutation-success-delta"
+      ]
     },
     {
       "id": "enhanced-mutation-fragment-bodies-escape-client-visible-html",
@@ -929,7 +960,8 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations passed with 30 mutants killed, including closed-row M1 evidence enforcement"
-      }
+      },
+      "sourceDecisions": ["server.wire.mutation-stream"]
     },
     {
       "id": "defer-shell-streams-before-slow-regions-complete",
@@ -1040,7 +1072,17 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations"
-      }
+      },
+      "sourceDecisions": [
+        "server.wire.bless-redirect-response",
+        "server.wire.redirect-location-header",
+        "server.wire.redirect-location-header-value",
+        "server.wire.route-outcome-headers",
+        "server.wire.route-to-web-response",
+        "server.wire.server-to-web-response",
+        "server.wire.static-export-header-sink",
+        "server.wire.static-export-headers"
+      ]
     },
     {
       "id": "route-outcome-headers-reject-crlf-injection",
@@ -1151,7 +1193,13 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations"
-      }
+      },
+      "sourceDecisions": [
+        "server.wire.error-document-shell",
+        "server.wire.html-server-error",
+        "server.wire.route-outcome-response",
+        "server.wire.system-response"
+      ]
     },
     {
       "id": "500-shells-escape-request-controlled-payloads",
@@ -1234,7 +1282,8 @@
       },
       "m3": {
         "mutationGate": "pnpm run check:security-gate-mutations passed with 31 mutants killed; census closed-row M1/M2/M3 enforcement remains mutation-tested"
-      }
+      },
+      "sourceDecisions": ["server.wire.capability-url"]
     },
     {
       "id": "capability-urls-mint-and-verify-against-the-production-artifact",

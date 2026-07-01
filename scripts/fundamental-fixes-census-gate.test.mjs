@@ -8,6 +8,7 @@ import {
   REQUIRED_RESOLVER_EXPRESSION_KINDS,
   evaluateFundamentalFixesCensus,
   extractPlanCensusRows,
+  extractSourceDecisionRows,
   loadCensusManifest,
 } from './fundamental-fixes-census-gate.mjs';
 
@@ -45,6 +46,8 @@ describe('fundamental-fixes-census-gate', () => {
         REQUIRED_DIALECT_MATRIX_DIALECTS.length * REQUIRED_DIALECT_MATRIX_SINKS.length,
       outputWireSinkRows: 39,
       resolverExpressionKindRows: REQUIRED_RESOLVER_EXPRESSION_KINDS.length,
+      sourceOutputWireSinkRows: 27,
+      sourceWriteCapableHandleRows: 8,
       writeCapableHandleRows: 23,
     });
     expect(report.openRows).toEqual([]);
@@ -57,6 +60,45 @@ describe('fundamental-fixes-census-gate', () => {
     );
     expect(report.openRows).not.toContain(
       'read-only-handle-client-session-escapes-fail-closed-before-execution',
+    );
+  });
+
+  it('derives source sink/handle denominator rows from branded source decisions', () => {
+    const sourceRows = extractSourceDecisionRows();
+    expect(sourceRows.filter((row) => row.kind === 'write-capable-handle')).toHaveLength(8);
+    expect(sourceRows.filter((row) => row.kind === 'output-wire-sink')).toHaveLength(27);
+    expect(sourceRows.map((row) => row.sourceDecision)).toContain('server.sql.enforce-managed-sql');
+    expect(sourceRows.map((row) => row.sourceDecision)).toContain('server.wire.mutation-stream');
+  });
+
+  it('fails when a source-discovered sink or handle is not enrolled in the manifest', () => {
+    const manifest = cloneDefaultManifest();
+    const row = manifest.rows.find((candidate) => candidate.id === 'ssr-document-html');
+    row.sourceDecisions = row.sourceDecisions.filter(
+      (sourceDecision) => sourceDecision !== 'server.wire.ssr-document',
+    );
+
+    expect(evaluateFundamentalFixesCensus({ manifest, planText }).violations).toContain(
+      'scripts/fundamental-fixes-census.manifest.json: missing manifest enrollment for output-wire-sink source decision server.wire.ssr-document (packages/server/src/document-core.ts:226)',
+    );
+  });
+
+  it('fails stale or duplicate source-decision manifest enrollments', () => {
+    const stale = cloneDefaultManifest();
+    const row = stale.rows.find((candidate) => candidate.id === 'ssr-document-html');
+    row.sourceDecisions = [...row.sourceDecisions, 'server.wire.no-longer-exists'];
+
+    expect(evaluateFundamentalFixesCensus({ manifest: stale, planText }).violations).toContain(
+      'ssr-document-html: source decision server.wire.no-longer-exists is not source-discovered',
+    );
+
+    const duplicate = cloneDefaultManifest();
+    duplicate.rows
+      .find((candidate) => candidate.id === 'q-query-response')
+      .sourceDecisions.push('server.wire.ssr-document');
+
+    expect(evaluateFundamentalFixesCensus({ manifest: duplicate, planText }).violations).toContain(
+      'q-query-response: duplicate source decision enrollment server.wire.ssr-document; already enrolled by ssr-document-html',
     );
   });
 
