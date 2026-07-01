@@ -214,6 +214,34 @@ describe('server webhook primitive', () => {
     expect(steps).toEqual(['begin', 'handler:tx_1', 'commit']);
   });
 
+  it('fails closed on malformed JSON before schema parse or handler execution', async () => {
+    let handlerCalls = 0;
+    const verifier = hmacSignature({
+      encoding: 'hex',
+      header: 'x-signature',
+      name: 'stripe-lite',
+      payload: (request) => request.payload,
+      scheme: 'stripe-lite:v1:hmac-sha256',
+      secret: 'whsec_test',
+    });
+    const stripeWebhook = webhook('/webhooks/stripe', {
+      handler() {
+        handlerCalls += 1;
+      },
+      idempotency: (input) => input.id as string,
+      input: s.object({ id: s.string() }),
+      verify: verifier,
+    });
+    const body = '{ not json';
+    const result = await runWebhook(stripeWebhook, signedRequest(body, sign(body)));
+
+    expect(result.response.status).toBe(400);
+    await expect(result.response.text()).resolves.toBe('Invalid JSON webhook body');
+    expect(result.changes).toEqual([]);
+    expect(result.replayed).toBe(false);
+    expect(handlerCalls).toBe(0);
+  });
+
   it('wraps WebhookTxDb with the managed SQL runtime floor before the handler sees it', async () => {
     const replayStore = createMemoryWebhookReplayStore();
     const calls: string[] = [];

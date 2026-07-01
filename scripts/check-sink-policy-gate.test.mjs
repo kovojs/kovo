@@ -12,6 +12,7 @@ import {
   logChannelNeutralizerInvariantFindings,
   logChannelSinkFindings,
   publicSinkPolicyEscapeFindings,
+  requestBodyParserChokeFindings,
   responseFragmentApplyInvariantFindings,
   rootedFileServeRawSinkFindings,
   rootedFileServeInvariantFindings,
@@ -1257,6 +1258,65 @@ describe('sink-policy gate', () => {
     ).toEqual([]);
   });
 
+  it('rejects direct request JSON and form parsing outside the request-body choke', () => {
+    expect(
+      requestBodyParserChokeFindings(
+        'packages/server/src/unsafe-body.ts',
+        `
+          export async function decode(request) {
+            const json = await request.json();
+            const form = await request.formData();
+            return { json, form };
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-body.ts: KV442 request body parser bypass; route JSON/form body parsing through packages/server/src/untrusted-request-body.ts so runtime inputs hit one schema-bounded choke',
+    ]);
+  });
+
+  it('rejects direct raw request body JSON decode outside the request-body choke', () => {
+    expect(
+      requestBodyParserChokeFindings(
+        'packages/server/src/webhook.ts',
+        `
+          export function parseWebhookBody(rawBody) {
+            return JSON.parse(new TextDecoder().decode(rawBody));
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/webhook.ts: KV442 raw request body JSON parser bypass; route raw-byte JSON decode through packages/server/src/untrusted-request-body.ts before schema validation',
+    ]);
+  });
+
+  it('allows request body parsing inside the parser choke and load-shed wrapper', () => {
+    expect(
+      requestBodyParserChokeFindings(
+        'packages/server/src/untrusted-request-body.ts',
+        `
+          export async function readUntrustedRequestBody(request) {
+            if (request.headers.get("content-type") === "application/json") return request.json();
+            return request.formData();
+          }
+        `,
+        { allowedChokeFile: true },
+      ),
+    ).toEqual([]);
+
+    expect(
+      requestBodyParserChokeFindings(
+        'packages/server/src/app-load-shed.ts',
+        `
+          export function requestWithBodyLimit(target) {
+            return JSON.parse(new TextDecoder().decode(await readLimitedArrayBuffer(target)));
+          }
+        `,
+        { allowedChokeFile: true },
+      ),
+    ).toEqual([]);
+  });
+
   it('runs the deserialization gate over configured server source files', () => {
     expect(
       checkSinkPolicyGate({
@@ -1271,8 +1331,9 @@ describe('sink-policy gate', () => {
           file === 'sink-policy.ts'
             ? validPolicy
             : `
-              export function unsafe(request) {
+              export async function unsafe(request) {
                 const decoded = JSON.parse(payload, revivePayload);
+                const body = await request.json();
                 return new RegExp(request.url);
               }
             `,
@@ -1287,6 +1348,7 @@ describe('sink-policy gate', () => {
     ).toEqual([
       'packages/server/src/unsafe-deserialize.ts: KV442 unsafe deserialization sink JSON.parse reviver; keep body/wire decode reviver-free and route request shapes through schema validation',
       'packages/server/src/unsafe-deserialize.ts: KV442 unsafe dynamic RegExp sink from request/input-derived value; keep pattern construction static or route matching through schema validation',
+      'packages/server/src/unsafe-deserialize.ts: KV442 request body parser bypass; route JSON/form body parsing through packages/server/src/untrusted-request-body.ts so runtime inputs hit one schema-bounded choke',
     ]);
   });
 
