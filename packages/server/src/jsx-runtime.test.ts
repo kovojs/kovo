@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { trustedHtml } from '@kovojs/browser';
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
 import { component, FieldError, FormError } from '@kovojs/core';
 import {
   setRuntimeSinkSecurityEventHandler,
@@ -557,6 +557,20 @@ describe('server jsx runtime', () => {
   it('renders trusted HTML child values without escaping', () => {
     expect(html(jsx('section', { children: trustedHtml('<kovo-defer></kovo-defer>') }))).toBe(
       '<section><kovo-defer></kovo-defer></section>',
+    );
+  });
+
+  it('renders only Kovo-minted TrustedUrl values through URL attribute neutralization', () => {
+    const forgedUrl = { value: 'javascript:alert(1)' };
+
+    expect(html(jsx('a', { href: 'javascript:alert(1)', children: 'bad' }))).toBe(
+      '<a href="#">bad</a>',
+    );
+    expect(html(jsx('a', { href: trustedUrl('javascript:alert(1)'), children: 'vouched' }))).toBe(
+      '<a href="javascript:alert(1)">vouched</a>',
+    );
+    expect(html(jsx('a', { href: forgedUrl, children: 'forged' }))).not.toContain(
+      'href="javascript:alert(1)"',
     );
   });
 

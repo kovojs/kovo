@@ -2,16 +2,20 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
-import { expressionResolvesToTrustedHtmlPureBrand } from '../output-context-facts.js';
+import {
+  expressionResolvesToRenderedHtmlRawSink,
+  expressionResolvesToTrustedHtmlPureBrand,
+  expressionResolvesToTrustedUrlPureBrand,
+} from '../output-context-facts.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 
 /**
- * SPEC §9.1 (sink renderer) / §5.2 #10 (output safety) / §4.8 (trustedHtml escape hatch), KV426
- * (KV236/KV426 family): `trustedHtml(x)` is a PURE brand that performs no sanitization — it brands
- * `x` so a raw-HTML sink emits it verbatim. Branding provably REQUEST- or QUERY-derived data is
- * therefore a by-construction XSS sink (`trustedHtml(renderMarkdown(userBody))` is stored XSS), and
- * the brand currently suppresses KV236 silently. This gate ERRORS when the branded value is provably
- * request/query-derived.
+ * SPEC §9.1 (sink renderer) / §5.2 #10 (output safety) / §4.8 (trustedHtml/trustedUrl escape
+ * hatch), KV426 (KV236/KV426 family): `trustedHtml(x)` / `trustedUrl(x)` are PURE brands that
+ * perform no sanitization, and `renderedHtml(x)` is the server-internal raw-HTML minting sink.
+ * Branding or minting REQUEST-/QUERY-derived data is therefore a by-construction XSS / unsafe URL
+ * sink. This gate ERRORS when the value is request/query-derived OR when the source cannot be
+ * proven clean at this local AST layer.
  *
  * Provenance is decided by AST symbol-identity over the request/query source set (SPEC §6.6(1):
  * "classification is carried by AST symbol-identity provenance … never [a] text heuristic"; §5.2
@@ -19,27 +23,25 @@ import type { ComponentModuleModel } from '../scan/parse.js';
  * KV438 mass-assignment write-provenance gate (SPEC §10.3/§11.1) and on KV437's client-capture gate
  * (its `publishToClient(value, { reason })` audited-escape shape is mirrored here).
  *
- * Bounded blast radius (technical-preview bias: the gate is unconditional, the escape is
- * explicit + audited). The gate flags only PROVABLY-tainted argument expressions:
+ * Bounded blast radius (technical-preview bias: the gate is unconditional, the escape is explicit
+ * + audited). The gate flags:
  *   - a request root: the conventional mutation/form `input` identifier, or a `req`/`request`
- *     accessor chain (`req.search`/`req.params`/`req.body`/`req.headers`/`req.cookies`/…);
+ *     accessor chain only when that root is not shadowed by a local binding
+ *     (`req.search`/`req.params`/`req.body`/`req.headers`/`req.cookies`/…);
  *   - a query root: a render binding destructured from the component's `queries` result;
  *   - those reached directly, via a field access (`question.body`), via taint-preserving local
  *     composition (`question.body ?? ''`, `` `${question.body}` ``), or via a same-scope
  *     alias/destructure/derive (`const { body } = question; trustedHtml(body)`).
- * It deliberately does NOT flag a function-call result (`trustedHtml(renderUserCard(q.name))`):
- * the compiler has no inter-procedural return provenance here (cf. KV437's callee-position reasoning
- * and KV438's `kovoAnalyzerSummary` requirement), so a call result is treated as opaque/clean. That
- * keeps framework-internal/server-derived `trustedHtml(...)` usage clean instead of cascading a
- * blanket "justify every call" rule across the codebase. The residue — `trustedHtml(f(tainted))`
- * where `f` re-emits the taint as raw HTML — is documented, not silently swallowed.
+ * Function calls, spreads, unbound identifiers, and unhandled expression forms are unprovable, not
+ * clean. They fail closed unless the public trustedHtml/trustedUrl call carries an audited reason.
  *
  * Author escapes (audit-visible in `kovo explain --trust`, consistent with KV438's
  * serverValue/adminAssign):
  *   - render user/CMS content through `safeRichHtml(value)` — the sanitizing rich-HTML floor; it is
  *     a different callee, so it is never flagged here;
  *   - for a value the author asserts is safe, take the audited escape `trustedHtml(value,
- *     "<justification>")` (a non-empty static reason), which discharges the gate but stays recorded.
+ *     "<justification>")` / `trustedUrl(value, "<justification>")` (a non-empty static reason),
+ *     which discharges the public trust-brand gate but stays recorded.
  */
 export function validateTrustedHtmlProvenance(
   diagnostics: DiagnosticFactory,
@@ -50,16 +52,21 @@ export function validateTrustedHtmlProvenance(
 
   const found: CompilerDiagnostic[] = [];
   const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node) && callResolvesToTrustedHtmlPureBrand(sourceFile, node)) {
+    if (ts.isCallExpression(node)) {
+      const sink = rawTrustSinkForCall(sourceFile, node);
       const value = node.arguments[0];
-      if (value !== undefined && !ts.isSpreadElement(value) && !hasAuditedReason(node)) {
+      if (
+        sink !== null &&
+        value !== undefined &&
+        !(sink.auditedReasonAllowed && hasAuditedReason(node))
+      ) {
         const provenance = classifyExpression(value, {
           ...enclosingRenderProvenanceBindings(node, bindingsByRender),
           depth: 0,
           visited: new Set<ts.Node>(),
         });
         if (provenance !== null) {
-          found.push(trustedHtmlProvenanceDiagnostic(diagnostics, value, provenance));
+          found.push(rawTrustProvenanceDiagnostic(diagnostics, value, provenance, sink));
         }
       }
     }
@@ -69,7 +76,13 @@ export function validateTrustedHtmlProvenance(
   return found;
 }
 
-type Provenance = 'request' | 'query';
+type Provenance = 'query' | 'request' | 'unprovable';
+
+interface RawTrustSink {
+  readonly auditedReasonAllowed: boolean;
+  readonly label: 'renderedHtml' | 'trustedHtml' | 'trustedUrl';
+  readonly rawSink: 'raw HTML' | 'trusted URL';
+}
 
 interface ClassifyContext {
   readonly queryBindings: ReadonlySet<string>;
@@ -109,28 +122,46 @@ const CORE_MODULE_SPECIFIER = '@kovojs/core';
 const QUERIES_PROPERTY = 'queries';
 const RENDER_PROPERTY = 'render';
 
-function callResolvesToTrustedHtmlPureBrand(
+function rawTrustSinkForCall(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
-): boolean {
-  if (expressionResolvesToTrustedHtmlPureBrand(sourceFile, call.expression)) return true;
-  return wrapperHelperResolvesToTrustedHtmlPureBrand(sourceFile, call);
+): RawTrustSink | null {
+  const direct = rawTrustSinkForExpression(sourceFile, call.expression);
+  if (direct !== null) return direct;
+  return wrapperHelperRawTrustSink(sourceFile, call);
+}
+
+function rawTrustSinkForExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): RawTrustSink | null {
+  if (expressionResolvesToTrustedHtmlPureBrand(sourceFile, expression)) {
+    return { auditedReasonAllowed: true, label: 'trustedHtml', rawSink: 'raw HTML' };
+  }
+  if (expressionResolvesToTrustedUrlPureBrand(sourceFile, expression)) {
+    return { auditedReasonAllowed: true, label: 'trustedUrl', rawSink: 'trusted URL' };
+  }
+  if (expressionResolvesToRenderedHtmlRawSink(sourceFile, expression)) {
+    return { auditedReasonAllowed: false, label: 'renderedHtml', rawSink: 'raw HTML' };
+  }
+  return null;
 }
 
 /**
  * Same-file wrapper-helper recognition for KV426's pure brand sink. This is intentionally narrower
  * than TypeScript type inference: it follows AST symbol identity to a local helper whose body
- * directly calls the real `trustedHtml(param)` pure brand. The call-site argument still owns
+ * directly calls the real `trustedHtml(param)` / `trustedUrl(param)` pure brand or internal
+ * `renderedHtml(param)` sink. The call-site argument still owns
  * request/query provenance per SPEC §6.6; the helper return type or brand annotation is not proof.
  */
-function wrapperHelperResolvesToTrustedHtmlPureBrand(
+function wrapperHelperRawTrustSink(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
-): boolean {
+): RawTrustSink | null {
   const callee = unwrap(call.expression);
-  if (!ts.isIdentifier(callee)) return false;
+  if (!ts.isIdentifier(callee)) return null;
   const declaration = localCallableDeclaration(callee, callee.text);
-  if (declaration === undefined) return false;
+  if (declaration === undefined) return null;
 
   const body =
     ts.isVariableDeclaration(declaration) && declaration.initializer
@@ -138,27 +169,32 @@ function wrapperHelperResolvesToTrustedHtmlPureBrand(
       : ts.isFunctionDeclaration(declaration)
         ? declaration.body
         : undefined;
-  if (body === undefined) return false;
+  if (body === undefined) return null;
 
   const parameterName = callableFirstParameterName(declaration);
-  if (parameterName === undefined) return false;
+  if (parameterName === undefined) return null;
 
   const trustedCall = directReturnExpression(body);
-  if (trustedCall === undefined || !ts.isCallExpression(trustedCall)) return false;
-  if (!expressionResolvesToTrustedHtmlPureBrand(sourceFile, trustedCall.expression)) return false;
+  if (trustedCall === undefined || !ts.isCallExpression(trustedCall)) return null;
+  const sink = rawTrustSinkForExpression(sourceFile, trustedCall.expression);
+  if (sink === null) return null;
 
   const brandedValue = trustedCall.arguments[0];
-  if (brandedValue === undefined) return false;
+  if (brandedValue === undefined || ts.isSpreadElement(brandedValue)) return null;
   const unwrappedValue = unwrap(brandedValue);
-  return ts.isIdentifier(unwrappedValue) && unwrappedValue.text === parameterName;
+  return ts.isIdentifier(unwrappedValue) && unwrappedValue.text === parameterName ? sink : null;
 }
 
 /**
  * Classify an expression's data provenance from typed AST facts. Returns `'request'`/`'query'` when
- * the value is PROVABLY request/query-derived, or `null` (opaque/clean) otherwise — fail-open only
- * for the inter-procedural residue the gate intentionally does not model (function-call results).
+ * the value is request/query-derived, `'unprovable'` when this local analysis cannot prove the value
+ * clean, or `null` only for values proven local/static-clean.
  */
-function classifyExpression(node: ts.Expression, ctx: ClassifyContext): Provenance | null {
+function classifyExpression(
+  node: ts.Expression | ts.SpreadElement,
+  ctx: ClassifyContext,
+): Provenance | null {
+  if (ts.isSpreadElement(node)) return classifyExpression(node.expression, ctx) ?? 'unprovable';
   const expr = unwrap(node);
 
   if (ts.isPropertyAccessExpression(expr) || ts.isElementAccessExpression(expr)) {
@@ -168,36 +204,90 @@ function classifyExpression(node: ts.Expression, ctx: ClassifyContext): Provenan
     return classifyIdentifier(expr, ctx);
   }
   if (ts.isConditionalExpression(expr)) {
-    const whenTrue = classifyExpression(expr.whenTrue, ctx);
-    if (whenTrue !== null) return whenTrue;
-    return classifyExpression(expr.whenFalse, { ...ctx, visited: new Set(ctx.visited) });
+    return firstProvenance([
+      classifyExpression(expr.condition, { ...ctx, visited: new Set(ctx.visited) }),
+      classifyExpression(expr.whenTrue, { ...ctx, visited: new Set(ctx.visited) }),
+      classifyExpression(expr.whenFalse, { ...ctx, visited: new Set(ctx.visited) }),
+    ]);
   }
-  if (ts.isBinaryExpression(expr) && binaryOperatorMayPropagateTaint(expr.operatorToken.kind)) {
-    const left = classifyExpression(expr.left, ctx);
-    if (left !== null) return left;
-    return classifyExpression(expr.right, { ...ctx, visited: new Set(ctx.visited) });
+  if (ts.isBinaryExpression(expr)) {
+    return firstProvenance([
+      classifyExpression(expr.left, { ...ctx, visited: new Set(ctx.visited) }),
+      classifyExpression(expr.right, { ...ctx, visited: new Set(ctx.visited) }),
+    ]);
   }
   if (ts.isTemplateExpression(expr)) {
-    for (const span of expr.templateSpans) {
-      const provenance = classifyExpression(span.expression, {
-        ...ctx,
-        visited: new Set(ctx.visited),
-      });
-      if (provenance !== null) return provenance;
-    }
+    return firstProvenance(
+      expr.templateSpans.map((span) =>
+        classifyExpression(span.expression, { ...ctx, visited: new Set(ctx.visited) }),
+      ),
+    );
   }
-  // Function-call results and literals are opaque: the gate does not invent inter-procedural taint
-  // (documented residue), while taint-preserving local composition is handled above.
-  return null;
+  if (ts.isCallExpression(expr) || ts.isNewExpression(expr)) {
+    const argumentProvenance = firstProvenance(
+      [...(expr.arguments ?? [])].map((arg) =>
+        classifyExpression(arg, { ...ctx, visited: new Set(ctx.visited) }),
+      ),
+    );
+    return argumentProvenance ?? 'unprovable';
+  }
+  if (ts.isArrayLiteralExpression(expr)) {
+    return firstProvenance(
+      expr.elements.map((element) =>
+        classifyExpression(element, { ...ctx, visited: new Set(ctx.visited) }),
+      ),
+    );
+  }
+  if (ts.isObjectLiteralExpression(expr)) {
+    return firstProvenance(
+      expr.properties.map((property) => classifyObjectLiteralProperty(property, ctx)),
+    );
+  }
+  if (ts.isPrefixUnaryExpression(expr) || ts.isPostfixUnaryExpression(expr)) {
+    return classifyExpression(expr.operand, ctx);
+  }
+  if (ts.isNoSubstitutionTemplateLiteral(expr) || isStaticLiteral(expr)) return null;
+  if (expr.kind === ts.SyntaxKind.NullKeyword || expr.kind === ts.SyntaxKind.UndefinedKeyword) {
+    return null;
+  }
+  return 'unprovable';
 }
 
-function binaryOperatorMayPropagateTaint(kind: ts.SyntaxKind): boolean {
+function classifyObjectLiteralProperty(
+  property: ts.ObjectLiteralElementLike,
+  ctx: ClassifyContext,
+): Provenance | null {
+  if (ts.isSpreadAssignment(property)) {
+    return (
+      classifyExpression(property.expression, { ...ctx, visited: new Set(ctx.visited) }) ??
+      'unprovable'
+    );
+  }
+  if (ts.isPropertyAssignment(property)) {
+    return classifyExpression(property.initializer, { ...ctx, visited: new Set(ctx.visited) });
+  }
+  if (ts.isShorthandPropertyAssignment(property)) {
+    return classifyIdentifier(property.name, { ...ctx, visited: new Set(ctx.visited) });
+  }
+  return 'unprovable';
+}
+
+function firstProvenance(values: readonly (Provenance | null)[]): Provenance | null {
+  let unprovable = false;
+  for (const value of values) {
+    if (value === 'query' || value === 'request') return value;
+    if (value === 'unprovable') unprovable = true;
+  }
+  return unprovable ? 'unprovable' : null;
+}
+
+function isStaticLiteral(expr: ts.Expression): boolean {
   return (
-    kind === ts.SyntaxKind.PlusToken ||
-    kind === ts.SyntaxKind.BarBarToken ||
-    kind === ts.SyntaxKind.AmpersandAmpersandToken ||
-    kind === ts.SyntaxKind.QuestionQuestionToken ||
-    kind === ts.SyntaxKind.CommaToken
+    ts.isStringLiteralLike(expr) ||
+    ts.isNumericLiteral(expr) ||
+    expr.kind === ts.SyntaxKind.BigIntLiteral ||
+    expr.kind === ts.SyntaxKind.FalseKeyword ||
+    expr.kind === ts.SyntaxKind.TrueKeyword
   );
 }
 
@@ -230,10 +320,17 @@ function classifyMemberRoot(
     // `req.params.id` / `request.body.html`: request-derived when the root is an unshadowed request
     // accessor and the first member is a request channel.
     if (
-      (ctx.requestBindings.has(cursor.text) || REQUEST_ACCESSOR_ROOTS.has(cursor.text)) &&
+      ctx.requestBindings.has(cursor.text) &&
+      firstMember !== undefined &&
+      REQUEST_ACCESSORS.has(firstMember)
+    ) {
+      return 'request';
+    }
+    if (
+      REQUEST_ACCESSOR_ROOTS.has(cursor.text) &&
       firstMember !== undefined &&
       REQUEST_ACCESSORS.has(firstMember) &&
-      localConstInitializer(cursor, cursor.text) === undefined
+      !hasLocalBinding(cursor, cursor.text)
     ) {
       return 'request';
     }
@@ -263,7 +360,8 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
   if (ctx.queryDataRoots.has(id.text)) return 'query';
   if (ctx.requestBindings.has(id.text)) return 'request';
   if (id.text === REQUEST_INPUT_IDENTIFIER) return 'request';
-  return null;
+  if (id.text === 'undefined' || id.text === 'NaN' || id.text === 'Infinity') return null;
+  return hasLocalBinding(id, id.text) ? 'unprovable' : 'unprovable';
 }
 
 /**
@@ -271,32 +369,83 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
  * `const { <name> } = <init>` visible at `node`, if any.
  */
 function localConstInitializer(node: ts.Node, name: string): ts.Expression | undefined {
+  return localBinding(node, name)?.initializer;
+}
+
+function hasLocalBinding(node: ts.Node, name: string): boolean {
+  return localBinding(node, name) !== undefined;
+}
+
+function localBinding(
+  node: ts.Node,
+  name: string,
+): { readonly initializer?: ts.Expression } | undefined {
+  const sourceFile = node.getSourceFile();
+  const position = node.getStart(sourceFile);
   let cursor: ts.Node | undefined = node.parent;
   while (cursor) {
+    if (isFunctionLikeWithParameters(cursor) && cursor.getStart(sourceFile) < position) {
+      if (cursor.parameters.some((parameter) => bindingNameBinds(parameter.name, name))) {
+        return {};
+      }
+    }
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
       for (const statement of cursor.statements) {
-        if (!ts.isVariableStatement(statement)) continue;
+        if (statement.getStart(sourceFile) >= position) continue;
+        if (!ts.isVariableStatement(statement)) {
+          if (statementBindsName(statement, name)) return {};
+          continue;
+        }
         for (const declaration of statement.declarationList.declarations) {
+          if (declaration.getStart(sourceFile) >= position) continue;
           if (
             ts.isIdentifier(declaration.name) &&
             declaration.name.text === name &&
-            declaration.initializer
+            declaration.initializer &&
+            isConstVariableDeclaration(declaration)
           ) {
-            return declaration.initializer;
+            return { initializer: declaration.initializer };
           }
           if (
             ts.isObjectBindingPattern(declaration.name) &&
             declaration.initializer &&
-            objectBindingPatternBindsName(declaration.name, name)
+            objectBindingPatternBindsName(declaration.name, name) &&
+            isConstVariableDeclaration(declaration)
           ) {
-            return declaration.initializer;
+            return { initializer: declaration.initializer };
           }
+          if (bindingNameBinds(declaration.name, name)) return {};
         }
       }
     }
     cursor = cursor.parent;
   }
   return undefined;
+}
+
+function statementBindsName(statement: ts.Statement, name: string): boolean {
+  if (ts.isImportDeclaration(statement)) return importDeclarationBindsName(statement, name);
+  if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return true;
+  if (ts.isClassDeclaration(statement) && statement.name?.text === name) return true;
+  return false;
+}
+
+function importDeclarationBindsName(statement: ts.ImportDeclaration, name: string): boolean {
+  const clause = statement.importClause;
+  if (!clause) return false;
+  if (clause.name?.text === name) return true;
+  const bindings = clause.namedBindings;
+  if (!bindings) return false;
+  if (ts.isNamespaceImport(bindings)) return bindings.name.text === name;
+  if (!ts.isNamedImports(bindings)) return false;
+  return bindings.elements.some((element) => element.name.text === name);
+}
+
+function isConstVariableDeclaration(node: ts.VariableDeclaration): boolean {
+  return (
+    ts.isVariableDeclarationList(node.parent) &&
+    (node.parent.flags & ts.NodeFlags.Const) === ts.NodeFlags.Const
+  );
 }
 
 function localCallableDeclaration(
@@ -384,6 +533,12 @@ function bindingNameBinds(name: ts.BindingName, target: string): boolean {
 function objectBindingPatternBindsName(pattern: ts.ObjectBindingPattern, name: string): boolean {
   for (const element of pattern.elements) {
     if (ts.isIdentifier(element.name) && identifierName(element.name) === name) return true;
+    if (
+      (ts.isObjectBindingPattern(element.name) || ts.isArrayBindingPattern(element.name)) &&
+      bindingNameBinds(element.name, name)
+    ) {
+      return true;
+    }
   }
   return false;
 }
@@ -608,25 +763,31 @@ const EMPTY_RENDER_BINDINGS: RenderProvenanceBindings = {
   requestBindings: EMPTY_BINDINGS,
 };
 
-function trustedHtmlProvenanceDiagnostic(
+function rawTrustProvenanceDiagnostic(
   diagnostics: DiagnosticFactory,
-  value: ts.Expression,
+  value: ts.Expression | ts.SpreadElement,
   provenance: Provenance,
+  sink: RawTrustSink,
 ): CompilerDiagnostic {
+  const source =
+    provenance === 'unprovable'
+      ? 'data whose provenance cannot be proven locally'
+      : `${provenance}-derived data`;
   const detail =
-    `trustedHtml() brands ${provenance === 'request' ? 'request' : 'query'}-derived data without ` +
-    'sanitization or an audited justification, so attacker-controlled bytes reach a raw-HTML sink.';
+    `${sink.label}() sends ${source} to a ${sink.rawSink} sink without sanitization or an audited ` +
+    'justification.';
+  const publicFix = sink.auditedReasonAllowed
+    ? `or, for a value you assert is not request/query data, use the audited escape ${sink.label}(value, "<justification>") so it is surfaced in kovo explain --trust.`
+    : 'or route the value through a public trustedHtml()/safeRichHtml() boundary with an audited reason before it reaches the internal renderedHtml sink.';
   return {
     ...diagnostics.at('KV426', { start: value.getStart(), length: value.getWidth() }, detail),
     help: [
-      'Blocked reason: trustedHtml() is a pure brand that performs NO sanitization (SPEC §4.8); ' +
-        'branding provably request- or query-derived data emits attacker-controlled bytes verbatim ' +
-        'into a raw-HTML sink (stored/reflected XSS).',
+      `Blocked reason: ${sink.label}() is a pure ${sink.rawSink} escape that performs NO sanitization ` +
+        '(SPEC §4.8); sending request/query-derived or unprovable data to it can emit ' +
+        'attacker-controlled bytes verbatim.',
       'Fixes: render user/CMS content through safeRichHtml(value) (the sanitizing rich-HTML floor, ' +
-        'exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; or, ' +
-        'for a value you assert is not request/query data, use the audited escape ' +
-        'trustedHtml(value, "<justification>") so it is surfaced in kovo explain --trust.',
-      'SPEC §9.1 (sink renderer), §5.2 #10 (output safety), §4.8 (trustedHtml); KV236/KV426 family. ' +
+        `exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; ${publicFix}`,
+      `SPEC §9.1 (sink renderer), §5.2 #10 (output safety), §4.8 (${sink.label}); KV236/KV426 family. ` +
         'Provenance is decided by AST symbol-identity over the request/query source set, modeled on ' +
         'KV438 (SPEC §11.1).',
       diagnosticDefinitions.KV426.help,

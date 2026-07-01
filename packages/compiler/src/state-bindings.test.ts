@@ -708,6 +708,52 @@ export const StateHelperAlias = component({
     );
   });
 
+  it('fails closed with KV311 for imported or unbound module helpers in state derives', () => {
+    const imported = compileComponentModule({
+      fileName: 'state-imported-helper.tsx',
+      source: `
+import { format } from './format';
+
+export const StateImportedHelper = component({
+  state: () => ({ count: 1 }),
+  render: (_queries, state) => (
+    <state-imported-helper><p>{format(state.count)}</p></state-imported-helper>
+  ),
+});
+`,
+    });
+    const unbound = compileComponentModule({
+      fileName: 'state-unbound-helper.tsx',
+      source: `
+export const StateUnboundHelper = component({
+  state: () => ({ count: 1 }),
+  render: (_queries, state) => (
+    <state-unbound-helper><p>{formatMissing(state.count)}</p></state-unbound-helper>
+  ),
+});
+`,
+    });
+
+    expect(imported.files[1]?.source ?? '').not.toContain('format(state.count)');
+    expect(unbound.files[1]?.source ?? '').not.toContain('formatMissing(state.count)');
+    expect(imported.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV311',
+          message: expect.stringContaining('StateImportedHelper state.count expression'),
+        }),
+      ]),
+    );
+    expect(unbound.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV311',
+          message: expect.stringContaining('StateUnboundHelper state.count expression'),
+        }),
+      ]),
+    );
+  });
+
   it('classifies renderOnce state reads without emitting a runtime state plan', () => {
     const result = compileComponentModule({
       fileName: 'state-once.tsx',
