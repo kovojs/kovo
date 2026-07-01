@@ -335,7 +335,8 @@ packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test
   compiler/server suite; `pnpm run check:api-surface`; `pnpm run check:vp`; and `git diff --check`.
 - Integrated KV426/KV311 metamorphic slice: trusted HTML provenance now catches namespace, local-alias,
   local re-export barrel, and same-file direct wrapper-helper variants; query update coverage now follows
-  same-render destructured fields and wrapper/helper aliases. Verified with `vp exec vitest --run
+  same-render destructured fields, function-declaration helpers, and wrapper/helper aliases. Verified with
+  `vp exec vitest --run
 packages/compiler/src/trusted-html-provenance.test.ts
 packages/compiler/src/output-context-trusted-brand-identity.test.ts
 packages/compiler/src/query-coverage.test.ts
