@@ -22,6 +22,7 @@ import {
 } from './html.js';
 import {
   explainGuard,
+  guardFailureToResult,
   guardFailureIsUnauthenticated,
   resolveLifecycleRequest,
   runGuard,
@@ -208,6 +209,18 @@ type ExecuteMutationLifecycleOptions<Request, ReplayResponse> = RunMutationOptio
   replay?: MutationLifecycleReplayPolicy<ReplayResponse>;
 };
 
+const mutationLifecycleGate: unique symbol = Symbol('kovo.mutationLifecycleGate');
+
+type ValidatedMutationLifecycle<Input, Request> = {
+  readonly [mutationLifecycleGate]: true;
+  readonly input: Input;
+  readonly lifecycleRequest: Request;
+};
+
+type InternalRunMutationOptions<Request, Input = unknown> = RunMutationOptions<Request> & {
+  readonly [mutationLifecycleGate]?: ValidatedMutationLifecycle<Input, Request>;
+};
+
 type MutationResponseDeliveryMode<Request, Value> =
   | {
       csrf: CsrfValidationOptions<Request> | false | undefined;
@@ -272,11 +285,6 @@ async function executeMutationLifecycle<
   if (!inputResult.ok) return { failure: inputResult.failure, kind: 'validation-failure' };
 
   const input = inputResult.value as InferSchema<InputSchema>;
-  const lifecycleOptions = {
-    ...options,
-    guardResolved: true,
-    preParsedInput: { value: input },
-  } satisfies RunMutationOptions<Request>;
   const lifecycleRequest = withGuardArgs(
     await resolveLifecycleRequest(
       request,
@@ -288,14 +296,8 @@ async function executeMutationLifecycle<
   if (!options.guardResolved) {
     const guardFailure = await runGuard(definition.guard, lifecycleRequest);
     if (guardFailure) {
-      const status = mutationGuardFailureStatus(guardFailure);
       return {
-        failure: {
-          error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
-          ok: false,
-          ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
-          status,
-        },
+        failure: mutationGuardFailureToResult(guardFailure),
         guardFailure,
         kind: 'guard-failure',
         lifecycleRequest,
@@ -330,16 +332,51 @@ async function executeMutationLifecycle<
 
     const reservation =
       reservationResult.kind === 'reserved' ? reservationResult.reservation : undefined;
-    return runMutationLifecycleHandler(definition, rawInput, request, lifecycleOptions, {
-      catchHandlerErrors: options.catchHandlerErrors,
-      reservation,
-    });
+    return runMutationLifecycleHandler(
+      definition,
+      rawInput,
+      request,
+      validatedMutationLifecycleOptions<Request, InferSchema<InputSchema>>(
+        options,
+        input,
+        lifecycleRequest,
+      ),
+      {
+        catchHandlerErrors: options.catchHandlerErrors,
+        reservation,
+      },
+    );
   }
 
-  return runMutationLifecycleHandler(definition, rawInput, request, lifecycleOptions, {
-    catchHandlerErrors: options.catchHandlerErrors,
-    reservation: undefined,
-  });
+  return runMutationLifecycleHandler(
+    definition,
+    rawInput,
+    request,
+    validatedMutationLifecycleOptions<Request, InferSchema<InputSchema>>(
+      options,
+      input,
+      lifecycleRequest,
+    ),
+    {
+      catchHandlerErrors: options.catchHandlerErrors,
+      reservation: undefined,
+    },
+  );
+}
+
+function validatedMutationLifecycleOptions<Request, Input>(
+  options: ExecuteMutationLifecycleOptions<Request, unknown>,
+  input: Input,
+  lifecycleRequest: Request,
+): InternalRunMutationOptions<Request, Input> {
+  return {
+    ...options,
+    [mutationLifecycleGate]: {
+      [mutationLifecycleGate]: true,
+      input,
+      lifecycleRequest,
+    },
+  };
 }
 
 async function runMutationLifecycleHandler<
@@ -354,7 +391,7 @@ async function runMutationLifecycleHandler<
   definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
   rawInput: unknown,
   request: Request,
-  options: RunMutationOptions<Request>,
+  options: InternalRunMutationOptions<Request, InferSchema<InputSchema>>,
   state: {
     catchHandlerErrors: boolean | undefined;
     reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
@@ -408,52 +445,47 @@ export async function runMutation<
   request: Request,
   options: RunMutationOptions<Request> = {},
 ): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
-  const csrf = mutationCsrfOptions(definition, options.csrf);
-  if (
-    csrf === undefined ||
-    (csrf !== false && !validateCsrfToken(rawInput, request, csrf, { audience: definition.key }))
-  ) {
-    return {
-      error: { code: 'CSRF', payload: {} },
-      ok: false,
-      status: 422,
-    };
-  }
+  const internalOptions = options as InternalRunMutationOptions<Request, InferSchema<InputSchema>>;
+  const validatedLifecycle = internalOptions[mutationLifecycleGate];
+  let input: InferSchema<InputSchema>;
+  let lifecycleRequest: Request;
 
-  // The enhanced/no-JS dispatch paths parse+coerce the input once to thread `req.args` onto the
-  // pre-replay arg-aware guard (SPEC §10.3 lifecycle: parse → guard) and pass the parsed value in
-  // via `preParsedInput` so we do not re-parse here; direct callers (fixtures/tests) parse here.
-  const inputResult = options.preParsedInput
-    ? { ok: true as const, value: options.preParsedInput.value as InferSchema<InputSchema> }
-    : await parseMutationInput(definition.input, rawInput);
-  if (!inputResult.ok) return inputResult.failure;
-
-  const input = inputResult.value as InferSchema<InputSchema>;
-  // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)"): merge the query's/mutation's *validated*
-  // args onto the request so an arg-aware guard (`guards.owns` reading `req.args`) and the handler
-  // both see the same `s.*`-coerced values, discharging KV414 for the covered key. In the
-  // enhanced/no-JS paths the authoritative arg-aware guard already ran pre-replay against this same
-  // merged shape, so `guardResolved` skips the re-run below (avoiding double-running rateLimit).
-  const lifecycleRequest = withGuardArgs(
-    await resolveLifecycleRequest(
-      request,
-      mutationLifecycleOptionsWithSqlPolicy(definition, options),
-    ),
-    input,
-  );
-
-  // A1 (SPEC §10.3): when the dispatch layer already evaluated the guard chain before the replay
-  // lookup, skip it here so a stateful guard (rateLimit) is not double-executed.
-  if (!options.guardResolved) {
-    const guardFailure = await runGuard(definition.guard, lifecycleRequest);
-    if (guardFailure) {
+  if (validatedLifecycle) {
+    // SPEC §9.1: enhanced/no-JS dispatch owns the single CSRF → parse → guard gate before replay.
+    // The module-private sentinel is minted only by executeMutationLifecycle after that gate passes,
+    // so runMutation can consume the validated outcome without repeating security checks by hand.
+    input = validatedLifecycle.input;
+    lifecycleRequest = validatedLifecycle.lifecycleRequest;
+  } else {
+    const csrf = mutationCsrfOptions(definition, options.csrf);
+    if (
+      csrf === undefined ||
+      (csrf !== false && !validateCsrfToken(rawInput, request, csrf, { audience: definition.key }))
+    ) {
       return {
-        error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
+        error: { code: 'CSRF', payload: {} },
         ok: false,
-        ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
-        status: guardFailure.status,
+        status: 422,
       };
     }
+
+    const inputResult = await parseMutationInput(definition.input, rawInput);
+    if (!inputResult.ok) return inputResult.failure;
+
+    input = inputResult.value as InferSchema<InputSchema>;
+    // SPEC §10.3:1155-1157 ("Guards (arg-aware, normative)"): merge the mutation's *validated*
+    // args onto the request so an arg-aware guard (`guards.owns` reading `req.args`) and the handler
+    // both see the same `s.*`-coerced values, discharging KV414 for the covered key.
+    lifecycleRequest = withGuardArgs(
+      await resolveLifecycleRequest(
+        request,
+        mutationLifecycleOptionsWithSqlPolicy(definition, options),
+      ),
+      input,
+    );
+
+    const guardFailure = await runGuard(definition.guard, lifecycleRequest);
+    if (guardFailure) return mutationGuardFailureToResult(guardFailure);
   }
 
   const manualInvalidations: ChangeRecord[] = [];
@@ -1961,9 +1993,8 @@ function mutationGuardFailureIsUnauthenticated<Request>(
   return guardFailureIsUnauthenticated(guardFailure, request);
 }
 
-function mutationGuardFailureStatus(guardFailure: ResolvedGuardFailure): 403 | 422 | 429 {
-  if (guardFailure.auth === 'unauthorized') return 403;
-  return guardFailure.status as 422 | 429;
+function mutationGuardFailureToResult(guardFailure: ResolvedGuardFailure): MutationFail {
+  return guardFailureToResult(guardFailure, { authenticatedUnauthorizedStatus: 403 });
 }
 
 function loginLocation(next: string): string {

@@ -21,7 +21,7 @@ import {
 import { renderMutationResponse, renderNoJsMutationResponse, runMutation } from './mutation.js';
 import { query, runQuery } from './query.js';
 import { route, runRoutePage } from './route.js';
-import { s } from './schema.js';
+import { s, type Schema } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
 describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
@@ -380,6 +380,7 @@ describe('server guard and session primitives', () => {
     });
 
     await expect(runMutation(guarded, { productId: 'p1' }, { session: null })).resolves.toEqual({
+      auth: 'unauthenticated',
       error: { code: 'UNAUTHORIZED', payload: {} },
       ok: false,
       status: 422,
@@ -454,9 +455,10 @@ describe('server guard and session primitives', () => {
     await expect(
       runMutation(guarded, { productId: 'p1' }, { session: { user: { roles: ['staff'] } } }),
     ).resolves.toEqual({
+      auth: 'unauthorized',
       error: { code: 'UNAUTHORIZED', payload: {} },
       ok: false,
-      status: 422,
+      status: 403,
     });
     await expect(
       runMutation(guarded, { productId: 'p1' }, { session: { user: { roles: ['admin'] } } }),
@@ -712,6 +714,58 @@ describe('server guard and session primitives', () => {
       },
       status: 401,
     });
+  });
+
+  it('runs enhanced mutation CSRF, parse, and guard once before the handler', async () => {
+    type Request = { session?: { id?: string; user?: { id: string } | null } | null };
+    let csrfSessionReads = 0;
+    let parseCalls = 0;
+    let guardCalls = 0;
+    let handlerCalls = 0;
+    const request = { session: { id: 's1', user: { id: 'u1' } } } satisfies Request;
+    const csrf = {
+      secret: 'single-lifecycle-gate-secret-0123456789abcdef',
+      sessionId(req: Request) {
+        csrfSessionReads += 1;
+        return req.session?.id;
+      },
+    };
+    const objectInput = s.object({ productId: s.string() });
+    const input: Schema<{ productId: string }> = {
+      parse(rawInput) {
+        parseCalls += 1;
+        return objectInput.parse(rawInput);
+      },
+    };
+    const guarded = mutation('cart/deduped-lifecycle', {
+      csrf,
+      guard(req: Request) {
+        guardCalls += 1;
+        return req.session?.user ? true : { kind: 'unauthenticated' as const, payload: {} };
+      },
+      input,
+      handler() {
+        handlerCalls += 1;
+        return 'ok';
+      },
+    });
+    const token = csrfToken(request, csrf, { audience: 'cart/deduped-lifecycle' });
+    csrfSessionReads = 0;
+
+    await expect(
+      renderMutationResponse(guarded, {
+        buildToken: 'single-lifecycle-build',
+        rawInput: { 'kovo-csrf': token, productId: 'p1' },
+        request,
+      }),
+    ).resolves.toMatchObject({ status: 200 });
+
+    // One CSRF validation pass currently reads the session id three times internally; the old
+    // lifecycle duplication would run the whole pass twice.
+    expect(csrfSessionReads).toBe(3);
+    expect(parseCalls).toBe(1);
+    expect(guardCalls).toBe(1);
+    expect(handlerCalls).toBe(1);
   });
 
   it('returns 303 login redirect for unauthenticated no-JS mutation guard failures', async () => {
@@ -1202,7 +1256,12 @@ describe('guards.owns production-path: runners thread validated args/params (SPE
     ).resolves.toMatchObject({ ok: true, value: { id: 'r1' } });
     await expect(
       runMutation(orderMutation, { id: 'r1' }, { session: { user: { id: 'intruder' } } }),
-    ).resolves.toEqual({ error: { code: 'UNAUTHORIZED', payload: {} }, ok: false, status: 422 });
+    ).resolves.toEqual({
+      auth: 'unauthorized',
+      error: { code: 'UNAUTHORIZED', payload: {} },
+      ok: false,
+      status: 403,
+    });
   });
 
   it('renderNoJsMutationResponse (production no-JS path: pre-replay guard) discharges KV414', async () => {

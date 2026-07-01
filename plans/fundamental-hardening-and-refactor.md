@@ -162,17 +162,19 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     same authored expression normalizes differently per phase.
   - Fix: one shared AST-util (superset unless a phase demonstrably needs less); pin with fixpoint/golden tests first.
   - Evidence: Same focused compiler Vitest/VP/diff checks listed for C2 passed after replacing the divergent unwrap copies with the shared `unwrapExpression` helper in `scan/ast.ts`.
-- [ ] **S1 — Shared `guardFailureToResult`; four copies disagree on `auth`.** (S · low)
+- [x] **S1 — Shared `guardFailureToResult`; four copies disagree on `auth`.** (S · low)
   - Problem: `route.ts:664` (`routeGuardFailure`, incl. `auth`) + `query.ts:431` (incl. `auth`) vs `mutation.ts:293`
     plus `mutation.ts:450` (omit `auth`) → can drop the unauthenticated→login redirect / `retryAfter` on the mutation surface.
   - Decision: determine whether the mutation paths' missing `auth` is intended (SPEC §9.5) before unifying; move
     `routeGuardFailure` into `guards.ts` as the single mapper; call from all four.
-- [ ] **S3 — Collapse the double CSRF→parse→guard in the mutation lifecycle.** (M · med)
+  - Evidence: `pnpm exec vitest --run packages/server/src/csrf.test.ts packages/server/src/guards.test.ts packages/server/src/route-query-guards.test.ts packages/server/src/route.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts packages/server/src/replay.test.ts`, `vp check packages/server/src/guards.ts packages/server/src/route.ts packages/server/src/query.ts packages/server/src/mutation.ts packages/server/src/guards.test.ts`, and `git diff --check HEAD~1..HEAD` passed after route/query/mutation guard failures used the shared `guardFailureToResult` mapper while preserving mutation reauth/403 behavior.
+- [x] **S3 — Collapse the double CSRF→parse→guard in the mutation lifecycle.** (M · med)
   - Problem: `executeMutationLifecycle` validates CSRF, parses input, maps guard failure (`mutation.ts:256-303`), then
     `runMutation` repeats the byte-identical CSRF gate (`:414`), parse, and guard mapping (`447-457`) — two identical
     security gates kept in lockstep by hand.
   - Fix: route all callers through one gate via a module-private `csrfValidated` sentinel consumed by `runMutation`;
     preserve the normative CSRF→parse→guard order (SPEC §9.1).
+  - Evidence: Same focused server Vitest/VP/diff checks listed for S1 passed after `runMutation` consumed a module-private validated lifecycle sentinel and regression coverage asserted a single CSRF→parse→guard pass.
 - [ ] **S4 — One cookie-safe header-bag; make the unsafe spread unrepresentable.** (M · low)
   - Problem: the correct multi-value model exists (`response.ts:12` `ResponseHeaders`, `appendResponseHeader`,
     `mergeMutationResponseHeaders`), but many paths build ad-hoc `Record<string,string>` combined by object spread

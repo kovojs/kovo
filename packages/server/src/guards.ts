@@ -164,6 +164,43 @@ export interface ResolvedGuardFailure {
   status: 422 | 429;
 }
 
+/** @internal Shared route/query/mutation guard-failure result shape (SPEC §9.2/§9.5). */
+export interface GuardFailureResult<Status extends 403 | 422 | 429 = 422 | 429> {
+  auth?: ResolvedGuardFailure['auth'];
+  error: {
+    code: ResolvedGuardFailure['code'];
+    payload: Record<string, unknown>;
+  };
+  ok: false;
+  retryAfter?: number;
+  status: Status;
+}
+
+/** @internal */
+export function guardFailureToResult(failure: ResolvedGuardFailure): GuardFailureResult;
+export function guardFailureToResult(
+  failure: ResolvedGuardFailure,
+  options: { authenticatedUnauthorizedStatus: 403 },
+): GuardFailureResult<403 | 422 | 429>;
+export function guardFailureToResult(
+  failure: ResolvedGuardFailure,
+  options?: { authenticatedUnauthorizedStatus: 403 },
+): GuardFailureResult<403 | 422 | 429> {
+  const status =
+    options?.authenticatedUnauthorizedStatus === 403 &&
+    failure.auth === 'unauthorized' &&
+    failure.status === 422
+      ? 403
+      : failure.status;
+  return {
+    ...(failure.auth === undefined ? {} : { auth: failure.auth }),
+    error: { code: failure.code, payload: failure.payload ?? {} },
+    ok: false,
+    ...(failure.retryAfter === undefined ? {} : { retryAfter: failure.retryAfter }),
+    status,
+  };
+}
+
 /** The minimal authenticated-user shape guards inspect: `id` and `roles`. */
 export interface SessionUserLike {
   id?: string;

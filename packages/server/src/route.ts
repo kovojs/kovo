@@ -5,6 +5,7 @@ import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 import { reportServerError } from './diagnostics.js';
 import {
+  guardFailureToResult,
   renderHttpGuardFailureResponse,
   runGuard,
   sanitizeNext,
@@ -662,13 +663,7 @@ async function runRoutePageInternal<
 }
 
 function routeGuardFailure(failure: ResolvedGuardFailure): RoutePageFailure {
-  return {
-    ...(failure.auth === undefined ? {} : { auth: failure.auth }),
-    error: { code: failure.code, payload: failure.payload ?? {} },
-    ok: false,
-    ...(failure.retryAfter === undefined ? {} : { retryAfter: failure.retryAfter }),
-    status: failure.status,
-  };
+  return guardFailureToResult(failure);
 }
 
 function getRoutePageMetadata(

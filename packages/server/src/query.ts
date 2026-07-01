@@ -3,6 +3,7 @@ import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
 import type { AccessDecision } from './access.js';
 import {
+  guardFailureToResult,
   renderHttpGuardFailureResponse,
   runGuard,
   withGuardArgs,
@@ -428,13 +429,7 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
       : (withGuardArgs(resolvedRequest, argsResult.value) as typeof resolvedRequest);
   const guardFailure = await runGuard(definition.guard, lifecycleRequest);
   if (guardFailure) {
-    return {
-      ...(guardFailure.auth === undefined ? {} : { auth: guardFailure.auth }),
-      error: { code: guardFailure.code, payload: guardFailure.payload ?? {} },
-      ok: false,
-      ...(guardFailure.retryAfter === undefined ? {} : { retryAfter: guardFailure.retryAfter }),
-      status: guardFailure.status,
-    };
+    return guardFailureToResult(guardFailure);
   }
 
   const input = argsResult.value;
