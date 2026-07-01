@@ -256,6 +256,38 @@ describe('server response adapters', () => {
     }
   });
 
+  it('allows explicitly allowlisted cross-origin redirect Location targets', () => {
+    expect(
+      redirectLocationHeader('https://accounts.example.test/oauth/callback?state=s1', {
+        allowlist: [
+          {
+            origin: 'https://accounts.example.test',
+            reason: 'OAuth provider callback redirects after delegated sign-in',
+          },
+        ],
+      }),
+    ).toBe('https://accounts.example.test/oauth/callback?state=s1');
+
+    expect(
+      redirectLocationHeader('https://evil.example/phish', {
+        allowlist: [
+          {
+            origin: 'https://accounts.example.test',
+            reason: 'OAuth provider callback redirects after delegated sign-in',
+          },
+        ],
+      }),
+    ).toBe('/');
+  });
+
+  it('rejects redirect Location allowlist entries without an audit rationale', () => {
+    expect(() =>
+      redirectLocationHeader('https://accounts.example.test/oauth/callback', {
+        allowlist: [{ origin: 'https://accounts.example.test', reason: ' ' }],
+      }),
+    ).toThrow(/rationale/);
+  });
+
   it('revalidates mutable blessed redirect Location headers at the final sink', () => {
     const response = blessRedirectResponse({
       body: '',

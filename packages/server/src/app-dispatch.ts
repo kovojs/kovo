@@ -116,9 +116,13 @@ export async function dispatchMatchedAppRequest({
         })
       ).response;
       assertEndpointResponsePosture(match.endpoint, response);
-      return finalizeRawWebResponse(response, request);
+      return finalizeRawWebResponse(response, request, match.endpoint.response);
     }
-    return finalizeRawWebResponse(await runEndpoint(match.endpoint, endpointRequest), request);
+    return finalizeRawWebResponse(
+      await runEndpoint(match.endpoint, endpointRequest),
+      request,
+      match.endpoint.response,
+    );
   }
 
   if (match.kind === 'route') {

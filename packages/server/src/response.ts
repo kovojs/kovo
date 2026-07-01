@@ -24,6 +24,19 @@ export type MutationResponseHeaders = ResponseHeaders;
 
 const SERVER_REDIRECT_LOCATION_SINK = 'server:redirect-location';
 
+/** An explicit, audit-readable cross-origin redirect target allowance. */
+export interface RedirectLocationAllowlistEntry {
+  /** Exact origin, e.g. `https://accounts.example.com`. */
+  origin: string;
+  /** Human-readable reason the app may navigate users to this origin. */
+  reason: string;
+}
+
+/** Options for the framework-owned redirect Location choke. */
+export interface RedirectLocationOptions {
+  allowlist?: readonly RedirectLocationAllowlistEntry[];
+}
+
 /** The common shape of every server response: `body`, `headers`, and `status`. */
 export interface ServerResponseBase<
   Body,
@@ -455,8 +468,8 @@ export const serverResponseToWebResponse = wireEmitter(
  */
 export const redirectLocationHeader = wireEmitter(
   'server.wire.redirect-location-header',
-  function (target: string): string {
-    return sanitizeRedirectLocation(target);
+  function (target: string, options: RedirectLocationOptions = {}): string {
+    return sanitizeRedirectLocation(target, options);
   },
 );
 
@@ -467,7 +480,7 @@ export const blessRedirectResponse = wireEmitter('server.wire.bless-redirect-res
   const locationName = findHeaderName(response.headers, 'Location');
   if (locationName !== undefined) {
     const location = response.headers[locationName];
-    response.headers[locationName] = sanitizeRedirectLocation(
+    response.headers[locationName] = redirectLocationHeader(
       typeof location === 'string' ? location : (location?.[0] ?? '/'),
     );
   }
@@ -480,7 +493,7 @@ export const redirectLocationHeaderValue = wireEmitter(
   function (value: ResponseHeaderValue, blessed: boolean): string {
     if (blessed) {
       const location = Array.isArray(value) ? (value[0] ?? '/') : value;
-      return sanitizeRedirectLocation(location);
+      return redirectLocationHeader(location);
     }
     const text = Array.isArray(value) ? value.join(', ') : String(value);
     drainRuntimeSinkSecurityEvent({
@@ -658,11 +671,61 @@ function requestHeader(request: unknown, name: string): string | undefined {
   return undefined;
 }
 
-function sanitizeRedirectLocation(target: string): string {
+function sanitizeRedirectLocation(target: string, options: RedirectLocationOptions): string {
   if (hasHeaderControlCharacter(target)) return '/';
-  if (!target.startsWith('/') || target.startsWith('//') || target.startsWith('/\\')) return '/';
   if (target.includes('\\')) return '/';
+  if (target.startsWith('/') && !target.startsWith('//') && !target.startsWith('/\\')) {
+    return target;
+  }
+
+  const origin = absoluteRedirectOrigin(target);
+  if (origin === undefined) return '/';
+  if (!redirectOriginAllowed(origin, options.allowlist)) return '/';
   return target;
+}
+
+function absoluteRedirectOrigin(target: string): string | undefined {
+  try {
+    const url = new URL(target);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return undefined;
+    return url.origin;
+  } catch {
+    return undefined;
+  }
+}
+
+function redirectOriginAllowed(
+  origin: string,
+  allowlist: readonly RedirectLocationAllowlistEntry[] | undefined,
+): boolean {
+  if (allowlist === undefined) return false;
+  let allowed = false;
+  for (const entry of allowlist) {
+    if (normalizedRedirectAllowlistOrigin(entry) === origin) allowed = true;
+  }
+  return allowed;
+}
+
+function normalizedRedirectAllowlistOrigin(entry: RedirectLocationAllowlistEntry): string {
+  if (hasHeaderControlCharacter(entry.reason) || entry.reason.trim().length === 0) {
+    throw new TypeError('Redirect Location allowlist entries require a non-empty rationale.');
+  }
+  if (hasHeaderControlCharacter(entry.origin)) {
+    throw new TypeError('Redirect Location allowlist origins must not contain control characters.');
+  }
+  let url: URL;
+  try {
+    url = new URL(entry.origin);
+  } catch {
+    throw new TypeError(`Invalid Redirect Location allowlist origin: ${entry.origin}`);
+  }
+  if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+    throw new TypeError('Redirect Location allowlist origins must use http: or https:.');
+  }
+  if (url.pathname !== '/' || url.search !== '' || url.hash !== '') {
+    throw new TypeError('Redirect Location allowlist entries must be exact origins.');
+  }
+  return url.origin;
 }
 
 function hasHeaderControlCharacter(value: string): boolean {

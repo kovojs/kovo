@@ -507,6 +507,79 @@ describe('server endpoints', () => {
     }
   });
 
+  it('requires raw endpoint external redirects to be allowlisted with a reason', async () => {
+    const previous = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+    process.env.KOVO_VERIFY_ENDPOINT_POSTURE = '1';
+    try {
+      const undeclared = endpoint('/machine/external-redirect', {
+        csrf: false,
+        csrfJustification: 'runtime redirect allowlist verification test',
+        handler: () =>
+          new Response(null, {
+            headers: {
+              'Cache-Control': 'no-store',
+              Location: 'https://accounts.example.test/oauth/start',
+            },
+            status: 303,
+          }),
+        method: 'POST',
+        reason: 'runtime redirect allowlist verification test',
+        response: {
+          appOwnedSafety: true,
+          body: 'redirect',
+          cache: 'no-store',
+          reservedHeaders: ['Location'],
+        },
+      });
+
+      await expect(
+        runEndpoint(
+          undeclared,
+          new Request('https://example.test/machine/external-redirect', { method: 'POST' }),
+        ),
+      ).rejects.toThrow(/redirect Location must be same-origin/u);
+
+      const declared = endpoint('/machine/external-redirect-declared', {
+        csrf: false,
+        csrfJustification: 'runtime redirect allowlist verification test',
+        handler: () =>
+          new Response(null, {
+            headers: {
+              'Cache-Control': 'no-store',
+              Location: 'https://accounts.example.test/oauth/start',
+            },
+            status: 303,
+          }),
+        method: 'POST',
+        reason: 'runtime redirect allowlist verification test',
+        response: {
+          appOwnedSafety: true,
+          body: 'redirect',
+          cache: 'no-store',
+          redirectAllowlist: [
+            {
+              origin: 'https://accounts.example.test',
+              reason: 'Delegated OAuth flow redirects through the identity provider',
+            },
+          ],
+          reservedHeaders: ['Location'],
+        },
+      });
+
+      await expect(
+        runEndpoint(
+          declared,
+          new Request('https://example.test/machine/external-redirect-declared', {
+            method: 'POST',
+          }),
+        ),
+      ).resolves.toMatchObject({ status: 303 });
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
+      else process.env.KOVO_VERIFY_ENDPOINT_POSTURE = previous;
+    }
+  });
+
   it('enforces declared response posture in production by default', async () => {
     const previousNodeEnv = process.env.NODE_ENV;
     const previousVerify = process.env.KOVO_VERIFY_ENDPOINT_POSTURE;
