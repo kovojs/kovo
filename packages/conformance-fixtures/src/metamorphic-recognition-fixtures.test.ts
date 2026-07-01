@@ -89,10 +89,16 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
       },
       {
         code: 'KV311',
-        enforced: 4,
+        enforced: 5,
         label: 'update coverage',
         todo: 0,
-        variants: ['control', 'local-alias', 'destructured-binding', 'wrapper-helper'],
+        variants: [
+          'control',
+          'local-alias',
+          'destructured-binding',
+          'wrapper-helper',
+          'function-helper',
+        ],
       },
     ]);
 

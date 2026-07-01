@@ -56,6 +56,7 @@ function localAliasesForExpression(
   return dedupeAliases([
     ...expression.localConstAliases,
     ...identifierConstReadAliasesForExpression(expression, model),
+    ...functionDeclarationReadAliasesForExpression(expression, model),
     ...destructuredAliasesForExpression(expression, model),
   ]);
 }
@@ -68,6 +69,7 @@ function identifierConstReadAliasesForExpression(
   if (!body) return [];
 
   const declarations = identifierConstDeclarationsBefore(model.sourceFile, body, expression.start);
+  const functions = functionDeclarationsBefore(model.sourceFile, body, expression.start);
   const aliases: ReactiveAliasModel[] = [];
   for (const name of expression.references) {
     const declaration = declarations.get(name);
@@ -77,12 +79,37 @@ function identifierConstReadAliasesForExpression(
       model.sourceFile,
       declaration.initializer,
       declarations,
+      functions,
     );
     if (accesses.length === 0) continue;
     aliases.push({
       accesses,
       name,
       start: declaration.getStart(model.sourceFile),
+    });
+  }
+  return aliases;
+}
+
+function functionDeclarationReadAliasesForExpression(
+  expression: JsxExpressionModel,
+  model: ComponentModuleModel,
+): readonly ReactiveAliasModel[] {
+  const body = smallestFunctionBlockContaining(model.sourceFile, expression.start);
+  if (!body) return [];
+
+  const declarations = functionDeclarationsBefore(model.sourceFile, body, expression.start);
+  const aliases: ReactiveAliasModel[] = [];
+  for (const name of expression.references) {
+    const declaration = declarations.get(name);
+    if (!declaration?.body) continue;
+
+    const accesses = propertyAccessPathModels(model.sourceFile, declaration.body);
+    if (accesses.length === 0) continue;
+    aliases.push({
+      accesses,
+      name,
+      start: declaration.name?.getStart(model.sourceFile) ?? declaration.getStart(model.sourceFile),
     });
   }
   return aliases;
@@ -139,23 +166,49 @@ function identifierConstDeclarationsBefore(
   return declarations;
 }
 
+function functionDeclarationsBefore(
+  sourceFile: ts.SourceFile,
+  body: ts.Block,
+  expressionStart: number,
+): ReadonlyMap<string, ts.FunctionDeclaration> {
+  const declarations = new Map<string, ts.FunctionDeclaration>();
+  const visit = (node: ts.Node): void => {
+    if (node.getStart(sourceFile) >= expressionStart) return;
+    if (ts.isFunctionDeclaration(node) && node.name && node.body) {
+      declarations.set(node.name.text, node);
+      return;
+    }
+    if (node !== body && isFunctionOrClassLike(node)) return;
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(body, visit);
+  return declarations;
+}
+
 function resolvedInitializerAccesses(
   sourceFile: ts.SourceFile,
   initializer: ts.Expression,
   declarations: ReadonlyMap<string, ts.VariableDeclaration>,
+  functions: ReadonlyMap<string, ts.FunctionDeclaration>,
   seen: ReadonlySet<string> = new Set(),
 ): readonly PropertyAccessPathModel[] {
   const direct = propertyAccessPathModels(sourceFile, initializer);
   const nested = identifierReferences(initializer).flatMap((name) => {
     if (seen.has(name)) return [];
     const declaration = declarations.get(name);
-    if (!declaration?.initializer) return [];
-    return resolvedInitializerAccesses(
-      sourceFile,
-      declaration.initializer,
-      declarations,
-      new Set([...seen, name]),
-    );
+    if (declaration?.initializer) {
+      return resolvedInitializerAccesses(
+        sourceFile,
+        declaration.initializer,
+        declarations,
+        functions,
+        new Set([...seen, name]),
+      );
+    }
+
+    const fn = functions.get(name);
+    if (fn?.body) return propertyAccessPathModels(sourceFile, fn.body);
+    return [];
   });
 
   return dedupeAccesses([...direct, ...nested]);
