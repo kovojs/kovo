@@ -143,12 +143,13 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     impl in `domain-writes.ts`; delete the divergence.
   - Verify: `pnpm --filter @kovojs/drizzle test`; a fixture where a helper-hidden raw write is now flagged.
   - Evidence: `pnpm exec vitest run packages/drizzle/src/raw-sql-static.test.ts packages/drizzle/src` passed after merging `agent/fundamental-d1-domain-writes`, including the helper-mediated mutation registry raw-write regression.
-- [ ] **D2 — Single `isQueryShapeWrapper`; the `schema.ts` copy drops `table-row` (secret-projection bug).** (S · med)
+- [x] **D2 — Single `isQueryShapeWrapper`; the `schema.ts` copy drops `table-row` (secret-projection bug).** (S · med)
   - Problem: triplicated at `static.ts:366`, `static/query-shapes.ts:2797`, `static/schema.ts:111`. The schema.ts copy
     (116-120) omits `shape.kind === 'table-row'`, so `secretQueryShape` (schema.ts:103) wraps a table-row secret whole
     instead of recursing into `.shape` — a KV435 secret-projection miss.
   - Fix: export one predicate covering all six `QueryShapeWrapper` kinds (static.ts:236); delete copies; confirm the
     changed table-row secret output vs SPEC/tests.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src`, `vp check packages/drizzle/src/static.ts packages/drizzle/src/static/query-shapes.ts packages/drizzle/src/static/schema.ts packages/drizzle/src/index.query-shapes.test.ts`, and `git diff --check HEAD~1..HEAD` passed after unifying `isQueryShapeWrapper` and adding table-row secret projection regression coverage.
 - [x] **C2 — Single `propertyNameText`; the KV426 copy omits `isNumericLiteral`.** (S · low-med)
   - Problem: five copies, three behaviors. `validate/trusted-html-provenance.ts:905` omits `isNumericLiteral`, so
     `{ 0: x }` resolves to `null` in the KV426 recognizer; `style.ts:1374` rejects template keys
@@ -224,6 +225,7 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
   - `types.ts:918` (`wrapperQueryShapeTypeExpr`) + `941-963` (`typeExprFromRevealedQueryShape`) enumerate the same
     union with divergent arms; exhaustiveness is enforced in only one → a new kind ships a silent `.d.ts` gap. Extract
     one `foldQueryShapeWrapper` with a `Record<kind,…>` handler; guard with `.d.ts` goldens.
+  - Gap: `packages/drizzle/src/types.ts`, `wrapperQueryShapeTypeExpr`, and `typeExprFromRevealedQueryShape` are absent on the current `2eef549be` base and integration branch, so this checkbox remains open pending plan correction or a later typegen surface.
 - [ ] **D4 — Add `assertNever` exhaustiveness to the Drizzle analyzer.** (M · low-med)
   - Zero exhaustiveness across ~20k lines. `PredicatePnf` (summaries.ts:3352, 6 kinds) is dispatched by ~9 partial
     if-chains (summaries.ts:537-552 silently returns `[]` for three kinds; :3772 handles only `eq`/`and`) → a new kind

@@ -1017,6 +1017,57 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('recurses into table-row wrappers when a whole secret table is projected', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'vault.queries.ts',
+          source: `
+          export const vaults = pgTable("vaults", {
+            id: text("id").primaryKey(),
+            token: text("token").notNull(),
+          }, kovo({ domain: "vault", key: "id", secret: true }));
+
+          export const vaultQuery = query("vault", {
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.select({ row: vaults }).from(vaults);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts[0]?.shape).toEqual({
+      row: {
+        kind: 'table-row',
+        shape: {
+          id: { kind: 'secret', shape: 'string' },
+          token: { kind: 'secret', shape: 'string' },
+        },
+        table: 'vaults',
+      },
+    });
+    expect(
+      diagnosticsForQueryFacts(facts).filter((diagnostic) => diagnostic.code === 'KV435'),
+    ).toEqual([
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection vault.row.id reads a secret-classified column or unresolved projection from secret-classified table(s): vaults. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+        severity: 'error',
+        site: 'vault.queries.ts:9',
+      },
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection vault.row.token reads a secret-classified column or unresolved projection from secret-classified table(s): vaults. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+        severity: 'error',
+        site: 'vault.queries.ts:9',
+      },
+    ]);
+  });
+
   it('allows explicit projected shapes from DB columns without KV439', () => {
     const facts = extractQueryFactsFromProject({
       files: [

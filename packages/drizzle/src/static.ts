@@ -363,7 +363,9 @@ function revealFactsFromQueryShape(
   );
 }
 
-function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
+/** @internal */ export function isQueryShapeWrapper(
+  shape: QueryShape,
+): shape is QueryShapeWrapper {
   return (
     typeof shape === 'object' &&
     shape !== null &&

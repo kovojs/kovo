@@ -29,7 +29,6 @@ import {
   type ProjectExtraction,
   type ProjectNamespaceTableNames,
   type QueryShape,
-  type QueryShapeWrapper,
   type SourceFileInput,
   DRIZZLE_CORE_MODULE_SPECIFIERS,
   DRIZZLE_UNMODELED_RELATION_FACTORY_NAMES,
@@ -38,6 +37,7 @@ import {
   BOOLEAN_COLUMN_BUILDERS,
   UNMODELED_RELATION_EXPRESSION_PREFIX,
   appendTableEntries,
+  isQueryShapeWrapper,
   projectExportedTableNamesByName,
   projectNamespaceTableNamesByLocal,
   projectTableNameForNode,
@@ -106,19 +106,6 @@ function secretQueryShape(shape: QueryShape): QueryShape {
     return { ...shape, shape: secretQueryShape(shape.shape) };
   }
   return { kind: 'secret', shape };
-}
-
-function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
-  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return false;
-  return (
-    'kind' in shape &&
-    'shape' in shape &&
-    (shape.kind === 'nullable' ||
-      shape.kind === 'optional' ||
-      shape.kind === 'secret' ||
-      shape.kind === 'volatile-time' ||
-      (shape.kind === 'revealed' && 'reveal' in shape))
-  );
 }
 
 /** @internal */ export function projectRelationalTableNamesByProperty(

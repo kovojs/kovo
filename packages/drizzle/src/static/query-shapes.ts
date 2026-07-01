@@ -54,6 +54,7 @@ import {
   computedPropertyNameExpression,
   functionBody,
   isJoinReadCallName,
+  isQueryShapeWrapper,
   isRestBindingElement,
   isQueryCallOnReceiver,
   isQueryReadCallName,
@@ -2683,8 +2684,29 @@ function appendProjectedColumn(
     tablePath?: string;
   },
 ): void {
+  const tableRow = tableRowProjectionWrapper(input.shape);
+  if (
+    tableRow &&
+    typeof tableRow.shape === 'object' &&
+    tableRow.shape !== null &&
+    !Array.isArray(tableRow.shape) &&
+    !isQueryShapeWrapper(tableRow.shape)
+  ) {
+    for (const [column, shape] of Object.entries(tableRow.shape)) {
+      target.push({
+        classification: queryShapeContainsSecret(shape) ? 'secret' : 'public',
+        column,
+        path: `${input.path}.${column}`,
+        projection: 'table-row',
+        site: input.site,
+        table: tableRow.table,
+      });
+    }
+    return;
+  }
+
   const tableColumn = input.tablePath ? tableColumnFromPath(input.tablePath) : undefined;
-  const table = input.table ?? tableColumn?.table ?? tableRowProjectionTable(input.shape);
+  const table = input.table ?? tableColumn?.table ?? tableRow?.table;
   if (!table) return;
   const column = input.column ?? tableColumn?.column;
 
@@ -2705,10 +2727,16 @@ function tableColumnFromPath(path: string): { column: string; table: string } | 
 }
 
 function tableRowProjectionTable(shape: QueryShape): string | undefined {
+  return tableRowProjectionWrapper(shape)?.table;
+}
+
+function tableRowProjectionWrapper(
+  shape: QueryShape,
+): Extract<QueryShapeWrapper, { kind: 'table-row' }> | undefined {
   if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return undefined;
   if (isQueryShapeWrapper(shape)) {
-    if (shape.kind === 'table-row') return shape.table;
-    return tableRowProjectionTable(shape.shape);
+    if (shape.kind === 'table-row') return shape;
+    return tableRowProjectionWrapper(shape.shape);
   }
   return undefined;
 }
@@ -2792,22 +2820,6 @@ function queryShapeContainsSecret(shape: QueryShape): boolean {
     return queryShapeContainsSecret(shape.shape);
   }
   return Object.values(shape).some(queryShapeContainsSecret);
-}
-
-function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
-  return (
-    typeof shape === 'object' &&
-    shape !== null &&
-    !Array.isArray(shape) &&
-    'kind' in shape &&
-    'shape' in shape &&
-    (shape.kind === 'nullable' ||
-      shape.kind === 'optional' ||
-      shape.kind === 'secret' ||
-      shape.kind === 'table-row' ||
-      shape.kind === 'volatile-time' ||
-      (shape.kind === 'revealed' && 'reveal' in shape))
-  );
 }
 
 /** @internal */ export function nullableShape(shape: QueryShape): QueryShape {
