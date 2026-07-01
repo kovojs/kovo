@@ -44,7 +44,7 @@ that removes the broader source of drift.
   - Verification: add fixtures for `import { s as schema }`, namespace imports, and barrel re-exports;
     run `pnpm exec vitest --run packages/compiler/src/scan/query-shape-source.test.ts packages/compiler/src/scan/mutation-inputs.test.ts packages/server/src/internal/data-plane-static-analysis.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`.
 
-- [ ] **P0.3 - Generate one framework-identity export catalog for compiler, server, and Drizzle.**
+- [x] **P0.3 - Generate one framework-identity export catalog for compiler, server, and Drizzle.**
   - Current signals: `packages/core/src/internal/framework-identity.ts` and
     `packages/drizzle/src/static/framework-identity.ts` maintain separate canonical module/export
     catalogs and subpath rules for the same framework identities.
@@ -54,6 +54,7 @@ that removes the broader source of drift.
   - Risk reduced: future public/internal subpath moves cannot create alias/re-export recognition gaps
     between compiler, server, and Drizzle static analysis.
   - Verification: `pnpm exec vitest --run packages/drizzle/src/index.identity-resolver.test.ts packages/compiler/src/scan/query-shape-source.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/server/src/vite-data-plane-gate.test.ts` plus `node scripts/fundamental-fixes-inventory.mjs`.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.identity-resolver.test.ts packages/compiler/src/scan/query-shape-source.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/server/src/vite-data-plane-gate.test.ts` passed with 4 files/101 tests after merging `agent/hvr4-identity-catalog-20260701-002426`; `node scripts/fundamental-fixes-inventory.mjs`, `pnpm run check:vp`, and `git diff --check HEAD^..HEAD` passed.
 
 - [ ] **P0.4 - Make CLI auth/session audits consume producer-owned graph facts.**
   - Current signals: `packages/cli/src/graph-output.ts` has producer-owned access facts, but security
