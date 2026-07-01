@@ -101,6 +101,22 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        diagnostics: [
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection user.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+            severity: 'error',
+            site: 'user.queries.ts:12',
+          },
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection user.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+            severity: 'error',
+            site: 'user.queries.ts:15',
+          },
+        ],
         query: 'user',
         readProvenance: [
           {

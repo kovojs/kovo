@@ -1543,11 +1543,118 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.count is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection user.count reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
         severity: 'error',
         site: 'user.queries.ts:12',
       },
     ]);
+  });
+
+  it('reports KV435 when a second select launders a secret through find and assignment', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'contact.queries.ts',
+          source: `
+          export const contacts = pgTable("contacts", {
+            company: text("company").notNull(),
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "contact", key: "id", secret: ["company"] }));
+
+          export const contactList = query("contacts", {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
+              const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);
+              const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);
+              for (const secretRow of secretRows) {
+                const item = items.find((candidate) => candidate.id === secretRow.id);
+                if (item) item.company = secretRow.secret;
+              }
+              return items;
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining(
+          'Query projection contacts.secret reads a secret-classified',
+        ),
+        site: 'contact.queries.ts:11',
+      }),
+    ]);
+  });
+
+  it('reports KV435 when a second select secret is pushed into the returned array', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'contact.queries.ts',
+          source: `
+          export const contacts = pgTable("contacts", {
+            company: text("company").notNull(),
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "contact", key: "id", secret: ["company"] }));
+
+          export const contactList = query("contacts", {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
+              const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);
+              const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);
+              const first = secretRows[0];
+              if (first) items.push({ id: first.id, name: "redacted", company: first.secret });
+              return items;
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining(
+          'Query projection contacts.secret reads a secret-classified',
+        ),
+        site: 'contact.queries.ts:11',
+      }),
+    ]);
+  });
+
+  it('keeps a second secret select green when its value is proven off the returned query wire', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'contact.queries.ts',
+          source: `
+          export const contacts = pgTable("contacts", {
+            company: text("company").notNull(),
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "contact", key: "id", secret: ["company"] }));
+
+          export const contactList = query("contacts", {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
+              const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);
+              const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);
+              const serverOnlyCount = secretRows.length;
+              if (serverOnlyCount > 10) await Promise.resolve(serverOnlyCount);
+              return items;
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(
+      diagnosticsForQueryFacts(facts).filter((diagnostic) => diagnostic.code === 'KV435'),
+    ).toEqual([]);
   });
 
   it('recognizes audited trustedReveal calls imported from @kovojs/core', () => {
@@ -1912,14 +2019,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.computed:[displayKey] is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection user.computed:[displayKey] reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
         severity: 'error',
         site: 'user.queries.ts:13',
       },
       {
         code: 'KV435',
         message:
-          'Secret query value reaches the client wire. Query projection user.spread:publicColumns is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+          'Secret query value reaches the client wire. Query projection user.spread:publicColumns reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
         severity: 'error',
         site: 'user.queries.ts:14',
       },
@@ -2688,6 +2795,22 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        diagnostics: [
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection users.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+            severity: 'error',
+            site: 'user.queries.ts:13',
+          },
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection users.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+            severity: 'error',
+            site: 'user.queries.ts:16',
+          },
+        ],
         query: 'users',
         readProvenance: [
           {
@@ -2736,7 +2859,22 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         site: 'user.queries.ts:9',
       },
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection users.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+        severity: 'error',
+        site: 'user.queries.ts:13',
+      },
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection users.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+        severity: 'error',
+        site: 'user.queries.ts:16',
+      },
+    ]);
   });
 
   it('derives nested relational query shapes from static with columns projections', () => {
@@ -2781,6 +2919,22 @@ describe('@kovojs/drizzle touch graph helpers', () => {
 
     expect(facts).toEqual([
       {
+        diagnostics: [
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection posts.author.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+            severity: 'error',
+            site: 'post.queries.ts:23',
+          },
+          {
+            code: 'KV435',
+            message:
+              'Secret query value reaches the client wire. Query projection posts.author.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+            severity: 'error',
+            site: 'post.queries.ts:24',
+          },
+        ],
         query: 'posts',
         readProvenance: [
           {
@@ -2830,7 +2984,22 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         site: 'post.queries.ts:14',
       },
     ]);
-    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection posts.author.apiToken reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+        severity: 'error',
+        site: 'post.queries.ts:23',
+      },
+      {
+        code: 'KV435',
+        message:
+          'Secret query value reaches the client wire. Query projection posts.author.passwordHash reads a secret-classified column or unresolved projection from secret-classified table(s): users. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
+        severity: 'error',
+        site: 'post.queries.ts:24',
+      },
+    ]);
   });
 
   it('derives array shapes for defineRelations many projections', () => {
