@@ -64,11 +64,6 @@ describe('create-kovo starter (build integration: production island derives)', (
         },
       ]);
       expect(census.entries).toHaveLength(1);
-      const clientSources = clientArtifactSources(root).join('\n');
-      expect(clientSources).not.toMatch(
-        /\b(?:chained|direct|firstItem|firstGroup|computedLabel|firstCard|cardLabel)\b/u,
-      );
-
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
         detached: process.platform !== 'win32',
@@ -84,14 +79,37 @@ describe('create-kovo starter (build integration: production island derives)', (
       const html = await fetchTextWhenReady(`${origin}/island-derive-proof`, output);
       expect(html).toContain('data-proof="island-derive"');
       expect(html).toContain('data-bind="/c/__v/');
+      const clientSources = (await clientModuleSourcesFromHtml(origin, html)).join('\n');
+      for (const path of [
+        'state.count',
+        'state.items[0]',
+        'state.nested.label',
+        'state.groups[0][0]',
+        'state.extra["computed-key"]',
+        '(state.cards[0]).label',
+      ]) {
+        expect(clientSources).toContain(path);
+      }
+      expect(clientSources).not.toMatch(
+        /\b(?:chained|direct|firstItem|firstGroup|computedLabel|firstCard|cardLabel)\b/u,
+      );
 
       browser = await chromium.launch({ headless: true });
       const page = await browser.newPage();
       const pageErrors: string[] = [];
       const consoleErrors: string[] = [];
+      const frameworkDataRequestsAfterInteraction: string[] = [];
+      let interactionStarted = false;
       page.on('pageerror', (error) => pageErrors.push(error.message));
       page.on('console', (message) => {
         if (message.type() === 'error') consoleErrors.push(message.text());
+      });
+      page.on('request', (request) => {
+        if (!interactionStarted) return;
+        const url = new URL(request.url());
+        if (url.pathname.startsWith('/_q') || url.pathname.startsWith('/_m')) {
+          frameworkDataRequestsAfterInteraction.push(`${request.method()} ${url.pathname}`);
+        }
       });
       await page.goto(`${origin}/island-derive-proof`, { waitUntil: 'networkidle' });
 
@@ -102,6 +120,7 @@ describe('create-kovo starter (build integration: production island derives)', (
       await expectOutputText(page, 'computed', 'delta');
       await expectOutputText(page, 'card', 'card-a');
 
+      interactionStarted = true;
       await page.click('[data-proof="advance"]');
       try {
         await page.waitForFunction(
@@ -138,6 +157,7 @@ describe('create-kovo starter (build integration: production island derives)', (
 
       expect(pageErrors).toEqual([]);
       expect(consoleErrors).toEqual([]);
+      expect(frameworkDataRequestsAfterInteraction).toEqual([]);
     } finally {
       await browser?.close();
       await stopProcess(server);
@@ -145,6 +165,7 @@ describe('create-kovo starter (build integration: production island derives)', (
     }
   }, 180_000);
 
+  // @kovo-security-certifies KV311 module-helper-derive-prod-artifact
   it('does not ship an unbound module-helper state derive in the production client artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -179,7 +200,7 @@ async function expectOutputText(
 }
 
 function clientArtifactSources(root: string): readonly string[] {
-  const clientRoot = join(root, 'dist/client');
+  const clientRoot = join(root, 'dist');
   if (!existsSync(clientRoot)) return [];
   const files: string[] = [];
   const visit = (directory: string): void => {
@@ -195,6 +216,23 @@ function clientArtifactSources(root: string): readonly string[] {
   };
   visit(clientRoot);
   return files;
+}
+
+async function clientModuleSourcesFromHtml(
+  origin: string,
+  html: string,
+): Promise<readonly string[]> {
+  const hrefs = [
+    ...new Set([...html.matchAll(/\/c\/__v\/[^"'\s#]+\.client\.js/g)].map(([href]) => href)),
+  ];
+  expect(hrefs.length).toBeGreaterThan(0);
+  return Promise.all(
+    hrefs.map(async (href) => {
+      const response = await fetch(`${origin}${href}`);
+      expect(response.status).toBe(200);
+      return response.text();
+    }),
+  );
 }
 
 function addIslandDeriveProof(root: string): void {

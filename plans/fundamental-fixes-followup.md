@@ -48,10 +48,14 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 **(a) Write-capable handle surfaces** — close via H (statement-parse-primary allowlist) + I (dialect):
 
 - [ ] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]
-  - [ ] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]
-  - [ ] `readonlyDb()` transaction and future/unknown methods fail closed at runtime [H]
-  - [ ] `readonlyDb()` public endpoint cannot mutate in a prod artifact for every supported dialect [H]
-  - [ ] `Reader<Db>` type surface rejects write-capable methods [H]
+  - [x] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed 2 prod-artifact endpoint cases across default+SQLite; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
+  - [x] `readonlyDb()` transaction and future/unknown methods fail closed at runtime [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite endpoint cases covering `transaction` and `futureStatement`; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
+  - [x] `readonlyDb()` public endpoint cannot mutate in a prod artifact for every supported dialect [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite `/api/readonly-mutation-attempt` cases and kept the drift table at 0; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
+  - [x] `Reader<Db>` type surface rejects write-capable methods [H]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` passed 65 tests including a compiler-backed `Reader<Db>` type proof; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs for the matching public read-handle endpoint; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
 - [ ] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]
   - [ ] write-mode declared-table statements pass and cross-table statements fail closed [H/I]
   - [ ] SQLite raw SQL statement parse parity matches the default dialect [I]
@@ -63,7 +67,8 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
   - [ ] query/load storage upload, store, delete, and put writes fail closed [H]
   - [ ] declared mutation/capability storage writes still work through the audited path [H]
 - [ ] raw driver `$client` / `.session` escape from any managed handle [H]
-  - [ ] managed write handle `$client`/`.session` escapes fail closed before nested wrapping [H]
+  - [x] managed write handle `$client`/`.session` escapes fail closed before nested wrapping [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed 4 prod-artifact tests including default+SQLite build-fail managed-write escape attempts; M2 row proof uses `buildProductionArtifact(root)` / `kovo build --no-cache`; M3 `pnpm run check:security-gate-mutations` kills `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
   - [x] read-only handle `$client`/`.session` escapes fail closed before execution [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot` passed 8 prod-artifact tests including default+SQLite read-only escape attempts; M2 row proof uses `buildProductionArtifact(root)`; M3 `pnpm run check:security-gate-mutations` killed `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
   - [ ] webhook transaction `$client`/`.session` escapes fail closed before execution [H]
@@ -77,9 +82,12 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 - [ ] SSR document HTML [C2]
   - [ ] SSR route render text is escaped in the production document [C2]
   - [ ] SSR raw/trusted HTML boundaries require proof-or-KV406 [C2]
-- [ ] `/_q` query response [C2]
-  - [ ] `/_q` query response body escapes client-visible HTML [C2]
-  - [ ] `/_q` query response headers do not expose session data to shared caches [C2]
+- [x] `/_q` query response [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] `/_q` query response body escapes client-visible HTML [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot` passed the default+SQLite prod-artifact `/_q` attacker body proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` killed `server-wire-html/drop-query-wire-body-escaping`.
+  - [x] `/_q` query response headers do not expose session data to shared caches [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot` passed the default+SQLite prod-artifact `/_q` private-cache proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` killed `server-wire-html/drop-query-wire-body-escaping`.
 - [ ] mutation delta / enhanced-mutation response [C2]
   - [ ] enhanced mutation fragment bodies escape client-visible HTML [C2]
   - [ ] mutation-triggered query refreshes preserve query wire bounds [C2]
@@ -106,10 +114,14 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
   - [x] KV426 blocks `@internal renderedHtml()` query taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
   - [ ] real build resolves local/star barrels and literal element access for raw-HTML sinks [B3/E2]
-- [ ] client-derive bodies (leak / `ReferenceError` boundary) [C2]
-  - [ ] emitted client derives use state paths instead of render-local aliases [C2]
-  - [ ] hydrated derives update on interaction without `ReferenceError` or framework requests [C2]
-  - [ ] module-helper-in-derive stays either lowered safely or fails KV311 [C2]
+- [x] client-derive bodies (leak / `ReferenceError` boundary) [C2]
+  - Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot` passed 2 prod-artifact tests; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
+  - [x] emitted client derives use state paths instead of render-local aliases [C2]
+    - Evidence: M1 fetched the served `/c/__v/...client.js` from `packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts` and asserted `state.count`, `state.items[0]`, nested/computed state paths, and no render-local alias names.
+  - [x] hydrated derives update on interaction without `ReferenceError` or framework requests [C2]
+    - Evidence: M1 same prod-artifact browser test clicked the state-only control, observed all derived outputs update, `pageErrors=[]`, `consoleErrors=[]`, and no post-interaction `/_q` or `/_m` requests.
+  - [x] module-helper-in-derive stays either lowered safely or fails KV311 [C2]
+    - Evidence: M1 same prod-artifact shard passed the helper proof asserting built artifacts do not ship `format(state.count)`/`format =`; focused compiler shard `pnpm exec vitest --run packages/compiler/src/state-bindings.test.ts -t "state aliases|helper" --reporter=dot` passed 9 alias/helper tests including KV311 helper failures.
 - [ ] secret-column-to-wire across ALL value-flow paths [C2]
   - [ ] direct secret projection to query wire fails KV435 in every supported dialect [C2]
   - [ ] transformed query-loader return laundering fails KV435/KV406 [C2]

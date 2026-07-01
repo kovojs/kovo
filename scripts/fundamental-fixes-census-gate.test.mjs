@@ -32,8 +32,9 @@ describe('fundamental-fixes-census-gate', () => {
   });
 
   it('keeps the default manifest structurally valid without falsely claiming completion', () => {
+    const manifest = loadCensusManifest();
     const report = evaluateFundamentalFixesCensus({
-      manifest: loadCensusManifest(),
+      manifest,
       planText,
     });
 
@@ -46,7 +47,13 @@ describe('fundamental-fixes-census-gate', () => {
       resolverExpressionKindRows: REQUIRED_RESOLVER_EXPRESSION_KINDS.length,
       writeCapableHandleRows: 23,
     });
-    expect(report.openRows).toHaveLength(report.rowCount - 4);
+    const closedRowIds = manifest.rows
+      .filter((row) => row.status === 'closed')
+      .map((row) => row.id);
+    expect(report.openRows).toHaveLength(report.rowCount - closedRowIds.length);
+    for (const closedRowId of closedRowIds) {
+      expect(report.openRows).not.toContain(closedRowId);
+    }
     expect(report.openRows).not.toContain(
       'kv426-blocks-trustedhtml-request-taint-in-a-prod-artifact',
     );

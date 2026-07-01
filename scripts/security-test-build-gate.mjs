@@ -171,12 +171,31 @@ export const SECURITY_BUILD_PROOFS = [
     requiredNeedles: [
       'buildProductionArtifact(root)',
       'assertProdArtifactSinkCensus(root',
+      'state.count',
+      'state.items[0]',
+      'state.extra["computed-key"]',
+      'frameworkDataRequestsAfterInteraction',
       'expect(pageErrors).toEqual([])',
       'expect(consoleErrors).toEqual([])',
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
     testName:
       'hydrates destructured state aliases from the production artifact without stale or throwing derives',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'module-helper-derive-prod-artifact',
+    code: 'KV311',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+    requiredNeedles: [
+      'buildProductionArtifact(root)',
+      'clientArtifactSources(root)',
+      'format(state.count)',
+      "not.toContain('format(state.count)')",
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+    testName:
+      'does not ship an unbound module-helper state derive in the production client artifact',
   },
   {
     buildInvocation: 'cli-main-build',

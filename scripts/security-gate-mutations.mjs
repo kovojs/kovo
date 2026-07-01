@@ -30,6 +30,7 @@ const trustedHtmlProvenancePath = path.join(
   'packages/compiler/src/validate/trusted-html-provenance.ts',
 );
 const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
+const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts');
 
 const missingRealBuildProofBranch = [
   '      if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
@@ -137,6 +138,10 @@ const kv311IslandDeriveProofEnrollmentBranch = [
   '    requiredNeedles: [',
   "      'buildProductionArtifact(root)',",
   "      'assertProdArtifactSinkCensus(root',",
+  "      'state.count',",
+  "      'state.items[0]',",
+  '      \'state.extra["computed-key"]\',',
+  "      'frameworkDataRequestsAfterInteraction',",
   "      'expect(pageErrors).toEqual([])',",
   "      'expect(consoleErrors).toEqual([])',",
   '    ],',
@@ -255,6 +260,10 @@ const removedResponseFragmentTrustedHtmlRouteBranch = [
   '    );',
   '  }',
 ].join('\n');
+
+const queryWireHtmlEscapeBranch = '${escapeHtml(stringifyKovoWireValue(options.value))}';
+
+const removedQueryWireHtmlEscapeBranch = '${stringifyKovoWireValue(options.value)}';
 
 const m5ForbiddenStatusBranch = [
   '  } else if (FORBIDDEN_STATUS_PATTERN.test(row.status)) {',
@@ -600,6 +609,16 @@ export const SECURITY_GATE_MUTANTS = [
     search: responseFragmentTrustedHtmlRouteBranch,
     sourceFile: sinkPolicyGatePath,
     test: assertResponseFragmentTrustedHtmlRouteCountIsCaught,
+  },
+  {
+    description: 'Deletes HTML escaping from the /_q query response wire body sink.',
+    expectedKiller: 'C2 /_q query wire bodies must HTML-escape serialized values',
+    name: 'server-wire-html/drop-query-wire-body-escaping',
+    replacement: removedQueryWireHtmlEscapeBranch,
+    search: queryWireHtmlEscapeBranch,
+    sourceFile: queryWireHtmlPath,
+    sourceOnly: true,
+    test: assertQueryWireHtmlBodyEscapingIsCaught,
   },
   {
     baseModule: fundamentalFixesCensusGate,
@@ -1040,6 +1059,10 @@ async function assertKv311IslandDeriveProofEnrollmentIsPinned(moduleUnderTest) {
   const needles = [
     'buildProductionArtifact(root)',
     'assertProdArtifactSinkCensus(root',
+    'state.count',
+    'state.items[0]',
+    'state.extra["computed-key"]',
+    'frameworkDataRequestsAfterInteraction',
     'expect(pageErrors).toEqual([])',
     'expect(consoleErrors).toEqual([])',
   ];
@@ -1242,6 +1265,13 @@ async function assertResponseFragmentTrustedHtmlRouteCountIsCaught(moduleUnderTe
     findings,
     'response-fragment-apply.ts: response-fragment HTML sink must route exactly two template.innerHTML writes through trustedHtml(); found 1',
   );
+}
+
+async function assertQueryWireHtmlBodyEscapingIsCaught(_moduleUnderTest, { sourceText } = {}) {
+  const findings = sinkPolicyGate.queryWireHtmlInvariantFindings('wire-html.ts', sourceText ?? '');
+  if (findings.includes('wire-html.ts: /_q query wire body must HTML-escape serialized values')) {
+    throw new Error('/_q query wire body escaping invariant was removed');
+  }
 }
 
 async function assertM5ForbiddenStatusIsCaught(moduleUnderTest) {

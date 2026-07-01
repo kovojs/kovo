@@ -17,6 +17,7 @@ import {
 import {
   addRuntimeMutationSafetyProofs,
   buildProductionArtifact,
+  execFileSyncErrorOutput,
 } from './index.build.test-support.js';
 
 interface ReadonlyAttemptResponse {
@@ -195,4 +196,38 @@ describe('create-kovo starter (build integration: production transaction artifac
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
+
+  it.each([
+    { dialect: undefined, label: 'default' },
+    { dialect: 'sqlite' as const, label: 'SQLite' },
+  ])(
+    'blocks managed write raw-driver escapes before $label artifact emission',
+    ({ dialect }) => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-managed-write-escape-'));
+
+      try {
+        writeKovoProject(root, {
+          ...(dialect === undefined ? {} : { dialect }),
+          name: 'Prod Managed Write Escape Proof',
+        });
+        linkStarterBuildDependencies(root);
+        addRuntimeMutationSafetyProofs(root, { includeManagedWriteEscapeAttempt: true });
+
+        try {
+          buildProductionArtifact(root);
+          throw new Error('Expected kovo build --no-cache to fail for managed raw-driver escape.');
+        } catch (error) {
+          const output = execFileSyncErrorOutput(error);
+          expect(output).toContain('kovo build check preflight failed');
+          expect(output).toContain('KV406');
+          expect(output).toContain('runtime-safety-proofs.ts');
+        }
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    120_000,
+  );
 });

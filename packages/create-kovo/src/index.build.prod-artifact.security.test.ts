@@ -1,11 +1,15 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject } from './index.js';
+import {
+  assertProdArtifactSinkCensus,
+  readProductionGraph,
+} from './index.build.prod-artifact.sink-census.js';
 import {
   collectOutput,
   cookieHeader,
@@ -213,6 +217,77 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 120_000);
 
+  it('serves /_q query wire bodies escaped and private from production artifacts', async () => {
+    for (const dialect of ['postgres', 'sqlite'] as const) {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, `create-kovo-prod-query-wire-${dialect}-`));
+      const port = await reservePort();
+      let server: ChildProcessWithoutNullStreams | undefined;
+
+      try {
+        writeKovoProject(root, { dialect, name: `Prod Query Wire Proof ${dialect}` });
+        linkStarterBuildDependencies(root);
+        addQueryWireProof(root);
+
+        buildProductionArtifact(root);
+        const census = assertProdArtifactSinkCensus(root, [
+          {
+            proof: {
+              evidence:
+                'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes escaped /_q body wire from the production server artifact',
+              kind: 'proof',
+            },
+            sink: '/_q query response body',
+            witnesses: ['renderQueryWireHtml', 'escapeHtml', 'q-response-proof'],
+          },
+          {
+            proof: {
+              evidence:
+                'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes /_q private cache headers from the production server artifact',
+              kind: 'proof',
+            },
+            sink: '/_q query response headers',
+            witnesses: ['querySuccessCacheHeaders', 'private, no-store', 'Vary'],
+          },
+        ]);
+        expect(census.entries).toHaveLength(2);
+        const queryKey = 'queries/q-response-proof-query';
+        expect(JSON.stringify(readProductionGraph(root))).toContain(queryKey);
+
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: {
+            ...withRepoBinOnPath(),
+            HOST: '127.0.0.1',
+            NODE_ENV: 'production',
+            PORT: String(port),
+          },
+        });
+        const output = collectOutput(server);
+        const origin = `http://127.0.0.1:${port}`;
+
+        await fetchTextWhenReady(`${origin}/_q/${encodeURIComponent(queryKey)}`, output);
+        const response = await fetch(`${origin}/_q/${encodeURIComponent(queryKey)}`);
+        const body = await response.text();
+
+        expect(response.status, body).toBe(200);
+        expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+        expect(response.headers.get('cache-control')).toBe('private, no-store');
+        expect(response.headers.get('vary')).toContain('Cookie');
+        expect(body).toContain(`<kovo-query name="${queryKey}">`);
+        expect(body).toContain('&lt;img src=x onerror=\\"alert(1)\\"&gt;');
+        expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+        expect(body).not.toContain('<img src=x onerror="alert(1)">');
+        expect(body).not.toContain('<script>alert(1)</script>');
+      } finally {
+        await stopProcess(server);
+        rmSync(root, { force: true, recursive: true });
+      }
+    }
+  }, 240_000);
+
   it('serves component-scoped FormError as a real no-JS 422 output from the production artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -312,3 +387,53 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 120_000);
 });
+
+function addQueryWireProof(root: string): void {
+  const queriesPath = join(root, 'src/queries.ts');
+  const queries = replaceRequired(
+    readFileSync(queriesPath, 'utf8'),
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { publicAccess, query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    '/_q wire proof query import',
+  );
+  writeFileSync(
+    queriesPath,
+    `${queries}
+
+export const qResponseProofQuery = query({
+  access: publicAccess('public /_q output escaping proof'),
+  load: () => ({
+    attacker: '<img src=x onerror="alert(1)"><script>alert(1)</script>',
+  }),
+  read: { cacheControl: 'public, max-age=600' },
+  reads: [],
+});
+`,
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const appWithQueryImport = replaceRequired(
+    readFileSync(appPath, 'utf8'),
+    "import { contactsQuery } from './queries.js';",
+    "import { contactsQuery, qResponseProofQuery } from './queries.js';",
+    '/_q wire proof app import',
+  );
+  const app = replaceRequired(
+    appWithQueryImport,
+    '  queries: [contactsQuery],',
+    '  queries: [contactsQuery, qResponseProofQuery],',
+    '/_q wire proof query registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
+function replaceRequired(
+  source: string,
+  search: string,
+  replacement: string,
+  label: string,
+): string {
+  if (!source.includes(search)) throw new Error(`Expected scaffold anchor for ${label}.`);
+  return source.replace(search, replacement);
+}

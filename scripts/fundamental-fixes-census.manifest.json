@@ -18,33 +18,115 @@
       "id": "readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot (65 passed, 2.34s); pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s); pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-readonly-endpoint",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s)",
+        "dialects": {
+          "postgres": "default prod-artifact /api/readonly-mutation-attempt blocks readonlyAppDb all/get/values mutation attempts and preserves the drift count at 0",
+          "sqlite": "SQLite prod-artifact /api/readonly-mutation-attempt blocks readonlyAppDb all/get/values mutation attempts and preserves the drift count at 0"
+        },
+        "independentReviewer": "agent/followup-hi-sql-20260701-080440 authored the H/I proof path; agent/readonly-census-1782922347 independently reverified the prod-artifact and runtime shards in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 13 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
+      }
     },
     {
       "id": "readonlydb-transaction-and-future-unknown-methods-fail-closed-at-runtime",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot (65 passed, 2.34s); pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s); pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-readonly-endpoint",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s)",
+        "dialects": {
+          "postgres": "default prod-artifact /api/readonly-mutation-attempt blocks readonlyAppDb transaction and futureStatement mutation attempts",
+          "sqlite": "SQLite prod-artifact /api/readonly-mutation-attempt blocks readonlyAppDb transaction and futureStatement mutation attempts"
+        },
+        "independentReviewer": "agent/followup-hi-sql-20260701-080440 authored the H/I proof path; agent/readonly-census-1782922347 independently reverified the prod-artifact and runtime shards in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 13 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
+      }
     },
     {
       "id": "readonlydb-public-endpoint-cannot-mutate-in-a-prod-artifact-for-every-supported-dialect",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s); pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
+      "evidenceBundles": [
+        "m1-prod-artifact-readonly-endpoint",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s)",
+        "dialects": {
+          "postgres": "default prod-artifact GET /api/readonly-mutation-attempt returns blocked=true for all attempts and /api/raw-runtime-drift-count remains 0",
+          "sqlite": "SQLite prod-artifact GET /api/readonly-mutation-attempt returns blocked=true for all attempts and /api/raw-runtime-drift-count remains 0"
+        },
+        "independentReviewer": "agent/followup-hi-sql-20260701-080440 authored the H/I proof path; agent/readonly-census-1782922347 independently reverified the prod-artifact endpoint shard in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 13 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
+      }
     },
     {
       "id": "reader-db-type-surface-rejects-write-capable-methods",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot (65 passed, 2.34s) including a compiler-backed Reader<Db> type proof; pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s) for the matching public readonly endpoint surface",
+        "dialects": {
+          "postgres": "default prod-artifact public readonly endpoint uses readonlyAppDb and blocks write-capable attempts; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot also passed the Reader<Db> type proof",
+          "sqlite": "SQLite prod-artifact public readonly endpoint uses readonlyAppDb and blocks write-capable attempts; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot also passed the Reader<Db> type proof"
+        },
+        "independentReviewer": "agent/readonly-census-1782922347 added and verified the compiler-backed Reader<Db> type proof against the pre-existing public readonly endpoint proof"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs for the public readonly endpoint surface",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 13 real-build proofs; the type row additionally uses a compiler-backed tsc invocation inside packages/server/src/managed-db.test.ts"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
+      }
     },
     {
       "id": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2",
@@ -134,9 +216,29 @@
       "id": "managed-write-handle-client-session-escapes-fail-closed-before-nested-wrapping",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "raw-driver-client-session-escape-from-any-managed-handle"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (4 passed, 105.33s locally; independent verifier rerun passed 4 tests in 98.08s); row proof uses buildProductionArtifact(root); pnpm run check:security-gate-mutations kills sql-safe-handle/drop-managed-raw-driver-escape-denial",
+      "parent": "raw-driver-client-session-escape-from-any-managed-handle",
+      "evidenceBundles": [
+        "m1-prod-artifact-managed-write-escape",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (4 passed, 105.33s)",
+        "dialects": {
+          "postgres": "default prod-artifact starter attempts request.db.$client and request.db.session on a managed write mutation handle and fails kovo build --no-cache before artifact emission",
+          "sqlite": "SQLite prod-artifact starter attempts request.db.$client and request.db.session on a managed write mutation handle and fails kovo build --no-cache before artifact emission"
+        },
+        "independentReviewer": "agent 019f1e7b-e7ec-7d41-af5d-e3ee03c0e302 independently inspected the proof and reran pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (4 passed, 98.08s)"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root), which invokes kovo build ./src/app.tsx --no-cache",
+        "noFixtureOnlyCertification": "the managed-write escape proof uses generated starter source and the production build preflight; it is not an extraFiles/unit-only shortcut"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills sql-safe-handle/drop-managed-raw-driver-escape-denial"
+      }
     },
     {
       "id": "read-only-handle-client-session-escapes-fail-closed-before-execution",
@@ -228,24 +330,84 @@
       "id": "q-query-response",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot; proof calls buildProductionArtifact(root) and assertProdArtifactSinkCensus(root); pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping.",
+      "evidenceBundles": [
+        "m1-prod-artifact-query-wire",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot (1 passed, 7 skipped, 61.85s)",
+        "dialects": {
+          "postgres": "production artifact default/postgres starter serves /_q/queries/q-response-proof-query with escaped attacker body and private cache headers",
+          "sqlite": "production artifact SQLite starter serves /_q/queries/q-response-proof-query with escaped attacker body and private cache headers"
+        },
+        "independentReviewer": "agent/output-census-1782922353 added the prod-artifact proof; focused gate re-run in this session verified both dialect cases"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs and assertProdArtifactSinkCensus(root) for /_q body/header witnesses",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds validates enrolled security build proofs; this row's proof is a real starter kovo build, not extraFiles/unit-only coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping"
+      }
     },
     {
       "id": "q-query-response-body-escapes-client-visible-html",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "q-query-response"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot served default+SQLite prod artifacts and observed escaped <img>/<script> payloads in /_q; pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping.",
+      "parent": "q-query-response",
+      "evidenceBundles": [
+        "m1-prod-artifact-query-wire",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot (1 passed, 7 skipped, 61.85s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact /_q body contains &lt;img...&gt; and &lt;script&gt; while raw attacker tags are absent",
+          "sqlite": "SQLite prod artifact /_q body contains &lt;img...&gt; and &lt;script&gt; while raw attacker tags are absent"
+        },
+        "independentReviewer": "agent/output-census-1782922353 added the prod-artifact proof; focused gate re-run in this session verified both dialect cases"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root), starts dist/server/server.mjs, and fetches /_q/queries/q-response-proof-query",
+        "noFixtureOnlyCertification": "proof uses the generated production server artifact and assertProdArtifactSinkCensus(root), not fixture-only extraFiles/unit coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping"
+      }
     },
     {
       "id": "q-query-response-headers-do-not-expose-session-data-to-shared-caches",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "q-query-response"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot served default+SQLite prod artifacts and observed Cache-Control: private, no-store plus Vary: Cookie on /_q; pnpm run check:security-gate-mutations keeps the shared query wire sink enrolled.",
+      "parent": "q-query-response",
+      "evidenceBundles": [
+        "m1-prod-artifact-query-wire",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot (1 passed, 7 skipped, 61.85s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact /_q response carries Cache-Control: private, no-store and Vary: Cookie despite declared public read.cacheControl",
+          "sqlite": "SQLite prod artifact /_q response carries Cache-Control: private, no-store and Vary: Cookie despite declared public read.cacheControl"
+        },
+        "independentReviewer": "agent/output-census-1782922353 added the prod-artifact proof; focused gate re-run in this session verified both dialect cases"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root), starts dist/server/server.mjs, and fetches /_q/queries/q-response-proof-query",
+        "noFixtureOnlyCertification": "proof uses the generated production server artifact and assertProdArtifactSinkCensus(root), not fixture-only extraFiles/unit coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping"
+      }
     },
     {
       "id": "mutation-delta-enhanced-mutation-response",
@@ -489,32 +651,116 @@
       "id": "client-derive-bodies-leak-referenceerror-boundary",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "evidenceBundles": [
+        "m1-prod-artifact-island-derive",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s)",
+        "clientArtifact": "the prod-artifact test fetched the served /c/__v/...client.js module from the production server before asserting derive bodies",
+        "dialects": {
+          "postgres": "client derive lowering is dialect-independent; the starter prod artifact built and served with the default Postgres scaffold dependencies",
+          "sqlite": "client derive lowering is dialect-independent; no SQL dialect branch participates in emitted client derive bodies"
+        },
+        "independentReviewer": "agent/derive-census-1782922363 hardened and reverified the existing C2/KV311 proof on a fresh origin/main worktree"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts calls buildProductionArtifact(root) before serving or inspecting the production server artifact",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed, including KV311 island-derive-prod-artifact and module-helper-derive-prod-artifact)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (29 mutants killed, including security-test-build-gate/weaken-kv311-island-derive-proof-enrollment)"
+      }
     },
     {
       "id": "emitted-client-derives-use-state-paths-instead-of-render-local-aliases",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "client-derive-bodies-leak-referenceerror-boundary"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s) fetched the served client module and asserted state paths with no render-local alias names; M2/M3 gates passed.",
+      "parent": "client-derive-bodies-leak-referenceerror-boundary",
+      "evidenceBundles": [
+        "m1-prod-artifact-island-derive",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s)",
+        "clientArtifact": "served /c/__v/...client.js contains state.count, state.items[0], state.nested.label, state.groups[0][0], state.extra[\"computed-key\"], and (state.cards[0]).label; render-local alias names are absent",
+        "dialects": {
+          "postgres": "client derive lowering is dialect-independent; the starter prod artifact built and served with the default Postgres scaffold dependencies",
+          "sqlite": "client derive lowering is dialect-independent; no SQL dialect branch participates in emitted client derive bodies"
+        },
+        "independentReviewer": "agent/derive-census-1782922363 reverified the served client artifact in a fresh origin/main worktree"
+      },
+      "m2": {
+        "productionBuild": "row proof uses buildProductionArtifact(root) and the served production client module, not fixture-only compile output",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (29 mutants killed; KV311 proof enrollment pins state-path evidence)"
+      }
     },
     {
       "id": "hydrated-derives-update-on-interaction-without-referenceerror-or-framework-requests",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "client-derive-bodies-leak-referenceerror-boundary"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s) clicked the hydrated state-only control and observed updated derives, no page/console errors, and no /_q or /_m requests; M2/M3 gates passed.",
+      "parent": "client-derive-bodies-leak-referenceerror-boundary",
+      "evidenceBundles": [
+        "m1-prod-artifact-island-derive",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s)",
+        "browser": "Playwright observed count/first/nested/group/computed/card derives update after click with pageErrors=[], consoleErrors=[], and frameworkDataRequestsAfterInteraction=[]",
+        "dialects": {
+          "postgres": "client derive hydration is dialect-independent; the starter prod artifact built and served with the default Postgres scaffold dependencies",
+          "sqlite": "client derive hydration is dialect-independent; no SQL dialect branch participates in local state hydration or client derive updates"
+        },
+        "independentReviewer": "agent/derive-census-1782922363 reverified the browser interaction in a fresh origin/main worktree"
+      },
+      "m2": {
+        "productionBuild": "row proof serves dist/server/server.mjs created by buildProductionArtifact(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (29 mutants killed; KV311 proof enrollment pins no-console-error evidence)"
+      }
     },
     {
       "id": "module-helper-in-derive-stays-either-lowered-safely-or-fails-kv311",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "client-derive-bodies-leak-referenceerror-boundary"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s) proved the prod artifact does not ship unbound format(state.count); pnpm exec vitest --run packages/compiler/src/state-bindings.test.ts -t \"state aliases|helper\" --reporter=dot passed 9 alias/helper tests including KV311 helper failures; M2/M3 gates passed.",
+      "parent": "client-derive-bodies-leak-referenceerror-boundary",
+      "evidenceBundles": [
+        "m1-prod-artifact-island-derive",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s)",
+        "compiler": "pnpm exec vitest --run packages/compiler/src/state-bindings.test.ts -t \"state aliases|helper\" --reporter=dot (9 passed, 20 skipped) covers KV311 helper fail-closed cases",
+        "dialects": {
+          "postgres": "module-helper derive safety is dialect-independent; the starter prod artifact built with the default Postgres scaffold dependencies",
+          "sqlite": "module-helper derive safety is dialect-independent; no SQL dialect branch participates in helper-dependent state derive lowering"
+        },
+        "independentReviewer": "agent/derive-census-1782922363 reverified the helper prod artifact and compiler KV311 shard in a fresh origin/main worktree"
+      },
+      "m2": {
+        "productionBuild": "module-helper-derive-prod-artifact is enrolled in packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts and calls buildProductionArtifact(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (29 mutants killed, including required KV311 proof-evidence and proof-enrollment mutants)"
+      }
     },
     {
       "id": "secret-column-to-wire-across-all-value-flow-paths",
@@ -1310,9 +1556,29 @@
       "command": "pnpm run check:security-gate-mutations",
       "evidence": "Mutation harness kills branch removals in enrolled security and census gates."
     },
+    "m1-prod-artifact-readonly-endpoint": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
+      "evidence": "Production artifact readonly endpoint tests build with kovo build --no-cache and exercise default plus SQLite readonlyDb mutation-attempt paths."
+    },
     "m1-prod-artifact-transactions": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot",
       "evidence": "Production artifact transaction/raw-SQL starter tests build with kovo build --no-cache and exercise default plus SQLite runtime SQL handle paths."
+    },
+    "m1-prod-artifact-managed-write-escape": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
+      "evidence": "Production artifact transaction tests build default and SQLite starters with kovo build --no-cache and prove managed write raw-driver escape attempts fail before artifact emission."
+    },
+    "h-managed-db-runtime-type": {
+      "command": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot",
+      "evidence": "Managed DB tests exercise readonlyDb raw SQL, transaction, future-method runtime fail-closed behavior and a compiler-backed Reader<Db> type-surface proof."
+    },
+    "m1-prod-artifact-query-wire": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot",
+      "evidence": "Production artifact /_q query-wire proof builds default and SQLite starters with kovo build --no-cache, serves dist/server/server.mjs, and observes escaped body plus private cache headers."
+    },
+    "m1-prod-artifact-island-derive": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot",
+      "evidence": "Production artifact island-derive browser test builds with kovo build --no-cache, fetches the served client module, clicks hydrated state, and checks helper-derived client artifacts."
     }
   }
 }

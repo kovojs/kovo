@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { execFileSync, type ExecFileSyncOptionsWithBufferEncoding } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { KovoReadonlyHandleError, managedDb, readonlyDb } from './managed-db.js';
@@ -17,6 +19,29 @@ import { domain } from './domain.js';
 // `Reader<Db>` tsc mirror are exercised elsewhere (drizzle static gate; type-level).
 
 const product = domain('product');
+
+function resolveBin(name: string): string {
+  return join(
+    process.cwd(),
+    'node_modules',
+    '.bin',
+    process.platform === 'win32' ? `${name}.cmd` : name,
+  );
+}
+
+function execFileSyncWithDiagnostics(
+  file: string,
+  args: readonly string[],
+  options: ExecFileSyncOptionsWithBufferEncoding,
+): void {
+  try {
+    execFileSync(file, [...args], options);
+  } catch (error) {
+    const stderr = (error as { stderr?: Buffer }).stderr?.toString('utf8') ?? '';
+    const stdout = (error as { stdout?: Buffer }).stdout?.toString('utf8') ?? '';
+    throw new Error([stdout, stderr].filter(Boolean).join('\n'));
+  }
+}
 
 interface FakeRow {
   id: string;
@@ -209,6 +234,95 @@ function runtimeSqlMatrixStatementExecutionLog(
 }
 
 describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
+  it('typechecks Reader<Db> as a read-only capability surface', () => {
+    const root = mkdtempSync(join(process.cwd(), 'packages/server/.tmp-reader-types-'));
+    try {
+      writeFileSync(
+        join(root, 'reader-type-proof.ts'),
+        `
+import { readonlyDb, type Reader } from '@kovojs/server';
+
+type FakeDb = {
+  $client: { execute(statement: unknown): Promise<unknown> };
+  all(statement: unknown): Promise<unknown>;
+  get(statement: unknown): Promise<unknown>;
+  insert(table: string): { values(value: unknown): Promise<void> };
+  select(): { from(table: string): Promise<unknown[]> };
+  transaction<Result>(callback: (tx: FakeDb) => Promise<Result>): Promise<Result>;
+  update(table: string): { set(value: unknown): { where(value: unknown): Promise<void> } };
+  values(statement: unknown): Promise<unknown[]>;
+  with(cte: unknown): {
+    select(): { from(table: string): Promise<unknown[]> };
+    update(table: string): { set(value: unknown): Promise<void> };
+  };
+};
+
+declare const raw: FakeDb;
+
+const reader = readonlyDb(raw);
+const acceptsReader = (db: Reader<FakeDb>) => db;
+acceptsReader(reader);
+
+reader.select().from('products');
+reader.with('active').select().from('products');
+
+// @ts-expect-error SPEC §6.6/§9.4/§10.3: raw provider handles lack the Reader brand.
+acceptsReader(raw);
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides write builders.
+reader.insert('products');
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides write builders.
+reader.update('products');
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides transaction openers.
+reader.transaction(async () => undefined);
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides raw driver escape handles.
+void reader.$client;
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides dialect/raw SQL sinks by default.
+reader.all({ text: 'select 1', values: [] });
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides SQLite .get sinks by default.
+reader.get({ sql: 'select 1', values: [] });
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides SQLite .values sinks by default.
+reader.values({ sql: 'select 1', values: [] });
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> narrows CTE-prefixed builders to reads.
+reader.with('active').update('products');
+
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'tsconfig.json'),
+        JSON.stringify(
+          {
+            compilerOptions: {
+              exactOptionalPropertyTypes: true,
+              module: 'NodeNext',
+              moduleResolution: 'NodeNext',
+              noEmit: true,
+              noUncheckedIndexedAccess: true,
+              skipLibCheck: true,
+              strict: true,
+              target: 'ES2024',
+              types: ['node'],
+              verbatimModuleSyntax: true,
+            },
+            include: ['reader-type-proof.ts'],
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSyncWithDiagnostics(resolveBin('tsc'), ['-p', join(root, 'tsconfig.json')], {
+          cwd: process.cwd(),
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('brands Reader<Db> so raw write handles are not casually assignable', () => {
     type FakeDb = ReturnType<typeof fakeDb>;
     const raw = fakeDb([]);
