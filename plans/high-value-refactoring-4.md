@@ -129,7 +129,7 @@ that removes the broader source of drift.
 
 ## P1 - Cross-Package Drift and Runtime Chokepoints
 
-- [ ] **P1.1 - Make source-derived registry assignment table-driven, including tasks.**
+- [x] **P1.1 - Make source-derived registry assignment table-driven, including tasks.**
   - Current signals: `packages/compiler/src/source-derived-lowering.ts` handles component, domain,
     mutation, query, and webhook assignment helpers, while `assignDerivedTaskKey()` exists in server task
     code but is not exported through `packages/server/src/internal/wire.ts` for the same lowering path.
@@ -138,8 +138,9 @@ that removes the broader source of drift.
     reject it with a clear compiler diagnostic.
   - Risk reduced: the compiler graph cannot prove a task key that runtime app registration later rejects.
   - Verification: `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/scan/parse.test.ts packages/server/src/app.test.ts packages/server/src/task-runtime.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/registry.test.ts packages/compiler/src/scan/parse.test.ts packages/server/src/app.test.ts packages/server/src/task-runtime.test.ts` passed with 4 files/160 tests after merging `agent/hvr4-registry-runtime-20260701-002536`; `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check HEAD^..HEAD` passed.
 
-- [ ] **P1.2 - Centralize runtime registry virtual-module derivation and serialization.**
+- [x] **P1.2 - Centralize runtime registry virtual-module derivation and serialization.**
   - Current signals: server dev derives runtime registry facts and serializes a virtual module in
     `packages/server/src/vite.ts`; CLI production build keeps separate runtime registry types and
     emitter logic in `packages/cli/src/commands/build-export.ts`, even though
@@ -149,6 +150,7 @@ that removes the broader source of drift.
   - Risk reduced: dev and production cannot register different query-read, mutation-touch, or live-target
     facts from the same source project.
   - Verification: `pnpm exec vitest --run packages/server/src/registry-facts.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-export.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/registry-facts.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-export.test.ts` passed with 4 files/72 passed and 1 skipped, and `pnpm exec vitest --run packages/compiler/src/vite.test.ts packages/server/src/vite.test.ts` passed with 2 files/43 tests after merging `agent/hvr4-registry-runtime-20260701-002536`; `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check HEAD^..HEAD` passed.
 
 - [x] **P1.3 - Share untrusted request-body parsing for endpoint CSRF and mutations.**
   - Current signals: `packages/server/src/app-dispatch.ts` says endpoint CSRF parsing mirrors mutation
