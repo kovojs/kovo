@@ -309,8 +309,9 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
 
 ## Phase 6 — Honesty edges + independent refactors (parallel worktrees)
 
-- [ ] **O.1** `task-observability.ts` redacts `lastError` on the same footing as `args` (`createDurableTaskStatus`
+- [x] **O.1** `task-observability.ts` redacts `lastError` on the same footing as `args` (`createDurableTaskStatus`
       returns `lastError` verbatim while `args` is redacted — a secret in a task error reaches the status surface). (`papercuts-24` P2)
+  - Evidence: `pnpm exec vitest --run packages/server/src/task-observability.test.ts`, `vp check packages/server/src/task-observability.ts packages/server/src/task-observability.test.ts`, and `git diff --check` passed after the default status/failure surfaces redacted both `args` and `lastError`, with `{ includeArgs: true }` preserving privileged diagnostics.
 - [ ] **O.2** KV310 warns (not certifies-clean) when a hand-written optimistic transform's only consumers are
       fragment-target regions with no client optimism (SPEC §8:442 makes the fragment path a runtime no-op; the gap is
       the false-green certification — extend `papercuts-super-5` C1 from the no-consumer to the fragment-consumer case). (`papercuts-24` P3)

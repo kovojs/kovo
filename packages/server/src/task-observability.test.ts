@@ -7,7 +7,7 @@ import {
 import { MemoryDurableTaskQueue } from './task-queue.js';
 
 describe('durable task observability (SPEC §9.6)', () => {
-  it('lists dead-lettered jobs without exposing serialized args by default', async () => {
+  it('lists dead-lettered jobs without exposing serialized args or errors by default', async () => {
     const store = new MemoryDurableTaskQueue();
     const handle = await store.enqueue({
       args: { email: 'buyer@example.test', token: 'secret-token' },
@@ -23,24 +23,28 @@ describe('durable task observability (SPEC §9.6)', () => {
       task: 'email.send',
       status: 'dead',
       attempts: 1,
-      lastError: 'smtp down',
     });
-    expect(await status.get(handle)).not.toHaveProperty('args');
+    const redacted = await status.get(handle);
+    expect(redacted).not.toHaveProperty('args');
+    expect(redacted).not.toHaveProperty('lastError');
   });
 
-  it('exposes args only when inspection callers explicitly opt in', async () => {
+  it('exposes args and errors only when inspection callers explicitly opt in', async () => {
     const store = new MemoryDurableTaskQueue();
     const handle = await store.enqueue({
       args: { orderId: 'ord_1' },
       task: 'email.send',
     });
+    const [claimed] = await store.claimDue({ leaseMs: 1000, limit: 1, now: new Date() });
+    await store.markFailed(claimed!.id, new Error('provider token abc123 failed'));
 
     const record = await createDurableTaskStatus(store).get(handle, { includeArgs: true });
 
     expect(record).toMatchObject({
       args: { orderId: 'ord_1' },
       id: handle.id,
-      status: 'ready',
+      lastError: 'provider token abc123 failed',
+      status: 'dead',
     });
   });
 
@@ -87,6 +91,16 @@ describe('durable task observability (SPEC §9.6)', () => {
 
     expect(failures).toEqual(
       expect.arrayContaining([
+        expect.objectContaining({ id: 'job_dead', status: 'dead' }),
+        expect.objectContaining({ id: 'job_failed', status: 'failed' }),
+      ]),
+    );
+    for (const failure of failures) expect(failure).not.toHaveProperty('lastError');
+
+    await expect(
+      status.listFailures({ includeArgs: true, task: 'billing.charge' }),
+    ).resolves.toEqual(
+      expect.arrayContaining([
         expect.objectContaining({ status: 'dead', lastError: 'max attempts exhausted' }),
         expect.objectContaining({ status: 'failed', lastError: 'transient' }),
       ]),
@@ -123,10 +137,12 @@ describe('durable task observability (SPEC §9.6)', () => {
       expect.objectContaining({
         id: 'job_1',
         key: 'order-1',
-        lastError: 'boom',
         status: 'dead',
       }),
     ]);
+    const [redacted] = await status.listFailures({ limit: 5, task: 'email.send' });
+    expect(redacted).not.toHaveProperty('args');
+    expect(redacted).not.toHaveProperty('lastError');
     expect(statements[0]!.text).toContain('task_key = $1');
     expect(statements[0]!.text).toContain('status = any($2::text[])');
     expect(statements[0]!.text).toContain('limit $3 offset $4');

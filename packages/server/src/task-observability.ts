@@ -36,8 +36,9 @@ export interface DurableTaskStatusFilters {
   readonly limit?: number;
   readonly offset?: number;
   /**
-   * Args are intentionally redacted by default because scheduled task payloads
-   * commonly carry customer data or external-provider secrets (SPEC §9.6).
+   * Args and failure text are intentionally redacted by default because scheduled task
+   * payloads and thrown errors commonly carry customer data or external-provider secrets
+   * (SPEC §9.6).
    */
   readonly includeArgs?: boolean;
 }
@@ -94,7 +95,7 @@ export interface DurableTaskStatusSurface {
 /**
  * Framework-owned inspection facade for durable tasks (SPEC §9.6). It reads the
  * persisted job rows directly for deployed Postgres artifacts, or a read-only
- * snapshot in memory tests, and redacts serialized args unless callers
+ * snapshot in memory tests, and redacts serialized args and failure text unless callers
  * explicitly request them for privileged diagnostics.
  */
 export function createDurableTaskStatus(
@@ -208,7 +209,9 @@ function statusRecord(
       ? { args: assertAndCloneJsonValue(job.args, { root: 'args' }) }
       : {}),
     ...(job.key === undefined ? {} : { key: job.key }),
-    ...(job.lastError === undefined ? {} : { lastError: job.lastError }),
+    ...(options?.includeArgs === true && job.lastError !== undefined
+      ? { lastError: job.lastError }
+      : {}),
     ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
     ...(job.leaseOwner === undefined ? {} : { leaseOwner: job.leaseOwner }),
   };
