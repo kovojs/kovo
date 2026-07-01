@@ -2755,13 +2755,12 @@ function secretProjectionBackstopDiagnostics(
   for (const read of readProvenance) {
     for (const column of read.columns) {
       if (revealedPaths.has(column.path)) continue;
-      if (column.projection === 'column' && column.classification !== 'unresolved') continue;
       if (column.classification !== 'secret' && column.classification !== 'unresolved') continue;
 
       diagnostics.push(
         drizzleDiagnostic({
           code: 'KV435',
-          detail: `Query projection ${query}.${column.path} is opaque or unresolved while reading secret-classified table(s): ${column.table}. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
+          detail: `Query projection ${query}.${column.path} reads a secret-classified column or unresolved projection from secret-classified table(s): ${column.table}. Prove the read stays off the query wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
           site: column.site || read.site,
         }),
       );
@@ -3442,13 +3441,14 @@ function extractQueryDefinitionsFromSourceFile(
       destructuredCandidates,
       receiverReferences,
     );
-    const selection =
-      selectShapeFromQueryBody(
-        bodyObject,
-        receiverReferences,
-        options.columnShapes,
-        receiverMode,
-      ) ??
+    const selectSelection = selectShapeFromQueryBody(
+      bodyObject,
+      receiverReferences,
+      options.columnShapes,
+      receiverMode,
+    );
+    const relationalSelection =
+      selectSelection ??
       relationalShapeFromQueryBody(
         bodyObject,
         receiverReferences,
@@ -3456,12 +3456,22 @@ function extractQueryDefinitionsFromSourceFile(
         options.relationalRelationTableName,
         options.relationalRelationCardinality,
       );
+    const selection = selectSelection ?? relationalSelection;
     const outputShape = queryOutputShape(bodyObject);
     const outputInitializer = objectPropertyInitializer(bodyObject, 'output');
     const shape =
       selection && !isEmptyQueryShape(selection.shape)
         ? selection.shape
         : (outputShape ?? selection?.shape ?? {});
+    const projectedColumns = [
+      ...wireRelevantProjectedColumnsFromQueryBody(
+        bodyObject,
+        receiverReferences,
+        options.columnShapes,
+        receiverMode,
+      ),
+      ...(selectSelection ? [] : (relationalSelection?.projectedColumns ?? [])),
+    ];
     const hasOutputSchema =
       outputShape !== undefined ||
       (outputInitializer !== undefined && Node.isObjectLiteralExpression(outputInitializer));
@@ -3535,7 +3545,7 @@ function extractQueryDefinitionsFromSourceFile(
       ),
       localHelperCalls,
       opaquePaths: selection?.opaquePaths ?? [],
-      projectedColumns: selection?.projectedColumns ?? [],
+      projectedColumns,
       query,
       shape,
       tableExpressions: queryTableExpressions(
@@ -4127,6 +4137,7 @@ import {
   unresolvedQueryCallbackDiagnostics,
   unresolvedQueryLoadCallbackDiagnostic,
   volatileTimeShape,
+  wireRelevantProjectedColumnsFromQueryBody,
   type QueryBodyObjectResolution,
   type QueryLoadCallbackResolution,
   type QueryLoadSpreadResolution,
