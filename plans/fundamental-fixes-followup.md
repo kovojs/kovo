@@ -91,10 +91,14 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 - [ ] mutation delta / enhanced-mutation response [C2]
   - [ ] enhanced mutation fragment bodies escape client-visible HTML [C2]
   - [ ] mutation-triggered query refreshes preserve query wire bounds [C2]
-- [ ] streaming / `<Defer>` chunks [C2]
-  - [ ] `<Defer>` shell streams before slow regions complete [C2]
-  - [ ] `<Defer>` region failures isolate to their own fallback [C2]
-  - [ ] streamed `<Defer>` chunks escape attacker markup and private details [C2]
+- [x] streaming / `<Defer>` chunks [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] `<Defer>` shell streams before slow regions complete [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot` passed the default+SQLite prod-artifact stream proof; M2 proof calls `buildProductionArtifact(root)` and serves `dist/server/server.mjs`; M3 `pnpm run check:security-gate-mutations` killed 30 mutants.
+  - [x] `<Defer>` region failures isolate to their own fallback [C2]
+        Evidence: M1 same Defer prod-artifact shard returned HTTP 200 for a throwing region, streamed that region's error fallback, and still rendered a safe sibling fragment; M2 real-build proof and M3 30-mutant gate same as parent.
+  - [x] streamed `<Defer>` chunks escape attacker markup and private details [C2]
+        Evidence: M1 same Defer prod-artifact shard asserted attacker markup is escaped in fallback/chunks, raw sibling text is escaped, and private thrown details stay off the stream; M2 real-build proof and M3 30-mutant gate same as parent.
 - [ ] response headers (incl. `Set-Cookie`, redirects) [C2]
   - [ ] route outcome headers reject CRLF injection [C2]
   - [ ] typed and raw `Set-Cookie` paths normalize safe cookies and reject unsafe cookies [C2]

@@ -436,32 +436,112 @@
       "id": "streaming-defer-chunks",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot (2 passed, 90.10s); proof calls buildProductionArtifact(root) and serves dist/server/server.mjs; pnpm run check:security-gate-mutations passed with 30 mutants killed.",
+      "evidenceBundles": [
+        "m1-prod-artifact-defer-streaming",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot (2 passed, 90.10s)",
+        "dialects": {
+          "postgres": "default prod-artifact /probe/nested-defer and /probe/defer-error streamed shell/fallback/sibling assertions from dist/server/server.mjs",
+          "sqlite": "SQLite prod-artifact /probe/nested-defer and /probe/defer-error streamed shell/fallback/sibling assertions from dist/server/server.mjs"
+        },
+        "independentReviewer": "agent/followup-defer-1782923952 produced the worker proof branch for main-agent independent reverify before integration"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.defer.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 14 real-build proofs; this row's proof is a real starter kovo build and server artifact, not fixture-only coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 30 mutants killed, including closed-row M1 evidence enforcement"
+      }
     },
     {
       "id": "defer-shell-streams-before-slow-regions-complete",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "streaming-defer-chunks"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot (2 passed, 90.10s) asserted the first streamed shell chunk arrives within 500ms and excludes the 1000ms slow region content.",
+      "parent": "streaming-defer-chunks",
+      "evidenceBundles": [
+        "m1-prod-artifact-defer-streaming",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot (2 passed, 90.10s)",
+        "dialects": {
+          "postgres": "default prod-artifact first /probe/nested-defer chunk contains the <kovo-defer> shell before the slow outer region resolves",
+          "sqlite": "SQLite prod-artifact first /probe/nested-defer chunk contains the <kovo-defer> shell before the slow outer region resolves"
+        },
+        "independentReviewer": "agent/followup-defer-1782923952 produced the worker proof branch for main-agent independent reverify before integration"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.defer.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 14 real-build proofs; this row's proof is a real starter kovo build and server artifact, not fixture-only coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 30 mutants killed, including closed-row M1 evidence enforcement"
+      }
     },
     {
       "id": "defer-region-failures-isolate-to-their-own-fallback",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "streaming-defer-chunks"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot (2 passed, 90.10s) returned HTTP 200 for a throwing region, streamed that region's error fallback, and preserved a safe sibling fragment.",
+      "parent": "streaming-defer-chunks",
+      "evidenceBundles": [
+        "m1-prod-artifact-defer-streaming",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot (2 passed, 90.10s)",
+        "dialects": {
+          "postgres": "default prod-artifact /probe/defer-error stays HTTP 200, emits unsafe-region state=error fallback, and still emits safe-sibling fragment",
+          "sqlite": "SQLite prod-artifact /probe/defer-error stays HTTP 200, emits unsafe-region state=error fallback, and still emits safe-sibling fragment"
+        },
+        "independentReviewer": "agent/followup-defer-1782923952 produced the worker proof branch for main-agent independent reverify before integration"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.defer.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 14 real-build proofs; this row's proof is a real starter kovo build and server artifact, not fixture-only coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 30 mutants killed, including closed-row M1 evidence enforcement"
+      }
     },
     {
       "id": "streamed-defer-chunks-escape-attacker-markup-and-private-details",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "streaming-defer-chunks"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot (2 passed, 90.10s) asserted attacker markup and raw sibling strings are escaped in streamed chunks and private thrown details stay off-wire.",
+      "parent": "streaming-defer-chunks",
+      "evidenceBundles": [
+        "m1-prod-artifact-defer-streaming",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot (2 passed, 90.10s)",
+        "dialects": {
+          "postgres": "default prod-artifact escaped <img> fallback/chunk content, escaped raw sibling text, and omitted private deferred details",
+          "sqlite": "SQLite prod-artifact escaped <img> fallback/chunk content, escaped raw sibling text, and omitted private deferred details"
+        },
+        "independentReviewer": "agent/followup-defer-1782923952 produced the worker proof branch for main-agent independent reverify before integration"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.defer.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 14 real-build proofs; this row's proof is a real starter kovo build and server artifact, not fixture-only coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 30 mutants killed, including closed-row M1 evidence enforcement"
+      }
     },
     {
       "id": "response-headers-incl-set-cookie-redirects",
@@ -1563,6 +1643,10 @@
     "m1-prod-artifact-transactions": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot",
       "evidence": "Production artifact transaction/raw-SQL starter tests build with kovo build --no-cache and exercise default plus SQLite runtime SQL handle paths."
+    },
+    "m1-prod-artifact-defer-streaming": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot",
+      "evidence": "Production artifact Defer starter test builds default and SQLite starters with kovo build --no-cache, serves dist/server/server.mjs, and asserts shell TTFB, per-region fallback isolation, escaping, and private-detail bounds."
     },
     "m1-prod-artifact-managed-write-escape": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
