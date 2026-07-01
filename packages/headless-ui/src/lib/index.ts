@@ -70,7 +70,11 @@ export type {
   SetOpenStateOptions,
 } from './open-state.js';
 
-export { moveCollectionIndex, navigationIntentFromKey } from './keyboard-navigation.js';
+export {
+  isActivationKey,
+  moveCollectionIndex,
+  navigationIntentFromKey,
+} from './keyboard-navigation.js';
 export type {
   CollectionOrientation,
   MoveOptions,

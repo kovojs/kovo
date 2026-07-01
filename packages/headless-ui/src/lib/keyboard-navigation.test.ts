@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { moveCollectionIndex, navigationIntentFromKey } from './keyboard-navigation.js';
+import {
+  isActivationKey,
+  moveCollectionIndex,
+  navigationIntentFromKey,
+} from './keyboard-navigation.js';
 
 describe('headless-ui keyboard navigation', () => {
   it('maps APG-style collection keys by orientation and direction', () => {
@@ -40,5 +44,12 @@ describe('headless-ui keyboard navigation', () => {
 
     expect(moveCollectionIndex('first', { currentIndex: 0, items })).toBe(-1);
     expect(moveCollectionIndex('last', { currentIndex: 0, items })).toBe(-1);
+  });
+
+  it('treats Enter, Space, and legacy Spacebar as activation keys', () => {
+    expect(isActivationKey('Enter')).toBe(true);
+    expect(isActivationKey(' ')).toBe(true);
+    expect(isActivationKey('Spacebar')).toBe(true);
+    expect(isActivationKey('ArrowDown')).toBe(false);
   });
 });

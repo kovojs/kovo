@@ -333,11 +333,48 @@ describe('headless-ui select primitive', () => {
       value: { changed: true, value: 'blue' },
     });
 
+    const legacySpacebarEvent = selectKeyEvent('Spacebar');
+    expect(
+      selectKeyDown(legacySpacebarEvent, {
+        highlightedValue: 'blue',
+        items: colorItems,
+        open: true,
+        value: 'red',
+      }),
+    ).toMatchObject({
+      open: { changed: true, open: false },
+      value: { changed: true, value: 'blue' },
+    });
+    expect(legacySpacebarEvent.defaultPrevented).toBe(true);
+
     expect(
       selectTypeahead({ highlightedValue: 'red', items: colorItems, value: 'red' }, 'b', {
         now: 1000,
       }),
     ).toMatchObject({ matchIndex: 2, value: 'blue' });
+  });
+
+  it('accepts deterministic now injection for keyboard typeahead', () => {
+    const event = selectKeyEvent('b');
+    const originalNow = Date.now;
+    Date.now = () => 999;
+
+    try {
+      const result = selectKeyDown(
+        event,
+        { highlightedValue: 'red', items: colorItems, open: true, value: 'red' },
+        { now: 100 },
+      );
+
+      expect(result).toMatchObject({
+        matchIndex: 2,
+        state: { buffer: 'b', updatedAt: 100 },
+        value: 'blue',
+      });
+      expect(event.defaultPrevented).toBe(true);
+    } finally {
+      Date.now = originalNow;
+    }
   });
 
   it('guards the primitive change handler when author behavior prevented default', () => {

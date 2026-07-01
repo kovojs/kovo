@@ -29,6 +29,10 @@ const verticalKeys = new Map<string, NavigationIntent>([
   ['ArrowUp', 'previous'],
 ]);
 
+export function isActivationKey(key: string): boolean {
+  return key === 'Enter' || key === ' ' || key === 'Spacebar';
+}
+
 export function navigationIntentFromKey(
   key: string,
   options: NavigationKeyOptions = {},

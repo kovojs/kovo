@@ -12,6 +12,7 @@ import {
   type PrimitiveDataAttributes,
   type TypeaheadState,
 } from '../lib/index.js';
+import { activeDescendantId, describedByIds } from '../lib/active-descendant.js';
 
 /**
  * Public interface used by the Autocomplete primitive.
@@ -1118,16 +1119,15 @@ function autocompleteValueDisabled(state: AutocompleteState, value: string | und
 function autocompleteActiveDescendant(
   options: AutocompleteInputAttributeOptions,
 ): string | undefined {
-  if (options.highlightedValue === undefined) return undefined;
-
-  const itemId = autocompleteItemId(options, options.highlightedValue);
-  if (itemId !== undefined) return itemId;
-
   // J1 (SPEC.md §4.6): index against the *filtered* render order
   // (autocompleteSuggestions — the options the listbox actually renders), not the
   // full item list, so the synthesized id matches the rendered option's
   // auto-generated id after typing. Mirrors combobox.ts/command.ts.
-  return autocompleteFallbackOptionId(options, options.highlightedValue);
+  return activeDescendantId<string>({
+    fallbackId: (value) => autocompleteFallbackOptionId(options, value),
+    highlightedValue: options.highlightedValue,
+    itemId: (value) => autocompleteItemId(options, value),
+  });
 }
 
 function autocompleteItemId(state: AutocompleteState, value: string): string | undefined {
@@ -1193,7 +1193,8 @@ function autocompleteDescribedBy(options: {
   errorId?: string;
   invalid?: boolean;
 }): string {
-  return [options.descriptionId, options.invalid === true ? options.errorId : undefined]
-    .filter((id): id is string => id !== undefined && id.length > 0)
-    .join(' ');
+  return describedByIds(
+    options.descriptionId,
+    options.invalid === true ? options.errorId : undefined,
+  );
 }

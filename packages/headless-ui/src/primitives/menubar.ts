@@ -3,6 +3,7 @@ import {
   dataOrientation,
   dataState,
   dispatchCancelableChange,
+  isActivationKey,
   mergeDataAttributes,
   moveCollection,
   projectCollectionItems,
@@ -1091,5 +1092,5 @@ function menubarDataOrientation(
 }
 
 function menubarItemActivationKey(key: string): boolean {
-  return key === 'Enter' || key === ' ' || key === 'Spacebar';
+  return isActivationKey(key);
 }

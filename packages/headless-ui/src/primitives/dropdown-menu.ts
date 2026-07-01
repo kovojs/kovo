@@ -4,6 +4,7 @@ import {
   dispatchCancelableChange,
   mergeDataAttributes,
   moveCollection,
+  isActivationKey,
   projectCollectionItems,
   typeaheadCollection,
   openState,
@@ -1041,11 +1042,9 @@ function dropdownMenuCollectionItem(item: DropdownMenuItem) {
 }
 
 function dropdownMenuItemActivationKey(key: string): boolean {
-  return key === 'Enter' || key === ' ' || key === 'Spacebar';
+  return isActivationKey(key);
 }
 
 function dropdownMenuTriggerOpenKey(key: string): boolean {
-  return (
-    key === 'Enter' || key === ' ' || key === 'Spacebar' || key === 'ArrowDown' || key === 'ArrowUp'
-  );
+  return isActivationKey(key) || key === 'ArrowDown' || key === 'ArrowUp';
 }

@@ -12,6 +12,7 @@ import {
   type PrimitiveDataAttributes,
   type TypeaheadState,
 } from '../lib/index.js';
+import { activeDescendantId, describedByIds } from '../lib/active-descendant.js';
 
 /**
  * Public interface used by the Combobox primitive.
@@ -984,15 +985,14 @@ function comboboxValueDisabled(state: ComboboxState, value: string | undefined):
 }
 
 function comboboxActiveDescendant(options: ComboboxInputAttributeOptions): string | undefined {
-  if (options.highlightedValue === undefined) return undefined;
-
-  const itemId = comboboxItemId(options, options.highlightedValue);
-  if (itemId !== undefined) return itemId;
-
   // J2 (SPEC.md §4.6): index against the *filtered* render order (the options the
   // listbox actually renders, comboboxFilteredItems), not the full item list, so the
   // synthesized id matches the rendered option's auto-generated id after filtering.
-  return comboboxFallbackOptionId(options, options.highlightedValue);
+  return activeDescendantId<string>({
+    fallbackId: (value) => comboboxFallbackOptionId(options, value),
+    highlightedValue: options.highlightedValue,
+    itemId: (value) => comboboxItemId(options, value),
+  });
 }
 
 function comboboxItemId(state: ComboboxState, value: string): string | undefined {
@@ -1046,9 +1046,10 @@ function comboboxDescribedBy(options: {
   errorId?: string;
   invalid?: boolean;
 }): string {
-  return [options.descriptionId, options.invalid === true ? options.errorId : undefined]
-    .filter((id): id is string => id !== undefined && id.length > 0)
-    .join(' ');
+  return describedByIds(
+    options.descriptionId,
+    options.invalid === true ? options.errorId : undefined,
+  );
 }
 
 function comboboxItemMatches(item: ComboboxItem, query: string): boolean {

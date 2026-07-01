@@ -3,6 +3,7 @@ import {
   dataDisabled,
   dataState,
   dispatchCancelableChange,
+  isActivationKey,
   mergeDataAttributes,
   moveCollection,
   projectCollectionItems,
@@ -239,6 +240,22 @@ export type SelectOpenChangeDetail = PrimitiveChangeDetail<SelectOpenChangeReaso
 export interface SelectChangeOptions {
   onOpenChange?: (detail: SelectOpenChangeDetail) => void;
   onValueChange?: (detail: SelectChangeDetail) => void;
+}
+
+/**
+ * Options accepted by the Select primitive select key down handler.
+ *
+ * SPEC.md §4.6 defines primitive attribute records and merge ownership.
+ *
+ * @example
+ * ```ts
+ * import type { SelectKeyDownOptions } from '@kovojs/headless-ui/select';
+ *
+ * const value: SelectKeyDownOptions = {} as SelectKeyDownOptions;
+ * ```
+ */
+export interface SelectKeyDownOptions extends SelectChangeOptions {
+  now?: number;
 }
 
 /**
@@ -938,11 +955,11 @@ export function selectItemClick(
 export function selectKeyDown(
   event: SelectKeyboardEvent,
   state: SelectState,
-  options: SelectChangeOptions = {},
+  options: SelectKeyDownOptions = {},
 ): SelectKeyboardResult | undefined {
   if (event.defaultPrevented) return;
 
-  if (event.key === 'Enter' || event.key === ' ') {
+  if (isActivationKey(event.key)) {
     if (state.open === true && state.highlightedValue !== undefined) {
       const result = selectOption(state, state.highlightedValue, options);
       if (result.value.changed) event.preventDefault();
@@ -977,7 +994,10 @@ export function selectKeyDown(
     return result;
   }
 
-  const typeahead = selectTypeahead(state, event.key, { loop: true, now: Date.now() });
+  const typeahead = selectTypeahead(state, event.key, {
+    loop: true,
+    now: options.now ?? Date.now(),
+  });
   if (typeahead.matchIndex >= 0) {
     event.preventDefault();
     if (state.open === true) return typeahead;

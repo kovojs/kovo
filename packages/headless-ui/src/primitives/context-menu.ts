@@ -3,6 +3,7 @@ import {
   dataState,
   dispatchCancelableChange,
   mergeDataAttributes,
+  isActivationKey,
   moveCollection,
   projectCollectionItems,
   setOpenState,
@@ -1126,5 +1127,5 @@ function contextMenuCollectionItem(item: ContextMenuItem) {
 }
 
 function contextMenuItemActivationKey(key: string): boolean {
-  return key === 'Enter' || key === ' ' || key === 'Spacebar';
+  return isActivationKey(key);
 }
