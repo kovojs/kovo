@@ -15,6 +15,7 @@
           "./internal/client-module-url",
           "./internal/diagnostics",
           "./internal/document-protocol",
+          "./internal/filesystem",
           "./internal/fragment-target",
           "./internal/framework-identity",
           "./internal/graph",

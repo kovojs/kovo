@@ -1,5 +1,7 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
+import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import { escapeAttribute } from './html.js';
 import {
@@ -63,11 +65,9 @@ async function staticExportIntegrityByPath({
 async function readableStaticExportAssetBytes(
   asset: StaticExportAssetArtifact,
 ): Promise<Buffer | undefined> {
-  try {
-    return await readFile(asset.source);
-  } catch {
-    return undefined;
-  }
+  const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(asset.source));
+  const bytes = await fileSystem.fileBytes(path.basename(asset.source));
+  return bytes === undefined ? undefined : Buffer.from(bytes);
 }
 
 function sriSha384(bytes: Buffer): string {
