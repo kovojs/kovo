@@ -303,3 +303,9 @@ packages/drizzle/src/index.query-loader-receivers.test.ts packages/cli/src/index
   chokepoint suites; and `git diff --check`.
 - Current starter CI routing: `.github/workflows/ci.yml` enrolls the new runtime-contract prod-artifact test
   in the starter matrix, and `scripts/ci-shards.test.mjs` keeps it out of root Vitest shards.
+- Integrated A/E slices: hidden Drizzle reads inside ordinary closures now fail closed with KV406, and
+  metamorphic recognition has a dedicated CI gate outside generic root Vitest shards. Verified with
+  `pnpm exec vitest --run packages/drizzle/src/index.query-loader-receivers.test.ts
+packages/cli/src/index.kovo-check.test.ts`; and
+  `pnpm exec vitest --run packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts
+scripts/ci-shards.test.mjs`.
