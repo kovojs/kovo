@@ -11,13 +11,17 @@ import {
 import {
   isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,
-  isKovoExtraConfigCallName,
   type KovoDomainTableAnnotation,
   type KovoFanAnnotation,
   type KovoSecretColumnAnnotation,
   type KovoTableAnnotation,
   type KovoViewAnnotation,
 } from '../drizzle-surface.js';
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  typeAliasResolvesToFrameworkExport,
+} from './framework-identity.js';
 import {
   type ExtractedForeignKey,
   type ExtractedTable,
@@ -311,15 +315,8 @@ function isQueryShapeWrapper(shape: QueryShape): shape is QueryShapeWrapper {
     );
   }
 
-  const alias = type.getAliasSymbol();
-  if (alias?.getName() !== 'Reader') return false;
-  const declarations = alias.getDeclarations();
-  if (
-    declarations.length > 0 &&
-    !declarations.some((declaration) => isKovoServerDeclaration(declaration))
-  ) {
-    return false;
-  }
+  const readerIdentity = frameworkExport('@kovojs/server', 'Reader');
+  if (!typeAliasResolvesToFrameworkExport(type, readerIdentity)) return false;
 
   return type
     .getAliasTypeArguments()
@@ -1787,53 +1784,11 @@ function relationHelperTargetName(expression: Node): string | undefined {
 
 /** @internal */ export function isKovoAnnotationCall(node: Node): boolean {
   if (!Node.isCallExpression(node)) return false;
-  const expression = node.getExpression();
-  if (Node.isIdentifier(expression)) {
-    const name = expression.getText();
-    if (isKovoExtraConfigCallName(name)) return true;
-    return kovoAnnotationCallBindingsForSourceFile(expression.getSourceFile()).identifiers.has(
-      name,
-    );
-  }
-  if (!Node.isPropertyAccessExpression(expression)) return false;
-  if (!isKovoExtraConfigCallName(expression.getName())) return false;
-  const receiver = unwrappedStaticExpressionNode(expression.getExpression());
-  return (
-    Node.isIdentifier(receiver) &&
-    kovoAnnotationCallBindingsForSourceFile(expression.getSourceFile()).namespaces.has(
-      receiver.getText(),
-    )
+  return expressionResolvesToFrameworkExport(
+    node.getExpression(),
+    frameworkExport('@kovojs/drizzle', 'kovo'),
+    { legacyGlobals: [frameworkExport('@kovojs/drizzle', 'kovo')] },
   );
-}
-
-interface KovoAnnotationCallBindings {
-  identifiers: ReadonlySet<string>;
-  namespaces: ReadonlySet<string>;
-}
-
-const kovoAnnotationCallBindingsCache = new WeakMap<SourceFile, KovoAnnotationCallBindings>();
-
-function kovoAnnotationCallBindingsForSourceFile(
-  sourceFile: SourceFile,
-): KovoAnnotationCallBindings {
-  const cached = kovoAnnotationCallBindingsCache.get(sourceFile);
-  if (cached) return cached;
-
-  const identifiers = new Set<string>();
-  const namespaces = new Set<string>();
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== '@kovojs/drizzle') continue;
-    for (const named of declaration.getNamedImports()) {
-      if (!isKovoExtraConfigCallName(named.getName())) continue;
-      identifiers.add(named.getAliasNode()?.getText() ?? named.getName());
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) namespaces.add(namespace.getText());
-  }
-
-  const bindings = { identifiers, namespaces };
-  kovoAnnotationCallBindingsCache.set(sourceFile, bindings);
-  return bindings;
 }
 
 /** @internal */ export function tableNameArgument(initializer: Node): string | undefined {

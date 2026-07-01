@@ -22,6 +22,7 @@ import {
   type SessionAlias,
   type SessionProvenanceContext,
 } from '../static.js';
+import { expressionResolvesToFrameworkExport, frameworkExport } from './framework-identity.js';
 
 /** @internal */ export function emptySessionProvenanceContext(): SessionProvenanceContext {
   return { aliases: new Map(), helpers: new Map(), opaqueAliases: new Map() };
@@ -53,8 +54,14 @@ function analyzerHelperSummariesForSourceFile(
   const summaries = new Map<string, PrivateScopeProvenance>();
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const callee = unwrappedStaticExpressionNode(call.getExpression());
-    const calleeName = Node.isIdentifier(callee) ? callee.getText() : staticAccessName(callee);
-    if (calleeName !== 'kovoAnalyzerSummary') continue;
+    if (
+      !expressionResolvesToFrameworkExport(
+        callee,
+        frameworkExport('@kovojs/drizzle', 'kovoAnalyzerSummary'),
+      )
+    ) {
+      continue;
+    }
 
     const [helper, summary] = call.getArguments();
     if (!helper || !summary) continue;

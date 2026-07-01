@@ -70,7 +70,6 @@ import {
 import {
   isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,
-  isKovoExtraConfigCallName,
   type KovoDomainRef,
   type KovoDomainTableAnnotation,
   type KovoFanAnnotation,
@@ -116,6 +115,10 @@ import {
   type SymbolProvenanceContext,
   type SymbolProvenanceRoot,
 } from './static/symbol-provenance.js';
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+} from './static/framework-identity.js';
 import { drizzleDiagnostic } from './static/diagnostics.js';
 
 /** @internal */ export const IGNORED_LOCAL_CALL_NAMES = new Set([
@@ -807,9 +810,6 @@ function sqlSafetyDiagnosticsForSourceFile(
 ): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = [];
   const context = sqlSafetyContextForSourceFile(sourceFile);
-  const nativeDrizzleSqlReceivers = nativeDrizzleSqlReceiverTexts(sourceFile);
-  const kovoSqlReceivers = kovoSqlReceiverTextsForSourceFile(sourceFile);
-  const kovoMutationStreamReceivers = kovoMutationStreamReceiverTexts(sourceFile);
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
   // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
   // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
@@ -829,19 +829,13 @@ function sqlSafetyDiagnosticsForSourceFile(
   }
 
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const rawHelperDiagnostic = sqlRawHelperDiagnostic(
-      file,
-      call,
-      context,
-      nativeDrizzleSqlReceivers,
-      kovoSqlReceivers,
-    );
+    const rawHelperDiagnostic = sqlRawHelperDiagnostic(file, call, context);
     if (rawHelperDiagnostic) diagnostics.push(rawHelperDiagnostic);
 
     const sinkName = sqlSinkName(call);
     if (!sinkName) continue;
     if (sqlSinkReceiverIsRawDriverClient(call, rawDriverClients)) continue;
-    if (sqlSinkReceiverIsKovoMutationStream(call, kovoMutationStreamReceivers)) continue;
+    if (sqlSinkReceiverIsKovoMutationStream(call)) continue;
     const [statement] = call.getArguments();
     const safety = sqlTextSafety(statement, context);
     if (safety === 'safe') continue;
@@ -862,8 +856,6 @@ function sqlRawHelperDiagnostic(
   file: SourceFileInput,
   call: CallExpression,
   context: SqlSafetyContext,
-  nativeDrizzleSqlReceivers: ReadonlySet<string>,
-  kovoSqlReceivers: ReadonlySet<string>,
 ): TouchGraphDiagnostic | null {
   const expression = call.getExpression();
   if (!Node.isPropertyAccessExpression(expression)) return null;
@@ -872,7 +864,7 @@ function sqlRawHelperDiagnostic(
   const method = expression.getName();
   if (method !== 'raw' && method !== 'identifier') return null;
   const [first, second] = call.getArguments();
-  if (nativeDrizzleSqlReceivers.has(receiver.getText())) {
+  if (expressionResolvesToFrameworkExport(receiver, frameworkExport('drizzle-orm', 'sql'))) {
     return drizzleDiagnostic({
       code: 'KV422',
       detail: `Direct drizzle-orm sql.${method}(...) is not accepted in app code; import Kovo's sql from @kovojs/drizzle so raw chunks and identifiers are auditable.`,
@@ -884,7 +876,13 @@ function sqlRawHelperDiagnostic(
   // `@kovojs/drizzle` binding — bare `sql`, an `import { sql as s }` alias, or a
   // namespace `<ns>.sql` accessor — so `s.raw(...)` / `k.sql.raw(...)` cannot slip a
   // raw chunk past the gate the way a literal `receiver === 'sql'` check did.
-  if (!kovoSqlReceivers.has(receiver.getText())) return null;
+  if (
+    !expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
+      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+    })
+  ) {
+    return null;
+  }
   if (method === 'identifier' && sqlAllowlistSafety(second, context) === 'literal') return null;
 
   const safety = sqlTextSafety(first, context);
@@ -897,77 +895,15 @@ function sqlRawHelperDiagnostic(
   });
 }
 
-function nativeDrizzleSqlReceiverTexts(sourceFile: SourceFile): Set<string> {
-  const receivers = new Set<string>();
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== 'drizzle-orm') continue;
-    for (const named of declaration.getNamedImports()) {
-      if (named.getName() === 'sql') receivers.add(named.getAliasNode()?.getText() ?? 'sql');
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) receivers.add(`${namespace.getText()}.sql`);
-  }
-  return receivers;
-}
-
-const KOVO_DRIZZLE_MODULE_SPECIFIER = '@kovojs/drizzle';
-const kovoSqlReceiverTextsCache = new WeakMap<SourceFile, Set<string>>();
-const kovoSqlTaggedTemplateTextsCache = new WeakMap<SourceFile, Set<string>>();
-
-/**
- * SPEC §10.2/§6.6 (KV422): the receiver texts that resolve to Kovo's auditable raw-SQL
- * helper `sql` from `@kovojs/drizzle`. Mirrors {@link nativeDrizzleSqlReceiverTexts} but
- * for Kovo's own `sql`: a local alias (`import { sql as s }` → `s`) or a namespace
- * accessor (`import * as k` → `k.sql`). Bare `sql` is always seeded because the analyzer
- * treats an unqualified `sql.raw(...)` as Kovo's helper even without an explicit import
- * in a fixture. Anchoring KV422 to this resolved set keeps `sql.raw`/`sql.identifier`
- * detection sound under aliasing/namespace imports that a literal `receiver === 'sql'`
- * compare silently missed. Memoized per source file (read once per analysis pass).
- */
-function kovoSqlReceiverTextsForSourceFile(sourceFile: SourceFile): Set<string> {
-  const cached = kovoSqlReceiverTextsCache.get(sourceFile);
-  if (cached) return cached;
-
-  const receivers = new Set<string>(['sql']);
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_DRIZZLE_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      if (named.getName() === 'sql') receivers.add(named.getAliasNode()?.getText() ?? 'sql');
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) receivers.add(`${namespace.getText()}.sql`);
-  }
-
-  kovoSqlReceiverTextsCache.set(sourceFile, receivers);
-  return receivers;
-}
-
-/**
- * SPEC §10.2/§6.6 (KV422): tagged-template SQL safety follows the resolved
- * `@kovojs/drizzle` import binding, so alias/namespace imports of `sql` and
- * `staticSql` stay recognized as the same safe carriers as their bare forms.
- */
-function kovoSqlTaggedTemplateTextsForSourceFile(sourceFile: SourceFile): Set<string> {
-  const cached = kovoSqlTaggedTemplateTextsCache.get(sourceFile);
-  if (cached) return cached;
-
-  const tags = new Set<string>(['sql', 'staticSql']);
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_DRIZZLE_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      const importName = named.getName();
-      if (importName !== 'sql' && importName !== 'staticSql') continue;
-      tags.add(named.getAliasNode()?.getText() ?? importName);
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) {
-      tags.add(`${namespace.getText()}.sql`);
-      tags.add(`${namespace.getText()}.staticSql`);
-    }
-  }
-
-  kovoSqlTaggedTemplateTextsCache.set(sourceFile, tags);
-  return tags;
+function isKovoSqlTagExpression(tag: Node): boolean {
+  return (
+    expressionResolvesToFrameworkExport(tag, frameworkExport('@kovojs/drizzle', 'sql'), {
+      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+    }) ||
+    expressionResolvesToFrameworkExport(tag, frameworkExport('@kovojs/drizzle', 'staticSql'), {
+      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'staticSql')],
+    })
+  );
 }
 
 /** @internal */
@@ -976,101 +912,27 @@ export function isKovoDrizzleTrustedSqlCall(expression: CallExpression): boolean
 }
 
 function isKovoDrizzleTrustedSqlCallee(callee: Node): boolean {
-  if (Node.isIdentifier(callee)) return identifierImportsKovoDrizzleTrustedSql(callee);
-  if (!Node.isPropertyAccessExpression(callee)) return false;
-  if (callee.getName() !== 'trustedSql') return false;
-  return identifierImportsKovoDrizzleNamespace(callee.getExpression());
-}
-
-function identifierImportsKovoDrizzleTrustedSql(identifier: Node): boolean {
-  if (!Node.isIdentifier(identifier)) return false;
-  const symbols = [identifier.getSymbol(), symbolForIdentifierReference(identifier)];
-  return symbols.some((symbol) =>
-    symbol?.getDeclarations().some((declaration) => {
-      if (!Node.isImportSpecifier(declaration)) return false;
-      if (declaration.getName() !== 'trustedSql') return false;
-      return (
-        declaration.getImportDeclaration().getModuleSpecifierValue() ===
-        KOVO_DRIZZLE_MODULE_SPECIFIER
-      );
-    }),
+  return expressionResolvesToFrameworkExport(
+    callee,
+    frameworkExport('@kovojs/drizzle', 'trustedSql'),
   );
-}
-
-function identifierImportsKovoDrizzleNamespace(identifier: Node): boolean {
-  if (!Node.isIdentifier(identifier)) return false;
-  const symbols = [identifier.getSymbol(), symbolForIdentifierReference(identifier)];
-  return symbols.some((symbol) =>
-    symbol?.getDeclarations().some((declaration) => {
-      if (!Node.isNamespaceImport(declaration)) return false;
-      const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-      return importDeclaration?.getModuleSpecifierValue() === KOVO_DRIZZLE_MODULE_SPECIFIER;
-    }),
-  );
-}
-
-function kovoMutationStreamReceiverTexts(sourceFile: SourceFile): Set<string> {
-  const receivers = new Set<string>();
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_SERVER_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      if (named.getName() === 'stream') receivers.add(named.getAliasNode()?.getText() ?? 'stream');
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) receivers.add(`${namespace.getText()}.stream`);
-  }
-  return receivers;
-}
-
-const KOVO_SERVER_MODULE_SPECIFIER = '@kovojs/server';
-
-interface KovoServerImportBindings {
-  /** export name → local identifier texts bound to it (`import { query as q }` → `q`). */
-  identifiersByExport: ReadonlyMap<string, ReadonlySet<string>>;
-  /** local names of `import * as ns from '@kovojs/server'` namespace imports. */
-  namespaces: ReadonlySet<string>;
-}
-
-const kovoServerImportBindingsCache = new WeakMap<SourceFile, KovoServerImportBindings>();
-
-function kovoServerImportBindings(sourceFile: SourceFile): KovoServerImportBindings {
-  const cached = kovoServerImportBindingsCache.get(sourceFile);
-  if (cached) return cached;
-
-  const identifiersByExport = new Map<string, Set<string>>();
-  const namespaces = new Set<string>();
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_SERVER_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      const exportName = named.getName();
-      const local = named.getAliasNode()?.getText() ?? exportName;
-      const set = identifiersByExport.get(exportName) ?? new Set<string>();
-      set.add(local);
-      identifiersByExport.set(exportName, set);
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) namespaces.add(namespace.getText());
-  }
-
-  const bindings: KovoServerImportBindings = { identifiersByExport, namespaces };
-  kovoServerImportBindingsCache.set(sourceFile, bindings);
-  return bindings;
 }
 
 /**
  * SPEC §6.6/§10.2/§11.1 (KV435/KV414/KV410/KV406/KV438): does `expression` name the `@kovojs/server`
- * export `exportName` (e.g. `query`/`domain`/`write`) as a call callee? Recognizes the canonical bare
- * identifier, a local import alias (`import { query as q }` → `q(...)`), and a namespace-member
- * accessor (`import * as srv` → `srv.query(...)`). Mirrors the established alias-hardening of Kovo's
- * `sql`/`kovo()`/`route()` recognizers so an aliased or namespaced loader/write/domain definition
- * cannot silently erase its security surface the way a literal `expression.getText() === 'query'`
- * compare did (bugz-3 H1/L11). The bare name is always accepted because the canonical app/fixture
- * form references these primitives globally and the un-aliased binding IS the export name.
+ * export `exportName` (e.g. `query`/`domain`/`write`) as a call callee? The shared resolver follows
+ * import aliases, namespace imports, re-exports, local const aliases, and object destructuring. The
+ * bare-name fallback exists only for unresolved legacy fixture globals; a local declaration named
+ * `query`/`domain`/`write` is not treated as Kovo.
  *
  * @internal
  */
 export function isKovoServerCalleeExpression(expression: Node, exportName: string): boolean {
-  return kovoServerCalleeExpressionMatches(expression, exportName, new Set(), 0);
+  return expressionResolvesToFrameworkExport(
+    expression,
+    frameworkExport('@kovojs/server', exportName),
+    { legacyGlobals: [frameworkExport('@kovojs/server', exportName)] },
+  );
 }
 
 interface StaticQueryDeclaration {
@@ -1198,218 +1060,6 @@ function sourceDerivedKebabCase(value: string): string {
     .toLowerCase();
 }
 
-function kovoServerCalleeExpressionMatches(
-  expression: Node,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (depth > 6) return false;
-  const callee = unwrappedStaticExpressionNode(expression);
-  if (Node.isIdentifier(callee)) {
-    if (callee.getText() === exportName) return true;
-    if (
-      kovoServerImportBindings(callee.getSourceFile())
-        .identifiersByExport.get(exportName)
-        ?.has(callee.getText()) ??
-      false
-    ) {
-      return true;
-    }
-    if (identifierImportsKovoServerExport(callee, exportName, seen, depth + 1)) return true;
-    const initializer = localConstIdentifierInitializer(callee);
-    return initializer
-      ? kovoServerCalleeExpressionMatches(initializer, exportName, seen, depth + 1)
-      : false;
-  }
-  if (Node.isPropertyAccessExpression(callee)) {
-    if (callee.getName() !== exportName) return false;
-    return kovoServerNamespaceExpressionMatches(
-      callee.getExpression(),
-      exportName,
-      seen,
-      depth + 1,
-    );
-  }
-  return false;
-}
-
-function kovoServerNamespaceExpressionMatches(
-  expression: Node,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (depth > 6) return false;
-  const receiver = unwrappedStaticExpressionNode(expression);
-  if (!Node.isIdentifier(receiver)) return false;
-  if (kovoServerImportBindings(receiver.getSourceFile()).namespaces.has(receiver.getText())) {
-    return true;
-  }
-  if (namespaceImportsKovoServerExport(receiver, exportName, seen, depth + 1)) return true;
-  const initializer = localConstIdentifierInitializer(receiver);
-  return initializer
-    ? kovoServerNamespaceExpressionMatches(initializer, exportName, seen, depth + 1)
-    : false;
-}
-
-function localConstIdentifierInitializer(identifier: Node): Node | undefined {
-  if (!Node.isIdentifier(identifier)) return undefined;
-  const symbol = symbolForIdentifierReference(identifier) ?? identifier.getSymbol();
-  const declaration = symbol?.getDeclarations()?.[0];
-  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
-  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
-  const declarationList = declaration.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-  return declaration.getInitializer();
-}
-
-function identifierImportsKovoServerExport(
-  identifier: Node,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (!Node.isIdentifier(identifier)) return false;
-  const local = identifier.getText();
-  for (const declaration of identifier.getSourceFile().getImportDeclarations()) {
-    for (const named of declaration.getNamedImports()) {
-      const localName = named.getAliasNode()?.getText() ?? named.getName();
-      if (localName !== local) continue;
-      const importedName = named.getName();
-      const specifier = declaration.getModuleSpecifierValue();
-      if (specifier === KOVO_SERVER_MODULE_SPECIFIER) return importedName === exportName;
-      const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
-      if (
-        moduleSourceFile &&
-        moduleExportsKovoServerName(moduleSourceFile, importedName, exportName, seen, depth + 1)
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function namespaceImportsKovoServerExport(
-  identifier: Node,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (!Node.isIdentifier(identifier)) return false;
-  const local = identifier.getText();
-  for (const declaration of identifier.getSourceFile().getImportDeclarations()) {
-    const namespace = declaration.getNamespaceImport();
-    if (!namespace || namespace.getText() !== local) continue;
-    const specifier = declaration.getModuleSpecifierValue();
-    if (specifier === KOVO_SERVER_MODULE_SPECIFIER) return true;
-    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
-    if (
-      moduleSourceFile &&
-      moduleExportsKovoServerName(moduleSourceFile, exportName, exportName, seen, depth + 1)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function moduleExportsKovoServerName(
-  sourceFile: SourceFile,
-  importedName: string,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (depth > 6) return false;
-  const key = `${sourceFile.getFilePath()}:${importedName}:${exportName}`;
-  if (seen.has(key)) return false;
-  seen.add(key);
-
-  for (const declaration of sourceFile.getExportDeclarations()) {
-    const specifier = declaration.getModuleSpecifierValue();
-    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
-    const namedExports = declaration.getNamedExports();
-    if (namedExports.length === 0) {
-      if (specifier === KOVO_SERVER_MODULE_SPECIFIER && importedName === exportName) return true;
-      if (
-        moduleSourceFile &&
-        moduleExportsKovoServerName(moduleSourceFile, importedName, exportName, seen, depth + 1)
-      ) {
-        return true;
-      }
-      continue;
-    }
-
-    for (const named of namedExports) {
-      const exported = named.getAliasNode()?.getText() ?? named.getName();
-      if (exported !== importedName) continue;
-      const local = named.getName();
-      if (specifier === KOVO_SERVER_MODULE_SPECIFIER) return local === exportName;
-      if (
-        moduleSourceFile &&
-        moduleExportsKovoServerName(moduleSourceFile, local, exportName, seen, depth + 1)
-      ) {
-        return true;
-      }
-      if (
-        !specifier &&
-        sourceFileIdentifierResolvesToKovoServerExport(sourceFile, local, exportName)
-      ) {
-        return true;
-      }
-    }
-  }
-
-  return sourceFileExportedConstResolvesToKovoServerExport(sourceFile, importedName, exportName);
-}
-
-function sourceFileIdentifierResolvesToKovoServerExport(
-  sourceFile: SourceFile,
-  local: string,
-  exportName: string,
-): boolean {
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_SERVER_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      const localName = named.getAliasNode()?.getText() ?? named.getName();
-      if (localName === local && named.getName() === exportName) return true;
-    }
-  }
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    if (declaration.getName() !== local) continue;
-    const initializer = declaration.getInitializer();
-    if (!initializer) continue;
-    if (kovoServerCalleeExpressionMatches(initializer, exportName, new Set(), 0)) return true;
-  }
-  return false;
-}
-
-function sourceFileExportedConstResolvesToKovoServerExport(
-  sourceFile: SourceFile,
-  local: string,
-  exportName: string,
-): boolean {
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    if (declaration.getName() !== local) continue;
-    const statement = declaration.getVariableStatement();
-    const exported = statement
-      ?.getModifiers()
-      .some((modifier) => modifier.getKind() === SyntaxKind.ExportKeyword);
-    const initializer = declaration.getInitializer();
-    if (
-      exported &&
-      initializer &&
-      kovoServerCalleeExpressionMatches(initializer, exportName, new Set(), 0)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function sqlSinkReceiverIsRawDriverClient(
   call: CallExpression,
   rawDriverClients: ReadonlySet<string>,
@@ -1425,17 +1075,16 @@ function sqlSinkReceiverIsRawDriverClient(
   );
 }
 
-function sqlSinkReceiverIsKovoMutationStream(
-  call: CallExpression,
-  kovoMutationStreamReceivers: ReadonlySet<string>,
-): boolean {
-  if (kovoMutationStreamReceivers.size === 0) return false;
+function sqlSinkReceiverIsKovoMutationStream(call: CallExpression): boolean {
   const expression = call.getExpression();
   const receiver =
     Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)
       ? expression.getExpression()
       : undefined;
-  return Boolean(receiver && kovoMutationStreamReceivers.has(receiver.getText()));
+  return Boolean(
+    receiver &&
+    expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/server', 'stream')),
+  );
 }
 
 function sqlSinkName(call: CallExpression): string | null {
@@ -1491,8 +1140,7 @@ function sqlTextSafety(expression: Node | undefined, context: SqlSafetyContext):
   }
   if (Node.isTaggedTemplateExpression(expression)) {
     const tag = expression.getTag();
-    const safeTags = kovoSqlTaggedTemplateTextsForSourceFile(expression.getSourceFile());
-    return safeTags.has(tag.getText()) ? 'safe' : 'unknown';
+    return isKovoSqlTagExpression(tag) ? 'safe' : 'unknown';
   }
   if (Node.isTemplateExpression(expression)) return 'tainted';
   if (Node.isCallExpression(expression)) {
@@ -1503,8 +1151,11 @@ function sqlTextSafety(expression: Node | undefined, context: SqlSafetyContext):
       // SPEC §10.2/§6.6 (KV422): resolve Kovo `sql` through its aliased/namespace
       // `@kovojs/drizzle` binding so `s.raw(...)` / `k.sql.identifier(...)` are
       // classified identically to bare `sql.*` — matching the sink-side fix above.
-      const kovoSqlReceivers = kovoSqlReceiverTextsForSourceFile(expression.getSourceFile());
-      if (kovoSqlReceivers.has(receiver.getText())) {
+      if (
+        expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
+          legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+        })
+      ) {
         const method = callExpression.getName();
         if (method === 'identifier') {
           return sqlAllowlistSafety(expression.getArguments()[1], context) === 'literal'
@@ -4631,6 +4282,18 @@ export {
   type SymbolProvenanceKind,
   type SymbolProvenanceRoot,
 } from './static/symbol-provenance.js';
+/** @internal */
+export {
+  canonicalFrameworkExportForExpression,
+  canonicalFrameworkExportForSymbol,
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  symbolResolvesToFrameworkExport,
+  typeAliasResolvesToFrameworkExport,
+  type CanonicalFrameworkExportIdentity,
+  type CanonicalFrameworkModule,
+  type FrameworkIdentityOptions,
+} from './static/framework-identity.js';
 /** @internal */
 export {
   computedPropertyNameExpression,

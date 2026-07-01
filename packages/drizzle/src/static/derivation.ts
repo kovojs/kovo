@@ -99,6 +99,7 @@ import {
   rawTablesFromWriteInitializer,
   writeActionCallbackFunction,
 } from './domain-writes.js';
+import { expressionResolvesToFrameworkExport, frameworkExport } from './framework-identity.js';
 
 // ───────────────────────────────────────────────────────────────────────────
 // SPEC.md §10.5 derivation extraction (Stage 1 write→effect, Stage 2 query→shape).
@@ -996,8 +997,6 @@ function extractMassAssignmentFromDeriveExtraction(
       return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
     };
     const serverSummaryKeys = serverSummaryKeysForSourceFile(sourceFile);
-    const privilegedHelpers = privilegedWriteHelperNames(sourceFile);
-
     for (const callback of deriveWriteCallbacks(sourceFile)) {
       const receivers = projectDrizzleReceivers(callback.fn);
       const sessionContext = sessionProvenanceContextForNodes(sourceFile, [callback.body]);
@@ -1005,14 +1004,8 @@ function extractMassAssignmentFromDeriveExtraction(
         inputRoots: callbackInputRootNodes(callback.fn),
         serverSummaryKeys,
       });
-      const passwordSinkSymbolKeys = passwordSinkAliasKeysForNodes(
-        [callback.body],
-        privilegedHelpers,
-      );
-      const encryptedAtRestSymbolKeys = encryptedAtRestAliasKeysForNodes(
-        [callback.body],
-        privilegedHelpers,
-      );
+      const passwordSinkSymbolKeys = passwordSinkAliasKeysForNodes([callback.body]);
+      const encryptedAtRestSymbolKeys = encryptedAtRestAliasKeysForNodes([callback.body]);
       const name = callback.key ?? '<anonymous>';
       for (const call of touchBodyCallExpressions(callback.body)) {
         facts.push(
@@ -1026,7 +1019,6 @@ function extractMassAssignmentFromDeriveExtraction(
             symbolContext,
             passwordSinkSymbolKeys,
             encryptedAtRestSymbolKeys,
-            privilegedHelpers,
           }),
         );
       }
@@ -1109,7 +1101,6 @@ interface MassAssignmentCallContext {
   symbolContext: SymbolProvenanceContext;
   passwordSinkSymbolKeys: ReadonlySet<string>;
   encryptedAtRestSymbolKeys: ReadonlySet<string>;
-  privilegedHelpers: PrivilegedWriteHelpers;
 }
 
 interface RawWriteDeclaration {
@@ -1122,16 +1113,6 @@ interface RawWriteSqlTrust {
   hasExecute: boolean;
   site?: string;
   trusted: boolean;
-}
-
-interface PrivilegedWriteHelpers {
-  adminAssign: ReadonlySet<string>;
-  encryptAtRest: ReadonlySet<string>;
-  encryptionNamespaces: ReadonlySet<string>;
-  hashPassword: ReadonlySet<string>;
-  namespaces: ReadonlySet<string>;
-  passwordNamespaces: ReadonlySet<string>;
-  serverValue: ReadonlySet<string>;
 }
 
 function massAssignmentFactsForWriteCall(
@@ -1549,10 +1530,10 @@ function governedValueVerdict(
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
     // adminAssign(value, reason): the audited privileged write — always passes (recorded).
-    if (isPrivilegedHelperCall(callee, 'adminAssign', context.privilegedHelpers)) {
+    if (isPrivilegedHelperCall(callee, 'adminAssign')) {
       return { ok: true, provenance: 'input' };
     }
-    if (isPrivilegedHelperCall(callee, 'serverValue', context.privilegedHelpers)) {
+    if (isPrivilegedHelperCall(callee, 'serverValue')) {
       const inner = expression.getArguments()[0];
       // serverValue discharges only a NON-input argument; serverValue(input.x,…) still fails.
       if (!inner) return { ok: true, provenance: 'unknown' };
@@ -1639,7 +1620,7 @@ function confidentialAtRestValueVerdict(
   const expression = unwrappedAwaitedStaticExpressionNode(node);
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    if (isPrivilegedHelperCall(callee, 'adminAssign', context.privilegedHelpers)) {
+    if (isPrivilegedHelperCall(callee, 'adminAssign')) {
       return { ok: true, provenance: 'input' };
     }
     if (isBlessedEncryptAtRestCall(expression, context)) {
@@ -1664,46 +1645,29 @@ function confidentialAtRestValueVerdict(
   return { ok: false, provenance: 'unknown', detail: expression.getText() };
 }
 
-function isPrivilegedHelperCall(
-  callee: Node,
-  helper: 'adminAssign' | 'serverValue',
-  helpers: PrivilegedWriteHelpers,
-): boolean {
-  if (Node.isIdentifier(callee)) return helpers[helper].has(callee.getText());
-  if (!Node.isPropertyAccessExpression(callee)) return false;
-  const receiver = callee.getExpression();
-  return (
-    Node.isIdentifier(receiver) &&
-    helpers.namespaces.has(receiver.getText()) &&
-    callee.getName() === helper
-  );
+function isPrivilegedHelperCall(callee: Node, helper: 'adminAssign' | 'serverValue'): boolean {
+  return expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/server', helper));
 }
 
 function isBlessedEncryptAtRestCall(
   expression: CallExpression,
-  context: MassAssignmentCallContext,
+  _context: MassAssignmentCallContext,
 ): boolean {
-  return isBlessedEncryptAtRestCallWithHelpers(expression, context.privilegedHelpers);
+  return isBlessedEncryptAtRestCallExpression(expression);
 }
 
 function isBlessedPasswordHashCall(
   expression: CallExpression,
-  context: MassAssignmentCallContext,
+  _context: MassAssignmentCallContext,
 ): boolean {
-  return isBlessedPasswordHashCallWithHelpers(expression, context.privilegedHelpers);
+  return isBlessedPasswordHashCallExpression(expression);
 }
 
-function encryptedAtRestAliasKeysForNodes(
-  bodies: readonly Node[],
-  helpers: PrivilegedWriteHelpers,
-): ReadonlySet<string> {
+function encryptedAtRestAliasKeysForNodes(bodies: readonly Node[]): ReadonlySet<string> {
   const aliases = new Set<string>();
   const isEncryptedExpression = (node: Node): boolean => {
     const expression = unwrappedAwaitedStaticExpressionNode(node);
-    if (
-      Node.isCallExpression(expression) &&
-      isBlessedEncryptAtRestCallWithHelpers(expression, helpers)
-    ) {
+    if (Node.isCallExpression(expression) && isBlessedEncryptAtRestCallExpression(expression)) {
       return true;
     }
     if (!Node.isIdentifier(expression)) return false;
@@ -1732,34 +1696,19 @@ function encryptedAtRestAliasKeysForNodes(
   return aliases;
 }
 
-function isBlessedEncryptAtRestCallWithHelpers(
-  expression: CallExpression,
-  helpers: PrivilegedWriteHelpers,
-): boolean {
+function isBlessedEncryptAtRestCallExpression(expression: CallExpression): boolean {
   const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  if (Node.isIdentifier(callee)) {
-    return helpers.encryptAtRest.has(callee.getText());
-  }
-  if (!Node.isPropertyAccessExpression(callee)) return false;
-  const receiver = callee.getExpression();
-  return (
-    Node.isIdentifier(receiver) &&
-    helpers.encryptionNamespaces.has(receiver.getText()) &&
-    callee.getName() === 'encryptAtRest'
+  return expressionResolvesToFrameworkExport(
+    callee,
+    frameworkExport('@kovojs/server', 'encryptAtRest'),
   );
 }
 
-function passwordSinkAliasKeysForNodes(
-  bodies: readonly Node[],
-  helpers: PrivilegedWriteHelpers,
-): ReadonlySet<string> {
+function passwordSinkAliasKeysForNodes(bodies: readonly Node[]): ReadonlySet<string> {
   const aliases = new Set<string>();
   const isPasswordSinkExpression = (node: Node): boolean => {
     const expression = unwrappedAwaitedStaticExpressionNode(node);
-    if (
-      Node.isCallExpression(expression) &&
-      isBlessedPasswordHashCallWithHelpers(expression, helpers)
-    ) {
+    if (Node.isCallExpression(expression) && isBlessedPasswordHashCallExpression(expression)) {
       return true;
     }
     if (!Node.isIdentifier(expression)) return false;
@@ -1788,62 +1737,12 @@ function passwordSinkAliasKeysForNodes(
   return aliases;
 }
 
-function isBlessedPasswordHashCallWithHelpers(
-  expression: CallExpression,
-  helpers: PrivilegedWriteHelpers,
-): boolean {
+function isBlessedPasswordHashCallExpression(expression: CallExpression): boolean {
   const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  if (Node.isIdentifier(callee)) {
-    return helpers.hashPassword.has(callee.getText());
-  }
-  if (!Node.isPropertyAccessExpression(callee)) return false;
-  const receiver = callee.getExpression();
-  return (
-    Node.isIdentifier(receiver) &&
-    helpers.passwordNamespaces.has(receiver.getText()) &&
-    callee.getName() === 'hashPassword'
+  return expressionResolvesToFrameworkExport(
+    callee,
+    frameworkExport('@kovojs/server', 'hashPassword'),
   );
-}
-
-function privilegedWriteHelperNames(sourceFile: SourceFile): PrivilegedWriteHelpers {
-  const adminAssign = new Set<string>();
-  const encryptAtRest = new Set<string>();
-  const encryptionNamespaces = new Set<string>();
-  const hashPassword = new Set<string>();
-  const serverValue = new Set<string>();
-  const namespaces = new Set<string>();
-  const passwordNamespaces = new Set<string>();
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    const specifier = declaration.getModuleSpecifierValue();
-    if (specifier !== '@kovojs/server' && specifier !== '@kovojs/server/write-governance') {
-      continue;
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) {
-      namespaces.add(namespace.getText());
-      if (specifier === '@kovojs/server') {
-        encryptionNamespaces.add(namespace.getText());
-        passwordNamespaces.add(namespace.getText());
-      }
-    }
-    for (const named of declaration.getNamedImports()) {
-      const imported = named.getName();
-      const local = named.getAliasNode()?.getText() ?? imported;
-      if (imported === 'adminAssign') adminAssign.add(local);
-      if (specifier === '@kovojs/server' && imported === 'encryptAtRest') encryptAtRest.add(local);
-      if (specifier === '@kovojs/server' && imported === 'hashPassword') hashPassword.add(local);
-      if (imported === 'serverValue') serverValue.add(local);
-    }
-  }
-  return {
-    adminAssign,
-    encryptAtRest,
-    encryptionNamespaces,
-    hashPassword,
-    namespaces,
-    passwordNamespaces,
-    serverValue,
-  };
 }
 
 function symbolicLiteralValue(node: Node): JsonValue | undefined {
