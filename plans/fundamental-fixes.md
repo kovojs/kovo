@@ -349,3 +349,10 @@ packages/drizzle/src/index.query-shapes.test.ts
 packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `vp exec vitest --run
 packages/drizzle/src/index.recognizer-alias-bugz3.test.ts packages/drizzle/src/raw-sql-static.test.ts`;
   and `pnpm run check:vp`.
+- Integrated A/F capability slice: starter templates no longer export `appDbProvider`, keep `readonlyAppDb`
+  as the blessed endpoint-read handle, and KV330 now covers direct DB writes in task, webhook, and endpoint
+  handlers. Verified with `vp exec vitest --run packages/compiler/src/direct-db.test.ts
+packages/compiler/src/scan/parse.test.ts packages/create-kovo/src/index.test.ts`; `vp exec vitest --run
+packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/index.build.test.ts`;
+  `vp exec vitest --run packages/create-kovo/src/index.build.scaffold.typecheck.test.ts`;
+  `pnpm run check:api-surface`; and `pnpm run check:vp`.
