@@ -37,6 +37,9 @@ async function expectReadonlyAttemptBlocked(origin: string): Promise<void> {
     expect.objectContaining({ blocked: true, method: 'get' }),
     expect.objectContaining({ blocked: true, method: 'values' }),
     expect.objectContaining({ blocked: true, method: 'transaction' }),
+    expect.objectContaining({ blocked: true, method: '$client' }),
+    expect.objectContaining({ blocked: true, method: 'session' }),
+    expect.objectContaining({ blocked: true, method: 'futureStatement' }),
   ]);
 }
 
@@ -82,6 +85,26 @@ describe('create-kovo starter (build integration: production transaction artifac
       };
       expect(afterReadonlyAttempt.count).toBe(0);
 
+      const writeId = `success-${Date.now()}`;
+      const success = await fetch(`${origin}/_m/runtime-safety-proofs/write-tx-proof`, {
+        body: new URLSearchParams({
+          id: writeId,
+          'Kovo-Idem': `idem-success-${Date.now()}`,
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      await success.text();
+      expect(success.status).toBe(303);
+      const afterSuccess = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+        count: number;
+      };
+      expect(afterSuccess.count).toBe(1);
+
       const response = await fetch(`${origin}/_m/runtime-safety-proofs/fail-after-write`, {
         body: new URLSearchParams({
           id: `partial-${Date.now()}`,
@@ -100,7 +123,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       const after = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
         count: number;
       };
-      expect(after.count).toBe(0);
+      expect(after.count).toBe(1);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -148,6 +171,25 @@ describe('create-kovo starter (build integration: production transaction artifac
         count: number;
       };
       expect(afterReadonlyAttempt.count).toBe(0);
+
+      const success = await fetch(`${origin}/_m/runtime-safety-proofs/write-tx-proof`, {
+        body: new URLSearchParams({
+          id: `sqlite-success-${Date.now()}`,
+          'Kovo-Idem': `idem-sqlite-success-${Date.now()}`,
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      await success.text();
+      expect(success.status).toBe(303);
+      const afterSuccess = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+        count: number;
+      };
+      expect(afterSuccess.count).toBe(1);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });

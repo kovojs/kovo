@@ -129,7 +129,9 @@ export type WebhookDeclaredWriteDomain<Writes extends WebhookDeclaredWrites | un
  * ordering, SQL provenance, and fail-closed sinks remain the enforcement. Casts/`any` can forge the
  * type and must not be treated as proof.
  */
-export type WebhookTxDb<Db> = (Db extends object ? Omit<Db, 'transaction'> : Db) & {
+export type WebhookTxDb<Db> = (Db extends object
+  ? Omit<Db, '$client' | 'client' | 'pglite' | 'session' | 'sqlite' | 'transaction'>
+  : Db) & {
   readonly [webhookTxDbBrand]: {
     readonly db: Db;
     readonly scope: 'webhook-transaction';
