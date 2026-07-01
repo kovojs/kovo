@@ -4,6 +4,7 @@
   "private": true,
   "type": "module",
   "exports": {
+    "./adversarial-corpus": "./src/adversarial-corpus.ts",
     "./command-fixtures": "./src/command-fixtures.ts",
     "./commerce-fixtures": "./src/commerce-fixtures.ts",
     "./compiler-fixtures": "./src/compiler-fixtures.ts",

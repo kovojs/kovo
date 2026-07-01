@@ -20,6 +20,12 @@ import {
   type PropertyTestResult,
 } from '@kovojs/test/assertions';
 import {
+  DEC10_CORPUS_DIALECTS,
+  dec10AdversarialSeeds,
+  dec10GreenCorpusRows,
+  type Dec10GreenCorpusRow,
+} from '@kovojs/conformance-fixtures/adversarial-corpus';
+import {
   commerceDeclaredQueriesHarnessFact,
   commerceFixtureFile,
   commerceHarnessQueryFact,
@@ -514,6 +520,12 @@ import {
 describe('@kovojs/test package subpath exports', () => {
   it('resolves seam-specific public modules from canonical subpaths', () => {
     expect(createVerificationFakeDb().read('cart_items')).toEqual([]);
+    expect(DEC10_CORPUS_DIALECTS).toEqual(['pglite', 'better-sqlite3']);
+    expect(dec10AdversarialSeeds).toHaveLength(3);
+    expect(dec10GreenCorpusRows()).toHaveLength(18);
+    expectTypeOf<Dec10GreenCorpusRow>()
+      .toHaveProperty('dialect')
+      .toEqualTypeOf<'pglite' | 'better-sqlite3'>();
     expect(verificationLayerBehaviorFact).toBeTypeOf('function');
     expect(verificationLayerKovoCheckDiagnosticsFact).toBeTypeOf('function');
     expect(commerceDeclaredQueriesHarnessFact).toBeTypeOf('function');

@@ -256,10 +256,16 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     `scripts/check-security-brands.mjs`: every function reachable from an enforcement site / in a security-decision file
     MUST be branded; unbranded → fail. (Split into 3.2a/3.2b/3.2c commits + the check.)
   - Evidence: `pnpm exec vitest --run scripts/check-security-brands.test.mjs packages/core/src/internal/security-markers.test.ts packages/compiler/src/trusted-html-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/confidentiality-folded-read-set.test.ts packages/server/src/capability-url.test.ts packages/server/src/mutation-response.test.ts packages/server/src/response.test.ts packages/server/src/generated-query-registry.test.ts packages/server/src/route-query-guards.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/route-response.test.ts packages/server/src/static-export-headers.test.ts packages/server/src/sql-write-allowlist.test.ts packages/server/src/sql-write-allowlist.oracle.test.ts`, `pnpm run check:security-brands`, `pnpm run check:api-surface`, `pnpm run check:publish`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after the classifier/wire-emitter marker and gate enrolled 52 branded security-decision functions.
-- [ ] **G4 — Fuzz corpus + green corpus (DEC10, M12).**
+- [x] **G4 — Fuzz corpus + green corpus (DEC10, M12).**
   - `packages/conformance-fixtures/src/adversarial-corpus.ts` + property generators (SQL, taint expressions,
     import/alias shapes). `scripts/check-green-corpus.mjs` builds the DEC10 corpus on both dialects and asserts zero new
     KV errors; wire into `check`.
+  - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/adversarial-corpus.test.ts
+    packages/conformance-fixtures/src/adversarial-corpus.green.test.ts
+    packages/conformance-fixtures/src/package-exports.test.ts scripts/check-green-corpus.test.mjs`, `pnpm run
+    check:green-corpus`, `pnpm run check:api-surface`, touched-file `vp check`, and `git diff --check` passed after the
+    DEC10 corpus added SQL, taint-expression, and import-alias adversarial seeds plus 18 dialect-expanded green rows
+    proving no compiler KV diagnostics and SQL allowlist/static/trusted/separated-carrier validation.
 - [x] **G5 — Matrix + adversary map (DEC8/DEC9, M13).**
   - Parametrize the security suites by the DEC8 `preset × dialect` matrix. Add
     `packages/conformance-fixtures/src/gate-adversary-map.ts` encoding DEC9 + a test that every branded gate has an
