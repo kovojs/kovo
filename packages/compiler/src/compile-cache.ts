@@ -12,6 +12,7 @@ import type {
 /** @internal Per-module compiler cache key input. */
 export interface CompileCacheKeyInput {
   readonly dependencyFootprint?: CompileDependencyFootprint;
+  readonly extraFiles?: readonly CompileCacheExtraFileKey[];
   readonly fileName: string;
   readonly packageComponentPrefixes?: unknown;
   readonly previousRegistryFacts?: unknown;
@@ -23,6 +24,18 @@ export interface CompileCacheKeyInput {
   readonly root?: string;
   readonly source: string;
   readonly sourceProvenance?: unknown;
+}
+
+interface CompileCacheExtraFileKey {
+  readonly fileName: string;
+  readonly sourceHash: string;
+}
+
+interface CompileComponentCacheKeyOptions extends CompileComponentOptions {
+  readonly extraFiles?: readonly {
+    readonly fileName: string;
+    readonly source: string;
+  }[];
 }
 
 interface CompileCacheEntry<Result> {
@@ -142,6 +155,7 @@ export function compileCacheKey(input: CompileCacheKeyInput): string {
   return canonicalJson({
     compileContext: portableCompileContext,
     compilerBuildId: compilerBuildId(),
+    extraFiles: portableExtraFileCacheKeys(input.extraFiles),
     fileName: portableCachePath(input.fileName),
     // SPEC §5.2.1: the key must be a total function of all compile-affecting options.
     // productionRenderPlanGate flips the KV435 confidentiality gate and the KV416 token-
@@ -155,10 +169,13 @@ export function compileCacheKey(input: CompileCacheKeyInput): string {
 
 /** @internal Converts declared component compile inputs into cache key shape. */
 export function compileComponentCacheKeyInput(
-  options: CompileComponentOptions,
+  options: CompileComponentCacheKeyOptions,
   dependencyFootprint?: CompileDependencyFootprint,
 ): CompileCacheKeyInput {
   const input = compileCacheProjection({
+    ...(options.extraFiles === undefined
+      ? {}
+      : { extraFiles: extraFileCacheKeys(options.extraFiles) }),
     fileName: options.fileName,
     ...(options.packageComponentPrefixes === undefined
       ? {}
@@ -234,6 +251,7 @@ export function narrowCompileCacheKeyInput(
 
   return compileCacheProjection({
     dependencyFootprint: narrowedFootprint,
+    ...(input.extraFiles === undefined ? {} : { extraFiles: input.extraFiles }),
     fileName: input.fileName,
     productionRenderPlanGate: input.productionRenderPlanGate,
     ...(input.root === undefined ? {} : { root: input.root }),
@@ -247,6 +265,7 @@ function compileCacheProjection(input: CompileCacheKeyInput): CompileCacheKeyInp
     ...(input.dependencyFootprint === undefined
       ? {}
       : { dependencyFootprint: input.dependencyFootprint }),
+    ...(input.extraFiles === undefined ? {} : { extraFiles: input.extraFiles }),
     fileName: input.fileName,
     ...(input.packageComponentPrefixes === undefined
       ? {}
@@ -269,11 +288,31 @@ function compileCacheProjection(input: CompileCacheKeyInput): CompileCacheKeyInp
 function compileCacheSourceKey(input: CompileCacheKeyInput): string {
   return canonicalJson({
     compilerBuildId: compilerBuildId(),
+    extraFiles: portableExtraFileCacheKeys(input.extraFiles),
     fileName: portableCachePath(input.fileName),
     root: portableCachePath(input.root),
     sourceHash: stableHash(input.source),
     sourceProvenance: input.sourceProvenance ?? null,
   });
+}
+
+function extraFileCacheKeys(
+  files: readonly { readonly fileName: string; readonly source: string }[],
+): readonly CompileCacheExtraFileKey[] {
+  return [...files]
+    .map((file) => ({ fileName: file.fileName, sourceHash: stableHash(file.source) }))
+    .sort((a, b) => a.fileName.localeCompare(b.fileName));
+}
+
+function portableExtraFileCacheKeys(
+  files: readonly CompileCacheExtraFileKey[] | undefined,
+): readonly CompileCacheExtraFileKey[] {
+  return (files ?? [])
+    .map((file) => ({
+      fileName: portableCachePath(file.fileName) ?? '',
+      sourceHash: file.sourceHash,
+    }))
+    .sort((a, b) => a.fileName.localeCompare(b.fileName));
 }
 
 function resolvedDependencyFootprint(value: unknown): CompileDependencyFootprint | null {
