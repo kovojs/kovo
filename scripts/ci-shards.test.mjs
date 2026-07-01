@@ -194,7 +194,7 @@ describe('ci-shards', () => {
     expect(assigned.toSorted(compareStrings)).toEqual(
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
-    expect(shards.map((shard) => shard.seconds)).toEqual([640, 621, 638, 577, 631, 578, 625, 629]);
+    expect(shards.map((shard) => shard.seconds)).toEqual([617, 612, 613, 608, 618, 580, 577, 576]);
   });
 
   it('keeps browser-backed starter entries isolated to the shard that needs Chromium', () => {
@@ -205,7 +205,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 4, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 5, entries: ['island-derive-artifacts'] }]);
   });
 });
 
