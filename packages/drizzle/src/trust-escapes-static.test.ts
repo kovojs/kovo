@@ -4,9 +4,14 @@ import {
   collectTrustEscapesFromProject,
   collectUnregisteredSinksFromProject,
 } from '@kovojs/drizzle/internal/static';
+import type { TrustEscapeSourceFileInput } from '@kovojs/drizzle/internal/static';
 
 function trustEscapesFor(source: string, fileName = 'app.tsx') {
   return collectTrustEscapesFromProject({ files: [{ fileName, source }] });
+}
+
+function trustEscapesForFiles(files: readonly TrustEscapeSourceFileInput[]) {
+  return collectTrustEscapesFromProject({ files });
 }
 
 function sinksFor(source: string, fileName = 'app.tsx') {
@@ -58,6 +63,59 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
     expect(escapes).toEqual([
       expect.objectContaining({ kind: 'trustedSql', justification: 'static report clause' }),
     ]);
+  });
+
+  it('resolves trust escape callees through aliases, namespaces, local aliases, and barrels', () => {
+    const escapes = trustEscapesForFiles([
+      {
+        fileName: 'browser-barrel.ts',
+        source: "export { trustedHtml as barrelHtml } from '@kovojs/browser';",
+      },
+      {
+        fileName: 'app.tsx',
+        source: `
+          import { trustedHtml as th, trustedUrl } from '@kovojs/browser';
+          import * as browser from '@kovojs/browser';
+          import { trustedSql } from '@kovojs/drizzle';
+          import * as server from '@kovojs/server';
+          import { barrelHtml } from './browser-barrel';
+          const localUrl = trustedUrl;
+          const localHtml = (value: string) => value;
+
+          th(aliasHtml);
+          browser.trustedHtml(namespaceHtml);
+          localUrl(aliasUrl);
+          trustedSql(rawSql);
+          server.endpoint('/raw', { reason: 'raw transport' });
+          server.webhook('unsigned', { verify: 'none', verifyJustification: 'fixture' });
+          barrelHtml(barrel);
+          localHtml(shadowed);
+        `,
+      },
+    ]);
+
+    expect(escapes.map((escape) => `${escape.kind}:${escape.source}`).sort()).toEqual([
+      'rawEndpoint:/raw',
+      'trustedHtml:aliasHtml',
+      'trustedHtml:barrel',
+      'trustedHtml:namespaceHtml',
+      'trustedSql:rawSql',
+      'trustedUrl:aliasUrl',
+      'webhookVerifyNone:unsigned',
+    ]);
+  });
+
+  it('does not collect local shadows as framework trust escapes', () => {
+    const escapes = trustEscapesFor(`
+      function trustedHtml(value: string) { return value; }
+      const endpoint = (path: string) => path;
+      const webhook = (name: string) => name;
+      trustedHtml(html);
+      endpoint('/fake');
+      webhook('fake', { verify: 'none' });
+    `);
+
+    expect(escapes).toEqual([]);
   });
 
   it('emits a rawEndpoint escape per endpoint() declaration', () => {

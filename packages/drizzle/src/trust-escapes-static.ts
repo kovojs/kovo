@@ -15,6 +15,10 @@
 
 import { Node, Project, SyntaxKind, ts, type SourceFile } from 'ts-morph';
 import type { TrustEscapeExplain, UnregisteredSinkFact } from '@kovojs/core/internal/graph';
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+} from './static/framework-identity.js';
 
 /** @internal */
 export interface TrustEscapeSourceFileInput {
@@ -154,27 +158,41 @@ function trustEscapesForSourceFile(
 
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const callee = call.getExpression();
-    if (!Node.isIdentifier(callee)) continue;
-    const name = callee.getText();
+    const name = trustedCallNameForCallee(callee);
 
-    const trustedKind = TRUSTED_CALL_KINDS[name];
-    if (trustedKind) {
+    const trustedKind = name ? TRUSTED_CALL_KINDS[name] : undefined;
+    if (name && trustedKind) {
       escapes.push(buildTrustedCallEscape(file, call, name, trustedKind));
       continue;
     }
 
-    if (name === 'endpoint') {
+    if (isKovoServerTrustCallee(callee, 'endpoint')) {
       escapes.push(buildRawEndpointEscape(file, call));
       continue;
     }
 
-    if (name === 'webhook') {
+    if (isKovoServerTrustCallee(callee, 'webhook')) {
       const escape = buildWebhookVerifyNoneEscape(file, call);
       if (escape) escapes.push(escape);
     }
   }
 
   return escapes;
+}
+
+function trustedCallNameForCallee(callee: Node): keyof typeof TRUSTED_CALL_KINDS | undefined {
+  const candidates = [
+    ['trustedHtml', '@kovojs/browser'],
+    ['trustedSql', '@kovojs/drizzle'],
+    ['trustedUrl', '@kovojs/browser'],
+  ] as const;
+  return candidates.find(([exportName, module]) =>
+    expressionResolvesToFrameworkExport(callee, frameworkExport(module, exportName)),
+  )?.[0];
+}
+
+function isKovoServerTrustCallee(callee: Node, exportName: 'endpoint' | 'webhook'): boolean {
+  return expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/server', exportName));
 }
 
 function buildTrustedCallEscape(

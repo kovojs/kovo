@@ -14,9 +14,9 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
     expect(metamorphicRecognitionCoverageRows()).toEqual([
       {
         code: 'KV414',
-        enforced: 6,
+        enforced: 7,
         label: 'owner read IDOR',
-        todo: 1,
+        todo: 0,
         variants: [
           'control',
           'import-alias',
@@ -29,9 +29,9 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
       },
       {
         code: 'KV435',
-        enforced: 6,
+        enforced: 7,
         label: 'secret query wire',
-        todo: 1,
+        todo: 0,
         variants: [
           'control',
           'import-alias',
@@ -74,9 +74,9 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
       },
       {
         code: 'KV407',
-        enforced: 6,
+        enforced: 7,
         label: 'undeclared query read',
-        todo: 1,
+        todo: 0,
         variants: [
           'control',
           'import-alias',
@@ -126,14 +126,6 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
 
     expect(todoRows).toEqual(
       expect.arrayContaining([
-        expect.objectContaining({
-          code: 'KV414',
-          kind: 'wrapper-helper',
-          blockers: [
-            METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
-            METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
-          ],
-        }),
         expect.objectContaining({
           code: 'KV426',
           kind: 're-export-barrel',

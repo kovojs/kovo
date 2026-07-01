@@ -327,17 +327,11 @@ function kovoServerBindingVariants(): readonly KovoServerBindingVariant[] {
       setupLines: ['const { query: q } = srv;'],
     },
     {
-      blockers: [
-        METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
-        METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
-      ],
       callee: 'defineQuery',
-      expectation: 'todo',
+      expectation: 'enforced',
       importLine: 'import { query } from "@kovojs/server";',
       kind: 'wrapper-helper',
       label: 'wrapper helper call',
-      reason:
-        'Workstream A fail-closed default / Workstream C IR verification: helper-indirect query declarations need either a KV406 unresolved-declaration diagnostic or IR-level sink facts; current query extraction is declaration-call based.',
       setupLines: [
         'const defineQuery = (key: string, body: unknown) => query(key, body as never);',
       ],

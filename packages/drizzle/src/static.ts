@@ -36,6 +36,7 @@ import {
   type CallExpression,
   type CompilerOptions,
   type ArrowFunction,
+  type FunctionDeclaration,
   type FunctionExpression,
   type ObjectLiteralExpression,
   type ParameterDeclaration,
@@ -1117,9 +1118,19 @@ export function staticQueryDeclarationFromCall(
     Node.isPropertyAccessExpression(expression) &&
     expression.getName() === 'elevated' &&
     isKovoServerCalleeExpression(expression.getExpression(), 'query');
-  if (!isQueryCall && !isElevatedQueryCall) return null;
+  if (!isQueryCall && !isElevatedQueryCall) {
+    return staticQueryDeclarationFromWrapperCall(declaration, queryCall);
+  }
 
   const [firstArgument, secondArgument] = queryCall.getArguments();
+  return staticQueryDeclarationFromArguments(declaration, firstArgument, secondArgument);
+}
+
+function staticQueryDeclarationFromArguments(
+  declaration: VariableDeclaration,
+  firstArgument: Node | undefined,
+  secondArgument: Node | undefined,
+): StaticQueryDeclaration | null {
   if (
     firstArgument &&
     (Node.isStringLiteral(firstArgument) || Node.isNoSubstitutionTemplateLiteral(firstArgument))
@@ -1131,6 +1142,81 @@ export function staticQueryDeclarationFromCall(
     return query ? { bodyArgument: firstArgument, query } : null;
   }
   return null;
+}
+
+function staticQueryDeclarationFromWrapperCall(
+  declaration: VariableDeclaration,
+  wrapperCall: CallExpression,
+): StaticQueryDeclaration | null {
+  const target = simpleKovoQueryWrapperTarget(wrapperCall.getExpression());
+  if (!target) return null;
+
+  const wrapperArgs = wrapperCall.getArguments();
+  const forwardedArgs = target.queryCall
+    .getArguments()
+    .map((argument) => substituteWrapperParameter(argument, target.parameters, wrapperArgs));
+  return staticQueryDeclarationFromArguments(declaration, forwardedArgs[0], forwardedArgs[1]);
+}
+
+function simpleKovoQueryWrapperTarget(
+  callee: Node,
+): { parameters: readonly ParameterDeclaration[]; queryCall: CallExpression } | null {
+  const target = unwrappedStaticExpressionNode(callee);
+  if (!Node.isIdentifier(target)) return null;
+
+  const declaration = target.getSymbol()?.getDeclarations()[0];
+  if (!declaration) return null;
+
+  const initializer = Node.isVariableDeclaration(declaration) ? declaration.getInitializer() : null;
+  const functionLike = initializer
+    ? unwrappedFunctionExpression(initializer)
+    : Node.isFunctionDeclaration(declaration)
+      ? declaration
+      : null;
+  if (!functionLike) return null;
+
+  const returned = singleReturnedExpression(functionLike);
+  const queryCall = returned ? unwrappedStaticExpressionNode(returned) : undefined;
+  if (!queryCall || !Node.isCallExpression(queryCall)) return null;
+
+  return isKovoServerCalleeExpression(queryCall.getExpression(), 'query')
+    ? { parameters: functionLike.getParameters(), queryCall }
+    : null;
+}
+
+function singleReturnedExpression(
+  functionLike: ArrowFunction | FunctionDeclaration | FunctionExpression,
+): Node | null {
+  const body = functionLike.getBody();
+  if (!body) return null;
+  if (!Node.isBlock(body)) return body;
+
+  const statements = body.getStatements();
+  if (statements.length !== 1) return null;
+  const statement = statements[0];
+  return statement && Node.isReturnStatement(statement)
+    ? (statement.getExpression() ?? null)
+    : null;
+}
+
+function substituteWrapperParameter(
+  argument: Node,
+  parameters: readonly ParameterDeclaration[],
+  wrapperArgs: readonly Node[],
+): Node {
+  const unwrapped = unwrappedStaticExpressionNode(argument);
+  const identifier = Node.isIdentifier(unwrapped)
+    ? unwrapped
+    : Node.isAsExpression(unwrapped)
+      ? unwrappedStaticExpressionNode(unwrapped.getExpression())
+      : undefined;
+  if (!identifier || !Node.isIdentifier(identifier)) return argument;
+
+  const parameterIndex = parameters.findIndex((parameter) => {
+    const name = parameter.getNameNode();
+    return Node.isIdentifier(name) && name.getText() === identifier.getText();
+  });
+  return parameterIndex >= 0 ? (wrapperArgs[parameterIndex] ?? argument) : argument;
 }
 
 /**
