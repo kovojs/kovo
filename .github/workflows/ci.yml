@@ -127,14 +127,32 @@ jobs:
         include:
           # Grouped from the 2026-07-01 starter timings to keep each shard near
           # 3-6 minutes while avoiding one runner setup per small file. The M1
-          # adversarial sweep is dialect-complete and runs alone.
+          # adversarial sweep is split by row-focused -t names because the full
+          # file is intentionally dialect-complete and too slow as one shard.
           - shard: raw-sql-typecheck
             files: >-
               packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
               packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
-          - shard: m1-adversarial
+          - shard: m1-storage-write
             files: >-
               packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
+            testName: M1:storage-write
+          - shard: m1-raw-html
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
+            testName: M1:raw-html
+          - shard: m1-secret-wire
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
+            testName: M1:secret-wire
+          - shard: m1-raw-sql
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
+            testName: M1:raw-sql
+          - shard: m1-output-wire
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
+            testName: M1:output-wire
           - shard: security-assets
             files: >-
               packages/create-kovo/src/index.build.prod-artifact.security.test.ts
@@ -185,9 +203,15 @@ jobs:
         if: matrix.shard == 'defer-headers-redirect-islands'
         run: vp exec playwright install --with-deps chromium
       - name: Generated starter proofs (${{ matrix.shard }})
+        env:
+          STARTER_TEST_NAME: ${{ matrix.testName }}
         run: |
           for file in ${{ matrix.files }}; do
-            vp exec vitest --run "$file"
+            if [ -n "$STARTER_TEST_NAME" ]; then
+              vp exec vitest --run "$file" -t "$STARTER_TEST_NAME"
+            else
+              vp exec vitest --run "$file"
+            fi
           done
 
   build:
