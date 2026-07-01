@@ -1,10 +1,18 @@
 import * as ts from 'typescript';
 
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
+
 import { deriveMutationKey } from '../mutation-names.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 import type { MutationInputFieldCoercion, MutationInputFieldFact } from '../types.js';
 
 ensureTypescriptRuntime(ts);
+
+const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 
 /** @internal Local mutation input facts extracted at the scanner/fact boundary. */
 export interface LocalMutationInputFact {
@@ -51,9 +59,7 @@ function mutationInputFactFromVariable(
   if (!ts.isIdentifier(node.name)) return null;
   const initializer = unwrapTsExpression(node.initializer);
   if (!initializer || !ts.isCallExpression(initializer)) return null;
-  if (!ts.isIdentifier(initializer.expression) || initializer.expression.text !== 'mutation') {
-    return null;
-  }
+  if (!isKovoMutationCallee(sourceFile, initializer.expression)) return null;
 
   const [keyArg, optionsArg] = initializer.arguments;
   const key = keyArg && ts.isStringLiteralLike(keyArg) ? keyArg.text : null;
@@ -69,6 +75,16 @@ function mutationInputFactFromVariable(
     key: key ?? deriveMutationKey(sourceFile.fileName, node.name.text),
     localName: node.name.text,
   };
+}
+
+function isKovoMutationCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    MUTATION_FACTORY_IDENTITY,
+    { legacyGlobals: [MUTATION_FACTORY_IDENTITY] },
+  );
 }
 
 function mutationInputFields(

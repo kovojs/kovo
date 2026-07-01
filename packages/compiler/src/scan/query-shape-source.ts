@@ -1,6 +1,14 @@
 import * as ts from 'typescript';
 
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
+
 import type { QueryShape, QueryShapeFact } from '../types.js';
+
+const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 
 /**
  * @internal Merge projected query-shape facts from multiple analyzers. Primary facts win for
@@ -216,49 +224,17 @@ function propertyNameText(name: ts.PropertyName): string | null {
 }
 
 function isQueryCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
-  const queryBindings = kovoServerQueryBindings(sourceFile);
-  if (ts.isIdentifier(expression)) return queryBindings.identifiers.has(expression.text);
-  if (ts.isPropertyAccessExpression(expression) && expression.name.text === 'query') {
-    return (
-      ts.isIdentifier(expression.expression) &&
-      queryBindings.namespaces.has(expression.expression.text)
-    );
-  }
   return (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === 'elevated' &&
-    isQueryCallee(sourceFile, expression.expression)
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      QUERY_IDENTITY,
+    ) ||
+    (ts.isPropertyAccessExpression(expression) &&
+      expression.name.text === 'elevated' &&
+      isQueryCallee(sourceFile, expression.expression))
   );
-}
-
-function kovoServerQueryBindings(sourceFile: ts.SourceFile): {
-  identifiers: Set<string>;
-  namespaces: Set<string>;
-} {
-  const identifiers = new Set<string>();
-  const namespaces = new Set<string>();
-
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    const moduleSpecifier = statement.moduleSpecifier;
-    if (!ts.isStringLiteralLike(moduleSpecifier) || moduleSpecifier.text !== '@kovojs/server') {
-      continue;
-    }
-    const clause = statement.importClause;
-    const bindings = clause?.namedBindings;
-    if (!bindings) continue;
-    if (ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
-      continue;
-    }
-    for (const element of bindings.elements) {
-      if ((element.propertyName?.text ?? element.name.text) === 'query') {
-        identifiers.add(element.name.text);
-      }
-    }
-  }
-
-  return { identifiers, namespaces };
 }
 
 function isExportedVariableDeclaration(declaration: ts.VariableDeclaration): boolean {

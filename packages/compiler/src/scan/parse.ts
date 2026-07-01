@@ -1,5 +1,12 @@
 import * as ts from 'typescript';
 
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkExportIdentity,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
+
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
@@ -41,9 +48,12 @@ export type * from './model.js';
 ensureTypescriptRuntime(ts);
 
 interface ComponentFactoryBindings {
-  readonly names: ReadonlySet<string>;
-  readonly namespaceNames: ReadonlySet<string>;
+  readonly sourceFile: ts.SourceFile;
 }
+
+const COMPONENT_FACTORY_IDENTITY = frameworkExport('@kovojs/core', 'component');
+const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
+const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
 
 /**
  * @internal FN7 (plans/compiler-refactoring.md): the canonical source parse. The scanner uses it,
@@ -143,10 +153,10 @@ export function parseComponentModule(fileName: string, source: string): Componen
       (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression))
     ) {
       calls.push(callExpressionModel(sourceFile, source, node));
-      if (ts.isIdentifier(node.expression) && node.expression.text === 'mutation') {
+      if (isFrameworkExpression(sourceFile, node.expression, MUTATION_FACTORY_IDENTITY)) {
         mutationHandlers.push(...mutationHandlerModels(sourceFile, source, node));
       }
-      if (ts.isIdentifier(node.expression) && node.expression.text === 'task') {
+      if (isFrameworkExpression(sourceFile, node.expression, TASK_FACTORY_IDENTITY)) {
         taskRunHandlers.push(...taskRunHandlerModels(sourceFile, source, node));
       }
     }
@@ -305,57 +315,27 @@ function hasExportModifier(node: ts.FunctionDeclaration | ts.VariableStatement):
 }
 
 function componentFactoryBindings(sourceFile: ts.SourceFile): ComponentFactoryBindings {
-  const names = new Set(['component']);
-  const namespaceNames = new Set<string>();
-  const bindings = { names, namespaceNames };
-
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
-    if (statement.moduleSpecifier.text !== '@kovojs/core') continue;
-
-    const namedBindings = statement.importClause?.namedBindings;
-    if (!namedBindings) continue;
-    if (ts.isNamespaceImport(namedBindings)) {
-      namespaceNames.add(namedBindings.name.text);
-      continue;
-    }
-    if (!ts.isNamedImports(namedBindings)) continue;
-    for (const element of namedBindings.elements) {
-      const importedName = element.propertyName?.text ?? element.name.text;
-      if (importedName === 'component') names.add(element.name.text);
-    }
-  }
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const statement of sourceFile.statements) {
-      if (!ts.isVariableStatement(statement)) continue;
-      for (const declaration of statement.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
-        if (!isComponentFactoryReference(declaration.initializer, bindings)) continue;
-        if (names.has(declaration.name.text)) continue;
-        names.add(declaration.name.text);
-        changed = true;
-      }
-    }
-  }
-
-  return bindings;
+  return { sourceFile };
 }
 
 function isComponentFactoryReference(
   expression: ts.Expression,
   bindings: ComponentFactoryBindings,
 ): boolean {
-  const unwrapped = unwrapExpression(expression);
-  if (ts.isIdentifier(unwrapped)) return bindings.names.has(unwrapped.text);
-  return (
-    ts.isPropertyAccessExpression(unwrapped) &&
-    unwrapped.name.text === 'component' &&
-    ts.isIdentifier(unwrapped.expression) &&
-    bindings.namespaceNames.has(unwrapped.expression.text)
+  return isFrameworkExpression(bindings.sourceFile, expression, COMPONENT_FACTORY_IDENTITY);
+}
+
+function isFrameworkExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  identity: FrameworkExportIdentity,
+): boolean {
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    identity,
+    { legacyGlobals: [identity] },
   );
 }
 

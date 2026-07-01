@@ -1,5 +1,12 @@
 import ts from 'typescript';
 
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkExportIdentity,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
+
 import { deriveComponentNames } from './component-names.js';
 import { deriveRegistryIdentity } from './registry-identities.js';
 import { parseSourceFile } from './scan/parse.js';
@@ -31,13 +38,26 @@ const helperImports = {
 
 type SourceDerivedPrimitive = keyof typeof helperImports;
 
+const COMPONENT_IDENTITY = frameworkExport('@kovojs/core', 'component');
+const DOMAIN_IDENTITY = frameworkExport('@kovojs/server', 'domain');
+const MUTATION_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
+const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
+const TAG_IDENTITY = frameworkExport('@kovojs/server', 'tag');
+const WEBHOOK_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
+const LEGACY_IDENTITIES = [
+  COMPONENT_IDENTITY,
+  DOMAIN_IDENTITY,
+  MUTATION_IDENTITY,
+  QUERY_IDENTITY,
+  TAG_IDENTITY,
+  WEBHOOK_IDENTITY,
+] as const;
+
 interface SourceDerivedRegistryAssignment {
   binding: string;
   call: ts.CallExpression;
   primitive: SourceDerivedPrimitive;
 }
-
-type SourceDerivedImportLocals = Readonly<Record<SourceDerivedPrimitive, ReadonlySet<string>>>;
 
 /** @internal Lower standalone app/server registry declarations before Vite evaluates createApp(). */
 export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
@@ -69,7 +89,6 @@ function exportedRegistryAssignments(
   sourceFile: ts.SourceFile,
 ): readonly SourceDerivedRegistryAssignment[] {
   const assignments: SourceDerivedRegistryAssignment[] = [];
-  const importLocals = sourceDerivedImportLocals(sourceFile);
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     const exported = hasExportModifier(statement);
@@ -79,7 +98,7 @@ function exportedRegistryAssignments(
       const call = declaration.initializer;
       if (!call || !ts.isCallExpression(call)) continue;
 
-      const primitive = sourceDerivedPrimitive(call, importLocals);
+      const primitive = sourceDerivedPrimitive(sourceFile, call);
       if (primitive === null) continue;
       if (primitive !== 'component' && !exported) continue;
       assignments.push({ binding: declaration.name.text, call, primitive });
@@ -89,74 +108,54 @@ function exportedRegistryAssignments(
 }
 
 function sourceDerivedPrimitive(
+  sourceFile: ts.SourceFile,
   call: ts.CallExpression,
-  importLocals: SourceDerivedImportLocals,
 ): SourceDerivedPrimitive | null {
-  if (ts.isIdentifier(call.expression)) {
-    const local = call.expression.text;
-    if (importLocals.component.has(local) && isSingleObjectArgument(call)) return 'component';
-    if (importLocals.domain.has(local) && call.arguments.length === 0) return 'domain';
-    if (importLocals.mutation.has(local) && isSingleObjectArgument(call)) return 'mutation';
-    if (importLocals.query.has(local) && isSingleObjectArgument(call)) return 'query';
-    if (importLocals.webhook.has(local) && isPathFirstWebhookCall(call)) return 'webhook';
-    return null;
+  if (resolvesTo(sourceFile, call.expression, COMPONENT_IDENTITY) && isSingleObjectArgument(call)) {
+    return 'component';
   }
-
   if (
-    ts.isPropertyAccessExpression(call.expression) &&
-    ts.isIdentifier(call.expression.expression) &&
-    importLocals.query.has(call.expression.expression.text) &&
-    call.expression.name.text === 'elevated' &&
-    isSingleObjectArgument(call)
+    (resolvesTo(sourceFile, call.expression, DOMAIN_IDENTITY) ||
+      resolvesTo(sourceFile, call.expression, TAG_IDENTITY)) &&
+    call.arguments.length === 0
   ) {
+    return 'domain';
+  }
+  if (resolvesTo(sourceFile, call.expression, MUTATION_IDENTITY) && isSingleObjectArgument(call)) {
+    return 'mutation';
+  }
+  if (isQueryObjectCall(sourceFile, call)) {
     return 'query';
   }
-
-  return null;
-}
-
-function sourceDerivedImportLocals(sourceFile: ts.SourceFile): SourceDerivedImportLocals {
-  const mutable: Record<SourceDerivedPrimitive, Set<string>> = {
-    component: new Set(['component']),
-    domain: new Set(['domain', 'tag']),
-    mutation: new Set(['mutation']),
-    query: new Set(['query']),
-    webhook: new Set(['webhook']),
-  };
-
-  for (const statement of sourceFile.statements) {
-    if (
-      !ts.isImportDeclaration(statement) ||
-      !statement.moduleSpecifier ||
-      !ts.isStringLiteralLike(statement.moduleSpecifier)
-    ) {
-      continue;
-    }
-    const moduleSpecifier = statement.moduleSpecifier.text;
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings || !ts.isNamedImports(bindings)) continue;
-
-    for (const element of bindings.elements) {
-      const imported = element.propertyName?.text ?? element.name.text;
-      const primitive = importedSourceDerivedPrimitive(moduleSpecifier, imported);
-      if (primitive) mutable[primitive].add(element.name.text);
-    }
+  if (resolvesTo(sourceFile, call.expression, WEBHOOK_IDENTITY) && isPathFirstWebhookCall(call)) {
+    return 'webhook';
   }
 
-  return mutable;
+  return null;
 }
 
-function importedSourceDerivedPrimitive(
-  moduleSpecifier: string,
-  imported: string,
-): SourceDerivedPrimitive | null {
-  if (moduleSpecifier === '@kovojs/core' && imported === 'component') return 'component';
-  if (moduleSpecifier !== '@kovojs/server') return null;
-  if (imported === 'domain' || imported === 'tag') return 'domain';
-  if (imported === 'mutation') return 'mutation';
-  if (imported === 'query') return 'query';
-  if (imported === 'webhook') return 'webhook';
-  return null;
+function isQueryObjectCall(sourceFile: ts.SourceFile, call: ts.CallExpression): boolean {
+  if (!isSingleObjectArgument(call)) return false;
+  if (resolvesTo(sourceFile, call.expression, QUERY_IDENTITY)) return true;
+  return (
+    ts.isPropertyAccessExpression(call.expression) &&
+    call.expression.name.text === 'elevated' &&
+    resolvesTo(sourceFile, call.expression.expression, QUERY_IDENTITY)
+  );
+}
+
+function resolvesTo(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  identity: FrameworkExportIdentity,
+): boolean {
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    identity,
+    { legacyGlobals: LEGACY_IDENTITIES },
+  );
 }
 
 function isSingleObjectArgument(call: ts.CallExpression): boolean {

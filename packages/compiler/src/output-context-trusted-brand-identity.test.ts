@@ -42,6 +42,15 @@ describe('F1: KV236 trusted-brand suppression is symbol-identity, fail-closed', 
     ).toBe(0);
   });
 
+  it('LEGIT: the @kovojs/server re-export and namespace member still resolve by identity', () => {
+    expect(
+      kv236(SCRIPT("import { trustedHtml } from '@kovojs/server';", 'trustedHtml(cfg.inline)')),
+    ).toBe(0);
+    expect(
+      kv236(SCRIPT("import * as kovo from '@kovojs/server';", 'kovo.trustedHtml(cfg.inline)')),
+    ).toBe(0);
+  });
+
   it('BYPASS CLOSED: a local shadow `const trustedHtml` no longer suppresses KV236', () => {
     expect(
       kv236(SCRIPT('const trustedHtml = (s: string) => s;', 'trustedHtml(cfg.inline)')),

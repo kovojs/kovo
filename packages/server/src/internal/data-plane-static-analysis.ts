@@ -8,6 +8,11 @@ import { isMainThread, parentPort, Worker, workerData } from 'node:worker_thread
 
 import type { DiagnosticCode } from '@kovojs/core';
 import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 /** @internal Compiler-compatible query shape used for KV302/KV435 validation. */
@@ -163,6 +168,7 @@ const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-06-30.shared-data-plane.v1';
 const OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND = 'kovo.output-schema-query-shape';
 const OUTPUT_SCHEMA_WORKER_MIN_FILES = 8;
 const OUTPUT_SCHEMA_WORKER_MAX_COUNT = 4;
+const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 
 interface OutputSchemaQueryShapeWorkerData {
   files: readonly DataPlaneSourceFile[];
@@ -918,44 +924,17 @@ function isQueryCallee(
   sourceFile: import('typescript').SourceFile,
   expression: import('typescript').Expression,
 ): boolean {
-  const queryBindings = kovoServerQueryBindings(ts, sourceFile);
-  if (ts.isIdentifier(expression)) return queryBindings.identifiers.has(expression.text);
-  if (ts.isPropertyAccessExpression(expression) && expression.name.text === 'query') {
-    return (
-      ts.isIdentifier(expression.expression) &&
-      queryBindings.namespaces.has(expression.expression.text)
-    );
-  }
   return (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === 'elevated' &&
-    isQueryCallee(ts, sourceFile, expression.expression)
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      QUERY_IDENTITY,
+    ) ||
+    (ts.isPropertyAccessExpression(expression) &&
+      expression.name.text === 'elevated' &&
+      isQueryCallee(ts, sourceFile, expression.expression))
   );
-}
-
-function kovoServerQueryBindings(
-  ts: TypeScriptModule,
-  sourceFile: import('typescript').SourceFile,
-): { identifiers: Set<string>; namespaces: Set<string> } {
-  const identifiers = new Set<string>();
-  const namespaces = new Set<string>();
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    const moduleSpecifier = statement.moduleSpecifier;
-    if (!ts.isStringLiteralLike(moduleSpecifier) || moduleSpecifier.text !== '@kovojs/server')
-      continue;
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings) continue;
-    if (ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
-      continue;
-    }
-    for (const element of bindings.elements) {
-      if ((element.propertyName?.text ?? element.name.text) === 'query')
-        identifiers.add(element.name.text);
-    }
-  }
-  return { identifiers, namespaces };
 }
 
 function isExportedVariableDeclaration(
