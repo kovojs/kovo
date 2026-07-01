@@ -349,7 +349,7 @@ function initializerExpressionFromExpression(
   }
   const accessPath = exactInitializerPath(propertyAccessPathModels(sourceFile, initializer));
   if (!accessPath) return null;
-  return { accessPath, expression: initializer.getText(sourceFile) };
+  return { accessPath, expression: accessPath };
 }
 
 function unresolvedInitializerAccessPaths(

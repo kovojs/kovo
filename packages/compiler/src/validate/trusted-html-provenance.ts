@@ -342,7 +342,6 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
   if (ctx.queryDataRoots.has(id.text)) return 'query';
   if (ctx.requestBindings.has(id.text)) return 'request';
   if (id.text === REQUEST_INPUT_IDENTIFIER) return 'request';
-  if (id.text === 'undefined' || id.text === 'NaN' || id.text === 'Infinity') return null;
   return hasLocalBinding(id, id.text) ? 'unprovable' : 'unprovable';
 }
 
