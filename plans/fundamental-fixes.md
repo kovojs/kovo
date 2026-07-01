@@ -300,8 +300,8 @@ packages/drizzle/src/index.query-loader-receivers.test.ts packages/cli/src/index
 ## Latest verification
 
 - Inventory is now reproducible: `node scripts/fundamental-fixes-inventory.mjs` scans production
-  compiler/drizzle sources and reports 57 literal/import syntactic candidates, 1,794 AST-kind gates, and
-  93 KV406/fail-closed sites. Verified with
+  compiler/drizzle sources and reports 57 literal/import syntactic candidates, 1,797 AST-kind gates, and
+  95 KV406/fail-closed sites. Verified with
   `vp exec vitest --run scripts/fundamental-fixes-inventory.test.mjs` and `pnpm run check:vp`.
 - Integrated Phase 0 foundation plus first B/D/F/G slices on
   `agent/implement-fundamental-fixes-20260630-171240`. Latest checks: `pnpm run check:vp`;
@@ -355,4 +355,13 @@ packages/drizzle/src/index.recognizer-alias-bugz3.test.ts packages/drizzle/src/r
 packages/compiler/src/scan/parse.test.ts packages/create-kovo/src/index.test.ts`; `vp exec vitest --run
 packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/index.build.test.ts`;
   `vp exec vitest --run packages/create-kovo/src/index.build.scaffold.typecheck.test.ts`;
+  `pnpm run check:api-surface`; and `pnpm run check:vp`.
+- Integrated D runtime slice: all current `runQuery` server callers record or forward query warnings,
+  custom task schedulers receive validated `DurableTaskEnqueueInput`, and verified sync file parsing fails
+  closed while async parsing owns byte-sniffed enforcement. Verified with `vp exec vitest --run
+packages/server/src/query-endpoint.test.ts packages/server/src/app.test.ts
+packages/server/src/mutation.test.ts packages/server/src/mutation-delta.test.ts
+packages/server/src/task-runtime.test.ts packages/server/src/live-target-renderer.test.tsx
+packages/server/src/schema.test.ts`; `vp exec vitest --run
+packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`;
   `pnpm run check:api-surface`; and `pnpm run check:vp`.
