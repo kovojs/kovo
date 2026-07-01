@@ -190,10 +190,11 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     preset run different physical copies of the header bridge.
   - Fix: generate the emitted adapter from the same source, or add a parity test asserting Set-Cookie + pseudo-header agreement.
   - Evidence: `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/build.test.ts`, `vp check packages/server/src/build.ts packages/server/src/build.test.ts`, and `git diff --check HEAD~1..HEAD` passed after the emitted Node/Vercel adapter tests asserted live parity for multi-value `Set-Cookie`, HTTP/2 pseudo-header URL fallback, and pseudo-header filtering.
-- [ ] **G2 + J.3 — SQL oracle + validate J (DEC3, M12).**
+- [x] **G2 + J.3 — SQL oracle + validate J (DEC3, M12).**
   - Add `packages/server/src/sql-write-oracle.ts` (execute-and-diff-in-transaction; pglite + better-sqlite3) and
     `sql-write-allowlist.oracle.test.ts` cross-checking `writeTablesForStatement` vs the oracle over the DDL corpus,
     on the DEC8 matrix (uses T1 `runGate`). A static/oracle mismatch fails CI.
+  - Evidence: `pnpm exec vitest --run packages/server/src/sql-write-allowlist.oracle.test.ts packages/server/src/sql-write-allowlist.test.ts`, `vp check packages/server/src/sql-write-oracle.ts packages/server/src/sql-write-allowlist.oracle.test.ts`, and `git diff --check` passed with transaction-rollback oracle coverage for PGlite/Postgres and better-sqlite3/SQLite over DML, DDL, view/index, and SQLite pragma cases.
 - [ ] **P.1 — DB-write choke (DEC4, M8).**
   - Route every handle family (`readonlyDb`×6, `managedDb`, `wrapManagedDbForSqlSafety`, webhook Tx, storage,
     `createDurableTaskSqlExecutor`) through `enforceManagedSql()`; add `scripts/check-single-choke.mjs` (via `runGate`)
