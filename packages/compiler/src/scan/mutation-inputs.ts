@@ -9,6 +9,7 @@ import {
 import { deriveMutationKey } from '../mutation-names.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 import type { MutationInputFieldCoercion, MutationInputFieldFact } from '../types.js';
+import { propertyNameText } from './ast.js';
 
 ensureTypescriptRuntime(ts);
 
@@ -130,13 +131,6 @@ function objectPropertyExpression(
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
     if (propertyNameText(property.name) === propertyName) return property.initializer;
-  }
-  return null;
-}
-
-function propertyNameText(name: ts.PropertyName): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text;
   }
   return null;
 }

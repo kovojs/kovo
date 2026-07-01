@@ -23,6 +23,7 @@ import type {
   RouteRegionFact,
   RouteNavigationSegmentFact,
 } from '../types.js';
+import { propertyNameText, unwrapExpression } from './ast.js';
 import type { StaticLiteralValue } from './object.js';
 import { applySourceReplacements, replaceExtension, type SourceReplacement } from '../shared.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
@@ -978,28 +979,6 @@ function jsxTagName(name: ts.JsxTagNameExpression): string | null {
   if (ts.isIdentifier(name)) return name.text;
   if (ts.isPropertyAccessExpression(name)) return name.getText();
   return null;
-}
-
-function propertyNameText(name: ts.PropertyName): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text;
-  }
-  return null;
-}
-
-function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current = expression;
-  while (
-    ts.isAwaitExpression(current) ||
-    ts.isParenthesizedExpression(current) ||
-    ts.isNonNullExpression(current) ||
-    ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current) ||
-    ts.isTypeAssertionExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
 }
 
 function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | undefined {

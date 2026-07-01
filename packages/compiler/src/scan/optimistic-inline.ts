@@ -9,6 +9,7 @@ import {
 import { deriveMutationKey } from '../mutation-names.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
+import { propertyNameText } from './ast.js';
 
 ensureTypescriptRuntime(ts);
 
@@ -490,14 +491,6 @@ function queryNameFromComputedExpression(
     ts.isIdentifier(unwrapped.expression)
   ) {
     return localQueryKeys.get(unwrapped.expression.text) ?? null;
-  }
-  return null;
-}
-
-function propertyNameText(name: ts.PropertyName | undefined): string | null {
-  if (!name) return null;
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text;
   }
   return null;
 }

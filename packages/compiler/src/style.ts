@@ -22,6 +22,7 @@ import { escapeAttribute, type SourceReplacement } from './shared.js';
 import type { StyleRuleUsage } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
+import { propertyNameText } from './scan/ast.js';
 import type { ComponentModuleModel, JsxAttributeModel, SourceSpan } from './scan/parse.js';
 import { parseSourceFile } from './scan/parse.js';
 import { knownQueryNames, queryNameFromPath } from './analyze/query-shapes.js';
@@ -339,10 +340,7 @@ function collectStyleEnvironment(
       const frames = styleKeyframesCall(node.initializer, styleImports, localObjects, staticValues);
       if (frames) {
         const result = createKeyframesWithIdentity(frames.frames, {
-          namespace:
-            frames.options.namespace ??
-            defaultStyleIdentity.keyframes ??
-            'keyframes',
+          namespace: frames.options.namespace ?? defaultStyleIdentity.keyframes ?? 'keyframes',
           source: frames.options.source ?? fileName,
         });
         staticValues.set(node.name.text, result.name);
@@ -1377,12 +1375,6 @@ function sanitizeIdentifier(value: string): string {
 
 function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFact {
   return fact;
-}
-
-function propertyNameText(name: ts.PropertyName): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name))
-    return name.text;
-  return null;
 }
 
 function pushRuleUsages(

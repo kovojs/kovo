@@ -267,6 +267,33 @@ export const Button = component({
     expect(result.diagnostics).toEqual([]);
   });
 
+  it('resolves no-substitution template property keys in static style.create objects', () => {
+    const result = compileComponentModule({
+      fileName: 'components/template-key-button.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import * as style from '@kovojs/style';
+
+const base = style.create({
+  root: {
+    [\`backgroundColor\`]: 'black',
+    [\`color\`]: 'white',
+  },
+});
+
+export const Button = component({
+  render: () => <button style={base.root}>Buy</button>,
+});
+`,
+    });
+
+    const cssSource = result.files.find((file) => file.kind === 'css')?.source ?? '';
+
+    expect(cssSource).toContain('background-color:black');
+    expect(cssSource).toContain('color:white');
+    expect(result.diagnostics).toEqual([]);
+  });
+
   it('resolves literal customColor token calls in static style.create objects', () => {
     const result = compileComponentModule({
       fileName: 'components/warning-callout.tsx',

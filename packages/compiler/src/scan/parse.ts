@@ -13,6 +13,7 @@ import { deriveMutationKey } from '../mutation-names.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
+import { propertyNameText, unwrapExpression } from './ast.js';
 import type { StaticLiteralValue } from './object.js';
 import type {
   ArrowFunctionPartsModel,
@@ -887,19 +888,6 @@ function documentGetElementByIdTarget(
   const target = call.arguments[0];
   if (!target) return null;
   return ts.isStringLiteralLike(target) ? target.text : null;
-}
-
-function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current = expression;
-  while (
-    ts.isParenthesizedExpression(current) ||
-    ts.isNonNullExpression(current) ||
-    ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
 }
 
 function isDeclaredIdentifier(node: ts.Identifier): boolean {
@@ -2212,28 +2200,6 @@ function staticConstructorTypeEntry(
   return {};
 }
 
-function propertyNameText(
-  name: ts.PropertyName,
-  staticStringValues: ReadonlyMap<string, string> = new Map(),
-): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text;
-  }
-
-  if (
-    ts.isComputedPropertyName(name) &&
-    (ts.isStringLiteralLike(name.expression) || ts.isNumericLiteral(name.expression))
-  ) {
-    return name.expression.text;
-  }
-
-  if (ts.isComputedPropertyName(name) && ts.isIdentifier(name.expression)) {
-    return staticStringValues.get(name.expression.text) ?? null;
-  }
-
-  return null;
-}
-
 function objectLiteralEntries(
   sourceFile: ts.SourceFile,
   source: string,
@@ -2242,7 +2208,7 @@ function objectLiteralEntries(
 ): ObjectLiteralEntry[] {
   return expression.properties.flatMap((property) => {
     if (ts.isPropertyAssignment(property)) {
-      const key = propertyNameText(property.name, staticStringValues);
+      const key = propertyNameText(property.name, { staticStringValues });
       if (!key) return [];
 
       return [
@@ -2273,7 +2239,7 @@ function objectLiteralEntries(
     }
 
     if (ts.isMethodDeclaration(property)) {
-      const key = propertyNameText(property.name, staticStringValues);
+      const key = propertyNameText(property.name, { staticStringValues });
       return key ? [{ key }] : [];
     }
 

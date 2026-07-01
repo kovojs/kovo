@@ -162,6 +162,18 @@ export const C = component({
     ).toHaveLength(1);
   });
 
+  it('flags trustedHtml() over a numeric query key reached through element access', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { 0: postQuery },
+  render: (data) => <article>{trustedHtml(data[0].body)}</article>,
+});
+`),
+    ).toHaveLength(1);
+  });
+
   it('flags trustedUrl() in a JSX URL attribute over non-destructured render data', () => {
     expect(
       kv426(`

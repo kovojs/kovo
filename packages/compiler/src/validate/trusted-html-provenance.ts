@@ -7,6 +7,7 @@ import {
   expressionResolvesToTrustedHtmlPureBrand,
   expressionResolvesToTrustedUrlPureBrand,
 } from '../output-context-facts.js';
+import { propertyNameText } from '../scan/ast.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 
 /**
@@ -687,6 +688,7 @@ function elementAccessName(argument: ts.Expression | undefined): string | null {
   if (argument === undefined) return null;
   const expr = unwrap(argument);
   if (ts.isStringLiteralLike(expr)) return literalText(expr);
+  if (ts.isNumericLiteral(expr)) return expr.text;
   return null;
 }
 
@@ -900,12 +902,6 @@ function identifierName(name: ts.Identifier): string {
 
 function literalText(node: ts.StringLiteralLike): string {
   return node.text;
-}
-
-function propertyNameText(name: ts.PropertyName): string | null {
-  if (ts.isIdentifier(name)) return identifierName(name);
-  if (ts.isStringLiteralLike(name)) return literalText(name);
-  return null;
 }
 
 function moduleExportNameText(name: ts.ModuleExportName): string {

@@ -149,17 +149,19 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     instead of recursing into `.shape` — a KV435 secret-projection miss.
   - Fix: export one predicate covering all six `QueryShapeWrapper` kinds (static.ts:236); delete copies; confirm the
     changed table-row secret output vs SPEC/tests.
-- [ ] **C2 — Single `propertyNameText`; the KV426 copy omits `isNumericLiteral`.** (S · low-med)
+- [x] **C2 — Single `propertyNameText`; the KV426 copy omits `isNumericLiteral`.** (S · low-med)
   - Problem: five copies, three behaviors. `validate/trusted-html-provenance.ts:905` omits `isNumericLiteral`, so
     `{ 0: x }` resolves to `null` in the KV426 recognizer; `style.ts:1374` rejects template keys
     (`isStringLiteral` not `isStringLiteralLike`). Others: `route-pages.ts:983`, `optimistic-inline.ts:497`,
     `mutation-inputs.ts:137`, `parse.ts:2215`.
   - Fix: one helper covering Identifier + StringLiteralLike + NumericLiteral; verify the two narrower call sites don't rely on rejection.
-- [ ] **C1 — One `unwrapExpression` for the compiler.** (M · med)
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts packages/compiler/src/style.test.ts packages/compiler/src/parse.test.ts packages/compiler/src/reactive-aliases.test.ts packages/compiler/src/redos-pattern.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/mutation-inputs.test.ts packages/compiler/src/optimistic-inline.test.ts`, `vp check packages/compiler/src/scan/ast.ts packages/compiler/src/scan/parse.ts packages/compiler/src/analyze/reactive-aliases.ts packages/compiler/src/validate/redos-pattern.ts packages/compiler/src/scan/route-pages.ts packages/compiler/src/scan/mutation-inputs.ts packages/compiler/src/scan/optimistic-inline.ts packages/compiler/src/validate/trusted-html-provenance.ts packages/compiler/src/style.ts packages/compiler/src/trusted-html-provenance.test.ts packages/compiler/src/style.test.ts`, and `git diff --check HEAD~1..HEAD` passed after moving identifier/string-like/numeric property-name handling into `scan/ast.ts` and adding KV426/style regressions.
+- [x] **C1 — One `unwrapExpression` for the compiler.** (M · med)
   - Problem: four copies peel different wrapper sets — `parse.ts:892` + `reactive-aliases.ts:357` (paren/non-null/as/
     satisfies), `redos-pattern.ts:397` (+`TypeAssertion`), `route-pages.ts:990` (+`TypeAssertion`+`Await`) — so the
     same authored expression normalizes differently per phase.
   - Fix: one shared AST-util (superset unless a phase demonstrably needs less); pin with fixpoint/golden tests first.
+  - Evidence: Same focused compiler Vitest/VP/diff checks listed for C2 passed after replacing the divergent unwrap copies with the shared `unwrapExpression` helper in `scan/ast.ts`.
 - [ ] **S1 — Shared `guardFailureToResult`; four copies disagree on `auth`.** (S · low)
   - Problem: `route.ts:664` (`routeGuardFailure`, incl. `auth`) + `query.ts:431` (incl. `auth`) vs `mutation.ts:293`
     plus `mutation.ts:450` (omit `auth`) → can drop the unauthenticated→login redirect / `retryAfter` on the mutation surface.

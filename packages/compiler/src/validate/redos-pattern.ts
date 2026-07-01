@@ -1,6 +1,7 @@
 import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { unwrapExpression } from '../scan/ast.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 
 const CHAR_CARET = 0x5e;
@@ -392,18 +393,4 @@ function setsOverlap(a: TokenSet, b: TokenSet): boolean {
 
 function identifierName(name: ts.MemberName): string | null {
   return ts.isIdentifier(name) ? String(name.escapedText) : null;
-}
-
-function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current: ts.Expression = expression;
-  while (
-    ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current) ||
-    ts.isParenthesizedExpression(current) ||
-    ts.isNonNullExpression(current) ||
-    ts.isTypeAssertionExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
 }

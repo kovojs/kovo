@@ -4,6 +4,7 @@ import {
   type PropertyAccessPathModel,
   propertyAccessPathModels,
 } from '../scan/parse.js';
+import { unwrapExpression } from '../scan/ast.js';
 import * as ts from 'typescript';
 
 /** @internal Follow same-render-body `const x = state/query...` aliases for §4.9 coverage. */
@@ -352,19 +353,6 @@ function accessExpressionFromExpression(expression: ts.Expression): InitializerE
     };
   }
   return null;
-}
-
-function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current = expression;
-  while (
-    ts.isParenthesizedExpression(current) ||
-    ts.isNonNullExpression(current) ||
-    ts.isAsExpression(current) ||
-    ts.isSatisfiesExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
 }
 
 function elementAccessMember(
