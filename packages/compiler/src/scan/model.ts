@@ -55,10 +55,18 @@ export interface HandlerWriteSinkFact {
   surface: HandlerWriteSinkSurface;
 }
 
+export interface WebhookRecordChangeFact {
+  declaredWriteKeys: readonly string[];
+  domainKey: string;
+  owner: HandlerWriteSinkOwner;
+  span: SourceSpan;
+}
+
 export interface MutationHandlerModel {
   body: string;
   bodyEnd: number;
   handlerWriteSinks?: readonly HandlerWriteSinkFact[];
+  webhookRecordChanges?: readonly WebhookRecordChangeFact[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyStart: number;
   paramNames: readonly (string | undefined)[];

@@ -1277,6 +1277,38 @@ export default createApp({
     }
   }, 90_000);
 
+  it('blocks webhook recordChange domains outside declared writes during build check preflight', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-record-change-writes-'));
+    const appPath = join(root, 'app.ts');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(appPath, webhookRecordChangePreflightAppModuleSource(), 'utf8');
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toMatch(
+        /ERROR KV402 app\.ts:\d+:\d+ Write touched an undeclared domain\. webhook \/webhooks\/payment recordChange\("billing"\) is outside declared writes \(model\/contact\)\./,
+      );
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
   it('surfaces fatal optimistic coverage gaps as build errors', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fatal-kv310-'));
     const appPath = join(root, 'app.mjs');
@@ -2909,6 +2941,34 @@ const paymentWebhook = webhook('/webhooks/payment', {
 export default createApp({
   endpoints: [paymentWebhook],
   tasks: [sendReceipt],
+});
+`;
+}
+
+function webhookRecordChangePreflightAppModuleSource(): string {
+  return `
+import { createApp, createMemoryWebhookReplayStore, domain, s, webhook } from '@kovojs/server';
+
+const contact = domain('model/contact');
+const billing = domain('billing');
+
+const paymentWebhook = webhook('/webhooks/payment', {
+  access: { kind: 'public', reason: 'build preflight regression fixture' },
+  handler(input, context) {
+    context.recordChange(contact, { keys: [input.id] });
+    (context as unknown as { recordChange(domain: typeof billing): unknown }).recordChange(billing);
+    return { ok: true };
+  },
+  idempotency: (input) => input.id,
+  input: s.object({ id: s.string(), kind: s.string().optional() }),
+  replayStore: createMemoryWebhookReplayStore(),
+  verify: 'none',
+  verifyJustification: 'build preflight regression fixture',
+  writes: [contact],
+});
+
+export default createApp({
+  endpoints: [paymentWebhook],
 });
 `;
 }

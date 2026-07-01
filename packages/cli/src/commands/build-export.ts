@@ -8,7 +8,7 @@ import { pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 
 import type { DiagnosticCode } from '@kovojs/core';
-import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { CompileResult, CompileRouteModuleResult } from '@kovojs/compiler';
 import type {
@@ -586,7 +586,7 @@ async function buildCheckGraph(
   });
   const diagnostics = [
     ...(graph.diagnostics ?? []),
-    ...((staticArtifacts.components ?? []).flatMap((component) => component.diagnostics) ?? []).map(
+    ...buildPreflightComponentDiagnostics(staticArtifacts.components ?? []).map(
       staticDiagnosticFact,
     ),
     ...result.diagnostics.map(staticDiagnosticFact),
@@ -601,6 +601,22 @@ async function buildCheckGraph(
     };
   }
   return { graph: result.graph, queryShapeFacts: staticArtifacts.queryShapeFacts };
+}
+
+function buildPreflightComponentDiagnostics(
+  components: NonNullable<KovoBuildCheckArtifacts['components']>,
+): CompileResult['diagnostics'] {
+  return components
+    .flatMap((component) => component.diagnostics)
+    .filter((diagnostic) => !isMutationDirectDbComponentDiagnostic(diagnostic));
+}
+
+function isMutationDirectDbComponentDiagnostic(
+  diagnostic: CompileResult['diagnostics'][number],
+): boolean {
+  // SPEC §11 production builds derive mutation write safety from the Drizzle data-plane graph;
+  // task/webhook KV330 diagnostics still come from compiler handler facts and remain fatal here.
+  return diagnostic.code === 'KV330' && diagnostic.message === diagnosticDefinitions.KV330.message;
 }
 
 function staticDiagnosticFact(

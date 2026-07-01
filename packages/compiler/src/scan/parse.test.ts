@@ -13,6 +13,7 @@ import {
   parseComponentModule,
   soleJsxExpressionChild,
   taskRunHandlers,
+  webhookRecordChanges,
 } from './parse.js';
 
 describe('compiler scan parser helpers', () => {
@@ -529,6 +530,86 @@ export const paymentWebhook = webhook('/webhooks/payment', {
           start: source.indexOf('appDb.update'),
         },
         surface: 'webhook',
+      },
+    ]);
+  });
+
+  it('records webhook recordChange facts with declared write keys', () => {
+    const source = `
+import { domain, webhook } from '@kovojs/server';
+
+const contact = domain('model/contact');
+const billing = domain('billing');
+
+export const paymentWebhook = webhook('/webhooks/payment', {
+  async handler(input, context) {
+    context.recordChange(contact, { keys: [input.id] });
+    (context as unknown as { recordChange(domain: typeof billing): unknown }).recordChange(billing);
+    return Response.json({ ok: true });
+  },
+  writes: [contact],
+});
+`;
+    const facts = webhookRecordChanges(parseComponentModule('webhooks.ts', source));
+
+    expect(facts).toEqual([
+      {
+        declaredWriteKeys: ['model/contact'],
+        domainKey: 'model/contact',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        span: {
+          end: source.indexOf('contact, { keys') + 'contact'.length,
+          start: source.indexOf('contact, { keys'),
+        },
+      },
+      {
+        declaredWriteKeys: ['model/contact'],
+        domainKey: 'billing',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        span: {
+          end: source.lastIndexOf('billing)') + 'billing'.length,
+          start: source.lastIndexOf('billing)'),
+        },
+      },
+    ]);
+  });
+
+  it('records destructured webhook recordChange facts', () => {
+    const source = `
+import { domain, webhook } from '@kovojs/server';
+
+const contact = domain('model/contact');
+const billing = domain('billing');
+
+export const paymentWebhook = webhook('/webhooks/payment', {
+  async handler(input, { recordChange, recordChange: markChanged }) {
+    recordChange(contact, { keys: [input.id] });
+    markChanged(billing);
+    return Response.json({ ok: true });
+  },
+  writes: [contact],
+});
+`;
+    const facts = webhookRecordChanges(parseComponentModule('webhooks.ts', source));
+
+    expect(facts).toEqual([
+      {
+        declaredWriteKeys: ['model/contact'],
+        domainKey: 'model/contact',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        span: {
+          end: source.indexOf('contact, { keys') + 'contact'.length,
+          start: source.indexOf('contact, { keys'),
+        },
+      },
+      {
+        declaredWriteKeys: ['model/contact'],
+        domainKey: 'billing',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        span: {
+          end: source.indexOf('billing);') + 'billing'.length,
+          start: source.indexOf('billing);'),
+        },
       },
     ]);
   });

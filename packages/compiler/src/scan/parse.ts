@@ -43,6 +43,7 @@ import type {
   StringRenderModel,
   TaskRunHandlerModel,
   TemporalReadModel,
+  WebhookRecordChangeFact,
   ZeroArgArrowCallArgumentKind,
   ZeroArgArrowModel,
 } from './model.js';
@@ -56,6 +57,7 @@ interface ComponentFactoryBindings {
 }
 
 const COMPONENT_FACTORY_IDENTITY = frameworkExport('@kovojs/core', 'component');
+const DOMAIN_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'domain');
 const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
@@ -155,6 +157,7 @@ export function parseComponentModule(
   const taskRunHandlers: TaskRunHandlerModel[] = [];
   const webhookHandlers: MutationHandlerModel[] = [];
   const moduleScopeObjectEntries = moduleScopeObjectEntryModels(sourceFile, source);
+  const domainBindings = domainBindingKeys(sourceFile);
 
   const visit = (node: ts.Node): void => {
     const specifier = moduleSpecifierModel(node);
@@ -197,7 +200,7 @@ export function parseComponentModule(
         taskRunHandlers.push(...taskRunHandlerModels(sourceFile, source, node));
       }
       if (isFrameworkExpression(sourceFile, node.expression, WEBHOOK_FACTORY_IDENTITY)) {
-        webhookHandlers.push(...webhookHandlerModels(sourceFile, source, node));
+        webhookHandlers.push(...webhookHandlerModels(sourceFile, source, node, domainBindings));
       }
     }
     if (isExportedRenderSourceFunction(node)) {
@@ -345,6 +348,24 @@ function moduleScopeStaticStringValues(sourceFile: ts.SourceFile): ReadonlyMap<s
   }
 
   return strings;
+}
+
+function domainBindingKeys(sourceFile: ts.SourceFile): ReadonlyMap<string, string> {
+  const domains = new Map<string, string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isVariableStatement(statement)) continue;
+
+    for (const declaration of statement.declarationList.declarations) {
+      if (!ts.isIdentifier(declaration.name) || declaration.initializer === undefined) continue;
+      const domainKey = domainKeyFromExpression(sourceFile, declaration.initializer, domains);
+      if (domainKey !== undefined && domainKey !== 'UNRESOLVED') {
+        domains.set(declaration.name.text, domainKey);
+      }
+    }
+  }
+
+  return domains;
 }
 
 function isExportedVariable(node: ts.VariableDeclaration): boolean {
@@ -624,6 +645,10 @@ export function handlerWriteSinks(model: ComponentModuleModel): HandlerWriteSink
     ...model.taskRunHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
     ...model.webhookHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
   ];
+}
+
+export function webhookRecordChanges(model: ComponentModuleModel): WebhookRecordChangeFact[] {
+  return model.webhookHandlers.flatMap((handler) => handler.webhookRecordChanges ?? []);
 }
 
 function stringLiteralArrayValuesFromExpression(expression: ts.Expression): string[] | null {
@@ -1119,11 +1144,17 @@ function handlerPropertyModels(
   return handlerPropertyEntries(sourceFile, source, call).map((entry) => entry.model);
 }
 
+interface HandlerPropertyEntry {
+  body: ts.ConciseBody;
+  model: MutationHandlerModel;
+  parameters: ts.NodeArray<ts.ParameterDeclaration>;
+}
+
 function handlerPropertyEntries(
   sourceFile: ts.SourceFile,
   source: string,
   call: ts.CallExpression,
-): Array<{ body: ts.ConciseBody; model: MutationHandlerModel }> {
+): HandlerPropertyEntry[] {
   const options = [...call.arguments].find(ts.isObjectLiteralExpression);
   if (!options || !ts.isObjectLiteralExpression(options)) return [];
 
@@ -1134,6 +1165,7 @@ function handlerPropertyEntries(
             {
               body: property.body,
               model: functionBodyModel(sourceFile, source, property.body, property.parameters),
+              parameters: property.parameters,
             },
           ]
         : [];
@@ -1150,6 +1182,7 @@ function handlerPropertyEntries(
       {
         body: initializer.body,
         model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
+        parameters: initializer.parameters,
       },
     ];
   });
@@ -1159,13 +1192,25 @@ function webhookHandlerModels(
   sourceFile: ts.SourceFile,
   source: string,
   call: ts.CallExpression,
+  domainBindings: ReadonlyMap<string, string>,
 ): MutationHandlerModel[] {
   const owner = webhookOwner(sourceFile, call);
-  return handlerPropertyEntries(sourceFile, source, call).map(({ body, model }) => ({
+  const definition = taskDefinitionObject(call);
+  const declaredWriteKeys = definition
+    ? webhookDeclaredWriteKeys(sourceFile, definition, domainBindings)
+    : [];
+  return handlerPropertyEntries(sourceFile, source, call).map(({ body, model, parameters }) => ({
     ...model,
     handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
       owner,
       surface: 'webhook',
+    }),
+    webhookRecordChanges: webhookRecordChangeFacts(sourceFile, body, {
+      contextParamName: model.paramNames[1],
+      declaredWriteKeys,
+      domainBindings,
+      owner,
+      recordChangeParamNames: webhookRecordChangeParamNames(parameters[1]?.name),
     }),
   }));
 }
@@ -1234,6 +1279,130 @@ function webhookOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): Handl
   const exported = exportedConstInitializerName(call);
   if ('exportedConstName' in exported) return { kind: 'path', value: exported.exportedConstName };
   return { kind: 'path', value: 'UNRESOLVED' };
+}
+
+function webhookDeclaredWriteKeys(
+  sourceFile: ts.SourceFile,
+  definition: ts.ObjectLiteralExpression,
+  domainBindings: ReadonlyMap<string, string>,
+): string[] {
+  const writes = definition.properties.find(
+    (property): property is ts.PropertyAssignment =>
+      ts.isPropertyAssignment(property) && propertyNameText(property.name) === 'writes',
+  );
+  if (!writes) return [];
+
+  const initializer = unwrapExpression(writes.initializer);
+  if (!ts.isArrayLiteralExpression(initializer)) return ['UNRESOLVED'];
+
+  return initializer.elements.map((element) => {
+    const expression = ts.isSpreadElement(element) ? element.expression : element;
+    return domainKeyFromExpression(sourceFile, expression, domainBindings) ?? 'UNRESOLVED';
+  });
+}
+
+function webhookRecordChangeFacts(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  options: {
+    readonly contextParamName: string | undefined;
+    readonly declaredWriteKeys: readonly string[];
+    readonly domainBindings: ReadonlyMap<string, string>;
+    readonly owner: HandlerWriteSinkOwner;
+    readonly recordChangeParamNames: readonly string[];
+  },
+): WebhookRecordChangeFact[] {
+  const contextParamName = options.contextParamName;
+  if (!contextParamName && options.recordChangeParamNames.length === 0) return [];
+
+  const facts: WebhookRecordChangeFact[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const fact = webhookRecordChangeFact(sourceFile, node, options);
+      if (fact) facts.push(fact);
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(body);
+  return facts.sort((left, right) => left.span.start - right.span.start);
+}
+
+function webhookRecordChangeFact(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  options: {
+    readonly contextParamName: string | undefined;
+    readonly declaredWriteKeys: readonly string[];
+    readonly domainBindings: ReadonlyMap<string, string>;
+    readonly owner: HandlerWriteSinkOwner;
+    readonly recordChangeParamNames: readonly string[];
+  },
+): WebhookRecordChangeFact | null {
+  const callee = unwrapExpression(call.expression);
+  if (ts.isPropertyAccessExpression(callee)) {
+    if (callee.name.text !== 'recordChange') return null;
+    const receiver = unwrapExpression(callee.expression);
+    if (
+      !options.contextParamName ||
+      !ts.isIdentifier(receiver) ||
+      receiver.text !== options.contextParamName
+    ) {
+      return null;
+    }
+  } else if (!ts.isIdentifier(callee) || !options.recordChangeParamNames.includes(callee.text)) {
+    return null;
+  }
+
+  const [domainArgument] = call.arguments;
+  const domainKey =
+    domainArgument === undefined
+      ? 'UNRESOLVED'
+      : (domainKeyFromExpression(sourceFile, domainArgument, options.domainBindings) ??
+        'UNRESOLVED');
+  const spanTarget = domainArgument ?? callee;
+  return {
+    declaredWriteKeys: options.declaredWriteKeys,
+    domainKey,
+    owner: options.owner,
+    span: {
+      end: spanTarget.getEnd(),
+      start: spanTarget.getStart(sourceFile),
+    },
+  };
+}
+
+function webhookRecordChangeParamNames(name: ts.BindingName | undefined): string[] {
+  if (!name || !ts.isObjectBindingPattern(name)) return [];
+
+  return name.elements.flatMap((element) => {
+    const propertyName = element.propertyName;
+    if (
+      propertyName !== undefined &&
+      (!ts.isIdentifier(propertyName) || propertyName.text !== 'recordChange')
+    ) {
+      return [];
+    }
+    const bindingName = element.name;
+    if (!ts.isIdentifier(bindingName)) return [];
+    if (propertyName === undefined && bindingName.text !== 'recordChange') return [];
+    return [bindingName.text];
+  });
+}
+
+function domainKeyFromExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  domainBindings: ReadonlyMap<string, string>,
+): string | undefined {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isIdentifier(unwrapped)) return domainBindings.get(unwrapped.text) ?? 'UNRESOLVED';
+  if (!ts.isCallExpression(unwrapped)) return undefined;
+  if (!isFrameworkExpression(sourceFile, unwrapped.expression, DOMAIN_FACTORY_IDENTITY)) {
+    return undefined;
+  }
+  const [key] = unwrapped.arguments;
+  return key && ts.isStringLiteralLike(key) ? key.text : 'UNRESOLVED';
 }
 
 function runHandlerModel(

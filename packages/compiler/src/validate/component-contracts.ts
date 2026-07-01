@@ -30,6 +30,7 @@ import {
   type HandlerWriteSinkFact,
   type PropertyAccessPathModel,
   type RenderInputModel,
+  type WebhookRecordChangeFact,
 } from '../scan/parse.js';
 import { dedupeBy, kebabCase } from '../shared.js';
 import type {
@@ -505,6 +506,59 @@ export function validateDirectDbAccess(
   }
 
   return found;
+}
+
+export function validateWebhookRecordChanges(
+  diagnostics: DiagnosticFactory,
+  model: ComponentModuleModel,
+): CompilerDiagnostic[] {
+  return webhookHandlers(model).flatMap((handler) =>
+    (handler.webhookRecordChanges ?? []).flatMap((fact) =>
+      webhookRecordChangeDiagnostic(diagnostics, fact),
+    ),
+  );
+}
+
+function webhookRecordChangeDiagnostic(
+  diagnostics: DiagnosticFactory,
+  fact: WebhookRecordChangeFact,
+): CompilerDiagnostic[] {
+  const length = Math.max(1, fact.span.end - fact.span.start);
+  const declared = fact.declaredWriteKeys.filter((key) => key !== 'UNRESOLVED');
+  if (fact.domainKey === 'UNRESOLVED' || fact.declaredWriteKeys.includes('UNRESOLVED')) {
+    return [
+      {
+        ...diagnostics.at('KV406', { start: fact.span.start, length }),
+        help: [
+          'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
+          'Blocked reason: the compiler could not statically resolve the recordChange domain or every writes[] entry, so the webhook write surface could be under-reported.',
+          'Fixes: pass a module-level domain("...") binding to context.recordChange(...) and include that same binding in webhook writes[].',
+          'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
+        ].join('\n'),
+        message:
+          'Unresolved webhook recordChange domain; declare a statically named domain in writes[].',
+      },
+    ];
+  }
+
+  if (declared.includes(fact.domainKey)) return [];
+
+  const declaredLabel = declared.length === 0 ? 'none' : declared.join(', ');
+  return [
+    {
+      ...diagnostics.at(
+        'KV402',
+        { start: fact.span.start, length },
+        `webhook ${fact.owner.value} recordChange("${fact.domainKey}") is outside declared writes (${declaredLabel}).`,
+      ),
+      help: [
+        'Would lower to: a webhook endpoint whose emitted change records are covered by declared writes.',
+        'Blocked reason: context.recordChange(...) targets a domain absent from webhook writes[], so kovo explain/check could under-report machine-ingress writes.',
+        'Fixes: add the domain binding to writes[] or remove the recordChange call.',
+        'SPEC §9.1 requires webhook changes to be declared so machine-ingress writes stay explainable and verifiable.',
+      ].join('\n'),
+    },
+  ];
 }
 
 function handlerWriteSinkDiagnostic(

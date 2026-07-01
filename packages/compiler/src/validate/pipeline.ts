@@ -20,6 +20,7 @@ import {
   validateRemovedFragmentTargetOption,
   validateReservedQueryNames,
   validateServerFactsInLocalState,
+  validateWebhookRecordChanges,
 } from './component-contracts.js';
 import {
   validateDuplicateComponentNames as validateComponentNameUniqueness,
@@ -161,6 +162,7 @@ const compilerValidators: readonly CompilerValidator[] = [
     validateEventPayloads(diagnostics, model, options),
   ),
   loweredValidator(({ diagnostics, model }) => validateDirectDbAccess(diagnostics, model)),
+  originalValidator(({ diagnostics, model }) => validateWebhookRecordChanges(diagnostics, model)),
   originalValidator(({ diagnostics, model, options }) =>
     validateDeclaredClockReadsInRender(diagnostics, model, options),
   ),

@@ -130,14 +130,20 @@ packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/in
 
 ## Remaining Program Checklist
 
-- [ ] **A1. Close the fail-closed acceptance cases.**
+- [x] **A1. Close the fail-closed acceptance cases.**
   - [x] Closure-scoped secret/owner read fails the build with KV406 or a stricter security diagnostic. - Evidence: `vp exec vitest --run packages/drizzle/src/index.query-loader-receivers.test.ts
 packages/cli/src/index.kovo-check.test.ts`.
   - [x] `task` and webhook DB writes outside audited channels fail the build. - Evidence:
         `vp exec vitest --run packages/compiler/src/direct-db.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`;
         `vp exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts -t "task and webhook direct-write diagnostics|blocks task and webhook direct DB writes"`.
-  - [ ] `recordChange` to an undeclared domain fails the build.
-  - [ ] Existing green-path apps still build after B1 and F1.
+  - [x] `recordChange` to an undeclared domain fails the build. - Evidence:
+        `vp exec vitest --run packages/compiler/src/scan/parse.test.ts -t "webhook recordChange" packages/compiler/src/webhook-record-change.test.ts`;
+        `vp exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "webhook recordChange domains"`.
+  - [x] Existing green-path apps still build after B1 and F1. - Evidence:
+        `vp exec vitest --run packages/create-kovo/src/index.build.runtime.test.ts`;
+        `vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts`;
+        `vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts`;
+        `vp exec vitest --run packages/create-kovo/src/index.build.scaffold.typecheck.test.ts packages/create-kovo/src/index.test.ts`.
   - Acceptance: focused compiler/drizzle tests for each case plus a create-kovo prod-artifact build where
     the bug is observable in the artifact.
 
