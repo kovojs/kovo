@@ -1,5 +1,6 @@
 // SPEC §6.4 and §9.5: route-returned notFound() and unexpected page failures
 // render the configured app error shells with stable statuses.
+import { trustedHtml } from '@kovojs/browser';
 import { createApp, notFound, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
@@ -17,19 +18,29 @@ const brokenRoute = route('/broken', {
   },
 });
 
+function escapeShellText(value: string): string {
+  return value.replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+}
+
 export default defineFixture({
   app: createApp({
     errorShells: {
       notFound: ({ request, status }) => {
         const url = new URL(request.url);
         return {
-          body: `<main data-error-shell="404"><h1>Custom missing</h1><p>${status}:${url.pathname}</p></main>`,
+          body: trustedHtml(
+            `<main data-error-shell="404"><h1>Custom missing</h1><p>${status}:${escapeShellText(
+              url.pathname,
+            )}</p></main>`,
+          ),
           headers: { 'Content-Type': 'text/html; charset=utf-8' },
           status,
         };
       },
       serverError: ({ status }) => ({
-        body: `<main data-error-shell="500"><h1>Custom failure</h1><p>${status}:safe</p></main>`,
+        body: trustedHtml(
+          `<main data-error-shell="500"><h1>Custom failure</h1><p>${status}:safe</p></main>`,
+        ),
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
         status,
       }),
