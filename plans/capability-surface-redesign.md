@@ -15,7 +15,7 @@ preserving compatibility for a model that is hard to explain.
 
 ## Checklist
 
-- [ ] **Remove `query.elevated()` as a public GET-write escape.**
+- [x] **Remove `query.elevated()` as a public GET-write escape.**
   - Decision: do not keep a read-path API that grants write authority. GET-backed query loads can be
     retried, prefetched, focus-refetched, cached, or replayed; making writes safe there depends on an
     idempotency story authors cannot reliably prove at the call site.
@@ -27,9 +27,14 @@ preserving compatibility for a model that is hard to explain.
     `kovo explain --capabilities` vocabulary that treats query writes as an accepted capability.
   - Tighten diagnostics/docs so KV433 says ordinary `query()` loaders are read-only and the fix is to
     move the write to a mutation/domain/endpoint, not to an elevated query escape.
-  - Evidence to close: SPEC/API update, public API-surface check, server/runtime tests proving query
-    loaders receive only read handles, Drizzle/static tests proving query write reachability always
-    fails closed, and migration of existing tests/docs/examples away from `query.elevated()`.
+  - Evidence: `spec/10-data-plane.md` and `spec/11-diagnostics.md` now define KV433 without a GET-write
+    escape; `packages/server/src/query.ts`, `packages/server/src/api/data.ts`, and
+    `packages/server/src/index.ts` no longer export the public factory, marker, or fact drain.
+  - Evidence: `pnpm exec vitest run packages/server/src/query-endpoint.test.ts packages/server/src/managed-db.test.ts packages/server/src/api/app.test.ts packages/server/src/response-posture.test.ts packages/server/src/vite-data-plane-gate.test.ts`;
+    `pnpm exec vitest run packages/drizzle/src/index.toctou-readonly.test.ts`;
+    `pnpm exec vitest run packages/compiler/src/compile-component.test.ts packages/compiler/src/scan/query-shape-source.test.ts packages/compiler/src/vite.test.ts`;
+    `pnpm exec vitest run packages/core/src/diagnostics.test.ts`; `pnpm run check:api-surface`;
+    `git diff --check`; `pnpm run check:vp`.
 
 - [ ] **Move webhook writes through audited mutation calls.**
   - Decision: webhook handlers should be machine-ingress coordinators, not owners of raw transaction

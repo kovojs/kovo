@@ -169,7 +169,7 @@ packages/cli/src/index.kovo-check.test.ts`.
         `node scripts/fundamental-fixes-inventory.mjs` reports 40 syntactic candidates.
   - [ ] Review and convert or explicitly mark the remaining Drizzle alias/table recognizers.
   - [ ] Review and convert or explicitly mark trust-escape DOM/`Function` recognizers.
-  - [ ] Finish capability-owned compiler comparisons for `recordChange` and `query.elevated` through
+  - [ ] Finish the remaining capability-owned compiler comparisons for `recordChange` through
         `plans/capability-surface-redesign.md`.
   - Acceptance: inventory count drops for security-relevant literal/import recognizers; new/changed tests
     prove alias, re-export, namespace, and local-shadow behavior.
@@ -263,9 +263,8 @@ packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`
   - [x] Leave webhook transaction API redesign open unless a dedicated worker owns that public API change.
   - [x] Leave direct-DB detector alias/destructure gaps to A/B/C workstreams, not starter cleanup.
   - Acceptance: after F1, plan has explicit open items for any remaining write-capable public API seam.
-  - Evidence: `plans/capability-surface-redesign.md` tracks the remaining `query.elevated()`,
-    webhook write-authority, and direct-DB detector hardening decisions as separate open
-    checkboxes.
+  - Evidence: `plans/capability-surface-redesign.md` tracks query write authority, webhook
+    write-authority, and direct-DB detector hardening decisions as separate checkboxes.
 
 - [x] **G. Branded provenance types are complete for the current defense-in-depth scope.**
   - Evidence: `Reader<Db>`, `WebhookTxDb`, `TrustedHtml`, and `TrustedUrl` use module-private
