@@ -2,6 +2,12 @@ import { dirname, relative, resolve } from 'node:path';
 import * as ts from 'typescript';
 
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkExportIdentity,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
 import type { AccessDecisionFact } from '@kovojs/core/internal/graph';
 
 import { diagnosticFor, type CompilerDiagnostic } from '../diagnostics.js';
@@ -54,13 +60,16 @@ interface RouteComponentImportModel {
 }
 
 interface RouteFrameworkBindings {
-  readonly layoutNames: ReadonlySet<string>;
-  readonly namespaceNames: ReadonlySet<string>;
-  readonly respondNames: ReadonlySet<string>;
-  readonly routeNames: ReadonlySet<string>;
   readonly rootedFileHandleNames: ReadonlySet<string>;
-  readonly rootedFilesNames: ReadonlySet<string>;
+  readonly sourceFile: ts.SourceFile;
 }
+
+const LAYOUT_IDENTITY = frameworkExport('@kovojs/server', 'layout');
+const PUBLIC_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'publicAccess');
+const RESPOND_IDENTITY = frameworkExport('@kovojs/server', 'respond');
+const ROOTED_FILES_IDENTITY = frameworkExport('@kovojs/server', 'rootedFiles');
+const ROUTE_IDENTITY = frameworkExport('@kovojs/server', 'route');
+const VERIFIED_ACCESS_IDENTITY = frameworkExport('@kovojs/server', 'verifiedAccess');
 
 const navigationSegmentStampAttributes = new Set([
   'kovo-nav-components',
@@ -412,49 +421,12 @@ function routeLayoutModels(
 }
 
 function routeFrameworkBindings(sourceFile: ts.SourceFile): RouteFrameworkBindings {
-  const layoutNames = new Set<string>();
-  const namespaceNames = new Set<string>();
-  const respondNames = new Set<string>();
-  const routeNames = new Set<string>();
   const rootedFileHandleNames = new Set<string>();
-  const rootedFilesNames = new Set<string>();
-
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    if (!statement.moduleSpecifier || !ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
-    if (statement.moduleSpecifier.text !== '@kovojs/server') continue;
-
-    const namedBindings = statement.importClause?.namedBindings;
-    if (!namedBindings) continue;
-    if (ts.isNamespaceImport(namedBindings)) {
-      namespaceNames.add(namedBindings.name.text);
-      continue;
-    }
-    if (!ts.isNamedImports(namedBindings)) continue;
-    for (const element of namedBindings.elements) {
-      const importedName = element.propertyName?.text ?? element.name.text;
-      if (importedName === 'route') routeNames.add(element.name.text);
-      if (importedName === 'layout') layoutNames.add(element.name.text);
-      if (importedName === 'respond') respondNames.add(element.name.text);
-      if (importedName === 'rootedFiles') rootedFilesNames.add(element.name.text);
-    }
-  }
-
-  const bindings = {
-    layoutNames,
-    namespaceNames,
-    respondNames,
-    routeNames,
-    rootedFileHandleNames,
-    rootedFilesNames,
-  };
+  const bindings = { rootedFileHandleNames, sourceFile };
 
   const visit = (node: ts.Node): void => {
     if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name) && node.initializer) {
       const initializer = unwrapExpression(node.initializer);
-      if (isFrameworkRootedFilesReference(initializer, bindings)) {
-        rootedFilesNames.add(node.name.text);
-      }
       if (ts.isCallExpression(initializer) && isFrameworkRootedFilesCall(initializer, bindings)) {
         rootedFileHandleNames.add(node.name.text);
       }
@@ -469,25 +441,23 @@ function routeFrameworkBindings(sourceFile: ts.SourceFile): RouteFrameworkBindin
 }
 
 function isFrameworkRouteCall(call: ts.CallExpression, bindings: RouteFrameworkBindings): boolean {
-  return isFrameworkCall(call.expression, 'route', bindings.routeNames, bindings.namespaceNames);
+  return isFrameworkExpression(bindings, call.expression, ROUTE_IDENTITY);
 }
 
 function isFrameworkLayoutCall(call: ts.CallExpression, bindings: RouteFrameworkBindings): boolean {
-  return isFrameworkCall(call.expression, 'layout', bindings.layoutNames, bindings.namespaceNames);
+  return isFrameworkExpression(bindings, call.expression, LAYOUT_IDENTITY);
 }
 
-function isFrameworkCall(
+function isFrameworkExpression(
+  bindings: RouteFrameworkBindings,
   expression: ts.Expression,
-  propertyName: 'layout' | 'respond' | 'rootedFiles' | 'route',
-  localNames: ReadonlySet<string>,
-  namespaceNames: ReadonlySet<string>,
+  identity: FrameworkExportIdentity,
 ): boolean {
-  if (ts.isIdentifier(expression)) return localNames.has(expression.text);
-  return (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === propertyName &&
-    ts.isIdentifier(expression.expression) &&
-    namespaceNames.has(expression.expression.text)
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    bindings.sourceFile,
+    expression,
+    identity,
   );
 }
 
@@ -557,31 +527,14 @@ function isFrameworkRespondReference(
   expression: ts.Expression,
   bindings: RouteFrameworkBindings,
 ): boolean {
-  return isFrameworkCall(expression, 'respond', bindings.respondNames, bindings.namespaceNames);
+  return isFrameworkExpression(bindings, expression, RESPOND_IDENTITY);
 }
 
 function isFrameworkRootedFilesCall(
   call: ts.CallExpression,
   bindings: RouteFrameworkBindings,
 ): boolean {
-  return isFrameworkCall(
-    call.expression,
-    'rootedFiles',
-    bindings.rootedFilesNames,
-    bindings.namespaceNames,
-  );
-}
-
-function isFrameworkRootedFilesReference(
-  expression: ts.Expression,
-  bindings: RouteFrameworkBindings,
-): boolean {
-  return isFrameworkCall(
-    expression,
-    'rootedFiles',
-    bindings.rootedFilesNames,
-    bindings.namespaceNames,
-  );
+  return isFrameworkExpression(bindings, call.expression, ROOTED_FILES_IDENTITY);
 }
 
 function routeAccessFact(
@@ -624,14 +577,13 @@ function accessDecisionFact(
   const access = objectPropertyInitializer(object, 'access');
   if (!access) return undefined;
 
-  if (ts.isIdentifier(access) && access.text === 'verifiedAccess') {
+  if (isFrameworkAccessExpression(sourceFile, access, VERIFIED_ACCESS_IDENTITY)) {
     return { kind: 'verified-machine-auth' };
   }
 
   if (
     ts.isCallExpression(access) &&
-    ts.isIdentifier(access.expression) &&
-    access.expression.text === 'publicAccess'
+    isFrameworkAccessExpression(sourceFile, access.expression, PUBLIC_ACCESS_IDENTITY)
   ) {
     const [reason] = access.arguments;
     if (reason && ts.isStringLiteralLike(reason)) return { kind: 'public', reason: reason.text };
@@ -650,6 +602,19 @@ function accessDecisionFact(
   }
 
   return undefined;
+}
+
+function isFrameworkAccessExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  identity: FrameworkExportIdentity,
+): boolean {
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    identity,
+  );
 }
 
 function accessGuardNames(access: ts.ObjectLiteralExpression, sourceFile: ts.SourceFile): string[] {

@@ -1,9 +1,15 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  expressionAtSpan,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
 import { hasUnsafeUrlScheme } from '@kovojs/core/internal/security-url';
+import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
   isUrlAttribute,
+  expressionResolvesToTrustedHtmlBrand,
   trustedHtmlBrandLocalNames,
   type GeneratedOutputWriteFact,
 } from '../output-context-facts.js';
@@ -69,7 +75,8 @@ function validateRawtextElementText(
 
   const found: CompilerDiagnostic[] = [];
   for (const child of directChildExpressions(model, element)) {
-    if (!isDynamicExpression(child) || isTrustedBrandCall(child, trustedBrandNames)) continue;
+    if (!isDynamicExpression(child) || isTrustedBrandCall(model, child, trustedBrandNames))
+      continue;
     found.push(
       outputContextDiagnostic(diagnostics, `dynamic <${element.tag}> element text`, {
         start: child.containerStart,
@@ -118,10 +125,18 @@ function isDynamicExpression(expression: JsxExpressionModel): boolean {
  *     a bare call, so `callName` is undefined and KV236 fires.
  */
 function isTrustedBrandCall(
+  model: ComponentModuleModel,
   expression: JsxExpressionModel,
   trustedBrandNames: ReadonlySet<string>,
 ): boolean {
-  return expression.callName !== undefined && trustedBrandNames.has(expression.callName);
+  if (expression.callName !== undefined && trustedBrandNames.has(expression.callName)) return true;
+  const astExpression = expressionAtSpan(
+    ts as FrameworkIdentityTypeScript,
+    model.sourceFile,
+    expression,
+  );
+  if (!astExpression || !ts.isCallExpression(astExpression)) return false;
+  return expressionResolvesToTrustedHtmlBrand(model.sourceFile, astExpression.expression);
 }
 
 export function collectTrustedHtmlOutputContextFacts(

@@ -1,10 +1,19 @@
 import * as ts from 'typescript';
 
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
+
 import { deriveMutationKey } from '../mutation-names.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 
 ensureTypescriptRuntime(ts);
+
+const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
+const MUTATION_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 
 /** @internal One lowered optimistic query entry from authored source. */
 export interface InlineOptimisticTransformFact {
@@ -124,9 +133,7 @@ function inlineMutationOptimisticPlan(
   initializer: ts.Expression,
 ): InlineOptimisticPlanFact | null {
   if (!ts.isCallExpression(initializer)) return null;
-  if (!ts.isIdentifier(initializer.expression) || initializer.expression.text !== 'mutation') {
-    return null;
-  }
+  if (!isKovoMutationCallee(sourceFile, initializer.expression)) return null;
 
   const [firstArg, secondArg] = initializer.arguments;
   const key =
@@ -184,6 +191,16 @@ function standaloneOptimisticPlan(
     ...(queue === undefined ? {} : { queue }),
     transforms: merged,
   };
+}
+
+function isKovoMutationCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    MUTATION_IDENTITY,
+    { legacyGlobals: [MUTATION_IDENTITY] },
+  );
 }
 
 function mutationQueuePropertyValue(
@@ -420,7 +437,7 @@ function queryKeyFromCall(
   statement: ts.VariableStatement,
   call: ts.CallExpression,
 ): string | null {
-  if (!isQueryCallExpression(call.expression)) return null;
+  if (!isQueryCallExpression(sourceFile, call.expression)) return null;
   const [firstArg] = call.arguments;
   if (firstArg && ts.isStringLiteralLike(firstArg)) return firstArg.text;
   if (firstArg && ts.isObjectLiteralExpression(firstArg) && isExportedStatement(statement)) {
@@ -429,13 +446,22 @@ function queryKeyFromCall(
   return null;
 }
 
-function isQueryCallExpression(expression: ts.Expression): boolean {
-  if (ts.isIdentifier(expression)) return expression.text === 'query';
+function isQueryCallExpression(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+  if (
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      QUERY_IDENTITY,
+      { legacyGlobals: [QUERY_IDENTITY] },
+    )
+  ) {
+    return true;
+  }
   return (
     ts.isPropertyAccessExpression(expression) &&
     expression.name.text === 'elevated' &&
-    ts.isIdentifier(expression.expression) &&
-    expression.expression.text === 'query'
+    isQueryCallExpression(sourceFile, expression.expression)
   );
 }
 

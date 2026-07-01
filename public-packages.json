@@ -16,6 +16,7 @@
           "./internal/diagnostics",
           "./internal/document-protocol",
           "./internal/fragment-target",
+          "./internal/framework-identity",
           "./internal/graph",
           "./internal/json",
           "./internal/module-ref",

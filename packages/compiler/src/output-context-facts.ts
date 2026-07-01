@@ -1,4 +1,11 @@
 import { contextualOutputSinkFamilyForAttribute } from '@kovojs/core/internal/sink-policy';
+import {
+  expressionResolvesToAnyFrameworkExport,
+  frameworkExport,
+  frameworkExportForModuleSpecifier,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
+import * as ts from 'typescript';
 
 import type { ComponentModuleModel } from './scan/parse.js';
 
@@ -34,31 +41,71 @@ export interface GeneratedOutputWriteFact {
  * brands (`trustedHtml`, `safeRichHtml`). SPEC §4.8 / §5.2 #8: app source imports the brand only
  * from this entrypoint.
  */
-const TRUSTED_HTML_BRAND_MODULE = '@kovojs/browser';
-const TRUSTED_HTML_BRAND_EXPORTS = new Set(['trustedHtml', 'safeRichHtml']);
+const TRUSTED_HTML_ESCAPE_EXPORTS = [
+  frameworkExport('@kovojs/browser', 'trustedHtml'),
+  frameworkExport('@kovojs/browser', 'safeRichHtml'),
+  frameworkExport('@kovojs/server', 'safeRichHtml'),
+] as const;
+
+const TRUSTED_HTML_PURE_BRAND_EXPORTS = [
+  frameworkExport('@kovojs/browser', 'trustedHtml'),
+] as const;
 
 /**
  * @internal The local identifiers in this module that are bound to the REAL trusted-HTML brand
- * exports of `@kovojs/browser`, resolved from typed import facts (`model.namedImports`).
+ * exports, resolved from canonical framework export identity.
  *
  * SPEC §6.6(1) ("classification is carried by AST symbol-identity provenance … never [a] text
  * heuristic") and §5.2 rule 9 (post-parse phases decide from typed facts, never raw source strings):
- * the KV236 escape hatch must be recognized by symbol identity, not by a source-text name match. A
- * local `const trustedHtml = …` (shadow), a same-named import from another module, or an aliased
- * binding is therefore NOT a brand and cannot suppress KV236 (fail-closed); an aliased import of the
- * real export (`import { trustedHtml as th }`) IS, because its local name resolves through the import.
+ * the KV236 escape hatch must be recognized by symbol identity, not by a source-text name match.
  */
 export function trustedHtmlBrandLocalNames(model: ComponentModuleModel): ReadonlySet<string> {
   const localNames = new Set<string>();
   for (const imported of model.namedImports) {
-    if (
-      imported.moduleSpecifier === TRUSTED_HTML_BRAND_MODULE &&
-      TRUSTED_HTML_BRAND_EXPORTS.has(imported.importedName)
-    ) {
+    const identity = frameworkExportForModuleSpecifier(
+      imported.moduleSpecifier,
+      imported.importedName,
+    );
+    if (expressionIdentityIsTrustedHtmlEscape(identity)) {
       localNames.add(imported.localName);
     }
   }
   return localNames;
+}
+
+/** @internal Whether an AST expression resolves to a trusted HTML brand helper. */
+export function expressionResolvesToTrustedHtmlBrand(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  return expressionResolvesToAnyFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    TRUSTED_HTML_ESCAPE_EXPORTS,
+  );
+}
+
+/** @internal Whether an AST expression resolves to the pure trustedHtml brand. */
+export function expressionResolvesToTrustedHtmlPureBrand(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  return expressionResolvesToAnyFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    TRUSTED_HTML_PURE_BRAND_EXPORTS,
+  );
+}
+
+function expressionIdentityIsTrustedHtmlEscape(
+  identity: ReturnType<typeof frameworkExportForModuleSpecifier>,
+): boolean {
+  return TRUSTED_HTML_ESCAPE_EXPORTS.some(
+    (expected) =>
+      identity?.module === expected.module && identity.exportName === expected.exportName,
+  );
 }
 
 export function outputContextForAttribute(name: string): OutputContext {

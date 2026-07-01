@@ -5,6 +5,12 @@ import {
   type RenderPlanFingerprintInput,
 } from '@kovojs/core/internal/render-plan-token';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  callExpressionAtSpan,
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
 
 import { collectQueryUpdateCoverage, collectQueryUpdatePlans } from './analyze/query-updates.js';
@@ -54,6 +60,7 @@ import {
   firstComponentModel,
   componentHasInferredFragmentTarget,
   componentOptionObjectEntries,
+  type CallExpressionModel,
   type ComponentModel,
   type ComponentModuleModel,
   type ObjectLiteralEntry,
@@ -99,6 +106,9 @@ import {
 } from './types.js';
 
 ensureTypescriptRuntime(ts);
+
+const KOVO_MUTATION_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
+const KOVO_QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 
 /**
  * Compile a single authored component module (TSX/JSX source) into its lowered-IR
@@ -1020,7 +1030,7 @@ function derivedMutationKeyAssignments(
   fileName: string,
 ): SourceReplacement[] {
   return model.calls.flatMap((call) => {
-    if (!isExportedObjectFormMutationCall(call)) return [];
+    if (!isExportedObjectFormMutationCall(model, call)) return [];
 
     const derivedKey = deriveMutationKey(fileName, call.exportedConstName);
     return [
@@ -1038,10 +1048,11 @@ function derivedMutationKeyAssignments(
 }
 
 function isExportedObjectFormMutationCall(
+  model: ComponentModuleModel,
   call: ComponentModuleModel['calls'][number],
 ): call is ComponentModuleModel['calls'][number] & { exportedConstName: string } {
   return (
-    call.name === 'mutation' &&
+    isKovoMutationCall(model, call) &&
     call.exportedConstName !== undefined &&
     call.arguments.length === 1 &&
     call.arguments[0]?.trimStart().startsWith('{') === true
@@ -1089,32 +1100,45 @@ function insertDerivedQueryKeyImport(source: string, model: ComponentModuleModel
 }
 
 function exportedObjectFirstQueryCalls(model: ComponentModuleModel) {
-  const queryLocalNames = kovoQueryLocalNames(model);
-  if (queryLocalNames.size === 0) return [];
   return model.calls.filter(
     (call) =>
       call.exportedConstName &&
-      isKovoQueryCallName(call.name, queryLocalNames) &&
+      isKovoQueryCall(model, call) &&
       call.arguments.length === 1 &&
       typeof call.argumentStaticValues[0] !== 'string',
   );
 }
 
-function kovoQueryLocalNames(model: ComponentModuleModel): ReadonlySet<string> {
-  return new Set(
-    model.namedImports
-      .filter(
-        (entry) => entry.moduleSpecifier === '@kovojs/server' && entry.importedName === 'query',
-      )
-      .map((entry) => entry.localName),
-  );
+function isKovoQueryCall(model: ComponentModuleModel, call: CallExpressionModel) {
+  const astCall = callExpressionAtSpan(ts as FrameworkIdentityTypeScript, model.sourceFile, call);
+  return astCall ? isKovoQueryCallee(model.sourceFile, astCall.expression) : false;
 }
 
-function isKovoQueryCallName(callName: string, queryLocalNames: ReadonlySet<string>): boolean {
-  for (const localName of queryLocalNames) {
-    if (callName === localName || callName === `${localName}.elevated`) return true;
-  }
-  return false;
+function isKovoMutationCall(model: ComponentModuleModel, call: CallExpressionModel) {
+  const astCall = callExpressionAtSpan(ts as FrameworkIdentityTypeScript, model.sourceFile, call);
+  return astCall
+    ? expressionResolvesToFrameworkExport(
+        ts as FrameworkIdentityTypeScript,
+        model.sourceFile,
+        astCall.expression,
+        KOVO_MUTATION_IDENTITY,
+        { legacyGlobals: [KOVO_MUTATION_IDENTITY] },
+      )
+    : false;
+}
+
+function isKovoQueryCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+  return (
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      KOVO_QUERY_IDENTITY,
+    ) ||
+    (ts.isPropertyAccessExpression(expression) &&
+      expression.name.text === 'elevated' &&
+      isKovoQueryCallee(sourceFile, expression.expression))
+  );
 }
 
 export function collectStateDeriveReferenceFacts(

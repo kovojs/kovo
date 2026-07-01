@@ -863,6 +863,62 @@ export const ProductGrid = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('lowers object-form mutation keys through data API aliases', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/product-grid.tsx',
+      source: `
+import { component } from '@kovojs/core';
+import { mutation as defineMutation } from '@kovojs/server/api/data';
+
+const mutationAlias = defineMutation;
+
+export const addToCart = mutationAlias({
+  queue: true,
+  handler() {
+    return null;
+  },
+});
+
+export const ProductGrid = component({
+  mutations: { addToCart },
+  render: () => <form mutation={addToCart} />,
+});
+`,
+    });
+
+    expect(result.loweredSource).toContain(
+      'addToCart.key = "components/product-grid/add-to-cart";',
+    );
+    expect(result.loweredSource).toContain(
+      'if (addToCart.queue === true) addToCart.queue = "components/product-grid/add-to-cart";',
+    );
+  });
+
+  it('does not assign derived mutation keys to local mutation lookalikes', () => {
+    const result = compileComponentModule({
+      fileName: 'src/components/product-grid.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+function mutation(value) { return value; }
+
+export const addToCart = mutation({
+  queue: true,
+  handler() {
+    return null;
+  },
+});
+
+export const ProductGrid = component({
+  render: () => <section />,
+});
+`,
+    });
+
+    expect(result.loweredSource).not.toContain('addToCart.key =');
+    expect(result.loweredSource).not.toContain('if (addToCart.queue === true)');
+  });
+
   it('marks duplicate DOM leaves with stable registry-key disambiguation facts', () => {
     const derived = deriveAppGraph({
       graph: {
