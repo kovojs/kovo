@@ -81,6 +81,7 @@ export type {
   RoutePageResponse,
   RouteResponseBody,
   RouteResponseOutcome,
+  RouteResponseStatus,
   RouteStoredFileOptions,
   RouteStreamOptions,
   ServerResponseBase,

@@ -170,6 +170,7 @@ export interface LocalConstAliasModel {
   accesses: readonly PropertyAccessPathModel[];
   expression: string;
   name: string;
+  references: readonly string[];
   start: number;
 }
 

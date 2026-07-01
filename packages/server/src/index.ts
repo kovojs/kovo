@@ -486,6 +486,7 @@ export type {
   RouteRequestInput,
   RouteResponseBody,
   RouteResponseOutcome,
+  RouteResponseStatus,
   RouteStoredFileOptions,
   RouteStreamOptions,
   ServerErrorDiagnosticContext,
