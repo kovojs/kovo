@@ -221,9 +221,10 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     branches are hand-forked pairs differing only in the terminal builder (1825-1842 vs 1936-1951; 1844-1867 vs
     1869-1892) despite `MutationResponseDeliveryMode` (211-223) existing to dispatch them. Extract
     `mutation/{wire-response,no-js,replay-policy,failure-html}.ts`; compute the outcome once, map to mode-specific responses.
-- [ ] **T6 — Split `graph-output.ts` (3046 lines) along input/args/formatters.** (L · low; after T3)
+- [x] **T6 — Split `graph-output.ts` (3046 lines) along input/args/formatters.** (L · low; after T3)
   - Extract `graph-input.ts` (`readGraphInput:73`, `discoverGraphInputPath:112`), `graph-args.ts` (after T3), and the
     ~35 pure `Fact→string` formatters (≈1300-3046) → `graph-explain-format.ts`; keep orchestration in graph-output.ts.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/graph-output.args.test.ts packages/cli/src/graph-input.test.ts packages/cli/src/graph-explain-format.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after moving graph input, argv parsing, and explain/check formatters out of `graph-output.ts`.
 - [ ] **C3 — Exhaustive fold for the two `QueryShapeWrapper` codegen switches.** (M · med)
   - `types.ts:918` (`wrapperQueryShapeTypeExpr`) + `941-963` (`typeExprFromRevealedQueryShape`) enumerate the same
     union with divergent arms; exhaustiveness is enforced in only one → a new kind ships a silent `.d.ts` gap. Extract
