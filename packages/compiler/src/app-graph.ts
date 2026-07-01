@@ -165,15 +165,7 @@ function mergeAccessExplainFacts(
   callerFacts: readonly CoreGraph.AccessExplainFact[],
   derivedFacts: readonly CoreGraph.AccessExplainFact[],
 ): CoreGraph.AccessExplainFact[] {
-  const facts = [...callerFacts];
-  const existing = new Set(callerFacts.map(accessExplainFactKey));
-  for (const fact of derivedFacts) {
-    const key = accessExplainFactKey(fact);
-    if (existing.has(key)) continue;
-    facts.push(fact);
-    existing.add(key);
-  }
-  return facts.sort(compareAccessFacts);
+  return mergeFactsByKey(callerFacts, derivedFacts, accessExplainFactKey, compareAccessFacts);
 }
 
 function accessExplainFactKey(fact: CoreGraph.AccessExplainFact): string {
@@ -195,17 +187,7 @@ function mergeAuthPostureFacts(
   callerFacts: readonly CoreGraph.AuthPostureFact[],
   derivedFacts: readonly CoreGraph.AuthPostureFact[],
 ): CoreGraph.AuthPostureFact[] {
-  const facts = [...callerFacts];
-  const existing = new Set(callerFacts.map(authPostureFactKey));
-  for (const fact of derivedFacts) {
-    const key = authPostureFactKey(fact);
-    if (existing.has(key)) continue;
-    facts.push(fact);
-    existing.add(key);
-  }
-  return facts.sort(
-    (left, right) => left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name),
-  );
+  return mergeFactsByKey(callerFacts, derivedFacts, authPostureFactKey, compareKindNameFacts);
 }
 
 function authPostureFactKey(fact: CoreGraph.AuthPostureFact): string {
@@ -216,17 +198,7 @@ function mergeSessionAuthorityFacts(
   callerFacts: readonly CoreGraph.SessionAuthorityFact[],
   derivedFacts: readonly CoreGraph.SessionAuthorityFact[],
 ): CoreGraph.SessionAuthorityFact[] {
-  const facts = [...callerFacts];
-  const existing = new Set(callerFacts.map(sessionAuthorityFactKey));
-  for (const fact of derivedFacts) {
-    const key = sessionAuthorityFactKey(fact);
-    if (existing.has(key)) continue;
-    facts.push(fact);
-    existing.add(key);
-  }
-  return facts.sort(
-    (left, right) => left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name),
-  );
+  return mergeFactsByKey(callerFacts, derivedFacts, sessionAuthorityFactKey, compareKindNameFacts);
 }
 
 function sessionAuthorityFactKey(fact: CoreGraph.SessionAuthorityFact): string {
@@ -237,25 +209,52 @@ function mergeOwnershipPostureFacts(
   callerFacts: readonly CoreGraph.OwnershipPostureFact[],
   derivedFacts: readonly CoreGraph.OwnershipPostureFact[],
 ): CoreGraph.OwnershipPostureFact[] {
-  const facts = [...callerFacts];
-  const existing = new Set(callerFacts.map(ownershipPostureFactKey));
-  for (const fact of derivedFacts) {
-    const key = ownershipPostureFactKey(fact);
-    if (existing.has(key)) continue;
-    facts.push(fact);
-    existing.add(key);
-  }
-  return facts.sort(
-    (left, right) =>
-      left.kind.localeCompare(right.kind) ||
-      left.name.localeCompare(right.name) ||
-      left.domain.localeCompare(right.domain) ||
-      (left.key ?? '').localeCompare(right.key ?? ''),
+  return mergeFactsByKey(
+    callerFacts,
+    derivedFacts,
+    ownershipPostureFactKey,
+    compareOwnershipPostureFacts,
   );
 }
 
 function ownershipPostureFactKey(fact: CoreGraph.OwnershipPostureFact): string {
   return `${fact.kind}\0${fact.name}\0${fact.domain}\0${fact.key ?? ''}`;
+}
+
+function mergeFactsByKey<Fact>(
+  callerFacts: readonly Fact[],
+  derivedFacts: readonly Fact[],
+  keyForFact: (fact: Fact) => string,
+  compareFacts: (left: Fact, right: Fact) => number,
+): Fact[] {
+  const facts = [...callerFacts];
+  const existing = new Set(callerFacts.map(keyForFact));
+  for (const fact of derivedFacts) {
+    const key = keyForFact(fact);
+    if (existing.has(key)) continue;
+    facts.push(fact);
+    existing.add(key);
+  }
+  return facts.sort(compareFacts);
+}
+
+function compareKindNameFacts(
+  left: { readonly kind: string; readonly name: string },
+  right: { readonly kind: string; readonly name: string },
+): number {
+  return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
+}
+
+function compareOwnershipPostureFacts(
+  left: CoreGraph.OwnershipPostureFact,
+  right: CoreGraph.OwnershipPostureFact,
+): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.name.localeCompare(right.name) ||
+    left.domain.localeCompare(right.domain) ||
+    (left.key ?? '').localeCompare(right.key ?? '')
+  );
 }
 
 /** @internal Process-lifetime cache for app graph derivation keyed by contribution fingerprints. */

@@ -1416,6 +1416,87 @@ export const ProductGrid = component({
     ]);
   });
 
+  it('merges caller-provided posture facts by key while retaining derived facts', () => {
+    const derived = deriveAppGraph({
+      graph: {
+        access: [
+          {
+            decision: 'guard',
+            detail: 'caller access fact',
+            kind: 'mutation',
+            name: 'cart/add',
+            source: 'access',
+          },
+        ],
+        authPosture: [
+          {
+            detail: 'caller auth posture',
+            guarded: true,
+            kind: 'query',
+            name: 'cart',
+            source: 'access-posture',
+          },
+        ],
+        mutations: [
+          {
+            guards: ['authed', 'owns:cart:id'],
+            key: 'cart/add',
+            writes: ['cart'],
+          },
+        ],
+        ownershipPosture: [
+          {
+            domain: 'cart',
+            key: 'id',
+            kind: 'mutation',
+            name: 'cart/add',
+            ownerGuarded: true,
+            source: 'ownership-posture',
+          },
+        ],
+        queries: [
+          {
+            domains: ['cart'],
+            guards: ['authed', 'owns:cart:id'],
+            query: 'cart',
+          },
+        ],
+        sessionAuthority: [
+          {
+            detail: 'caller session authority',
+            kind: 'mutation',
+            name: 'cart/add',
+            referencesSession: false,
+            source: 'session-authority',
+          },
+        ],
+      },
+    });
+
+    expect(derived.graph.access?.filter((fact) => fact.kind === 'mutation')).toEqual([
+      expect.objectContaining({ detail: 'caller access fact', name: 'cart/add' }),
+    ]);
+    expect(derived.graph.authPosture?.filter((fact) => fact.kind === 'query')).toEqual([
+      expect.objectContaining({ detail: 'caller auth posture', name: 'cart' }),
+    ]);
+    expect(
+      derived.graph.sessionAuthority?.filter(
+        (fact) => fact.kind === 'mutation' && fact.name === 'cart/add',
+      ),
+    ).toEqual([expect.objectContaining({ detail: 'caller session authority' })]);
+    expect(derived.graph.ownershipPosture).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ kind: 'mutation', name: 'cart/add' }),
+        expect.objectContaining({ kind: 'query', name: 'cart' }),
+      ]),
+    );
+    expect(
+      derived.graph.ownershipPosture?.filter(
+        (fact) => fact.kind === 'mutation' && fact.name === 'cart/add',
+      ),
+    ).toHaveLength(1);
+  });
+
   it('preserves durable task facts when deriving the app graph', () => {
     const derived = deriveAppGraph({
       graph: {
