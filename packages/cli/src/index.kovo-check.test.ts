@@ -788,6 +788,27 @@ describe('kovo check', () => {
     expect(result.exitCode).not.toBe(0);
   });
 
+  it('reports an unresolved write-shaped query() loader site as KV406 (SPEC §10.3)', () => {
+    const result = kovoCheck({
+      queryWriteReachability: [
+        {
+          canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+          operation: 'UNRESOLVED',
+          operationKind: 'UNRESOLVED',
+          operationProvenance: 'computed-member',
+          query: 'dashboard',
+          site: 'q.ts:4',
+          table: 'logs',
+          unresolved: { code: 'KV406', reason: 'computed-member' },
+        },
+      ],
+    });
+    expect(result.output).toContain(
+      'ERROR KV406 QUERY dashboard operation=UNRESOLVED table=logs site=q.ts:4',
+    );
+    expect(result.exitCode).not.toBe(0);
+  });
+
   it('suppresses KV414 with a recorded public-read justification (SPEC §10.3)', () => {
     const result = kovoCheck({
       ownerDomains: [{ domain: 'order', owner: 'userId' }],

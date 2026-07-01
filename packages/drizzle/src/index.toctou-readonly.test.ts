@@ -257,17 +257,34 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     const result = reach(
       `${QHEAD}export const dashboard = query("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.delete(logs).where(eq(logs.id, "x")); return { ok: true }; } });`,
     );
-    expect(result).toEqual([
-      { operation: 'delete', query: 'dashboard', site: 'q.ts:4', table: 'logs' },
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+        operation: 'delete',
+        operationKind: 'delete',
+        operationProvenance: 'property-access',
+        query: 'dashboard',
+        site: 'q.ts:4',
+        table: 'logs',
+      },
     ]);
+    expect(result[0]?.span).toEqual({ end: expect.any(Number), start: expect.any(Number) });
   });
 
   it('flags a query() loader that reaches a module-scope Drizzle write receiver', () => {
     const result = reach(
       `${QHEAD}declare const db: PgAsyncDatabase<any, any>;\nexport const dashboard = query("dashboard", { load: async () => { await db.delete(logs).where(eq(logs.id, "x")); return { ok: true }; } });`,
     );
-    expect(result).toEqual([
-      { operation: 'delete', query: 'dashboard', site: 'q.ts:5', table: 'logs' },
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+        operation: 'delete',
+        operationKind: 'delete',
+        operationProvenance: 'property-access',
+        query: 'dashboard',
+        site: 'q.ts:5',
+        table: 'logs',
+      },
     ]);
   });
 
@@ -275,8 +292,16 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     const result = reach(
       `${QHEAD}export const dashboard = query.elevated("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.delete(logs).where(eq(logs.id, "x")); return { ok: true }; } });`,
     );
-    expect(result).toEqual([
-      { operation: 'delete', query: 'dashboard', site: 'q.ts:4', table: 'logs' },
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+        operation: 'delete',
+        operationKind: 'delete',
+        operationProvenance: 'property-access',
+        query: 'dashboard',
+        site: 'q.ts:4',
+        table: 'logs',
+      },
     ]);
   });
 
@@ -284,9 +309,12 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     const result = reach(
       `${QHEAD}export const dashboard = query("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.execute("vacuum"); return { ok: true }; } });`,
     );
-    expect(result).toEqual([
+    expect(result).toMatchObject([
       {
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'raw-receiver-method' },
         operation: 'execute',
+        operationKind: 'execute',
+        operationProvenance: 'property-access',
         query: 'dashboard',
         site: 'q.ts:4',
         table: '__kovoUnresolvedReadSource',
@@ -298,12 +326,50 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     const result = reach(
       `${QHEAD}export const dashboard = query.elevated("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.execute("vacuum"); return { ok: true }; } });`,
     );
-    expect(result).toEqual([
+    expect(result).toMatchObject([
       {
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'raw-receiver-method' },
         operation: 'execute',
+        operationKind: 'execute',
+        operationProvenance: 'property-access',
         query: 'dashboard',
         site: 'q.ts:4',
         table: '__kovoUnresolvedReadSource',
+      },
+    ]);
+  });
+
+  it('normalizes a destructured Drizzle write method alias in a query loader', () => {
+    const result = reach(
+      `${QHEAD}export const dashboard = query("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { const { delete: remove } = db; await remove(logs).where(eq(logs.id, "x")); return { ok: true }; } });`,
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+        operation: 'delete',
+        operationKind: 'delete',
+        operationProvenance: 'receiver-method-alias',
+        query: 'dashboard',
+        site: 'q.ts:4',
+        table: 'logs',
+      },
+    ]);
+  });
+
+  it('emits an unresolved canonical fact for computed Drizzle receiver methods', () => {
+    const result = reach(
+      `${QHEAD}export const dashboard = query("dashboard", { load: async (db: PgAsyncDatabase<any, any>, method: string) => { await db[method](logs); return { ok: true }; } });`,
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+        operation: 'UNRESOLVED',
+        operationKind: 'UNRESOLVED',
+        operationProvenance: 'computed-member',
+        query: 'dashboard',
+        site: 'q.ts:4',
+        table: 'logs',
+        unresolved: { code: 'KV406', reason: 'computed-member' },
       },
     ]);
   });

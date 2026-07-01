@@ -865,10 +865,11 @@ export function kovoCheck(
       pushFinding(massAssignmentKv438Line(finding), true);
     }
 
-    // SPEC §6.6/§9.4 / secure-framework Phase 5: a query() loader that directly reaches a
-    // Drizzle write is the blocking KV433 confused-deputy error.
+    // SPEC §6.6/§9.4 / secure-framework Phase 5: query write-reachability facts are the
+    // canonical Drizzle-produced surface. Resolved direct writes are KV433; unresolved
+    // write-shaped loader sites fail closed as KV406 instead of disappearing.
     for (const finding of sortedQueryWriteReachability(graph.queryWriteReachability ?? [])) {
-      pushFinding(queryWriteReachabilityKv433Line(finding), true);
+      pushFinding(queryWriteReachabilityLine(finding), true);
     }
 
     // SPEC §10.3/§11.1 / secure-framework Phase 6: a single-row self-referential write to a
@@ -2515,16 +2516,35 @@ function sortedToctou(facts: readonly CoreGraph.ToctouFact[]): readonly CoreGrap
   );
 }
 
+/** The enforced query write-reachability error line for a read-only loader (SPEC §9.4). */
+function queryWriteReachabilityLine(fact: CoreGraph.QueryWriteReachabilityFact): string {
+  if (fact.unresolved?.code === 'KV406') return queryWriteReachabilityKv406Line(fact);
+  return queryWriteReachabilityKv433Line(fact);
+}
+
 /** The enforced KV433 (read-only query) error line for a write-reaching loader (SPEC §9.4). */
 function queryWriteReachabilityKv433Line(fact: CoreGraph.QueryWriteReachabilityFact): string {
   return [
     'ERROR KV433',
     'QUERY',
     fact.query,
-    `operation=${fact.operation}`,
-    `table=${fact.table}`,
+    `operation=${fact.operationKind ?? fact.operation}`,
+    `table=${fact.canonicalTarget?.identity ?? fact.table}`,
     `site=${fact.site}`,
     diagnosticDefinitions.KV433.message,
+  ].join(' ');
+}
+
+/** The enforced KV406 line for an unresolved write-shaped query loader site (SPEC §10.3). */
+function queryWriteReachabilityKv406Line(fact: CoreGraph.QueryWriteReachabilityFact): string {
+  return [
+    'ERROR KV406',
+    'QUERY',
+    fact.query,
+    `operation=${fact.operationKind ?? fact.operation}`,
+    `table=${fact.canonicalTarget?.identity ?? fact.table}`,
+    `site=${fact.site}`,
+    diagnosticDefinitions.KV406.message,
   ].join(' ');
 }
 

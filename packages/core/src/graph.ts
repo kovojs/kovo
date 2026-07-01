@@ -456,12 +456,51 @@ export interface MassAssignmentFact {
   via: 'raw-sql' | 'set' | 'spread' | 'values';
 }
 
+/** @internal */
+export type QueryWriteReachabilityOperationKind =
+  | 'batch'
+  | 'delete'
+  | 'execute'
+  | 'insert'
+  | 'run'
+  | 'update'
+  | 'UNRESOLVED';
+
+/** @internal */
+export type QueryWriteReachabilityOperationProvenance =
+  | 'computed-member'
+  | 'property-access'
+  | 'receiver-method-alias';
+
+/** @internal */
+export type QueryWriteReachabilityTargetProvenance =
+  | 'raw-receiver-method'
+  | 'table-argument'
+  | 'unresolved-table';
+
+/** @internal */
+export interface QueryWriteReachabilityUnresolved {
+  code: 'KV406';
+  reason: 'computed-member';
+}
+
 /** A `query()` loader that reaches a Drizzle write — the §9.4 read-only finding (KV433 Stage 2). */
 export interface QueryWriteReachabilityFact {
+  canonicalTarget?: {
+    identity: string;
+    provenance: QueryWriteReachabilityTargetProvenance;
+  };
   operation: string;
+  operationKind?: QueryWriteReachabilityOperationKind;
+  operationProvenance?: QueryWriteReachabilityOperationProvenance;
   query: string;
   site: string;
+  span?: {
+    end: number;
+    start: number;
+  };
   table: string;
+  unresolved?: QueryWriteReachabilityUnresolved;
 }
 
 /**

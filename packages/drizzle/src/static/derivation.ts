@@ -14,6 +14,9 @@ import type {
 } from '@kovojs/core/internal/derivation';
 import type {
   MassAssignmentFact,
+  QueryWriteReachabilityOperationKind,
+  QueryWriteReachabilityOperationProvenance,
+  QueryWriteReachabilityTargetProvenance,
   QueryWriteReachabilityFact,
   ToctouFact,
 } from '@kovojs/core/internal/graph';
@@ -30,6 +33,7 @@ import {
 } from 'ts-morph';
 
 import {
+  COMPUTED_DRIZZLE_RECEIVER_METHOD,
   UNRESOLVED_READ_SOURCE_EXPRESSION,
   computedPropertyNameExpression,
   createProjectExtraction,
@@ -100,6 +104,7 @@ import {
   writeActionCallbackFunction,
 } from './domain-writes.js';
 import { expressionResolvesToFrameworkExport, frameworkExport } from './framework-identity.js';
+import { receiverMethodAliasCallName, receiverMethodAliasesForBody } from './receiver-surface.js';
 
 // ───────────────────────────────────────────────────────────────────────────
 // SPEC.md §10.5 derivation extraction (Stage 1 write→effect, Stage 2 query→shape).
@@ -2220,7 +2225,12 @@ function dedupeToctouFacts(facts: readonly ToctouFact[]): ToctouFact[] {
 // read-only proxy handle where Kovo owns `context.db`; it is a runtime floor, while this
 // direct static check is the by-construction gate.
 
-const KV433_DIRECT_WRITE_OPERATIONS = new Set([
+type ResolvedQueryWriteReachabilityOperationKind = Exclude<
+  QueryWriteReachabilityOperationKind,
+  'UNRESOLVED'
+>;
+
+const KV433_DIRECT_WRITE_OPERATIONS = new Set<ResolvedQueryWriteReachabilityOperationKind>([
   'batch',
   'delete',
   'execute',
@@ -2228,6 +2238,19 @@ const KV433_DIRECT_WRITE_OPERATIONS = new Set([
   'run',
   'update',
 ]);
+
+const KV433_RAW_RECEIVER_WRITE_OPERATIONS = new Set<QueryWriteReachabilityOperationKind>([
+  'batch',
+  'execute',
+  'run',
+]);
+
+interface QueryLoaderWriteContext {
+  file: SourceFileInput;
+  query: string;
+  receivers: ProjectDrizzleReceivers;
+  resolveTable: (node: Node) => string | undefined;
+}
 
 /**
  * SPEC §6.6/§9.4 (KV433 Stage 2) — every `query()` loader whose body directly reaches a
@@ -2283,31 +2306,171 @@ function extractQueryWriteReachabilityFromDeriveExtraction(
         projectDrizzleReceivers(loader.fn),
         moduleScopeDrizzleReceivers(sourceFile),
       );
-      for (const call of touchBodyCallExpressions(functionBody(loader.fn))) {
-        const expression = call.getExpression();
-        const operation = staticAccessName(expression);
-        const receiver = staticAccessExpression(expression);
-        if (!operation || !receiver) continue;
-        if (!KV433_DIRECT_WRITE_OPERATIONS.has(operation)) continue;
-        if (!isProjectDrizzleReceiverIdentifier(receiver, receivers)) continue;
-        const tableArgument = call.getArguments()[0];
-        const table =
-          (tableArgument && resolveTable(tableArgument)) || UNRESOLVED_READ_SOURCE_EXPRESSION;
-        facts.push({
-          operation,
+      facts.push(
+        ...queryWriteReachabilityFactsForLoader(functionBody(loader.fn), {
+          file,
           query: loader.name,
-          site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
-          table,
-        });
-      }
+          receivers,
+          resolveTable,
+        }),
+      );
     }
   });
-  return facts.sort(
+  return dedupeQueryWriteReachabilityFacts(facts).sort(
     (left, right) =>
       left.query.localeCompare(right.query) ||
       left.site.localeCompare(right.site) ||
       left.operation.localeCompare(right.operation),
   );
+}
+
+function queryWriteReachabilityFactsForLoader(
+  body: Node,
+  context: QueryLoaderWriteContext,
+): QueryWriteReachabilityFact[] {
+  const facts: QueryWriteReachabilityFact[] = [];
+  const methodAliases = receiverMethodAliasesForBody(body, (node) =>
+    isProjectDrizzleReceiverIdentifier(node, context.receivers),
+  );
+
+  for (const call of touchBodyCallExpressions(body)) {
+    const direct = directQueryLoaderWriteFact(call, context);
+    if (direct) facts.push(direct);
+
+    const aliasOperation = receiverMethodAliasCallName(call, methodAliases);
+    if (!aliasOperation) continue;
+    const alias = queryLoaderWriteFactForOperation(
+      call,
+      aliasOperation,
+      'receiver-method-alias',
+      context,
+    );
+    if (alias) facts.push(alias);
+  }
+
+  return dedupeQueryWriteReachabilityFacts(facts);
+}
+
+function directQueryLoaderWriteFact(
+  call: CallExpression,
+  context: QueryLoaderWriteContext,
+): QueryWriteReachabilityFact | undefined {
+  const surface = directDrizzleReceiverCallSurface(call);
+  if (!surface || !isProjectDrizzleReceiverIdentifier(surface.receiver, context.receivers)) {
+    return undefined;
+  }
+  return queryLoaderWriteFactForOperation(call, surface.name, 'property-access', context);
+}
+
+function queryLoaderWriteFactForOperation(
+  call: CallExpression,
+  operation: string,
+  operationProvenance: QueryWriteReachabilityOperationProvenance,
+  context: QueryLoaderWriteContext,
+): QueryWriteReachabilityFact | undefined {
+  if (operation === COMPUTED_DRIZZLE_RECEIVER_METHOD) {
+    return queryLoaderUnresolvedWriteFact(call, operationProvenance, context);
+  }
+
+  if (!isQueryWriteOperationKind(operation)) return undefined;
+  const target = queryWriteTargetForCall(call, operation, context.resolveTable);
+
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation,
+    operationKind: operation,
+    operationProvenance,
+    query: context.query,
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+  };
+}
+
+function queryLoaderUnresolvedWriteFact(
+  call: CallExpression,
+  operationProvenance: QueryWriteReachabilityOperationProvenance,
+  context: QueryLoaderWriteContext,
+): QueryWriteReachabilityFact {
+  const target = queryWriteTargetForCall(call, 'UNRESOLVED', context.resolveTable);
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation: 'UNRESOLVED',
+    operationKind: 'UNRESOLVED',
+    operationProvenance:
+      operationProvenance === 'receiver-method-alias' ? operationProvenance : 'computed-member',
+    query: context.query,
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+    unresolved: { code: 'KV406', reason: 'computed-member' },
+  };
+}
+
+function queryWriteTargetForCall(
+  call: CallExpression,
+  operation: QueryWriteReachabilityOperationKind,
+  resolveTable: (node: Node) => string | undefined,
+): {
+  canonicalTarget: {
+    identity: string;
+    provenance: QueryWriteReachabilityTargetProvenance;
+  };
+  table: string;
+} {
+  if (KV433_RAW_RECEIVER_WRITE_OPERATIONS.has(operation)) {
+    return {
+      canonicalTarget: { identity: 'UNRESOLVED', provenance: 'raw-receiver-method' },
+      table: UNRESOLVED_READ_SOURCE_EXPRESSION,
+    };
+  }
+
+  const tableArgument = call.getArguments()[0];
+  if (!tableArgument) {
+    return {
+      canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-table' },
+      table: UNRESOLVED_READ_SOURCE_EXPRESSION,
+    };
+  }
+
+  const table = resolveTable(tableArgument);
+  if (!table) {
+    return {
+      canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-table' },
+      table: UNRESOLVED_READ_SOURCE_EXPRESSION,
+    };
+  }
+
+  return { canonicalTarget: { identity: table, provenance: 'table-argument' }, table };
+}
+
+function isQueryWriteOperationKind(
+  operation: string,
+): operation is ResolvedQueryWriteReachabilityOperationKind {
+  return (KV433_DIRECT_WRITE_OPERATIONS as ReadonlySet<string>).has(operation);
+}
+
+function dedupeQueryWriteReachabilityFacts(
+  facts: readonly QueryWriteReachabilityFact[],
+): QueryWriteReachabilityFact[] {
+  const seen = new Set<string>();
+  const deduped: QueryWriteReachabilityFact[] = [];
+  for (const fact of facts) {
+    const key = [
+      fact.query,
+      fact.site,
+      fact.operationKind ?? fact.operation,
+      fact.operationProvenance ?? '',
+      fact.table,
+      fact.canonicalTarget?.identity ?? '',
+      fact.canonicalTarget?.provenance ?? '',
+      fact.unresolved?.code ?? '',
+    ].join('\0');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(fact);
+  }
+  return deduped;
 }
 
 function moduleScopeDrizzleReceivers(sourceFile: SourceFile): ProjectDrizzleReceivers {
