@@ -10,6 +10,7 @@ import {
   extractQueryFactsFromProject,
   extractTouchGraphFromProject,
   frameworkExport,
+  frameworkIdentityExpressionKindRows,
   isDrizzleDatabaseType,
   type SourceFileInput,
 } from '@kovojs/drizzle/internal/static';
@@ -96,6 +97,20 @@ const sqlUsageViaBridge: SourceFileInput = {
 };
 
 describe('@kovojs/drizzle static framework identity resolver', () => {
+  it('exposes expression-kind resolver coverage with an explicit default row', () => {
+    expect(frameworkIdentityExpressionKindRows).toEqual([
+      { kind: SyntaxKind.Identifier, resolution: 'resolve-identifier' },
+      { kind: SyntaxKind.PropertyAccessExpression, resolution: 'resolve-property-access' },
+      { kind: SyntaxKind.ElementAccessExpression, resolution: 'resolve-element-access' },
+      { kind: SyntaxKind.ParenthesizedExpression, resolution: 'unwrap-expression' },
+      { kind: SyntaxKind.AsExpression, resolution: 'unwrap-expression' },
+      { kind: SyntaxKind.SatisfiesExpression, resolution: 'unwrap-expression' },
+      { kind: SyntaxKind.TypeAssertionExpression, resolution: 'unwrap-expression' },
+      { kind: SyntaxKind.NonNullExpression, resolution: 'unwrap-expression' },
+      { kind: 'default', resolution: 'fail-closed' },
+    ]);
+  });
+
   it('recognizes re-exported, destructured, and aliased framework constructs', () => {
     const files = [DB, bridgeFile, schemaViaBridge, usageViaBridge];
 

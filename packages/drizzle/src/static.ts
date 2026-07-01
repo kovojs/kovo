@@ -4734,10 +4734,12 @@ export {
   canonicalFrameworkExportForSymbol,
   expressionResolvesToFrameworkExport,
   frameworkExport,
+  frameworkIdentityExpressionKindRows,
   symbolResolvesToFrameworkExport,
   typeAliasResolvesToFrameworkExport,
   type CanonicalFrameworkExportIdentity,
   type CanonicalFrameworkModule,
+  type FrameworkIdentityExpressionKindResolution,
   type FrameworkIdentityOptions,
 } from './static/framework-identity.js';
 /** @internal */
