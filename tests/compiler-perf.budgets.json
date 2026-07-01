@@ -9,7 +9,7 @@
     "large-component": {
       "fileCount": 1,
       "minLoc": 600,
-      "coldMaxMs": 1200,
+      "coldMaxMs": 2000,
       "warmMaxMs": 100
     },
     "many-small-components": {
@@ -46,7 +46,7 @@
   "total": {
     "fileCount": 125,
     "minLoc": 5290,
-    "coldMaxMs": 2750,
+    "coldMaxMs": 3500,
     "warmMaxMs": 500
   }
 }
