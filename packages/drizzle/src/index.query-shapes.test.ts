@@ -1231,7 +1231,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         message:
           'Secret query value reaches the client wire. Query projection user.count is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
         severity: 'error',
-        site: 'user.queries.ts:7',
+        site: 'user.queries.ts:12',
       },
     ]);
   });
@@ -1513,14 +1513,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         message:
           'Secret query value reaches the client wire. Query projection user.computed:[displayKey] is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
         severity: 'error',
-        site: 'user.queries.ts:8',
+        site: 'user.queries.ts:13',
       },
       {
         code: 'KV435',
         message:
           'Secret query value reaches the client wire. Query projection user.spread:publicColumns is opaque or unresolved while reading secret-classified table(s): users. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).',
         severity: 'error',
-        site: 'user.queries.ts:8',
+        site: 'user.queries.ts:14',
       },
       {
         code: 'KV406',
@@ -2252,6 +2252,34 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(facts).toEqual([
       {
         query: 'users',
+        readProvenance: [
+          {
+            columns: [
+              {
+                classification: 'secret',
+                column: 'apiToken',
+                path: 'apiToken',
+                projection: 'column',
+                site: 'user.queries.ts:13',
+                table: 'users',
+              },
+              {
+                classification: 'secret',
+                column: 'passwordHash',
+                path: 'passwordHash',
+                projection: 'column',
+                site: 'user.queries.ts:16',
+                table: 'users',
+              },
+            ],
+            domain: 'user',
+            keys: null,
+            scope: { kind: 'unscoped' },
+            site: 'user.queries.ts:9',
+            source: 'select',
+            via: 'users',
+          },
+        ],
         reads: ['user'],
         shape: {
           apiToken: {
@@ -2317,6 +2345,34 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(facts).toEqual([
       {
         query: 'posts',
+        readProvenance: [
+          {
+            columns: [
+              {
+                classification: 'secret',
+                column: 'apiToken',
+                path: 'author.apiToken',
+                projection: 'column',
+                site: 'post.queries.ts:23',
+                table: 'users',
+              },
+              {
+                classification: 'secret',
+                column: 'passwordHash',
+                path: 'author.passwordHash',
+                projection: 'column',
+                site: 'post.queries.ts:24',
+                table: 'users',
+              },
+            ],
+            domain: 'user',
+            keys: null,
+            scope: { kind: 'unscoped' },
+            site: 'post.queries.ts:14',
+            source: 'select',
+            via: 'users',
+          },
+        ],
         reads: ['post', 'user'],
         shape: {
           author: {

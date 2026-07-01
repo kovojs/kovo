@@ -17,6 +17,9 @@ import type {
 import type {
   MassAssignmentFact,
   OwnerDomainFact,
+  QueryProjectedColumn,
+  QueryReadProvenance,
+  QueryReadScopeProvenance,
   QueryWriteReachabilityFact,
   RevealExplainFact,
   ScopeAuditFact,
@@ -263,6 +266,7 @@ import { drizzleDiagnostic } from './static/diagnostics.js';
   /** Exact private principal symbols for `ownerScopedSessionReads`, e.g. `guard:userId`. */
   ownerScopedPrivateReadKeys?: readonly OwnerPrivateScopeKey[];
   query: string;
+  readProvenance?: readonly QueryReadProvenance[];
   reads: readonly string[];
   /** Domains explicitly marked externally-owned/read-only for missed-invalidation posture. */
   readOnlyDomains?: readonly string[];
@@ -2772,6 +2776,17 @@ function extractQueryFactsFromPreparedFiles(
       const allReads = [
         ...new Set([...reads, ...declaredReads, ...query.declaredReadDomains, ...helperReads]),
       ].sort();
+      const instanceKey = queryInstanceKey(query.instanceKeyComparisons, fileTables);
+      const readProvenance = queryReadProvenanceFacts({
+        columnShapes,
+        declaredReadExpressions: query.declaredReadExpressions,
+        helperReads: localHelperSummary.reads,
+        ...(instanceKey?.instanceKey === undefined ? {} : { instanceKey: instanceKey.instanceKey }),
+        projectedColumns: query.projectedColumns,
+        queryTableExpressions: query.tableExpressions,
+        site,
+        tables: fileTables,
+      });
       // SPEC §10.2: a `reads:` entry naming an `exempt` table is KV411 — checked over BOTH the
       // `.from()`-derived read set AND the author's declared `reads:` table set, so an exempt/outbox
       // read cannot be smuggled past the static pass through a declared `reads:` entry either.
@@ -2792,24 +2807,7 @@ function extractQueryFactsFromPreparedFiles(
         // A declared `reads:` Domain VALUE counts as a declaration too (§10.2 `reads: readonly Domain[]`).
         query.declaredReadExpressions.length > 0 || query.declaredReadDomains.length > 0,
       )
-        .concat(
-          secretProjectionBackstopDiagnostics(
-            query.query,
-            [...query.opaquePaths, ...query.unresolvedPaths],
-            query.shape,
-            // SPEC §10.2 (F2, plans/compiler-soundness.md): the KV435 secret backstop must run over
-            // the FULL folded read set — statically-extracted table expressions PLUS the author's
-            // declared `reads:` set — not `tableExpressions` alone. Otherwise an opaque projection
-            // that references a secret table only via raw SQL text (invisible to `tableExpressions`)
-            // leaks the secret column to the client wire even when the author honestly declares the
-            // table in `reads:`. Both inputs are symbol-identity table facts (hard-rule #9). Declared
-            // Domain values carry no columns, so they cannot add a secret table here.
-            [...query.tableExpressions, ...query.declaredReadExpressions],
-            columnShapes,
-            fileTables,
-            site,
-          ),
-        )
+        .concat(secretProjectionBackstopDiagnostics(query.query, readProvenance, query.shape))
         .concat(tableRowProjectionDiagnostics(query.query, query.shape, site))
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
@@ -2845,7 +2843,6 @@ function extractQueryFactsFromPreparedFiles(
         query.instanceKeyComparisons,
         fileTables,
       );
-      const instanceKey = queryInstanceKey(query.instanceKeyComparisons, fileTables);
       // A3 (SPEC §10.3): the supplemental owner-column arg signal. Omit any domain the
       // declared-key `instanceKey` already captures as `arg:*` — that domain is already
       // flagged `args` by `scopeAuditsFromQueryFacts`, so listing it here too would only
@@ -2886,6 +2883,7 @@ function extractQueryFactsFromPreparedFiles(
         ...(ownerScopedPrivateReadKeys.length > 0 ? { ownerScopedPrivateReadKeys } : {}),
         ...(ownerScopedSessionReads.length > 0 ? { ownerScopedSessionReads } : {}),
         query: query.query,
+        ...(readProvenance.length > 0 ? { readProvenance } : {}),
         reads: allReads,
         ...(readOnlyDomains.length > 0 ? { readOnlyDomains } : {}),
         ...(sessionAnchoredReads.length > 0 ? { sessionAnchoredReads } : {}),
@@ -2900,34 +2898,240 @@ function extractQueryFactsFromPreparedFiles(
 
 function secretProjectionBackstopDiagnostics(
   query: string,
-  projectionPaths: readonly string[],
+  readProvenance: readonly QueryReadProvenance[],
   shape: QueryShape,
-  tableExpressions: readonly string[],
-  columnShapes: Readonly<Record<string, QueryShape>>,
-  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
-  site: string,
 ): TouchGraphDiagnostic[] {
   const revealedPaths = revealedQueryShapePaths(shape);
-  const paths = [...new Set(projectionPaths)].filter((path) => !revealedPaths.has(path)).sort();
-  if (paths.length === 0) return [];
+  const diagnostics: TouchGraphDiagnostic[] = [];
 
-  const secretTables = tableExpressions
-    .flatMap((table) =>
-      tableHasSecretColumn(columnShapes, table)
-        ? secretBackstopTableDisplayNames(tables, table)
-        : [],
-    )
-    .sort();
-  if (secretTables.length === 0) return [];
+  for (const read of readProvenance) {
+    for (const column of read.columns) {
+      if (revealedPaths.has(column.path)) continue;
+      if (column.projection === 'column' && column.classification !== 'unresolved') continue;
+      if (column.classification !== 'secret' && column.classification !== 'unresolved') continue;
 
-  const tableList = [...new Set(secretTables)].join(', ');
-  return paths.map((path) =>
-    drizzleDiagnostic({
-      code: 'KV435',
-      detail: `Query projection ${query}.${path} is opaque or unresolved while reading secret-classified table(s): ${tableList}. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
-      site,
+      diagnostics.push(
+        drizzleDiagnostic({
+          code: 'KV435',
+          detail: `Query projection ${query}.${column.path} is opaque or unresolved while reading secret-classified table(s): ${column.table}. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
+          site: column.site || read.site,
+        }),
+      );
+    }
+  }
+
+  return dedupeDiagnostics(diagnostics);
+}
+
+interface QueryReadProvenanceFactsInput {
+  columnShapes: Readonly<Record<string, QueryShape>>;
+  declaredReadExpressions: readonly string[];
+  helperReads: readonly ReadSummaryInput[];
+  instanceKey?: {
+    domain: string;
+    key: string;
+  };
+  projectedColumns: readonly QueryProjectedColumn[];
+  queryTableExpressions: readonly string[];
+  site: string;
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>;
+}
+
+function queryReadProvenanceFacts(input: QueryReadProvenanceFactsInput): QueryReadProvenance[] {
+  const facts: QueryReadProvenance[] = [];
+  const directTableExpressions = new Set(input.queryTableExpressions);
+  const declaredTableExpressions = input.declaredReadExpressions.filter(
+    (table) => !directTableExpressions.has(table),
+  );
+
+  facts.push(
+    ...queryReadProvenanceFromTableExpressions({
+      ...input,
+      source: 'select',
+      tableExpressions: [...directTableExpressions],
     }),
   );
+  facts.push(
+    ...queryReadProvenanceFromTableExpressions({
+      ...input,
+      source: 'declared',
+      tableExpressions: declaredTableExpressions,
+    }),
+  );
+
+  for (const read of input.helperReads) {
+    const domain = extractedDomainKey(read.table.domain);
+    const columns = secretProjectedColumnsForRead({
+      columnShapes: input.columnShapes,
+      projectedColumns: [],
+      readSite: read.site,
+      source: 'helper',
+      table: read.table,
+      tableExpression: read.table.name,
+    });
+    if (columns.length === 0) continue;
+
+    facts.push({
+      columns,
+      domain,
+      keys: read.readKey ?? null,
+      scope: read.scope ?? readScopeFromKey(read.readKey),
+      site: read.site,
+      source: 'helper',
+      via: read.table.name,
+    });
+  }
+
+  return dedupeQueryReadProvenance(facts);
+}
+
+function queryReadProvenanceFromTableExpressions(
+  input: QueryReadProvenanceFactsInput & {
+    source: QueryReadProvenance['source'];
+    tableExpressions: readonly string[];
+  },
+): QueryReadProvenance[] {
+  const facts: QueryReadProvenance[] = [];
+
+  for (const tableExpression of input.tableExpressions) {
+    for (const table of input.tables.get(tableExpression) ?? []) {
+      if (!isDomainExtractedTableAnnotation(table.annotation)) continue;
+      const domain = extractedDomainKey(table.annotation.domain);
+      const columns = secretProjectedColumnsForRead({
+        columnShapes: input.columnShapes,
+        projectedColumns: input.projectedColumns,
+        readSite: input.site,
+        source: input.source,
+        table: table.annotation,
+        tableExpression,
+      });
+      if (columns.length === 0) continue;
+
+      const keys = input.instanceKey?.domain === domain ? input.instanceKey.key : null;
+      facts.push({
+        columns,
+        domain,
+        keys,
+        scope: readScopeFromKey(keys ?? undefined),
+        site: input.site,
+        source: input.source,
+        via: table.annotation.name,
+      });
+    }
+  }
+
+  return facts;
+}
+
+function secretProjectedColumnsForRead(input: {
+  columnShapes: Readonly<Record<string, QueryShape>>;
+  projectedColumns: readonly QueryProjectedColumn[];
+  readSite: string;
+  source: QueryReadProvenance['source'];
+  table: { name: string };
+  tableExpression: string;
+}): QueryProjectedColumn[] {
+  const secretTable = tableHasSecretColumn(input.columnShapes, input.tableExpression);
+  const columns = input.projectedColumns
+    .filter((column) =>
+      projectedColumnBelongsToRead(column, input.tableExpression, input.table.name),
+    )
+    .flatMap((column) => {
+      if (column.classification === 'secret') {
+        return [{ ...column, table: input.table.name }];
+      }
+      if (secretTable && (column.projection === 'opaque' || column.projection === 'unresolved')) {
+        return [
+          {
+            ...column,
+            classification: 'unresolved' as const,
+            table: input.table.name,
+          },
+        ];
+      }
+      return [];
+    });
+
+  if (columns.length > 0) return dedupeProjectedColumns(columns);
+  if (!secretTable || input.source !== 'helper') return [];
+
+  return [
+    {
+      classification: 'unresolved',
+      path: '$',
+      projection: 'unresolved',
+      site: input.readSite,
+      table: input.table.name,
+    },
+  ];
+}
+
+function projectedColumnBelongsToRead(
+  column: QueryProjectedColumn,
+  tableExpression: string,
+  tableName: string,
+): boolean {
+  return column.table === '' || column.table === tableExpression || column.table === tableName;
+}
+
+function readScopeFromKey(key: string | undefined): QueryReadScopeProvenance {
+  if (!key) return { kind: 'unscoped' };
+  if (key.startsWith('arg:')) return { key, kind: 'arg' };
+  if (key.startsWith('guard:')) return { key, kind: 'guard' };
+  if (key.startsWith('tenant:')) return { key, kind: 'tenant' };
+  return { key, kind: 'session' };
+}
+
+function dedupeQueryReadProvenance(facts: readonly QueryReadProvenance[]): QueryReadProvenance[] {
+  return [...new Map(facts.map((fact) => [queryReadProvenanceKey(fact), fact])).values()].sort(
+    (left, right) =>
+      left.domain.localeCompare(right.domain) ||
+      left.via.localeCompare(right.via) ||
+      left.source.localeCompare(right.source) ||
+      left.site.localeCompare(right.site),
+  );
+}
+
+function queryReadProvenanceKey(fact: QueryReadProvenance): string {
+  return [
+    fact.domain,
+    fact.via,
+    fact.source,
+    fact.keys ?? '',
+    fact.site,
+    JSON.stringify(fact.columns),
+  ].join('\0');
+}
+
+function dedupeProjectedColumns(columns: readonly QueryProjectedColumn[]): QueryProjectedColumn[] {
+  return [...new Map(columns.map((column) => [projectedColumnKey(column), column])).values()].sort(
+    (left, right) =>
+      left.path.localeCompare(right.path) ||
+      left.table.localeCompare(right.table) ||
+      (left.column ?? '').localeCompare(right.column ?? '') ||
+      left.projection.localeCompare(right.projection),
+  );
+}
+
+function projectedColumnKey(column: QueryProjectedColumn): string {
+  return [
+    column.path,
+    column.table,
+    column.column ?? '',
+    column.classification,
+    column.projection,
+    column.site,
+  ].join('\0');
+}
+
+function dedupeDiagnostics(diagnostics: readonly TouchGraphDiagnostic[]): TouchGraphDiagnostic[] {
+  return [
+    ...new Map(diagnostics.map((diagnostic) => [diagnosticKey(diagnostic), diagnostic])).values(),
+  ];
+}
+
+function diagnosticKey(diagnostic: TouchGraphDiagnostic): string {
+  return [diagnostic.code, diagnostic.message, diagnostic.site].join('\0');
 }
 
 function tableRowProjectionDiagnostics(
@@ -3116,6 +3320,7 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
   instanceKeyComparisons: QueryInstanceKeyComparisons;
   localHelperCalls: readonly string[];
   opaquePaths: readonly string[];
+  projectedColumns: readonly QueryProjectedColumn[];
   query: string;
   shape: QueryShape;
   tableExpressions: readonly string[];
@@ -3292,6 +3497,7 @@ function extractQueryDefinitionsFromSourceFile(
           instanceKeyComparisons: { argCandidates: [], instanceKey: [] },
           localHelperCalls: [],
           opaquePaths: [],
+          projectedColumns: [],
           query,
           shape: {},
           tableExpressions: [],
@@ -3362,6 +3568,7 @@ function extractQueryDefinitionsFromSourceFile(
       ...receiverMethodAliasQueryDiagnostics(bodyObject, receiverReferences),
       ...externalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionsByKey),
+      ...unresolvedQueryClosureReadDiagnostics(bodyObject, receiverReferences),
       ...unresolvedQueryReadDiagnostics(bodyObject, receiverReferences, readResolutionOptions),
       // SPEC §11.1 (v1 scope): fail-closed KV406 for a destructured loader receiver slot that
       // project mode could not type-prove. This DETECTOR never produces a positive read/write
@@ -3402,6 +3609,7 @@ function extractQueryDefinitionsFromSourceFile(
       ),
       localHelperCalls,
       opaquePaths: selection?.opaquePaths ?? [],
+      projectedColumns: selection?.projectedColumns ?? [],
       query,
       shape,
       tableExpressions: queryTableExpressions(
@@ -3988,6 +4196,7 @@ import {
   typedSqlProjectionShape,
   unclassifiedQueryReceiverDiagnostics,
   unprovenDestructuredReceiverReferences,
+  unresolvedQueryClosureReadDiagnostics,
   unresolvedProjectionDiagnostics,
   unresolvedQueryCallbackDiagnostics,
   unresolvedQueryLoadCallbackDiagnostic,

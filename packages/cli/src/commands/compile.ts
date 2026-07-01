@@ -15,6 +15,7 @@ import type {
   PuntReason,
   SymbolicEffect,
 } from '@kovojs/core/internal/derivation';
+import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type {
   CompileComponentOptions,
   CompileRouteModuleOptions,
@@ -1690,11 +1691,23 @@ function readJsonFile(path: string): unknown {
 }
 
 function queryDomainsFromStaticFacts(
-  facts: readonly { query: string; reads: readonly string[]; site: string }[],
-): { domains: readonly string[]; query: string }[] {
+  facts: readonly {
+    query: string;
+    readProvenance?: readonly CoreGraph.QueryReadProvenance[];
+    reads: readonly string[];
+    site: string;
+  }[],
+): CoreGraph.QueryReadSet[] {
   return [...facts]
     .sort((left, right) => siteLineNumber(left.site) - siteLineNumber(right.site))
-    .map((fact) => ({ domains: [...fact.reads], query: fact.query }));
+    .map((fact) => {
+      const readProvenance = fact.readProvenance;
+      return {
+        domains: [...fact.reads],
+        query: fact.query,
+        ...(readProvenance !== undefined && readProvenance.length > 0 ? { readProvenance } : {}),
+      };
+    });
 }
 
 function siteLineNumber(site: string): number {
