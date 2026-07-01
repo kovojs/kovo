@@ -325,62 +325,6 @@ interface OwnerDomainScope {
     .sort(compareRevealExplainFacts);
 }
 
-function revealFactsFromQueryShape(
-  query: string,
-  shape: QueryShape,
-  fallbackSite: string,
-  path: readonly string[] = [],
-): RevealExplainFact[] {
-  if (typeof shape !== 'object' || shape === null) return [];
-  if (Array.isArray(shape)) {
-    return shape.flatMap((item) => revealFactsFromQueryShape(query, item, fallbackSite, path));
-  }
-
-  if (isQueryShapeWrapper(shape)) {
-    if (shape.kind === 'revealed') {
-      return [
-        {
-          grade: shape.reveal.grade,
-          method: shape.reveal.method,
-          path: path.join('.') || '$',
-          query,
-          site: shape.reveal.site ?? fallbackSite,
-          ...(shape.reveal.justification === undefined
-            ? {}
-            : { justification: shape.reveal.justification }),
-          ...(shape.reveal.selectedSecret === undefined
-            ? {}
-            : { selectedSecret: shape.reveal.selectedSecret }),
-          ...(shape.reveal.source === undefined ? {} : { source: shape.reveal.source }),
-        },
-      ];
-    }
-    return revealFactsFromQueryShape(query, shape.shape, fallbackSite, path);
-  }
-
-  return Object.entries(shape).flatMap(([key, child]) =>
-    revealFactsFromQueryShape(query, child, fallbackSite, [...path, key]),
-  );
-}
-
-/** @internal */ export function isQueryShapeWrapper(
-  shape: QueryShape,
-): shape is QueryShapeWrapper {
-  return (
-    typeof shape === 'object' &&
-    shape !== null &&
-    !Array.isArray(shape) &&
-    'kind' in shape &&
-    'shape' in shape &&
-    (shape.kind === 'nullable' ||
-      shape.kind === 'optional' ||
-      shape.kind === 'secret' ||
-      shape.kind === 'table-row' ||
-      shape.kind === 'volatile-time' ||
-      (shape.kind === 'revealed' && 'reveal' in shape))
-  );
-}
-
 function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplainFact): number {
   return (
     left.query.localeCompare(right.query) ||
@@ -2041,95 +1985,6 @@ function rawWriteScopeFactsForFunction(
   ];
 }
 
-function rawWriteSqlTrustByDomainWriteCallback(
-  file: SourceFileInput,
-): ReadonlyMap<string, RawWriteSqlTrust> {
-  return withParsedSourceFile(file, (sourceFile) => {
-    const trustByWrite = new Map<string, RawWriteSqlTrust>();
-
-    for (const declaration of sourceFile.getVariableDeclarations()) {
-      const domainName = declaration.getNameNode();
-      const initializer = declaration.getInitializer();
-      if (!Node.isIdentifier(domainName) || !initializer) continue;
-      const domainCall = unwrappedStaticExpressionNode(initializer);
-      if (!Node.isCallExpression(domainCall)) continue;
-      const expression = domainCall.getExpression();
-      if (!isKovoServerCalleeExpression(expression, 'domain')) continue;
-
-      const domainObject = domainWriteObject(domainCall.getArguments()[0]);
-      if (!domainObject.body) continue;
-
-      for (const property of domainWriteProperties(domainObject.body)) {
-        if (rawTablesFromWriteInitializer(property.initializer).length === 0) continue;
-        const callback = writeActionCallbackFunction(property.initializer);
-        if (!callback) continue;
-        const trust = rawWriteSqlTrustForCallback(callback, file);
-        if (trust.hasRawSqlSink) {
-          trustByWrite.set(`${domainName.getText()}.${property.memberName}`, trust);
-        }
-      }
-    }
-
-    return trustByWrite;
-  });
-}
-
-function rawTablesByMutationHandler(file: SourceFileInput): ReadonlyMap<string, readonly string[]> {
-  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
-    const rawTables = new Map<string, string[]>();
-    const localFunctions = rawSqlLocalFunctionsByName(sourceFile);
-
-    forEachMutationConfig(sourceFile, (key, config) => {
-      const tables = rawTablesFromMutationRegistry(config);
-      if (tables.length === 0) return;
-
-      rawTables.set(key, tables);
-      const callback = mutationHandlerCallback(config);
-      if (!callback) return;
-
-      for (const helperName of rawSqlLocalHelperCallNamesReceivingDriver(
-        callback,
-        localFunctions,
-        new Set(),
-      )) {
-        rawTables.set(helperName, mergedRawTables(rawTables.get(helperName), tables));
-      }
-    });
-
-    return rawTables;
-  });
-}
-
-function rawWriteSqlTrustByMutationHandler(
-  file: SourceFileInput,
-): ReadonlyMap<string, RawWriteSqlTrust> {
-  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
-    const trustByMutation = new Map<string, RawWriteSqlTrust>();
-
-    forEachMutationConfig(sourceFile, (key, config) => {
-      if (rawTablesFromMutationRegistry(config).length === 0) return;
-      const callback = mutationHandlerCallback(config);
-      if (!callback) return;
-      const trust = rawWriteSqlTrustForCallback(callback, file);
-      if (trust.hasRawSqlSink) trustByMutation.set(key, trust);
-    });
-
-    return trustByMutation;
-  });
-}
-
-function projectSourceFileInput(file: SourceFileInput): SourceFileInput {
-  const fileName = projectSourceFileName(file.fileName);
-  return fileName === file.fileName ? file : { ...file, fileName };
-}
-
-function mergedRawTables(
-  left: readonly string[] | undefined,
-  right: readonly string[] | undefined,
-): string[] {
-  return [...new Set([...(left ?? []), ...(right ?? [])])];
-}
-
 const KOVO_DURABLE_TASK_QUEUE_TABLE = '_kovo_jobs';
 const KOVO_DURABLE_TASK_QUEUE_OPERATIONS = new Set(['cancel', 'schedule']);
 
@@ -3078,45 +2933,8 @@ function tableRowProjectionDiagnostics(
   );
 }
 
-function tableRowQueryShapePaths(shape: QueryShape, path: readonly string[] = []): string[] {
-  if (typeof shape !== 'object' || shape === null) return [];
-  if (Array.isArray(shape)) return shape.flatMap((item) => tableRowQueryShapePaths(item, path));
-
-  if (isQueryShapeWrapper(shape)) {
-    if (shape.kind === 'table-row') return [path.join('.') || '$'];
-    return tableRowQueryShapePaths(shape.shape, path);
-  }
-
-  return Object.entries(shape).flatMap(([key, child]) =>
-    tableRowQueryShapePaths(child, [...path, key]),
-  );
-}
-
 function pathForQueryDiagnostic(query: string, path: string): string {
   return path === '$' ? query : `${query}.${path}`;
-}
-
-function revealedQueryShapePaths(
-  shape: QueryShape,
-  path: readonly string[] = [],
-  paths = new Set<string>(),
-): ReadonlySet<string> {
-  if (typeof shape !== 'object' || shape === null) return paths;
-  if (Array.isArray(shape)) {
-    for (const item of shape) revealedQueryShapePaths(item, path, paths);
-    return paths;
-  }
-
-  if (isQueryShapeWrapper(shape)) {
-    if (shape.kind === 'revealed') paths.add(path.join('.') || '$');
-    revealedQueryShapePaths(shape.shape, path, paths);
-    return paths;
-  }
-
-  for (const [key, child] of Object.entries(shape)) {
-    revealedQueryShapePaths(child, [...path, key], paths);
-  }
-  return paths;
 }
 
 function secretBackstopTableDisplayNames(
@@ -3138,18 +2956,6 @@ function tableHasSecretColumn(
   return Object.entries(columnShapes).some(
     ([path, shape]) => path.startsWith(prefix) && queryShapeContainsSecret(shape),
   );
-}
-
-function queryShapeContainsSecret(shape: QueryShape): boolean {
-  if (typeof shape !== 'object' || shape === null) return false;
-  if (Array.isArray(shape)) return shape.some(queryShapeContainsSecret);
-
-  if ('kind' in shape && 'shape' in shape) {
-    if (shape.kind === 'secret') return true;
-    return queryShapeContainsSecret(shape.shape);
-  }
-
-  return Object.values(shape).some(queryShapeContainsSecret);
 }
 
 function unresolvedConditionalIdentifiersForFiles(
@@ -3568,16 +3374,6 @@ function extractQueryDefinitionsFromSourceFile(
   return definitions;
 }
 
-function isEmptyQueryShape(shape: QueryShape): boolean {
-  return (
-    typeof shape === 'object' &&
-    shape !== null &&
-    !Array.isArray(shape) &&
-    !('kind' in shape) &&
-    Object.keys(shape).length === 0
-  );
-}
-
 function dynamicDeclaredReadsDiagnostics(body: ObjectLiteralExpression): TouchGraphDiagnostic[] {
   const readsProperty = body.getProperty('reads');
   if (!Node.isPropertyAssignment(readsProperty)) return [];
@@ -3977,21 +3773,15 @@ import {
 /** @internal */
 export { projectTablesBySyntheticName } from './static/tables.js';
 import {
-  domainWriteObject,
   functionReceiverParametersByKey,
-  forEachMutationConfig,
+  mergedRawTables,
   mergedRawWriteSqlTrust,
-  mutationHandlerCallback,
   rawTablesByDomainWriteCallback,
-  rawTablesFromMutationRegistry,
-  rawTablesFromWriteInitializer,
-  rawSqlLocalFunctionsByName,
-  rawSqlLocalHelperCallNamesReceivingDriver,
-  rawWriteSqlTrustForCallback,
+  rawTablesByMutationHandler,
+  rawWriteSqlTrustByDomainWriteCallback,
+  rawWriteSqlTrustByMutationHandler,
   unresolvedDomainWriteCallbacks,
-  writeActionCallbackFunction,
   writeCallbackFunction,
-  domainWriteProperties,
   extractedFunctionKey,
   typeHasOpaqueStringMembers,
   type RawWriteSqlTrust,
@@ -4103,6 +3893,7 @@ import {
   isTimeVolatileExpression,
   isTimeVolatileSource,
   isTimeVolatileSqlProjection,
+  isEmptyQueryShape,
   nullableJoinTables,
   nullableNestedShape,
   objectLiteralStaticPropertyReference,
@@ -4127,9 +3918,12 @@ import {
   queryLoadCallbackResolution,
   queryLocalHelperCalls,
   queryReceiverAliasReferencesForCall,
+  queryShapeContainsSecret,
   queryShapeFromObjectLiteralNode,
+  revealFactsFromQueryShape,
   receiverMethodAliasQueryDiagnostics,
   referencedQueryCallbackFunction,
+  revealedQueryShapePaths,
   relationalQueryDiagnostics,
   relationalShapeFromQueryBody,
   scalarProjectionTable,
@@ -4145,6 +3939,7 @@ import {
   staticTsExpressionPath,
   symbolForStaticMemberReference,
   tableExpressionBase,
+  tableRowQueryShapePaths,
   typedSqlProjectionShape,
   unclassifiedQueryReceiverDiagnostics,
   unprovenDestructuredReceiverReferences,
@@ -4188,6 +3983,7 @@ export {
   callbackFunctionFromDeclaration,
   callbackFunctionFromBindingElement,
   staticLiteralContainerInitializer,
+  isQueryShapeWrapper,
   nullableShape,
 } from './static/query-shapes.js';
 import {

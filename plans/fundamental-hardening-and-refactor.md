@@ -208,11 +208,12 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
 
 ## Phase 3 — Structural splits (so later edits land in the right module)
 
-- [ ] **D5 — Finish the `static.ts` monolith extraction.** (L · med; after D1/D2/D3)
+- [x] **D5 — Finish the `static.ts` monolith extraction.** (L · med; after D1/D2/D3)
   - `packages/drizzle/src/static.ts` (4913 lines) re-exports 13 `static/*` modules yet still privately defines parallel
     copies (root of D1/D2/D3; the loose `'kind' in shape` at static.ts:3354 vs the strict predicate at
     query-shapes.ts:2790). Move query-shape traversal → `query-shapes.ts` (shared `foldQueryShape` visitor);
     raw-write/mutation cluster → `domain-writes.ts`; leave static.ts a thin barrel.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src`, `vp check packages/drizzle/src/static.ts packages/drizzle/src/static/query-shapes.ts packages/drizzle/src/static/domain-writes.ts`, and `git diff --check HEAD~1..HEAD` passed after moving query-shape traversal helpers and `foldQueryShape` into `static/query-shapes.ts` and raw-write/mutation handler map helpers into `static/domain-writes.ts`.
 - [ ] **S6 — Split `mutation.ts` along the `mutation/` seam.** (L · low-med; after S3)
   - The 1973-line file mixes the lifecycle SM (242-382), `runMutation` (398-550), enhanced wire (744-1034), no-JS PRG
     (1071-1524), replay adapters (1143-1250), failure HTML (1686-1803). The enhanced/no-JS reauth + stale-session-CSRF

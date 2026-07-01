@@ -23,6 +23,7 @@ import {
   lineForIndex,
   objectPropertyInitializer,
   propertyNameText,
+  projectSourceFileName,
   resolvedSymbolKey,
   staticMutationDeclarationFromCall,
   singleReturnExpression,
@@ -629,6 +630,39 @@ import { staticAccessExpression, staticAccessName } from './summaries.js';
   return [];
 }
 
+/** @internal */ export function rawWriteSqlTrustByDomainWriteCallback(
+  file: SourceFileInput,
+): ReadonlyMap<string, RawWriteSqlTrust> {
+  return withParsedSourceFile(file, (sourceFile) => {
+    const trustByWrite = new Map<string, RawWriteSqlTrust>();
+
+    for (const declaration of sourceFile.getVariableDeclarations()) {
+      const domainName = declaration.getNameNode();
+      const initializer = declaration.getInitializer();
+      if (!Node.isIdentifier(domainName) || !initializer) continue;
+      const domainCall = unwrappedStaticExpressionNode(initializer);
+      if (!Node.isCallExpression(domainCall)) continue;
+      const expression = domainCall.getExpression();
+      if (!isKovoServerCalleeExpression(expression, 'domain')) continue;
+
+      const domainObject = domainWriteObject(domainCall.getArguments()[0]);
+      if (!domainObject.body) continue;
+
+      for (const property of domainWriteProperties(domainObject.body)) {
+        if (rawTablesFromWriteInitializer(property.initializer).length === 0) continue;
+        const callback = writeActionCallbackFunction(property.initializer);
+        if (!callback) continue;
+        const trust = rawWriteSqlTrustForCallback(callback, file);
+        if (trust.hasRawSqlSink) {
+          trustByWrite.set(`${domainName.getText()}.${property.memberName}`, trust);
+        }
+      }
+    }
+
+    return trustByWrite;
+  });
+}
+
 /** @internal */ export interface RawWriteSqlTrust {
   hasRawSqlSink: boolean;
   site?: string;
@@ -698,6 +732,64 @@ import { staticAccessExpression, staticAccessName } from './summaries.js';
   }
 
   return undefined;
+}
+
+/** @internal */ export function rawTablesByMutationHandler(
+  file: SourceFileInput,
+): ReadonlyMap<string, readonly string[]> {
+  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
+    const rawTables = new Map<string, string[]>();
+    const localFunctions = rawSqlLocalFunctionsByName(sourceFile);
+
+    forEachMutationConfig(sourceFile, (key, config) => {
+      const tables = rawTablesFromMutationRegistry(config);
+      if (tables.length === 0) return;
+
+      rawTables.set(key, tables);
+      const callback = mutationHandlerCallback(config);
+      if (!callback) return;
+
+      for (const helperName of rawSqlLocalHelperCallNamesReceivingDriver(
+        callback,
+        localFunctions,
+        new Set(),
+      )) {
+        rawTables.set(helperName, mergedRawTables(rawTables.get(helperName), tables));
+      }
+    });
+
+    return rawTables;
+  });
+}
+
+/** @internal */ export function rawWriteSqlTrustByMutationHandler(
+  file: SourceFileInput,
+): ReadonlyMap<string, RawWriteSqlTrust> {
+  return withParsedSourceFile(projectSourceFileInput(file), (sourceFile) => {
+    const trustByMutation = new Map<string, RawWriteSqlTrust>();
+
+    forEachMutationConfig(sourceFile, (key, config) => {
+      if (rawTablesFromMutationRegistry(config).length === 0) return;
+      const callback = mutationHandlerCallback(config);
+      if (!callback) return;
+      const trust = rawWriteSqlTrustForCallback(callback, file);
+      if (trust.hasRawSqlSink) trustByMutation.set(key, trust);
+    });
+
+    return trustByMutation;
+  });
+}
+
+function projectSourceFileInput(file: SourceFileInput): SourceFileInput {
+  const fileName = projectSourceFileName(file.fileName);
+  return fileName === file.fileName ? file : { ...file, fileName };
+}
+
+/** @internal */ export function mergedRawTables(
+  left: readonly string[] | undefined,
+  right: readonly string[] | undefined,
+): string[] {
+  return [...new Set([...(left ?? []), ...(right ?? [])])];
 }
 
 /** @internal */ export function rawWriteSqlTrustForCallback(

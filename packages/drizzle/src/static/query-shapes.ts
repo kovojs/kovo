@@ -19,7 +19,7 @@ import {
   type FrameworkExportIdentity,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
-import type { QueryProjectedColumn } from '@kovojs/core/internal/graph';
+import type { QueryProjectedColumn, RevealExplainFact } from '@kovojs/core/internal/graph';
 import { drizzleDiagnostic, sourceSiteForNode } from './diagnostics.js';
 import {
   appendSourceDestructuredReceiverBinding,
@@ -54,7 +54,6 @@ import {
   computedPropertyNameExpression,
   functionBody,
   isJoinReadCallName,
-  isQueryShapeWrapper,
   isRestBindingElement,
   isQueryCallOnReceiver,
   isQueryReadCallName,
@@ -90,6 +89,24 @@ const DRIZZLE_AGGREGATE_HELPER_IDENTITIES: readonly FrameworkExportIdentity[] = 
   'sum',
   'sumDistinct',
 ].map((name) => frameworkExport('drizzle-orm', name));
+
+/** @internal */ export function isQueryShapeWrapper(
+  shape: QueryShape,
+): shape is QueryShapeWrapper {
+  return (
+    typeof shape === 'object' &&
+    shape !== null &&
+    !Array.isArray(shape) &&
+    'kind' in shape &&
+    'shape' in shape &&
+    (shape.kind === 'nullable' ||
+      shape.kind === 'optional' ||
+      shape.kind === 'secret' ||
+      shape.kind === 'table-row' ||
+      shape.kind === 'volatile-time' ||
+      (shape.kind === 'revealed' && 'reveal' in shape))
+  );
+}
 
 /** @internal */ export interface QueryShapeSelection {
   diagnostics?: readonly TouchGraphDiagnostic[];
@@ -284,13 +301,7 @@ function appendRelationalProjectionShape(
 }
 
 /** @internal */ export function volatileTimeShape(shape: QueryShape): QueryShape {
-  if (
-    typeof shape === 'object' &&
-    shape !== null &&
-    !Array.isArray(shape) &&
-    'kind' in shape &&
-    shape.kind === 'volatile-time'
-  ) {
+  if (isQueryShapeWrapper(shape) && shape.kind === 'volatile-time') {
     return shape;
   }
   return { kind: 'volatile-time', shape };
@@ -2812,24 +2823,111 @@ function revealedShape(shape: QueryShape, reveal: QueryShapeReveal): QueryShape 
   return { kind: 'revealed', reveal, shape };
 }
 
-function queryShapeContainsSecret(shape: QueryShape): boolean {
-  if (typeof shape !== 'object' || shape === null) return false;
-  if (Array.isArray(shape)) return shape.some(queryShapeContainsSecret);
-  if (isQueryShapeWrapper(shape)) {
-    if (shape.kind === 'secret') return true;
-    return queryShapeContainsSecret(shape.shape);
-  }
-  return Object.values(shape).some(queryShapeContainsSecret);
+/** @internal */ export interface QueryShapeFoldNode {
+  path: readonly string[];
+  shape: QueryShape;
 }
 
-/** @internal */ export function nullableShape(shape: QueryShape): QueryShape {
-  if (
+/** @internal */ export type QueryShapeFoldResult<T> =
+  | readonly T[]
+  | {
+      descend?: boolean;
+      items: readonly T[];
+    };
+
+/** @internal */ export function foldQueryShape<T>(
+  shape: QueryShape,
+  visitor: (node: QueryShapeFoldNode) => QueryShapeFoldResult<T>,
+  path: readonly string[] = [],
+): T[] {
+  if (typeof shape !== 'object' || shape === null) return [];
+  const result = visitor({ path, shape });
+  const current = isQueryShapeFoldItems(result) ? result : result.items;
+  if (!isQueryShapeFoldItems(result) && result.descend === false) return [...current];
+  const children = childQueryShapes(shape, path).flatMap((child) =>
+    foldQueryShape(child.shape, visitor, child.path),
+  );
+  return [...current, ...children];
+}
+
+function isQueryShapeFoldItems<T>(result: QueryShapeFoldResult<T>): result is readonly T[] {
+  return Array.isArray(result);
+}
+
+function childQueryShapes(
+  shape: QueryShape,
+  path: readonly string[],
+): readonly QueryShapeFoldNode[] {
+  if (Array.isArray(shape)) return shape.map((item) => ({ path, shape: item }));
+  if (isQueryShapeWrapper(shape)) return [{ path, shape: shape.shape }];
+  return Object.entries(shape).map(([key, child]) => ({ path: [...path, key], shape: child }));
+}
+
+/** @internal */ export function revealFactsFromQueryShape(
+  query: string,
+  shape: QueryShape,
+  fallbackSite: string,
+): RevealExplainFact[] {
+  return foldQueryShape(shape, ({ path, shape: current }) => {
+    if (!isQueryShapeWrapper(current) || current.kind !== 'revealed') return [];
+    return {
+      descend: false,
+      items: [
+        {
+          grade: current.reveal.grade,
+          method: current.reveal.method,
+          path: path.join('.') || '$',
+          query,
+          site: current.reveal.site ?? fallbackSite,
+          ...(current.reveal.justification === undefined
+            ? {}
+            : { justification: current.reveal.justification }),
+          ...(current.reveal.selectedSecret === undefined
+            ? {}
+            : { selectedSecret: current.reveal.selectedSecret }),
+          ...(current.reveal.source === undefined ? {} : { source: current.reveal.source }),
+        },
+      ],
+    };
+  });
+}
+
+/** @internal */ export function revealedQueryShapePaths(shape: QueryShape): ReadonlySet<string> {
+  return new Set(
+    foldQueryShape(shape, ({ path, shape: current }) =>
+      isQueryShapeWrapper(current) && current.kind === 'revealed' ? [path.join('.') || '$'] : [],
+    ),
+  );
+}
+
+/** @internal */ export function tableRowQueryShapePaths(shape: QueryShape): string[] {
+  return foldQueryShape(shape, ({ path, shape: current }) =>
+    isQueryShapeWrapper(current) && current.kind === 'table-row'
+      ? { descend: false, items: [path.join('.') || '$'] }
+      : [],
+  );
+}
+
+/** @internal */ export function queryShapeContainsSecret(shape: QueryShape): boolean {
+  return foldQueryShape(shape, ({ shape: current }) =>
+    isQueryShapeWrapper(current) && current.kind === 'secret'
+      ? { descend: false, items: [true] }
+      : [],
+  ).some(Boolean);
+}
+
+/** @internal */ export function isEmptyQueryShape(shape: QueryShape): boolean {
+  return (
     typeof shape === 'object' &&
     shape !== null &&
     !Array.isArray(shape) &&
-    'kind' in shape &&
-    shape.kind === 'nullable'
-  ) {
+    !isQueryShapeWrapper(shape) &&
+    Object.keys(shape).length === 0
+  );
+}
+
+/** @internal */ export function nullableShape(shape: QueryShape): QueryShape {
+  if (isQueryShapeWrapper(shape) && shape.kind === 'nullable') {
     return shape;
   }
   return { kind: 'nullable', shape };
