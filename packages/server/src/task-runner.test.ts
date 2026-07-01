@@ -1,11 +1,21 @@
-import { describe, expect, it, vi } from 'vitest';
+import http from 'node:http';
+import type { AddressInfo } from 'node:net';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { installNetConnectFloor, resolveEgressPolicy } from './egress.js';
 import { s } from './schema.js';
 import { task } from './task.js';
 import { createDurableTaskRunner } from './task-runner.js';
 import { MemoryDurableTaskQueue } from './task-queue.js';
 
 describe('durable task runner (SPEC §9.6)', () => {
+  let uninstallEgressFloor: (() => void) | undefined;
+
+  afterEach(() => {
+    uninstallEgressFloor?.();
+    uninstallEgressFloor = undefined;
+  });
+
   it('resolves tasks by key and invokes run(args, ctx) with job context', async () => {
     const store = new MemoryDurableTaskQueue();
     const run = vi.fn(async () => undefined);
@@ -56,6 +66,45 @@ describe('durable task runner (SPEC §9.6)', () => {
       status: 'dead',
       lastError: 'No durable task is registered for key "missing.task".',
     });
+  });
+
+  it('routes default ctx.fetch through the framework egress allowlist choke', async () => {
+    const server = http.createServer((_req, res) => res.end('task-ok'));
+    await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+    const port = (server.address() as AddressInfo).port;
+    uninstallEgressFloor = installNetConnectFloor(
+      resolveEgressPolicy(
+        {
+          allowDestinations: [`http://127.0.0.1:${port}`],
+          allowInternal: [`127.0.0.1:${port}`],
+        },
+        () => {},
+      ),
+    );
+    try {
+      const store = new MemoryDurableTaskQueue();
+      const bodies: string[] = [];
+      const outbound = task('outbound.task', {
+        input: s.object({}),
+        async run(_args, ctx) {
+          bodies.push(await (await ctx.fetch(`http://127.0.0.1:${port}/`)).text());
+          await expect(ctx.fetch(`http://localhost:${port}/`)).rejects.toMatchObject({
+            reason: 'destination-allowlist',
+          });
+        },
+      });
+      await store.enqueue({ task: outbound.key, args: {} });
+      const runner = createDurableTaskRunner({ store, tasks: [outbound] });
+
+      await runner.runOnce(new Date());
+
+      expect(bodies).toEqual(['task-ok']);
+      expect(store.snapshot()[0]).toMatchObject({ status: 'succeeded' });
+    } finally {
+      uninstallEgressFloor?.();
+      uninstallEgressFloor = undefined;
+      server.close();
+    }
   });
 
   it('lets a task schedule follow-on work through the queue-backed context helper', async () => {
