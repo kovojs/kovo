@@ -584,6 +584,130 @@ export const StateAlias = component({
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
   });
 
+  it('lowers destructured state aliases to canonical state-path derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-destructure-alias.tsx',
+      source: `
+export const StateDestructureAlias = component({
+  state: () => ({ count: 1 }),
+  render: (_queries, state) => {
+    const { count } = state;
+    return <state-destructure-alias><p>{count + 1}</p></state-destructure-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      'export const StateDestructureAlias$p_text_derive = derive(["state"], (state) => (state.count) + 1);',
+    );
+    expect(clientSource).not.toContain('=> count');
+    expect(
+      evaluateStateDerive(clientSource, 'StateDestructureAlias$p_text_derive', { count: 2 }),
+    ).toBe(3);
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
+  it('lowers chained state aliases to canonical state-path derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-chained-alias.tsx',
+      source: `
+export const StateChainedAlias = component({
+  state: () => ({ count: 1 }),
+  render: (_queries, state) => {
+    const direct = state.count;
+    const chained = direct;
+    return <state-chained-alias><p>{chained + 1}</p></state-chained-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      'export const StateChainedAlias$p_text_derive = derive(["state"], (state) => (state.count) + 1);',
+    );
+    expect(clientSource).not.toContain('chained');
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
+  it('lowers nested and computed state destructuring aliases to canonical state-path derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-nested-computed-alias.tsx',
+      source: `
+export const StateNestedComputedAlias = component({
+  state: () => ({ profile: { name: 'Ada' }, count: 1 }),
+  render: (_queries, state) => {
+    const { profile: { name }, ['count']: total } = state;
+    return <state-nested-computed-alias><p>{name + ':' + total}</p></state-nested-computed-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      `export const StateNestedComputedAlias$p_text_derive = derive(["state"], (state) => (state.profile.name) + ':' + (state.count));`,
+    );
+    expect(clientSource).not.toContain('=> name');
+    expect(clientSource).not.toContain('total');
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
+  it('lowers array-destructured state aliases to reactive derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-array-alias.tsx',
+      source: `
+export const StateArrayAlias = component({
+  state: () => ({ items: ['first', 'second'] }),
+  render: (_queries, state) => {
+    const [firstItem] = state.items;
+    return <state-array-alias><p>{firstItem.toUpperCase()}</p></state-array-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      'export const StateArrayAlias$p_text_derive = derive(["state"], (state) => (state.items[0]).toUpperCase());',
+    );
+    expect(clientSource).not.toContain('firstItem');
+    expect(
+      evaluateStateDerive(clientSource, 'StateArrayAlias$p_text_derive', { items: ['ok'] }),
+    ).toBe('OK');
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
+  it('fails closed with KV311 instead of emitting unbound helper-dependent state derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-helper-alias.tsx',
+      source: `
+const format = (value) => String(value);
+
+export const StateHelperAlias = component({
+  state: () => ({ count: 1 }),
+  render: (_queries, state) => {
+    const label = format(state.count);
+    return <state-helper-alias><p>{label}</p><span>{format(state.count)}</span></state-helper-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).not.toContain('format(state.count)');
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV311',
+          message: expect.stringContaining('StateHelperAlias state.count expression'),
+        }),
+      ]),
+    );
+  });
+
   it('classifies renderOnce state reads without emitting a runtime state plan', () => {
     const result = compileComponentModule({
       fileName: 'state-once.tsx',
@@ -636,3 +760,16 @@ export const BadStateQuery = component({
     ]);
   });
 });
+
+function evaluateStateDerive(
+  clientSource: string,
+  exportName: string,
+  state: Record<string, unknown>,
+): unknown {
+  const escapedName = exportName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const match = new RegExp(
+    `export const ${escapedName} = derive\\(\\["state"\\], \\(state\\) => ([\\s\\S]*?)\\);`,
+  ).exec(clientSource);
+  expect(match?.[1]).toBeDefined();
+  return Function('state', `return (${match?.[1]});`)(state);
+}
