@@ -5,6 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { domain } from './domain.js';
 import { runEndpoint, type EndpointRequest } from './endpoint.js';
 import { assignDerivedWebhookName } from './internal/wire.js';
+import { mutation } from './mutation.js';
 import { s, SchemaValidationError } from './schema.js';
 import {
   createMemoryWebhookReplayStore as createPublicMemoryWebhookReplayStore,
@@ -184,6 +185,82 @@ describe('server webhook primitive', () => {
     await expect(second.response.text()).resolves.toBe('ok');
     expect(writes).toBe(1);
     expect(steps).toEqual(['begin', 'handler:tx_1', 'commit']);
+  });
+
+  it('dispatches webhook writes through an audited mutation and replays provider duplicates', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    const invoice = domain('invoice-run-mutation');
+    let mutationWrites = 0;
+    const recordInvoice = mutation('invoice/record-webhook', {
+      handler(input: { id: string }) {
+        mutationWrites += 1;
+        return { stored: input.id };
+      },
+      input: s.object({ id: s.string() }),
+      registry: { touches: [invoice] },
+    });
+    const stripeWebhook = webhook('/webhooks/stripe-mutation', {
+      async handler(input, context) {
+        return context.runMutation(recordInvoice, { id: input.id });
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+    const body = JSON.stringify({ id: 'evt_run_mutation' });
+    const request = () =>
+      new Request('https://example.test/webhooks/stripe-mutation', { body, method: 'POST' });
+
+    const first = await runWebhook(stripeWebhook, request());
+    const second = await runWebhook(stripeWebhook, request());
+
+    expect(first.replayed).toBe(false);
+    expect(first.value).toEqual({ stored: 'evt_run_mutation' });
+    expect(first.changes).toEqual([
+      { domain: 'invoice-run-mutation', input: { id: 'evt_run_mutation' } },
+    ]);
+    expect(first.response.status).toBe(200);
+    expect(first.response.headers.get('kovo-changes')).toBe('[{"domain":"invoice-run-mutation"}]');
+    expect(second.replayed).toBe(true);
+    expect(second.changes).toEqual([]);
+    expect(second.response.status).toBe(200);
+    expect(mutationWrites).toBe(1);
+  });
+
+  it('fails closed before a webhook mutation dispatch when replay posture is inactive', async () => {
+    const invoice = domain('invoice-run-mutation-no-replay');
+    let mutationWrites = 0;
+    const recordInvoice = mutation('invoice/record-webhook-no-replay', {
+      handler(input: { id: string }) {
+        mutationWrites += 1;
+        return { stored: input.id };
+      },
+      input: s.object({ id: s.string() }),
+      registry: { touches: [invoice] },
+    });
+    const unsafeWebhook = webhook('/webhooks/stripe-mutation-no-replay', {
+      async handler(input, context) {
+        return context.runMutation(recordInvoice, { id: input.id });
+      },
+      input: s.object({ id: s.string() }),
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook test',
+    });
+
+    const result = await runWebhook(
+      unsafeWebhook,
+      new Request('https://example.test/webhooks/stripe-mutation-no-replay', {
+        body: JSON.stringify({ id: 'evt_no_replay' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(result.replayed).toBe(false);
+    expect(result.changes).toEqual([]);
+    expect(mutationWrites).toBe(0);
   });
 
   it('rejects tampered payloads before parsing or handler execution', async () => {

@@ -383,6 +383,7 @@ export interface EndpointExplain {
   path: string;
   rateLimit?: string;
   reason?: string;
+  runMutations?: readonly string[];
   surface?: 'dynamic-export' | 'endpoint' | 'route-file' | 'route-stream' | 'webhook';
   writes?: readonly string[];
 }

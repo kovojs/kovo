@@ -90,6 +90,7 @@ import type {
   ClockUpdatePlanFact,
   CompileDependencyFootprint,
   ComponentGraphFact,
+  EndpointGraphFact,
   HandlerWriteSinkFact,
   HandlerLowering,
   QueryUpdatePlanFact,
@@ -698,6 +699,7 @@ function assembleCompileResult(
       viewTransitionNames: facts.viewTransitions.map((stamp) => stamp.name),
     }),
     diagnostics: verified.diagnostics,
+    endpointGraphFacts: facts.endpointGraphFacts,
     files: [
       {
         fileName: registryCss.fileNames.server,
@@ -786,6 +788,9 @@ function componentCompileFactSnapshot(
   ledger.append('componentGraphFacts', { phase: 'graph', pass: 'component-graph' }, [
     ...registryCss.componentGraphFacts,
   ]);
+  ledger.append('endpointGraphFacts', { phase: 'graph', pass: 'webhook-endpoint-graph' }, [
+    ...webhookEndpointGraphFactsFromModel(originalModel),
+  ]);
   ledger.append('taskGraphFacts', { phase: 'graph', pass: 'task-graph' }, [
     ...taskGraphFactsFromModel(originalModel),
   ]);
@@ -824,6 +829,20 @@ function taskGraphFactsFromModel(model: ComponentModuleModel): TaskGraphFact[] {
     ...(handler.runMutationEdges.length === 0 ? {} : { runMutations: handler.runMutationEdges }),
     ...(handler.runQueryEdges.length === 0 ? {} : { runQueries: handler.runQueryEdges }),
     ...(handler.scheduleEdges.length === 0 ? {} : { schedules: handler.scheduleEdges }),
+  }));
+}
+
+function webhookEndpointGraphFactsFromModel(model: ComponentModuleModel): EndpointGraphFact[] {
+  return model.webhookHandlers.map((handler) => ({
+    method: 'POST',
+    mount: 'exact',
+    name: handler.owner.value,
+    path: handler.owner.value,
+    ...(handler.runMutationEdges.length === 0 ? {} : { runMutations: handler.runMutationEdges }),
+    surface: 'webhook',
+    ...(handler.declaredWriteKeys.length === 0
+      ? {}
+      : { writes: handler.declaredWriteKeys.filter((key) => key !== 'UNRESOLVED') }),
   }));
 }
 

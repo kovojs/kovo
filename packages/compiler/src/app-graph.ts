@@ -62,6 +62,10 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.handlerWriteSinks ?? []),
     ...(options.components ?? []).flatMap((component) => component.handlerWriteSinkFacts ?? []),
   ]);
+  const endpoints = mergeEndpointExplainFacts([
+    ...(options.graph?.endpoints ?? []),
+    ...(options.components ?? []).flatMap((component) => component.endpointGraphFacts ?? []),
+  ]);
   const routePages = (options.routePages ?? []).flatMap((routePage) => routePage.routePageFacts);
   const publishToClientCapabilities = (options.components ?? []).flatMap((component) =>
     publishToClientCapabilitiesFromFacts(component.publishToClientFacts ?? []),
@@ -82,7 +86,7 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
   // proves a decision EXISTS, never that it is correct.
   const pagesForAccess = mergedPages ?? options.graph?.pages;
   const derivedAccess = deriveAccessExplainFacts({
-    ...(options.graph?.endpoints === undefined ? {} : { endpoints: options.graph.endpoints }),
+    ...(endpoints.length === 0 ? {} : { endpoints }),
     ...(options.graph?.mutations === undefined ? {} : { mutations: options.graph.mutations }),
     ...(pagesForAccess === undefined ? {} : { pages: pagesForAccess }),
     ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
@@ -93,6 +97,7 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(access.length > 0 ? { access } : {}),
     ...(capabilities.length > 0 ? { capabilities } : {}),
     components,
+    ...(endpoints.length > 0 ? { endpoints } : {}),
     ...(mergedPages === undefined ? {} : { pages: mergedPages }),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
     ...(tasks.length > 0 ? { tasks } : {}),
@@ -189,6 +194,10 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
     .flatMap((component) => component.handlerWriteSinkFacts ?? [])
     .map((fact) => factHash(fact))
     .sort();
+  const endpointHashes = (options.components ?? [])
+    .flatMap((component) => component.endpointGraphFacts ?? [])
+    .map((fact) => factHash(fact))
+    .sort();
   const routeHashes = (options.routePages ?? [])
     .flatMap((routePage) => routePage.routePageFacts)
     .map((fact) => factHash(fact))
@@ -196,6 +205,7 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
 
   return factHash({
     components: componentHashes,
+    endpoints: endpointHashes,
     graph: options.graph ?? null,
     handlerWriteSinks: handlerWriteSinkHashes,
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
@@ -253,6 +263,59 @@ function mergeHandlerWriteSinkFacts(
     byKey.set(factHash(fact), fact);
   }
   return [...byKey.values()].sort(compareHandlerWriteSinkFacts);
+}
+
+function mergeEndpointExplainFacts(
+  facts: readonly CoreGraph.EndpointExplain[],
+): CoreGraph.EndpointExplain[] {
+  const byKey = new Map<string, CoreGraph.EndpointExplain>();
+
+  for (const fact of facts) {
+    const key = endpointExplainMergeKey(fact);
+    const previous = byKey.get(key);
+    if (!previous) {
+      byKey.set(key, normalizeEndpointExplainFact(fact));
+      continue;
+    }
+
+    const runMutations = mergeSortedStrings(previous.runMutations, fact.runMutations);
+    const writes = mergeSortedStrings(previous.writes, fact.writes);
+    byKey.set(key, {
+      ...previous,
+      ...normalizeEndpointExplainFact(fact),
+      ...(runMutations.length === 0 ? {} : { runMutations }),
+      ...(writes.length === 0 ? {} : { writes }),
+    });
+  }
+
+  return [...byKey.values()].sort(compareEndpointExplainFacts);
+}
+
+function normalizeEndpointExplainFact(fact: CoreGraph.EndpointExplain): CoreGraph.EndpointExplain {
+  return {
+    ...fact,
+    ...(fact.runMutations === undefined || fact.runMutations.length === 0
+      ? {}
+      : { runMutations: [...new Set(fact.runMutations)].sort() }),
+    ...(fact.writes === undefined || fact.writes.length === 0
+      ? {}
+      : { writes: [...new Set(fact.writes)].sort() }),
+  };
+}
+
+function endpointExplainMergeKey(fact: CoreGraph.EndpointExplain): string {
+  return `${fact.surface ?? 'endpoint'}\0${fact.name ?? fact.path}\0${fact.path}`;
+}
+
+function compareEndpointExplainFacts(
+  left: CoreGraph.EndpointExplain,
+  right: CoreGraph.EndpointExplain,
+): number {
+  return (
+    (left.name ?? left.path).localeCompare(right.name ?? right.path) ||
+    left.path.localeCompare(right.path) ||
+    (left.surface ?? 'endpoint').localeCompare(right.surface ?? 'endpoint')
+  );
 }
 
 function compareHandlerWriteSinkFacts(

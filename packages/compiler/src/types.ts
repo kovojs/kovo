@@ -68,6 +68,9 @@ export type TaskGraphFact = CoreGraph.TaskExplain;
 /** @internal Compiler-owned task/webhook handler write-sink fact (SPEC §10.3/§11). */
 export type HandlerWriteSinkFact = CoreGraph.HandlerWriteSinkExplain;
 
+/** @internal Compiler-owned webhook endpoint graph fact (SPEC §9.1/§11.4). */
+export type EndpointGraphFact = CoreGraph.EndpointExplain;
+
 /**
  * @internal A component's fragment-target fact (target name + props type) used when building
  * the registry. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
@@ -215,6 +218,7 @@ export interface RegistryTypeFactOptions {
 export interface CompileAppGraphOptions {
   components?: readonly {
     componentGraphFacts: readonly ComponentGraphFact[];
+    endpointGraphFacts?: readonly EndpointGraphFact[];
     handlerWriteSinkFacts?: readonly HandlerWriteSinkFact[];
     publishToClientFacts?: readonly PublishToClientFact[];
     taskGraphFacts?: readonly TaskGraphFact[];
@@ -365,6 +369,7 @@ export interface CompileResult {
   cssAssets: readonly ComponentCssAsset[];
   dependencyFootprint: CompileDependencyFootprint;
   diagnostics: readonly CompilerDiagnostic[];
+  endpointGraphFacts: readonly EndpointGraphFact[];
   files: readonly EmittedFile[];
   handlerWriteSinkFacts: readonly HandlerWriteSinkFact[];
   handlerExports: readonly string[];
@@ -577,6 +582,7 @@ export function createEmptyCompileResult(): CompileResult {
     cssAssets: [],
     dependencyFootprint: {},
     diagnostics: [],
+    endpointGraphFacts: [],
     files: [],
     handlerWriteSinkFacts: [],
     handlerExports: [],

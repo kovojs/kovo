@@ -45,6 +45,7 @@ import type {
   TaskRunHandlerModel,
   TemporalReadModel,
   WebhookRecordChangeFact,
+  WebhookHandlerModel,
   ZeroArgArrowCallArgumentKind,
   ZeroArgArrowModel,
 } from './model.js';
@@ -156,7 +157,7 @@ export function parseComponentModule(
   const namedImports: NamedImportModel[] = [];
   const renderSourceReturns: StringRenderModel[] = [];
   const taskRunHandlers: TaskRunHandlerModel[] = [];
-  const webhookHandlers: MutationHandlerModel[] = [];
+  const webhookHandlers: WebhookHandlerModel[] = [];
   const moduleScopeObjectEntries = moduleScopeObjectEntryModels(sourceFile, source);
   const domainBindings = domainBindingKeys(sourceFile);
 
@@ -637,7 +638,7 @@ export function endpointHandlers(model: ComponentModuleModel): MutationHandlerMo
   return [...model.endpointHandlers];
 }
 
-export function webhookHandlers(model: ComponentModuleModel): MutationHandlerModel[] {
+export function webhookHandlers(model: ComponentModuleModel): WebhookHandlerModel[] {
   return [...model.webhookHandlers];
 }
 
@@ -1306,7 +1307,7 @@ function webhookHandlerModels(
   source: string,
   call: ts.CallExpression,
   domainBindings: ReadonlyMap<string, string>,
-): MutationHandlerModel[] {
+): WebhookHandlerModel[] {
   const owner = webhookOwner(sourceFile, call);
   const definition = taskDefinitionObject(call);
   const declaredWriteKeys = definition
@@ -1325,6 +1326,15 @@ function webhookHandlerModels(
       owner,
       recordChangeParamNames: webhookRecordChangeParamNames(parameters[1]?.name),
     }),
+    declaredWriteKeys,
+    owner,
+    runMutationEdges: taskCompositionEdges(
+      sourceFile,
+      source,
+      body,
+      model.paramNames[1],
+      'runMutation',
+    ),
   }));
 }
 

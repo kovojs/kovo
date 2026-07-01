@@ -306,6 +306,50 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     ]);
   });
 
+  it('still reports KV330 for raw webhook DB writes next to context.runMutation', () => {
+    const result = compileComponentModule({
+      fileName: 'webhooks.ts',
+      source: `
+import { webhook } from '@kovojs/server';
+import { appRuntimeDbProvider } from './db.js';
+
+const payment = domain('payment');
+
+export const paymentWebhook = webhook('/webhooks/payment', {
+  async handler(input, context) {
+    await context.runMutation(recordPayment, { id: input.id });
+    await appRuntimeDbProvider().insert(payments).values({ id: input.id });
+    return { ok: true };
+  },
+  idempotency: (input) => input.id,
+  input: paymentInput,
+  replayStore,
+  verify: 'none',
+  verifyJustification: 'fixture-only webhook test',
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV330',
+        fileName: 'webhooks.ts',
+        message:
+          'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+        severity: kv330.severity,
+      },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'appRuntimeDbProvider()', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        path: 'appRuntimeDbProvider().insert',
+        surface: 'webhook',
+      }),
+    ]);
+  });
+
   it('reports KV330 when endpoint handlers write through the app db provider', () => {
     const result = compileComponentModule({
       fileName: 'endpoints.ts',

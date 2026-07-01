@@ -28,10 +28,8 @@ test('duplicate provider event id replays without re-executing handler', async (
   expect(await duplicate.text()).toBe('ok');
   expect(first.headers()['kovo-idem']).toBe('evt_repeat_1');
   expect(duplicate.headers()['kovo-idem']).toBe('evt_repeat_1');
-  expect(first.headers()['kovo-changes']).toBe('[{"domain":"invoice","keys":["evt_repeat_1"]}]');
-  expect(duplicate.headers()['kovo-changes']).toBe(
-    '[{"domain":"invoice","keys":["evt_repeat_1"]}]',
-  );
+  expect(first.headers()['kovo-changes']).toBe('[{"domain":"invoice"}]');
+  expect(duplicate.headers()['kovo-changes']).toBe('[{"domain":"invoice"}]');
 
   await expect(
     kovoApp.db.query(

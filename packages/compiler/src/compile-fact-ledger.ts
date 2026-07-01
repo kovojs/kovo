@@ -7,6 +7,7 @@ import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import type {
   ClockUpdatePlanFact,
   ComponentGraphFact,
+  EndpointGraphFact,
   FragmentTargetFact,
   HandlerWriteSinkFact,
   LiveTargetFact,
@@ -32,6 +33,7 @@ export interface CompileFactFamilyMap {
   readonly clockUpdatePlans: ClockUpdatePlanFact;
   readonly componentCssAssets: ComponentCssAsset;
   readonly componentGraphFacts: ComponentGraphFact;
+  readonly endpointGraphFacts: EndpointGraphFact;
   readonly fragmentTargetFacts: FragmentTargetFact;
   readonly handlerWriteSinkFacts: HandlerWriteSinkFact;
   readonly liveTargetFacts: LiveTargetFact;
@@ -65,6 +67,7 @@ const compileFactFamilies = [
   'clockUpdatePlans',
   'componentCssAssets',
   'componentGraphFacts',
+  'endpointGraphFacts',
   'fragmentTargetFacts',
   'handlerWriteSinkFacts',
   'liveTargetFacts',
@@ -105,6 +108,7 @@ export class CompileFactLedger {
       clockUpdatePlans: dedupeByJson(this.#facts('clockUpdatePlans')),
       componentCssAssets: dedupeByJson(this.#facts('componentCssAssets')),
       componentGraphFacts: dedupeByJson(this.#facts('componentGraphFacts')),
+      endpointGraphFacts: dedupeByJson(this.#facts('endpointGraphFacts')),
       fragmentTargetFacts: dedupeByJson(this.#facts('fragmentTargetFacts')),
       handlerWriteSinkFacts: dedupeByJson(this.#facts('handlerWriteSinkFacts')),
       liveTargetFacts: dedupeByJson(this.#facts('liveTargetFacts')),

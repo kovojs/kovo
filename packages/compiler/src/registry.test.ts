@@ -1421,6 +1421,57 @@ export const recordDurableTask = task('durable-task-proofs/record', {
     ]);
   });
 
+  it('derives webhook mutation-dispatch endpoint facts from compiled webhook source', () => {
+    const result = compileComponentModule({
+      fileName: 'src/webhooks.ts',
+      source: `
+const invoice = domain('invoice');
+export const recordInvoice = mutation('billing/record-invoice', {
+  input: s.object({ id: s.string() }),
+  registry: { touches: [invoice] },
+  handler(input) {
+    return { ok: true };
+  },
+});
+
+export const stripeWebhook = webhook('/webhooks/stripe', {
+  input: s.object({ id: s.string() }),
+  idempotency: (input) => input.id,
+  replayStore,
+  verify: 'none',
+  verifyJustification: 'fixture-only webhook test',
+  async handler(input, context) {
+    await context.runMutation(recordInvoice, { id: input.id });
+    return { ok: true };
+  },
+});
+`,
+    });
+    const derived = deriveAppGraph({
+      components: [
+        {
+          componentGraphFacts: result.componentGraphFacts,
+          endpointGraphFacts: result.endpointGraphFacts,
+        },
+      ],
+      graph: {
+        mutations: [{ key: 'recordInvoice', writes: ['invoice'] }],
+      },
+    });
+
+    expect(result.endpointGraphFacts).toEqual([
+      {
+        method: 'POST',
+        mount: 'exact',
+        name: '/webhooks/stripe',
+        path: '/webhooks/stripe',
+        runMutations: ['recordInvoice'],
+        surface: 'webhook',
+      },
+    ]);
+    expect(derived.graph.endpoints).toEqual(result.endpointGraphFacts);
+  });
+
   it('derives page access facts from compiled JSX route pages', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',

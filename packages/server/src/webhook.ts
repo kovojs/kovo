@@ -2,6 +2,7 @@ import type { WebhookVerifier } from '@kovojs/core';
 import type { ChangeRecord } from './change-record.js';
 import { verifiedAccess, type AccessDecision } from './access.js';
 import type { Domain } from './domain.js';
+import { runMutation, type RunMutationOptions } from './mutation.js';
 import {
   endpointRequestWithoutSession,
   type EndpointDeclaration,
@@ -86,6 +87,21 @@ export interface WebhookReplayReservation {
  */
 export type WebhookDeclaredWrites = readonly Domain[];
 
+/** Minimal public shape accepted by `WebhookHandlerContext.runMutation(...)` (SPEC §9.1/§10.3). */
+export interface WebhookRunnableMutation<Input = unknown> {
+  input: Schema<Input>;
+  key: string;
+}
+
+/** Input accepted by `WebhookHandlerContext.runMutation(...)` for a mutation-like definition. */
+export type WebhookRunnableMutationInput<Mutation> =
+  Mutation extends WebhookRunnableMutation<infer Input> ? Input : never;
+
+/** Options used when an app dispatch path lets a webhook compose through `runMutation(...)`. */
+export interface RunWebhookOptions<Request extends EndpointRequest = EndpointRequest> {
+  mutationOptions?: Omit<RunMutationOptions<Request>, 'csrf'>;
+}
+
 /**
  * Domain keys a webhook may record from its declared `writes` list. If a webhook
  * declares no writes, `recordChange` has no valid domain key.
@@ -139,6 +155,10 @@ export interface WebhookHandlerContext<
     options?: WebhookChangeOptions<ChangeInput>,
   ): ChangeRecord<DomainKey, ChangeInput | Input>;
   request: EndpointRequest;
+  runMutation<const Mutation extends WebhookRunnableMutation<any>>(
+    definition: Mutation,
+    input: WebhookRunnableMutationInput<Mutation>,
+  ): Promise<unknown>;
   tx: WebhookTxDb<Tx>;
 }
 
@@ -413,6 +433,7 @@ export async function runWebhook<
 >(
   declaration: WebhookDeclaration<Name, Path, InputSchema, Value, Tx, Writes>,
   request: Request,
+  options: RunWebhookOptions = {},
 ): Promise<WebhookRunResult<WebhookInputFor<InputSchema>, Value>> {
   const endpointRequest = endpointRequestWithoutSession(request);
   const rawBody = new Uint8Array(await endpointRequest.arrayBuffer());
@@ -537,16 +558,40 @@ export async function runWebhook<
   const reservation = reserveOutcome.kind === 'reserved' ? reserveOutcome.reservation : undefined;
 
   const changes: ChangeRecord<string, WebhookInputFor<InputSchema>>[] = [];
-  const context = webhookHandlerContext(
-    input,
-    endpointRequest,
-    rawBody,
-    changes,
-    declaration.webhookDefinition.writes,
-  );
-
   try {
     const runHandler = async (tx: Tx): Promise<Value> => {
+      const context = webhookHandlerContext(
+        input,
+        endpointRequest,
+        rawBody,
+        changes,
+        declaration.webhookDefinition.writes,
+        async (definition, mutationInput) => {
+          if (reserveOutcome.kind !== 'reserved' && reserveOutcome.kind !== 'disabled') {
+            throw new Error('Webhook replay reservation is unavailable.');
+          }
+          if (!idemActive || declaration.webhookDefinition.replayStore === undefined) {
+            throw new Error(
+              `Webhook "${declaration.name}" called runMutation(${definition.key}) without an active idempotency replay reservation.`,
+            );
+          }
+
+          const mutationRequest = webhookMutationRequest(endpointRequest, tx);
+          const result = await runMutation(definition as never, mutationInput, mutationRequest, {
+            ...options.mutationOptions,
+            csrf: false,
+          } as never);
+          if (!result.ok) {
+            throw new Error(
+              `Webhook runMutation(${definition.key}) failed with ${result.status} ${result.error.code}.`,
+            );
+          }
+          changes.push(
+            ...(result.changes as readonly ChangeRecord<string, WebhookInputFor<InputSchema>>[]),
+          );
+          return result.value;
+        },
+      );
       const value = await declaration.webhookDefinition.handler(input, {
         ...context,
         tx: tx as WebhookTxDb<Tx>,
@@ -812,6 +857,7 @@ function webhookHandlerContext<Input, Tx>(
   rawBody: Uint8Array,
   changes: ChangeRecord<string, Input>[],
   declaredWrites: readonly Domain[] | undefined,
+  runMutationFromWebhook: WebhookHandlerContext<Input, Tx, WebhookDeclaredWrites>['runMutation'],
 ): WebhookHandlerContext<Input, Tx, WebhookDeclaredWrites> {
   return {
     fail(code, payload, options = {}) {
@@ -836,8 +882,38 @@ function webhookHandlerContext<Input, Tx>(
       return record;
     },
     request,
+    runMutation: runMutationFromWebhook,
     tx: undefined as unknown as WebhookTxDb<Tx>,
   };
+}
+
+function webhookMutationRequest<Tx>(request: EndpointRequest, tx: Tx): EndpointRequest {
+  if (tx === undefined) return request;
+  return new Proxy(request, {
+    get(target, property) {
+      if (property === 'db') return tx;
+      const value = Reflect.get(target, property, target) as unknown;
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+    getOwnPropertyDescriptor(target, property) {
+      if (property === 'db') {
+        return {
+          configurable: true,
+          enumerable: true,
+          value: tx,
+          writable: false,
+        };
+      }
+      return Reflect.getOwnPropertyDescriptor(target, property);
+    },
+    has(target, property) {
+      return property === 'db' || property in target;
+    },
+    ownKeys(target) {
+      const keys = Reflect.ownKeys(target);
+      return keys.includes('db') ? keys : [...keys, 'db'];
+    },
+  }) as EndpointRequest;
 }
 
 function assertDeclaredWebhookChangeDomain(

@@ -1,7 +1,7 @@
 // SPEC.md §9.1: webhook idempotency replays the stored response for repeated
 // provider event ids without re-executing the handler.
 import { hmacSignature } from '@kovojs/core';
-import { createApp, domain, s, webhook } from '@kovojs/server';
+import { createApp, domain, mutation, s, webhook } from '@kovojs/server';
 import type {
   WebhookReplayReservation,
   WebhookReplayStore,
@@ -34,22 +34,30 @@ function createReplayStore(): WebhookReplayStore {
 }
 
 const invoiceDomain = domain('invoice');
+const webhookEventInput = s.object({ id: s.string(), type: s.string() });
+
+const recordWebhookAttempt = mutation('webhook-idempotency/record-attempt', {
+  async handler(input, request) {
+    const webhookRequest = request as WebhookRequest;
+    await webhookRequest.db.query(
+      'insert into webhook_event_attempts (event_id, event_type) values ($1, $2)',
+      [input.id, input.type],
+    );
+    return { ok: true };
+  },
+  input: webhookEventInput,
+  registry: { touches: [invoiceDomain] },
+});
 
 export default defineFixture({
   app: () => {
     const replayStore = createReplayStore();
     const idempotentWebhook = webhook('/webhooks/stripe-idempotent', {
       async handler(input, context) {
-        const request = context.request as WebhookRequest;
-        await request.db.query(
-          'insert into webhook_event_attempts (event_id, event_type) values ($1, $2)',
-          [input.id, input.type],
-        );
-        context.recordChange(invoiceDomain, { keys: [input.id] });
-        return { ok: true };
+        return context.runMutation(recordWebhookAttempt, { id: input.id, type: input.type });
       },
       idempotency: (input) => input.id,
-      input: s.object({ id: s.string(), type: s.string() }),
+      input: webhookEventInput,
       replayStore,
       verify: hmacSignature({
         encoding: 'hex',
@@ -59,10 +67,9 @@ export default defineFixture({
         scheme: 'stripe-lite:v1:hmac-sha256',
         secret: 'whsec_integration',
       }),
-      writes: [invoiceDomain],
     });
 
-    return createApp({ endpoints: [idempotentWebhook] });
+    return createApp({ endpoints: [idempotentWebhook], mutations: [recordWebhookAttempt] });
   },
   schema: `create table webhook_event_attempts (
     event_id text not null,

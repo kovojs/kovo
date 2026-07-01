@@ -9,6 +9,7 @@ import {
 import { methodNotAllowedWebResponse, routeResponseToWebResponse } from './response.js';
 import type { ShellDispatchMatch } from './shell.js';
 import type { KovoApp } from './app-types.js';
+import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpoint.js';
 import {
   appRequestUrl,
   renderAppErrorDocumentResponse,
@@ -16,7 +17,13 @@ import {
 } from './app-document.js';
 import { handleAppMutationRequest } from './app-mutation-request.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
-import { finalizeRawWebResponse, resolveKovoLifecycleRequest } from './response-posture.js';
+import {
+  assertEndpointResponsePosture,
+  finalizeRawWebResponse,
+  resolveKovoLifecycleRequest,
+} from './response-posture.js';
+import { appTaskScheduler } from './task-runtime.js';
+import { runWebhook, type WebhookDeclaration } from './webhook.js';
 
 export interface MatchedAppDispatchOptions {
   app: KovoApp;
@@ -92,6 +99,24 @@ export async function dispatchMatchedAppRequest({
     if (authFailure) return finalizeRawWebResponse(authFailure, request);
     const csrfFailure = await validateEndpointCsrf(match.endpoint, request, app.csrf);
     if (csrfFailure) return finalizeRawWebResponse(csrfFailure, request);
+    if (isWebhookEndpoint(match.endpoint)) {
+      const taskScheduler = appTaskScheduler(app);
+      const mutationOptions = {
+        clientIp: (req: Request) => resolveRequestClientIp(app, req),
+        ...(match.endpoint.webhookDefinition.transaction === undefined && app.db !== undefined
+          ? { db: app.db }
+          : {}),
+        ...(app.onError === undefined ? {} : { onError: app.onError }),
+        ...(taskScheduler === undefined ? {} : { taskScheduler }),
+      };
+      const response = (
+        await runWebhook(match.endpoint, endpointRequest, {
+          mutationOptions,
+        })
+      ).response;
+      assertEndpointResponsePosture(match.endpoint, response);
+      return finalizeRawWebResponse(response, request);
+    }
     return finalizeRawWebResponse(await runEndpoint(match.endpoint, endpointRequest), request);
   }
 
@@ -115,6 +140,18 @@ export async function dispatchMatchedAppRequest({
   return routeResponseToWebResponse(
     await renderAppErrorDocumentResponse(app, request, 404),
     request,
+  );
+}
+
+function isWebhookEndpoint(
+  endpoint: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+): endpoint is WebhookDeclaration<string, string, any, any, any> {
+  return (
+    'webhook' in endpoint &&
+    endpoint.webhook === true &&
+    'webhookDefinition' in endpoint &&
+    'name' in endpoint &&
+    typeof endpoint.name === 'string'
   );
 }
 

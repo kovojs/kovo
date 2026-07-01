@@ -31,6 +31,7 @@ export type {
   CompileResult,
   CompileRouteModuleOptions,
   CompileRouteModuleResult,
+  EndpointGraphFact,
   HandlerWriteSinkFact,
   HmrImpactClass,
   HmrImpactClassification,

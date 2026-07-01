@@ -345,7 +345,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     lines.push('ENDPOINTS');
 
     for (const endpoint of endpoints) {
-      lines.push(endpointExplainLine(endpoint));
+      lines.push(endpointExplainLine(endpoint, graph));
     }
     for (const mutation of mutations) {
       lines.push(mutationEndpointExplainLine(mutation));
@@ -1783,8 +1783,12 @@ function unguardedLine(access: UnguardedAccessFact): string {
   return `${access.kind.toUpperCase()} ${access.name} ${access.detail}`;
 }
 
-function endpointExplainLine(endpoint: CoreGraph.EndpointExplain): string {
-  return [
+function endpointExplainLine(
+  endpoint: CoreGraph.EndpointExplain,
+  graph: CoreGraph.KovoExplainInput,
+): string {
+  const runMutations = endpoint.runMutations ?? [];
+  const fields = [
     `ENDPOINT ${endpointName(endpoint)}`,
     `surface=${endpoint.surface ?? 'endpoint'}`,
     `method=${endpoint.method ?? 'ANY'}`,
@@ -1799,8 +1803,22 @@ function endpointExplainLine(endpoint: CoreGraph.EndpointExplain): string {
     `headers=${list(endpoint.headers)}`,
     `files=${list(endpoint.files)}`,
     `dynamic=${list(endpoint.dynamicExports)}`,
-    `writes=${list(endpoint.writes)}`,
-  ].join(' ');
+    `writes=${list(endpointWrites(endpoint, graph))}`,
+  ];
+  if (runMutations.length > 0) fields.push(`runMutations=${list(runMutations)}`);
+  return fields.join(' ');
+}
+
+function endpointWrites(
+  endpoint: CoreGraph.EndpointExplain,
+  graph: CoreGraph.KovoExplainInput,
+): readonly string[] | undefined {
+  const writes = new Set(endpoint.writes ?? []);
+  for (const mutationKey of endpoint.runMutations ?? []) {
+    const mutation = (graph.mutations ?? []).find((candidate) => candidate.key === mutationKey);
+    for (const domain of mutation?.writes ?? []) writes.add(domain);
+  }
+  return writes.size === 0 ? undefined : [...writes].sort();
 }
 
 function trustEscapeLine(escape: CoreGraph.TrustEscapeExplain): string {

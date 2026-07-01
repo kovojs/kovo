@@ -82,6 +82,12 @@ export interface TaskRunHandlerModel extends MutationHandlerModel {
   scheduleEdges: readonly string[];
 }
 
+export interface WebhookHandlerModel extends MutationHandlerModel {
+  declaredWriteKeys: readonly string[];
+  owner: HandlerWriteSinkOwner;
+  runMutationEdges: readonly string[];
+}
+
 export interface PropertyAccessPathModel {
   end: number;
   inferredType?: 'boolean' | 'number';
@@ -342,7 +348,7 @@ export interface ComponentModuleModel {
   namedImports: readonly NamedImportModel[];
   renderSourceReturns: readonly StringRenderModel[];
   taskRunHandlers: readonly TaskRunHandlerModel[];
-  webhookHandlers: readonly MutationHandlerModel[];
+  webhookHandlers: readonly WebhookHandlerModel[];
   /**
    * @internal FN7: the scanner's own parsed `ts.SourceFile`, retained so phases like StyleX
    * extraction reuse it instead of re-parsing the component. Non-enumerable so the model stays a

@@ -777,6 +777,39 @@ describe('kovo explain', () => {
     `);
   });
 
+  it('prints webhook mutation dispatch and derives webhook writes from the called mutation', () => {
+    const result = kovoExplain(
+      {
+        endpoints: [
+          {
+            auth: 'verifier:stripe-signature',
+            body: 'raw',
+            cache: 'no-store',
+            csrf: 'exempt',
+            csrfJustification: 'signed stripe webhook',
+            method: 'POST',
+            name: 'billing/stripe',
+            path: '/webhooks/stripe',
+            runMutations: ['billing/record-invoice'],
+            surface: 'webhook',
+          },
+        ],
+        mutations: [{ key: 'billing/record-invoice', writes: ['invoice'] }],
+      },
+      { endpoints: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toMatchInlineSnapshot(`
+      "kovo-explain/v1
+      ENDPOINTS
+      ENDPOINT billing/stripe surface=webhook method=POST path=/webhooks/stripe mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=- rateLimit=- headers=- files=- dynamic=- writes=invoice runMutations=billing/record-invoice
+      MUTATION billing/record-invoice method=POST auth=- csrf=checked session=- writes=invoice
+      SUMMARY total=2
+      "
+    `);
+  });
+
   it('lists every mutation CSRF posture in --endpoints alongside endpoints (SPEC §11.4)', () => {
     const result = kovoExplain(
       {
