@@ -761,9 +761,9 @@ describe('diagnostic registry', () => {
           "code": "KV433",
           "help": "Would lower to: a read-only query() loader handle with no insert/update/delete/execute, and (Stage 2) a static proof that no write is reachable from the loader.
       Blocked reason: a query() loader that reaches a write — directly or via an imported domain() function called with a captured handle — is a state change on an idempotent read surface (the confused-deputy case).
-      Fixes: move the write to a mutation(); or, if the write must run on a read, use query.elevated (a GET that must be idempotent-safe-to-repeat) and audit it in kovo explain --capabilities.
+      Fixes: move the write to a mutation()/domain write, or use endpoint() for an explicitly side-effecting machine/API path.
       SPEC §6.6/§9.4 and secure-framework Phase 5: the runtime read-only proxy is the safe-default backstop; the static no-write-reachable proof is the by-construction guarantee.",
-          "message": "query() loader reaches a write without an elevated brand.",
+          "message": "query() loader reaches a write.",
           "severity": "error",
         },
         "KV434": {

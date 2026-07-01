@@ -2210,8 +2210,8 @@ function dedupeToctouFacts(facts: readonly ToctouFact[]): ToctouFact[] {
 // read surface; reaching a Drizzle write (insert/update/delete/execute/run/batch) from it is the
 // confused-deputy case (a state change on an idempotent GET). Stage 2 is the
 // by-construction half: a static proof that a loader body contains no DIRECTLY-reachable
-// Drizzle write. `query.elevated('name', …)` is the audited escape (a GET that must be
-// idempotent-safe-to-repeat). Honest scope: this detects writes DIRECTLY in the loader
+// Drizzle write. There is no GET-write query escape; legacy/demoted `.elevated` query-like
+// declarations are treated as read surfaces for this gate. Honest scope: this detects writes DIRECTLY in the loader
 // body. The fully interprocedural case (a loader calling an imported `domain()` function
 // that writes through a captured handle) needs the bottom-up write-summaries that are NOT
 // built; that residue is a documented gap, not covered here. Stage 1 is the shipped managed
@@ -2229,7 +2229,7 @@ const KV433_DIRECT_WRITE_OPERATIONS = new Set([
 
 /**
  * SPEC §6.6/§9.4 (KV433 Stage 2) — every `query()` loader whose body directly reaches a
- * Drizzle write, minus `query.elevated(...)` loaders (the audited escape). Returns the
+ * Drizzle write. Returns the
  * write-reachability facts the graph emission turns into blocking KV433 errors.
  *
  * @internal
@@ -2335,7 +2335,7 @@ function mergeProjectDrizzleReceivers(
   };
 }
 
-/** `query('name', { load })` loaders, excluding `query.elevated(...)` (the audited GET-write escape). */
+/** `query('name', { load })` loaders; legacy `.elevated` spellings are not an escape. */
 function readOnlyQueryLoaders(sourceFile: SourceFile): { fn: Node; name: string }[] {
   const loaders: { fn: Node; name: string }[] = [];
   for (const declaration of sourceFile.getVariableDeclarations()) {
@@ -2344,15 +2344,9 @@ function readOnlyQueryLoaders(sourceFile: SourceFile): { fn: Node; name: string 
     const queryCall = unwrappedStaticExpressionNode(initializer);
     if (!Node.isCallExpression(queryCall)) continue;
     const expression = queryCall.getExpression();
-    // `query(...)` is a read surface; `query.elevated(...)` is the audited escape.
     // SPEC §11.1 (bugz-3 H1): match the @kovojs/server `query` binding (bare/alias/namespace).
-    if (
-      Node.isPropertyAccessExpression(expression) &&
-      expression.getName() === 'elevated' &&
-      isKovoServerCalleeExpression(expression.getExpression(), 'query')
-    ) {
-      continue;
-    }
+    // `staticQueryDeclarationFromCall` still parses legacy `.elevated` spellings here so KV433
+    // fails closed instead of letting a demoted GET-write call disappear from the gate.
     const queryDeclaration = staticQueryDeclarationFromCall(declaration, queryCall);
     if (!queryDeclaration) continue;
     const body = queryBodyObjectLiteral(queryDeclaration.bodyArgument, 'project').body;

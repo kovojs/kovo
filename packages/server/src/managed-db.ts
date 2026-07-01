@@ -7,8 +7,8 @@
 //   - `managedDb(raw, 'read')`  → SQL-safe (KV422) + read-only proxy (KV433). A `query()` loader's
 //     write verb (insert/update/delete/execute/run/batch) throws `KovoReadonlyHandleError` and is a
 //     `tsc` error through the `Reader<Db>` type mirror.
-//   - `managedDb(raw, 'write')` → SQL-safe (KV422) only. A `mutation()` handler (and the audited
-//     `query.elevated(...)` GET-write escape) gets the full read-write handle.
+//   - `managedDb(raw, 'write')` → SQL-safe (KV422) only. A `mutation()` or other explicit write
+//     surface gets the full read-write handle.
 //
 // The read-only proxy is the safe-default runtime backstop; the KV433 direct static no-write-
 // reachable check remains the by-construction guarantee, while broader interprocedural write-
@@ -29,8 +29,8 @@ const WRITE_VERBS = new Set<string>(['insert', 'update', 'delete', 'execute', 'r
 /**
  * Thrown when a `query()` loader calls a write verb on its read-only managed handle (SPEC §9.4
  * KV433 Stage 1). This is the fail-closed runtime floor; the direct static no-write-reachable
- * proof is the by-construction guarantee. Move the write to a `mutation()`, or use
- * `query.elevated(...)` for an idempotent-safe-to-repeat write.
+ * proof is the by-construction guarantee. Move the write to a mutation/domain/endpoint write
+ * surface.
  */
 export class KovoReadonlyHandleError extends Error {
   constructor(message: string) {
@@ -77,7 +77,7 @@ export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
       if (typeof prop === 'string' && WRITE_VERBS.has(prop)) {
         return () => {
           throw new KovoReadonlyHandleError(
-            `A query() loader cannot ${prop}() — loaders are read-only (KV433). Move the write to a mutation(), or use query.elevated for an idempotent write.`,
+            `A query() loader cannot ${prop}() — loaders are read-only (KV433). Move the write to a mutation(), domain write, or endpoint().`,
           );
         };
       }
@@ -95,10 +95,10 @@ export interface ManagedDbOptions {
  * Resolve the framework-owned managed handle for a request (SPEC §6.6/§9.4/§10.3). Always applies
  * the KV422 SQL-safe wrap; in `'read'` mode it additionally applies the KV433 read-only proxy. This
  * is the single composition point: one handle = SQL-safe always + read-only in a loader + read-write
- * in a mutation (and in the audited `query.elevated` escape).
+ * in an explicit write surface.
  *
  * @param raw - The app's raw resolved db handle (`app.db(request)` value).
- * @param mode - `'read'` for a `query()` loader, `'write'` for a `mutation()`/`query.elevated`.
+ * @param mode - `'read'` for a `query()` loader, `'write'` for mutation/endpoint write surfaces.
  * @internal
  */
 export function managedDb<Db>(raw: Db, mode: 'read', options?: ManagedDbOptions): Reader<Db>;

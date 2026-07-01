@@ -246,16 +246,11 @@ function propertyNameText(name: ts.PropertyName): string | null {
 }
 
 function isQueryCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
-  return (
-    expressionResolvesToFrameworkExport(
-      ts as FrameworkIdentityTypeScript,
-      sourceFile,
-      expression,
-      QUERY_IDENTITY,
-    ) ||
-    (ts.isPropertyAccessExpression(expression) &&
-      expression.name.text === 'elevated' &&
-      isQueryCallee(sourceFile, expression.expression))
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    QUERY_IDENTITY,
   );
 }
 

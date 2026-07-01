@@ -342,7 +342,7 @@ const NON_DRIZZLE_OUTPUT_ALIAS_QUERY_SOURCE = [
 const NON_DRIZZLE_OUTPUT_IMPORTED_QUERY_ALIAS_SOURCE = [
   'import { query as defineQuery, s } from "@kovojs/server";',
   '',
-  'export const statusQuery = defineQuery.elevated({',
+  'export const statusQuery = defineQuery({',
   '  reads: [],',
   '  output: s.object({',
   '    summary: s.string(),',

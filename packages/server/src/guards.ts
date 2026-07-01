@@ -309,7 +309,7 @@ export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbV
   /**
    * The managed-handle mode the framework applies to the resolved `request.db` (SPEC §9.4/§10.3).
    * `'read'` installs the KV433 read-only proxy (a `query()` loader's handle); `'write'` (the
-   * default) installs only the KV422 SQL-safe handle (a `mutation()`/`query.elevated` handle).
+   * default) installs only the KV422 SQL-safe handle for explicit write surfaces.
    * @internal
    */
   dbMode?: ManagedDbMode;
@@ -700,7 +700,7 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     const dbValue = await options.db(lifecycleRequest as LifecycleRequest<Request, SessionValue>);
     // SPEC §6.6/§9.4/§10.3 (MARQUEE): the framework OWNS the handle threaded onto `request.db`.
     // `managedDb` composes the KV422 SQL-safe wrap with the KV433 read/write mode: a query loader's
-    // request carries the read-only handle (write verbs throw), a mutation/elevated request carries
+    // request carries the read-only handle (write verbs throw), a mutation/write request carries
     // the read-write handle. The mode defaults to 'write' so direct/legacy callers keep read-write
     // `request.db`; `runQuery` passes 'read' so loaders are read-only end to end.
     lifecycleRequest = requestWithProperty(

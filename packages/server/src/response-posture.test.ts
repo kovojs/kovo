@@ -179,7 +179,6 @@ describe('central response posture finalization', () => {
     await expect(
       resolveKovoLifecycleRequest(new Request('https://example.test/_q/cart'), {
         currentUrl: '/cart',
-        dbAccess: 'read',
         surface: 'query',
       } as never),
     ).rejects.toThrow('Lifecycle surface "query" does not accept option "currentUrl"');

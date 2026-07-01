@@ -50,7 +50,7 @@ export const cart = query({
   reads: [],
 });
 
-export const audit = query.elevated({
+export const audit = query({
   load: () => ({ ok: true }),
   reads: [],
 });
@@ -71,7 +71,7 @@ export const CartBadge = component({
     );
     expect(result.loweredSource).toContain('"components/cart-badge/cart"');
     expect(result.loweredSource).toContain(
-      'export const audit = __kovoAssignDerivedQueryKey(query.elevated({',
+      'export const audit = __kovoAssignDerivedQueryKey(query({',
     );
     expect(result.loweredSource).toContain('"components/cart-badge/audit"');
   });
@@ -89,7 +89,7 @@ export const cart = defineQuery({
   reads: [],
 });
 
-export const audit = defineQuery.elevated({
+export const audit = defineQuery({
   load: () => ({ ok: true }),
   output: {},
   reads: [],
@@ -108,7 +108,7 @@ export const CartBadge = component({
     );
     expect(result.loweredSource).toContain('"components/cart-badge/cart"');
     expect(result.loweredSource).toContain(
-      'export const audit = __kovoAssignDerivedQueryKey(defineQuery.elevated({',
+      'export const audit = __kovoAssignDerivedQueryKey(defineQuery({',
     );
     expect(result.loweredSource).toContain('"components/cart-badge/audit"');
   });
@@ -1253,10 +1253,6 @@ export const cartQuery = query('cart', {
   load: () => ({ count: 0 }),
   reads: [],
 });
-export const auditQuery = query.elevated('audit', {
-  load: () => ({ ok: true }),
-  reads: [],
-});
 `,
     });
 
@@ -1275,14 +1271,6 @@ export const auditQuery = query.elevated('audit', {
         help: expect.stringContaining('use `query({ load, reads })`'),
         message:
           'App source hard-codes a query registry identity; use the source-derived object form.',
-        severity: 'error',
-      },
-      {
-        code: 'KV235',
-        fileName: 'cart-model.ts',
-        help: expect.stringContaining('use `query.elevated({ load, reads })`'),
-        message:
-          'App source hard-codes a query.elevated registry identity; use the source-derived object form.',
         severity: 'error',
       },
     ]);

@@ -54,7 +54,6 @@ export interface QueryLifecyclePolicy<
   SessionValue = unknown,
   DbValue = unknown,
 > extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue> {
-  dbAccess: 'read' | 'write-elevated';
   surface: 'query';
 }
 
@@ -120,7 +119,7 @@ export async function resolveKovoLifecycleRequest<
     }
     case 'query': {
       const lifecycleOptions: RequestLifecycleOptions<RawRequest, SessionValue, DbValue> = {
-        dbMode: options.dbAccess === 'write-elevated' ? 'write' : 'read',
+        dbMode: 'read',
       };
       if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
       if (options.db !== undefined) lifecycleOptions.db = options.db;
@@ -334,7 +333,7 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
     'sqlWritePolicy',
     'surface',
   ]),
-  query: new Set(['clientIp', 'db', 'dbAccess', 'onError', 'sessionProvider', 'surface']),
+  query: new Set(['clientIp', 'db', 'onError', 'sessionProvider', 'surface']),
   system: new Set(['surface']),
 };
 

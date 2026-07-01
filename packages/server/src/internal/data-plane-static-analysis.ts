@@ -941,16 +941,11 @@ function isQueryCallee(
   sourceFile: import('typescript').SourceFile,
   expression: import('typescript').Expression,
 ): boolean {
-  return (
-    expressionResolvesToFrameworkExport(
-      ts as FrameworkIdentityTypeScript,
-      sourceFile,
-      expression,
-      QUERY_IDENTITY,
-    ) ||
-    (ts.isPropertyAccessExpression(expression) &&
-      expression.name.text === 'elevated' &&
-      isQueryCallee(ts, sourceFile, expression.expression))
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    QUERY_IDENTITY,
   );
 }
 

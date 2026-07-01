@@ -5,7 +5,6 @@ import { publicAccess } from './access.js';
 import { domain } from './domain.js';
 import {
   assignDerivedQueryKey,
-  drainElevatedQueryFacts,
   query,
   renderQueryEndpointResponse,
   renderQueryRegistryEndpointResponse,
@@ -32,18 +31,14 @@ describe('query endpoints', () => {
     expect(result.body).toBe('<kovo-query name="queries/cart/cart">{"count":2}</kovo-query>');
   });
 
-  it('records elevated query facts after assigning a source-derived key', () => {
-    drainElevatedQueryFacts();
+  it('does not expose a public query.elevated GET-write escape', () => {
+    const assertNoElevatedFactory = () => {
+      // @ts-expect-error SPEC §10.3/KV433: query loaders are read-only; writes move to mutation/domain/endpoint.
+      query.elevated({ load: () => ({ ok: true }), reads: [] });
+    };
 
-    const elevated = query.elevated({
-      load: () => ({ ok: true }),
-      reads: [],
-    });
-    expect(drainElevatedQueryFacts()).toEqual([]);
-
-    assignDerivedQueryKey(elevated, 'queries/audit/audit');
-
-    expect(drainElevatedQueryFacts()).toEqual([{ query: 'queries/audit/audit' }]);
+    expect(assertNoElevatedFactory).toBeTypeOf('function');
+    expect((query as unknown as { elevated?: unknown }).elevated).toBeUndefined();
   });
 
   it('rejects unknown query definition fields at type and runtime boundaries', () => {
@@ -54,10 +49,6 @@ describe('query endpoints', () => {
     const appQuery = query as QueryFactory<{ session?: { userId?: string } | null }>;
     const typedAppQuery = appQuery('typed-app-ok', {
       guard: (request) => request.session?.userId === 'u1',
-      load: () => ({ ok: true }),
-      reads: [],
-    });
-    const elevatedQuery = query.elevated('typed-elevated-ok', {
       load: () => ({ ok: true }),
       reads: [],
     });
@@ -85,17 +76,10 @@ describe('query endpoints', () => {
         load: () => ({ ok: true }),
         reads: [],
       });
-      query.elevated('bad-elevated-made-up', {
-        load: () => ({ ok: true }),
-        reads: [],
-        // @ts-expect-error query.elevated owns the elevated marker and rejects no-op fields too.
-        totallyMadeUp: 42,
-      });
     };
 
     expect(typedQuery.key).toBe('typed-ok');
     expect(typedAppQuery.key).toBe('typed-app-ok');
-    expect(elevatedQuery).toMatchObject({ elevated: true, key: 'typed-elevated-ok' });
     expect(assertUnknownQueryDefinitionFieldsRejected).toBeTypeOf('function');
     expect(() =>
       query('bad-runtime-live', {

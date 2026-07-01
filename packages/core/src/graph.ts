@@ -455,12 +455,7 @@ export interface MassAssignmentFact {
   via: 'raw-sql' | 'set' | 'spread' | 'values';
 }
 
-/**
- * A `query()` loader that reaches a Drizzle write without the `query.elevated`
- * escape — the §9.4 read-only/no-write-reachable finding (KV433 Stage 2).
- *
- * @internal
- */
+/** A `query()` loader that reaches a Drizzle write — the §9.4 read-only finding (KV433 Stage 2). */
 export interface QueryWriteReachabilityFact {
   operation: string;
   query: string;

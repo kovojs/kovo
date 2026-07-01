@@ -449,21 +449,12 @@ function queryKeyFromCall(
 }
 
 function isQueryCallExpression(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
-  if (
-    expressionResolvesToFrameworkExport(
-      ts as FrameworkIdentityTypeScript,
-      sourceFile,
-      expression,
-      QUERY_IDENTITY,
-      { legacyGlobals: [QUERY_IDENTITY] },
-    )
-  ) {
-    return true;
-  }
-  return (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === 'elevated' &&
-    isQueryCallExpression(sourceFile, expression.expression)
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    QUERY_IDENTITY,
+    { legacyGlobals: [QUERY_IDENTITY] },
   );
 }
 

@@ -9,8 +9,8 @@ import { domain } from './domain.js';
 // SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle.
 //
 // These tests prove the runtime floor: a `query()` loader's `context.db` is the SQL-safe (KV422)
-// read-only (KV433) handle whose write verbs throw, while reads pass through; a `query.elevated`
-// loader receives the full read-write handle; and the KV422 raw-string rejection still holds through
+// read-only (KV433) handle whose write verbs throw, while reads pass through; mutation/write
+// surfaces receive the full read-write handle; and the KV422 raw-string rejection still holds through
 // the managed handle (the unification). The static no-write-reachable proof (KV433 Stage 2) and the
 // `Reader<Db>` tsc mirror are exercised elsewhere (drizzle static gate; type-level).
 
@@ -242,26 +242,41 @@ describe('query loader threading (the chokepoint)', () => {
     ).rejects.toThrow(KovoReadonlyHandleError);
   });
 
-  it('query.elevated receives the full read-write handle (audited escape)', async () => {
+  it('a forged elevated marker still receives the read-only query handle (KV433)', async () => {
     const log: string[] = [];
     const db = fakeDb(log);
-    const elevated = query.elevated('product/touch', {
-      reads: [product],
-      async load(_input, context) {
-        // Idempotent-safe-to-repeat write on a read surface — allowed only because elevated.
-        await (
-          context!.db as unknown as { update(t: string): { set(): { where(): Promise<void> } } }
-        )
-          .update('products')
-          .set()
-          .where();
-        return { touched: true };
-      },
-    });
+    const legacyMarkedQuery = Object.assign(
+      query('product/touch', {
+        reads: [product],
+        async load(_input, context) {
+          await (
+            context!.db as unknown as { update(t: string): { set(): { where(): Promise<void> } } }
+          )
+            .update('products')
+            .set()
+            .where();
+          return { touched: true };
+        },
+      }),
+      { elevated: true },
+    );
 
-    expect(elevated.elevated).toBe(true);
-    const result = await runQuery(elevated, undefined, { db: undefined }, { db: () => db });
-    expect(result.ok).toBe(true);
+    await expect(
+      runQuery(legacyMarkedQuery, undefined, { db: undefined }, { db: () => db }),
+    ).rejects.toThrow(KovoReadonlyHandleError);
+    expect(log).toEqual([]);
+  });
+
+  it('managed write mode still exposes the full SQL-safe handle for write surfaces', async () => {
+    const log: string[] = [];
+    const db = fakeDb(log);
+    const writable = managedDb(db, 'write');
+
+    await (writable as unknown as { update(t: string): { set(): { where(): Promise<void> } } })
+      .update('products')
+      .set()
+      .where();
+
     expect(log).toContain('update:products');
   });
 });

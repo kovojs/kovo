@@ -15,7 +15,7 @@ interface StringRender {
 
 interface KeyFirstRegistryCall {
   length: number;
-  primitive: 'mutation' | 'query' | 'query.elevated';
+  primitive: 'mutation' | 'query';
   start: number;
 }
 
@@ -138,7 +138,7 @@ function keyFirstRegistryCall(
   call: ComponentModuleModel['calls'][number],
 ): KeyFirstRegistryCall | null {
   if (!call.exportedConstName) return null;
-  if (call.name !== 'mutation' && call.name !== 'query' && call.name !== 'query.elevated') {
+  if (call.name !== 'mutation' && call.name !== 'query') {
     return null;
   }
   if (typeof call.argumentStaticValues[0] !== 'string') return null;
@@ -164,11 +164,7 @@ function keyFirstRegistryIdentityDiagnostic({
   start: number;
 }): CompilerDiagnostic {
   const sourceForm =
-    primitive === 'mutation'
-      ? 'mutation({ input, handler })'
-      : primitive === 'query.elevated'
-        ? 'query.elevated({ load, reads })'
-        : 'query({ load, reads })';
+    primitive === 'mutation' ? 'mutation({ input, handler })' : 'query({ load, reads })';
   return {
     ...diagnosticFor(fileName, 'KV235', source, start, length),
     help: [

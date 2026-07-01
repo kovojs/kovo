@@ -8,7 +8,6 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import {
   callExpressionAtSpan,
   expressionResolvesToFrameworkExport,
-  expressionResolvesToFrameworkExportMember,
   frameworkExport,
   registerFrameworkIdentityProject,
   type FrameworkIdentityTypeScript,
@@ -1171,20 +1170,11 @@ function isKovoMutationCall(model: ComponentModuleModel, call: CallExpressionMod
 }
 
 function isKovoQueryCallee(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
-  return (
-    expressionResolvesToFrameworkExport(
-      ts as FrameworkIdentityTypeScript,
-      sourceFile,
-      expression,
-      KOVO_QUERY_IDENTITY,
-    ) ||
-    expressionResolvesToFrameworkExportMember(
-      ts as FrameworkIdentityTypeScript,
-      sourceFile,
-      expression,
-      KOVO_QUERY_IDENTITY,
-      'elevated',
-    )
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    KOVO_QUERY_IDENTITY,
   );
 }
 

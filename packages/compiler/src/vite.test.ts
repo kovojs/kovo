@@ -107,7 +107,7 @@ export const contact = domain();
 export const contactRow = tag();
 export const addToCart = mutation({ handler() {}, input: {} });
 export const cartQuery = query({ load: () => ({ count: 1 }), reads: [] });
-export const auditQuery = query.elevated({ load: () => ({ ok: true }), reads: [] });
+export const auditQuery = query({ load: () => ({ ok: true }), reads: [] });
 export const orderPaid = webhook('/webhooks/order-paid', {
   handler() {},
   input: {},
@@ -136,7 +136,7 @@ export const orderPaid = webhook('/webhooks/order-paid', {
       'export const cartQuery = __kovoAssignDerivedQueryKey(query({ load: () => ({ count: 1 }), reads: [] }), "app-shell/cart-query")',
     );
     expect(transformed?.code).toContain(
-      'export const auditQuery = __kovoAssignDerivedQueryKey(query.elevated({ load: () => ({ ok: true }), reads: [] }), "app-shell/audit-query")',
+      'export const auditQuery = __kovoAssignDerivedQueryKey(query({ load: () => ({ ok: true }), reads: [] }), "app-shell/audit-query")',
     );
     expect(transformed?.code).toContain(
       'export const orderPaid = __kovoAssignDerivedWebhookName(webhook',
@@ -213,7 +213,7 @@ export const token = kovoTrustedHtmlContent;
 import { query as defineQuery } from '@kovojs/server';
 
 export const cartQuery = defineQuery({ load: () => ({ count: 1 }), output: {}, reads: [] });
-export const auditQuery = defineQuery.elevated({ load: () => ({ ok: true }), output: {}, reads: [] });
+export const auditQuery = defineQuery({ load: () => ({ ok: true }), output: {}, reads: [] });
 `,
       'src/app-shell.ts',
     );
@@ -227,7 +227,7 @@ export const auditQuery = defineQuery.elevated({ load: () => ({ ok: true }), out
       'export const cartQuery = __kovoAssignDerivedQueryKey(defineQuery({ load: () => ({ count: 1 }), output: {}, reads: [] }), "app-shell/cart-query")',
     );
     expect(transformed?.code).toContain(
-      'export const auditQuery = __kovoAssignDerivedQueryKey(defineQuery.elevated({ load: () => ({ ok: true }), output: {}, reads: [] }), "app-shell/audit-query")',
+      'export const auditQuery = __kovoAssignDerivedQueryKey(defineQuery({ load: () => ({ ok: true }), output: {}, reads: [] }), "app-shell/audit-query")',
     );
   });
 
@@ -270,7 +270,7 @@ export const contact = defineDomain();
 export const contactTag = data.tag();
 export const addToCart = defineMutation({ handler() {}, input: {} });
 export const cartQuery = DataQuery({ load: () => ({ count: 1 }), reads: [] });
-export const auditQuery = DataQuery.elevated({ load: () => ({ ok: true }), reads: [] });
+export const auditQuery = DataQuery({ load: () => ({ ok: true }), reads: [] });
 export const orderPaid = routing.webhook('/webhooks/order-paid', {
   handler() {},
   input: {},
@@ -296,7 +296,7 @@ export const orderPaid = routing.webhook('/webhooks/order-paid', {
       'export const cartQuery = __kovoAssignDerivedQueryKey(DataQuery({ load: () => ({ count: 1 }), reads: [] }), "app-shell/cart-query")',
     );
     expect(transformed).toContain(
-      'export const auditQuery = __kovoAssignDerivedQueryKey(DataQuery.elevated({ load: () => ({ ok: true }), reads: [] }), "app-shell/audit-query")',
+      'export const auditQuery = __kovoAssignDerivedQueryKey(DataQuery({ load: () => ({ ok: true }), reads: [] }), "app-shell/audit-query")',
     );
     expect(transformed).toContain(
       `export const orderPaid = __kovoAssignDerivedWebhookName(routing.webhook('/webhooks/order-paid', {
@@ -315,14 +315,13 @@ export const orderPaid = routing.webhook('/webhooks/order-paid', {
 function component(value) { return value; }
 function domain() { return {}; }
 function mutation(value) { return value; }
-const query = Object.assign((value) => value, { elevated(value) { return value; } });
+function query(value) { return value; }
 const routing = { webhook(_path, value) { return value; } };
 
 const LocalRegion = component({ render() { return '<section />'; } });
 export const contact = domain();
 export const addToCart = mutation({ handler() {}, input: {} });
 export const cartQuery = query({ load: () => ({ count: 1 }), reads: [] });
-export const auditQuery = query.elevated({ load: () => ({ ok: true }), reads: [] });
 export const orderPaid = routing.webhook('/webhooks/order-paid', { handler() {} });
 `,
     });

@@ -271,11 +271,13 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     ]);
   });
 
-  it('does not flag a query.elevated loader (the audited escape)', () => {
+  it('flags a legacy query.elevated loader that reaches a Drizzle write', () => {
     const result = reach(
       `${QHEAD}export const dashboard = query.elevated("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.delete(logs).where(eq(logs.id, "x")); return { ok: true }; } });`,
     );
-    expect(result).toEqual([]);
+    expect(result).toEqual([
+      { operation: 'delete', query: 'dashboard', site: 'q.ts:4', table: 'logs' },
+    ]);
   });
 
   it('flags a query() loader that directly reaches a raw Drizzle write verb', () => {
@@ -292,11 +294,18 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     ]);
   });
 
-  it('keeps query.elevated as the escape for direct raw Drizzle write verbs', () => {
+  it('flags legacy query.elevated for direct raw Drizzle write verbs', () => {
     const result = reach(
       `${QHEAD}export const dashboard = query.elevated("dashboard", { load: async (db: PgAsyncDatabase<any, any>) => { await db.execute("vacuum"); return { ok: true }; } });`,
     );
-    expect(result).toEqual([]);
+    expect(result).toEqual([
+      {
+        operation: 'execute',
+        query: 'dashboard',
+        site: 'q.ts:4',
+        table: '__kovoUnresolvedReadSource',
+      },
+    ]);
   });
 
   it('does not flag a read-only loader', () => {

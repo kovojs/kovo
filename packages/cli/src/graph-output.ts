@@ -866,7 +866,7 @@ export function kovoCheck(
     }
 
     // SPEC §6.6/§9.4 / secure-framework Phase 5: a query() loader that directly reaches a
-    // Drizzle write (without query.elevated) is the blocking KV433 confused-deputy error.
+    // Drizzle write is the blocking KV433 confused-deputy error.
     for (const finding of sortedQueryWriteReachability(graph.queryWriteReachability ?? [])) {
       pushFinding(queryWriteReachabilityKv433Line(finding), true);
     }

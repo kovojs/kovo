@@ -67,7 +67,6 @@ export type {
 /** Attribute object returned by `mutationFormAttributes(...)`. */
 export type { MutationFormAttributes } from '../mutation.js';
 export type {
-  ElevatedQueryFact,
   PreserveDefinitionInference,
   QueryDeclarationBoundaryShape,
   QueryDeclarationDefinition,
@@ -89,7 +88,6 @@ export type {
  * from the exported binding plus module path and emits the generated metadata.
  */
 export const query = queryImplementation as unknown as QueryFactory;
-export { drainElevatedQueryFacts } from '../query.js';
 /**
  * Declare a durable background function whose serialized jobs are enqueued by
  * `request.schedule(...)` and drained by the node JobRunner (SPEC §9.6).

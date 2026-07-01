@@ -136,12 +136,7 @@ function sourceDerivedPrimitive(
 
 function isQueryObjectCall(sourceFile: ts.SourceFile, call: ts.CallExpression): boolean {
   if (!isSingleObjectArgument(call)) return false;
-  if (resolvesTo(sourceFile, call.expression, QUERY_IDENTITY)) return true;
-  return (
-    ts.isPropertyAccessExpression(call.expression) &&
-    call.expression.name.text === 'elevated' &&
-    resolvesTo(sourceFile, call.expression.expression, QUERY_IDENTITY)
-  );
+  return resolvesTo(sourceFile, call.expression, QUERY_IDENTITY);
 }
 
 function resolvesTo(

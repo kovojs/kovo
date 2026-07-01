@@ -1114,6 +1114,8 @@ export function staticQueryDeclarationFromCall(
 ): StaticQueryDeclaration | null {
   const expression = queryCall.getExpression();
   const isQueryCall = isKovoServerCalleeExpression(expression, 'query');
+  // Legacy `.elevated` query calls are still parsed here so KV433 can fail closed instead of
+  // letting a demoted GET-write spelling disappear from the static graph.
   const isElevatedQueryCall =
     Node.isPropertyAccessExpression(expression) &&
     expression.getName() === 'elevated' &&

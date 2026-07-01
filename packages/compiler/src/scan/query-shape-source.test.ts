@@ -18,7 +18,7 @@ export const product = q({
   load: () => ({ name: 'Desk' }),
 });
 
-export const audit = data.query.elevated({
+export const audit = data.query({
   output: data.s.object({ ok: data.s.boolean() }),
   reads: [],
   load: () => ({ ok: true }),
