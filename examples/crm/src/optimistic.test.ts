@@ -1,5 +1,6 @@
 import '../../../tests/example-generated-graphs.setup.js';
 
+import { readonlyDb } from '@kovojs/server';
 import { eq, sql } from 'drizzle-orm';
 import { describe, expect, it } from 'vitest';
 
@@ -112,7 +113,7 @@ describe('CRM optimistic demo behavior', () => {
 });
 
 function queryContext(db: CrmDb) {
-  return { db, request: { db } };
+  return { db: readonlyDb(db), request: { db } };
 }
 
 function createDealEffect(input: CreateDealInput) {

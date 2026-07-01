@@ -170,7 +170,7 @@ describe('commerce example queries', () => {
         orderHistoryQuery.load(
           {},
           {
-            db,
+            db: context.db,
             request: { session: { id: 's-custom', user: { id: 'u-custom-query' } } },
             session: { id: 's-custom', user: { id: 'u-custom-query' } },
           },
