@@ -177,6 +177,9 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - name: Install Chromium for browser-backed starter shard
+        if: matrix.shard == 'defer-headers-redirect-islands'
+        run: vp exec playwright install --with-deps chromium
       - name: Generated starter proofs (${{ matrix.shard }})
         run: |
           for file in ${{ matrix.files }}; do
