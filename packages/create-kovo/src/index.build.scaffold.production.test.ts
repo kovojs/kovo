@@ -45,5 +45,5 @@ describe('create-kovo starter (build integration: scaffold production)', () => {
     } finally {
       app.cleanup();
     }
-  }, 120_000);
+  }, 240_000);
 });

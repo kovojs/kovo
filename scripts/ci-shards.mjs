@@ -12,6 +12,7 @@ const DEFAULT_HISTORY_NAME = 'timing-history.json';
 const DEFAULT_DURATION_SECONDS = 5;
 const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/cli/src/index.kovo-compile.test.ts',
+  'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts',
   'packages/core/src/diagnostics.test.ts',
   'packages/core/src/sql-safety.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.assets.test.ts',

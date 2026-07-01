@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  diagnosticsForTouchGraph,
   diagnosticsForQueryFacts,
   extractOwnerAuditFromProject,
   extractTouchGraphFromProject,
@@ -921,6 +922,94 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         site: 'user.queries.ts:8',
       },
     ]);
+  });
+
+  it('marks closure-scoped touch graph reads as KV406 instead of dropping the function fact', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'account.domain.ts',
+          source: [
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const accounts = pgTable("accounts", {',
+            '  id: text("id").primaryKey(),',
+            '  ownerId: text("owner_id").notNull(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "account", key: "id", owner: "ownerId", secret: ["passwordHash"] }));',
+            '',
+            'export async function auditAccount(db: PgAsyncDatabase<any, any>) {',
+            '  const loadSecret = () => db.select({ passwordHash: accounts.passwordHash }).from(accounts);',
+            '  return loadSecret();',
+            '}',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      auditAccount: {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'KV406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Drizzle select read is hidden inside an ordinary closure; extract a named helper with a typed receiver parameter or declare the read/touch surface.',
+            site: 'account.domain.ts:10',
+          },
+        ],
+      },
+    });
+    expect(diagnosticsForTouchGraph(graph)).toEqual([
+      {
+        code: 'KV406',
+        message:
+          'Statically un-analyzable write site; manual touches required. Drizzle select read is hidden inside an ordinary closure; extract a named helper with a typed receiver parameter or declare the read/touch surface.',
+        severity: 'error',
+        site: 'account.domain.ts:10',
+      },
+    ]);
+  });
+
+  it('marks wrapper callback reads in domain write callbacks as KV406', () => {
+    const graph = extractTouchGraphFromProject({
+      files: [
+        {
+          fileName: 'account.domain.ts',
+          source: [
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const accounts = pgTable("accounts", {',
+            '  id: text("id").primaryKey(),',
+            '}, kovo({ domain: "account", key: "id" }));',
+            'declare function wrap<T>(callback: () => Promise<T>): () => Promise<T>;',
+            '',
+            'export const account = domain({',
+            '  refresh: write(async (db: PgAsyncDatabase<any, any>) => {',
+            '    const load = wrap(() => db.select({ id: accounts.id }).from(accounts));',
+            '    return load();',
+            '  }),',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(graph).toEqual({
+      'account.refresh': {
+        reads: [],
+        touches: [],
+        unresolved: [
+          {
+            code: 'KV406',
+            message:
+              'Statically un-analyzable write site; manual touches required. Drizzle select read is hidden inside an ordinary closure; extract a named helper with a typed receiver parameter or declare the read/touch surface.',
+            site: 'account.domain.ts:10',
+          },
+        ],
+      },
+    });
   });
 
   it('folds local query-loader helper reads through typed receiver carriers', () => {

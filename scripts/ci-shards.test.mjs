@@ -159,6 +159,9 @@ describe('ci-shards', () => {
       false,
     );
     expect(includeVitest('packages/core/src/sql-safety.test.ts')).toBe(false);
+    expect(
+      includeVitest('packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts'),
+    ).toBe(false);
     expect(includeVitest('packages/server/src/guards.test.ts')).toBe(false);
   });
 });

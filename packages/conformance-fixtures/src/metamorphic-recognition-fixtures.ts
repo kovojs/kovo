@@ -31,12 +31,23 @@ export type MetamorphicVariantKind =
 
 export type MetamorphicExpectation = 'enforced' | 'todo';
 
+export const METAMORPHIC_RECOGNITION_BLOCKERS = {
+  compilerMultiFileFixture: 'Compiler multi-file component fixture harness',
+  failClosedDefault: 'Workstream A fail-closed default',
+  irVerification: 'Workstream C IR verification',
+  semanticIdentity: 'Workstream B semantic identity resolver',
+} as const;
+
+export type MetamorphicRecognitionBlocker =
+  (typeof METAMORPHIC_RECOGNITION_BLOCKERS)[keyof typeof METAMORPHIC_RECOGNITION_BLOCKERS];
+
 export interface MetamorphicRunResult {
   codes: readonly string[];
   detail: readonly string[];
 }
 
 export interface MetamorphicVariantCase {
+  blockers?: readonly MetamorphicRecognitionBlocker[];
   expectation: MetamorphicExpectation;
   kind: MetamorphicVariantKind;
   label: string;
@@ -60,6 +71,7 @@ export interface MetamorphicCoverageRow {
 }
 
 interface KovoServerBindingVariant {
+  blockers?: readonly MetamorphicRecognitionBlocker[];
   callee: string;
   expectation: MetamorphicExpectation;
   extraFiles?: readonly SourceFileInput[];
@@ -71,6 +83,7 @@ interface KovoServerBindingVariant {
 }
 
 interface SqlBindingVariant {
+  blockers?: readonly MetamorphicRecognitionBlocker[];
   expectation: MetamorphicExpectation;
   expression: string;
   extraFiles?: readonly SourceFileInput[];
@@ -82,6 +95,7 @@ interface SqlBindingVariant {
 }
 
 interface CompilerExpressionVariant {
+  blockers?: readonly MetamorphicRecognitionBlocker[];
   expectation: MetamorphicExpectation;
   extraFilesUnsupported?: true;
   importLine?: string;
@@ -162,6 +176,7 @@ export function metamorphicRecognitionCoverageRows(
 export function metamorphicRecognitionTodoRows(
   seeds: readonly MetamorphicRecognitionSeed[] = metamorphicRecognitionSeeds,
 ): Array<{
+  blockers: readonly MetamorphicRecognitionBlocker[];
   code: Phase0MetamorphicCode;
   kind: MetamorphicVariantKind;
   label: string;
@@ -171,6 +186,7 @@ export function metamorphicRecognitionTodoRows(
     seed.variants
       .filter((variant) => variant.expectation === 'todo')
       .map((variant) => ({
+        blockers: variant.blockers ?? [],
         code: seed.code,
         kind: variant.kind,
         label: variant.label,
@@ -179,11 +195,77 @@ export function metamorphicRecognitionTodoRows(
   );
 }
 
+export function metamorphicRecognitionGateViolations(
+  seeds: readonly MetamorphicRecognitionSeed[] = metamorphicRecognitionSeeds,
+): string[] {
+  const failures: string[] = [];
+  const requiredCodes = new Set(PHASE0_METAMORPHIC_REQUIRED_CODES);
+  const seenCodes = new Map<Phase0MetamorphicCode, number>();
+  const validBlockers = new Set<string>(Object.values(METAMORPHIC_RECOGNITION_BLOCKERS));
+
+  for (const seed of seeds) {
+    seenCodes.set(seed.code, (seenCodes.get(seed.code) ?? 0) + 1);
+
+    if (seed.variants.length === 0) {
+      failures.push(`${seed.code}: add at least one metamorphic recognition variant`);
+      continue;
+    }
+
+    if (!seed.variants.some((variant) => variant.kind === 'control')) {
+      failures.push(`${seed.code}: add a control variant before gating spelling variants`);
+    }
+
+    if (!seed.variants.some((variant) => variant.expectation === 'enforced')) {
+      failures.push(`${seed.code}: at least one variant must be enforced in CI`);
+    }
+
+    const seenVariantKinds = new Set<MetamorphicVariantKind>();
+    for (const variant of seed.variants) {
+      if (seenVariantKinds.has(variant.kind)) {
+        failures.push(`${seed.code}: duplicate variant kind ${variant.kind}`);
+      }
+      seenVariantKinds.add(variant.kind);
+
+      if (variant.expectation === 'enforced' && variant.run === undefined) {
+        failures.push(`${seed.code}/${variant.kind}: enforced variants must provide a runner`);
+      }
+
+      if (variant.expectation === 'todo') {
+        if ((variant.reason ?? '').trim().length === 0) {
+          failures.push(`${seed.code}/${variant.kind}: TODO variants require a precise reason`);
+        }
+        if ((variant.blockers ?? []).length === 0) {
+          failures.push(`${seed.code}/${variant.kind}: TODO variants require named blockers`);
+        }
+        for (const blocker of variant.blockers ?? []) {
+          if (!validBlockers.has(blocker)) {
+            failures.push(`${seed.code}/${variant.kind}: unknown blocker ${blocker}`);
+          }
+        }
+      }
+    }
+  }
+
+  for (const code of PHASE0_METAMORPHIC_REQUIRED_CODES) {
+    if (!seenCodes.has(code)) failures.push(`${code}: missing CI-gated metamorphic seed`);
+  }
+
+  for (const [code, count] of seenCodes) {
+    if (!requiredCodes.has(code)) {
+      failures.push(`${code}: seed code is not enrolled in PHASE0_METAMORPHIC_REQUIRED_CODES`);
+    }
+    if (count > 1) failures.push(`${code}: duplicate metamorphic seed entries`);
+  }
+
+  return failures;
+}
+
 function variantCase(
   variant: KovoServerBindingVariant | SqlBindingVariant | CompilerExpressionVariant,
   run: () => MetamorphicRunResult,
 ): MetamorphicVariantCase {
   return {
+    ...(variant.blockers === undefined ? {} : { blockers: variant.blockers }),
     expectation: variant.expectation,
     kind: variant.kind,
     label: variant.label,
@@ -238,22 +320,24 @@ function kovoServerBindingVariants(): readonly KovoServerBindingVariant[] {
     },
     {
       callee: 'q',
-      expectation: 'todo',
+      expectation: 'enforced',
       importLine: 'import * as srv from "@kovojs/server";',
       kind: 'destructured-binding',
       label: 'destructured namespace binding',
-      reason:
-        'Workstream B identity resolution should follow destructured namespace bindings; the current source recognizer does not.',
       setupLines: ['const { query: q } = srv;'],
     },
     {
+      blockers: [
+        METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
+        METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
+      ],
       callee: 'defineQuery',
       expectation: 'todo',
       importLine: 'import { query } from "@kovojs/server";',
       kind: 'wrapper-helper',
       label: 'wrapper helper call',
       reason:
-        'Workstreams A/C should fail closed or recognize helper-indirect query declarations; current query extraction is declaration-call based.',
+        'Workstream A fail-closed default / Workstream C IR verification: helper-indirect query declarations need either a KV406 unresolved-declaration diagnostic or IR-level sink facts; current query extraction is declaration-call based.',
       setupLines: [
         'const defineQuery = (key: string, body: unknown) => query(key, body as never);',
       ],
@@ -366,12 +450,13 @@ export const Post = component({
 `,
     },
     {
+      blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity],
       expectation: 'todo',
       importLine: 'import * as browser from "@kovojs/browser";',
       kind: 'namespace-import',
       label: 'trustedHtml namespace member',
       reason:
-        'The current KV426 validator records direct named browser imports; Workstream B should lift this to semantic export identity.',
+        'Workstream B semantic identity resolver: the current KV426 validator records direct named browser imports, not browser.trustedHtml namespace members.',
       source: `
 export const Post = component({
   queries: { post: postQuery },
@@ -380,13 +465,17 @@ export const Post = component({
 `,
     },
     {
+      blockers: [
+        METAMORPHIC_RECOGNITION_BLOCKERS.compilerMultiFileFixture,
+        METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity,
+      ],
       expectation: 'todo',
       extraFilesUnsupported: true,
       importLine: 'import { th } from "./browser-barrel";',
       kind: 're-export-barrel',
       label: 'trustedHtml local barrel re-export',
       reason:
-        'compileComponentModule is currently single-file and the KV426 recognizer does not follow browser re-export barrels.',
+        'Compiler multi-file component fixture harness / Workstream B semantic identity resolver: compileComponentModule is currently single-file and KV426 does not follow browser re-export barrels.',
       source: `
 export const Post = component({
   queries: { post: postQuery },
@@ -395,12 +484,13 @@ export const Post = component({
 `,
     },
     {
+      blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity],
       expectation: 'todo',
       importLine: 'import { trustedHtml } from "@kovojs/browser";',
       kind: 'local-alias',
       label: 'trustedHtml local const alias',
       reason:
-        'The current KV426 recognizer tracks imported local names, not same-scope aliases of the trustedHtml binding.',
+        'Workstream B semantic identity resolver: the current KV426 recognizer tracks imported local names, not same-scope aliases of the trustedHtml binding.',
       source: `
 const th = trustedHtml;
 export const Post = component({
@@ -410,12 +500,16 @@ export const Post = component({
 `,
     },
     {
+      blockers: [
+        METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
+        METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
+      ],
       expectation: 'todo',
       importLine: 'import { trustedHtml } from "@kovojs/browser";',
       kind: 'wrapper-helper',
       label: 'trustedHtml wrapper helper',
       reason:
-        'The current KV426 gate documents function-call results as bounded interprocedural residue until fail-closed provenance lands.',
+        'Workstream A fail-closed default / Workstream C IR verification: function-call return provenance is the documented KV426 interprocedural residue until fail-closed provenance lands.',
       source: `
 const unsafeTrust = (value: string) => trustedHtml(value);
 export const Post = component({
@@ -457,11 +551,12 @@ export const CartBadge = component({
 `,
     },
     {
+      blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.irVerification],
       expectation: 'todo',
       kind: 'destructured-binding',
       label: 'destructured query field',
       reason:
-        'The current KV311 coverage pass does not follow destructured query fields; Workstreams A/C should make this fail closed through model facts.',
+        'Workstream C IR verification: the current KV311 coverage pass does not follow destructured query fields into query-read positions.',
       source: `
 export const CartBadge = component({
   queries: { cart: {} },
@@ -474,11 +569,15 @@ export const CartBadge = component({
 `,
     },
     {
+      blockers: [
+        METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
+        METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
+      ],
       expectation: 'todo',
       kind: 'wrapper-helper',
       label: 'closure helper returning query value',
       reason:
-        'The residual closure-shaped read is intentionally left visible for Workstreams A/C; current coverage extraction does not traverse ordinary closures.',
+        'Workstream A fail-closed default / Workstream C IR verification: closure-shaped query reads remain residual because current coverage extraction does not traverse ordinary closures.',
       source: `
 export const CartBadge = component({
   queries: { cart: {} },

@@ -964,6 +964,12 @@ function relationalReadWithObjectTableExpressions(
     const opaqueClosure = opaqueTouchClosureAncestor(call, body);
     if (!opaqueClosure) continue;
 
+    const directSelectRead = selectReadCall(call);
+    const directRelationalRead = directSelectRead ? undefined : relationalReadCall(call);
+    const directReadReceiver = directSelectRead?.receiver ?? directRelationalRead?.receiver;
+    const hasDirectRead =
+      directReadReceiver !== undefined &&
+      isProjectDrizzleReceiverIdentifier(directReadReceiver, receivers);
     const directWrite = isDrizzleWriteCall(call)
       ? directDrizzleReceiverCallSurface(call)
       : undefined;
@@ -981,13 +987,17 @@ function relationalReadWithObjectTableExpressions(
           projectReceiverReferenceInArgument(argument, receivers, carrierSymbolKeys),
         );
 
-    if (!hasDirectWrite && !helperCarriesReceiver) continue;
+    if (!hasDirectRead && !hasDirectWrite && !helperCarriesReceiver) continue;
 
     const index = call.getStart() - bodyOffset;
     if (index >= 0) {
       calls.push({
         index,
-        name: directWrite?.name ?? helperName ?? 'callback',
+        name: directSelectRead
+          ? 'closure-select'
+          : directRelationalRead
+            ? 'closure-relational-query'
+            : (directWrite?.name ?? helperName ?? 'callback'),
       });
     }
   }

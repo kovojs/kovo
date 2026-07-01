@@ -148,6 +148,12 @@ function unresolvedMessage(site: UnresolvedSummaryInput): string {
   if (site.operation === 'delete-predicate') {
     return `${diagnosticDefinitions.KV406.message} Delete predicate read source could not be resolved to a Drizzle table.`;
   }
+  if (site.operation === 'closure-select') {
+    return `${diagnosticDefinitions.KV406.message} Drizzle select read is hidden inside an ordinary closure; extract a named helper with a typed receiver parameter or declare the read/touch surface.`;
+  }
+  if (site.operation === 'closure-relational-query') {
+    return `${diagnosticDefinitions.KV406.message} Drizzle relational read is hidden inside an ordinary closure; extract a named helper with a typed receiver parameter or declare the read/touch surface.`;
+  }
   return diagnosticDefinitions.KV406.message;
 }
 
