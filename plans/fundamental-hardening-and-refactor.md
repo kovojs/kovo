@@ -358,7 +358,8 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     - Evidence: Same focused headless-ui Vitest/VP/API/gallery-browser/diff checks listed for U1 passed after routing combobox/autocomplete/select/dropdown/context/menubar trigger ARIA and disabled attributes through `triggerAttributes`.
   - [x] **U6** `createCollectionAdapter({getItems,projector})` factory retiring the six-fold typeahead/move + option/result scaffolding (e.g. `dropdown-menu.ts:774-795` vs `select.ts:802-818`); home for U1/U2/U4. L · med.
     - Evidence: Same focused headless-ui Vitest/VP/API/gallery-browser/diff checks listed for U1 passed after moving combobox/autocomplete/select/dropdown/context/menubar movement/typeahead projection through `createCollectionAdapter`.
-  - [ ] **U7** delete or document the dead `lib/positioning-fallback.ts` (exported via `internal.ts:9,43`, consumed by nothing but its own test; primitives use CSS anchor positioning). Run `audit-public-api` first. S · low.
+  - [x] **U7** delete or document the dead `lib/positioning-fallback.ts` (exported via `internal.ts:9,43`, consumed by nothing but its own test; primitives use CSS anchor positioning). Run `audit-public-api` first. S · low.
+    - Evidence: targeted API audit confirmed `positioning-fallback` was internal-only and unused outside its own test; `pnpm run check:api-surface`, focused headless-ui Vitest, touched-file `vp check`, reference scan, and `git diff --check` passed after deleting the dead module and internal exports.
 
 ## Verification map
 

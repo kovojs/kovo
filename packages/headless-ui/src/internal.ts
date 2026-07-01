@@ -6,8 +6,6 @@ export const checkedState = foundation.checkedState;
 /** @internal */
 export const cn = foundation.cn;
 /** @internal */
-export const computeFloatingPosition = foundation.computeFloatingPosition;
-/** @internal */
 export const createChangeDetail = foundation.createChangeDetail;
 /** @internal */
 export const dataDisabled = foundation.dataDisabled;
@@ -40,8 +38,6 @@ export const nextTypeaheadState = foundation.nextTypeaheadState;
 /** @internal */
 export const openState = foundation.openState;
 /** @internal */
-export const oppositePlacement = foundation.oppositePlacement;
-/** @internal */
 export const pressedState = foundation.pressedState;
 /** @internal */
 export const safeUrl = foundation.safeUrl;
@@ -56,24 +52,6 @@ export type ClassDictionary = Foundation.ClassDictionary;
 export type ClassValue = Foundation.ClassValue;
 /** @internal */
 export type CollectionOrientation = Foundation.CollectionOrientation;
-/** @internal */
-export type FloatingOffset = Foundation.FloatingOffset;
-/** @internal */
-export type FloatingOverflow = Foundation.FloatingOverflow;
-/** @internal */
-export type FloatingPlacement = Foundation.FloatingPlacement;
-/** @internal */
-export type FloatingPlacementAlign = Foundation.FloatingPlacementAlign;
-/** @internal */
-export type FloatingPlacementSide = Foundation.FloatingPlacementSide;
-/** @internal */
-export type FloatingPosition = Foundation.FloatingPosition;
-/** @internal */
-export type FloatingPositionOptions = Foundation.FloatingPositionOptions;
-/** @internal */
-export type FloatingRect = Foundation.FloatingRect;
-/** @internal */
-export type FloatingSize = Foundation.FloatingSize;
 /** @internal */
 export type KovoUiDocumentTokenProperty = Foundation.KovoUiDocumentTokenProperty;
 /** @internal */
