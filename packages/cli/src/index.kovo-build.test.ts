@@ -1386,6 +1386,7 @@ export default createApp({
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
       expect(errorOutput).toMatch(/ERROR KV426 promo\.tsx:\d+:\d+/);
+      expect(errorOutput.match(/ERROR KV426 promo\.tsx/g) ?? []).toHaveLength(2);
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -3104,6 +3105,7 @@ export const Promo = component({
 function trustedHtmlStarBarrelElementAccessPreflightComponentSource(): string {
   return `
 import { component, publicAccess, query, s } from '@kovojs/server';
+import * as browser from '@kovojs/browser';
 import * as safeHtml from './safe-html';
 
 export const postQuery = query('post', {
@@ -3114,7 +3116,12 @@ export const postQuery = query('post', {
 
 export const Promo = component({
   queries: { post: postQuery },
-  render: ({ post }) => <article>{safeHtml['trustedHtml'](post.body)}</article>,
+  render: ({ post }) => (
+    <article>
+      {browser['trustedHtml'](post.body)}
+      {safeHtml['trustedHtml'](post.body)}
+    </article>
+  ),
 });
 `;
 }

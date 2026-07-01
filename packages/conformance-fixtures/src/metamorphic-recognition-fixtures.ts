@@ -1,3 +1,7 @@
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { dirname, join } from 'node:path';
+
 import {
   analyzeSqlSafetyFromProject,
   diagnosticsForQueryFacts,
@@ -8,6 +12,7 @@ import {
 } from '@kovojs/drizzle/internal/static';
 
 import { compileComponentModule } from '../../compiler/src/index.js';
+import { viteFrameworkIdentityFiles } from '../../compiler/src/internal.js';
 
 export const PHASE0_METAMORPHIC_REQUIRED_CODES = [
   'KV414',
@@ -35,6 +40,12 @@ export type MetamorphicVariantKind =
 
 export type MetamorphicExpectation = 'enforced' | 'todo';
 
+export type MetamorphicProofPath =
+  | 'fixture-only-compiler'
+  | 'production-resolver'
+  | 'single-file-compiler'
+  | 'static-project';
+
 export const METAMORPHIC_RECOGNITION_BLOCKERS = {
   compilerMultiFileFixture: 'Compiler multi-file component fixture harness',
   failClosedDefault: 'Workstream A fail-closed default',
@@ -55,8 +66,10 @@ export interface MetamorphicVariantCase {
   expectation: MetamorphicExpectation;
   kind: MetamorphicVariantKind;
   label: string;
+  proofPath?: MetamorphicProofPath;
   reason?: string;
   run?: () => MetamorphicRunResult;
+  usesFixtureFiles?: boolean;
 }
 
 export interface MetamorphicRecognitionSeed {
@@ -86,6 +99,7 @@ interface KovoServerBindingVariant {
   importLine: string;
   kind: MetamorphicVariantKind;
   label: string;
+  proofPath?: MetamorphicProofPath;
   reason?: string;
   setupLines?: readonly string[];
 }
@@ -98,6 +112,7 @@ interface SqlBindingVariant {
   importLine: string;
   kind: MetamorphicVariantKind;
   label: string;
+  proofPath?: MetamorphicProofPath;
   reason?: string;
   setupLines?: readonly string[];
 }
@@ -109,6 +124,7 @@ interface CompilerExpressionVariant {
   importLine?: string;
   kind: MetamorphicVariantKind;
   label: string;
+  proofPath?: MetamorphicProofPath;
   reason?: string;
   source: string;
 }
@@ -249,6 +265,16 @@ export function metamorphicRecognitionGateViolations(
         failures.push(`${seed.code}/${variant.kind}: enforced variants must provide a runner`);
       }
 
+      if (
+        variant.expectation === 'enforced' &&
+        variant.usesFixtureFiles === true &&
+        variant.proofPath === 'fixture-only-compiler'
+      ) {
+        failures.push(
+          `${seed.code}/${variant.kind}: security variants with sibling files must use the production resolver path, not fixture-only extraFiles`,
+        );
+      }
+
       if (variant.expectation === 'todo') {
         const todoKey = `${seed.code}/${variant.kind}`;
         if (!approvedTodos.has(todoKey)) {
@@ -292,9 +318,20 @@ function variantCase(
     expectation: variant.expectation,
     kind: variant.kind,
     label: variant.label,
+    proofPath: variant.proofPath ?? defaultProofPath(variant),
     ...(variant.reason === undefined ? {} : { reason: variant.reason }),
     ...(variant.expectation === 'enforced' ? { run } : {}),
+    usesFixtureFiles: (variant.extraFiles?.length ?? 0) > 0,
   };
+}
+
+function defaultProofPath(
+  variant: KovoServerBindingVariant | SqlBindingVariant | CompilerExpressionVariant,
+): MetamorphicProofPath {
+  if ('source' in variant) {
+    return (variant.extraFiles?.length ?? 0) > 0 ? 'production-resolver' : 'single-file-compiler';
+  }
+  return 'static-project';
 }
 
 function kovoServerBindingVariants(): readonly KovoServerBindingVariant[] {
@@ -820,11 +857,7 @@ function runCompilerDiagnosticVariant(
   code: Phase0MetamorphicCode,
   variant: CompilerExpressionVariant,
 ): MetamorphicRunResult {
-  const result = compileComponentModule({
-    ...(variant.extraFiles ? { extraFiles: variant.extraFiles } : {}),
-    fileName: `${code.toLowerCase()}-${variant.kind}.tsx`,
-    source: [variant.importLine ?? '', variant.source].filter(Boolean).join('\n'),
-  });
+  const result = compileComponentVariant(code, variant);
   const diagnostics = result.diagnostics.filter((diagnostic) => diagnostic.code === code);
 
   return {
@@ -834,11 +867,7 @@ function runCompilerDiagnosticVariant(
 }
 
 function runDirectDbHandlerVariant(variant: CompilerExpressionVariant): MetamorphicRunResult {
-  const result = compileComponentModule({
-    ...(variant.extraFiles ? { extraFiles: variant.extraFiles } : {}),
-    fileName: `kv330-${variant.kind}.ts`,
-    source: [variant.importLine ?? '', variant.source].filter(Boolean).join('\n'),
-  });
+  const result = compileComponentVariant('KV330', variant);
   const diagnostics = result.diagnostics.filter(
     (diagnostic) => diagnostic.code === 'KV330' || diagnostic.code === 'KV406',
   );
@@ -855,6 +884,39 @@ function runDirectDbHandlerVariant(variant: CompilerExpressionVariant): Metamorp
       ),
     ],
   };
+}
+
+function compileComponentVariant(
+  code: Phase0MetamorphicCode,
+  variant: CompilerExpressionVariant,
+): ReturnType<typeof compileComponentModule> {
+  const fileName = `${code.toLowerCase()}-${variant.kind}.${code === 'KV330' ? 'ts' : 'tsx'}`;
+  const source = [variant.importLine ?? '', variant.source].filter(Boolean).join('\n');
+  if (!variant.extraFiles?.length) return compileComponentModule({ fileName, source });
+
+  // M2/E2: multi-file compiler security variants must exercise the same sibling-file resolver
+  // collection used by Vite/kovo build, not certify a fixture-only `extraFiles` shortcut.
+  const root = mkdtempSync(join(tmpdir(), 'kovo-metamorphic-resolver-'));
+  try {
+    writeMetamorphicSourceFile(root, fileName, source);
+    for (const extraFile of variant.extraFiles) {
+      writeMetamorphicSourceFile(root, extraFile.fileName, extraFile.source);
+    }
+    const extraFiles = viteFrameworkIdentityFiles(root, fileName, source);
+    return compileComponentModule({
+      ...(extraFiles.length === 0 ? {} : { extraFiles }),
+      fileName,
+      source,
+    });
+  } finally {
+    rmSync(root, { force: true, recursive: true });
+  }
+}
+
+function writeMetamorphicSourceFile(root: string, fileName: string, source: string): void {
+  const path = join(root, fileName);
+  mkdirSync(dirname(path), { recursive: true });
+  writeFileSync(path, source, 'utf8');
 }
 
 function ownerSecretQueryFiles(variant: KovoServerBindingVariant): SourceFileInput[] {

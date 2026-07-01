@@ -140,6 +140,34 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
         'KV435: missing CI-gated metamorphic seed',
       ]),
     );
+    expect(
+      metamorphicRecognitionGateViolations([
+        {
+          code: 'KV426',
+          description: 'fixture-only compiler security proof',
+          label: 'broken fixture-only',
+          variants: [
+            {
+              expectation: 'enforced',
+              kind: 'control',
+              label: 'control',
+              run: () => ({ codes: ['KV426'], detail: [] }),
+            },
+            {
+              expectation: 'enforced',
+              kind: 're-export-barrel',
+              label: 'fixture-only barrel',
+              proofPath: 'fixture-only-compiler',
+              run: () => ({ codes: ['KV426'], detail: [] }),
+              usesFixtureFiles: true,
+            },
+          ],
+        },
+        ...metamorphicRecognitionSeeds.filter((seed) => seed.code !== 'KV426'),
+      ]),
+    ).toContain(
+      'KV426/re-export-barrel: security variants with sibling files must use the production resolver path, not fixture-only extraFiles',
+    );
   });
 
   it('keeps phase-0 TODOs empty unless a test explicitly approves them', () => {
