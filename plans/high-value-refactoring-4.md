@@ -56,7 +56,7 @@ that removes the broader source of drift.
   - Verification: `pnpm exec vitest --run packages/drizzle/src/index.identity-resolver.test.ts packages/compiler/src/scan/query-shape-source.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/server/src/vite-data-plane-gate.test.ts` plus `node scripts/fundamental-fixes-inventory.mjs`.
   - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.identity-resolver.test.ts packages/compiler/src/scan/query-shape-source.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/server/src/vite-data-plane-gate.test.ts` passed with 4 files/101 tests after merging `agent/hvr4-identity-catalog-20260701-002426`; `node scripts/fundamental-fixes-inventory.mjs`, `pnpm run check:vp`, and `git diff --check HEAD^..HEAD` passed.
 
-- [ ] **P0.4 - Make CLI auth/session audits consume producer-owned graph facts.**
+- [x] **P0.4 - Make CLI auth/session audits consume producer-owned graph facts.**
   - Current signals: `packages/cli/src/graph-output.ts` has producer-owned access facts, but security
     checks such as unguarded/KV418-style audits still parse guard strings locally through helpers such
     as `unguardedAccesses()`, `hasAuthGuard()`, and session/ownership string classifiers.
@@ -66,6 +66,7 @@ that removes the broader source of drift.
   - Risk reduced: guard spelling changes cannot make `kovo check`/`kovo explain` fail open or produce
     false positives outside the compiler/server graph producers.
   - Verification: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/core/src/graph.test.ts packages/compiler/src/registry.test.ts packages/server/src/access-graph.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/core/src/graph.test.ts packages/compiler/src/registry.test.ts packages/server/src/access-graph.test.ts` passed with 5 files/187 tests after merging `agent/hvr4-graph-facts-20260701-002446`; `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check HEAD^..HEAD` passed.
 
 - [x] **P0.5 - Make scope audits consume canonical read provenance only.**
   - Current signals: `packages/drizzle/src/static.ts` still lets `QueryFact` carry parallel legacy scope
