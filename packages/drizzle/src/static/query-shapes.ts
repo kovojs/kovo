@@ -2,6 +2,7 @@ import {
   Node,
   SyntaxKind,
   ts,
+  type ArrowFunction,
   type BindingElement,
   type CallExpression,
   type FunctionDeclaration,
@@ -543,7 +544,7 @@ function localFunctionCallTaintedValueReachesWire(
   wireRoots: ReadonlySet<string>,
   elementAliases: ReadonlySet<string>,
 ): boolean {
-  const declaration = localFunctionDeclarationForCall(call, body);
+  const declaration = localFunctionDefinitionForCall(call, body);
   if (declaration === undefined) return false;
 
   const nestedTaint = new Set<string>();
@@ -568,21 +569,37 @@ function localFunctionCallTaintedValueReachesWire(
   );
 }
 
-function localFunctionDeclarationForCall(
+function localFunctionDefinitionForCall(
   call: CallExpression,
   body: Node,
-): FunctionDeclaration | undefined {
+): ArrowFunction | FunctionDeclaration | FunctionExpression | undefined {
   const callee = unwrappedStaticExpressionNode(call.getExpression());
   if (!Node.isIdentifier(callee)) return undefined;
 
   const calleeKey = localSymbolKey(callee);
   if (calleeKey === undefined) return undefined;
 
-  return body.getDescendantsOfKind(SyntaxKind.FunctionDeclaration).find((declaration) => {
-    if (!topLevelDescendant(body, declaration)) return false;
-    const name = declaration.getNameNode();
-    return name !== undefined && Node.isIdentifier(name) && localSymbolKey(name) === calleeKey;
-  });
+  const declaredFunction = body
+    .getDescendantsOfKind(SyntaxKind.FunctionDeclaration)
+    .find((declaration) => {
+      if (!topLevelDescendant(body, declaration)) return false;
+      const name = declaration.getNameNode();
+      return name !== undefined && Node.isIdentifier(name) && localSymbolKey(name) === calleeKey;
+    });
+  if (declaredFunction) return declaredFunction;
+
+  for (const variable of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    if (!topLevelDescendant(body, variable)) continue;
+    const name = variable.getNameNode();
+    if (!Node.isIdentifier(name) || localSymbolKey(name) !== calleeKey) continue;
+
+    const initializer = variable.getInitializer();
+    if (Node.isArrowFunction(initializer) || Node.isFunctionExpression(initializer)) {
+      return initializer;
+    }
+  }
+
+  return undefined;
 }
 
 function bindingNameIdentifierKeys(name: Node): string[] {

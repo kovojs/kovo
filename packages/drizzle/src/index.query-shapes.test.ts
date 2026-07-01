@@ -1732,6 +1732,19 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         'return items;',
       ],
     ],
+    [
+      'local arrow helper mutating the returned shape from a secret argument',
+      [
+        'const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);',
+        'const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);',
+        'const attachSecret = (rows: Array<{ id: string; secret: string }>) => {',
+        '  const first = rows[0];',
+        '  if (first) items.push({ id: first.id, name: "redacted", company: first.secret });',
+        '};',
+        'attachSecret(secretRows);',
+        'return items;',
+      ],
+    ],
   ])('reports KV435 for cross-select laundering through %s', (_label, loadBody) => {
     const facts = extractQueryFactsFromProject({
       files: [
