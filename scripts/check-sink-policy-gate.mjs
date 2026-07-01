@@ -477,6 +477,9 @@ export function sqlSafetyInvariantFindings(filePath, text) {
     ) {
       findings.push(`${filePath}: kovo check must fail on error-severity SQL-safety diagnostics`);
     }
+  }
+
+  if (filePath.endsWith('packages/cli/src/graph-explain-format.ts')) {
     if (
       !/\bconst\s+severity\s*=\s*diagnostic\s*\.\s*severity\s*\?\?\s*definition\?\s*\.\s*severity\s*\?\?\s*['"]error['"]/.test(
         source,
