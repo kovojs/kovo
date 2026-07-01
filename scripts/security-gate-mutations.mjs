@@ -216,6 +216,72 @@ const dialectMatrixRequirementBranch = '  validateDialectMatrixRows(rows, violat
 const removedDialectMatrixRequirementBranch =
   '  if (false) validateDialectMatrixRows(rows, violations);';
 
+const resolverExpressionKindDenominatorBranch =
+  "export const REQUIRED_RESOLVER_EXPRESSION_KINDS = [...typescriptExpressionKindNames(), 'default'];";
+
+const driftedResolverExpressionKindDenominatorBranch =
+  "export const REQUIRED_RESOLVER_EXPRESSION_KINDS = ['default'];";
+
+const resolverStatusRequirementBranch = [
+  '    if (!ALLOWED_RESOLVER_STATUSES.includes(row.resolverStatus)) {',
+  '      violations.push(',
+  "        `${row.id ?? '<missing-id>'}: resolverStatus must be one of ${ALLOWED_RESOLVER_STATUSES.join(",
+  "          ', ',",
+  '        )}`,',
+  '      );',
+  '    }',
+].join('\n');
+
+const removedResolverStatusRequirementBranch = [
+  '    if (false && !ALLOWED_RESOLVER_STATUSES.includes(row.resolverStatus)) {',
+  '      violations.push(',
+  "        `${row.id ?? '<missing-id>'}: resolverStatus must be one of ${ALLOWED_RESOLVER_STATUSES.join(",
+  "          ', ',",
+  '        )}`,',
+  '      );',
+  '    }',
+].join('\n');
+
+const resolverCoverageExpectationRequirementBranch = [
+  '    if (',
+  "      typeof row.coverageExpectation !== 'string' ||",
+  '      row.coverageExpectation.trim().length === 0 ||',
+  '      PLACEHOLDER_EVIDENCE_PATTERN.test(row.coverageExpectation.trim())',
+  '    ) {',
+  "      violations.push(`${row.id ?? '<missing-id>'}: resolver row is missing coverageExpectation`);",
+  '    }',
+].join('\n');
+
+const removedResolverCoverageExpectationRequirementBranch = [
+  '    if (',
+  '      false &&',
+  "      (typeof row.coverageExpectation !== 'string' ||",
+  '        row.coverageExpectation.trim().length === 0 ||',
+  '        PLACEHOLDER_EVIDENCE_PATTERN.test(row.coverageExpectation.trim()))',
+  '    ) {',
+  "      violations.push(`${row.id ?? '<missing-id>'}: resolver row is missing coverageExpectation`);",
+  '    }',
+].join('\n');
+
+const unknownResolverExpressionKindBranch = [
+  '    if (',
+  "      typeof row.expressionKind === 'string' &&",
+  '      !REQUIRED_RESOLVER_EXPRESSION_KINDS.includes(row.expressionKind)',
+  '    ) {',
+  '      violations.push(`${row.id}: unknown resolver expressionKind ${row.expressionKind}`);',
+  '    }',
+].join('\n');
+
+const removedUnknownResolverExpressionKindBranch = [
+  '    if (',
+  '      false &&',
+  "      typeof row.expressionKind === 'string' &&",
+  '      !REQUIRED_RESOLVER_EXPRESSION_KINDS.includes(row.expressionKind)',
+  '    ) {',
+  '      violations.push(`${row.id}: unknown resolver expressionKind ${row.expressionKind}`);',
+  '    }',
+].join('\n');
+
 export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
@@ -376,6 +442,49 @@ export const SECURITY_GATE_MUTANTS = [
     search: dialectMatrixRequirementBranch,
     sourceFile: fundamentalFixesCensusGatePath,
     test: assertDialectMatrixRequirementIsCaught,
+  },
+  {
+    baseModule: fundamentalFixesCensusGate,
+    description:
+      'Drifts the B3 resolver expression-kind denominator away from the TypeScript-derived kind set.',
+    expectedKiller:
+      'B3 resolver expression-kind denominator must stay derived from TypeScript plus default',
+    name: 'fundamental-fixes-census-gate/drift-resolver-expression-kind-denominator',
+    replacement: driftedResolverExpressionKindDenominatorBranch,
+    search: resolverExpressionKindDenominatorBranch,
+    sourceFile: fundamentalFixesCensusGatePath,
+    test: assertResolverExpressionKindDenominatorIsTypeScriptDerived,
+  },
+  {
+    baseModule: fundamentalFixesCensusGate,
+    description: 'Deletes the B3 resolver status requirement.',
+    expectedKiller: 'B3 resolver expression-kind rows must carry resolverStatus',
+    name: 'fundamental-fixes-census-gate/drop-resolver-status-requirement',
+    replacement: removedResolverStatusRequirementBranch,
+    search: resolverStatusRequirementBranch,
+    sourceFile: fundamentalFixesCensusGatePath,
+    test: assertResolverStatusRequirementIsCaught,
+  },
+  {
+    baseModule: fundamentalFixesCensusGate,
+    description: 'Deletes the B3 resolver coverage expectation requirement.',
+    expectedKiller: 'B3 resolver expression-kind rows must carry coverageExpectation',
+    name: 'fundamental-fixes-census-gate/drop-resolver-coverage-expectation-requirement',
+    replacement: removedResolverCoverageExpectationRequirementBranch,
+    search: resolverCoverageExpectationRequirementBranch,
+    sourceFile: fundamentalFixesCensusGatePath,
+    test: assertResolverCoverageExpectationRequirementIsCaught,
+  },
+  {
+    baseModule: fundamentalFixesCensusGate,
+    description:
+      'Deletes rejection of resolver expression kinds outside the TypeScript denominator.',
+    expectedKiller: 'B3 resolver expression-kind rows must reject unknown expression kinds',
+    name: 'fundamental-fixes-census-gate/drop-unknown-resolver-expression-kind-rejection',
+    replacement: removedUnknownResolverExpressionKindBranch,
+    search: unknownResolverExpressionKindBranch,
+    sourceFile: fundamentalFixesCensusGatePath,
+    test: assertUnknownResolverExpressionKindIsCaught,
   },
 ];
 
@@ -822,6 +931,71 @@ async function assertDialectMatrixRequirementIsCaught(moduleUnderTest) {
     violations,
     'scripts/fundamental-fixes-census.manifest.json: missing dialect x sink matrix row pglite/execute',
   );
+}
+
+async function assertResolverExpressionKindDenominatorIsTypeScriptDerived(moduleUnderTest) {
+  const requiredKinds = moduleUnderTest.REQUIRED_RESOLVER_EXPRESSION_KINDS;
+  if (!Array.isArray(requiredKinds)) {
+    throw new Error('resolver expression-kind denominator is not an array');
+  }
+
+  for (const kind of ['Identifier', 'CallExpression', 'AwaitExpression', 'YieldExpression']) {
+    if (!requiredKinds.includes(kind)) {
+      throw new Error(`resolver expression-kind denominator is missing TypeScript kind ${kind}`);
+    }
+  }
+  if (!requiredKinds.includes('default')) {
+    throw new Error('resolver expression-kind denominator is missing default fallback kind');
+  }
+  if (
+    requiredKinds.length !== fundamentalFixesCensusGate.REQUIRED_RESOLVER_EXPRESSION_KINDS.length
+  ) {
+    throw new Error(
+      `resolver expression-kind denominator drifted from ${fundamentalFixesCensusGate.REQUIRED_RESOLVER_EXPRESSION_KINDS.length} to ${requiredKinds.length}`,
+    );
+  }
+}
+
+async function assertResolverStatusRequirementIsCaught(moduleUnderTest) {
+  const { manifest, planText } = loadDefaultCensusFixture();
+  const row = firstResolverExpressionKindRow(manifest);
+  delete row.resolverStatus;
+  const violations = moduleUnderTest.evaluateFundamentalFixesCensus({
+    manifest,
+    planText,
+  }).violations;
+  assertIncludes(violations, `${row.id}: resolverStatus must be one of resolved, fails-closed`);
+}
+
+async function assertResolverCoverageExpectationRequirementIsCaught(moduleUnderTest) {
+  const { manifest, planText } = loadDefaultCensusFixture();
+  const row = firstResolverExpressionKindRow(manifest);
+  row.coverageExpectation = 'todo';
+  const violations = moduleUnderTest.evaluateFundamentalFixesCensus({
+    manifest,
+    planText,
+  }).violations;
+  assertIncludes(violations, `${row.id}: resolver row is missing coverageExpectation`);
+}
+
+async function assertUnknownResolverExpressionKindIsCaught(moduleUnderTest) {
+  const { manifest, planText } = loadDefaultCensusFixture();
+  const row = firstResolverExpressionKindRow(manifest);
+  row.expressionKind = 'DefinitelyNotATypeScriptExpressionKind';
+  const violations = moduleUnderTest.evaluateFundamentalFixesCensus({
+    manifest,
+    planText,
+  }).violations;
+  assertIncludes(
+    violations,
+    `${row.id}: unknown resolver expressionKind DefinitelyNotATypeScriptExpressionKind`,
+  );
+}
+
+function firstResolverExpressionKindRow(manifest) {
+  const row = manifest.rows.find((candidate) => candidate.kind === 'resolver-expression-kind');
+  if (!row) throw new Error('default census fixture has no resolver expression-kind rows');
+  return row;
 }
 
 function loadDefaultCensusFixture() {

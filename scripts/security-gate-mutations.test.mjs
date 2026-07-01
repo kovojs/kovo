@@ -60,6 +60,22 @@ describe('security-gate-mutations', () => {
           name: 'fundamental-fixes-census-gate/drop-dialect-matrix-requirement',
           status: 'killed',
         }),
+        expect.objectContaining({
+          name: 'fundamental-fixes-census-gate/drift-resolver-expression-kind-denominator',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'fundamental-fixes-census-gate/drop-resolver-status-requirement',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'fundamental-fixes-census-gate/drop-resolver-coverage-expectation-requirement',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'fundamental-fixes-census-gate/drop-unknown-resolver-expression-kind-rejection',
+          status: 'killed',
+        }),
       ]),
     );
     expect(results.every((result) => result.status === 'killed')).toBe(true);

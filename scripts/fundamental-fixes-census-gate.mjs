@@ -6,8 +6,10 @@ import { fileURLToPath } from 'node:url';
 
 const thisFile = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(thisFile);
-const repoRoot = path.resolve(scriptsDir, '..');
-const requireFromCwd = createRequire(path.join(process.cwd(), 'package.json'));
+const repoRoot = existsSync(path.join(path.resolve(scriptsDir, '..'), 'package.json'))
+  ? path.resolve(scriptsDir, '..')
+  : process.cwd();
+const requireFromRepo = createRequire(path.join(repoRoot, 'package.json'));
 
 export const defaultPlanPath = 'plans/fundamental-fixes-followup.md';
 export const defaultManifestPath = 'scripts/fundamental-fixes-census.manifest.json';
@@ -415,7 +417,7 @@ function lineNumberAtOffset(text, offset) {
 }
 
 function typescriptExpressionKindNames() {
-  const typescriptMain = requireFromCwd.resolve('typescript');
+  const typescriptMain = requireFromRepo.resolve('typescript');
   const compilerSource = readFileSync(typescriptMain, 'utf8');
   const leftHandSideKinds = syntaxKindNamesFromFunction(
     compilerSource,
