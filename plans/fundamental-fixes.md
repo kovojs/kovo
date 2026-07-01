@@ -52,7 +52,9 @@ the IR/fact-store migration in C1.
     `49e287410`.
   - Integrated B2 residual compiler-recognizer worker: `019f1c27-8f34-7050-b86a-ccf166bd9282`
     as `4d66ed78f`.
-  - Active sidecar work remains for Drizzle residual recognizers and the capability-surface plan.
+  - Integrated B2 residual Drizzle-recognizer worker: `019f1c27-8ed0-7cd0-adf6-63e2da47640e`
+    as `25fdd8114`.
+  - Active sidecar work remains for the webhook capability-surface plan.
 
 ## Active Worker Slices
 
@@ -167,8 +169,13 @@ packages/cli/src/index.kovo-check.test.ts`.
         generated-helper import de-dupe.
         Evidence: `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/scan/query-binding.test.ts packages/compiler/src/scan/optimistic-inline.test.ts packages/compiler/src/scan/query-shape-source.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/platform-lowering.test.ts`;
         `node scripts/fundamental-fixes-inventory.mjs` reports 40 syntactic candidates.
-  - [ ] Review and convert or explicitly mark the remaining Drizzle alias/table recognizers.
-  - [ ] Review and convert or explicitly mark trust-escape DOM/`Function` recognizers.
+  - [x] Review and convert or explicitly mark the remaining Drizzle alias/table recognizers.
+        Evidence: `pnpm exec vitest run packages/drizzle/src/index.write-callbacks-aliases.test.ts packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/trust-escapes-static.test.ts packages/drizzle/src/index.toctou-readonly.test.ts packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts`;
+        `node scripts/fundamental-fixes-inventory.mjs` reports 26 syntactic candidates after the
+        Drizzle and query-removal slices.
+  - [x] Review and convert or explicitly mark trust-escape DOM/`Function` recognizers.
+        Evidence: `pnpm exec vitest run packages/drizzle/src/trust-escapes-static.test.ts` covers
+        unshadowed global `Function`/`document.write` recognition and local shadows.
   - [ ] Finish the remaining capability-owned compiler comparisons for `recordChange` through
         `plans/capability-surface-redesign.md`.
   - Acceptance: inventory count drops for security-relevant literal/import recognizers; new/changed tests
