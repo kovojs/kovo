@@ -146,46 +146,54 @@ export function addRawSqlOwnerWriteProof(
   );
 
   const mutationsPath = join(root, 'src/mutations.ts');
-  const mutations = readFileSync(mutationsPath, 'utf8')
-    .replace(
-      "import { guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';",
-      [
-        options.trusted
-          ? "import { sql, trustedSql } from '@kovojs/drizzle';"
-          : "import { sql } from '@kovojs/drizzle';",
-        "import { domain, guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';",
-      ].join('\n'),
-    )
-    .replace(
+  let mutations = readFileSync(mutationsPath, 'utf8');
+  mutations = replaceRequired(
+    mutations,
+    "import { guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';",
+    [
+      options.trusted
+        ? "import { sql, trustedSql } from '@kovojs/drizzle';"
+        : "import { sql } from '@kovojs/drizzle';",
+      "import { domain, guards, mutation, s, serverValue, type MutationContext } from '@kovojs/server';",
+    ].join('\n'),
+    'raw SQL proof server import',
+  );
+  mutations = replaceRequired(
+    mutations,
+    'const duplicateEmailError = s.object({ email: s.string() });',
+    [
       'const duplicateEmailError = s.object({ email: s.string() });',
-      [
-        'const duplicateEmailError = s.object({ email: s.string() });',
-        "const rawOwner = domain('raw-owner');",
-      ].join('\n'),
-    )
-    .replace(
-      'registry: { touches: [contact] },',
-      declareTables
-        ? "registry: { touches: [contact, rawOwner], tables: ['raw_owners'] },"
-        : 'registry: { touches: [contact, rawOwner] },',
-    )
-    .replace(
-      [
-        '    await db',
-        '      .insert(contacts)',
-        "      .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });",
-      ].join('\n'),
-      [
-        '    await db.execute(',
-        options.trusted
-          ? "      trustedSql(sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`, { justification: 'reviewed owner predicate' }),"
-          : "      sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`,",
-        '    );',
-        '    await db',
-        '      .insert(contacts)',
-        "      .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });",
-      ].join('\n'),
-    );
+      "const rawOwner = domain('raw-owner');",
+    ].join('\n'),
+    'raw SQL proof domain declaration',
+  );
+  mutations = replaceRequired(
+    mutations,
+    'registry: { touches: [contact] },',
+    declareTables
+      ? "registry: { touches: [contact, rawOwner], tables: ['raw_owners'] },"
+      : 'registry: { touches: [contact, rawOwner] },',
+    'raw SQL proof mutation registry',
+  );
+  mutations = replaceRequired(
+    mutations,
+    [
+      '  await db',
+      '    .insert(contacts)',
+      "    .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });",
+    ].join('\n'),
+    [
+      '  await db.execute(',
+      options.trusted
+        ? "    trustedSql(sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`, { justification: 'reviewed owner predicate' }),"
+        : "    sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`,",
+      '  );',
+      '  await db',
+      '    .insert(contacts)',
+      "    .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });",
+    ].join('\n'),
+    'raw SQL proof contact insert anchor',
+  );
   writeFileSync(mutationsPath, mutations, 'utf8');
 }
 
@@ -245,7 +253,7 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
     join(root, 'src/runtime-safety-proofs.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { domain, endpoint, mutation, publicAccess, s, type MutationContext } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, s, write, type MutationContext } from '@kovojs/server';",
       '',
       "import { readonlyAppDb } from './db.js';",
       "import { rawRuntimeDrift, txProofs } from './schema.js';",
@@ -254,14 +262,37 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
       'const runtimeTableDriftError = s.object({ message: s.string() });',
       "const publicProof = publicAccess('public production mutation safety regression proof');",
       "const txProof = domain('tx_proof');",
+      "const rawRuntimeDriftDomain = domain('raw_runtime_drift');",
+      '',
+      'const insertTxProof = write({',
+      "  key: 'runtime-safety-proofs/insert-tx-proof',",
+      '  touches: [txProof],',
+      "  async run(db: AppRequest['db'], id: string) {",
+      '    await db.insert(txProofs).values({ id });',
+      '  },',
+      '});',
+      '',
+      'const insertRawRuntimeDrift = write({',
+      "  key: 'runtime-safety-proofs/insert-raw-runtime-drift',",
+      "  tables: ['contacts'],",
+      '  touches: [rawRuntimeDriftDomain],',
+      "  async run(db: AppRequest['db'], input: { id: string; label: string }) {",
+      '    await db.execute(',
+      '      trustedSql(',
+      '        sql`insert into raw_runtime_drift (id, label) values (${input.id}, ${input.label})`,',
+      "        { justification: 'audited runtime table-drift proof' },",
+      '      ),',
+      '    );',
+      '  },',
+      '});',
       '',
       'export const failAfterWrite = mutation({',
       '  access: publicProof,',
       '  csrf: false,',
       '  input: s.object({ id: s.string() }),',
-      '  registry: { touches: [txProof] },',
+      '  registry: { touches: insertTxProof.touches },',
       '  async handler(input: { id: string }, request: AppRequest) {',
-      '    await request.db.insert(txProofs).values({ id: input.id });',
+      '    await insertTxProof.run(request.db, input.id);',
       "    throw new Error('rollback proof');",
       '  },',
       '});',
@@ -271,19 +302,14 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
       '  csrf: false,',
       '  errors: { RUNTIME_TABLE_DRIFT: runtimeTableDriftError },',
       '  input: s.object({ id: s.string(), label: s.string() }),',
-      "  registry: { tables: ['contacts'] },",
+      "  registry: { tables: ['contacts'], touches: insertRawRuntimeDrift.touches },",
       '  async handler(',
       '    input: { id: string; label: string },',
       '    request: AppRequest,',
       '    context: MutationContext<{ RUNTIME_TABLE_DRIFT: typeof runtimeTableDriftError }>,',
       '  ) {',
       '    try {',
-      '      await request.db.execute(',
-      '        trustedSql(',
-      '          sql`insert into raw_runtime_drift (id, label) values (${input.id}, ${input.label})`,',
-      "          { justification: 'audited runtime table-drift proof' },",
-      '        ),',
-      '      );',
+      '      await insertRawRuntimeDrift.run(request.db, input);',
       '    } catch (error) {',
       "      if (error instanceof Error && error.message.includes('KV406')) {",
       "        return context.fail('RUNTIME_TABLE_DRIFT', { message: 'KV406' });",
@@ -815,6 +841,16 @@ export function attributeValue(html: string, name: string): string | undefined {
   const escaped = escapeRegExp(name);
   const match = new RegExp(`\\b${escaped}="([^"]*)"`).exec(html);
   return match?.[1];
+}
+
+function replaceRequired(
+  source: string,
+  search: string,
+  replacement: string,
+  label: string,
+): string {
+  if (!source.includes(search)) throw new Error(`Expected scaffold anchor for ${label}.`);
+  return source.replace(search, replacement);
 }
 
 function escapeRegExp(value: string): string {

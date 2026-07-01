@@ -659,4 +659,87 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
       }),
     ]);
   });
+
+  it('fails closed for helper-mediated mutation registry raw writes against owner tables', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          RAW_EXECUTE_DB,
+          {
+            fileName: 'mutations.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const rawOwners = pgTable("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "raw-owner", key: "id", owner: "userId" }));',
+              '',
+              'async function addContactRow(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
+              '  await db.execute(sql`update raw_owners set label = ${"x"} where id = ${input.id}`);',
+              '}',
+              '',
+              'export const addContact = mutation({',
+              '  registry: { tables: ["raw_owners"] },',
+              '  async handler(input: { id: string }, request: { db: PgAsyncDatabase<any, any> }) {',
+              '    return addContactRow(input, request.db);',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.ownerDomains).toEqual([{ domain: 'raw-owner', owner: 'userId' }]);
+    expect(audit.scopeAudits).toEqual([
+      expect.objectContaining({
+        domain: 'raw-owner',
+        kind: 'write',
+        name: 'mutations/add-contact',
+        scope: 'unknown',
+        site: 'mutations.ts:6',
+      }),
+    ]);
+  });
+
+  it('maps helper-mediated mutation raw table names to owner tables declared in sibling files', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          RAW_EXECUTE_DB,
+          {
+            fileName: 'schema.ts',
+            source:
+              'export const rawOwners = pgTable("raw_owners", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "raw-owner", key: "id", owner: "userId" }));',
+          },
+          {
+            fileName: 'mutations.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'async function addContactRow(input: { id: string }, db: PgAsyncDatabase<any, any>) {',
+              '  await db.execute(sql`update raw_owners set label = ${"x"} where id = ${input.id}`);',
+              '}',
+              '',
+              'export const addContact = mutation({',
+              '  registry: { tables: ["raw_owners"] },',
+              '  async handler(input: { id: string }, request: { db: PgAsyncDatabase<any, any> }) {',
+              '    return addContactRow(input, request.db);',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.ownerDomains).toEqual([{ domain: 'raw-owner', owner: 'userId' }]);
+    expect(audit.scopeAudits).toEqual([
+      expect.objectContaining({
+        domain: 'raw-owner',
+        kind: 'write',
+        name: 'mutations/add-contact',
+        scope: 'unknown',
+        site: 'mutations.ts:4',
+      }),
+    ]);
+  });
 });

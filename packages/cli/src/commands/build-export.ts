@@ -430,6 +430,7 @@ async function runTypeScriptBuildPreflight(appModulePath: string): Promise<void>
       [
         tscBin,
         '--noEmit',
+        '--allowImportingTsExtensions',
         '--incremental',
         '--tsBuildInfoFile',
         buildInfoFile,

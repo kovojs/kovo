@@ -315,6 +315,22 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     );
   });
 
+  it('does not classify reusable write-definition run methods as SQLite SQL sinks', () => {
+    const diagnostics = diagnosticsFor(`
+      export async function handler(input: { id: string }, request: { db: unknown }) {
+        const insertTxProof = {
+          async run(db: unknown, id: string) {
+            void db;
+            void id;
+          },
+        };
+        await insertTxProof.run(request.db, input.id);
+      }
+    `);
+
+    expect(diagnostics).toEqual([]);
+  });
+
   it('bans native drizzle-orm raw helpers so Kovo-owned helpers carry audit metadata', () => {
     const diagnostics = diagnosticsFor(`
       import { sql as drizzleSql } from 'drizzle-orm';
