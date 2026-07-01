@@ -19,6 +19,12 @@ const fundamentalFixesCensusManifestPath = path.join(
 );
 const fundamentalFixesFollowupPlanPath = path.join(repoRoot, 'plans/fundamental-fixes-followup.md');
 const securityTestBuildGatePath = path.join(scriptsDir, 'security-test-build-gate.mjs');
+const coreFrameworkIdentityPath = path.join(
+  repoRoot,
+  'packages/core/src/internal/framework-identity.ts',
+);
+const compilerCompilePath = path.join(repoRoot, 'packages/compiler/src/compile.ts');
+const compilerVitePath = path.join(repoRoot, 'packages/compiler/src/vite.ts');
 
 const missingRealBuildProofBranch = [
   '      if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
@@ -304,6 +310,76 @@ const removedUnknownResolverExpressionKindBranch = [
   '    }',
 ].join('\n');
 
+const coreElementAccessResolverBranch = [
+  '    case ts.SyntaxKind.ElementAccessExpression:',
+  "      return 'resolve-element-access';",
+].join('\n');
+
+const removedCoreElementAccessResolverBranch = [
+  '    case ts.SyntaxKind.ElementAccessExpression:',
+  "      return 'fail-closed';",
+].join('\n');
+
+const coreElementAccessCanonicalBranch = [
+  "    case 'resolve-element-access': {",
+  '      if (!ts.isElementAccessExpression(node)) return undefined;',
+  '      const member = elementAccessMemberName(ts, node);',
+  '      return member',
+  '        ? namespaceMemberIdentity(ts, sourceFile, node.expression, member, options, seen, depth + 1)',
+  '        : undefined;',
+  '    }',
+].join('\n');
+
+const removedCoreElementAccessCanonicalBranch = [
+  "    case 'resolve-element-access': {",
+  '      return undefined;',
+  '    }',
+].join('\n');
+
+const coreExportStarResolverBranch = [
+  '      if (!exportClause) {',
+  '        if (moduleSpecifier === undefined || !ts.isStringLiteralLike(moduleSpecifier)) continue;',
+  '        const specifier = moduleSpecifier.text;',
+  '        const starIdentity =',
+  '          specifierExportIdentity(specifier, exportName) ??',
+  '          localModuleExportIdentity(',
+  '            ts,',
+  '            sourceFile,',
+  '            specifier,',
+  '            exportName,',
+  '            options,',
+  '            seen,',
+  '            depth + 1,',
+  '          );',
+  '        if (starIdentity) return starIdentity;',
+  '      }',
+].join('\n');
+
+const removedCoreExportStarResolverBranch = [
+  '      if (!exportClause) {',
+  '        continue;',
+  '      }',
+].join('\n');
+
+const compileSiblingRegistrationBranch = [
+  '  registerFrameworkIdentityProject(',
+  '    sourceFile,',
+  '    options.extraFiles.map((file) => parseSourceFile(file.fileName, file.source)),',
+  '  );',
+].join('\n');
+
+const removedCompileSiblingRegistrationBranch = ['  return;'].join('\n');
+
+const viteJsToTsSiblingCandidatesBranch = [
+  "      case '.js':",
+  '        return [`${withoutExtension}.ts`, `${withoutExtension}.tsx`, basePath];',
+].join('\n');
+
+const weakenedViteJsToTsSiblingCandidatesBranch = [
+  "      case '.js':",
+  '        return [basePath];',
+].join('\n');
+
 export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
@@ -520,6 +596,63 @@ export const SECURITY_GATE_MUTANTS = [
     sourceFile: fundamentalFixesCensusGatePath,
     test: assertUnknownResolverExpressionKindIsCaught,
   },
+  {
+    description: 'Deletes the core resolver expression-kind branch for literal element access.',
+    expectedKiller:
+      'B3 resolver must classify ElementAccessExpression as resolved rather than fail-closed',
+    name: 'core-framework-identity/drop-element-access-kind-resolution',
+    replacement: removedCoreElementAccessResolverBranch,
+    search: coreElementAccessResolverBranch,
+    sourceFile: coreFrameworkIdentityPath,
+    sourceOnly: true,
+    test: assertCoreResolverSourceKeepsElementAccess,
+  },
+  {
+    description: 'Deletes the core resolver canonicalization branch for literal element access.',
+    expectedKiller:
+      'B3 resolver must route literal element access through namespace member resolution',
+    name: 'core-framework-identity/drop-element-access-canonicalization',
+    replacement: removedCoreElementAccessCanonicalBranch,
+    search: coreElementAccessCanonicalBranch,
+    sourceFile: coreFrameworkIdentityPath,
+    sourceOnly: true,
+    test: assertCoreResolverSourceKeepsElementAccess,
+  },
+  {
+    description: 'Deletes the core resolver export-star traversal branch.',
+    expectedKiller:
+      'B3 resolver must traverse export * barrels when resolving framework identities',
+    name: 'core-framework-identity/drop-export-star-resolution',
+    replacement: removedCoreExportStarResolverBranch,
+    search: coreExportStarResolverBranch,
+    sourceFile: coreFrameworkIdentityPath,
+    sourceOnly: true,
+    test: assertCoreResolverSourceKeepsExportStar,
+  },
+  {
+    description:
+      'Deletes compileComponentModule registration of production sibling files with the resolver.',
+    expectedKiller:
+      'E2 production compile must register extraFiles with framework identity resolution',
+    name: 'compiler-compile/drop-framework-identity-project-registration',
+    replacement: removedCompileSiblingRegistrationBranch,
+    search: compileSiblingRegistrationBranch,
+    sourceFile: compilerCompilePath,
+    sourceOnly: true,
+    test: assertCompilerSourceKeepsSiblingRegistration,
+  },
+  {
+    description:
+      'Weakens Vite production sibling discovery so .js imports no longer prefer .ts/.tsx siblings.',
+    expectedKiller:
+      'E2 production resolver must keep .js import specifiers resolving to TS/TSX siblings',
+    name: 'compiler-vite/drop-js-to-ts-sibling-candidates',
+    replacement: weakenedViteJsToTsSiblingCandidatesBranch,
+    search: viteJsToTsSiblingCandidatesBranch,
+    sourceFile: compilerVitePath,
+    sourceOnly: true,
+    test: assertViteSourceKeepsJsToTsSiblingCandidates,
+  },
 ];
 
 export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_MUTANTS } = {}) {
@@ -534,7 +667,8 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
     };
 
     try {
-      await mutant.test(mutant.baseModule);
+      const sourceText = readFileSync(mutant.sourceFile, 'utf8');
+      await mutant.test(mutant.baseModule, { sourceText });
     } catch (error) {
       results.push({
         ...result,
@@ -548,7 +682,26 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
     try {
       const mutantPath = path.join(tempRoot, path.basename(mutant.sourceFile));
       const sourceText = readFileSync(mutant.sourceFile, 'utf8');
-      writeFileSync(mutantPath, applyExactMutation(sourceText, mutant), 'utf8');
+      const mutatedSourceText = applyExactMutation(sourceText, mutant);
+      if (mutant.sourceOnly === true) {
+        try {
+          await mutant.test(mutant.baseModule, { sourceText: mutatedSourceText });
+          results.push({
+            ...result,
+            error: 'mutated gate still satisfied the killer assertion',
+            status: 'survived',
+          });
+        } catch (error) {
+          results.push({
+            ...result,
+            killerFailure: formatError(error),
+            status: 'killed',
+          });
+        }
+        continue;
+      }
+
+      writeFileSync(mutantPath, mutatedSourceText, 'utf8');
       const mutantModule = await import(`${pathToFileURL(mutantPath).href}?mutant=${Date.now()}`);
 
       try {
@@ -1046,6 +1199,35 @@ async function assertUnknownResolverExpressionKindIsCaught(moduleUnderTest) {
     violations,
     `${row.id}: unknown resolver expressionKind DefinitelyNotATypeScriptExpressionKind`,
   );
+}
+
+async function assertCoreResolverSourceKeepsElementAccess(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(coreElementAccessResolverBranch)) {
+    throw new Error('core resolver no longer classifies ElementAccessExpression as resolved');
+  }
+  if (!sourceText.includes(coreElementAccessCanonicalBranch)) {
+    throw new Error(
+      'core resolver no longer routes literal ElementAccessExpression through namespace member identity',
+    );
+  }
+}
+
+async function assertCoreResolverSourceKeepsExportStar(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(coreExportStarResolverBranch)) {
+    throw new Error('core resolver no longer traverses export * barrels');
+  }
+}
+
+async function assertCompilerSourceKeepsSiblingRegistration(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(compileSiblingRegistrationBranch)) {
+    throw new Error('compileComponentModule no longer registers extraFiles with the resolver');
+  }
+}
+
+async function assertViteSourceKeepsJsToTsSiblingCandidates(_moduleUnderTest, { sourceText } = {}) {
+  if (!sourceText?.includes(viteJsToTsSiblingCandidatesBranch)) {
+    throw new Error('Vite sibling discovery no longer maps .js specifiers to .ts/.tsx candidates');
+  }
 }
 
 function firstResolverExpressionKindRow(manifest) {
