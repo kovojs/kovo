@@ -105,14 +105,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.execute().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses carrier.db.execute().',
             severity: 'error',
             site: 'product.queries.ts:11',
           },
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call carrier.db.update().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses carrier.db.update().',
             severity: 'error',
             site: 'product.queries.ts:11',
           },
@@ -177,14 +177,14 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.execute().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses nested.inner.db.execute().',
             severity: 'error',
             site: 'product.queries.ts:11',
           },
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.update().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses nested.inner.db.update().',
             severity: 'error',
             site: 'product.queries.ts:11',
           },
@@ -327,7 +327,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.$with().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses db.$with().',
             severity: 'error',
             site: 'product.queries.ts:7',
           },

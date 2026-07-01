@@ -157,14 +157,16 @@ describe('query endpoints', () => {
       insert() {
         writes.push('insert');
       },
-      read() {
+      select() {
         return 'ok';
       },
     };
     const productQuery = query('productLifecycle', {
       load(_input, context?: { request: { db: typeof db } }) {
-        expect(context?.request.db.read()).toBe('ok');
-        expect(() => context?.request.db.insert()).toThrow(/loaders are read-only|cannot insert/);
+        expect(context?.request.db.select()).toBe('ok');
+        expect(() => context?.request.db.insert()).toThrow(
+          /loaders receive a read-only DB capability|cannot insert/,
+        );
         return { ok: true };
       },
       reads: [],

@@ -1642,6 +1642,7 @@ describe('server createApp request shell', () => {
     interface AppDb {
       count: number;
       reads: string[];
+      select(userId?: string): { count: number };
       writes: string[];
     }
 
@@ -1650,7 +1651,15 @@ describe('server createApp request shell', () => {
       session: { user: { id: string } } | null;
     };
 
-    const db: AppDb = { count: 1, reads: [], writes: [] };
+    const db: AppDb = {
+      count: 1,
+      reads: [],
+      select(userId?: string) {
+        if (userId) this.reads.push(userId);
+        return { count: this.count };
+      },
+      writes: [],
+    };
     const cart = domain('cart');
     // SPEC §6.6/§9.1: a session-authenticated mutation must stay CSRF-checked (KV418 forbids the
     // `csrf: false` + session combination), so the cart mutation is protected by a synchronizer
@@ -1658,8 +1667,10 @@ describe('server createApp request shell', () => {
     const csrf = { secret: 'provision-db-session-secret-key-0123456789', sessionId: () => 's1' };
     const cartQuery = query('cart', {
       load(_input, context?: { request: AppRequest }) {
-        context?.request.db.reads.push(context.request.session?.user.id ?? 'anonymous');
-        return { count: context?.request.db.count ?? 0 };
+        return {
+          count:
+            context?.request.db.select(context.request.session?.user.id ?? 'anonymous').count ?? 0,
+        };
       },
       reads: [cart],
     });
@@ -1697,7 +1708,7 @@ describe('server createApp request shell', () => {
             component: 'components/cart/badge',
             queries: ['cart'],
             render({ request }: { request: AppRequest }) {
-              return `<cart-badge>${request.db.count}:${request.session?.user.id}</cart-badge>`;
+              return `<cart-badge>${request.db.select().count}:${request.session?.user.id}</cart-badge>`;
             },
           },
         ],
@@ -1706,7 +1717,9 @@ describe('server createApp request shell', () => {
         routes: [
           route('/cart', {
             page(_context, request: AppRequest) {
-              return renderedHtml(`<main>${request.db.count}:${request.session?.user.id}</main>`);
+              return renderedHtml(
+                `<main>${request.db.select().count}:${request.session?.user.id}</main>`,
+              );
             },
           }),
         ],

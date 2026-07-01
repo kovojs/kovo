@@ -327,7 +327,7 @@ export const sendReceipt = task({
       expect.objectContaining({
         canonicalTarget: { identity: 'appDb', provenance: 'property-access-path' },
         operationKind: 'insert',
-        owner: { kind: 'key', value: 'sendReceipt' },
+        owner: { kind: 'key', value: 'tasks/send-receipt' },
         path: 'appDb.insert',
         surface: 'task',
       }),
