@@ -30,6 +30,7 @@ import {
 } from './receiver-surface.js';
 import { isKovoServerDeclaration } from './schema.js';
 import { callExpressionsInNode, touchBodyCallExpressions } from './project-receivers.js';
+import { assertNever } from './exhaustive.js';
 import {
   emptySessionProvenanceContext,
   opaqueAliasReasonForExpression,
@@ -534,42 +535,52 @@ function ownerPrivateScopedKeysFromComparisonPnf(
   pnf: QueryPredicateComparisonPnf,
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): readonly OwnerPrivateScopeKey[] {
-  if (pnf.kind === 'eq') {
-    const scoped = ownerPrivateScopedKeyFromEqOperands(
-      pnf.comparison.left,
-      pnf.comparison.right,
-      tables,
-    );
-    return scoped ? [scoped] : [];
-  }
-
-  if (pnf.kind === 'and') {
-    return uniqueOwnerPrivateScopedKeys(
-      pnf.nodes.flatMap((node) => ownerPrivateScopedKeysFromComparisonPnf(node, tables)),
-    );
-  }
-
-  if (pnf.kind !== 'or' || pnf.nodes.length === 0) return [];
-
-  let proven: OwnerPrivateScopeKey | undefined;
-  for (const node of pnf.nodes) {
-    const branchKeys = uniqueOwnerPrivateScopedKeys(
-      ownerPrivateScopedKeysFromComparisonPnf(node, tables),
-    );
-    const branchKey = branchKeys.length === 1 ? branchKeys[0] : undefined;
-    if (!branchKey) return [];
-
-    if (!proven) {
-      proven = branchKey;
-      continue;
+  switch (pnf.kind) {
+    case 'eq': {
+      const scoped = ownerPrivateScopedKeyFromEqOperands(
+        pnf.comparison.left,
+        pnf.comparison.right,
+        tables,
+      );
+      return scoped ? [scoped] : [];
     }
 
-    if (proven.domain !== branchKey.domain || proven.privateKey !== branchKey.privateKey) {
+    case 'and':
+      return uniqueOwnerPrivateScopedKeys(
+        pnf.nodes.flatMap((node) => ownerPrivateScopedKeysFromComparisonPnf(node, tables)),
+      );
+
+    case 'non-eq':
+    case 'opaque':
       return [];
-    }
-  }
 
-  return proven ? [proven] : [];
+    case 'or': {
+      if (pnf.nodes.length === 0) return [];
+
+      let proven: OwnerPrivateScopeKey | undefined;
+      for (const node of pnf.nodes) {
+        const branchKeys = uniqueOwnerPrivateScopedKeys(
+          ownerPrivateScopedKeysFromComparisonPnf(node, tables),
+        );
+        const branchKey = branchKeys.length === 1 ? branchKeys[0] : undefined;
+        if (!branchKey) return [];
+
+        if (!proven) {
+          proven = branchKey;
+          continue;
+        }
+
+        if (proven.domain !== branchKey.domain || proven.privateKey !== branchKey.privateKey) {
+          return [];
+        }
+      }
+
+      return proven ? [proven] : [];
+    }
+
+    default:
+      return assertNever(pnf, 'Unhandled query predicate comparison PNF kind');
+  }
 }
 
 function uniqueOwnerPrivateScopedKeys(
@@ -3441,9 +3452,19 @@ function insertValueRows(values: Node): ObjectLiteralExpression[] {
 }
 
 function pnfContainsEq(pnf: PredicatePnf): boolean {
-  if (pnf.kind === 'eq') return true;
-  if (pnf.kind === 'and' || pnf.kind === 'or') return pnf.nodes.some(pnfContainsEq);
-  return false;
+  switch (pnf.kind) {
+    case 'eq':
+      return true;
+    case 'and':
+    case 'or':
+      return pnf.nodes.some(pnfContainsEq);
+    case 'non-eq-comparison':
+    case 'non-eq-membership':
+    case 'opaque':
+      return false;
+    default:
+      return assertNever(pnf, 'Unhandled predicate PNF kind');
+  }
 }
 
 function nonEqMembershipPnf(
@@ -3769,35 +3790,52 @@ function mutationTargetRootName(node: Node): string | undefined {
 /** @internal */ export function pnfExactConjuncts(
   pnf: PredicatePnf,
 ): EqPredicateConjunct[] | null {
-  if (pnf.kind === 'eq') return [{ left: pnf.left, right: pnf.right }];
-  if (pnf.kind === 'and') {
-    const conjuncts: EqPredicateConjunct[] = [];
-    for (const child of pnf.nodes) {
-      const nested = pnfExactConjuncts(child);
-      if (!nested) return null;
-      conjuncts.push(...nested);
+  switch (pnf.kind) {
+    case 'eq':
+      return [{ left: pnf.left, right: pnf.right }];
+
+    case 'and': {
+      const conjuncts: EqPredicateConjunct[] = [];
+      for (const child of pnf.nodes) {
+        const nested = pnfExactConjuncts(child);
+        if (!nested) return null;
+        conjuncts.push(...nested);
+      }
+      return conjuncts;
     }
-    return conjuncts;
+
+    case 'non-eq-comparison':
+    case 'non-eq-membership':
+    case 'opaque':
+    case 'or':
+      return null;
+
+    default:
+      return assertNever(pnf, 'Unhandled predicate PNF kind');
   }
-  return null;
 }
 
 function comparisonPnf(
   pnf: PredicatePnf,
   toComparison: (conjunct: EqPredicateConjunct) => QueryInstanceKeyComparison,
 ): QueryPredicateComparisonPnf {
-  if (pnf.kind === 'eq') {
-    return { comparison: toComparison({ left: pnf.left, right: pnf.right }), kind: 'eq' };
+  switch (pnf.kind) {
+    case 'eq':
+      return { comparison: toComparison({ left: pnf.left, right: pnf.right }), kind: 'eq' };
+    case 'and':
+    case 'or':
+      return {
+        kind: pnf.kind,
+        nodes: pnf.nodes.map((node) => comparisonPnf(node, toComparison)),
+      };
+    case 'opaque':
+      return { kind: 'opaque' };
+    case 'non-eq-comparison':
+    case 'non-eq-membership':
+      return { kind: 'non-eq' };
+    default:
+      return assertNever(pnf, 'Unhandled predicate PNF kind');
   }
-
-  if (pnf.kind === 'and' || pnf.kind === 'or') {
-    return {
-      kind: pnf.kind,
-      nodes: pnf.nodes.map((node) => comparisonPnf(node, toComparison)),
-    };
-  }
-
-  return pnf.kind === 'opaque' ? { kind: 'opaque' } : { kind: 'non-eq' };
 }
 
 /** @internal */ export function eqPredicateConjuncts(
@@ -3808,14 +3846,20 @@ function comparisonPnf(
 }
 
 /** @internal */ export function pnfAllEqOperandPairs(pnf: PredicatePnf): EqPredicateConjunct[] {
-  if (pnf.kind === 'eq' || pnf.kind === 'non-eq-comparison') {
-    return [{ left: pnf.left, right: pnf.right }];
+  switch (pnf.kind) {
+    case 'eq':
+    case 'non-eq-comparison':
+      return [{ left: pnf.left, right: pnf.right }];
+    case 'non-eq-membership':
+      return pnf.rights.map((right) => ({ left: pnf.left, right }));
+    case 'and':
+    case 'or':
+      return pnf.nodes.flatMap(pnfAllEqOperandPairs);
+    case 'opaque':
+      return [];
+    default:
+      return assertNever(pnf, 'Unhandled predicate PNF kind');
   }
-  if (pnf.kind === 'non-eq-membership') {
-    return pnf.rights.map((right) => ({ left: pnf.left, right }));
-  }
-  if (pnf.kind === 'and' || pnf.kind === 'or') return pnf.nodes.flatMap(pnfAllEqOperandPairs);
-  return [];
 }
 
 /** @internal */ export function tableKeyReferences(
