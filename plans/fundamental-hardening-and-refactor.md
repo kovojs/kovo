@@ -110,13 +110,14 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     `exitCode`; adopt everywhere. **Every new gate below uses `runGate`.**
   - Verify: each gate's `.test.mjs`; a path-with-space test that the gate still runs.
   - Evidence: `pnpm exec vitest --run scripts/check-spec-index.test.mjs scripts/no-committed-generated.test.mjs scripts/check-sink-policy-gate.test.mjs scripts/fundamental-fixes-census-gate.test.mjs scripts/check-pack-security.test.mjs scripts/egress-floor.test.mjs scripts/supply-chain-gates.test.mjs scripts/public-packages.test.mjs scripts/security-gate-mutations.test.mjs` passed after merging `agent/fundamental-t1-cli`.
-- [ ] **T2 — One source-file walker + `isProductionSourceFile` policy.** (M · med)
+- [x] **T2 — One source-file walker + `isProductionSourceFile` policy.** (M · med)
   - Problem: six independent recursive walkers with differing exclusion sets feed gates that decide which files get
     scanned for dangerous sinks (`check-sink-policy-gate.mjs:2344/2354/2374`, `check-pack-security.mjs:432`,
     `compiler-build-id.mjs:30`, `import-boundary.mjs:258`, `fundamental-fixes-inventory.mjs:117`, `ci-shards.mjs:515`);
     an omission in one means files silently escape a gate.
   - Fix: `scripts/lib/source-files.mjs` with one canonical collect + `isProductionSourceFile` predicate; adopt in all
     six; preserve each caller's current filter (their `.test.mjs` siblings cover it).
+  - Evidence: `pnpm exec vitest --run scripts/lib/source-files.test.mjs scripts/check-sink-policy-gate.test.mjs scripts/check-pack-security.test.mjs scripts/import-boundary.test.mjs scripts/fundamental-fixes-inventory.test.mjs scripts/ci-shards.test.mjs` passed after merging `agent/fundamental-t2-source-files`.
 - [x] **T8 — Fold repo-root bootstrapping into `scripts/lib`.** (S · low)
   - Problem: four `repoRoot` computations (`check-sink-policy-gate.mjs:6`, `public-packages.mjs:14`,
     `security-gate-mutations.mjs:13`, `fundamental-fixes-census-gate.mjs:9`).
