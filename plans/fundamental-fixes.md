@@ -334,8 +334,8 @@ packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test
   local lookalikes across the migrated compiler/static gates. Verified with Curie's focused
   compiler/server suite; `pnpm run check:api-surface`; `pnpm run check:vp`; and `git diff --check`.
 - Integrated KV426/KV311 metamorphic slice: trusted HTML provenance now catches namespace, local-alias,
-  and same-file direct wrapper-helper variants; query update coverage now follows same-render destructured
-  fields and wrapper/helper aliases. Verified with `vp exec vitest --run
+  local re-export barrel, and same-file direct wrapper-helper variants; query update coverage now follows
+  same-render destructured fields and wrapper/helper aliases. Verified with `vp exec vitest --run
 packages/compiler/src/trusted-html-provenance.test.ts
 packages/compiler/src/output-context-trusted-brand-identity.test.ts
 packages/compiler/src/query-coverage.test.ts
@@ -349,9 +349,10 @@ packages/drizzle/src/index.query-shapes.test.ts
 packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `vp exec vitest --run
 packages/drizzle/src/index.recognizer-alias-bugz3.test.ts packages/drizzle/src/raw-sql-static.test.ts`;
   and `pnpm run check:vp`.
-- Integrated A/F capability slice: starter templates no longer export `appDbProvider`, keep `readonlyAppDb`
-  as the blessed endpoint-read handle, and KV330 now covers direct DB writes in task, webhook, and endpoint
-  handlers. Verified with `vp exec vitest --run packages/compiler/src/direct-db.test.ts
+- Integrated A/F capability slice: starter templates no longer export `appDbProvider` or
+  `appRuntimeDbProvider` from `src/db.ts`, keep `readonlyAppDb` as the blessed endpoint-read handle,
+  and KV330 now covers direct DB writes in task, webhook, and endpoint handlers. Verified with
+  `vp exec vitest --run packages/compiler/src/direct-db.test.ts
 packages/compiler/src/scan/parse.test.ts packages/create-kovo/src/index.test.ts`; `vp exec vitest --run
 packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/index.build.test.ts`;
   `vp exec vitest --run packages/create-kovo/src/index.build.scaffold.typecheck.test.ts`;
