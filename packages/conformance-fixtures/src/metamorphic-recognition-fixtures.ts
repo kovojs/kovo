@@ -527,7 +527,7 @@ export const Post = component({
           source: 'export * from "./browser-root";',
         },
       ],
-      importLine: 'import * as browser from "./browser-barrel";',
+      importLine: 'import * as browser from "./browser-barrel.js";',
       kind: 're-export-barrel',
       label: 'trustedHtml/trustedUrl export-star literal element access',
       source: `

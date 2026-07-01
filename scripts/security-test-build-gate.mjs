@@ -46,6 +46,19 @@ export const SECURITY_BUILD_PROOFS = [
     testName: 'resolves local trustedHtml/trustedUrl barrels during production build preflight',
   },
   {
+    buildInvocation: 'cli-main-build',
+    code: 'KV426',
+    proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+    requiredNeedles: [
+      'KV426',
+      "export * from './safe-html-root'",
+      'trustedHtmlStarBarrelElementAccessPreflightComponentSource()',
+    ],
+    sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
+    testName:
+      'resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight',
+  },
+  {
     buildInvocation: 'starter-build-production-artifact',
     code: 'KV435',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',

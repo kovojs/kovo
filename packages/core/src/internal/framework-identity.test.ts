@@ -133,7 +133,7 @@ describe('framework identity resolver', () => {
     const usage = sourceFile(
       '/app/usage.tsx',
       [
-        "import * as safeHtml from './browser-barrel';",
+        "import * as safeHtml from './browser-barrel.js';",
         "const key = 'html';",
         "safeHtml['html']('<strong>ok</strong>');",
         "safeHtml[key]('<strong>opaque</strong>');",

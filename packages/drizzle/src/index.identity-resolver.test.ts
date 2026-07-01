@@ -384,7 +384,7 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     const sourceFile = project.createSourceFile(
       '/app/tasks.ts',
       [
-        'import * as framework from "./server-barrel";',
+        'import * as framework from "./server-barrel.js";',
         'const method = "runTask";',
         'export const cleanup = framework["runTask"]("cleanup", { run() {} });',
         'export const opaque = framework[method]("opaque", { run() {} });',

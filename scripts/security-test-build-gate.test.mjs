@@ -227,6 +227,24 @@ describe('security-test-build-gate', () => {
       ),
     ).toBe(true);
   });
+
+  it('keeps the KV426 export-star resolver proof enrolled in the real build gate', () => {
+    expect(
+      SECURITY_BUILD_PROOFS.find(
+        (proof) =>
+          proof.code === 'KV426' &&
+          proof.testName ===
+            'resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight',
+      ),
+    ).toMatchObject({
+      buildInvocation: 'cli-main-build',
+      requiredNeedles: expect.arrayContaining([
+        'KV426',
+        "export * from './safe-html-root'",
+        'trustedHtmlStarBarrelElementAccessPreflightComponentSource()',
+      ]),
+    });
+  });
 });
 
 function withTempRepo(callback) {

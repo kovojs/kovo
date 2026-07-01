@@ -3088,7 +3088,7 @@ export default createApp({
 function trustedHtmlBarrelPreflightComponentSource(): string {
   return `
 import { component, publicAccess, query, s } from '@kovojs/server';
-import { trustedHtml, trustedUrl } from './safe-html';
+import { trustedHtml, trustedUrl } from './safe-html.js';
 
 export const postQuery = query('post', {
   access: publicAccess('trustedHtml barrel build preflight fixture'),
@@ -3112,7 +3112,7 @@ function trustedHtmlStarBarrelElementAccessPreflightComponentSource(): string {
   return `
 import { component, publicAccess, query, s } from '@kovojs/server';
 import * as browser from '@kovojs/browser';
-import * as safeHtml from './safe-html';
+import * as safeHtml from './safe-html.js';
 
 export const postQuery = query('post', {
   access: publicAccess('trustedHtml star barrel build preflight fixture'),

@@ -821,7 +821,22 @@ function readViteRelativeSourceFile(
 }
 
 function viteSourceFileCandidates(basePath: string): readonly string[] {
-  if (/\.[cm]?[tj]sx?$/.test(basePath)) return [basePath];
+  const explicitExtension = basePath.match(/\.(?:mtsx|ctsx|tsx|mts|cts|ts|mjs|cjs|jsx|js)$/u)?.[0];
+  if (explicitExtension) {
+    const withoutExtension = basePath.slice(0, -explicitExtension.length);
+    switch (explicitExtension) {
+      case '.js':
+        return [`${withoutExtension}.ts`, `${withoutExtension}.tsx`, basePath];
+      case '.jsx':
+        return [`${withoutExtension}.tsx`, `${withoutExtension}.ts`, basePath];
+      case '.mjs':
+        return [`${withoutExtension}.mts`, `${withoutExtension}.mtsx`, basePath];
+      case '.cjs':
+        return [`${withoutExtension}.cts`, `${withoutExtension}.ctsx`, basePath];
+      default:
+        return [basePath];
+    }
+  }
   return [
     `${basePath}.ts`,
     `${basePath}.tsx`,
