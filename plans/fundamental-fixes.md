@@ -250,10 +250,16 @@ name-and-bypass (turn the gate off).**
 
 ## Phased delivery
 
-- [ ] **Phase 0 — Foundation.** Build the E harness + seed corpus; inventory the 65 syntactic-recognition
+- [x] **Phase 0 — Foundation.** Build the E harness + seed corpus; inventory the 65 syntactic-recognition
       sites and the 121 existing `KV406` sites; **spike C** by extending `graph.json`/`touch-graph.ts` with
       column-level secret + key-scope provenance and porting secret-to-wire (KV435) to read it (with IR→TSX
       spans), to size the IR migration and prove the closure-read case fails closed.
+  - Evidence: `node scripts/fundamental-fixes-inventory.mjs`;
+    `pnpm exec vitest --run scripts/fundamental-fixes-inventory.test.mjs
+packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts
+packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts
+packages/drizzle/src/index.serialization.test.ts packages/cli/src/index.kovo-check.test.ts`; and
+    `pnpm run check:vp`.
 - [ ] **Phase 1 — Spelling-invariant recognition (B).** Land the identity resolver; migrate the 65 sites;
       E proves the alias/re-export classes are closed.
 - [ ] **Phase 2 — Fail-closed default (A).** Flip "no fact = `KV406`"; ship the audited escape hatch;
@@ -276,8 +282,12 @@ name-and-bypass (turn the gate off).**
 - [ ] B must land before A so "fail closed on unprovable" doesn't fire spuriously on aliased-but-safe
       constructs — confirm TS symbol resolution gives a reliable "cannot resolve" signal across module
       boundaries and dynamic imports.
-- [ ] C's cost: does the lowered IR already carry enough provenance to attach sink proofs, or must the IR
+- [x] C's cost: does the lowered IR already carry enough provenance to attach sink proofs, or must the IR
       schema be extended? (Answered by the Phase-0 KV435 spike.)
+  - Evidence: `packages/core/src/graph.ts`, `packages/drizzle/src/graph.ts`, and
+    `packages/drizzle/src/static/query-shapes.ts` now carry/query column-level read provenance; verified by
+    `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts
+packages/drizzle/src/index.query-loader-receivers.test.ts packages/cli/src/index.kovo-check.test.ts`.
 - [ ] D: which dev/prod divergences are _intentional_ (and must stay) vs accidental?
 - [ ] F: the migration path for apps that legitimately import `appDb` for reads.
 
@@ -287,3 +297,9 @@ name-and-bypass (turn the gate off).**
   compiler/drizzle sources and reports 79 literal/import syntactic candidates, 1,747 AST-kind gates, and
   92 KV406/fail-closed sites. Verified with
   `pnpm exec vitest --run scripts/fundamental-fixes-inventory.test.mjs` and `pnpm run check:vp`.
+- Integrated Phase 0 foundation plus first B/D/F/G slices on
+  `agent/implement-fundamental-fixes-20260630-171240`. Latest checks: `pnpm run check:vp`;
+  `pnpm run check:api-surface`; focused Drizzle identity/KV435 suites; focused server runtime/prod-artifact
+  chokepoint suites; and `git diff --check`.
+- Current starter CI routing: `.github/workflows/ci.yml` enrolls the new runtime-contract prod-artifact test
+  in the starter matrix, and `scripts/ci-shards.test.mjs` keeps it out of root Vitest shards.
