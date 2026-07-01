@@ -1626,6 +1626,87 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it.each([
+    [
+      'callback push with a renamed secret projection',
+      [
+        'const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);',
+        'const secretRows = await db.select({ id: contacts.id, displayCompany: contacts.company }).from(contacts);',
+        'secretRows.forEach((secretRow) => {',
+        '  items.push({ id: secretRow.id, name: "redacted", company: secretRow.displayCompany });',
+        '});',
+        'return items;',
+      ],
+    ],
+    [
+      'object spread plus JSON/template/call wrappers',
+      [
+        'const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);',
+        'const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);',
+        'const secretById = new Map<string, string>();',
+        'secretRows.forEach((secretRow) => {',
+        '  const payload = { ...secretRow, encoded: JSON.stringify({ value: `${wrapSecret(secretRow.secret)}` }) };',
+        '  secretById.set(payload.id, payload.encoded);',
+        '});',
+        'return items.map((item) => ({ ...item, company: secretById.get(item.id) ?? null }));',
+      ],
+    ],
+    [
+      'Object.assign into an element alias',
+      [
+        'const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);',
+        'const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);',
+        'const item = items[0];',
+        'const secretRow = secretRows[0];',
+        'if (item && secretRow) Object.assign(item, { company: secretRow.secret });',
+        'return items;',
+      ],
+    ],
+    [
+      'compound assignment into an element alias',
+      [
+        'const items = await db.select({ id: contacts.id, name: contacts.name, company: contacts.name }).from(contacts);',
+        'const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);',
+        'const item = items[0];',
+        'const secretRow = secretRows[0];',
+        'if (item && secretRow) item.company ||= secretRow.secret;',
+        'return items;',
+      ],
+    ],
+  ])('reports KV435 for cross-select laundering via %s', (_label, loadBody) => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'contact.queries.ts',
+          source: `
+          function wrapSecret(value: string): string {
+            return value;
+          }
+
+          export const contacts = pgTable("contacts", {
+            company: text("company").notNull(),
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "contact", key: "id", secret: ["company"] }));
+
+          export const contactList = query("contacts", {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
+              ${loadBody.join('\n')}
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining('reads a secret-classified'),
+      }),
+    ]);
+  });
+
   it('keeps a second secret select green when its value is proven off the returned query wire', () => {
     const facts = extractQueryFactsFromProject({
       files: [
