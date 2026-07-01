@@ -601,19 +601,21 @@ function replaceIdentifierReferences(
 
 function parenthesizeForReplacement(expression: string): string {
   const trimmed = expression.trim();
-  return hasSingleOuterParentheses(trimmed) ? trimmed : `(${trimmed})`;
+  return isOuterParenthesizedExpression(trimmed) ? trimmed : `(${trimmed})`;
 }
 
-function hasSingleOuterParentheses(expression: string): boolean {
-  if (!expression.startsWith('(') || !expression.endsWith(')')) return false;
-  let depth = 0;
-  for (let index = 0; index < expression.length; index += 1) {
-    const char = expression[index];
-    if (char === '(') depth += 1;
-    if (char === ')') depth -= 1;
-    if (depth === 0 && index < expression.length - 1) return false;
-  }
-  return depth === 0;
+function isOuterParenthesizedExpression(expression: string): boolean {
+  const sourceFile = ts.createSourceFile(
+    'kovo-reactive-alias-expression.ts',
+    `const __kovoReactiveAlias = ${expression};`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const statement = sourceFile.statements[0];
+  if (!statement || !ts.isVariableStatement(statement)) return false;
+  const declaration = statement.declarationList.declarations[0];
+  return !!declaration?.initializer && ts.isParenthesizedExpression(declaration.initializer);
 }
 
 function isReferenceIdentifierToken(expression: string, start: number): boolean {
