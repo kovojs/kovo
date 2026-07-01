@@ -134,9 +134,29 @@
       "id": "managed-write-handle-client-session-escapes-fail-closed-before-nested-wrapping",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "raw-driver-client-session-escape-from-any-managed-handle"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (4 passed, 105.33s locally; independent verifier rerun passed 4 tests in 98.08s); row proof uses buildProductionArtifact(root); pnpm run check:security-gate-mutations kills sql-safe-handle/drop-managed-raw-driver-escape-denial",
+      "parent": "raw-driver-client-session-escape-from-any-managed-handle",
+      "evidenceBundles": [
+        "m1-prod-artifact-managed-write-escape",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (4 passed, 105.33s)",
+        "dialects": {
+          "postgres": "default prod-artifact starter attempts request.db.$client and request.db.session on a managed write mutation handle and fails kovo build --no-cache before artifact emission",
+          "sqlite": "SQLite prod-artifact starter attempts request.db.$client and request.db.session on a managed write mutation handle and fails kovo build --no-cache before artifact emission"
+        },
+        "independentReviewer": "agent 019f1e7b-e7ec-7d41-af5d-e3ee03c0e302 independently inspected the proof and reran pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (4 passed, 98.08s)"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root), which invokes kovo build ./src/app.tsx --no-cache",
+        "noFixtureOnlyCertification": "the managed-write escape proof uses generated starter source and the production build preflight; it is not an extraFiles/unit-only shortcut"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills sql-safe-handle/drop-managed-raw-driver-escape-denial"
+      }
     },
     {
       "id": "read-only-handle-client-session-escapes-fail-closed-before-execution",
@@ -1313,6 +1333,10 @@
     "m1-prod-artifact-transactions": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot",
       "evidence": "Production artifact transaction/raw-SQL starter tests build with kovo build --no-cache and exercise default plus SQLite runtime SQL handle paths."
+    },
+    "m1-prod-artifact-managed-write-escape": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
+      "evidence": "Production artifact transaction tests build default and SQLite starters with kovo build --no-cache and prove managed write raw-driver escape attempts fail before artifact emission."
     }
   }
 }

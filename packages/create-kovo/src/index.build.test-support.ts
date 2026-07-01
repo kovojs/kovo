@@ -314,6 +314,7 @@ export function addRawSqlOwnerWriteProof(
 }
 
 export interface RuntimeMutationSafetyProofOptions {
+  includeManagedWriteEscapeAttempt?: boolean;
   includeRawTableDrift?: boolean;
   includeReadonlyMutationAttempt?: boolean;
 }
@@ -322,6 +323,7 @@ export function addRuntimeMutationSafetyProofs(
   root: string,
   options: RuntimeMutationSafetyProofOptions = {},
 ): void {
+  const includeManagedWriteEscapeAttempt = options.includeManagedWriteEscapeAttempt === true;
   const includeRawTableDrift = options.includeRawTableDrift === true;
   const includeReadonlyMutationAttempt = options.includeReadonlyMutationAttempt === true;
   const schemaPath = join(root, 'src/schema.ts');
@@ -411,6 +413,56 @@ export function addRuntimeMutationSafetyProofs(
       '  await db.insert(txProofs).values({ id });',
       '}',
       '',
+      ...(includeManagedWriteEscapeAttempt
+        ? [
+            'type ManagedWriteEscapeResult = { blocked: boolean; message: string; method: string };',
+            '',
+            'function managedWriteEscapeResult(',
+            '  method: string,',
+            '  run: () => unknown,',
+            '): ManagedWriteEscapeResult {',
+            '  try {',
+            '    void run();',
+            "    return { blocked: false, message: 'raw driver escape reached managed write handle', method };",
+            '  } catch (error) {',
+            '    const message = error instanceof Error ? error.message : String(error);',
+            '    const blocked = /raw driver escape|KV422/u.test(message);',
+            '    return { blocked, message, method };',
+            '  }',
+            '}',
+            '',
+            'function attemptManagedWriteClientEscape(request: AppRequest): ManagedWriteEscapeResult {',
+            "  return managedWriteEscapeResult('$client', () => {",
+            '    void (request.db as unknown as { $client: unknown }).$client;',
+            '  });',
+            '}',
+            '',
+            'function attemptManagedWriteSessionEscape(request: AppRequest): ManagedWriteEscapeResult {',
+            "  return managedWriteEscapeResult('session', () => {",
+            '    void (request.db as unknown as { session: unknown }).session;',
+            '  });',
+            '}',
+            '',
+            'export const managedWriteEscapeAttempt = mutation({',
+            '  access: publicProof,',
+            '  csrf: false,',
+            '  input: s.object({ id: s.string() }),',
+            "  registry: { tables: ['tx_proofs'], touches: [txProof] },",
+            '  async handler(input: { id: string }, request: AppRequest) {',
+            '    const results = [',
+            '      attemptManagedWriteClientEscape(request),',
+            '      attemptManagedWriteSessionEscape(request),',
+            '    ];',
+            '    if (!results.every((result) => result.blocked)) {',
+            "      throw new Error(results.map((result) => `${result.method}: ${result.message}`).join('\\n'));",
+            '    }',
+            '    await insertTxProofRow(request.db, input.id);',
+            '    return { blocked: true, results };',
+            '  },',
+            '});',
+            '',
+          ]
+        : []),
       ...(includeRawTableDrift
         ? [
             'const insertRawRuntimeDrift = write({',
@@ -589,6 +641,7 @@ export function addRuntimeMutationSafetyProofs(
 
   const runtimeSafetyImports = [
     'failAfterWrite',
+    ...(includeManagedWriteEscapeAttempt ? ['managedWriteEscapeAttempt'] : []),
     ...(includeReadonlyMutationAttempt ? ['readonlyMutationAttemptEndpoint'] : []),
     'rawRuntimeDriftCountEndpoint',
     ...(includeRawTableDrift ? ['rawTableDrift'] : []),
@@ -604,6 +657,7 @@ export function addRuntimeMutationSafetyProofs(
   const runtimeSafetyMutations = [
     'addContact',
     'failAfterWrite',
+    ...(includeManagedWriteEscapeAttempt ? ['managedWriteEscapeAttempt'] : []),
     ...(includeRawTableDrift ? ['rawTableDrift'] : []),
     'writeTxProof',
     'appSignIn',
