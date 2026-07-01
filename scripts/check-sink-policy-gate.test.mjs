@@ -40,6 +40,7 @@ function runFixture(files) {
     logChannelFiles: [],
     exists: (file) => Object.hasOwn(files, file),
     publicEntrypointFiles: Object.hasOwn(files, 'public.ts') ? ['public.ts'] : [],
+    queryWireHtmlPath: undefined,
     readText: (file) => files[file],
     responseFragmentApplyPath: undefined,
     rootedFileServeSinkFiles: [],
@@ -319,6 +320,7 @@ describe('sink-policy gate', () => {
                 return blessSink(ROOTED_FILE_SERVE_SINK, capability);
               }
             `,
+        queryWireHtmlPath: undefined,
         responseFragmentApplyPath: undefined,
         rootedFileServeSinkFiles: ['packages/server/src/file.ts'],
         sinkPolicyPath: 'sink-policy.ts',
@@ -441,6 +443,7 @@ describe('sink-policy gate', () => {
           file === 'sink-policy.ts'
             ? validPolicy
             : 'import { createWriteStream } from "node:fs"; createWriteStream(path);',
+        queryWireHtmlPath: undefined,
         responseFragmentApplyPath: undefined,
         rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
@@ -467,6 +470,7 @@ describe('sink-policy gate', () => {
           file === 'sink-policy.ts'
             ? validPolicy
             : 'import { execSync } from "node:child_process";',
+        queryWireHtmlPath: undefined,
         responseFragmentApplyPath: undefined,
         rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
@@ -838,6 +842,7 @@ describe('sink-policy gate', () => {
             : file === 'packages/server/src/unsafe.ts'
               ? 'export const run = Function("return 1");'
               : 'export const ok = 1;',
+        queryWireHtmlPath: undefined,
         responseFragmentApplyPath: undefined,
         rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
@@ -1271,6 +1276,7 @@ describe('sink-policy gate', () => {
                 return new RegExp(request.url);
               }
             `,
+        queryWireHtmlPath: undefined,
         responseFragmentApplyPath: undefined,
         rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
@@ -1329,6 +1335,7 @@ describe('sink-policy gate', () => {
           file === 'sink-policy.ts'
             ? validPolicy
             : 'export function handle(request) { console.info(request.url); }',
+        queryWireHtmlPath: undefined,
         responseFragmentApplyPath: undefined,
         rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
@@ -1588,6 +1595,7 @@ describe('sink-policy gate', () => {
           export function blessSink(sink, value) { return value; }
           export function isBlessedSink(sink, value) { return true; }
         `,
+        queryWireHtmlPath: undefined,
         responseFragmentApplyPath: undefined,
         rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
@@ -1845,6 +1853,7 @@ describe('sink-policy gate', () => {
           file === 'sink-policy.ts'
             ? validPolicy
             : 'import { stampStaticSql } from "@kovojs/core/internal/sql-safety";',
+        queryWireHtmlPath: undefined,
         responseFragmentApplyPath: undefined,
         rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
