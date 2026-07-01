@@ -22,6 +22,10 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
         const status = "where status = '" + req.search.status + "'";
         await db.exec("select * from products " + status);
         await db.prepare("select * from products where q like '%" + req.search.q + "%'");
+        await db.run("delete from products where id = '" + input.id + "'");
+        await db.get("select * from products where id = '" + input.id + "'");
+        await db.all("select * from products where status = '" + req.search.status + "'");
+        await db.values("select id from products where q like '%" + req.search.q + "%'");
         const ids = req.search.ids.split(",");
         await db.execute("select * from products where id in (" + ids.join(",") + ")");
         await db.query("select * from " + req.params.table);
@@ -35,6 +39,10 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
       'KV422',
       'KV422',
       'KV422',
+      'KV422',
+      'KV422',
+      'KV422',
+      'KV422',
     ]);
     expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual(
       expect.arrayContaining([
@@ -42,6 +50,10 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
         expect.stringContaining('query() receives request-derived SQL text'),
         expect.stringContaining('exec() receives request-derived SQL text'),
         expect.stringContaining('prepare() receives request-derived SQL text'),
+        expect.stringContaining('run() receives request-derived SQL text'),
+        expect.stringContaining('get() receives request-derived SQL text'),
+        expect.stringContaining('all() receives request-derived SQL text'),
+        expect.stringContaining('values() receives request-derived SQL text'),
       ]),
     );
   });

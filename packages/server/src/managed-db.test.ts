@@ -91,6 +91,122 @@ function fakeDb(log: string[]) {
   };
 }
 
+const RUNTIME_SQL_MATRIX_SINKS = [
+  'execute',
+  'query',
+  'run',
+  'get',
+  'all',
+  'values',
+  'transaction',
+  'with',
+  'unknown-method',
+] as const;
+
+type RuntimeSqlMatrixSink = (typeof RUNTIME_SQL_MATRIX_SINKS)[number];
+
+const RUNTIME_SQL_MATRIX_DIALECTS = [
+  {
+    dialect: undefined,
+    name: 'pglite',
+    read: { text: 'select id from products where id = $1', values: ['p1'] },
+    write: { text: 'update users set name = $1 where id = $2', values: ['Ada', 'u1'] },
+  },
+  {
+    dialect: 'sqlite' as const,
+    name: 'better-sqlite3-style',
+    read: { sql: 'select id from products where id = ?', values: ['p1'] },
+    write: { sql: 'delete from users where id = ?', values: ['u1'] },
+  },
+  {
+    dialect: undefined,
+    name: 'unknown synthetic',
+    read: { text: 'select id from products where id = $1', values: ['p1'] },
+    write: { text: 'insert into users (id) values ($1)', values: ['u1'] },
+  },
+] as const;
+
+function runtimeSqlMatrixRawDb(
+  dialectName: string,
+  sink: RuntimeSqlMatrixSink,
+  log: string[],
+): object {
+  const methodName = sink === 'unknown-method' ? 'futureStatement' : sink;
+  const directMethod = (statement: unknown) => {
+    log.push(`${dialectName}.${methodName}`);
+    return statement;
+  };
+
+  if (sink === 'transaction') {
+    return {
+      transaction(callback: (tx: { execute(statement: unknown): unknown }) => unknown) {
+        log.push(`${dialectName}.transaction`);
+        return callback({
+          execute(statement: unknown) {
+            log.push(`${dialectName}.transaction.execute`);
+            return statement;
+          },
+        });
+      },
+    };
+  }
+
+  if (sink === 'with') {
+    return {
+      with(_cte: unknown) {
+        log.push(`${dialectName}.with`);
+        return {
+          execute(statement: unknown) {
+            log.push(`${dialectName}.with.execute`);
+            return statement;
+          },
+          select() {
+            log.push(`${dialectName}.with.select`);
+            return { from: () => [] };
+          },
+        };
+      },
+    };
+  }
+
+  return { [methodName]: directMethod };
+}
+
+function executeRuntimeSqlMatrixSink(
+  handle: Record<string, unknown>,
+  sink: RuntimeSqlMatrixSink,
+  statement: unknown,
+): unknown {
+  if (sink === 'transaction') {
+    return (
+      handle as {
+        transaction(callback: (tx: { execute(statement: unknown): unknown }) => unknown): unknown;
+      }
+    ).transaction((tx) => tx.execute(statement));
+  }
+  if (sink === 'with') {
+    return (
+      handle as {
+        with(cte: unknown): { execute(statement: unknown): unknown };
+      }
+    )
+      .with('active_products')
+      .execute(statement);
+  }
+  const method = sink === 'unknown-method' ? 'futureStatement' : sink;
+  return (handle as Record<string, (statement: unknown) => unknown>)[method]!(statement);
+}
+
+function runtimeSqlMatrixStatementExecutionLog(
+  log: readonly string[],
+  sink: RuntimeSqlMatrixSink,
+): string[] {
+  if (sink === 'transaction') return log.filter((entry) => entry.endsWith('.transaction.execute'));
+  if (sink === 'with') return log.filter((entry) => entry.endsWith('.with.execute'));
+  const method = sink === 'unknown-method' ? 'futureStatement' : sink;
+  return log.filter((entry) => entry.endsWith(`.${method}`));
+}
+
 describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
   it('brands Reader<Db> so raw write handles are not casually assignable', () => {
     type FakeDb = ReturnType<typeof fakeDb>;
@@ -1002,127 +1118,49 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual([]);
   });
 
-  it.each([
-    {
-      dialect: undefined,
-      log: 'pglite.query',
-      method: 'query',
-      name: 'pglite query',
-      read: { text: 'select id from products where id = $1', values: ['p1'] },
-      rawDb(log: string[]) {
-        return {
-          query(statement: unknown) {
-            log.push('pglite.query');
-            return statement;
-          },
-        };
-      },
-      write: { text: 'update users set name = $1 where id = $2', values: ['Ada', 'u1'] },
-    },
-    {
-      dialect: 'sqlite' as const,
-      log: 'sqlite.run',
-      method: 'run',
-      name: 'better-sqlite3 run',
-      read: { sql: 'select id from products where id = ?', values: ['p1'] },
-      rawDb(log: string[]) {
-        return {
-          run(statement: unknown) {
-            log.push('sqlite.run');
-            return statement;
-          },
-        };
-      },
-      write: { sql: 'delete from users where id = ?', values: ['u1'] },
-    },
-    {
-      dialect: 'sqlite' as const,
-      log: 'sqlite.get',
-      method: 'get',
-      name: 'better-sqlite3 get',
-      read: { sql: 'select id from products where id = ?', values: ['p1'] },
-      rawDb(log: string[]) {
-        return {
-          get(statement: unknown) {
-            log.push('sqlite.get');
-            return statement;
-          },
-        };
-      },
-      write: { sql: 'insert into users (id) values (?)', values: ['u1'] },
-    },
-    {
-      dialect: 'sqlite' as const,
-      log: 'sqlite.all',
-      method: 'all',
-      name: 'better-sqlite3 all',
-      read: { sql: 'select id from products where id = ?', values: ['p1'] },
-      rawDb(log: string[]) {
-        return {
-          all(statement: unknown) {
-            log.push('sqlite.all');
-            return statement;
-          },
-        };
-      },
-      write: { sql: 'update users set name = ? where id = ?', values: ['Ada', 'u1'] },
-    },
-    {
-      dialect: 'sqlite' as const,
-      log: 'sqlite.values',
-      method: 'values',
-      name: 'better-sqlite3 values',
-      read: { sql: 'select id from products where id = ?', values: ['p1'] },
-      rawDb(log: string[]) {
-        return {
-          values(statement: unknown) {
-            log.push('sqlite.values');
-            return statement;
-          },
-        };
-      },
-      write: { sql: 'replace into users (id, name) values (?, ?)', values: ['u1', 'Ada'] },
-    },
-    {
-      dialect: undefined,
-      log: 'future.futureStatement',
-      method: 'futureStatement',
-      name: 'unknown future method',
-      read: { text: 'select id from products where id = $1', values: ['p1'] },
-      rawDb(log: string[]) {
-        return {
-          futureStatement(statement: unknown) {
-            log.push('future.futureStatement');
-            return statement;
-          },
-        };
-      },
-      write: { text: 'insert into users (id) values ($1)', values: ['u1'] },
-    },
-  ])(
-    '$name rejects raw strings and cross-table writes before execution',
-    async ({ dialect, log: expectedLog, method, read, rawDb, write }) => {
+  it.each(
+    RUNTIME_SQL_MATRIX_DIALECTS.flatMap((dialect) =>
+      RUNTIME_SQL_MATRIX_SINKS.map((sink) => ({ ...dialect, sink })),
+    ),
+  )(
+    'runtime matrix $name × $sink rejects raw strings and cross-table writes before execution',
+    async ({ dialect, name, read, sink, write }) => {
       const log: string[] = [];
-      const handle = managedDb(rawDb(log), 'write', {
+      const handle = managedDb(runtimeSqlMatrixRawDb(name, sink, log), 'write', {
         sqlWritePolicy: {
           ...(dialect === undefined ? {} : { dialect }),
           tables: ['products'],
           touches: ['product'],
         },
-      }) as Record<string, (statement: unknown) => unknown>;
+      }) as Record<string, unknown>;
 
-      const execute = (statement: unknown) => handle[method]!(statement);
+      const execute = (statement: unknown) => executeRuntimeSqlMatrixSink(handle, sink, statement);
 
-      expect(() => execute('select id from products')).toThrow(/KV422/);
-      expect(log).toEqual([]);
+      await expect(
+        Promise.resolve().then(() => execute('select id from products')),
+      ).rejects.toThrow(/KV422/);
+      expect(runtimeSqlMatrixStatementExecutionLog(log, sink)).toEqual([]);
+      log.splice(0);
 
       await expect(Promise.resolve(execute(read))).resolves.toMatchObject(read);
-      expect(log).toEqual([expectedLog]);
+      const successfulExecutionLog = runtimeSqlMatrixStatementExecutionLog(log, sink);
+      expect(successfulExecutionLog.length).toBeGreaterThan(0);
 
-      expect(() =>
-        execute(stampTrustedSql(write, `drifted ${method} write outside declared tables`)),
-      ).toThrow(/KV406/);
-      expect(log).toEqual([expectedLog]);
+      await expect(
+        Promise.resolve().then(() =>
+          execute(stampTrustedSql(write, `drifted ${String(sink)} write outside declared tables`)),
+        ),
+      ).rejects.toThrow(/KV406/);
+      expect(runtimeSqlMatrixStatementExecutionLog(log, sink)).toEqual(successfulExecutionLog);
+
+      if (sink === 'unknown-method') {
+        expect(() =>
+          (handle as { futureStatement(options: { mode: 'opaque' }): unknown }).futureStatement({
+            mode: 'opaque',
+          }),
+        ).toThrow(/unknown managed DB method db\.futureStatement/);
+        expect(runtimeSqlMatrixStatementExecutionLog(log, sink)).toEqual(successfulExecutionLog);
+      }
     },
   );
 });

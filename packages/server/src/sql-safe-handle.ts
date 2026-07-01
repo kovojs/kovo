@@ -163,6 +163,12 @@ function wrapDbAdapter(
         );
       }
 
+      if (prop === 'with' && typeof value === 'function') {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          guardedWriteWithMethod(target, value, mode, proxyCache, methodCache, writePolicy),
+        );
+      }
+
       if (prop === 'transaction' && typeof value === 'function') {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
           guardedTransactionMethod(target, value, mode, proxyCache, methodCache, writePolicy),
@@ -215,6 +221,29 @@ function guardedReadWithMethod(
   return (...args: unknown[]) => {
     const builder = value.apply(target, args);
     return isRecord(builder) ? wrapReadWithBuilder(builder, proxyCache, methodCache) : builder;
+  };
+}
+
+function guardedWriteWithMethod(
+  target: object,
+  value: Function,
+  mode: SqlSafetyMode,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): Function {
+  return (...args: unknown[]) => {
+    const builder = value.apply(target, args);
+    return isRecord(builder)
+      ? wrapDbAdapter(
+          builder,
+          mode,
+          proxyCache,
+          methodCache,
+          writePolicy,
+          writePolicy !== undefined,
+        )
+      : builder;
   };
 }
 

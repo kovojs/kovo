@@ -24,6 +24,14 @@ const RAW_SQL_WRITE_SINK_CASES = [
     types: pgliteDatabaseTypes(['execute(query: unknown): Promise<void>;']),
   },
   {
+    dbType: 'PgliteDatabase<any>',
+    importLine: 'import type { PgliteDatabase } from "drizzle-orm/pglite";',
+    method: 'query',
+    name: 'pglite query',
+    tableFactory: 'pgTable',
+    types: pgliteDatabaseTypes(['query(query: unknown): Promise<void>;']),
+  },
+  {
     dbType: 'BaseSQLiteDatabase<any, any, any, any>',
     importLine: 'import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";',
     method: 'run',
