@@ -404,6 +404,8 @@ export interface RuntimeMutationSafetyProofOptions {
   includeManagedWriteEscapeAttempt?: boolean;
   includeRawTableDrift?: boolean;
   includeReadonlyMutationAttempt?: boolean;
+  includeWebhookTransactionProof?: boolean;
+  includeWebhookTxEscapeAttempt?: boolean;
 }
 
 export function addRuntimeMutationSafetyProofs(
@@ -413,6 +415,8 @@ export function addRuntimeMutationSafetyProofs(
   const includeManagedWriteEscapeAttempt = options.includeManagedWriteEscapeAttempt === true;
   const includeRawTableDrift = options.includeRawTableDrift === true;
   const includeReadonlyMutationAttempt = options.includeReadonlyMutationAttempt === true;
+  const includeWebhookTransactionProof = options.includeWebhookTransactionProof === true;
+  const includeWebhookTxEscapeAttempt = options.includeWebhookTxEscapeAttempt === true;
   const schemaPath = join(root, 'src/schema.ts');
   const schemaSource = readFileSync(schemaPath, 'utf8');
   const isSqlite = schemaSource.includes('sqliteTable(');
@@ -483,8 +487,9 @@ export function addRuntimeMutationSafetyProofs(
     join(root, 'src/runtime-safety-proofs.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { domain, endpoint, mutation, publicAccess, s, write, type MutationContext } from '@kovojs/server';",
+      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, s, webhook, write, type MutationContext } from '@kovojs/server';",
       '',
+      "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';",
       "import { readonlyAppDb } from './db.js';",
       "import { rawRuntimeDrift, txProofs } from './schema.js';",
       "import type { AppRequest } from './auth.js';",
@@ -492,6 +497,12 @@ export function addRuntimeMutationSafetyProofs(
       'const runtimeTableDriftError = s.object({ message: s.string() });',
       "const publicProof = publicAccess('public production mutation safety regression proof');",
       "const txProof = domain('tx_proof');",
+      ...(includeWebhookTransactionProof || includeWebhookTxEscapeAttempt
+        ? [
+            'const webhookReplayStore = createMemoryWebhookReplayStore();',
+            'const webhookTxProofInput = s.object({ id: s.string() });',
+          ]
+        : []),
       ...(includeRawTableDrift
         ? ["const rawRuntimeDriftDomain = domain('raw_runtime_drift');"]
         : []),
@@ -590,6 +601,50 @@ export function addRuntimeMutationSafetyProofs(
       '  },',
       '});',
       '',
+      ...(includeWebhookTransactionProof
+        ? [
+            "export const txProofWebhook = webhook('/webhooks/tx-proof', {",
+            '  access: publicProof,',
+            '  idempotency: (input) => input.id,',
+            '  input: webhookTxProofInput,',
+            '  replayStore: webhookReplayStore,',
+            '  async transaction(_context, run) {',
+            '    return run(appRuntimeDbProvider());',
+            '  },',
+            "  verify: 'none',",
+            "  verifyJustification: 'local production webhook transaction proof fixture',",
+            '  writes: [txProof],',
+            '  async handler(input, context) {',
+            '    await context.runMutation(writeTxProof, { id: input.id });',
+            '    return { ok: true };',
+            '  },',
+            '});',
+            '',
+          ]
+        : []),
+      ...(includeWebhookTxEscapeAttempt
+        ? [
+            "export const webhookTxEscapeAttempt = webhook('/webhooks/tx-escape', {",
+            '  access: publicProof,',
+            '  idempotency: (input) => input.id,',
+            '  input: webhookTxProofInput,',
+            '  replayStore: webhookReplayStore,',
+            '  async transaction(_context, run) {',
+            '    return run(appRuntimeDbProvider());',
+            '  },',
+            "  verify: 'none',",
+            "  verifyJustification: 'local production webhook transaction proof fixture',",
+            '  writes: [txProof],',
+            '  async handler(input, context) {',
+            '    void (context.tx as unknown as { $client: unknown }).$client;',
+            '    void (context.tx as unknown as { session: unknown }).session;',
+            '    await (context.tx as unknown as { insert(table: unknown): { values(row: unknown): Promise<unknown> } }).insert(txProofs).values({ id: input.id });',
+            '    return { ok: true };',
+            '  },',
+            '});',
+            '',
+          ]
+        : []),
       ...(includeRawTableDrift
         ? [
             'export const rawTableDrift = mutation({',
@@ -732,6 +787,8 @@ export function addRuntimeMutationSafetyProofs(
     ...(includeReadonlyMutationAttempt ? ['readonlyMutationAttemptEndpoint'] : []),
     'rawRuntimeDriftCountEndpoint',
     ...(includeRawTableDrift ? ['rawTableDrift'] : []),
+    ...(includeWebhookTransactionProof ? ['txProofWebhook'] : []),
+    ...(includeWebhookTxEscapeAttempt ? ['webhookTxEscapeAttempt'] : []),
     'txProofCountEndpoint',
     'writeTxProof',
   ];
@@ -740,6 +797,8 @@ export function addRuntimeMutationSafetyProofs(
     'txProofCountEndpoint',
     'rawRuntimeDriftCountEndpoint',
     ...(includeReadonlyMutationAttempt ? ['readonlyMutationAttemptEndpoint'] : []),
+    ...(includeWebhookTransactionProof ? ['txProofWebhook'] : []),
+    ...(includeWebhookTxEscapeAttempt ? ['webhookTxEscapeAttempt'] : []),
   ];
   const runtimeSafetyMutations = [
     'addContact',

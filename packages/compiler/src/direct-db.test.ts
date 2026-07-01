@@ -498,6 +498,65 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     ]);
   });
 
+  it('reports KV330 for webhook transaction raw-driver escape handles', () => {
+    const result = compileComponentModule({
+      fileName: 'webhooks.ts',
+      source: `
+import { webhook } from '@kovojs/server';
+
+const payment = domain('payment');
+
+export const paymentWebhook = webhook('/webhooks/payment', {
+  async handler(input, context) {
+    void (context.tx as unknown as { $client: unknown }).$client;
+    void (context.tx as unknown as { session: unknown }).session;
+    await context.runMutation(recordPayment, { id: input.id });
+    return { ok: true };
+  },
+  idempotency: (input) => input.id,
+  input: paymentInput,
+  replayStore,
+  verify: 'none',
+  verifyJustification: 'fixture-only webhook test',
+  writes: [payment],
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV330',
+        fileName: 'webhooks.ts',
+        message:
+          'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+        severity: kv330.severity,
+      }),
+      expect.objectContaining({
+        code: 'KV330',
+        fileName: 'webhooks.ts',
+        message:
+          'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+        severity: kv330.severity,
+      }),
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'context.tx', provenance: 'property-access-path' },
+        operationKind: 'raw-driver-escape',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        path: 'context.tx.$client',
+        surface: 'webhook',
+      }),
+      expect.objectContaining({
+        canonicalTarget: { identity: 'context.tx', provenance: 'property-access-path' },
+        operationKind: 'raw-driver-escape',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        path: 'context.tx.session',
+        surface: 'webhook',
+      }),
+    ]);
+  });
+
   it('reports KV330 when endpoint handlers write through the app db provider', () => {
     const result = compileComponentModule({
       fileName: 'endpoints.ts',

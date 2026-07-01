@@ -221,6 +221,28 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
+    claimId: 'webhook-transaction-raw-driver-escape-prod-artifact',
+    code: 'KV330',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    requiredNeedles: [
+      'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',
+      'buildProductionArtifact(root)',
+      'Expected kovo build --no-cache to fail for webhook tx raw-driver escape.',
+      'KV330',
+      'Direct db access in a webhook handler',
+      'runtime-safety-proofs.ts',
+    ],
+    requiredProofFileNeedles: [
+      'includeWebhookTransactionProof',
+      'txProofWebhook',
+      'context.tx as unknown as { $client: unknown }',
+      'context.tx as unknown as { session: unknown }',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    testName: 'blocks $label webhook transaction raw-driver escapes before artifact emission',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
     claimId: 'raw-sql-owner-write-prod-artifact',
     code: 'KV414',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',

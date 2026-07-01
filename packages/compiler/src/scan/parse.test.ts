@@ -686,6 +686,49 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     ]);
   });
 
+  it('records webhook transaction raw-driver escape facts with the webhook path owner', () => {
+    const source = `
+import { webhook } from '@kovojs/server';
+
+export const paymentWebhook = webhook('/webhooks/payment', {
+  async handler(input, context) {
+    void (context.tx as unknown as { $client: unknown }).$client;
+    const tx = context.tx;
+    void tx.session;
+    return context.runMutation(recordPayment, { id: input.id });
+  },
+});
+`;
+    const facts = handlerWriteSinks(parseComponentModule('webhooks.ts', source));
+
+    expect(facts).toEqual([
+      {
+        canonicalTarget: { identity: 'context.tx', provenance: 'property-access-path' },
+        operationKind: 'raw-driver-escape',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        path: 'context.tx.$client',
+        span: {
+          end:
+            source.indexOf('(context.tx as unknown as { $client: unknown }).$client') +
+            '(context.tx as unknown as { $client: unknown }).$client'.length,
+          start: source.indexOf('(context.tx as unknown as { $client: unknown }).$client'),
+        },
+        surface: 'webhook',
+      },
+      {
+        canonicalTarget: { identity: 'tx', provenance: 'property-access-path' },
+        operationKind: 'raw-driver-escape',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        path: 'tx.session',
+        span: {
+          end: source.indexOf('tx.session') + 'tx.session'.length,
+          start: source.indexOf('tx.session'),
+        },
+        surface: 'webhook',
+      },
+    ]);
+  });
+
   it('records endpoint direct write sink facts with the endpoint path owner', () => {
     const source = `
 import { endpoint } from '@kovojs/server';
