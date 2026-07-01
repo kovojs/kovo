@@ -133,6 +133,7 @@ jobs:
               packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
           - shard: security-assets
             files: >-
+              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
               packages/create-kovo/src/index.build.prod-artifact.security.test.ts
               packages/create-kovo/src/index.build.prod-artifact.assets.test.ts
           - shard: runtime-sqlite-check

@@ -15,6 +15,7 @@ const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts',
   'packages/core/src/diagnostics.test.ts',
   'packages/core/src/sql-safety.test.ts',
+  'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.assets.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.defer.test.ts',
