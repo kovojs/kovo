@@ -50,6 +50,7 @@ export {
   type QuerySearchInput,
   type RegisteredQueryDefinition,
 } from '../query.js';
+export { assignDerivedTaskKey } from '../task.js';
 export type {
   WebhookReplayReservation,
   WebhookReplayStore,

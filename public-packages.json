@@ -1821,6 +1821,7 @@
           "./internal/escape",
           "./internal/execution",
           "./internal/html",
+          "./internal/runtime-registry-wire",
           "./internal/route",
           "./internal/static-export",
           "./internal/wire"

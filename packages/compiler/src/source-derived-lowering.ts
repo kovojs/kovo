@@ -13,36 +13,12 @@ import { parseSourceFile } from './scan/parse.js';
 import { applySourceReplacements, type SourceReplacement } from './shared.js';
 
 const helperModule = '@kovojs/server/internal/wire';
-const helperImports = {
-  component: {
-    imported: 'assignDerivedComponentName',
-    local: '__kovoAssignDerivedComponentName',
-  },
-  domain: {
-    imported: 'assignDerivedDomainKey',
-    local: '__kovoAssignDerivedDomainKey',
-  },
-  mutation: {
-    imported: 'assignDerivedMutationKey',
-    local: '__kovoAssignDerivedMutationKey',
-  },
-  query: {
-    imported: 'assignDerivedQueryKey',
-    local: '__kovoAssignDerivedQueryKey',
-  },
-  webhook: {
-    imported: 'assignDerivedWebhookName',
-    local: '__kovoAssignDerivedWebhookName',
-  },
-} as const;
-
-type SourceDerivedPrimitive = keyof typeof helperImports;
-
 const COMPONENT_IDENTITY = frameworkExport('@kovojs/core', 'component');
 const DOMAIN_IDENTITY = frameworkExport('@kovojs/server', 'domain');
 const MUTATION_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 const TAG_IDENTITY = frameworkExport('@kovojs/server', 'tag');
+const TASK_IDENTITY = frameworkExport('@kovojs/server', 'task');
 const WEBHOOK_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
 const LEGACY_IDENTITIES = [
   COMPONENT_IDENTITY,
@@ -50,8 +26,88 @@ const LEGACY_IDENTITIES = [
   MUTATION_IDENTITY,
   QUERY_IDENTITY,
   TAG_IDENTITY,
+  TASK_IDENTITY,
   WEBHOOK_IDENTITY,
 ] as const;
+
+const registryAssignmentTable = {
+  component: {
+    helper: {
+      imported: 'assignDerivedComponentName',
+      local: '__kovoAssignDerivedComponentName',
+    },
+    identity: COMPONENT_IDENTITY,
+    key(fileName: string, binding: string) {
+      return deriveComponentNames(fileName, { localName: binding }).registryKey;
+    },
+    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+      return isSingleObjectArgument(call);
+    },
+    requiresExport: false,
+  },
+  domain: {
+    helper: {
+      imported: 'assignDerivedDomainKey',
+      local: '__kovoAssignDerivedDomainKey',
+    },
+    identities: [DOMAIN_IDENTITY, TAG_IDENTITY],
+    key: registryIdentityKey,
+    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+      return call.arguments.length === 0;
+    },
+    requiresExport: true,
+  },
+  mutation: {
+    helper: {
+      imported: 'assignDerivedMutationKey',
+      local: '__kovoAssignDerivedMutationKey',
+    },
+    identity: MUTATION_IDENTITY,
+    key: registryIdentityKey,
+    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+      return isSingleObjectArgument(call);
+    },
+    requiresExport: true,
+  },
+  query: {
+    helper: {
+      imported: 'assignDerivedQueryKey',
+      local: '__kovoAssignDerivedQueryKey',
+    },
+    identity: QUERY_IDENTITY,
+    key: registryIdentityKey,
+    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+      return isSingleObjectArgument(call);
+    },
+    requiresExport: true,
+  },
+  task: {
+    helper: {
+      imported: 'assignDerivedTaskKey',
+      local: '__kovoAssignDerivedTaskKey',
+    },
+    identity: TASK_IDENTITY,
+    key: registryIdentityKey,
+    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+      return isSingleObjectArgument(call);
+    },
+    requiresExport: true,
+  },
+  webhook: {
+    helper: {
+      imported: 'assignDerivedWebhookName',
+      local: '__kovoAssignDerivedWebhookName',
+    },
+    identity: WEBHOOK_IDENTITY,
+    key: registryIdentityKey,
+    matches(_sourceFile: ts.SourceFile, call: ts.CallExpression) {
+      return isPathFirstWebhookCall(call);
+    },
+    requiresExport: true,
+  },
+} as const;
+
+type SourceDerivedPrimitive = keyof typeof registryAssignmentTable;
 
 interface SourceDerivedRegistryAssignment {
   binding: string;
@@ -69,7 +125,7 @@ export function lowerStandaloneSourceDerivedRegistryDeclarations(options: {
   if (assignments.length === 0) return null;
 
   const replacements: SourceReplacement[] = assignments.map((assignment) => {
-    const helper = helperImports[assignment.primitive].local;
+    const helper = registryAssignmentTable[assignment.primitive].helper.local;
     const key = derivedAssignmentKey(options.fileName, assignment);
     return {
       end: assignment.call.end,
@@ -100,7 +156,7 @@ function exportedRegistryAssignments(
 
       const primitive = sourceDerivedPrimitive(sourceFile, call);
       if (primitive === null) continue;
-      if (primitive !== 'component' && !exported) continue;
+      if (registryAssignmentTable[primitive].requiresExport && !exported) continue;
       assignments.push({ binding: declaration.name.text, call, primitive });
     }
   }
@@ -111,32 +167,18 @@ function sourceDerivedPrimitive(
   sourceFile: ts.SourceFile,
   call: ts.CallExpression,
 ): SourceDerivedPrimitive | null {
-  if (resolvesTo(sourceFile, call.expression, COMPONENT_IDENTITY) && isSingleObjectArgument(call)) {
-    return 'component';
-  }
-  if (
-    (resolvesTo(sourceFile, call.expression, DOMAIN_IDENTITY) ||
-      resolvesTo(sourceFile, call.expression, TAG_IDENTITY)) &&
-    call.arguments.length === 0
-  ) {
-    return 'domain';
-  }
-  if (resolvesTo(sourceFile, call.expression, MUTATION_IDENTITY) && isSingleObjectArgument(call)) {
-    return 'mutation';
-  }
-  if (isQueryObjectCall(sourceFile, call)) {
-    return 'query';
-  }
-  if (resolvesTo(sourceFile, call.expression, WEBHOOK_IDENTITY) && isPathFirstWebhookCall(call)) {
-    return 'webhook';
+  for (const primitive of Object.keys(registryAssignmentTable) as SourceDerivedPrimitive[]) {
+    const entry = registryAssignmentTable[primitive];
+    const identities = 'identities' in entry ? entry.identities : [entry.identity];
+    if (
+      identities.some((identity) => resolvesTo(sourceFile, call.expression, identity)) &&
+      entry.matches(sourceFile, call)
+    ) {
+      return primitive;
+    }
   }
 
   return null;
-}
-
-function isQueryObjectCall(sourceFile: ts.SourceFile, call: ts.CallExpression): boolean {
-  if (!isSingleObjectArgument(call)) return false;
-  return resolvesTo(sourceFile, call.expression, QUERY_IDENTITY);
 }
 
 function resolvesTo(
@@ -171,7 +213,7 @@ function insertHelperImport(
   primitives: ReadonlySet<SourceDerivedPrimitive>,
 ): string {
   const imported = [...primitives].map((primitive) => {
-    const helper = helperImports[primitive];
+    const helper = registryAssignmentTable[primitive].helper;
     return `${helper.imported} as ${helper.local}`;
   });
   const importLine = `import { ${imported.join(', ')} } from '${helperModule}';\n`;
@@ -197,10 +239,11 @@ function derivedAssignmentKey(
   fileName: string,
   assignment: SourceDerivedRegistryAssignment,
 ): string {
-  if (assignment.primitive === 'component') {
-    return deriveComponentNames(fileName, { localName: assignment.binding }).registryKey;
-  }
-  return deriveRegistryIdentity(fileName, assignment.binding).key;
+  return registryAssignmentTable[assignment.primitive].key(fileName, assignment.binding);
+}
+
+function registryIdentityKey(fileName: string, binding: string): string {
+  return deriveRegistryIdentity(fileName, binding).key;
 }
 
 function hasExportModifier(statement: ts.VariableStatement): boolean {

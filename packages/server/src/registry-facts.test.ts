@@ -5,6 +5,10 @@ import { registerGeneratedMutationTouchRegistry } from './generated-mutation-reg
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { mutation } from './mutation.js';
 import { mutationWithRuntimeRegistryFacts, runtimeRegistryFacts } from './registry-facts.js';
+import {
+  runtimeRegistryWireFactsFromGraph,
+  serializeRuntimeRegistryWireModule,
+} from './internal/runtime-registry-wire.js';
 import { query } from './query.js';
 import { s } from './schema.js';
 
@@ -85,5 +89,38 @@ describe('runtimeRegistryFacts', () => {
     expect(normalized.registry?.inferredTouches).toEqual([
       { domain: 'registry-facts-product', keys: 'arg:id' },
     ]);
+  });
+
+  it('serializes dev/prod runtime registry facts through one wire projection', () => {
+    const graph = {
+      queries: [
+        { domains: ['contact', 'account'], query: 'queries/contact-detail-query' },
+        { domains: [], query: 'queries/empty-query' },
+      ],
+      touchGraph: {
+        'mutations/update-contact': {
+          touches: [
+            { domain: 'contact', keys: 'arg:id' },
+            { domain: 'contact', keys: 'arg:id' },
+            { crossTable: true as const, domain: 'account', keys: null },
+          ],
+        },
+      },
+    };
+
+    const facts = runtimeRegistryWireFactsFromGraph(graph);
+
+    expect(facts).toEqual({
+      mutationTouches: {
+        'mutations/update-contact': [
+          { crossTable: true, domain: 'account', keys: null },
+          { domain: 'contact', keys: 'arg:id' },
+        ],
+      },
+      queryReads: [{ domains: ['account', 'contact'], query: 'queries/contact-detail-query' }],
+    });
+    expect(serializeRuntimeRegistryWireModule(facts)).toContain(
+      'registerGeneratedQueryReadRegistry([{"domains":["account","contact"],"query":"queries/contact-detail-query"}]);',
+    );
   });
 });

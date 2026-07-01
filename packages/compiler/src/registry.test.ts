@@ -1478,6 +1478,29 @@ export const recordDurableTask = task('durable-task-proofs/record', {
     expect(derived.graph.tasks).toEqual(result.taskGraphFacts);
   });
 
+  it('derives object-form durable task facts from source-derived task keys', () => {
+    const result = compileComponentModule({
+      fileName: 'src/durable-task-proofs.ts',
+      source: `
+export const recordDurableTask = task({
+  input: s.object({ proofId: s.string() }),
+  async run(input, context) {
+    await context.runQuery(taskProofQuery, { proofId: input.proofId });
+    await context.schedule(recordDurableTask, input);
+  },
+});
+`,
+    });
+
+    expect(result.taskGraphFacts).toEqual([
+      {
+        key: 'durable-task-proofs/record-durable-task',
+        runQueries: ['taskProofQuery'],
+        schedules: ['recordDurableTask'],
+      },
+    ]);
+  });
+
   it('derives task write-sink facts separately from task composition edges', () => {
     const result = compileComponentModule({
       fileName: 'src/durable-task-proofs.ts',

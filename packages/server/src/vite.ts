@@ -11,6 +11,7 @@ import type {
   QueryShapeFact as CompilerQueryShapeFact,
 } from '@kovojs/server/internal/data-plane-static-analysis';
 import { currentKovoBuildContext } from '@kovojs/server/internal/build-context';
+import { serializeRuntimeRegistryWireModule } from '@kovojs/server/internal/runtime-registry-wire';
 import type { KovoAppShellViteCompilerModuleDiagnosticReport } from './vite-dev.js';
 
 /** Options for the public Kovo Vite plugin (SPEC.md §9.5). */
@@ -307,7 +308,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
     },
     async load(id) {
       if (id === runtimeRegistryResolvedId) {
-        return serializeRuntimeRegistryModule(await collectRuntimeRegistry(root, app));
+        return serializeRuntimeRegistryWireModule(await collectRuntimeRegistry(root, app));
       }
       return (await compilerPlugin()).load?.(id) ?? null;
     },
@@ -540,15 +541,6 @@ async function collectCompilerQueryShapeFacts(
     appSourceDir: dirname(appEntryFileName(app, root)),
     root,
   });
-}
-
-function serializeRuntimeRegistryModule(registry: RuntimeRegistryFacts): string {
-  return [
-    `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';`,
-    `registerGeneratedQueryReadRegistry(${JSON.stringify(registry.queryReads)});`,
-    `registerGeneratedMutationTouchRegistry(${JSON.stringify(registry.mutationTouches)});`,
-    '',
-  ].join('\n');
 }
 
 /** The fail-closed build error thrown when the gate finds error-severity data-plane diagnostics. */

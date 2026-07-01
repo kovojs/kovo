@@ -21,6 +21,7 @@ import { registerGeneratedLiveTargetRenderer } from './live-target-registry.js';
 import { layout, route } from './route.js';
 import { s } from './schema.js';
 import { stylesheet } from './hints.js';
+import { assignDerivedTaskKey, task } from './task.js';
 import { renderedHtml } from './html.js';
 import { jsx } from './jsx-runtime.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
@@ -575,6 +576,22 @@ describe('server createApp request shell', () => {
     });
 
     expect(() => createApp({ mutations: [addToCart] })).toThrow(/without a derived key/);
+  });
+
+  it('accepts object-form tasks after compiler-derived key metadata is attached', () => {
+    const sendReceipt = assignDerivedTaskKey(
+      task({
+        input: s.object({ orderId: s.string() }),
+        run(input) {
+          return input.orderId;
+        },
+      }),
+      'tasks/send-receipt',
+    );
+
+    const app = createApp({ tasks: [sendReceipt] });
+
+    expect(app.tasks.map((entry) => entry.key)).toEqual(['tasks/send-receipt']);
   });
 
   it('accepts distinct mutation keys at createApp build time', () => {
