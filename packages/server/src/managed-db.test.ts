@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { KovoReadonlyHandleError, managedDb, readonlyDb } from './managed-db.js';
 import type { Reader } from './managed-db.js';
-import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
+import { kovoAsyncMutationTransaction, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
 import { domain } from './domain.js';
@@ -923,6 +923,41 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/raw driver escape db\.session|KV422/);
     expect(log).toEqual([]);
+  });
+
+  it('write mode internal transaction probe does not pierce layered raw driver escape denial', () => {
+    const inner = managedDb(
+      {
+        $client: {
+          query() {
+            throw new Error('raw client should not be reached');
+          },
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    );
+    const outer = wrapManagedDbForSqlSafety(inner, undefined, {
+      capability: 'write',
+      tables: ['products'],
+      touches: ['product'],
+    });
+
+    expect(() => void outer.$client).toThrow(/raw driver escape db\.\$client|KV422/);
+    expect(
+      (
+        outer as typeof outer & {
+          [kovoAsyncMutationTransaction]?: (
+            callback: (transactionDb: unknown) => Promise<unknown>,
+          ) => Promise<unknown>;
+        }
+      )[kovoAsyncMutationTransaction],
+    ).toBeUndefined();
   });
 
   it('write mode denies unknown methods behind raw driver escape properties before execution', () => {

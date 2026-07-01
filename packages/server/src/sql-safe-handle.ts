@@ -120,11 +120,12 @@ function wrapDbAdapter(
     get(target, prop, receiver) {
       if (prop === kovoAsyncMutationTransaction) {
         if (writePolicy?.capability === 'read') return undefined;
-        if (!sqliteTransactionClient(target)) return undefined;
+        const transactionControlTarget = frameworkManagedDbRawTarget(target) ?? target;
+        if (!sqliteTransactionClient(transactionControlTarget)) return undefined;
         return <Result>(callback: (transactionDb: unknown) => Promise<Result>) =>
           runSqliteAsyncTransaction(
-            target,
-            wrapTransactionDb(target, mode, proxyCache, methodCache, writePolicy),
+            transactionControlTarget,
+            wrapTransactionDb(transactionControlTarget, mode, proxyCache, methodCache, writePolicy),
             callback,
           );
       }
@@ -377,11 +378,12 @@ export function canRunSqliteAsyncTransaction(db: unknown): boolean {
 }
 
 function sqliteTransactionClient(db: unknown): SqliteTransactionClient | undefined {
-  if (!isRecord(db)) return undefined;
+  const target = frameworkManagedDbRawTarget(db) ?? db;
+  if (!isRecord(target)) return undefined;
 
-  if (isSqliteTransactionClient(db)) return db;
+  if (isSqliteTransactionClient(target)) return target;
 
-  const client = db.$client;
+  const client = target.$client;
   return isSqliteTransactionClient(client) ? client : undefined;
 }
 
