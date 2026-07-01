@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 
 import { mainAsync } from './index.js';
+import { runExportCommandStructured } from './commands/build-export.js';
 
 const repoRoot = process.cwd();
 
@@ -96,6 +97,44 @@ describe('kovo export', () => {
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('returns structured export artifacts before CLI text formatting', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-export-cli-'));
+    const appPath = join(root, 'app.mjs');
+    const outDir = join(root, 'dist');
+
+    try {
+      symlinkServerPackage(root);
+      writeFileSync(
+        appPath,
+        appModuleSource({
+          route:
+            "{ path: '/', page: () => trustedHtml('<main data-export-structured>Structured export</main>') }",
+        }),
+        'utf8',
+      );
+
+      const result = await runExportCommandStructured({
+        appModulePath: appPath,
+        outDir,
+      });
+
+      expect('error' in result).toBe(false);
+      if ('error' in result) return;
+      expect(result.exitCode).toBe(0);
+      expect(result.output).toContain('SUMMARY html=1 clientModules=1 assets=0 diagnostics=0');
+      expect(result.staticExport.artifacts).toHaveLength(1);
+      expect(result.staticExport.artifacts[0]).toMatchObject({
+        path: '/index.html',
+        status: 200,
+      });
+      expect(result.staticExport.clientModules).toHaveLength(1);
+      expect(result.staticExport.assets).toHaveLength(0);
+      expect(result.staticExport.diagnostics).toHaveLength(0);
+    } finally {
       rmSync(root, { force: true, recursive: true });
     }
   });

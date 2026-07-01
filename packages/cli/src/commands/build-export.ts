@@ -15,7 +15,12 @@ import type {
   lowerStandaloneSourceDerivedRegistryDeclarations,
   QueryShapeFact,
 } from '@kovojs/compiler/internal';
-import type { KovoApp, StaticExportCompileDiagnostic, StylesheetAsset } from '@kovojs/server';
+import type {
+  KovoApp,
+  StaticExportCompileDiagnostic,
+  StaticExportResult,
+  StylesheetAsset,
+} from '@kovojs/server';
 import type { KovoConfig, KovoPreset, PresetContext, PresetDiagnostic } from '@kovojs/server/build';
 import type { KovoNeutralBuild } from '@kovojs/server/internal/build';
 import { withKovoBuildContext } from '@kovojs/server/internal/build-context';
@@ -99,6 +104,10 @@ interface LoadedExportAppModule {
   appModule: unknown;
   close?: () => Promise<void>;
   exportStaticApp: ExportStaticApp;
+}
+
+export interface KovoExportCommandResult extends KovoCheckResult {
+  staticExport: StaticExportResult;
 }
 
 type BuildArgParseResult = { ok: true; options: KovoBuildOptions } | { message: string; ok: false };
@@ -1813,10 +1822,22 @@ function kovoServerHandlerEntrySource(
 }
 
 export async function runExportCommand(options: KovoExportOptions): Promise<CliCommandResult> {
+  const result = await runExportCommandStructured(options);
+  if ('error' in result) return result;
+
+  return {
+    exitCode: result.exitCode,
+    output: result.output,
+  };
+}
+
+export async function runExportCommandStructured(
+  options: KovoExportOptions,
+): Promise<CliCommandResult | KovoExportCommandResult> {
   let loadedExport: LoadedExportAppModule | undefined;
   try {
     const manifestPlan = await staticExportManifestPlan(options);
-    const result = await withStylesheetEnvOverlay(manifestPlan.stylesheetEnv, async () => {
+    const staticExport = await withStylesheetEnvOverlay(manifestPlan.stylesheetEnv, async () => {
       loadedExport = await loadExportAppModule(options);
       const app = appFromModule(loadedExport.appModule, options.appModulePath);
       return await loadedExport.exportStaticApp(app, {
@@ -1833,7 +1854,7 @@ export async function runExportCommand(options: KovoExportOptions): Promise<CliC
       });
     });
 
-    return kovoExportResult(result, options);
+    return kovoExportResult(staticExport, options);
   } catch (error) {
     return exportErrorResult(error);
   } finally {
@@ -2070,9 +2091,9 @@ function isStaticExportCompileDiagnostic(value: unknown): value is StaticExportC
 }
 
 function kovoExportResult(
-  result: Awaited<ReturnType<(typeof import('@kovojs/server'))['exportStaticApp']>>,
+  result: StaticExportResult,
   options: KovoExportOptions,
-): KovoCheckResult {
+): KovoExportCommandResult {
   const lines = ['kovo-export/v1'];
 
   for (const artifact of result.artifacts) {
@@ -2106,13 +2127,11 @@ function kovoExportResult(
   return {
     exitCode: exportResultExitCode(result, options),
     output: `${lines.join('\n')}\n`,
+    staticExport: result,
   };
 }
 
-function exportResultExitCode(
-  result: Awaited<ReturnType<(typeof import('@kovojs/server'))['exportStaticApp']>>,
-  options: KovoExportOptions,
-): 0 | 1 {
+function exportResultExitCode(result: StaticExportResult, options: KovoExportOptions): 0 | 1 {
   if (result.diagnostics.length === 0) return 0;
   if (
     options.onNonExportable === 'skip' &&

@@ -8,12 +8,22 @@ const defaultStaticRoot = resolve(siteRoot, 'dist');
 
 export async function createSiteStaticServeServer({
   host = process.env.HOST ?? '127.0.0.1',
+  onRequest,
   port = Number(process.env.PORT ?? 4173),
   staticRoot = defaultStaticRoot,
   strictPort = false,
 } = {}) {
-  const server = createNodeServer((request, response) => {
-    serveSiteStaticFile({
+  const server = createNodeServer(async (request, response) => {
+    const intercepted = await onRequest?.({
+      method: request.method ?? 'GET',
+      rawUrl: request.url ?? '/',
+      request,
+      response,
+      staticRoot,
+    });
+    if (intercepted === true) return;
+
+    await serveSiteStaticFile({
       method: request.method ?? 'GET',
       rawUrl: request.url ?? '/',
       response,
@@ -32,59 +42,75 @@ export async function createSiteStaticServeServer({
   };
 }
 
-export function serveSiteStaticFile({ rawUrl, method, response, staticRoot = defaultStaticRoot }) {
+export function resolveSiteStaticRequest({ rawUrl, method, staticRoot = defaultStaticRoot }) {
   if (!existsSync(staticRoot)) {
-    sendText(
-      response,
+    return textResponseResult(
       404,
       'Static export directory not found. Run pnpm --filter @kovojs/site run build first.\n',
     );
-    return;
   }
 
   if (method !== 'GET' && method !== 'HEAD') {
-    response.writeHead(405, {
+    return textResponseResult(405, 'Method not allowed for static docs.\n', {
       allow: 'GET, HEAD',
-      'content-type': 'text/plain; charset=utf-8',
     });
-    response.end('Method not allowed for static docs.\n');
-    return;
   }
 
   let url;
   try {
     url = new URL(rawUrl, 'http://kovo-site.local');
   } catch {
-    sendText(response, 400, 'Invalid request URL.\n');
-    return;
+    return textResponseResult(400, 'Invalid request URL.\n');
   }
 
   let decodedPath;
   try {
     decodedPath = decodeURIComponent(url.pathname);
   } catch {
-    sendText(response, 400, 'Invalid request path.\n');
-    return;
+    return textResponseResult(400, 'Invalid request path.\n');
   }
 
   const primaryPath = resolveFilePath(staticRoot, decodedPath);
   if (!insideRoot(staticRoot, primaryPath)) {
-    sendText(response, 403, 'Refusing to serve outside the static export directory.\n');
-    return;
+    return textResponseResult(403, 'Refusing to serve outside the static export directory.\n');
   }
 
   if (existsSync(primaryPath) && statSync(primaryPath).isFile()) {
-    sendFile(response, method, primaryPath, decodedPath);
-    return;
+    return fileResponseResult({
+      filePath: primaryPath,
+      requestPath: decodedPath,
+      responsePath: decodedPath,
+      status: 200,
+    });
   }
 
   const notFoundPath = resolve(staticRoot, '404.html');
   if (existsSync(notFoundPath) && statSync(notFoundPath).isFile()) {
-    sendFile(response, method, notFoundPath, '/404.html', 404);
-    return;
+    return fileResponseResult({
+      filePath: notFoundPath,
+      requestPath: decodedPath,
+      responsePath: '/404.html',
+      status: 404,
+    });
   }
 
-  sendText(response, 404, 'Not found.\n');
+  return textResponseResult(404, 'Not found.\n');
+}
+
+export async function serveSiteStaticFile({
+  rawUrl,
+  method,
+  response,
+  staticRoot = defaultStaticRoot,
+}) {
+  const resolved = resolveSiteStaticRequest({ method, rawUrl, staticRoot });
+  if (resolved.kind === 'file') {
+    sendFile(response, method, resolved.filePath, resolved.responsePath, resolved.status);
+    return resolved;
+  }
+
+  sendText(response, resolved.status, resolved.body, resolved.headers);
+  return resolved;
 }
 
 if (isMainModule()) {
@@ -163,9 +189,29 @@ function sendFile(response, method, filePath, decodedPath, status = 200) {
   response.end(readFileSync(filePath));
 }
 
-function sendText(response, status, body) {
-  response.writeHead(status, { 'content-type': 'text/plain; charset=utf-8' });
+function sendText(response, status, body, headers = {}) {
+  response.writeHead(status, { ...headers, 'content-type': 'text/plain; charset=utf-8' });
   response.end(body);
+}
+
+function textResponseResult(status, body, headers = {}) {
+  return {
+    body,
+    headers: { ...headers, 'content-type': 'text/plain; charset=utf-8' },
+    kind: 'text',
+    status,
+  };
+}
+
+function fileResponseResult({ filePath, requestPath, responsePath, status }) {
+  return {
+    filePath,
+    headers: responseHeaders(filePath, responsePath),
+    kind: 'file',
+    requestPath,
+    responsePath,
+    status,
+  };
 }
 
 function responseHeaders(filePath, decodedPath) {
