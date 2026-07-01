@@ -37,6 +37,8 @@ export const defaultLogChannelNeutralizerFiles = ['packages/server/src/logging.t
 
 export const defaultResponseFragmentApplyPath = 'packages/browser/src/response-fragment-apply.ts';
 
+export const defaultQueryWireHtmlPath = 'packages/server/src/wire-html.ts';
+
 export const defaultSqlGuardDowngradeRoots = [
   'packages/core/src',
   'packages/drizzle/src',
@@ -154,6 +156,9 @@ export function checkSinkPolicyGate(options = {}) {
   const responseFragmentApplyPath = Object.hasOwn(options, 'responseFragmentApplyPath')
     ? options.responseFragmentApplyPath
     : defaultResponseFragmentApplyPath;
+  const queryWireHtmlPath = Object.hasOwn(options, 'queryWireHtmlPath')
+    ? options.queryWireHtmlPath
+    : defaultQueryWireHtmlPath;
   const sqlGuardDowngradeFiles =
     options.sqlGuardDowngradeFiles ?? collectSourceFiles(root, defaultSqlGuardDowngradeRoots);
   const sqlSafetyInvariantFiles = options.sqlSafetyInvariantFiles ?? defaultSqlSafetyInvariantFiles;
@@ -354,6 +359,16 @@ export function checkSinkPolicyGate(options = {}) {
     }
   }
 
+  if (queryWireHtmlPath) {
+    if (!exists(queryWireHtmlPath)) {
+      findings.push(`${queryWireHtmlPath}: query wire HTML sink gate input is missing`);
+    } else {
+      findings.push(
+        ...queryWireHtmlInvariantFindings(queryWireHtmlPath, readText(queryWireHtmlPath)),
+      );
+    }
+  }
+
   return findings;
 }
 
@@ -542,6 +557,41 @@ export function responseFragmentApplyInvariantFindings(filePath, text) {
     findings.push(
       `${filePath}: response-fragment sanitizer denylist must keep event, srcdoc, and raw HTML attributes blocked`,
     );
+  }
+
+  return findings;
+}
+
+export function queryWireHtmlInvariantFindings(filePath, text) {
+  const source = stripComments(text);
+  const findings = [];
+
+  if (!/\bfunction\s+renderQueryWireHtml\s*\(/.test(source)) {
+    findings.push(`${filePath}: /_q query wire sink must keep renderQueryWireHtml()`);
+  }
+
+  if (!/\bname="\$\{escapeAttribute\s*\(\s*options\s*\.\s*name\s*\)\}"/.test(source)) {
+    findings.push(`${filePath}: /_q query wire name attribute must be escaped`);
+  }
+
+  if (!/\bkey="\$\{escapeAttribute\s*\(\s*options\s*\.\s*key\s*\)\}"/.test(source)) {
+    findings.push(`${filePath}: /_q query wire key attribute must be escaped`);
+  }
+
+  if (
+    !/\bversion="\$\{escapeAttribute\s*\(\s*String\s*\(\s*options\s*\.\s*version\s*\)\s*\)\}"/.test(
+      source,
+    )
+  ) {
+    findings.push(`${filePath}: /_q query wire version attribute must be escaped`);
+  }
+
+  if (
+    !/\$\{escapeHtml\s*\(\s*stringifyKovoWireValue\s*\(\s*options\s*\.\s*value\s*\)\s*\)\}/.test(
+      source,
+    )
+  ) {
+    findings.push(`${filePath}: /_q query wire body must HTML-escape serialized values`);
   }
 
   return findings;

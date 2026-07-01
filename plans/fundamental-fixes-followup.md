@@ -77,9 +77,12 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 - [ ] SSR document HTML [C2]
   - [ ] SSR route render text is escaped in the production document [C2]
   - [ ] SSR raw/trusted HTML boundaries require proof-or-KV406 [C2]
-- [ ] `/_q` query response [C2]
-  - [ ] `/_q` query response body escapes client-visible HTML [C2]
-  - [ ] `/_q` query response headers do not expose session data to shared caches [C2]
+- [x] `/_q` query response [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] `/_q` query response body escapes client-visible HTML [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot` passed the default+SQLite prod-artifact `/_q` attacker body proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` killed `server-wire-html/drop-query-wire-body-escaping`.
+  - [x] `/_q` query response headers do not expose session data to shared caches [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot` passed the default+SQLite prod-artifact `/_q` private-cache proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` killed `server-wire-html/drop-query-wire-body-escaping`.
 - [ ] mutation delta / enhanced-mutation response [C2]
   - [ ] enhanced mutation fragment bodies escape client-visible HTML [C2]
   - [ ] mutation-triggered query refreshes preserve query wire bounds [C2]

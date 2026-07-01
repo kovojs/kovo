@@ -69,6 +69,10 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'server-wire-html/drop-query-wire-body-escaping',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'fundamental-fixes-census-gate/drop-m5-forbidden-status-enforcement',
           status: 'killed',
         }),

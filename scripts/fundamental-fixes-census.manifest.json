@@ -228,24 +228,84 @@
       "id": "q-query-response",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot; proof calls buildProductionArtifact(root) and assertProdArtifactSinkCensus(root); pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping.",
+      "evidenceBundles": [
+        "m1-prod-artifact-query-wire",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot (1 passed, 7 skipped, 61.85s)",
+        "dialects": {
+          "postgres": "production artifact default/postgres starter serves /_q/queries/q-response-proof-query with escaped attacker body and private cache headers",
+          "sqlite": "production artifact SQLite starter serves /_q/queries/q-response-proof-query with escaped attacker body and private cache headers"
+        },
+        "independentReviewer": "agent/output-census-1782922353 added the prod-artifact proof; focused gate re-run in this session verified both dialect cases"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs and assertProdArtifactSinkCensus(root) for /_q body/header witnesses",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds validates enrolled security build proofs; this row's proof is a real starter kovo build, not extraFiles/unit-only coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping"
+      }
     },
     {
       "id": "q-query-response-body-escapes-client-visible-html",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "q-query-response"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot served default+SQLite prod artifacts and observed escaped <img>/<script> payloads in /_q; pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping.",
+      "parent": "q-query-response",
+      "evidenceBundles": [
+        "m1-prod-artifact-query-wire",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot (1 passed, 7 skipped, 61.85s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact /_q body contains &lt;img...&gt; and &lt;script&gt; while raw attacker tags are absent",
+          "sqlite": "SQLite prod artifact /_q body contains &lt;img...&gt; and &lt;script&gt; while raw attacker tags are absent"
+        },
+        "independentReviewer": "agent/output-census-1782922353 added the prod-artifact proof; focused gate re-run in this session verified both dialect cases"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root), starts dist/server/server.mjs, and fetches /_q/queries/q-response-proof-query",
+        "noFixtureOnlyCertification": "proof uses the generated production server artifact and assertProdArtifactSinkCensus(root), not fixture-only extraFiles/unit coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping"
+      }
     },
     {
       "id": "q-query-response-headers-do-not-expose-session-data-to-shared-caches",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "q-query-response"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot served default+SQLite prod artifacts and observed Cache-Control: private, no-store plus Vary: Cookie on /_q; pnpm run check:security-gate-mutations keeps the shared query wire sink enrolled.",
+      "parent": "q-query-response",
+      "evidenceBundles": [
+        "m1-prod-artifact-query-wire",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot (1 passed, 7 skipped, 61.85s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact /_q response carries Cache-Control: private, no-store and Vary: Cookie despite declared public read.cacheControl",
+          "sqlite": "SQLite prod artifact /_q response carries Cache-Control: private, no-store and Vary: Cookie despite declared public read.cacheControl"
+        },
+        "independentReviewer": "agent/output-census-1782922353 added the prod-artifact proof; focused gate re-run in this session verified both dialect cases"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root), starts dist/server/server.mjs, and fetches /_q/queries/q-response-proof-query",
+        "noFixtureOnlyCertification": "proof uses the generated production server artifact and assertProdArtifactSinkCensus(root), not fixture-only extraFiles/unit coverage"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills server-wire-html/drop-query-wire-body-escaping"
+      }
     },
     {
       "id": "mutation-delta-enhanced-mutation-response",
@@ -1313,6 +1373,10 @@
     "m1-prod-artifact-transactions": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot",
       "evidence": "Production artifact transaction/raw-SQL starter tests build with kovo build --no-cache and exercise default plus SQLite runtime SQL handle paths."
+    },
+    "m1-prod-artifact-query-wire": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot",
+      "evidence": "Production artifact /_q query-wire proof builds default and SQLite starters with kovo build --no-cache, serves dist/server/server.mjs, and observes escaped body plus private cache headers."
     }
   }
 }
