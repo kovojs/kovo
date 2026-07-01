@@ -58,13 +58,14 @@ describe('create-kovo starter (build integration: production island derives)', (
             'state.nested.label',
             'state.groups[0][0]',
             'state.extra["computed-key"]',
+            'state.cards[0].label',
           ],
         },
       ]);
       expect(census.entries).toHaveLength(1);
       const clientSources = clientArtifactSources(root).join('\n');
       expect(clientSources).not.toMatch(
-        /\b(?:chained|direct|firstItem|firstGroup|computedLabel)\b/u,
+        /\b(?:chained|direct|firstItem|firstGroup|computedLabel|firstCard|cardLabel)\b/u,
       );
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
@@ -98,6 +99,7 @@ describe('create-kovo starter (build integration: production island derives)', (
       await expectOutputText(page, 'nested', 'alpha');
       await expectOutputText(page, 'group', 'inner');
       await expectOutputText(page, 'computed', 'delta');
+      await expectOutputText(page, 'card', 'card-a');
 
       await page.click('[data-proof="advance"]');
       try {
@@ -110,7 +112,8 @@ describe('create-kovo starter (build integration: production island derives)', (
               text('first') === 'second' &&
               text('nested') === 'beta' &&
               text('group') === 'updated' &&
-              text('computed') === 'gamma'
+              text('computed') === 'gamma' &&
+              text('card') === 'card-b'
             );
           },
           undefined,
@@ -201,7 +204,7 @@ function addIslandDeriveProof(root: string): void {
       "import { component } from '@kovojs/core';",
       '',
       'export const IslandDeriveProof = component({',
-      "  state: () => ({ count: 1, extra: { 'computed-key': 'delta' }, groups: [[{ label: 'inner' }]], items: ['first'], nested: { label: 'alpha' } }),",
+      "  state: () => ({ cards: [{ label: 'card-a' }], count: 1, extra: { 'computed-key': 'delta' }, groups: [[{ label: 'inner' }]], items: ['first'], nested: { label: 'alpha' } }),",
       '  render: (_queries, state) => (',
       '      <island-derive-proof data-proof="island-derive">',
       '        {(() => {',
@@ -226,6 +229,11 @@ function addIslandDeriveProof(root: string): void {
       '          const { extra: { ["computed-key"]: computedLabel } } = state;',
       '          return <output data-proof="computed">{computedLabel}</output>;',
       '        })()}',
+      '        {(() => {',
+      '          const firstCard = state.cards[0];',
+      '          const cardLabel = firstCard.label;',
+      '          return <output data-proof="card">{cardLabel}</output>;',
+      '        })()}',
       '        <button',
       '          data-proof="advance"',
       '          type="button"',
@@ -235,6 +243,7 @@ function addIslandDeriveProof(root: string): void {
       "            state.nested = { label: 'beta' };",
       "            state.groups = [[{ label: 'updated' }]];",
       "            state.extra = { 'computed-key': 'gamma' };",
+      "            state.cards = [{ label: 'card-b' }];",
       '          }}',
       '        >',
       '          Advance',

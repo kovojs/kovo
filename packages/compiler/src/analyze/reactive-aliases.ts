@@ -1,7 +1,6 @@
 import {
   type ComponentModuleModel,
   type JsxExpressionModel,
-  type LocalConstAliasModel,
   type PropertyAccessPathModel,
   propertyAccessPathModels,
 } from '../scan/parse.js';
@@ -29,34 +28,7 @@ export function reactiveExpressionForJsxExpression(
   model: ComponentModuleModel,
 ): string | null {
   const aliases = localAliasesForExpression(expression, model);
-  const referencedAliases = aliases.filter((alias) => expression.references.includes(alias.name));
-  if (referencedAliases.some((alias) => alias.expression === undefined)) return null;
-  if (aliases.length === 0) {
-    return referencesAreDeriveInputs(expression.references, ['state'])
-      ? expression.expression
-      : null;
-  }
-  const referencedAliasNames = new Set(referencedAliases.map((alias) => alias.name));
-  const remainingReferences = expression.references.filter(
-    (name) => !referencedAliasNames.has(name),
-  );
-  if (!referencesAreDeriveInputs(remainingReferences, ['state'])) return null;
-  if (
-    referencedAliases.some((alias) => !referencesAreDeriveInputs(alias.references ?? [], ['state']))
-  ) {
-    return null;
-  }
-
-  let expanded = expression.expression;
-  for (const alias of [...aliases]
-    .filter(isExpressionAlias)
-    .sort((left, right) => right.name.length - left.name.length)) {
-    expanded = expanded.replace(
-      new RegExp(`\\b${escapeRegExp(alias.name)}\\b`, 'g'),
-      `(${alias.expression})`,
-    );
-  }
-  return expanded;
+  return lowerReactiveExpression(expression.expression, expression.references, aliasMap(aliases));
 }
 
 interface ReactiveAliasModel {
@@ -72,86 +44,82 @@ function localAliasesForExpression(
   model: ComponentModuleModel,
 ): readonly ReactiveAliasModel[] {
   if (expression.references.length === 0) return [];
-  return dedupeAliases([
-    ...expression.localConstAliases,
-    ...identifierConstReadAliasesForExpression(expression, model),
-    ...functionDeclarationReadAliasesForExpression(expression, model),
-    ...destructuredAliasesForExpression(expression, model),
-  ]);
-}
-
-function identifierConstReadAliasesForExpression(
-  expression: JsxExpressionModel,
-  model: ComponentModuleModel,
-): readonly ReactiveAliasModel[] {
   const body = smallestFunctionBlockContaining(model.sourceFile, expression.start);
   if (!body) return [];
 
   const declarations = identifierConstDeclarationsBefore(model.sourceFile, body, expression.start);
   const functions = functionDeclarationsBefore(model.sourceFile, body, expression.start);
-  const destructuredAliases = aliasMap(
-    destructuredAliasDeclarationsBefore(model.sourceFile, body, expression.start),
+  const destructuredAliases = destructuredAliasDeclarationsBefore(
+    model.sourceFile,
+    body,
+    expression.start,
   );
+  const identifierAliases = identifierConstReadAliasesBefore(
+    model.sourceFile,
+    declarations,
+    functions,
+    aliasMap(destructuredAliases),
+  );
+  const identifierExpressionAliasNames = new Set(
+    identifierAliases.filter((alias) => alias.expression !== undefined).map((alias) => alias.name),
+  );
+  const aliases = dedupeAliases([
+    ...expression.localConstAliases.filter(
+      (alias) => !identifierExpressionAliasNames.has(alias.name),
+    ),
+    ...identifierAliases,
+    ...functionDeclarationReadAliasesBefore(model.sourceFile, functions),
+    ...destructuredAliases,
+  ]);
+  return aliasesReachableFromReferences(expression.references, aliases);
+}
+
+function identifierConstReadAliasesBefore(
+  sourceFile: ts.SourceFile,
+  declarations: ReadonlyMap<string, ts.VariableDeclaration>,
+  functions: ReadonlyMap<string, ts.FunctionDeclaration>,
+  destructuredAliases: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
+): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
-  for (const name of expression.references) {
-    const declaration = declarations.get(name);
-    if (!declaration?.initializer) continue;
+  for (const [name, declaration] of declarations) {
+    if (!declaration.initializer) continue;
 
     const accesses = resolvedInitializerAccesses(
-      model.sourceFile,
+      sourceFile,
       declaration.initializer,
       declarations,
       functions,
       destructuredAliases,
     );
     if (accesses.length === 0) continue;
-    const aliasExpression = ts.isIdentifier(declaration.initializer)
-      ? canonicalExpressionForAccesses(accesses)
-      : undefined;
+    const aliasExpression = accessExpressionFromExpression(declaration.initializer);
     aliases.push({
       accesses,
-      ...(aliasExpression ? { expression: aliasExpression } : {}),
+      ...(aliasExpression ? { expression: aliasExpression.expression } : {}),
       name,
-      ...(aliasExpression ? { references: referenceRootsForAccesses(accesses) } : {}),
-      start: declaration.getStart(model.sourceFile),
+      ...(aliasExpression ? { references: identifierReferences(declaration.initializer) } : {}),
+      start: declaration.getStart(sourceFile),
     });
   }
   return aliases;
 }
 
-function functionDeclarationReadAliasesForExpression(
-  expression: JsxExpressionModel,
-  model: ComponentModuleModel,
+function functionDeclarationReadAliasesBefore(
+  sourceFile: ts.SourceFile,
+  declarations: ReadonlyMap<string, ts.FunctionDeclaration>,
 ): readonly ReactiveAliasModel[] {
-  const body = smallestFunctionBlockContaining(model.sourceFile, expression.start);
-  if (!body) return [];
-
-  const declarations = functionDeclarationsBefore(model.sourceFile, body, expression.start);
   const aliases: ReactiveAliasModel[] = [];
-  for (const name of expression.references) {
-    const declaration = declarations.get(name);
-    if (!declaration?.body) continue;
-
-    const accesses = propertyAccessPathModels(model.sourceFile, declaration.body);
+  for (const [name, declaration] of declarations) {
+    if (!declaration.body) continue;
+    const accesses = propertyAccessPathModels(sourceFile, declaration.body);
     if (accesses.length === 0) continue;
     aliases.push({
       accesses,
       name,
-      start: declaration.name?.getStart(model.sourceFile) ?? declaration.getStart(model.sourceFile),
+      start: declaration.name?.getStart(sourceFile) ?? declaration.getStart(sourceFile),
     });
   }
   return aliases;
-}
-
-function destructuredAliasesForExpression(
-  expression: JsxExpressionModel,
-  model: ComponentModuleModel,
-): readonly ReactiveAliasModel[] {
-  const references = new Set(expression.references);
-  const body = smallestFunctionBlockContaining(model.sourceFile, expression.start);
-  if (!body) return [];
-
-  return destructuredAliasDeclarationsBefore(model.sourceFile, body, expression.start, references);
 }
 
 function destructuredAliasDeclarationsBefore(
@@ -232,7 +200,10 @@ function resolvedInitializerAccesses(
   destructuredAliases: ReadonlyMap<string, readonly ReactiveAliasModel[]> = new Map(),
   seen: ReadonlySet<string> = new Set(),
 ): readonly PropertyAccessPathModel[] {
-  const direct = propertyAccessPathModels(sourceFile, initializer);
+  const direct = propertyAccessPathModels(sourceFile, initializer).filter((access) => {
+    const root = referenceRootForAccessPath(access.path);
+    return !root || (!declarations.has(root) && !destructuredAliases.has(root));
+  });
   const nested = identifierReferences(initializer).flatMap((name) => {
     if (seen.has(name)) return [];
     const destructured = destructuredAliases.get(name);
@@ -266,7 +237,7 @@ function bindingPatternAliases(
   prefix: readonly BindingPathSegment[],
 ): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
-  const initializerExpression = initializerExpressionFromExpression(sourceFile, initializer);
+  const initializerExpression = initializerExpressionFromExpression(initializer);
   const fallbackAccessPaths = initializerExpression
     ? [bindingPathAccessPath(initializerExpression.accessPath, prefix)]
     : unresolvedInitializerAccessPaths(sourceFile, initializer);
@@ -341,15 +312,72 @@ interface InitializerExpression {
 type BindingPathSegment = { kind: 'index'; value: string } | { kind: 'property'; value: string };
 
 function initializerExpressionFromExpression(
-  sourceFile: ts.SourceFile,
   initializer: ts.Expression,
 ): InitializerExpression | null {
-  if (ts.isIdentifier(initializer)) {
-    return { accessPath: initializer.text, expression: initializer.text };
+  return accessExpressionFromExpression(initializer);
+}
+
+function accessExpressionFromExpression(expression: ts.Expression): InitializerExpression | null {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isIdentifier(unwrapped)) {
+    return { accessPath: unwrapped.text, expression: unwrapped.text };
   }
-  const accessPath = exactInitializerPath(propertyAccessPathModels(sourceFile, initializer));
-  if (!accessPath) return null;
-  return { accessPath, expression: accessPath };
+  if (ts.isPropertyAccessExpression(unwrapped)) {
+    const receiver = accessExpressionFromExpression(unwrapped.expression);
+    if (!receiver) return null;
+    const receiverPath = unwrapped.questionDotToken
+      ? markLastAccessPathSegmentOptional(receiver.accessPath)
+      : receiver.accessPath;
+    return {
+      accessPath: `${receiverPath}.${unwrapped.name.text}`,
+      expression: `${receiver.expression}${unwrapped.questionDotToken ? '?.' : '.'}${
+        unwrapped.name.text
+      }`,
+    };
+  }
+  if (ts.isElementAccessExpression(unwrapped)) {
+    const receiver = accessExpressionFromExpression(unwrapped.expression);
+    const member = elementAccessMember(unwrapped);
+    if (!receiver || !member) return null;
+    return {
+      accessPath: `${receiver.accessPath}.${member.path}`,
+      expression: `${receiver.expression}${member.expression}`,
+    };
+  }
+  return null;
+}
+
+function unwrapExpression(expression: ts.Expression): ts.Expression {
+  let current = expression;
+  while (
+    ts.isParenthesizedExpression(current) ||
+    ts.isNonNullExpression(current) ||
+    ts.isAsExpression(current) ||
+    ts.isSatisfiesExpression(current)
+  ) {
+    current = current.expression;
+  }
+  return current;
+}
+
+function elementAccessMember(
+  expression: ts.ElementAccessExpression,
+): { expression: string; path: string } | null {
+  const argument = expression.argumentExpression;
+  if (ts.isStringLiteralLike(argument)) {
+    return { expression: `[${JSON.stringify(argument.text)}]`, path: argument.text };
+  }
+  if (ts.isNumericLiteral(argument)) {
+    return { expression: `[${argument.text}]`, path: argument.text };
+  }
+  return null;
+}
+
+function markLastAccessPathSegmentOptional(path: string): string {
+  const parts = path.split('.');
+  const last = parts.at(-1);
+  if (last) parts[parts.length - 1] = last.endsWith('?') ? last : `${last}?`;
+  return parts.join('.');
 }
 
 function unresolvedInitializerAccessPaths(
@@ -359,11 +387,6 @@ function unresolvedInitializerAccessPaths(
   return [
     ...new Set(propertyAccessPathModels(sourceFile, initializer).map((access) => access.path)),
   ];
-}
-
-function exactInitializerPath(accesses: readonly PropertyAccessPathModel[]): string | null {
-  const paths = [...new Set(accesses.map((access) => access.path))];
-  return paths.length === 1 ? (paths[0] ?? null) : null;
 }
 
 function unresolvedBindingAliases(
@@ -450,13 +473,6 @@ function bindingPathExpression(root: string, path: readonly BindingPathSegment[]
   }, root);
 }
 
-function canonicalExpressionForAccesses(
-  accesses: readonly PropertyAccessPathModel[],
-): string | undefined {
-  const path = exactInitializerPath(accesses);
-  return path ?? undefined;
-}
-
 function referencesAreDeriveInputs(
   references: readonly string[],
   inputs: readonly string[],
@@ -465,15 +481,152 @@ function referencesAreDeriveInputs(
   return references.every((name) => allowed.has(name));
 }
 
-function referenceRootsForAccesses(
-  accesses: readonly PropertyAccessPathModel[],
-): readonly string[] {
-  return [...new Set(accesses.flatMap((access) => referenceRootsForAccessPath(access.path)))];
+function referenceRootsForAccessPath(path: string): readonly string[] {
+  const root = referenceRootForAccessPath(path);
+  return root ? [root] : [];
 }
 
-function referenceRootsForAccessPath(path: string): readonly string[] {
+function referenceRootForAccessPath(path: string): string | null {
   const [root] = path.split(/[.[\]]/, 1);
-  return root ? [root] : [];
+  return root ?? null;
+}
+
+function aliasesReachableFromReferences(
+  references: readonly string[],
+  aliases: readonly ReactiveAliasModel[],
+): readonly ReactiveAliasModel[] {
+  const aliasesByName = aliasMap(aliases);
+  const reached: ReactiveAliasModel[] = [];
+  const seen = new Set<string>();
+
+  const visit = (name: string): void => {
+    const candidates = aliasesByName.get(name);
+    if (!candidates) return;
+    for (const alias of candidates) {
+      const key = `${alias.name}\0${alias.start}`;
+      if (seen.has(key)) continue;
+      seen.add(key);
+      reached.push(alias);
+      for (const reference of alias.references ?? []) visit(reference);
+    }
+  };
+
+  for (const reference of references) visit(reference);
+  return reached;
+}
+
+function lowerReactiveExpression(
+  expression: string,
+  references: readonly string[],
+  aliasesByName: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
+  seenAliases: ReadonlySet<string> = new Set(),
+): string | null {
+  if (referencesAreDeriveInputs(references, ['state'])) return expression;
+
+  const replacements = new Map<string, string>();
+  for (const reference of references) {
+    if (referencesAreDeriveInputs([reference], ['state'])) continue;
+    const lowered = lowerAliasReference(reference, aliasesByName, seenAliases);
+    if (!lowered) return null;
+    replacements.set(reference, parenthesizeForReplacement(lowered));
+  }
+  return replaceIdentifierReferences(expression, replacements);
+}
+
+function lowerAliasReference(
+  name: string,
+  aliasesByName: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
+  seenAliases: ReadonlySet<string>,
+): string | null {
+  const aliases = aliasesByName.get(name);
+  if (!aliases || aliases.length === 0) return null;
+
+  const lowered = aliases.map((alias) => lowerAlias(alias, aliasesByName, seenAliases));
+  if (lowered.some((value) => value === null)) return null;
+  const distinct = [...new Set(lowered.filter((value): value is string => value !== null))];
+  return distinct.length === 1 ? (distinct[0] ?? null) : null;
+}
+
+function lowerAlias(
+  alias: ReactiveAliasModel,
+  aliasesByName: ReadonlyMap<string, readonly ReactiveAliasModel[]>,
+  seenAliases: ReadonlySet<string>,
+): string | null {
+  if (!alias.expression) return null;
+  const key = `${alias.name}\0${alias.start}`;
+  if (seenAliases.has(key)) return null;
+  return lowerReactiveExpression(
+    alias.expression,
+    alias.references ?? [],
+    aliasesByName,
+    new Set([...seenAliases, key]),
+  );
+}
+
+function replaceIdentifierReferences(
+  expression: string,
+  replacements: ReadonlyMap<string, string>,
+): string {
+  if (replacements.size === 0) return expression;
+
+  const scanner = ts.createScanner(
+    ts.ScriptTarget.Latest,
+    false,
+    ts.LanguageVariant.Standard,
+    expression,
+  );
+  const edits: { end: number; replacement: string; start: number }[] = [];
+  let token = scanner.scan();
+  while (token !== ts.SyntaxKind.EndOfFileToken) {
+    if (token === ts.SyntaxKind.Identifier) {
+      const name = scanner.getTokenText();
+      const replacement = replacements.get(name);
+      if (replacement && isReferenceIdentifierToken(expression, scanner.getTokenPos())) {
+        edits.push({
+          end: scanner.getTextPos(),
+          replacement,
+          start: scanner.getTokenPos(),
+        });
+      }
+    }
+    token = scanner.scan();
+  }
+
+  let rewritten = expression;
+  for (const edit of edits.sort((left, right) => right.start - left.start)) {
+    rewritten = `${rewritten.slice(0, edit.start)}${edit.replacement}${rewritten.slice(edit.end)}`;
+  }
+  return rewritten;
+}
+
+function parenthesizeForReplacement(expression: string): string {
+  const trimmed = expression.trim();
+  return hasSingleOuterParentheses(trimmed) ? trimmed : `(${trimmed})`;
+}
+
+function hasSingleOuterParentheses(expression: string): boolean {
+  if (!expression.startsWith('(') || !expression.endsWith(')')) return false;
+  let depth = 0;
+  for (let index = 0; index < expression.length; index += 1) {
+    const char = expression[index];
+    if (char === '(') depth += 1;
+    if (char === ')') depth -= 1;
+    if (depth === 0 && index < expression.length - 1) return false;
+  }
+  return depth === 0;
+}
+
+function isReferenceIdentifierToken(expression: string, start: number): boolean {
+  if (previousNonWhitespace(expression, start) === '.') return false;
+  return true;
+}
+
+function previousNonWhitespace(expression: string, start: number): string | null {
+  for (let index = start - 1; index >= 0; index -= 1) {
+    const char = expression[index];
+    if (char && !/\s/.test(char)) return char;
+  }
+  return null;
 }
 
 const safeGlobalIdentifiers = [
@@ -574,12 +727,4 @@ function dedupeAccesses(
     deduped.push(access);
   }
   return deduped;
-}
-
-function isExpressionAlias(alias: ReactiveAliasModel): alias is LocalConstAliasModel {
-  return alias.expression !== undefined;
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }

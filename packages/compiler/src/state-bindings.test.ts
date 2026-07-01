@@ -731,6 +731,124 @@ export const StateNestedArrayAlias = component({
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
   });
 
+  it('lowers transitive element-access state aliases to canonical state-path derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-transitive-element-alias.tsx',
+      source: `
+export const StateTransitiveElementAlias = component({
+  state: () => ({ items: [{ label: 'first' }] }),
+  render: (_queries, state) => {
+    const first = state.items[0];
+    const label = first.label;
+    return <state-transitive-element-alias><p>{label}</p></state-transitive-element-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      'export const StateTransitiveElementAlias$p_text_derive = derive(["state"], (state) => ((state.items[0]).label));',
+    );
+    expect(clientSource).not.toContain('first.label');
+    expect(clientSource).not.toContain('=> label');
+    expect(
+      evaluateStateDerive(clientSource, 'StateTransitiveElementAlias$p_text_derive', {
+        items: [{ label: 'updated' }],
+      }),
+    ).toBe('updated');
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
+  it('lowers destructuring from element-access state aliases to canonical state-path derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-element-destructure-alias.tsx',
+      source: `
+export const StateElementDestructureAlias = component({
+  state: () => ({ items: [{ label: 'first' }] }),
+  render: (_queries, state) => {
+    const { label } = state.items[0];
+    return <state-element-destructure-alias><p>{label}</p></state-element-destructure-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      'export const StateElementDestructureAlias$p_text_derive = derive(["state"], (state) => (state.items[0].label));',
+    );
+    expect(clientSource).not.toContain('=> label');
+    expect(
+      evaluateStateDerive(clientSource, 'StateElementDestructureAlias$p_text_derive', {
+        items: [{ label: 'updated' }],
+      }),
+    ).toBe('updated');
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
+  it('does not rewrite property names while lowering alias-based derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-alias-property-name.tsx',
+      source: `
+export const StateAliasPropertyName = component({
+  state: () => ({ name: 'Ada', profile: { name: 'Lovelace' } }),
+  render: (_queries, state) => {
+    const name = state.name;
+    return <state-alias-property-name><p>{name + ':' + state.profile.name}</p></state-alias-property-name>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      `export const StateAliasPropertyName$p_text_derive = derive(["state"], (state) => (state.name) + ':' + state.profile.name);`,
+    );
+    expect(clientSource).not.toContain('state.profile.(state.name)');
+    expect(
+      evaluateStateDerive(clientSource, 'StateAliasPropertyName$p_text_derive', {
+        name: 'Grace',
+        profile: { name: 'Hopper' },
+      }),
+    ).toBe('Grace:Hopper');
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
+  it('rewrites aliases in ternary branches while lowering state derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-alias-ternary.tsx',
+      source: `
+export const StateAliasTernary = component({
+  state: () => ({ active: true, label: 'ready' }),
+  render: (_queries, state) => {
+    const label = state.label;
+    return <state-alias-ternary><p>{state.active ? label : 'idle'}</p></state-alias-ternary>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      `export const StateAliasTernary$p_text_derive = derive(["state"], (state) => state.active ? (state.label) : 'idle');`,
+    );
+    expect(clientSource).not.toContain('? label :');
+    expect(
+      evaluateStateDerive(clientSource, 'StateAliasTernary$p_text_derive', {
+        active: true,
+        label: 'updated',
+      }),
+    ).toBe('updated');
+    expect(
+      evaluateStateDerive(clientSource, 'StateAliasTernary$p_text_derive', {
+        active: false,
+        label: 'updated',
+      }),
+    ).toBe('idle');
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
   it('fails closed with KV311 for unprovable state destructuring aliases', () => {
     const dynamic = compileComponentModule({
       fileName: 'state-dynamic-destructure-alias.tsx',
@@ -773,6 +891,34 @@ export const StateRestDestructureAlias = component({
         expect.objectContaining({
           code: 'KV311',
           message: expect.stringContaining('StateRestDestructureAlias state.items expression'),
+        }),
+      ]),
+    );
+  });
+
+  it('fails closed with KV311 for dynamic element-access state aliases', () => {
+    const result = compileComponentModule({
+      fileName: 'state-dynamic-element-alias.tsx',
+      source: `
+export const StateDynamicElementAlias = component({
+  state: () => ({ items: [{ label: 'first' }] }),
+  render: (_queries, state) => {
+    const index = 0;
+    const item = state.items[index];
+    return <state-dynamic-element-alias><p>{item.label}</p></state-dynamic-element-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).not.toContain('state.items[index]');
+    expect(clientSource).not.toContain('item.label');
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV311',
+          message: expect.stringContaining('StateDynamicElementAlias state.items expression'),
         }),
       ]),
     );
