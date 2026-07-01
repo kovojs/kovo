@@ -177,11 +177,12 @@ function quoteLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-/** The running app database. The framework provider and auth adapter own the write-capable handle. */
+/** The running app database. Endpoint/user-authored reads should import readonlyAppDb. */
 const appDatabase = createAppDb();
 export const readonlyAppDb = appDatabase.readonlyDb;
 export const appDbReady = appDatabase.ready;
 
-export function appDbProvider(): AppDb {
+/** Framework construction/auth adapter hook; do not import this into endpoint/webhook/task code. */
+export function appRuntimeDbProvider(): AppDb {
   return appDatabase.db;
 }

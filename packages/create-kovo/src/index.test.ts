@@ -245,7 +245,8 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).not.toContain('void client.exec');
     expect(files.get('src/db.ts')).toContain('export const readonlyAppDb = appDatabase.readonlyDb');
     expect(files.get('src/db.ts')).toContain('export const appDbReady = appDatabase.ready');
-    expect(files.get('src/db.ts')).toContain('export function appDbProvider(): AppDb');
+    expect(files.get('src/db.ts')).toContain('export function appRuntimeDbProvider(): AppDb');
+    expect(files.get('src/db.ts')).not.toContain('export function appDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export const appDb = appDatabase.db');
     expect(files.get('src/db.ts')).toContain('ON CONFLICT (id) DO NOTHING');
     expect(files.get('src/app.tsx')).toContain('createMemoryMutationReplayStore');
@@ -254,16 +255,16 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/app.tsx')).toContain('mutationReplayStore,');
     expect(files.get('src/app.tsx')).toContain(
-      "import { appDbProvider, appDbReady } from './db.js'",
+      "import { appRuntimeDbProvider, appDbReady } from './db.js'",
     );
     expect(files.get('src/app.tsx')).toContain('await appDbReady');
-    expect(files.get('src/app.tsx')).toContain('db: appDbProvider,');
+    expect(files.get('src/app.tsx')).toContain('db: appRuntimeDbProvider,');
     expect(files.get('src/app.tsx')).not.toContain('db: () => appDb');
     expect(files.get('src/app.test.ts')).toContain('const { ready, readonlyDb } = createAppDb();');
     expect(files.get('src/app.test.ts')).toContain('{ db: readonlyDb, request: {} }');
     expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
     expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
-    expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appDbProvider(),');
+    expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appRuntimeDbProvider(),');
     expect(files.get('src/auth.ts')).not.toContain('database: drizzleAdapter(appDb,');
   });
 
@@ -423,7 +424,8 @@ describe('create-kovo starter (metadata)', () => {
       'return { db, readonlyDb: readonlyDb(db), ready: Promise.resolve() }',
     );
     expect(files.get('src/db.ts')).toContain('export const readonlyAppDb = appDatabase.readonlyDb');
-    expect(files.get('src/db.ts')).toContain('export function appDbProvider(): AppDb');
+    expect(files.get('src/db.ts')).toContain('export function appRuntimeDbProvider(): AppDb');
+    expect(files.get('src/db.ts')).not.toContain('export function appDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export const appDb = appDatabase.db');
     expect(files.get('src/db.ts')).toContain('"emailVerified" integer NOT NULL DEFAULT 0');
     expect(files.get('src/db.ts')).toContain('"createdAt" integer NOT NULL DEFAULT');
@@ -442,7 +444,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/schema.ts')).not.toContain("text('expiresAt')");
     expect(files.get('src/schema.ts')).not.toContain('timestamp(');
     expect(files.get('src/auth.ts')).toContain("provider: 'sqlite'");
-    expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appDbProvider(),');
+    expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appRuntimeDbProvider(),');
     expect(files.get('src/auth.ts')).not.toContain('database: drizzleAdapter(appDb,');
     expect(files.get('README.md')).toContain('opt-in SQLite dialect');
     expect(files.get('README.md')).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
