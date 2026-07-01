@@ -174,7 +174,7 @@ const DRIZZLE_QUERY_SHAPE_SOURCE = [
 ].join('\n');
 
 const SHAPE_DEPENDENT_COMPONENT = [
-  'import { component } from "@kovojs/server";',
+  'import { component } from "@kovojs/core";',
   '',
   'export const ProductCard = component({',
   '  queries: { product: {} },',
@@ -189,7 +189,7 @@ const SHAPE_DEPENDENT_COMPONENT = [
 ].join('\n');
 
 const VALID_SHAPE_COMPONENT = [
-  'import { component } from "@kovojs/server";',
+  'import { component } from "@kovojs/core";',
   '',
   'export const ProductCard = component({',
   '  queries: { product: {} },',
@@ -219,7 +219,7 @@ const DRIZZLE_OUTPUT_MERGE_QUERY_SOURCE = [
 ].join('\n');
 
 const DRIZZLE_OUTPUT_MERGE_COMPONENT = [
-  'import { component } from "@kovojs/server";',
+  'import { component } from "@kovojs/core";',
   'import { contactsQuery } from "../contacts";',
   '',
   'export const ContactsSummary = component({',
@@ -264,7 +264,7 @@ const DRIZZLE_DERIVED_OUTPUT_QUERY_SOURCE = [
 ].join('\n');
 
 const DRIZZLE_DERIVED_OUTPUT_COMPONENT = [
-  'import { component } from "@kovojs/server";',
+  'import { component } from "@kovojs/core";',
   'import { contactStatsQuery } from "../contact-stats";',
   '',
   'export const ContactStats = component({',
@@ -295,7 +295,7 @@ const NON_DRIZZLE_OUTPUT_QUERY_SOURCE = [
 ].join('\n');
 
 const NON_DRIZZLE_OUTPUT_VALID_COMPONENT = [
-  'import { component } from "@kovojs/server";',
+  'import { component } from "@kovojs/core";',
   'import { status } from "../status";',
   '',
   'export const StatusCard = component({',
@@ -311,7 +311,7 @@ const NON_DRIZZLE_OUTPUT_VALID_COMPONENT = [
 ].join('\n');
 
 const NON_DRIZZLE_OUTPUT_INVALID_COMPONENT = [
-  'import { component } from "@kovojs/server";',
+  'import { component } from "@kovojs/core";',
   'import { status } from "../status";',
   '',
   'export const StatusCard = component({',
@@ -354,7 +354,7 @@ const NON_DRIZZLE_OUTPUT_IMPORTED_QUERY_ALIAS_SOURCE = [
 ].join('\n');
 
 const NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT = [
-  'import { component } from "@kovojs/server";',
+  'import { component } from "@kovojs/core";',
   'import { statusQuery } from "../status";',
   '',
   'export const StatusCard = component({',

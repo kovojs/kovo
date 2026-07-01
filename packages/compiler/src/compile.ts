@@ -8,6 +8,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import {
   callExpressionAtSpan,
   expressionResolvesToFrameworkExport,
+  expressionResolvesToFrameworkExportMember,
   frameworkExport,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
@@ -1135,9 +1136,13 @@ function isKovoQueryCallee(sourceFile: ts.SourceFile, expression: ts.Expression)
       expression,
       KOVO_QUERY_IDENTITY,
     ) ||
-    (ts.isPropertyAccessExpression(expression) &&
-      expression.name.text === 'elevated' &&
-      isKovoQueryCallee(sourceFile, expression.expression))
+    expressionResolvesToFrameworkExportMember(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      KOVO_QUERY_IDENTITY,
+      'elevated',
+    )
   );
 }
 

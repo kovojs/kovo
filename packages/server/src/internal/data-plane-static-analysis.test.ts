@@ -73,7 +73,7 @@ describe('data-plane static analysis aggregate ABI', () => {
           {
             fileName: 'src/status-card.tsx',
             source: [
-              'import { component } from "@kovojs/server";',
+              'import { component } from "@kovojs/core";',
               '',
               'export const StatusCard = component({',
               '  render: () => <p>ready</p>,',

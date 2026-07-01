@@ -84,6 +84,16 @@ const CORE_EXPORTS = new Set(['component', 'trustedReveal']);
 
 const MAX_RESOLUTION_DEPTH = 12;
 
+interface DeclarationIndexEntry {
+  readonly declaration: TypeScript.Node;
+  readonly start: number;
+}
+
+const declarationIndexCache = new WeakMap<
+  TypeScript.SourceFile,
+  WeakMap<TypeScript.Node, Map<string, readonly DeclarationIndexEntry[]>>
+>();
+
 /** @internal */
 export function frameworkExport(
   module: FrameworkIdentityModule,
@@ -133,6 +143,23 @@ export function expressionResolvesToAnyFrameworkExport(
   return frameworkExportIn(
     canonicalFrameworkExportForExpression(ts, sourceFile, expression, options),
     expected,
+  );
+}
+
+/** @internal True for a static member access on a resolved framework export. */
+export function expressionResolvesToFrameworkExportMember(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  expression: TypeScript.Expression,
+  receiver: FrameworkExportIdentity,
+  member: string,
+  options: FrameworkIdentityOptions = {},
+): boolean {
+  const node = unwrapExpression(ts, expression);
+  return (
+    ts.isPropertyAccessExpression(node) &&
+    node.name.text === member &&
+    expressionResolvesToFrameworkExport(ts, sourceFile, node.expression, receiver, options)
   );
 }
 
@@ -391,17 +418,46 @@ function declarationInContainerBefore(
   name: string,
   position: number,
 ): TypeScript.Node | undefined {
+  const declarations = declarationIndexForContainer(ts, sourceFile, container).get(name);
+  if (!declarations) return undefined;
+
   let found: TypeScript.Node | undefined;
+  for (const entry of declarations) {
+    if (entry.start >= position) break;
+    found = entry.declaration;
+  }
+  return found;
+}
+
+function declarationIndexForContainer(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  container: TypeScript.Node,
+): Map<string, readonly DeclarationIndexEntry[]> {
+  let sourceCache = declarationIndexCache.get(sourceFile);
+  if (!sourceCache) {
+    sourceCache = new WeakMap();
+    declarationIndexCache.set(sourceFile, sourceCache);
+  }
+
+  const cached = sourceCache.get(container);
+  if (cached) return cached;
+
+  const index = new Map<string, DeclarationIndexEntry[]>();
+  const add = (name: string, declaration: TypeScript.Node): void => {
+    const bucket = index.get(name);
+    const entry = { declaration, start: declaration.getStart(sourceFile) };
+    if (bucket) bucket.push(entry);
+    else index.set(name, [entry]);
+  };
+
   const visit = (node: TypeScript.Node): void => {
     if (node !== container) {
       const start = node.getStart(sourceFile);
-      if (start >= position) return;
+      if (start >= container.getEnd()) return;
     }
 
-    const declaration = namedDeclaration(ts, node, name);
-    if (declaration && declaration.getStart(sourceFile) < position) {
-      found = declaration;
-    }
+    for (const declaration of namedDeclarations(ts, node)) add(declaration.name, declaration.node);
     if (
       node !== container &&
       (isFunctionLikeWithParameters(ts, node) || ts.isClassDeclaration(node))
@@ -412,48 +468,56 @@ function declarationInContainerBefore(
   };
 
   ts.forEachChild(container, visit);
-  return found;
+  for (const bucket of index.values()) {
+    bucket.sort((left, right) => left.start - right.start);
+  }
+  sourceCache.set(container, index);
+  return index;
 }
 
-function namedDeclaration(
+function namedDeclarations(
   ts: FrameworkIdentityTypeScript,
   node: TypeScript.Node,
-  name: string,
-): TypeScript.Node | undefined {
-  if (ts.isImportDeclaration(node)) return importDeclarationBinding(ts, node, name);
-  if (ts.isVariableDeclaration(node) && bindingNameBinds(ts, node.name, name)) {
-    if (ts.isIdentifier(node.name)) return node;
-    if (ts.isObjectBindingPattern(node.name)) return objectBindingElement(ts, node.name, name);
+): { readonly name: string; readonly node: TypeScript.Node }[] {
+  if (ts.isImportDeclaration(node)) return importDeclarationBindings(ts, node);
+  if (ts.isVariableDeclaration(node)) {
+    if (ts.isIdentifier(node.name)) return [{ name: node.name.text, node }];
+    if (ts.isObjectBindingPattern(node.name)) return objectBindingElements(ts, node.name);
   }
-  if (ts.isFunctionDeclaration(node) && node.name?.text === name) return node;
-  if (ts.isClassDeclaration(node) && node.name?.text === name) return node;
-  if (ts.isInterfaceDeclaration(node) && node.name.text === name) return node;
-  if (ts.isTypeAliasDeclaration(node) && node.name.text === name) return node;
-  return undefined;
+  if (ts.isFunctionDeclaration(node) && node.name) return [{ name: node.name.text, node }];
+  if (ts.isClassDeclaration(node) && node.name) return [{ name: node.name.text, node }];
+  if (ts.isInterfaceDeclaration(node)) return [{ name: node.name.text, node }];
+  if (ts.isTypeAliasDeclaration(node)) return [{ name: node.name.text, node }];
+  return [];
 }
 
-function importDeclarationBinding(
+function importDeclarationBindings(
   ts: FrameworkIdentityTypeScript,
   node: TypeScript.ImportDeclaration,
-  name: string,
-): TypeScript.Node | undefined {
+): { readonly name: string; readonly node: TypeScript.Node }[] {
   const clause = node.importClause;
-  if (!clause) return undefined;
-  if (clause.name?.text === name) return clause;
+  if (!clause) return [];
+  const declarations: { name: string; node: TypeScript.Node }[] = [];
+  if (clause.name) declarations.push({ name: clause.name.text, node: clause });
   const bindings = clause.namedBindings;
-  if (!bindings) return undefined;
-  if (ts.isNamespaceImport(bindings)) return bindings.name.text === name ? bindings : undefined;
-  if (!ts.isNamedImports(bindings)) return undefined;
-  return bindings.elements.find((element) => element.name.text === name);
+  if (!bindings) return declarations;
+  if (ts.isNamespaceImport(bindings)) {
+    declarations.push({ name: bindings.name.text, node: bindings });
+    return declarations;
+  }
+  if (!ts.isNamedImports(bindings)) return declarations;
+  for (const element of bindings.elements) {
+    declarations.push({ name: element.name.text, node: element });
+  }
+  return declarations;
 }
 
-function objectBindingElement(
+function objectBindingElements(
   ts: FrameworkIdentityTypeScript,
   pattern: TypeScript.ObjectBindingPattern,
-  name: string,
-): TypeScript.BindingElement | undefined {
-  return pattern.elements.find(
-    (element) => ts.isIdentifier(element.name) && element.name.text === name,
+): { readonly name: string; readonly node: TypeScript.Node }[] {
+  return pattern.elements.flatMap((element) =>
+    ts.isIdentifier(element.name) ? [{ name: element.name.text, node: element }] : [],
   );
 }
 
