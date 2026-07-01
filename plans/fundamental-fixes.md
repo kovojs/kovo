@@ -323,3 +323,7 @@ packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/
 packages/drizzle/src/index.serialization.test.ts`; `pnpm exec vitest --run
 packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts`; and
   `pnpm run check:vp`.
+- Integrated B slice: compiler/server framework construct recognition now routes through a shared
+  framework identity resolver for aliases, namespace imports, destructuring, package subpaths, and
+  local lookalikes across the migrated compiler/static gates. Verified with Curie's focused
+  compiler/server suite; `pnpm run check:api-surface`; `pnpm run check:vp`; and `git diff --check`.
