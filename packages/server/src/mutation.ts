@@ -6,7 +6,6 @@ import {
   type ForwardSetCookiePosture,
 } from './cookies.js';
 import {
-  KOVO_IDEM_FIELD_NAME,
   mutationCsrfOptions,
   validateCsrfToken,
   verifyCsrfRequestOriginFloor,
@@ -14,12 +13,7 @@ import {
 } from './csrf.js';
 import { invalidate, mutationRegistryChangeRecords, type ChangeRecord } from './change-record.js';
 import { reportServerError } from './diagnostics.js';
-import {
-  escapeAttribute,
-  escapeHtml,
-  generatedFragmentHtml,
-  generatedFragmentHtmlValue,
-} from './html.js';
+import { generatedFragmentHtml, generatedFragmentHtmlValue } from './html.js';
 import {
   explainGuard,
   guardFailureToResult,
@@ -54,20 +48,12 @@ import {
   type MutationWireRequest,
   type MutationWireResponse,
   type NoJsMutationRequest,
-  type NoJsMutationReplayReservation,
   type NoJsMutationResponse,
 } from './mutation-wire.js';
 import type { GeneratedFragmentRenderable } from './renderable.js';
 import type { TaskHandle, TaskInput, TaskSchedulingRequest } from './task.js';
 import { durableTaskScheduleInput } from './task-runner.js';
-import {
-  commitReservedMutationReplay,
-  canonicalRequestFingerprint,
-  MutationReplayConflictError,
-  mutationReplayContext,
-  readMutationReplay,
-  reserveMutationReplayBeforeRun,
-} from './replay.js';
+import { commitReservedMutationReplay, MutationReplayConflictError } from './replay.js';
 import {
   formLikeToRecord,
   isSchemaValidationError,
@@ -77,6 +63,19 @@ import {
   type ValidationFailurePayload,
 } from './schema.js';
 import { renderStreamingMutationWireResponse } from './mutation/streaming.js';
+import {
+  renderDefaultFailureFragmentContent,
+  renderDefaultFailurePage,
+} from './mutation/failure-html.js';
+import {
+  enhancedMutationReplayPolicy,
+  isEnhancedReplayResponse,
+  isNoJsReplayResponse,
+  noJsMutationReplayPolicy,
+  optionalReplayPolicy,
+  type MutationLifecycleReplayPolicy,
+  type MutationLifecycleReplayReservation,
+} from './mutation/replay-policy.js';
 import {
   queriesToRerun,
   renderFragmentChunks,
@@ -153,30 +152,6 @@ export type {
 export { invalidate } from './change-record.js';
 export type { ChangeRecord, InvalidateOptions, MutationTouchSite } from './change-record.js';
 
-type MutationLifecycleReplayReservation<Response> = {
-  abort?(): void;
-  commit(response: Response): void;
-};
-
-type MutationLifecycleReplayPolicy<Response> = {
-  read(): Promise<Response | undefined> | Response | undefined;
-  reserve():
-    | Promise<
-        | { kind: 'conflict' }
-        | { kind: 'disabled' }
-        | { kind: 'replayed'; response: Response }
-        | { kind: 'reserved'; reservation: MutationLifecycleReplayReservation<Response> }
-        | { kind: 'unavailable' }
-        | { kind: 'unreserved' }
-      >
-    | { kind: 'conflict' }
-    | { kind: 'disabled' }
-    | { kind: 'replayed'; response: Response }
-    | { kind: 'reserved'; reservation: MutationLifecycleReplayReservation<Response> }
-    | { kind: 'unavailable' }
-    | { kind: 'unreserved' };
-};
-
 type MutationLifecycleOutcome<Value, Input, ReplayResponse> =
   | { kind: 'csrf-failure'; failure: MutationFail<'CSRF', Record<string, never>> }
   | { kind: 'validation-failure'; failure: MutationFail<'VALIDATION', ValidationFailurePayload> }
@@ -241,12 +216,6 @@ type TransactionCapableRequestDb = {
     callback: (transactionDb: unknown) => Promise<Result> | Result,
   ): Promise<Result> | Result;
 };
-
-function optionalReplayPolicy<Response>(
-  replay: MutationLifecycleReplayPolicy<Response> | undefined,
-): { replay?: MutationLifecycleReplayPolicy<Response> } {
-  return replay === undefined ? {} : { replay };
-}
 
 /**
  * Internal mutation lifecycle state machine shared by enhanced, no-JS, and direct
@@ -1173,115 +1142,6 @@ function mutationRuntimeRegistryFacts<
   };
 }
 
-function enhancedMutationReplayPolicy<Request, Value>(
-  mode: Extract<MutationResponseDeliveryMode<Request, Value>, { kind: 'enhanced-fragment' }>,
-): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> {
-  const context = mutationReplayContext(mode.csrf ?? false, {
-    ...mode.request,
-    mutationKey: mode.mutationKey,
-  });
-  return {
-    async read() {
-      return enhancedReplayResponseOrConflict(await readMutationReplay(context));
-    },
-    async reserve() {
-      const result = await reserveMutationReplayBeforeRun(context);
-      if (result.kind === 'replayed') {
-        return {
-          kind: 'replayed',
-          response: enhancedReplayResultOrConflict(result.response),
-        };
-      }
-      if (result.kind !== 'reserved') return result;
-      return {
-        kind: 'reserved',
-        reservation: {
-          ...(result.reservation.abort === undefined
-            ? {}
-            : { abort: () => result.reservation.abort?.() }),
-          commit(response: BufferedMutationWireResponse) {
-            result.reservation.commit(response);
-          },
-        },
-      };
-    },
-  };
-}
-
-function noJsMutationReplayPolicy<Request, Value>(
-  mode: Extract<MutationResponseDeliveryMode<Request, Value>, { kind: 'no-js-prg' }>,
-): MutationLifecycleReplayPolicy<NoJsMutationResponse> | undefined {
-  // A2 (SPEC §10.3:1063/1151): derive the idem from the hidden `Kovo-Idem` form field. A real no-JS
-  // POST arrives as `FormData` (or a pre-parsed record), so the field must be READ via
-  // `formLikeToRecord` (which materializes FormData entries). The explicit `idem` option wins for
-  // callers that supply it directly (tests / pre-resolved tokens).
-  const idem = mode.request.idem ?? readNoJsIdemField(mode.request.rawInput);
-  if (!idem || !mode.request.replayStore) return undefined;
-
-  const scope = noJsReplayScopeFor(mode.csrf, mode.mutationKey, mode.request.request);
-  const fingerprint =
-    mode.request.requestFingerprint ?? canonicalRequestFingerprint(mode.request.rawInput);
-  return {
-    async read() {
-      return noJsReplayResponseOrConflict(
-        await mode.request.replayStore?.get(scope, idem, fingerprint),
-      );
-    },
-    async reserve() {
-      let reservation = mode.request.replayStore?.reserve(scope, idem, fingerprint);
-      if (reservation) {
-        return {
-          kind: 'reserved',
-          reservation: noJsReplayReservation(reservation),
-        };
-      }
-
-      const pending = noJsReplayResponseOrConflict(
-        await mode.request.replayStore?.get(scope, idem, fingerprint),
-      );
-      if (pending) return { kind: 'replayed', response: pending };
-
-      reservation = mode.request.replayStore?.reserve(scope, idem, fingerprint);
-      return reservation
-        ? { kind: 'reserved', reservation: noJsReplayReservation(reservation) }
-        : { kind: 'unavailable' };
-    },
-  };
-}
-
-function enhancedReplayResponseOrConflict(
-  response: MutationEndpointReplayResponse | undefined,
-): BufferedMutationWireResponse | undefined {
-  if (response === undefined) return undefined;
-  return enhancedReplayResultOrConflict(response);
-}
-
-function enhancedReplayResultOrConflict(
-  response: MutationEndpointReplayResponse,
-): BufferedMutationWireResponse {
-  if (isEnhancedReplayResponse(response)) return response;
-  throw new MutationReplayConflictError();
-}
-
-function noJsReplayResponseOrConflict(
-  response: MutationEndpointReplayResponse | undefined,
-): NoJsMutationResponse | undefined {
-  if (response === undefined) return undefined;
-  if (isNoJsReplayResponse(response)) return response;
-  throw new MutationReplayConflictError();
-}
-
-function noJsReplayReservation(
-  reservation: NoJsMutationReplayReservation,
-): MutationLifecycleReplayReservation<NoJsMutationResponse> {
-  return {
-    ...(reservation.abort === undefined ? {} : { abort: () => reservation.abort?.() }),
-    commit(response) {
-      reservation.commit(response);
-    },
-  };
-}
-
 function isReplayTerminalOutcome<Value, Input, ReplayResponse>(
   outcome: MutationLifecycleOutcome<Value, Input, ReplayResponse>,
 ): outcome is Extract<
@@ -1421,65 +1281,6 @@ async function renderNoJsMutationFailureResponse<Request, Value>(
   };
 }
 
-/**
- * Read the per-submit `Kovo-Idem` token from a no-JS form body (A2, SPEC §10.3:1063/1151).
- *
- * A real no-JS POST arrives as `FormData`; `formLikeToRecord` materializes its entries (and
- * passes a pre-parsed record through unchanged), so the hidden `Kovo-Idem` field is actually
- * read rather than missed by an `in`-operator probe that FormData entries never satisfy. Returns
- * `undefined` for a non-object body or an absent/empty field so the caller falls through to the
- * unprotected path only when there is genuinely no idem token.
- */
-function readNoJsIdemField(rawInput: unknown): string | undefined {
-  if (typeof rawInput !== 'object' || rawInput === null) return undefined;
-  let record: Record<string, unknown>;
-  try {
-    record = formLikeToRecord(rawInput);
-  } catch {
-    return undefined;
-  }
-  const value = record[KOVO_IDEM_FIELD_NAME];
-  return typeof value === 'string' && value !== '' ? value : undefined;
-}
-
-/**
- * Derive the replay scope for the no-JS form path (A2 + GAP4-2, SPEC §10.3:1062-1066/1151).
- *
- * Scopes by (mutation-key, session-id) when a session is available; for `csrf:false`
- * or sessionless mutations, falls back to a mutation-key namespace so a stable
- * `Kovo-Idem` still dedups duplicate external POSTs. Every scope carries a `nojs:` prefix so
- * no-JS 303 records share a key space with no enhanced fragment record when one injected
- * {@link MutationReplayStore} backs both mutation paths.
- */
-function noJsReplayScopeFor<Request>(
-  csrf: CsrfValidationOptions<Request> | false | undefined,
-  mutationKey: string,
-  request: Request,
-): string {
-  let sessionScope: string | null = null;
-
-  if (csrf !== false && csrf !== undefined && 'sessionId' in csrf) {
-    const id = (csrf as { sessionId(r: Request): string | undefined }).sessionId(request);
-    if (id) sessionScope = id;
-  }
-
-  if (!sessionScope && typeof request === 'object' && request !== null) {
-    const req = request as Record<string, unknown>;
-    if (typeof req['sessionId'] === 'string' && req['sessionId'] !== '') {
-      sessionScope = req['sessionId'];
-    } else if (
-      typeof req['session'] === 'object' &&
-      req['session'] !== null &&
-      typeof (req['session'] as Record<string, unknown>)['id'] === 'string' &&
-      (req['session'] as Record<string, unknown>)['id'] !== ''
-    ) {
-      sessionScope = (req['session'] as Record<string, unknown>)['id'] as string;
-    }
-  }
-
-  return sessionScope !== null ? `nojs:${mutationKey}\0${sessionScope}` : `nojs:${mutationKey}`;
-}
-
 function isMutationFail(value: unknown): value is MutationFail {
   return (
     typeof value === 'object' &&
@@ -1585,25 +1386,6 @@ function replayResponseMatchesMode<Request, Value>(
   return mode.kind === 'no-js-prg'
     ? isNoJsReplayResponse(response)
     : isEnhancedReplayResponse(response);
-}
-
-function isNoJsReplayResponse(
-  response: MutationEndpointReplayResponse,
-): response is NoJsMutationResponse {
-  return (
-    response.status === 303 ||
-    String(response.headers['Content-Type'] ?? '').startsWith('text/html;')
-  );
-}
-
-function isEnhancedReplayResponse(
-  response: MutationEndpointReplayResponse,
-): response is BufferedMutationWireResponse {
-  return (
-    response.status !== 303 &&
-    (String(response.headers['Content-Type'] ?? '').startsWith('text/vnd.kovo.fragment+html;') ||
-      typeof response.headers['Kovo-Reauth'] === 'string')
-  );
 }
 
 async function replayConflictResponseForMode<Request, Value>(
@@ -1784,46 +1566,6 @@ function mutationFailureTarget<Request>(wireRequest: MutationWireRequest<Request
     wireRequest.targets?.[0] ??
     'error'
   );
-}
-
-function renderDefaultFailureFragmentContent(failure: MutationFail): string {
-  if (failure.error.code === 'VALIDATION' && isValidationFailurePayload(failure.error.payload)) {
-    return failure.error.payload.issues
-      .map(
-        (issue) =>
-          `<output role="alert" data-error-path="${escapeAttribute(issue.path.join('.'))}">${escapeHtml(issue.message)}</output>`,
-      )
-      .join('');
-  }
-
-  return `<output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output>`;
-}
-
-function isValidationFailurePayload(value: unknown): value is ValidationFailurePayload {
-  return (
-    typeof value === 'object' &&
-    value !== null &&
-    'issues' in value &&
-    Array.isArray(value.issues) &&
-    value.issues.every(
-      (issue) =>
-        typeof issue === 'object' &&
-        issue !== null &&
-        'message' in issue &&
-        typeof issue.message === 'string' &&
-        'path' in issue &&
-        Array.isArray(issue.path) &&
-        issue.path.every((part: unknown) => typeof part === 'string'),
-    )
-  );
-}
-
-function renderDefaultFailurePage(failure: MutationFail): string {
-  if (failure.error.code === 'VALIDATION' && isValidationFailurePayload(failure.error.payload)) {
-    return `<!doctype html><html><body>${renderDefaultFailureFragmentContent(failure)}</body></html>`;
-  }
-
-  return `<!doctype html><html><body><output role="alert" data-error-code="${escapeAttribute(failure.error.code)}">${escapeHtml(JSON.stringify(failure.error.payload))}</output></body></html>`;
 }
 
 function stampNoJsMutationFailureHeaders(headers: ResponseHeaders): ResponseHeaders {

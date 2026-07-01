@@ -53,6 +53,29 @@ export interface MutationReplayContext<
   scope: string | null;
 }
 
+export interface ReplayReservationStore<Response, Reservation> {
+  get(
+    scope: string,
+    idem: string,
+    fingerprint?: string,
+  ): Promise<Response | undefined> | Response | undefined;
+  reserve(scope: string, idem: string, fingerprint?: string): Reservation | undefined;
+}
+
+export type ReplayReservationResult<Response, Reservation> =
+  | { kind: 'conflict' }
+  | { kind: 'disabled' }
+  | { kind: 'replayed'; response: Response }
+  | { kind: 'reserved'; reservation: Reservation }
+  | { kind: 'unavailable' };
+
+export interface ReplayReservationRequest<Response, Reservation> {
+  fingerprint?: string | undefined;
+  idem?: string | undefined;
+  scope: string | null;
+  store?: ReplayReservationStore<Response, Reservation> | undefined;
+}
+
 export interface MutationReplayStoreOptions {
   maxEntries?: number;
   /**
@@ -338,11 +361,29 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
   | { kind: 'reserved'; reservation: MutationReplayReservation<Response> }
   | { kind: 'unavailable' }
 > {
-  if (!replay.idem || !replay.scope || !replay.replayStore) return { kind: 'disabled' };
+  return reserveReplayBeforeRun({
+    fingerprint: replay.fingerprint,
+    idem: replay.idem,
+    scope: replay.scope,
+    store: replay.replayStore,
+  });
+}
 
-  let reservation: MutationReplayReservation<Response> | undefined;
+/**
+ * Shared SPEC §10.3 fail-closed replay reservation machine for mutation and webhook paths.
+ * `reserve()` may return undefined for an already-pending durable row; callers must then await
+ * the committed response, retry the atomic reservation, and fail closed if neither succeeds.
+ */
+export async function reserveReplayBeforeRun<Response, Reservation>(
+  replay: ReplayReservationRequest<Response, Reservation>,
+): Promise<ReplayReservationResult<Response, Reservation>> {
+  if (replay.idem === undefined || replay.scope === null || replay.store === undefined) {
+    return { kind: 'disabled' };
+  }
+
+  let reservation: Reservation | undefined;
   try {
-    reservation = replay.replayStore.reserve(replay.scope, replay.idem, replay.fingerprint);
+    reservation = replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
   } catch (error) {
     if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
     throw error;
@@ -355,7 +396,7 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
   // (e.g. a validation failure), the pending promise rejects — fall back to
   // running ourselves rather than propagating the abort.
   try {
-    const pending = await replay.replayStore.get(replay.scope, replay.idem, replay.fingerprint);
+    const pending = await replay.store.get(replay.scope, replay.idem, replay.fingerprint);
     if (pending) return { kind: 'replayed', response: pending };
   } catch (error) {
     if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
@@ -365,9 +406,9 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
   // A6: The record vanished (expired/evicted/aborted) before we could read it.
   // Re-reserve so this request runs with a proper reservation rather than falling
   // through unprotected (which would re-open the M4 double-execute hazard).
-  let retryReservation: MutationReplayReservation<Response> | undefined;
+  let retryReservation: Reservation | undefined;
   try {
-    retryReservation = replay.replayStore.reserve(replay.scope, replay.idem, replay.fingerprint);
+    retryReservation = replay.store.reserve(replay.scope, replay.idem, replay.fingerprint);
   } catch (error) {
     if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
     throw error;
@@ -376,7 +417,7 @@ export async function reserveMutationReplayBeforeRun<Response extends MutationRe
 
   // Another request snuck in again — await that one.
   try {
-    const pending = await replay.replayStore.get(replay.scope, replay.idem, replay.fingerprint);
+    const pending = await replay.store.get(replay.scope, replay.idem, replay.fingerprint);
     if (pending) return { kind: 'replayed', response: pending };
   } catch (error) {
     if (error instanceof MutationReplayConflictError) return { kind: 'conflict' };
