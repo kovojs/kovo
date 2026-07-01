@@ -6,7 +6,11 @@ import {
   type QueryEndpointRegistry,
   type QueryEndpointRequest,
 } from './query.js';
-import { methodNotAllowedWebResponse, routeResponseToWebResponse } from './response.js';
+import {
+  methodNotAllowedWebResponse,
+  routeResponseToWebResponse,
+  serverResponseToWebResponse,
+} from './response.js';
 import type { ShellDispatchMatch } from './shell.js';
 import type { KovoApp } from './app-types.js';
 import type { EndpointDeclaration, EndpointMethod, EndpointMount } from './endpoint.js';
@@ -171,11 +175,13 @@ async function validateEndpointCsrf(
   // SPEC §9.1 / §6.6: endpoint() is default-CSRF for unsafe browser verbs.
   // Exempt endpoints keep raw-body access; protected endpoints validate a cloned
   // body before the raw handler can run.
-  if (csrf === undefined) return endpointCsrfFailureResponse();
+  if (csrf === undefined) return endpointCsrfFailureResponse(request);
 
   const rawInput = await readCsrfCarrierFromRequest(request);
 
-  return validateCsrfToken(rawInput, request, csrf) ? undefined : endpointCsrfFailureResponse();
+  return validateCsrfToken(rawInput, request, csrf)
+    ? undefined
+    : endpointCsrfFailureResponse(request);
 }
 
 function requiresCsrf(method: string): boolean {
@@ -183,9 +189,13 @@ function requiresCsrf(method: string): boolean {
   return upper === 'POST' || upper === 'PUT' || upper === 'PATCH' || upper === 'DELETE';
 }
 
-function endpointCsrfFailureResponse(): Response {
-  return new Response('CSRF', {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    status: 422,
-  });
+function endpointCsrfFailureResponse(request: Pick<Request, 'method'>): Response {
+  return serverResponseToWebResponse(
+    {
+      body: 'CSRF',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 422,
+    },
+    request,
+  );
 }

@@ -4,6 +4,7 @@ import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
   assertEndpointResponsePosture,
   endpointRequestWithoutSession,
+  finalizeServerResponse,
 } from './response-posture.js';
 
 export type { RedirectLocationAllowlistEntry } from './response.js';
@@ -267,8 +268,12 @@ export function endpointMatches(
 export { endpointRequestWithoutSession };
 
 function endpointAuthFailureResponse(): Response {
-  return new Response('Unauthorized', {
-    headers: { 'Content-Type': 'text/plain; charset=utf-8' },
-    status: 401,
-  });
+  return finalizeServerResponse(
+    {
+      body: 'Unauthorized',
+      headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 401,
+    },
+    { method: 'GET' },
+  );
 }

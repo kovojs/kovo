@@ -25,6 +25,15 @@ import type {
   EndpointResponseBodyPosture,
 } from './endpoint.js';
 
+export type WireOutputChannel = 'framework-response' | 'raw-endpoint-response';
+
+export interface WireOutputProvenance {
+  blessedRedirect?: boolean;
+  method: string;
+  redirectAllowlist?: readonly RedirectLocationAllowlistEntry[];
+  status?: number;
+}
+
 /**
  * Internal request/response lifecycle policy shared by document/query/mutation/endpoint/system
  * surfaces. SPEC §§5.2.1, 6.6, 9.1, 9.4, 9.5, and 10.3 keep these floors at the request shell:
@@ -186,13 +195,19 @@ export function finalizeServerResponse(
   request: Pick<Request, 'method'>,
 ): Response {
   const body = request.method === 'HEAD' || response.status === 304 ? null : response.body;
-  return new Response(webResponseBodyToBodyInit(body), {
-    headers: finalizeResponseHeaders(response.headers, {
-      blessedRedirect: isBlessedRedirectResponse(response),
+  return emitToWire(
+    {
+      body,
+      headers: response.headers,
       status: response.status,
-    }),
-    status: response.status,
-  });
+    },
+    'framework-response',
+    {
+      blessedRedirect: isBlessedRedirectResponse(response),
+      method: request.method,
+      status: response.status,
+    },
+  );
 }
 
 /**
@@ -204,14 +219,55 @@ export function finalizeRawWebResponse(
   request: Pick<Request, 'method'>,
   options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[] } = {},
 ): Response {
-  const finalizedHeaders = finalizeRawResponseHeaders(response, options);
-  const suppressBody = request.method === 'HEAD' || response.status === 304;
-  if (!suppressBody && finalizedHeaders === response.headers) return response;
-
-  return new Response(suppressBody ? null : response.body, {
-    headers: finalizedHeaders,
+  return emitToWire(response, 'raw-endpoint-response', {
+    method: request.method,
+    ...(options.redirectAllowlist === undefined
+      ? {}
+      : { redirectAllowlist: options.redirectAllowlist }),
     status: response.status,
-    statusText: response.statusText,
+  });
+}
+
+/**
+ * DEC5 wire-output choke (SPEC §9.1/§9.5): every framework-owned response finalization path
+ * reaches the Web `Response` constructor here, after status/body suppression and header safety
+ * checks have run for the selected channel.
+ */
+export function emitToWire(
+  value: Response | ServerResponseBase<WebResponseBody, ResponseHeaders>,
+  channel: WireOutputChannel,
+  provenance: WireOutputProvenance,
+): Response {
+  if (channel === 'raw-endpoint-response') {
+    if (!(value instanceof Response)) {
+      throw new TypeError('emitToWire raw-endpoint-response requires a Web Response.');
+    }
+    const finalizedHeaders = finalizeRawResponseHeaders(
+      value,
+      provenance.redirectAllowlist === undefined
+        ? {}
+        : { redirectAllowlist: provenance.redirectAllowlist },
+    );
+    const suppressBody = provenance.method === 'HEAD' || value.status === 304;
+    if (!suppressBody && finalizedHeaders === value.headers) return value;
+
+    return new Response(suppressBody ? null : value.body, {
+      headers: finalizedHeaders,
+      status: value.status,
+      statusText: value.statusText,
+    });
+  }
+
+  if (value instanceof Response) {
+    throw new TypeError('emitToWire framework-response requires a structured response.');
+  }
+
+  return new Response(webResponseBodyToBodyInit(value.body), {
+    headers: finalizeResponseHeaders(value.headers, {
+      blessedRedirect: provenance.blessedRedirect ?? false,
+      status: provenance.status ?? value.status,
+    }),
+    status: value.status,
   });
 }
 

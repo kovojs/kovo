@@ -522,13 +522,17 @@ export function methodNotAllowedWebResponse(
   request: Pick<Request, 'method'>,
   allowedMethods: readonly string[],
 ): Response {
-  return new Response(request.method === 'HEAD' ? null : 'Method Not Allowed', {
-    headers: {
-      Allow: allowedMethods.join(', '),
-      'Content-Type': 'text/plain; charset=utf-8',
+  return finalizeServerResponse(
+    {
+      body: 'Method Not Allowed',
+      headers: {
+        Allow: allowedMethods.join(', '),
+        'Content-Type': 'text/plain; charset=utf-8',
+      },
+      status: 405,
     },
-    status: 405,
-  });
+    request,
+  );
 }
 
 export const routeResponseToDocumentResponse = wireEmitter(
