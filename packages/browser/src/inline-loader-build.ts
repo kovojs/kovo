@@ -1227,11 +1227,37 @@ export function buildInlineKovoLoaderModuleSource(
     'Generated inline Kovo loader bootstrap',
   );
 
-  const moduleSource = `${[
+  const moduleSource = `${buildInlineKovoLoaderModuleLines({
+    installerSource,
+    runtimeModuleSource,
+    runtimeModuleVersion,
+    stubInstallerSource,
+  }).join('\n')}\n`;
+  assertInlineKovoLoaderModuleArtifactParity(moduleSource, 'Generated inline Kovo loader module');
+
+  return moduleSource;
+}
+
+interface InlineKovoLoaderModuleLineParts {
+  installerSource: string;
+  runtimeModuleSource: string;
+  runtimeModuleVersion: string;
+  stubInstallerSource: string;
+}
+
+function buildInlineKovoLoaderModuleLines({
+  installerSource,
+  runtimeModuleSource,
+  runtimeModuleVersion,
+  stubInstallerSource,
+}: InlineKovoLoaderModuleLineParts): string[] {
+  const moduleHeaderLines = [
     '// @ts-nocheck',
     '// Generated from the SPEC.md §4.4 readable inline bootstrap by inline-loader-build.ts.',
     "import type { ImportHandlerModule } from './handlers.js';",
     '',
+  ];
+  const runtimeSeedLines = [
     '// SPEC.md §4.4 caps the always-loaded document bootstrap, not this deferred',
     '// runtime installer source. This literal seeds the versioned runtime module.',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
@@ -1251,6 +1277,8 @@ export function buildInlineKovoLoaderModuleSource(
       runtimeModuleSource,
     )};`,
     '',
+  ];
+  const runtimeInstallerLines = [
     '// prettier-ignore',
     'const inlineKovoLoaderInstaller = (',
     `  ${installerSource}`,
@@ -1263,6 +1291,8 @@ export function buildInlineKovoLoaderModuleSource(
     '  inlineKovoLoaderInstaller(importModule);',
     '}',
     '',
+  ];
+  const bootstrapInstallerLines = [
     '// prettier-ignore',
     'const inlineKovoLoaderBootstrapInstaller = (',
     `  ${stubInstallerSource}`,
@@ -1282,6 +1312,8 @@ export function buildInlineKovoLoaderModuleSource(
     '  );',
     '}',
     '',
+  ];
+  const publicSourceFactoryLines = [
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     'export function createInlineKovoLoaderSource(',
     '  runtimeModuleExpression = JSON.stringify(kovoDeferredRuntimeModulePath),',
@@ -1310,10 +1342,15 @@ export function buildInlineKovoLoaderModuleSource(
     '',
     '/** Runtime API used by Kovo applications and generated runtime integration. */',
     'export const kovoLoaderSource = createInlineKovoLoaderSource();',
-  ].join('\n')}\n`;
-  assertInlineKovoLoaderModuleArtifactParity(moduleSource, 'Generated inline Kovo loader module');
+  ];
 
-  return moduleSource;
+  return [
+    ...moduleHeaderLines,
+    ...runtimeSeedLines,
+    ...runtimeInstallerLines,
+    ...bootstrapInstallerLines,
+    ...publicSourceFactoryLines,
+  ];
 }
 
 function buildKovoDeferredRuntimeModuleSource(installerSource: string): string {
@@ -1550,72 +1587,74 @@ export function assertInlineKovoLoaderTrustedTypesRouting(
     responseApplySource,
   );
 
-  assertInlineKovoLoaderTrustedTypesReadableRouting(readableApplySource, readableInstallerSource);
-  assertInlineKovoLoaderTrustedTypesMinifiedRouting(
-    minifyInlineJavaScriptSource(compactInlineKovoLoaderInstallerLocalNames(readableApplySource)),
-    minifiedInstallerSource,
-  );
+  assertInlineKovoLoaderTrustedTypesRoutingForSource({
+    applySource: readableApplySource,
+    installerSource: readableInstallerSource,
+    mode: 'readable',
+  });
+  assertInlineKovoLoaderTrustedTypesRoutingForSource({
+    applySource: minifyInlineJavaScriptSource(
+      compactInlineKovoLoaderInstallerLocalNames(readableApplySource),
+    ),
+    installerSource: minifiedInstallerSource,
+    mode: 'minified',
+  });
 }
 
-function assertInlineKovoLoaderTrustedTypesReadableRouting(
-  readableApplySource: string,
-  readableInstallerSource: string,
-): void {
-  const readableSinkRoutes = countSubstring(readableApplySource, 'innerHTML = trustedHtml(');
+type InlineKovoLoaderTrustedTypesRoutingMode = 'readable' | 'minified';
 
-  if (readableSinkRoutes !== 2) {
+interface InlineKovoLoaderTrustedTypesRoutingAssertion {
+  applySource: string;
+  installerSource: string;
+  mode: InlineKovoLoaderTrustedTypesRoutingMode;
+}
+
+function assertInlineKovoLoaderTrustedTypesRoutingForSource({
+  applySource,
+  installerSource,
+  mode,
+}: InlineKovoLoaderTrustedTypesRoutingAssertion): void {
+  const sinkRoutes =
+    mode === 'readable'
+      ? countSubstring(applySource, 'innerHTML = trustedHtml(')
+      : countSubstring(installerSource, 'innerHTML=th(') +
+        countSubstring(installerSource, 'innerHTML=trustedHtml(');
+  if (sinkRoutes !== 2) {
     throw new Error(
-      `Inline Kovo loader Trusted Types routing must wrap both readable response-apply innerHTML sinks; found ${readableSinkRoutes}.`,
+      `Inline Kovo loader Trusted Types routing must wrap both ${mode} response-apply innerHTML sinks; found ${sinkRoutes}.`,
     );
   }
-  if (!readableApplySource.includes('function trustedHtml(h)')) {
-    throw new Error('Inline Kovo loader Trusted Types routing is missing the trustedHtml shim.');
-  }
-  for (const token of [
-    'const t = w.trustedTypes;',
-    "p = t.createPolicy('kovo', { createHTML: (s) => s });",
-    'return p ? p.createHTML(h) : h;',
-  ]) {
-    if (!readableApplySource.includes(token)) {
-      throw new Error(`Inline Kovo loader Trusted Types routing is missing ${token}.`);
+
+  const requiredTokens =
+    mode === 'readable'
+      ? [
+          ['function trustedHtml(h)'],
+          ['const t = w.trustedTypes;'],
+          ["p = t.createPolicy('kovo', { createHTML: (s) => s });"],
+          ['return p ? p.createHTML(h) : h;'],
+        ]
+      : [
+          ['function th(h)', 'function trustedHtml(h)'],
+          ['trustedTypes'],
+          ["createPolicy('kovo'"],
+          ['createHTML'],
+          ['p.createHTML(h)'],
+        ];
+  for (const tokens of requiredTokens) {
+    if (
+      !tokens.some((token) => applySource.includes(token)) ||
+      (mode === 'minified' && !tokens.some((token) => installerSource.includes(token)))
+    ) {
+      throw new Error(
+        `Inline Kovo loader ${mode} Trusted Types routing is missing ${tokens.join(' or ')}.`,
+      );
     }
   }
-  if (!readableInstallerSource.includes(readableApplySource)) {
+
+  if (mode === 'readable' && !installerSource.includes(applySource)) {
     throw new Error(
       'Inline Kovo loader readable source must embed the Trusted Types-routed response-apply closure.',
     );
-  }
-}
-
-function assertInlineKovoLoaderTrustedTypesMinifiedRouting(
-  minifiedApplySource: string,
-  minifiedInstallerSource: string,
-): void {
-  const minifiedSinkRoutes =
-    countSubstring(minifiedInstallerSource, 'innerHTML=th(') +
-    countSubstring(minifiedInstallerSource, 'innerHTML=trustedHtml(');
-
-  if (minifiedSinkRoutes !== 2) {
-    throw new Error(
-      `Inline Kovo loader Trusted Types routing must wrap both minified response-apply innerHTML sinks; found ${minifiedSinkRoutes}.`,
-    );
-  }
-  const requiredTokens = [
-    ['function th(h)', 'function trustedHtml(h)'],
-    ['trustedTypes'],
-    ["createPolicy('kovo'"],
-    ['createHTML'],
-    ['p.createHTML(h)'],
-  ];
-  for (const tokens of requiredTokens) {
-    if (
-      !tokens.some((token) => minifiedApplySource.includes(token)) ||
-      !tokens.some((token) => minifiedInstallerSource.includes(token))
-    ) {
-      throw new Error(
-        `Inline Kovo loader minified Trusted Types routing is missing ${tokens.join(' or ')}.`,
-      );
-    }
   }
 }
 
