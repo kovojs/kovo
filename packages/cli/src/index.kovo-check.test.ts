@@ -1243,6 +1243,30 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails kovo check on an unresolved closure read in the touch graph', () => {
+    expect(
+      kovoCheck({
+        touchGraph: {
+          auditAccount: {
+            touches: [],
+            unresolved: [
+              {
+                code: 'KV406',
+                message:
+                  'Statically un-analyzable write site; manual touches required. Drizzle select read is hidden inside an ordinary closure; extract a named helper with a typed receiver parameter or declare the read/touch surface.',
+                site: 'account.domain.ts:10',
+              },
+            ],
+          },
+        },
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output:
+        'kovo-check/v1\nERROR KV406 account.domain.ts:10 Statically un-analyzable write site; manual touches required. Drizzle select read is hidden inside an ordinary closure; extract a named helper with a typed receiver parameter or declare the read/touch surface.\n',
+    });
+  });
+
   it('reports non-equality touch graph predicates as KV409 notices', () => {
     expect(
       kovoCheck({
