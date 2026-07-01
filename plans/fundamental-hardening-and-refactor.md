@@ -184,11 +184,12 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
   - Fix: make the ad-hoc builders return `ResponseHeaders`, route every merge through the cookie-safe combinator;
     consider a branded `HeaderBag` whose only combinator is the safe merge (per CLAUDE.md type-level ergonomics).
   - Evidence: `pnpm exec vitest --run packages/server/src/response.test.ts packages/server/src/mutation-response.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/webhook.test.ts`, `vp check packages/server/src/response.ts packages/server/src/mutation.ts packages/server/src/query.ts packages/server/src/webhook.ts packages/server/src/response.test.ts packages/server/src/mutation-response.test.ts packages/server/src/query-endpoint.test.ts`, and `git diff --check HEAD~1..HEAD` passed after routing response header merges through the cookie-safe `mergeResponseHeaders` combinator and preserving repeated `Set-Cookie` in retry-after, mutation, and query response paths.
-- [ ] **S5 — Share the fail-closed replay reservation; one webhook response builder.** (M · med)
+- [x] **S5 — Share the fail-closed replay reservation; one webhook response builder.** (M · med)
   - Problem: `webhook.ts:741` (`reserveWebhookReplayBeforeRun`) hand-mirrors the mutation reserve→get→re-reserve→
     fail-closed machine (`replay.ts` / `mutation.ts:1143-1250`); the `Cache-Control: private, no-store` + `Content-Type`
     webhook floor is inlined 5× (`webhook.ts:962,997,1013,1024,1034`).
   - Fix: lift the reservation into `replay.ts` (parameterized by store shape); add one `webhookResponse(...)` builder owning the floor.
+  - Evidence: `pnpm exec vitest --run packages/server/src/replay.test.ts packages/server/src/webhook.test.ts packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts packages/server/src/app-mutation-request.test.ts`, `pnpm run test:integration`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after sharing `reserveReplayBeforeRun` across mutation/no-JS/webhook replay paths and centralizing webhook response headers.
 - [x] **S2 — De-duplicate the Node⇄Web HTTP adapter (Set-Cookie parity).** (M · med)
   - Problem: live `node.ts:344` (with `getSetCookie()` splitting + HTTP/2 pseudo-header rationale) vs the string-emitted
     copy in `nodeAdapterRuntimeSource()` `build.ts:606` (already diverged: `build.ts:713` guards `typeof
@@ -215,12 +216,13 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     query-shapes.ts:2790). Move query-shape traversal → `query-shapes.ts` (shared `foldQueryShape` visitor);
     raw-write/mutation cluster → `domain-writes.ts`; leave static.ts a thin barrel.
   - Evidence: `pnpm exec vitest run packages/drizzle/src`, `vp check packages/drizzle/src/static.ts packages/drizzle/src/static/query-shapes.ts packages/drizzle/src/static/domain-writes.ts`, and `git diff --check HEAD~1..HEAD` passed after moving query-shape traversal helpers and `foldQueryShape` into `static/query-shapes.ts` and raw-write/mutation handler map helpers into `static/domain-writes.ts`.
-- [ ] **S6 — Split `mutation.ts` along the `mutation/` seam.** (L · low-med; after S3)
+- [x] **S6 — Split `mutation.ts` along the `mutation/` seam.** (L · low-med; after S3)
   - The 1973-line file mixes the lifecycle SM (242-382), `runMutation` (398-550), enhanced wire (744-1034), no-JS PRG
     (1071-1524), replay adapters (1143-1250), failure HTML (1686-1803). The enhanced/no-JS reauth + stale-session-CSRF
     branches are hand-forked pairs differing only in the terminal builder (1825-1842 vs 1936-1951; 1844-1867 vs
     1869-1892) despite `MutationResponseDeliveryMode` (211-223) existing to dispatch them. Extract
     `mutation/{wire-response,no-js,replay-policy,failure-html}.ts`; compute the outcome once, map to mode-specific responses.
+  - Evidence: Same server mutation/webhook/replay Vitest, touched-file `vp check`, and `git diff --check origin/main..HEAD` listed for S5 passed after moving enhanced wire, no-JS PRG, replay policy, and failure HTML response mapping into `mutation/` modules while keeping `mutation.ts` as lifecycle orchestration.
 - [x] **T6 — Split `graph-output.ts` (3046 lines) along input/args/formatters.** (L · low; after T3)
   - Extract `graph-input.ts` (`readGraphInput:73`, `discoverGraphInputPath:112`), `graph-args.ts` (after T3), and the
     ~35 pure `Fact→string` formatters (≈1300-3046) → `graph-explain-format.ts`; keep orchestration in graph-output.ts.

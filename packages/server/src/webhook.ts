@@ -22,6 +22,7 @@ import {
 import { isSchemaValidationError } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
+import { reserveReplayBeforeRun } from './replay.js';
 
 const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
 
@@ -543,11 +544,11 @@ export async function runWebhook<
   // returns undefined for a reserved-but-uncommitted row, so falling through to execute
   // double-runs the handler. Re-reserve, and if a reservation still cannot be obtained and
   // no committed response exists, FAIL CLOSED so the provider retries instead of executing.
-  const reserveOutcome = await reserveWebhookReplayBeforeRun(
-    declaration.webhookDefinition.replayStore,
-    replayScope,
+  const reserveOutcome = await reserveReplayBeforeRun({
     idem,
-  );
+    scope: replayScope,
+    store: declaration.webhookDefinition.replayStore,
+  });
   if (reserveOutcome.kind === 'replayed') {
     return {
       changes: [],
@@ -730,49 +731,6 @@ function webhookReplayPostureSatisfied(definition: {
   replayStore?: unknown;
 }): boolean {
   return definition.idempotency !== undefined && definition.replayStore !== undefined;
-}
-
-/**
- * H9 (SPEC §10.3:1151): acquire the atomic idempotency reservation BEFORE running the webhook
- * handler, mirroring `reserveMutationReplayBeforeRun` (replay.ts). `reserve()` returning
- * undefined means a concurrent delivery of the same provider event id already holds the slot.
- * On a durable cross-instance store, `get()` is non-blocking and returns undefined for that
- * reserved-but-uncommitted row, so a single attempt is NOT a miss — re-reserve, re-read, and if
- * neither a fresh reservation nor a committed response can be obtained, return `unavailable` so
- * the caller fails closed (429 Retry-After) and the provider retries, never double-executing.
- */
-async function reserveWebhookReplayBeforeRun(
-  store: WebhookReplayStore | undefined,
-  scope: string,
-  idem: string | undefined,
-): Promise<
-  | { kind: 'disabled' }
-  | { kind: 'replayed'; response: WebhookWireResponse }
-  | { kind: 'reserved'; reservation: WebhookReplayReservation }
-  | { kind: 'unavailable' }
-> {
-  // Replay dedup is active only when this event yields an idem token AND a store is present.
-  // (For tx-exposing webhooks both are guaranteed by the write-posture floor; idem may still be
-  // undefined if the app's idempotency() deliberately opts a specific event out of dedup.)
-  if (idem === undefined || store === undefined) return { kind: 'disabled' };
-
-  let reservation = store.reserve(scope, idem);
-  if (reservation) return { kind: 'reserved', reservation };
-
-  let committed = await store.get(scope, idem);
-  if (committed) return { kind: 'replayed', response: committed };
-
-  // reserve() lost and get() saw no committed response: a concurrent delivery holds a
-  // reserved-but-uncommitted slot on a durable non-blocking store. Re-reserve rather than
-  // fall through to execute (the bugz H9 double-execute window).
-  reservation = store.reserve(scope, idem);
-  if (reservation) return { kind: 'reserved', reservation };
-
-  committed = await store.get(scope, idem);
-  if (committed) return { kind: 'replayed', response: committed };
-
-  // Still neither reservable nor a committed response — fail closed so the provider retries.
-  return { kind: 'unavailable' };
 }
 
 type WebhookVerificationFields = WebhookVerifiedDefinition | WebhookNoneDefinition;
@@ -968,11 +926,11 @@ function webhookFailWireResponse(
 ): WebhookWireResponse {
   return {
     body: JSON.stringify({ error: failure.error, ok: false }),
-    headers: mergeResponseHeaders(
-      { 'Content-Type': 'application/json; charset=utf-8' },
-      webhookResponseHeaders(idem),
-      retryAfterHeaders(failure),
-    ),
+    headers: webhookResponseHeaders({
+      contentType: 'application/json; charset=utf-8',
+      idem,
+      extra: retryAfterHeaders(failure),
+    }),
     status: failure.status,
   };
 }
@@ -997,9 +955,22 @@ function responseFromWire(response: WebhookWireResponse): Response {
   return serverResponseToWebResponse(response, { method: 'GET' });
 }
 
-function webhookResponse(status: 400 | 401 | 500, body: string): Response {
-  return new Response(body, {
-    headers: { 'Cache-Control': 'private, no-store', 'Content-Type': 'text/plain; charset=utf-8' },
+type WebhookResponseContentType = 'application/json; charset=utf-8' | 'text/plain; charset=utf-8';
+
+function webhookResponse(
+  status: 400 | 401 | 422 | 429 | 500,
+  body: string,
+  options: {
+    contentType?: WebhookResponseContentType;
+    headers?: ResponseHeaders | undefined;
+  } = {},
+): Response {
+  return responseFromWire({
+    body,
+    headers: webhookResponseHeaders({
+      contentType: options.contentType ?? 'text/plain; charset=utf-8',
+      extra: options.headers,
+    }),
     status,
   });
 }
@@ -1014,23 +985,14 @@ const WEBHOOK_REPLAY_RETRY_AFTER_SECONDS = 1;
  * of executing here without the reservation the spec requires.
  */
 function webhookRetryResponse(): Response {
-  return new Response('Webhook processing in progress; retry shortly.', {
-    headers: {
-      'Cache-Control': 'private, no-store',
-      'Content-Type': 'text/plain; charset=utf-8',
-      'Retry-After': String(WEBHOOK_REPLAY_RETRY_AFTER_SECONDS),
-    },
-    status: 429,
+  return webhookResponse(429, 'Webhook processing in progress; retry shortly.', {
+    headers: { 'Retry-After': String(WEBHOOK_REPLAY_RETRY_AFTER_SECONDS) },
   });
 }
 
 function webhookJsonResponse(status: 422, body: unknown): Response {
-  return new Response(JSON.stringify(body), {
-    headers: {
-      'Cache-Control': 'private, no-store',
-      'Content-Type': 'application/json; charset=utf-8',
-    },
-    status,
+  return webhookResponse(status, JSON.stringify(body), {
+    contentType: 'application/json; charset=utf-8',
   });
 }
 
@@ -1038,18 +1000,30 @@ function webhookSuccessHeaders(
   changes: readonly ChangeRecord[],
   idem: string | undefined,
 ): ResponseHeaders {
+  return webhookResponseHeaders({
+    changes,
+    contentType: 'text/plain; charset=utf-8',
+    idem,
+  });
+}
+
+function webhookResponseHeaders(options: {
+  changes?: readonly ChangeRecord[] | undefined;
+  contentType: WebhookResponseContentType;
+  extra?: ResponseHeaders | undefined;
+  idem?: string | undefined;
+}): ResponseHeaders {
   return mergeResponseHeaders(
     {
       'Cache-Control': 'private, no-store',
-      'Content-Type': 'text/plain; charset=utf-8',
+      'Content-Type': options.contentType,
     },
-    webhookResponseHeaders(idem),
-    changes.length === 0 ? undefined : { 'Kovo-Changes': webhookChangeHeader(changes) },
+    options.idem === undefined ? undefined : { 'Kovo-Idem': options.idem },
+    options.changes === undefined || options.changes.length === 0
+      ? undefined
+      : { 'Kovo-Changes': webhookChangeHeader(options.changes) },
+    options.extra,
   );
-}
-
-function webhookResponseHeaders(idem: string | undefined): ResponseHeaders {
-  return idem === undefined ? {} : { 'Kovo-Idem': idem };
 }
 
 function webhookChangeHeader(changes: readonly ChangeRecord[]): string {
