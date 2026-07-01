@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
@@ -45,38 +46,38 @@ import type { ComponentModuleModel } from '../scan/parse.js';
  *     "<justification>")` / `trustedUrl(value, "<justification>")` (a non-empty static reason),
  *     which discharges the public trust-brand gate but stays recorded.
  */
-export function validateTrustedHtmlProvenance(
-  diagnostics: DiagnosticFactory,
-  model: ComponentModuleModel,
-): CompilerDiagnostic[] {
-  const sourceFile = model.sourceFile;
-  const bindingsByRender = renderProvenanceBindings(sourceFile);
+export const validateTrustedHtmlProvenance = securityClassifier(
+  'compiler.trusted-html.validate-provenance',
+  function (diagnostics: DiagnosticFactory, model: ComponentModuleModel): CompilerDiagnostic[] {
+    const sourceFile = model.sourceFile;
+    const bindingsByRender = renderProvenanceBindings(sourceFile);
 
-  const found: CompilerDiagnostic[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isCallExpression(node)) {
-      const sink = rawTrustSinkForCall(sourceFile, node);
-      const value = node.arguments[0];
-      if (
-        sink !== null &&
-        value !== undefined &&
-        !(sink.auditedReasonAllowed && hasAuditedReason(node))
-      ) {
-        const provenance = classifyExpression(value, {
-          ...enclosingRenderProvenanceBindings(node, bindingsByRender),
-          depth: 0,
-          visited: new Set<ts.Node>(),
-        });
-        if (provenance !== null) {
-          found.push(rawTrustProvenanceDiagnostic(diagnostics, value, provenance, sink));
+    const found: CompilerDiagnostic[] = [];
+    const visit = (node: ts.Node): void => {
+      if (ts.isCallExpression(node)) {
+        const sink = rawTrustSinkForCall(sourceFile, node);
+        const value = node.arguments[0];
+        if (
+          sink !== null &&
+          value !== undefined &&
+          !(sink.auditedReasonAllowed && hasAuditedReason(node))
+        ) {
+          const provenance = classifyExpression(value, {
+            ...enclosingRenderProvenanceBindings(node, bindingsByRender),
+            depth: 0,
+            visited: new Set<ts.Node>(),
+          });
+          if (provenance !== null) {
+            found.push(rawTrustProvenanceDiagnostic(diagnostics, value, provenance, sink));
+          }
         }
       }
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return found;
-}
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+    return found;
+  },
+);
 
 type Provenance = 'query' | 'request' | 'unprovable';
 
@@ -117,30 +118,30 @@ const BROWSER_MODULE_SPECIFIER = '@kovojs/browser';
 const SERVER_MODULE_SPECIFIER = '@kovojs/server';
 const SERVER_INTERNAL_HTML_MODULE_SPECIFIER = '@kovojs/server/internal/html';
 
-function rawTrustSinkForCall(
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
-): RawTrustSink | null {
-  const direct = rawTrustSinkForExpression(sourceFile, call.expression);
-  if (direct !== null) return direct;
-  return wrapperHelperRawTrustSink(sourceFile, call);
-}
+const rawTrustSinkForCall = securityClassifier(
+  'compiler.trusted-html.raw-trust-call',
+  function (sourceFile: ts.SourceFile, call: ts.CallExpression): RawTrustSink | null {
+    const direct = rawTrustSinkForExpression(sourceFile, call.expression);
+    if (direct !== null) return direct;
+    return wrapperHelperRawTrustSink(sourceFile, call);
+  },
+);
 
-function rawTrustSinkForExpression(
-  sourceFile: ts.SourceFile,
-  expression: ts.Expression,
-): RawTrustSink | null {
-  if (expressionResolvesToTrustedHtmlPureBrand(sourceFile, expression)) {
-    return { auditedReasonAllowed: true, label: 'trustedHtml', rawSink: 'raw HTML' };
-  }
-  if (expressionResolvesToTrustedUrlPureBrand(sourceFile, expression)) {
-    return { auditedReasonAllowed: true, label: 'trustedUrl', rawSink: 'trusted URL' };
-  }
-  if (expressionResolvesToRenderedHtmlRawSink(sourceFile, expression)) {
-    return { auditedReasonAllowed: false, label: 'renderedHtml', rawSink: 'raw HTML' };
-  }
-  return dynamicNamespaceRawTrustSink(sourceFile, expression);
-}
+const rawTrustSinkForExpression = securityClassifier(
+  'compiler.trusted-html.raw-trust-expression',
+  function (sourceFile: ts.SourceFile, expression: ts.Expression): RawTrustSink | null {
+    if (expressionResolvesToTrustedHtmlPureBrand(sourceFile, expression)) {
+      return { auditedReasonAllowed: true, label: 'trustedHtml', rawSink: 'raw HTML' };
+    }
+    if (expressionResolvesToTrustedUrlPureBrand(sourceFile, expression)) {
+      return { auditedReasonAllowed: true, label: 'trustedUrl', rawSink: 'trusted URL' };
+    }
+    if (expressionResolvesToRenderedHtmlRawSink(sourceFile, expression)) {
+      return { auditedReasonAllowed: false, label: 'renderedHtml', rawSink: 'raw HTML' };
+    }
+    return dynamicNamespaceRawTrustSink(sourceFile, expression);
+  },
+);
 
 type TrustNamespaceModule =
   | typeof BROWSER_MODULE_SPECIFIER
@@ -304,72 +305,72 @@ function wrapperHelperRawTrustSink(
  * the value is request/query-derived, `'unprovable'` when this local analysis cannot prove the value
  * clean, or `null` only for values proven local/static-clean.
  */
-function classifyExpression(
-  node: ts.Expression | ts.SpreadElement,
-  ctx: ClassifyContext,
-): Provenance | null {
-  if (ts.isSpreadElement(node)) return classifyExpression(node.expression, ctx) ?? 'unprovable';
-  const expr = unwrap(node);
+const classifyExpression = securityClassifier(
+  'compiler.trusted-html.classify-expression',
+  function (node: ts.Expression | ts.SpreadElement, ctx: ClassifyContext): Provenance | null {
+    if (ts.isSpreadElement(node)) return classifyExpression(node.expression, ctx) ?? 'unprovable';
+    const expr = unwrap(node);
 
-  if (ts.isPropertyAccessExpression(expr) || ts.isElementAccessExpression(expr)) {
-    return classifyMemberRoot(expr, ctx);
-  }
-  if (ts.isIdentifier(expr)) {
-    return classifyIdentifier(expr, ctx);
-  }
-  if (ts.isConditionalExpression(expr)) {
-    return firstProvenance([
-      classifyExpression(expr.condition, { ...ctx, visited: new Set(ctx.visited) }),
-      classifyExpression(expr.whenTrue, { ...ctx, visited: new Set(ctx.visited) }),
-      classifyExpression(expr.whenFalse, { ...ctx, visited: new Set(ctx.visited) }),
-    ]);
-  }
-  if (ts.isBinaryExpression(expr)) {
-    return firstProvenance([
-      classifyExpression(expr.left, { ...ctx, visited: new Set(ctx.visited) }),
-      classifyExpression(expr.right, { ...ctx, visited: new Set(ctx.visited) }),
-    ]);
-  }
-  if (ts.isTemplateExpression(expr)) {
-    return firstProvenance(
-      expr.templateSpans.map((span) =>
-        classifyExpression(span.expression, { ...ctx, visited: new Set(ctx.visited) }),
-      ),
-    );
-  }
-  if (ts.isCallExpression(expr) || ts.isNewExpression(expr)) {
-    const argumentProvenance = firstProvenance(
-      [...(expr.arguments ?? [])].map((arg) =>
-        classifyExpression(arg, { ...ctx, visited: new Set(ctx.visited) }),
-      ),
-    );
-    const calleeProvenance = classifyExpression(expr.expression, {
-      ...ctx,
-      visited: new Set(ctx.visited),
-    });
-    return firstProvenance([argumentProvenance, calleeProvenance]) ?? 'unprovable';
-  }
-  if (ts.isArrayLiteralExpression(expr)) {
-    return firstProvenance(
-      expr.elements.map((element) =>
-        classifyExpression(element, { ...ctx, visited: new Set(ctx.visited) }),
-      ),
-    );
-  }
-  if (ts.isObjectLiteralExpression(expr)) {
-    return firstProvenance(
-      expr.properties.map((property) => classifyObjectLiteralProperty(property, ctx)),
-    );
-  }
-  if (ts.isPrefixUnaryExpression(expr) || ts.isPostfixUnaryExpression(expr)) {
-    return classifyExpression(expr.operand, ctx);
-  }
-  if (ts.isNoSubstitutionTemplateLiteral(expr) || isStaticLiteral(expr)) return null;
-  if (expr.kind === ts.SyntaxKind.NullKeyword || expr.kind === ts.SyntaxKind.UndefinedKeyword) {
-    return null;
-  }
-  return 'unprovable';
-}
+    if (ts.isPropertyAccessExpression(expr) || ts.isElementAccessExpression(expr)) {
+      return classifyMemberRoot(expr, ctx);
+    }
+    if (ts.isIdentifier(expr)) {
+      return classifyIdentifier(expr, ctx);
+    }
+    if (ts.isConditionalExpression(expr)) {
+      return firstProvenance([
+        classifyExpression(expr.condition, { ...ctx, visited: new Set(ctx.visited) }),
+        classifyExpression(expr.whenTrue, { ...ctx, visited: new Set(ctx.visited) }),
+        classifyExpression(expr.whenFalse, { ...ctx, visited: new Set(ctx.visited) }),
+      ]);
+    }
+    if (ts.isBinaryExpression(expr)) {
+      return firstProvenance([
+        classifyExpression(expr.left, { ...ctx, visited: new Set(ctx.visited) }),
+        classifyExpression(expr.right, { ...ctx, visited: new Set(ctx.visited) }),
+      ]);
+    }
+    if (ts.isTemplateExpression(expr)) {
+      return firstProvenance(
+        expr.templateSpans.map((span) =>
+          classifyExpression(span.expression, { ...ctx, visited: new Set(ctx.visited) }),
+        ),
+      );
+    }
+    if (ts.isCallExpression(expr) || ts.isNewExpression(expr)) {
+      const argumentProvenance = firstProvenance(
+        [...(expr.arguments ?? [])].map((arg) =>
+          classifyExpression(arg, { ...ctx, visited: new Set(ctx.visited) }),
+        ),
+      );
+      const calleeProvenance = classifyExpression(expr.expression, {
+        ...ctx,
+        visited: new Set(ctx.visited),
+      });
+      return firstProvenance([argumentProvenance, calleeProvenance]) ?? 'unprovable';
+    }
+    if (ts.isArrayLiteralExpression(expr)) {
+      return firstProvenance(
+        expr.elements.map((element) =>
+          classifyExpression(element, { ...ctx, visited: new Set(ctx.visited) }),
+        ),
+      );
+    }
+    if (ts.isObjectLiteralExpression(expr)) {
+      return firstProvenance(
+        expr.properties.map((property) => classifyObjectLiteralProperty(property, ctx)),
+      );
+    }
+    if (ts.isPrefixUnaryExpression(expr) || ts.isPostfixUnaryExpression(expr)) {
+      return classifyExpression(expr.operand, ctx);
+    }
+    if (ts.isNoSubstitutionTemplateLiteral(expr) || isStaticLiteral(expr)) return null;
+    if (expr.kind === ts.SyntaxKind.NullKeyword || expr.kind === ts.SyntaxKind.UndefinedKeyword) {
+      return null;
+    }
+    return 'unprovable';
+  },
+);
 
 function classifyObjectLiteralProperty(
   property: ts.ObjectLiteralElementLike,

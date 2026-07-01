@@ -1,3 +1,4 @@
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
 interface StaticExportHeaderSinkOptions {
@@ -17,46 +18,53 @@ const HEADER_NAME_PATTERN = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/;
  * through one fail-closed sink before entering manifests or filesystem plans (SPEC.md §9.5 and
  * §9.4 header-channel transport safety).
  */
-export function createStaticExportHeaderSink(
-  options: StaticExportHeaderSinkOptions,
-): StaticExportHeaderSink {
-  const headers = new Map<string, string>();
+export const createStaticExportHeaderSink = wireEmitter(
+  'server.wire.static-export-header-sink',
+  function (options: StaticExportHeaderSinkOptions): StaticExportHeaderSink {
+    const headers = new Map<string, string>();
 
-  return {
-    append(name, value) {
-      const normalizedName = normalizeStaticExportHeaderName(name, options);
-      const normalizedValue = normalizeStaticExportHeaderValue(normalizedName, value, options);
-      const existing = headers.get(normalizedName);
-      headers.set(
-        normalizedName,
-        existing === undefined ? normalizedValue : `${existing}, ${normalizedValue}`,
-      );
-    },
-    set(name, value) {
-      const normalizedName = normalizeStaticExportHeaderName(name, options);
-      headers.set(normalizedName, normalizeStaticExportHeaderValue(normalizedName, value, options));
-    },
-    toJSON() {
-      return Object.fromEntries(
-        [...headers.entries()].sort(([left], [right]) => left.localeCompare(right)),
-      );
-    },
-  };
-}
+    return {
+      append(name, value) {
+        const normalizedName = normalizeStaticExportHeaderName(name, options);
+        const normalizedValue = normalizeStaticExportHeaderValue(normalizedName, value, options);
+        const existing = headers.get(normalizedName);
+        headers.set(
+          normalizedName,
+          existing === undefined ? normalizedValue : `${existing}, ${normalizedValue}`,
+        );
+      },
+      set(name, value) {
+        const normalizedName = normalizeStaticExportHeaderName(name, options);
+        headers.set(
+          normalizedName,
+          normalizeStaticExportHeaderValue(normalizedName, value, options),
+        );
+      },
+      toJSON() {
+        return Object.fromEntries(
+          [...headers.entries()].sort(([left], [right]) => left.localeCompare(right)),
+        );
+      },
+    };
+  },
+);
 
-export function staticExportHeaders(
-  source: Headers | HeadersInit | undefined,
-  options: StaticExportHeaderSinkOptions,
-): Record<string, string> {
-  const sink = createStaticExportHeaderSink(options);
-  if (source === undefined) return sink.toJSON();
+export const staticExportHeaders = wireEmitter(
+  'server.wire.static-export-headers',
+  function (
+    source: Headers | HeadersInit | undefined,
+    options: StaticExportHeaderSinkOptions,
+  ): Record<string, string> {
+    const sink = createStaticExportHeaderSink(options);
+    if (source === undefined) return sink.toJSON();
 
-  for (const [name, value] of staticExportHeaderEntries(source, options)) {
-    sink.append(name, value);
-  }
+    for (const [name, value] of staticExportHeaderEntries(source, options)) {
+      sink.append(name, value);
+    }
 
-  return sink.toJSON();
-}
+    return sink.toJSON();
+  },
+);
 
 function* staticExportHeaderEntries(
   source: Headers | HeadersInit,

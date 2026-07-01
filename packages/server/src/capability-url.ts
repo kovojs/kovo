@@ -21,6 +21,7 @@
  * drained for `kovo explain --capabilities`.
  */
 
+import { securityClassifier, wireEmitter } from '@kovojs/core/internal/security-markers';
 import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 
 const TOKEN_VERSION = 'v1';
@@ -167,39 +168,42 @@ function fromBase64url(value: string): Uint8Array | null {
  * @param options - `{ key, method?, scope?, expiresIn?, oneTime? }`.
  * @param now - Injectable clock (epoch ms) for tests.
  */
-export async function signCapability(
-  secret: SigningSecret,
-  options: SignCapabilityOptions,
-  now: number = Date.now(),
-): Promise<SignedCapability> {
-  const claims: CapabilityClaims = {
-    key: options.key,
-    method: options.method ?? 'GET',
-    expiry: now + (options.expiresIn ?? DEFAULT_CAPABILITY_TTL_MS),
-    ...(options.scope === undefined ? {} : { scope: options.scope }),
-  };
-  const oneTime = options.oneTime === true;
-  // A per-token nonce gives one-time tokens a stable replay id even when claims are identical.
-  const nonce = oneTime ? base64url(crypto.getRandomValues(new Uint8Array(12))) : '';
-  const signedBytes = canonicalizeWithNonce(claims, oneTime, nonce);
-  const signed = signingKeyRingFromSecret(secret).sign({
-    audience: options.audience ?? DEFAULT_CAPABILITY_AUDIENCE,
-    payload: signedBytes,
-    purpose: CAPABILITY_SIGNING_PURPOSE,
-  });
-  const payload = {
-    v: TOKEN_VERSION,
-    i: signed.keyId,
-    m: claims.method,
-    k: claims.key,
-    e: claims.expiry,
-    ...(claims.scope === undefined ? {} : { s: claims.scope }),
-    ...(oneTime ? { o: 1, n: nonce } : {}),
-  };
-  const payloadB64 = base64url(encoder.encode(JSON.stringify(payload)));
-  const token = `${payloadB64}.${signed.signature}`;
-  return { token, claims, oneTime };
-}
+export const signCapability = wireEmitter(
+  'server.wire.capability-url',
+  async function (
+    secret: SigningSecret,
+    options: SignCapabilityOptions,
+    now: number = Date.now(),
+  ): Promise<SignedCapability> {
+    const claims: CapabilityClaims = {
+      key: options.key,
+      method: options.method ?? 'GET',
+      expiry: now + (options.expiresIn ?? DEFAULT_CAPABILITY_TTL_MS),
+      ...(options.scope === undefined ? {} : { scope: options.scope }),
+    };
+    const oneTime = options.oneTime === true;
+    // A per-token nonce gives one-time tokens a stable replay id even when claims are identical.
+    const nonce = oneTime ? base64url(crypto.getRandomValues(new Uint8Array(12))) : '';
+    const signedBytes = canonicalizeWithNonce(claims, oneTime, nonce);
+    const signed = signingKeyRingFromSecret(secret).sign({
+      audience: options.audience ?? DEFAULT_CAPABILITY_AUDIENCE,
+      payload: signedBytes,
+      purpose: CAPABILITY_SIGNING_PURPOSE,
+    });
+    const payload = {
+      v: TOKEN_VERSION,
+      i: signed.keyId,
+      m: claims.method,
+      k: claims.key,
+      e: claims.expiry,
+      ...(claims.scope === undefined ? {} : { s: claims.scope }),
+      ...(oneTime ? { o: 1, n: nonce } : {}),
+    };
+    const payloadB64 = base64url(encoder.encode(JSON.stringify(payload)));
+    const token = `${payloadB64}.${signed.signature}`;
+    return { token, claims, oneTime };
+  },
+);
 
 /** Canonical bytes including the one-time flag + nonce so the signature commits to them too. */
 function canonicalizeWithNonce(
@@ -228,86 +232,89 @@ function canonicalizeWithNonce(
  * @returns `{ ok: true, claims }` only when every check passes; otherwise `{ ok: false, reason }`.
  *          Callers MUST NOT leak `reason` to the client (return a generic 403/404).
  */
-export async function verifyCapability(
-  secret: SigningSecret,
-  token: string,
-  expected: { key: string; method: CapabilityMethod; scope?: string },
-  options: { audience?: string; now?: number; replayStore?: CapabilityReplayStore } = {},
-): Promise<CapabilityVerifyResult> {
-  const now = options.now ?? Date.now();
-  const dot = token.indexOf('.');
-  if (dot <= 0) return { ok: false, reason: 'malformed' };
-  const payloadBytes = fromBase64url(token.slice(0, dot));
-  const signatureBytes = fromBase64url(token.slice(dot + 1));
-  if (!payloadBytes || !signatureBytes) return { ok: false, reason: 'malformed' };
+export const verifyCapability = securityClassifier(
+  'server.auth.verify-capability-url',
+  async function (
+    secret: SigningSecret,
+    token: string,
+    expected: { key: string; method: CapabilityMethod; scope?: string },
+    options: { audience?: string; now?: number; replayStore?: CapabilityReplayStore } = {},
+  ): Promise<CapabilityVerifyResult> {
+    const now = options.now ?? Date.now();
+    const dot = token.indexOf('.');
+    if (dot <= 0) return { ok: false, reason: 'malformed' };
+    const payloadBytes = fromBase64url(token.slice(0, dot));
+    const signatureBytes = fromBase64url(token.slice(dot + 1));
+    if (!payloadBytes || !signatureBytes) return { ok: false, reason: 'malformed' };
 
-  let payload: {
-    v?: string;
-    m?: string;
-    k?: string;
-    e?: number;
-    i?: string;
-    s?: string;
-    o?: number;
-    n?: string;
-  };
-  try {
-    payload = JSON.parse(new TextDecoder().decode(payloadBytes));
-  } catch {
-    return { ok: false, reason: 'malformed' };
-  }
-  if (
-    payload.v !== TOKEN_VERSION ||
-    (payload.m !== 'GET' && payload.m !== 'HEAD') ||
-    typeof payload.k !== 'string' ||
-    typeof payload.e !== 'number' ||
-    (payload.i !== undefined && typeof payload.i !== 'string')
-  ) {
-    return { ok: false, reason: 'malformed' };
-  }
-
-  const claims: CapabilityClaims = {
-    key: payload.k,
-    method: payload.m,
-    expiry: payload.e,
-    ...(payload.s === undefined ? {} : { scope: payload.s }),
-  };
-  const oneTime = payload.o === 1;
-  const nonce = typeof payload.n === 'string' ? payload.n : '';
-
-  // Recompute the signature over the canonicalized *received* fields and compare in constant time.
-  const verification = signingKeyRingFromSecret(secret).verify({
-    audience: options.audience ?? DEFAULT_CAPABILITY_AUDIENCE,
-    ...(payload.i === undefined ? {} : { keyId: payload.i }),
-    payload: canonicalizeWithNonce(claims, oneTime, nonce),
-    purpose: CAPABILITY_SIGNING_PURPOSE,
-    signature: base64url(signatureBytes),
-  });
-  if (!verification.ok) {
-    return { ok: false, reason: 'bad-signature' };
-  }
-
-  if (now >= claims.expiry) return { ok: false, reason: 'expired' };
-
-  // The token's claims must match what the route is about to do. The route derives `expected`
-  // from the request URL, not from the token — this is what makes the token un-substitutable.
-  if (
-    claims.key !== expected.key ||
-    claims.method !== expected.method ||
-    (claims.scope ?? '') !== (expected.scope ?? '')
-  ) {
-    return { ok: false, reason: 'claim-mismatch' };
-  }
-
-  if (oneTime) {
-    if (!options.replayStore) {
-      // A one-time token without a replay store cannot be enforced — fail closed.
-      return { ok: false, reason: 'replayed' };
+    let payload: {
+      v?: string;
+      m?: string;
+      k?: string;
+      e?: number;
+      i?: string;
+      s?: string;
+      o?: number;
+      n?: string;
+    };
+    try {
+      payload = JSON.parse(new TextDecoder().decode(payloadBytes));
+    } catch {
+      return { ok: false, reason: 'malformed' };
     }
-    const replayId = `${TOKEN_VERSION}:${claims.key}:${nonce}`;
-    const fresh = await options.replayStore.consume(replayId, claims.expiry);
-    if (!fresh) return { ok: false, reason: 'replayed' };
-  }
+    if (
+      payload.v !== TOKEN_VERSION ||
+      (payload.m !== 'GET' && payload.m !== 'HEAD') ||
+      typeof payload.k !== 'string' ||
+      typeof payload.e !== 'number' ||
+      (payload.i !== undefined && typeof payload.i !== 'string')
+    ) {
+      return { ok: false, reason: 'malformed' };
+    }
 
-  return { ok: true, claims };
-}
+    const claims: CapabilityClaims = {
+      key: payload.k,
+      method: payload.m,
+      expiry: payload.e,
+      ...(payload.s === undefined ? {} : { scope: payload.s }),
+    };
+    const oneTime = payload.o === 1;
+    const nonce = typeof payload.n === 'string' ? payload.n : '';
+
+    // Recompute the signature over the canonicalized *received* fields and compare in constant time.
+    const verification = signingKeyRingFromSecret(secret).verify({
+      audience: options.audience ?? DEFAULT_CAPABILITY_AUDIENCE,
+      ...(payload.i === undefined ? {} : { keyId: payload.i }),
+      payload: canonicalizeWithNonce(claims, oneTime, nonce),
+      purpose: CAPABILITY_SIGNING_PURPOSE,
+      signature: base64url(signatureBytes),
+    });
+    if (!verification.ok) {
+      return { ok: false, reason: 'bad-signature' };
+    }
+
+    if (now >= claims.expiry) return { ok: false, reason: 'expired' };
+
+    // The token's claims must match what the route is about to do. The route derives `expected`
+    // from the request URL, not from the token — this is what makes the token un-substitutable.
+    if (
+      claims.key !== expected.key ||
+      claims.method !== expected.method ||
+      (claims.scope ?? '') !== (expected.scope ?? '')
+    ) {
+      return { ok: false, reason: 'claim-mismatch' };
+    }
+
+    if (oneTime) {
+      if (!options.replayStore) {
+        // A one-time token without a replay store cannot be enforced — fail closed.
+        return { ok: false, reason: 'replayed' };
+      }
+      const replayId = `${TOKEN_VERSION}:${claims.key}:${nonce}`;
+      const fresh = await options.replayStore.consume(replayId, claims.expiry);
+      if (!fresh) return { ok: false, reason: 'replayed' };
+    }
+
+    return { ok: true, claims };
+  },
+);

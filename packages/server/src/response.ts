@@ -1,5 +1,6 @@
 import type { DeferredStreamChunk } from './deferred-stream.js';
 import type { StorageReadCapability } from '@kovojs/core';
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import {
   blessSink,
   drainRuntimeSinkSecurityEvent,
@@ -393,62 +394,74 @@ export const respond = {
   },
 };
 
-export function routeOutcomeResponse(
-  outcome: RouteResponseOutcome,
-  request: unknown,
-): RoutePageResponse {
-  const headers = routeOutcomeHeaders(outcome);
-  if (outcome.etag && requestHeader(request, 'if-none-match') === outcome.etag) {
-    return {
-      body: '',
+export const routeOutcomeResponse = wireEmitter(
+  'server.wire.route-outcome-response',
+  function (outcome: RouteResponseOutcome, request: unknown): RoutePageResponse {
+    const headers = routeOutcomeHeaders(outcome);
+    if (outcome.etag && requestHeader(request, 'if-none-match') === outcome.etag) {
+      return {
+        body: '',
+        headers,
+        status: 304,
+      };
+    }
+
+    const response: RoutePageResponse = {
+      body: outcome.body,
       headers,
-      status: 304,
+      status: 200,
     };
-  }
+    return markRouteResponseOutcome(response);
+  },
+);
 
-  const response: RoutePageResponse = {
-    body: outcome.body,
-    headers,
-    status: 200,
-  };
-  return markRouteResponseOutcome(response);
-}
-
-export function htmlServerErrorResponse(): RoutePageResponse {
-  return {
-    body: 'Internal Server Error',
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
-    status: 500,
-  };
-}
+export const htmlServerErrorResponse = wireEmitter(
+  'server.wire.html-server-error',
+  function (): RoutePageResponse {
+    return {
+      body: 'Internal Server Error',
+      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      status: 500,
+    };
+  },
+);
 
 export function retryAfterHeaders(result: { retryAfter?: number }): ResponseHeaders {
   return result.retryAfter === undefined ? {} : { 'Retry-After': String(result.retryAfter) };
 }
 
-export function routeResponseToWebResponse(
-  response: ServerResponseBase<RouteResponseBody, ResponseHeaders>,
-  request: Pick<Request, 'method'>,
-): Response {
-  return serverResponseToWebResponse(response, request);
-}
+export const routeResponseToWebResponse = wireEmitter(
+  'server.wire.route-to-web-response',
+  function (
+    response: ServerResponseBase<RouteResponseBody, ResponseHeaders>,
+    request: Pick<Request, 'method'>,
+  ): Response {
+    return serverResponseToWebResponse(response, request);
+  },
+);
 
-export function serverResponseToWebResponse(
-  response: ServerResponseBase<WebResponseBody, ResponseHeaders>,
-  request: Pick<Request, 'method'>,
-): Response {
-  return finalizeServerResponse(response, request);
-}
+export const serverResponseToWebResponse = wireEmitter(
+  'server.wire.server-to-web-response',
+  function (
+    response: ServerResponseBase<WebResponseBody, ResponseHeaders>,
+    request: Pick<Request, 'method'>,
+  ): Response {
+    return finalizeServerResponse(response, request);
+  },
+);
 
 /**
  * @internal Sanitize a framework-owned Location target for redirects (SPEC §6.6).
  */
-export function redirectLocationHeader(target: string): string {
-  return sanitizeRedirectLocation(target);
-}
+export const redirectLocationHeader = wireEmitter(
+  'server.wire.redirect-location-header',
+  function (target: string): string {
+    return sanitizeRedirectLocation(target);
+  },
+);
 
 /** @internal Mark a framework-owned 3xx response whose Location header was sanitized. */
-export function blessRedirectResponse<
+export const blessRedirectResponse = wireEmitter('server.wire.bless-redirect-response', function <
   Response extends ServerResponseBase<unknown, ResponseHeaders>,
 >(response: Response): Response {
   const locationName = findHeaderName(response.headers, 'Location');
@@ -459,30 +472,33 @@ export function blessRedirectResponse<
     );
   }
   return blessSink(SERVER_REDIRECT_LOCATION_SINK, response);
-}
+});
 
 /** @internal Unwrap a redirect Location sink value or fail closed to `/` with a KV236 event. */
-export function redirectLocationHeaderValue(value: ResponseHeaderValue, blessed: boolean): string {
-  if (blessed) {
-    const location = Array.isArray(value) ? (value[0] ?? '/') : value;
-    return sanitizeRedirectLocation(location);
-  }
-  const text = Array.isArray(value) ? value.join(', ') : String(value);
-  drainRuntimeSinkSecurityEvent({
-    action: 'neutralize',
-    code: 'KV236',
-    family: 'header',
-    message: 'Blocked unblessed redirect Location header at the server response boundary',
-    reason: '3xx Location headers must be minted by the framework redirect-location sink',
-    sink: 'Location',
-    value: {
-      length: text.length,
-      preview: text.slice(0, 80),
-      redacted: true,
-    },
-  });
-  return '/';
-}
+export const redirectLocationHeaderValue = wireEmitter(
+  'server.wire.redirect-location-header-value',
+  function (value: ResponseHeaderValue, blessed: boolean): string {
+    if (blessed) {
+      const location = Array.isArray(value) ? (value[0] ?? '/') : value;
+      return sanitizeRedirectLocation(location);
+    }
+    const text = Array.isArray(value) ? value.join(', ') : String(value);
+    drainRuntimeSinkSecurityEvent({
+      action: 'neutralize',
+      code: 'KV236',
+      family: 'header',
+      message: 'Blocked unblessed redirect Location header at the server response boundary',
+      reason: '3xx Location headers must be minted by the framework redirect-location sink',
+      sink: 'Location',
+      value: {
+        length: text.length,
+        preview: text.slice(0, 80),
+        redacted: true,
+      },
+    });
+    return '/';
+  },
+);
 
 /** @internal Check whether a 3xx response object owns a sanitized Location header. */
 export function isBlessedRedirectResponse(value: unknown): boolean {
@@ -502,21 +518,22 @@ export function methodNotAllowedWebResponse(
   });
 }
 
-export function routeResponseToDocumentResponse(
-  response: RoutePageResponse,
-): DocumentRouteResponseBase {
-  const documentResponse = {
-    ...response,
-    body: response.body instanceof ArrayBuffer ? new Uint8Array(response.body) : response.body,
-  };
-  const clonedResponse =
-    (response as { routeResponse?: unknown }).routeResponse === true
-      ? markRouteResponseOutcome(documentResponse)
-      : documentResponse;
-  return isBlessedRedirectResponse(response)
-    ? blessRedirectResponse(clonedResponse)
-    : clonedResponse;
-}
+export const routeResponseToDocumentResponse = wireEmitter(
+  'server.wire.route-to-document-response',
+  function (response: RoutePageResponse): DocumentRouteResponseBase {
+    const documentResponse = {
+      ...response,
+      body: response.body instanceof ArrayBuffer ? new Uint8Array(response.body) : response.body,
+    };
+    const clonedResponse =
+      (response as { routeResponse?: unknown }).routeResponse === true
+        ? markRouteResponseOutcome(documentResponse)
+        : documentResponse;
+    return isBlessedRedirectResponse(response)
+      ? blessRedirectResponse(clonedResponse)
+      : clonedResponse;
+  },
+);
 
 /**
  * KV428 (SPEC §6.6/§9.1): assert an in-memory body is safe to render inline, returning the
@@ -577,15 +594,18 @@ function routeResponseOutcome(
   });
 }
 
-function routeOutcomeHeaders(outcome: RouteResponseOutcome): Record<string, string> {
-  return {
-    ...safeRouteOutcomeHeaders(outcome.headers),
-    'Content-Disposition': outcome.contentDisposition,
-    'Content-Type': outcome.contentType,
-    'X-Content-Type-Options': 'nosniff',
-    ...(outcome.etag === undefined ? {} : { ETag: outcome.etag }),
-  };
-}
+const routeOutcomeHeaders = wireEmitter(
+  'server.wire.route-outcome-headers',
+  function (outcome: RouteResponseOutcome): Record<string, string> {
+    return {
+      ...safeRouteOutcomeHeaders(outcome.headers),
+      'Content-Disposition': outcome.contentDisposition,
+      'Content-Type': outcome.contentType,
+      'X-Content-Type-Options': 'nosniff',
+      ...(outcome.etag === undefined ? {} : { ETag: outcome.etag }),
+    };
+  },
+);
 
 const RESERVED_ROUTE_RESPONSE_HEADERS = new Set([
   'content-disposition',
