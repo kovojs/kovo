@@ -377,7 +377,12 @@ function classifyObjectLiteralProperty(
     );
   }
   if (ts.isPropertyAssignment(property)) {
-    return classifyExpression(property.initializer, { ...ctx, visited: new Set(ctx.visited) });
+    const keyProvenance = computedPropertyNameProvenance(property.name, ctx);
+    const valueProvenance = classifyExpression(property.initializer, {
+      ...ctx,
+      visited: new Set(ctx.visited),
+    });
+    return firstProvenance([keyProvenance, valueProvenance]);
   }
   if (ts.isShorthandPropertyAssignment(property)) {
     return classifyIdentifier(property.name, { ...ctx, visited: new Set(ctx.visited) });
@@ -402,6 +407,14 @@ function isStaticLiteral(expr: ts.Expression): boolean {
     expr.kind === ts.SyntaxKind.FalseKeyword ||
     expr.kind === ts.SyntaxKind.TrueKeyword
   );
+}
+
+function computedPropertyNameProvenance(
+  name: ts.PropertyName,
+  ctx: ClassifyContext,
+): Provenance | null {
+  if (!ts.isComputedPropertyName(name)) return null;
+  return classifyExpression(name.expression, { ...ctx, visited: new Set(ctx.visited) });
 }
 
 /** Classify a member-access chain (`a.b.c`, `req.params.id`) by its leftmost root and first member. */

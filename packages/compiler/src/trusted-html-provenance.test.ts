@@ -157,6 +157,38 @@ export const C = component({
     }
   });
 
+  it('propagates or fails closed for C2 operator and local-helper value-flow forms', () => {
+    const cases = [
+      "'<h1>' + post.body",
+      '`${post.body}`',
+      "post.body ?? '<p>fallback</p>'",
+      "post.body || '<p>fallback</p>'",
+      "post.body && '<p>present</p>'",
+      "post.safe ? '<p>ok</p>' : post.body",
+      'renderCard(post.body)',
+      'renderStaticCard()',
+      '([...safeParts] as unknown as string)',
+      '({ ...safeByKey }.body as string)',
+      "({ [post.body]: '<p>safe</p>' } as unknown as string)",
+    ];
+
+    for (const expr of cases) {
+      expect(
+        kv426(`
+import { trustedHtml } from '@kovojs/browser';
+const safeParts = ['<p>static</p>'];
+const safeByKey = { body: '<p>static</p>' };
+const renderCard = (value: string) => '<article>' + value + '</article>';
+const renderStaticCard = () => '<article>static</article>';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{trustedHtml(${expr})}</article>,
+});
+`),
+      ).toHaveLength(1);
+    }
+  });
+
   it('fails closed for operator forms whose result cannot be locally proven clean', () => {
     const cases = [
       'post.body.trim()',
@@ -263,6 +295,27 @@ export const C = component({
       kv426(`
 import { trustedHtml } from '@kovojs/browser';
 export const C = component({ render: () => <div>{trustedHtml('<b>safe</b>')}</div> });
+`),
+    ).toHaveLength(0);
+  });
+
+  it('stays clean for primitive safe constants through explicit string operators', () => {
+    expect(
+      kv426(`
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+import { renderedHtml } from '@kovojs/server/internal/html';
+const body = '<b>safe</b>';
+const suffix = '<i>also safe</i>';
+export const C = component({
+  render: () => (
+    <main>
+      {trustedHtml('<section>' + body + suffix)}
+      {trustedHtml(\`${'${body}'}${'${suffix}'}\`)}
+      <a href={trustedUrl('/docs/' + 'intro')}>docs</a>
+      {renderedHtml(true ? '<main>static</main>' : '<main>fallback</main>')}
+    </main>
+  ),
+});
 `),
     ).toHaveLength(0);
   });
