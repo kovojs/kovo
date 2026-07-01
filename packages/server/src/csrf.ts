@@ -11,6 +11,7 @@ import {
   type SigningKeyRingOptions,
   type SigningSecret,
 } from './keyring.js';
+import { isTrustedSecureRequest } from './request-scheme.js';
 import { formLikeToRecord } from './schema.js';
 
 /**
@@ -483,7 +484,7 @@ function isUsableAnonymousCsrfSecret(value: string | undefined): value is string
 }
 
 function requestIsHttps(request: unknown): boolean {
-  return request instanceof Request && new URL(request.url).protocol === 'https:';
+  return isTrustedSecureRequest(request);
 }
 
 const CSRF_MASKED_TOKEN_VERSION = 'v1';

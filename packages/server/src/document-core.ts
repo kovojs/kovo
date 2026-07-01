@@ -153,10 +153,9 @@ export interface DocumentResponseOptions extends Omit<DocumentAssemblyOptions, '
    * depend on this and are always applied.
    *
    * Wired: `app-document.ts` `renderAppRouteDocumentResponse` computes this from the
-   * request — `new URL(request.url).protocol === 'https:' || request.headers.get('x-forwarded-proto') === 'https'`
-   * (mirroring `csrf.ts` `requestIsHttps` and `node.ts`/`build.ts` forwarded-proto
-   * handling) — and passes it as `secure`. A missing/false flag simply omits the header
-   * (fail-safe: dev/localhost/non-HTTPS is never HSTS-pinned).
+   * adapter-proven request scheme via `trustedRequestScheme()` and passes it as
+   * `secure`. A missing/false flag simply omits the header (fail-safe:
+   * dev/localhost/non-HTTPS is never HSTS-pinned).
    */
   secure?: boolean;
   /**
