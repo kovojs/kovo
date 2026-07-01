@@ -28,8 +28,17 @@ export const addToCart = mutation({
         message: kv330.message,
         severity: kv330.severity,
         start: { column: 5, line: 5 },
-        length: 10,
+        length: 17,
       },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'request.db', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'cart.mutation/add-to-cart' },
+        path: 'request.db.insert',
+        surface: 'mutation',
+      }),
     ]);
   });
 
@@ -53,9 +62,18 @@ export const addToCart = mutation({
         fileName: 'cart.mutation.ts',
         message: kv330.message,
         severity: kv330.severity,
-        start: { column: 26, line: 4 },
-        length: 2,
+        start: { column: 11, line: 5 },
+        length: 9,
       },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'db', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'cart.mutation/add-to-cart' },
+        path: 'db.insert',
+        surface: 'mutation',
+      }),
     ]);
   });
 
@@ -83,19 +101,149 @@ export const clearCart = mutation({
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',
-        length: 10,
         message: kv330.message,
         severity: kv330.severity,
         start: { column: 5, line: 5 },
+        length: 17,
       },
       {
         code: 'KV330',
         fileName: 'cart.mutation.ts',
-        length: 2,
+        length: 9,
         message: kv330.message,
         severity: kv330.severity,
-        start: { column: 18, line: 11 },
+        start: { column: 5, line: 12 },
       },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'request.db', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'cart.mutation/add-to-cart' },
+        path: 'request.db.insert',
+        surface: 'mutation',
+      }),
+      expect.objectContaining({
+        canonicalTarget: { identity: 'db', provenance: 'property-access-path' },
+        operationKind: 'delete',
+        owner: { kind: 'key', value: 'cart.mutation/clear-cart' },
+        path: 'db.delete',
+        surface: 'mutation',
+      }),
+    ]);
+  });
+
+  it('reports KV330 for mutation handler aliases and destructured db handles', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.mutation.ts',
+      source: `
+export const addToCart = mutation({
+  handler(input, request) {
+    const tx = request.db;
+    const { db: destructuredDb } = request;
+    tx.insert(cartItems).values(input);
+    destructuredDb.delete(cartItems);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV330',
+        fileName: 'cart.mutation.ts',
+        length: 9,
+        message: kv330.message,
+        severity: kv330.severity,
+        start: { column: 5, line: 6 },
+      },
+      {
+        code: 'KV330',
+        fileName: 'cart.mutation.ts',
+        length: 21,
+        message: kv330.message,
+        severity: kv330.severity,
+        start: { column: 5, line: 7 },
+      },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'tx', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'cart.mutation/add-to-cart' },
+        path: 'tx.insert',
+        surface: 'mutation',
+      }),
+      expect.objectContaining({
+        canonicalTarget: { identity: 'destructuredDb', provenance: 'property-access-path' },
+        operationKind: 'delete',
+        owner: { kind: 'key', value: 'cart.mutation/add-to-cart' },
+        path: 'destructuredDb.delete',
+        surface: 'mutation',
+      }),
+    ]);
+  });
+
+  it('reports KV330 for mutation helper-wrapper callback db writes', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.mutation.ts',
+      source: `
+export const addToCart = mutation({
+  handler(input) {
+    return withDb(async (db) => db.update(cartItems).set(input));
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV330',
+        fileName: 'cart.mutation.ts',
+        message: kv330.message,
+        severity: kv330.severity,
+      },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'db', provenance: 'property-access-path' },
+        operationKind: 'update',
+        owner: { kind: 'key', value: 'cart.mutation/add-to-cart' },
+        path: 'db.update',
+        surface: 'mutation',
+      }),
+    ]);
+  });
+
+  it('reports KV406 for unresolved mutation write sinks', () => {
+    const result = compileComponentModule({
+      fileName: 'cart.mutation.ts',
+      source: `
+export const addToCart = mutation({
+  async handler(input) {
+    await dbFor(input.tenant).insert(cartItems).values(input);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV406',
+        fileName: 'cart.mutation.ts',
+        message: 'Unresolved write sink in a mutation handler; route through domain.',
+        severity: kv406.severity,
+        start: { column: 11, line: 4 },
+      },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-property-access' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'cart.mutation/add-to-cart' },
+        path: 'UNRESOLVED',
+        surface: 'mutation',
+      }),
     ]);
   });
 

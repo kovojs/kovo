@@ -9,6 +9,7 @@ import {
 } from '@kovojs/core/internal/framework-identity';
 
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
+import { deriveMutationKey } from '../mutation-names.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
 import type { StaticLiteralValue } from './object.js';
@@ -196,7 +197,7 @@ export function parseComponentModule(
         endpointHandlers.push(...endpointHandlerModels(sourceFile, source, node));
       }
       if (isFrameworkExpression(sourceFile, node.expression, MUTATION_FACTORY_IDENTITY)) {
-        mutationHandlers.push(...handlerPropertyModels(sourceFile, source, node));
+        mutationHandlers.push(...mutationHandlerModels(sourceFile, source, node));
       }
       if (isFrameworkExpression(sourceFile, node.expression, TASK_FACTORY_IDENTITY)) {
         taskRunHandlers.push(...taskRunHandlerModels(sourceFile, source, node));
@@ -645,6 +646,7 @@ export function webhookHandlers(model: ComponentModuleModel): WebhookHandlerMode
 export function handlerWriteSinks(model: ComponentModuleModel): HandlerWriteSinkFact[] {
   return [
     ...model.endpointHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
+    ...model.mutationHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
     ...model.taskRunHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
     ...model.webhookHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
   ];
@@ -1235,12 +1237,24 @@ function unwrapParentheses(expression: ts.Expression): ts.Expression {
   return current;
 }
 
-function handlerPropertyModels(
+function mutationHandlerModels(
   sourceFile: ts.SourceFile,
   source: string,
   call: ts.CallExpression,
 ): MutationHandlerModel[] {
-  return handlerPropertyEntries(sourceFile, source, call).map((entry) => entry.model);
+  const owner = mutationOwner(sourceFile, call);
+  return handlerPropertyEntries(sourceFile, source, call).map(({ body, model, parameters }) => {
+    const directDbTargets = mutationDirectDbTargetIdentities(sourceFile, body, parameters);
+    return {
+      ...model,
+      handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
+        owner,
+        resolvedTargetFilter: (identity) =>
+          directDbTargets.has(identity) || looksLikeDbTargetIdentity(identity),
+        surface: 'mutation',
+      }),
+    };
+  });
 }
 
 function endpointHandlerModels(
@@ -1389,6 +1403,142 @@ function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
   const exported = exportedConstInitializerName(call);
   if ('exportedConstName' in exported) return exported.exportedConstName;
   return sourceFile.fileName;
+}
+
+function mutationOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): HandlerWriteSinkOwner {
+  const [first] = call.arguments;
+  if (first && ts.isStringLiteralLike(first)) return { kind: 'key', value: first.text };
+
+  const exported = exportedConstInitializerName(call);
+  if ('exportedConstName' in exported) {
+    return {
+      kind: 'key',
+      value: deriveMutationKey(sourceFile.fileName, exported.exportedConstName),
+    };
+  }
+  return { kind: 'key', value: 'UNRESOLVED' };
+}
+
+function mutationDirectDbTargetIdentities(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  parameters: ts.NodeArray<ts.ParameterDeclaration>,
+): ReadonlySet<string> {
+  const requestParamNames = new Set<string>();
+  const targets = new Set<string>();
+
+  for (const parameter of parameters) {
+    collectDirectDbBindingNames(parameter.name, targets);
+    if (ts.isIdentifier(parameter.name) && isRequestLikeParamName(parameter.name.text)) {
+      requestParamNames.add(parameter.name.text);
+      targets.add(`${parameter.name.text}.db`);
+    }
+  }
+
+  const addAlias = (name: ts.BindingName, initializer: ts.Expression | undefined): void => {
+    if (!initializer) return;
+    const target = mutationDirectDbTargetIdentityFromExpression(initializer, targets);
+    const unwrappedInitializer = unwrapExpression(initializer);
+    const initializerName = ts.isIdentifier(unwrappedInitializer)
+      ? unwrappedInitializer.text
+      : undefined;
+    const requestLikeInitializer =
+      initializerName !== undefined && requestParamNames.has(initializerName);
+    if (!target && !requestLikeInitializer) return;
+
+    if (ts.isIdentifier(name)) {
+      targets.add(name.text);
+      return;
+    }
+    collectDirectDbBindingNames(name, targets);
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node)) addAlias(node.name, node.initializer);
+    ts.forEachChild(node, visit);
+  };
+
+  visit(body);
+  return targets;
+}
+
+function collectDirectDbBindingNames(name: ts.BindingName, targets: Set<string>): void {
+  if (ts.isIdentifier(name)) {
+    if (name.text === 'db' || looksLikeDbTargetIdentity(name.text)) targets.add(name.text);
+    return;
+  }
+
+  if (!ts.isObjectBindingPattern(name)) return;
+
+  for (const element of name.elements) {
+    const propertyName = element.propertyName;
+    const bindingName = element.name;
+    const bindsDbProperty =
+      propertyName === undefined
+        ? ts.isIdentifier(bindingName) && bindingName.text === 'db'
+        : bindingPropertyNameText(propertyName) === 'db';
+    if (bindsDbProperty) collectBindingIdentifiers(bindingName, targets);
+  }
+}
+
+function collectBindingIdentifiers(name: ts.BindingName, targets: Set<string>): void {
+  if (ts.isIdentifier(name)) {
+    targets.add(name.text);
+    return;
+  }
+
+  if (ts.isObjectBindingPattern(name)) {
+    for (const element of name.elements) collectBindingIdentifiers(element.name, targets);
+    return;
+  }
+
+  for (const element of name.elements) {
+    if (ts.isBindingElement(element)) collectBindingIdentifiers(element.name, targets);
+  }
+}
+
+function bindingPropertyNameText(name: ts.PropertyName): string | undefined {
+  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return undefined;
+}
+
+function mutationDirectDbTargetIdentityFromExpression(
+  expression: ts.Expression,
+  targets: ReadonlySet<string>,
+): string | undefined {
+  const unwrapped = unwrapExpression(expression);
+  const identity = expressionTargetIdentity(unwrapped);
+  if (identity && (targets.has(identity) || looksLikeDbTargetIdentity(identity))) return identity;
+  return undefined;
+}
+
+function expressionTargetIdentity(expression: ts.Expression): string | undefined {
+  if (ts.isIdentifier(expression)) return expression.text;
+  if (ts.isPropertyAccessExpression(expression)) return propertyAccessPath(expression) ?? undefined;
+  const receiver = callExpressionReceiverSegments(expression);
+  if (receiver) return receiver.join('.');
+  if (ts.isCallExpression(expression)) {
+    if (ts.isIdentifier(expression.expression)) return `${expression.expression.text}()`;
+    if (ts.isPropertyAccessExpression(expression.expression)) {
+      const path = propertyAccessPath(expression.expression);
+      return path ? `${path}()` : undefined;
+    }
+  }
+  return undefined;
+}
+
+function looksLikeDbTargetIdentity(identity: string): boolean {
+  const normalized = identity.toLowerCase();
+  return normalized.includes('db') || normalized.includes('database');
+}
+
+const requestLikeContextParamNames = new Set(['context', 'ctx']);
+
+function isRequestLikeParamName(param: string): boolean {
+  if (requestLikeContextParamNames.has(param)) return true;
+  return param.toLowerCase().endsWith('request');
 }
 
 function webhookOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): HandlerWriteSinkOwner {
@@ -1587,14 +1737,17 @@ function staticStringObjectProperty(
   return initializer && ts.isStringLiteralLike(initializer) ? initializer.text : undefined;
 }
 
+interface HandlerWriteSinkFactOptions {
+  readonly owner: HandlerWriteSinkOwner;
+  readonly resolvedTargetFilter?: (identity: string) => boolean;
+  readonly surface: HandlerWriteSinkSurface;
+}
+
 function handlerWriteSinkFacts(
   sourceFile: ts.SourceFile,
   source: string,
   body: ts.ConciseBody,
-  options: {
-    readonly owner: HandlerWriteSinkOwner;
-    readonly surface: HandlerWriteSinkSurface;
-  },
+  options: HandlerWriteSinkFactOptions,
 ): HandlerWriteSinkFact[] {
   const facts = new Map<string, HandlerWriteSinkFact>();
   const bodyPropertyAccesses = propertyAccessPathModels(sourceFile, body);
@@ -1602,6 +1755,12 @@ function handlerWriteSinkFacts(
   for (const access of bodyPropertyAccesses) {
     if (!isHandlerWriteSinkOperation(access.terminalName)) continue;
     const fact = resolvedHandlerWriteSinkFact(access, options);
+    if (
+      options.resolvedTargetFilter &&
+      !options.resolvedTargetFilter(fact.canonicalTarget.identity)
+    ) {
+      continue;
+    }
     facts.set(handlerWriteSinkFactKey(fact), fact);
   }
 
@@ -1619,10 +1778,7 @@ function handlerWriteSinkFacts(
 
 function resolvedHandlerWriteSinkFact(
   access: PropertyAccessPathModel,
-  options: {
-    readonly owner: HandlerWriteSinkOwner;
-    readonly surface: HandlerWriteSinkSurface;
-  },
+  options: HandlerWriteSinkFactOptions,
 ): HandlerWriteSinkFact {
   const operationKind = handlerWriteSinkOperation(access.terminalName);
   const suffix = `.${access.terminalName}`;
@@ -1647,10 +1803,7 @@ function unresolvedHandlerWriteSinkFact(
   sourceFile: ts.SourceFile,
   source: string,
   node: ts.CallExpression,
-  options: {
-    readonly owner: HandlerWriteSinkOwner;
-    readonly surface: HandlerWriteSinkSurface;
-  },
+  options: HandlerWriteSinkFactOptions,
 ): HandlerWriteSinkFact | null {
   const callee = unwrapParentheses(node.expression);
   if (ts.isPropertyAccessExpression(callee)) {

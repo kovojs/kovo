@@ -15,22 +15,20 @@ import {
   componentRenderInputModels,
   componentRenderSlots,
   componentStateReturnObjectModel,
-  endpointHandlers,
+  handlerWriteSinks,
   jsxExpressions,
   jsxElementChildBody,
-  mutationHandlers,
-  taskRunHandlers,
-  webhookHandlers,
   type ComponentModel,
   type ComponentModuleModel,
+  type HandlerWriteSinkFact,
   type JsxElementChildBody,
   type JsxElementModel,
   jsxElements,
   type NamedImportModel,
-  type HandlerWriteSinkFact,
   type PropertyAccessPathModel,
   type RenderInputModel,
   type WebhookRecordChangeFact,
+  webhookHandlers,
 } from '../scan/parse.js';
 import { dedupeBy, kebabCase } from '../shared.js';
 import type {
@@ -438,63 +436,7 @@ export function validateDirectDbAccess(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  const found: CompilerDiagnostic[] = [];
-
-  for (const handler of mutationHandlers(model)) {
-    const params = handler.paramNames;
-    const dbParamIndex = params.indexOf('db');
-    const receivesDb = dbParamIndex !== -1;
-    const requestParam = params.find(isRequestLikeParamName);
-    const requestDb =
-      requestParam === undefined
-        ? undefined
-        : handler.bodyPropertyAccesses.find(
-            (access) =>
-              access.path === `${requestParam}.db` || access.path.startsWith(`${requestParam}.db.`),
-          );
-
-    if (receivesDb) {
-      const span = handler.paramSpans[dbParamIndex];
-      found.push(
-        diagnostics.at('KV330', {
-          start: span?.start,
-          length: span ? span.end - span.start : undefined,
-        }),
-      );
-      continue;
-    }
-
-    if (requestParam && requestDb) {
-      const requestDbPath = `${requestParam}.db`;
-      found.push(diagnostics.at('KV330', { start: requestDb.start, length: requestDbPath.length }));
-    }
-  }
-
-  for (const handler of taskRunHandlers(model)) {
-    found.push(
-      ...(handler.handlerWriteSinks ?? [])
-        .filter((sink) => sink.surface === 'task')
-        .map((sink) => handlerWriteSinkDiagnostic(diagnostics, sink)),
-    );
-  }
-
-  for (const handler of webhookHandlers(model)) {
-    found.push(
-      ...(handler.handlerWriteSinks ?? [])
-        .filter((sink) => sink.surface === 'webhook')
-        .map((sink) => handlerWriteSinkDiagnostic(diagnostics, sink)),
-    );
-  }
-
-  for (const handler of endpointHandlers(model)) {
-    found.push(
-      ...(handler.handlerWriteSinks ?? [])
-        .filter((sink) => sink.surface === 'endpoint')
-        .map((sink) => handlerWriteSinkDiagnostic(diagnostics, sink)),
-    );
-  }
-
-  return found;
+  return handlerWriteSinks(model).map((sink) => handlerWriteSinkDiagnostic(diagnostics, sink));
 }
 
 export function validateWebhookRecordChanges(
@@ -567,10 +509,16 @@ function handlerWriteSinkDiagnostic(
       message:
         sink.surface === 'task'
           ? 'Unresolved write sink in a task run body; route through ctx.runMutation.'
-          : sink.surface === 'endpoint'
-            ? 'Unresolved write sink in an endpoint handler; route writes through an audited mutation/domain write.'
-            : 'Unresolved write sink in a webhook handler; route writes through an audited mutation/domain write.',
+          : sink.surface === 'mutation'
+            ? 'Unresolved write sink in a mutation handler; route through domain.'
+            : sink.surface === 'endpoint'
+              ? 'Unresolved write sink in an endpoint handler; route writes through an audited mutation/domain write.'
+              : 'Unresolved write sink in a webhook handler; route writes through an audited mutation/domain write.',
     };
+  }
+
+  if (sink.surface === 'mutation') {
+    return diagnostics.at('KV330', { start: sink.span.start, length });
   }
 
   if (sink.surface === 'task') {
@@ -620,20 +568,6 @@ function handlerWriteSinkIsUnresolved(sink: HandlerWriteSinkFact): boolean {
     sink.owner.value === 'UNRESOLVED' ||
     sink.canonicalTarget.identity === 'UNRESOLVED'
   );
-}
-
-// SPEC §5.2 (KV330): explicit typed predicate over the parsed handler parameter NAME (a
-// model-derived identifier, not a raw source slice). Decides whether a parameter is a
-// request/context object that could own a `.db` handle. This replaces the inline `/request$/i`
-// regex that previously made this decision, while preserving its exact match set: the literal
-// names `ctx`/`context`, plus any name whose lower-cased spelling ends in "request".
-const requestLikeContextParamNames = new Set(['context', 'ctx']);
-
-function isRequestLikeParamName(param: string | undefined): param is string {
-  if (param === undefined) return false;
-  if (requestLikeContextParamNames.has(param)) return true;
-
-  return param.toLowerCase().endsWith('request');
 }
 
 export function unhandledUpdateCoverageDiagnostics(

@@ -107,7 +107,7 @@ export interface TaskExplain {
 }
 
 /** @internal */
-export type HandlerWriteSinkSurface = 'endpoint' | 'task' | 'webhook';
+export type HandlerWriteSinkSurface = 'endpoint' | 'mutation' | 'task' | 'webhook';
 
 /** @internal */
 export type HandlerWriteSinkOperationKind =

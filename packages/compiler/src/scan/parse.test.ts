@@ -445,6 +445,94 @@ export const save = mutation({
     expect(handler?.paramNames).toEqual(['db']);
   });
 
+  it('records mutation direct write sink facts with source-derived owners', () => {
+    const source = `
+export const save = mutation({
+  handler(input, request) {
+    const tx = request.db;
+    tx.insert(input);
+  },
+});
+`;
+    const facts = handlerWriteSinks(parseComponentModule('src/mutations/cart.ts', source));
+
+    expect(facts).toEqual([
+      {
+        canonicalTarget: { identity: 'tx', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'mutations/cart/save' },
+        path: 'tx.insert',
+        span: {
+          end: source.indexOf('tx.insert') + 'tx.insert'.length,
+          start: source.indexOf('tx.insert'),
+        },
+        surface: 'mutation',
+      },
+    ]);
+  });
+
+  it('records destructured and helper-wrapper mutation write sink facts', () => {
+    const source = `
+export const save = mutation('cart/save', {
+  handler(input, { db: requestDb }) {
+    requestDb.delete(input);
+    return withDb((db) => db.update(input));
+  },
+});
+`;
+    const facts = handlerWriteSinks(parseComponentModule('src/mutations/cart.ts', source));
+
+    expect(facts).toEqual([
+      {
+        canonicalTarget: { identity: 'requestDb', provenance: 'property-access-path' },
+        operationKind: 'delete',
+        owner: { kind: 'key', value: 'cart/save' },
+        path: 'requestDb.delete',
+        span: {
+          end: source.indexOf('requestDb.delete') + 'requestDb.delete'.length,
+          start: source.indexOf('requestDb.delete'),
+        },
+        surface: 'mutation',
+      },
+      {
+        canonicalTarget: { identity: 'db', provenance: 'property-access-path' },
+        operationKind: 'update',
+        owner: { kind: 'key', value: 'cart/save' },
+        path: 'db.update',
+        span: {
+          end: source.indexOf('db.update') + 'db.update'.length,
+          start: source.indexOf('db.update'),
+        },
+        surface: 'mutation',
+      },
+    ]);
+  });
+
+  it('records unresolved mutation write sink facts instead of an empty safe set', () => {
+    const source = `
+export const save = mutation('cart/save', {
+  async handler(input) {
+    await dbFor(input.tenant).insert(input);
+  },
+});
+`;
+    const facts = handlerWriteSinks(parseComponentModule('src/mutations/cart.ts', source));
+
+    expect(facts).toEqual([
+      {
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-property-access' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'cart/save' },
+        path: 'UNRESOLVED',
+        span: {
+          end: source.indexOf('dbFor(input.tenant).insert') + 'dbFor(input.tenant).insert'.length,
+          start: source.indexOf('dbFor(input.tenant).insert'),
+        },
+        surface: 'mutation',
+      },
+    ]);
+  });
+
   it('records durable task run handlers and composition edges', () => {
     const source = `
 export const sendReceipt = task('email/send-receipt', {

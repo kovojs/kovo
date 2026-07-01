@@ -20,7 +20,7 @@ export interface ObjectLiteralEntry {
   valuePropertyAccesses?: readonly PropertyAccessPathModel[];
 }
 
-export type HandlerWriteSinkSurface = 'endpoint' | 'task' | 'webhook';
+export type HandlerWriteSinkSurface = 'endpoint' | 'mutation' | 'task' | 'webhook';
 
 export type HandlerWriteSinkOperationKind =
   | 'batch'

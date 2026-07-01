@@ -1349,7 +1349,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "help": "Blocked reason: direct request/db access in a mutation handler bypasses the domain write surface and weakens touch-graph analysis.
       Fixes: move writes behind a domain() module, inject the domain operation into the handler, or use the typed transaction context only inside the domain layer.
       SPEC §11.4 and §14 require writes to flow through domains so invalidation and verifier diagnostics stay complete.",
-          "length": 10,
+          "length": 17,
           "message": "Direct db access in a mutation handler; route through domain.",
           "severity": "error",
           "start": {

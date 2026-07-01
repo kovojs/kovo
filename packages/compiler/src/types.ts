@@ -65,7 +65,7 @@ export type ComponentGraphFact = Pick<
 /** @internal Durable task graph fact emitted from scanned `task().run` handlers (SPEC §9.6). */
 export type TaskGraphFact = CoreGraph.TaskExplain;
 
-/** @internal Compiler-owned task/webhook handler write-sink fact (SPEC §10.3/§11). */
+/** @internal Compiler-owned handler write-sink fact (SPEC §10.3/§11). */
 export type HandlerWriteSinkFact = CoreGraph.HandlerWriteSinkExplain;
 
 /** @internal Compiler-owned webhook endpoint graph fact (SPEC §9.1/§11.4). */
