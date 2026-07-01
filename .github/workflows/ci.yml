@@ -123,34 +123,31 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: scaffold-typecheck
-            file: packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
-          - shard: scaffold-sqlite
-            file: packages/create-kovo/src/index.build.scaffold.sqlite.test.ts
-          - shard: scaffold-production
-            file: packages/create-kovo/src/index.build.scaffold.production.test.ts
-          - shard: scaffold-packed-postgres
-            file: packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts
-          - shard: scaffold-packed-sqlite
-            file: packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts
-          - shard: scaffold-packed-runtime
-            file: packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts
+          - shard: scaffold-install
+            files: >-
+              packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
+              packages/create-kovo/src/index.build.scaffold.sqlite.test.ts
+              packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts
+              packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts
+          - shard: scaffold-prod-runtime
+            files: >-
+              packages/create-kovo/src/index.build.scaffold.production.test.ts
+              packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts
           - shard: prod-artifact-contacts
-            file: packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts
-          - shard: prod-artifact-assets
-            file: packages/create-kovo/src/index.build.prod-artifact.assets.test.ts
-          - shard: prod-artifact-durable-tasks-lifecycle
-            file: packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts
-          - shard: prod-artifact-durable-tasks-retries
-            file: packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts
+            files: packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts
+          - shard: prod-artifact-durable-transactions
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts
+              packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts
+              packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts
           - shard: prod-artifact-raw-sql
-            file: packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
+            files: packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
           - shard: prod-artifact-security
-            file: packages/create-kovo/src/index.build.prod-artifact.security.test.ts
-          - shard: prod-artifact-transactions
-            file: packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.security.test.ts
+              packages/create-kovo/src/index.build.prod-artifact.assets.test.ts
           - shard: runtime
-            file: packages/create-kovo/src/index.build.runtime.test.ts
+            files: packages/create-kovo/src/index.build.runtime.test.ts
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
@@ -169,7 +166,7 @@ jobs:
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - name: Generated starter proofs (${{ matrix.shard }})
-        run: vp exec vitest --run ${{ matrix.file }}
+        run: vp exec vitest --run ${{ matrix.files }}
 
   build:
     runs-on: ubuntu-latest
