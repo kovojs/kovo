@@ -47,7 +47,8 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 
 **(a) Write-capable handle surfaces** — close via H (statement-parse-primary allowlist) + I (dialect):
 
-- [ ] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]
+- [x] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]
+  - Evidence: children closed by current M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json` and reverified in this worker branch.
   - [x] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed 2 prod-artifact endpoint cases across default+SQLite; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
   - [x] `readonlyDb()` transaction and future/unknown methods fail closed at runtime [H]
@@ -56,10 +57,14 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite `/api/readonly-mutation-attempt` cases and kept the drift table at 0; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
   - [x] `Reader<Db>` type surface rejects write-capable methods [H]
         Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` passed 65 tests including a compiler-backed `Reader<Db>` type proof; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs for the matching public read-handle endpoint; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
-- [ ] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]
-  - [ ] write-mode declared-table statements pass and cross-table statements fail closed [H/I]
-  - [ ] SQLite raw SQL statement parse parity matches the default dialect [I]
-  - [ ] `wrapManagedDbForSqlSafety` enforces the same policy at every call site [H/I]
+- [x] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]
+  - Evidence: children closed by the managed DB runtime matrix plus transaction/raw-SQL production artifact proofs recorded in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] write-mode declared-table statements pass and cross-table statements fail closed [H/I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` covers declared-table pass/cross-table KV406 fail-closed in write mode; production raw-SQL artifact shard covers trusted pass plus drift fail-closed.
+  - [x] SQLite raw SQL statement parse parity matches the default dialect [I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` covers pglite/default, better-sqlite3, and synthetic unknown dialect sinks across the matrix.
+  - [x] `wrapManagedDbForSqlSafety` enforces the same policy at every call site [H/I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` covers top-level, transaction, with-builder, nested escape, and unknown-method call sites.
 - [ ] `WebhookTxDb` webhook transaction handle [H]
   - [ ] `WebhookTxDb` declared transaction writes still execute through the audited path [H]
   - [ ] `WebhookTxDb` raw `$client`/`.session` escape handles fail closed [H]
@@ -75,10 +80,14 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
   - [x] read-only handle `$client`/`.session` escapes fail closed before execution [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot` passed 8 prod-artifact tests including default+SQLite read-only escape attempts; M2 row proof uses `buildProductionArtifact(root)`; M3 `pnpm run check:security-gate-mutations` killed `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
   - [ ] webhook transaction `$client`/`.session` escapes fail closed before execution [H]
-- [ ] unknown/future drizzle method OR driver dialect → **fails closed by default** (not a matrix update) [H/I]
-  - [ ] unknown method with a SQL carrier is parsed before execution [H/I]
-  - [ ] unknown method without a SQL carrier fails closed [H/I]
-  - [ ] synthetic unknown driver/dialect fails closed without a matrix update [I]
+- [x] unknown/future drizzle method OR driver dialect → **fails closed by default** (not a matrix update) [H/I]
+  - Evidence: children closed by current futureStatement and synthetic unknown dialect matrix evidence in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] unknown method with a SQL carrier is parsed before execution [H/I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` proves `futureStatement` parses SQL carriers at any argument position before execution.
+  - [x] unknown method without a SQL carrier fails closed [H/I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` proves opaque no-carrier `futureStatement` calls throw the unknown-method KV422 path before execution.
+  - [x] synthetic unknown driver/dialect fails closed without a matrix update [I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` includes the synthetic unknown dialect across execute/query/run/get/all/values/transaction/with/unknown-method.
 
 **(b) Output / wire sinks** — close via C2 (enumerate from the emitted artifact; proof-or-KV406):
 

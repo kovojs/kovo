@@ -34,6 +34,16 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   },
   {
     claimExtractor: 'security-certification-markers',
+    description: 'Production artifact transaction certification tests',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+  },
+  {
+    claimExtractor: 'security-certification-markers',
+    description: 'Production artifact raw SQL certification tests',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
+  },
+  {
+    claimExtractor: 'security-certification-markers',
     description: 'CLI build preflight security certification tests',
     file: 'packages/cli/src/index.kovo-build.test.ts',
   },
@@ -179,6 +189,50 @@ export const SECURITY_BUILD_PROOFS = [
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
       'blocks local-helper Better Auth credential laundering from the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'readonly-managed-handle-prod-artifact',
+    code: 'KV433',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    requiredNeedles: [
+      'addRuntimeMutationSafetyProofs(root, { includeReadonlyMutationAttempt: true })',
+      'buildProductionArtifact(root)',
+      'expectReadonlyAttemptBlocked(origin)',
+    ],
+    requiredProofFileNeedles: ['/api/readonly-mutation-attempt', 'futureStatement'],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    testName: 'rolls back default mutation transactions in the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'managed-write-raw-driver-escape-prod-artifact',
+    code: 'KV422',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    requiredNeedles: [
+      'addRuntimeMutationSafetyProofs(root, { includeManagedWriteEscapeAttempt: true })',
+      'buildProductionArtifact(root)',
+      'Expected kovo build --no-cache to fail for managed raw-driver escape.',
+      'KV406',
+      'runtime-safety-proofs.ts',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    testName: 'blocks managed write raw-driver escapes before $label artifact emission',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'raw-sql-owner-write-prod-artifact',
+    code: 'KV414',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
+    requiredNeedles: [
+      'addRawSqlOwnerWriteProof(root)',
+      'buildProductionArtifact(root)',
+      'Expected kovo build --no-cache to fail for raw owner-table write.',
+      'KV414',
+      'domain=raw-owner',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
+    testName: 'blocks raw owner-table db.execute writes from the production build artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',

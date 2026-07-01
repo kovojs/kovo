@@ -45,6 +45,7 @@ async function expectReadonlyAttemptBlocked(origin: string): Promise<void> {
 }
 
 describe('create-kovo starter (build integration: production transaction artifacts)', () => {
+  // @kovo-security-certifies KV433 readonly-managed-handle-prod-artifact
   it('rolls back default mutation transactions in the production build artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -197,6 +198,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     }
   }, 120_000);
 
+  // @kovo-security-certifies KV422 managed-write-raw-driver-escape-prod-artifact
   it.each([
     { dialect: undefined, label: 'default' },
     { dialect: 'sqlite' as const, label: 'SQLite' },
