@@ -98,8 +98,8 @@ packages/server/src/mutation-delta.test.ts`; `vp exec vitest --run
 packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`; `git diff --check`;
     `pnpm run check:vp`.
 
-- [ ] **F1. Encapsulate starter runtime DB so `src/db.ts` exposes only read-safe app DB values.**
-  - Owner: worker `019f1be8-5499-76c2-9d40-1ac56bd6d269`.
+- [x] **F1. Encapsulate starter runtime DB so `src/db.ts` exposes only read-safe app DB values.**
+  - Owner: worker `019f1be8-5499-76c2-9d40-1ac56bd6d269`, integrated as `37237bffe`.
   - Files:
     `packages/create-kovo/templates/src/db.ts`,
     `packages/create-kovo/templates/src/db.sqlite.ts`,
@@ -113,14 +113,14 @@ packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`; `
     `packages/create-kovo/src/index.build.test-support.ts`,
     `packages/create-kovo/src/index.build.prod-artifact.durable-tasks.test-support.ts`,
     `packages/create-kovo/src/index.build.scaffold.typecheck.test.ts`.
-  - [ ] Stop exporting a raw-handle factory from starter-facing `src/db.ts` and `src/db.sqlite.ts`.
-  - [ ] Keep `readonlyAppDb` as the only app-facing DB value exported from `src/db.ts`.
-  - [ ] Move raw DB creation/provider ownership behind `_kovo/app-runtime-db.ts` without a string-named
+  - [x] Stop exporting a raw-handle factory from starter-facing `src/db.ts` and `src/db.sqlite.ts`.
+  - [x] Keep `readonlyAppDb` as the only app-facing DB value exported from `src/db.ts`.
+  - [x] Move raw DB creation/provider ownership behind `_kovo/app-runtime-db.ts` without a string-named
         global that exposes `{ db }`.
-  - [ ] Add a starter sound-subset rule rejecting non-type imports of `src/_kovo/app-runtime-db` outside
+  - [x] Add a starter sound-subset rule rejecting non-type imports of `src/_kovo/app-runtime-db` outside
         framework-owned files such as `src/app.tsx` and `src/auth.ts`.
-  - [ ] Update starter tests and DDL/proof helpers so they no longer import the raw provider from app source.
-  - Acceptance: `vp exec vitest --run packages/create-kovo/src/index.test.ts
+  - [x] Update starter tests and DDL/proof helpers so they no longer import the raw provider from app source.
+  - Evidence: `vp exec vitest --run packages/create-kovo/src/index.test.ts
 packages/create-kovo/src/index.build.scaffold.typecheck.test.ts`; `vp exec vitest --run
 packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/index.build.test.ts`;
     `vp exec vitest --run packages/compiler/src/direct-db.test.ts packages/compiler/src/scan/parse.test.ts`;
