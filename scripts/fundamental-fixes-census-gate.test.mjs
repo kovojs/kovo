@@ -31,7 +31,7 @@ describe('fundamental-fixes-census-gate', () => {
     ).toEqual(['C2', 'B3']);
   });
 
-  it('keeps the default manifest structurally valid without falsely claiming completion', () => {
+  it('keeps the default manifest structurally valid and complete', () => {
     const manifest = loadCensusManifest();
     const report = evaluateFundamentalFixesCensus({
       manifest,
@@ -39,7 +39,7 @@ describe('fundamental-fixes-census-gate', () => {
     });
 
     expect(report.ok).toBe(true);
-    expect(report.complete).toBe(false);
+    expect(report.complete).toBe(true);
     expect(report.denominator).toEqual({
       dialectMatrixRows:
         REQUIRED_DIALECT_MATRIX_DIALECTS.length * REQUIRED_DIALECT_MATRIX_SINKS.length,
@@ -47,13 +47,7 @@ describe('fundamental-fixes-census-gate', () => {
       resolverExpressionKindRows: REQUIRED_RESOLVER_EXPRESSION_KINDS.length,
       writeCapableHandleRows: 23,
     });
-    const closedRowIds = manifest.rows
-      .filter((row) => row.status === 'closed')
-      .map((row) => row.id);
-    expect(report.openRows).toHaveLength(report.rowCount - closedRowIds.length);
-    for (const closedRowId of closedRowIds) {
-      expect(report.openRows).not.toContain(closedRowId);
-    }
+    expect(report.openRows).toEqual([]);
     expect(report.openRows).not.toContain(
       'kv426-blocks-trustedhtml-request-taint-in-a-prod-artifact',
     );
@@ -140,15 +134,16 @@ describe('fundamental-fixes-census-gate', () => {
   it('requires M1, M2, and M3 evidence for closed rows', () => {
     const rowId =
       'write-mode-declared-table-statements-pass-and-cross-table-statements-fail-closed';
-    const closedPlanText = planText.replace(
-      '  - [ ] write-mode declared-table statements pass and cross-table statements fail closed [H/I]',
-      '  - [x] write-mode declared-table statements pass and cross-table statements fail closed [H/I]',
-    );
+    const closedPlanText = planText;
     const closedWithoutM1 = cloneDefaultManifest();
     const rowIndex = closedWithoutM1.rows.findIndex((row) => row.id === rowId);
     closedWithoutM1.rows[rowIndex] = {
       ...closedWithoutM1.rows[rowIndex],
       evidence: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+      evidenceBundles: [],
+      m1: undefined,
+      m2: undefined,
+      m3: undefined,
       status: 'closed',
     };
 
@@ -161,6 +156,7 @@ describe('fundamental-fixes-census-gate', () => {
     closedWithOnlyM1.rows[rowIndex] = {
       ...closedWithOnlyM1.rows[rowIndex],
       evidence: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+      evidenceBundles: [],
       m1: {
         dialects: {
           postgres: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
@@ -169,6 +165,8 @@ describe('fundamental-fixes-census-gate', () => {
         independentReviewer: 'agent/followup-reviewer@abc123',
         prodArtifact: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
       },
+      m2: undefined,
+      m3: undefined,
       status: 'closed',
     };
 
@@ -204,8 +202,16 @@ describe('fundamental-fixes-census-gate', () => {
 
   it('keeps parent rollup rows open until every child row closes', () => {
     const parentId = 'manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2';
+    const childId =
+      'write-mode-declared-table-statements-pass-and-cross-table-statements-fail-closed';
     const manifest = cloneDefaultManifest();
     const parentIndex = manifest.rows.findIndex((row) => row.id === parentId);
+    const childIndex = manifest.rows.findIndex((row) => row.id === childId);
+    manifest.rows[childIndex] = {
+      ...manifest.rows[childIndex],
+      evidence: 'placeholder',
+      status: 'open',
+    };
     manifest.rows[parentIndex] = {
       ...manifest.rows[parentIndex],
       evidence: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
@@ -227,22 +233,32 @@ describe('fundamental-fixes-census-gate', () => {
       status: 'closed',
     };
 
-    const closedPlanText = planText.replace(
-      "- [ ] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]",
-      "- [x] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]",
+    const syntheticPlanText = planText.replace(
+      '  - [x] write-mode declared-table statements pass and cross-table statements fail closed [H/I]',
+      '  - [ ] write-mode declared-table statements pass and cross-table statements fail closed [H/I]',
     );
 
     expect(
-      evaluateFundamentalFixesCensus({ manifest, planText: closedPlanText }).violations,
+      evaluateFundamentalFixesCensus({ manifest, planText: syntheticPlanText }).violations,
     ).toContain(
       `${parentId}: parent row cannot close while child row write-mode-declared-table-statements-pass-and-cross-table-statements-fail-closed is open`,
     );
   });
 
   it('has a separate completion mode that fails while denominator rows remain open', () => {
+    const manifest = cloneDefaultManifest();
+    manifest.rows[0] = {
+      ...manifest.rows[0],
+      evidence: 'placeholder',
+      status: 'open',
+    };
+    const syntheticPlanText = planText.replace(
+      '- [x] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]',
+      '- [ ] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]',
+    );
     const report = evaluateFundamentalFixesCensus({
-      manifest: loadCensusManifest(),
-      planText,
+      manifest,
+      planText: syntheticPlanText,
       requireComplete: true,
     });
 
