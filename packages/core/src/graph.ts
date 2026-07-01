@@ -53,6 +53,7 @@ export type TouchGraph = Readonly<Record<string, TouchGraphEntry>>;
 /** @internal */
 export interface KovoCheckInput {
   access?: readonly AccessExplainFact[];
+  authPosture?: readonly AuthPostureFact[];
   capabilities?: readonly CapabilityExplain[];
   components?: readonly ComponentExplain[];
   cookieDowngrades?: readonly CookieDowngradeExplain[];
@@ -69,6 +70,7 @@ export interface KovoCheckInput {
   mutations?: readonly MutationExplain[];
   optimistic?: readonly OptimisticCoverage[];
   ownerDomains?: readonly OwnerDomainFact[];
+  ownershipPosture?: readonly OwnershipPostureFact[];
   pages?: readonly PageExplain[];
   queryData?: readonly QueryDataFact[];
   queries?: readonly QueryReadSet[];
@@ -77,6 +79,7 @@ export interface KovoCheckInput {
   renderEquivalenceChecks?: readonly RenderEquivalenceCheck[];
   revealed?: readonly RevealExplainFact[];
   scopeAudits?: readonly ScopeAuditFact[];
+  sessionAuthority?: readonly SessionAuthorityFact[];
   sqlSafety?: readonly SqlSafetyExplainFact[];
   sqlSafetyDiagnostics?: readonly SqlSafetyDiagnosticFact[];
   tasks?: readonly TaskExplain[];
@@ -168,6 +171,34 @@ export interface AccessExplainFact {
   name: string;
   site?: string;
   source?: 'access';
+}
+
+/** @internal Producer-owned guarded/unguarded posture for SPEC.md §10.2 audits. */
+export interface AuthPostureFact {
+  detail?: string;
+  guarded: boolean;
+  kind: 'endpoint' | 'mutation' | 'page' | 'query' | 'webhook';
+  name: string;
+  source?: 'access-posture';
+}
+
+/** @internal Producer-owned ambient session authority posture for SPEC.md §9.1 / KV418. */
+export interface SessionAuthorityFact {
+  detail?: string;
+  kind: 'endpoint' | 'mutation' | 'webhook';
+  name: string;
+  referencesSession: boolean;
+  source?: 'session-authority';
+}
+
+/** @internal Producer-owned ownership-guard posture for SPEC.md §10.3 / KV414. */
+export interface OwnershipPostureFact {
+  domain: string;
+  key?: string;
+  kind: 'mutation' | 'query';
+  name: string;
+  ownerGuarded: boolean;
+  source?: 'ownership-posture';
 }
 
 /**
@@ -773,6 +804,37 @@ export function deriveAccessExplainFacts(input: AccessDerivationInput): AccessEx
   ].sort(compareAccessExplainFact);
 }
 
+/** @internal Derive guarded/unguarded posture as producer-owned facts (SPEC.md §10.2). */
+export function deriveAuthPostureFacts(input: AccessDerivationInput): AuthPostureFact[] {
+  const decided = decidedAccessKeys(deriveAccessExplainFacts(input));
+  return [
+    ...(input.endpoints ?? []).map((endpoint) => endpointAuthPostureFact(endpoint, decided)),
+    ...(input.mutations ?? []).map((mutation) => mutationAuthPostureFact(mutation, decided)),
+    ...(input.pages ?? []).map((page) => pageAuthPostureFact(page, decided)),
+    ...(input.queries ?? []).map((query) => queryAuthPostureFact(query, decided)),
+  ].sort(compareAuthPostureFact);
+}
+
+/** @internal Derive ambient session authority posture for KV418 producers (SPEC.md §9.1). */
+export function deriveSessionAuthorityFacts(input: AccessDerivationInput): SessionAuthorityFact[] {
+  return [
+    ...(input.endpoints ?? []).map(endpointSessionAuthorityFact),
+    ...(input.mutations ?? []).map(mutationSessionAuthorityFact),
+  ].sort(compareSessionAuthorityFact);
+}
+
+/** @internal Derive owner-domain guard posture for KV414 producers (SPEC.md §10.3). */
+export function deriveOwnershipPostureFacts(input: AccessDerivationInput): OwnershipPostureFact[] {
+  return [
+    ...(input.queries ?? []).flatMap((query) =>
+      ownershipPostureFactsForGuards('query', query.query, query.guards ?? []),
+    ),
+    ...(input.mutations ?? []).flatMap((mutation) =>
+      ownershipPostureFactsForGuards('mutation', mutation.key, mutation.guards ?? []),
+    ),
+  ].sort(compareOwnershipPostureFact);
+}
+
 function explicitAccessExplainFact(
   kind: AccessExplainFact['kind'],
   name: string,
@@ -880,8 +942,210 @@ function compareAccessExplainFact(left: AccessExplainFact, right: AccessExplainF
   );
 }
 
+function decidedAccessKeys(access: readonly AccessExplainFact[]): ReadonlySet<string> {
+  const keys = new Set<string>();
+  for (const fact of access) {
+    if (fact.decision !== 'missing') keys.add(accessKey(fact.kind, fact.name));
+  }
+  return keys;
+}
+
+function accessKey(kind: AccessExplainFact['kind'], name: string): string {
+  return `${kind}\0${name}`;
+}
+
+function endpointAuthPostureFact(
+  endpoint: EndpointExplain,
+  decided: ReadonlySet<string>,
+): AuthPostureFact {
+  const kind = endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
+  const name = endpoint.name ?? endpoint.path;
+  return {
+    detail: [
+      `method=${endpoint.method ?? 'ANY'}`,
+      `path=${endpoint.path}`,
+      `mount=${endpoint.mount ?? 'exact'}`,
+      `auth=${endpointAuthDetail(endpoint)}`,
+      `csrf=${endpoint.csrf ?? 'checked'}`,
+    ].join(' '),
+    guarded:
+      decided.has(accessKey(kind, name)) ||
+      hasSessionAuthGuard(endpoint.guards ?? []) ||
+      endpointHasAuth(endpoint),
+    kind,
+    name,
+    source: 'access-posture',
+  };
+}
+
+function mutationAuthPostureFact(
+  mutation: MutationExplain,
+  decided: ReadonlySet<string>,
+): AuthPostureFact {
+  return {
+    detail: [
+      `guards=${listFactValues(mutation.guards)}`,
+      mutation.auth === undefined ? '' : `auth=${mutation.auth}`,
+      `writes=${listFactValues(mutation.writes)}`,
+      `invalidates=${listFactValues(mutation.invalidates)}`,
+      `manual-invalidates=${listFactValues(mutation.manualInvalidates)}`,
+    ]
+      .filter(Boolean)
+      .join(' '),
+    guarded:
+      decided.has(accessKey('mutation', mutation.key)) ||
+      hasSessionAuthGuard(mutation.guards ?? []) ||
+      mutation.auth !== undefined,
+    kind: 'mutation',
+    name: mutation.key,
+    source: 'access-posture',
+  };
+}
+
+function pageAuthPostureFact(page: PageExplain, decided: ReadonlySet<string>): AuthPostureFact {
+  return {
+    detail: [
+      `guards=${listFactValues(page.guards)}`,
+      `queries=${listFactValues(page.queries)}`,
+    ].join(' '),
+    guarded: decided.has(accessKey('page', page.route)) || hasSessionAuthGuard(page.guards ?? []),
+    kind: 'page',
+    name: page.route,
+    source: 'access-posture',
+  };
+}
+
+function queryAuthPostureFact(query: QueryReadSet, decided: ReadonlySet<string>): AuthPostureFact {
+  return {
+    detail: [
+      `guards=${listFactValues(query.guards)}`,
+      `reads=${listFactValues(query.domains)}`,
+    ].join(' '),
+    guarded:
+      decided.has(accessKey('query', query.query)) || hasSessionAuthGuard(query.guards ?? []),
+    kind: 'query',
+    name: query.query,
+    source: 'access-posture',
+  };
+}
+
+function endpointSessionAuthorityFact(endpoint: EndpointExplain): SessionAuthorityFact {
+  const kind = endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
+  return {
+    detail: `auth=${endpointAuthDetail(endpoint)} guards=${listFactValues(endpoint.guards)}`,
+    kind,
+    name: endpoint.name ?? endpoint.path,
+    referencesSession:
+      endpoint.auth === 'authed' || hasSessionAuthorityGuard(endpoint.guards ?? []),
+    source: 'session-authority',
+  };
+}
+
+function mutationSessionAuthorityFact(mutation: MutationExplain): SessionAuthorityFact {
+  return {
+    detail: `session=${mutation.session ?? '-'} auth=${mutation.auth ?? '-'} guards=${listFactValues(mutation.guards)}`,
+    kind: 'mutation',
+    name: mutation.key,
+    referencesSession:
+      mutation.session !== undefined ||
+      mutation.auth === 'authed' ||
+      mutation.auth?.startsWith('role:') === true ||
+      hasSessionAuthorityGuard(mutation.guards ?? []),
+    source: 'session-authority',
+  };
+}
+
+function ownershipPostureFactsForGuards(
+  kind: OwnershipPostureFact['kind'],
+  name: string,
+  guards: readonly string[],
+): OwnershipPostureFact[] {
+  return guards.flatMap((guard) => {
+    const parsed = ownsGuardFact(guard);
+    if (!parsed) return [];
+    return [{ ...parsed, kind, name, ownerGuarded: true, source: 'ownership-posture' as const }];
+  });
+}
+
+function ownsGuardFact(guard: string): Pick<OwnershipPostureFact, 'domain' | 'key'> | undefined {
+  if (guard.startsWith('owns:')) {
+    const parts = guard.slice('owns:'.length).split(':');
+    const domain = parts[0]?.trim();
+    if (!domain) return undefined;
+    const key = parts.slice(1).join(':').trim();
+    return key ? { domain, key } : { domain };
+  }
+  if (guard.startsWith('owns(') && guard.endsWith(')')) {
+    const [domainPart, keyPart] = guard.slice('owns('.length, -1).split(',');
+    const domain = domainPart?.trim();
+    if (!domain) return undefined;
+    const key = keyPart?.trim();
+    return key ? { domain, key } : { domain };
+  }
+  return undefined;
+}
+
+function endpointHasAuth(endpoint: EndpointExplain): boolean {
+  if (!endpoint.auth) return false;
+  return (
+    endpoint.auth === 'authed' ||
+    endpoint.auth.startsWith('role:') ||
+    endpoint.auth.startsWith('custom:') ||
+    endpoint.auth.startsWith('verifier:')
+  );
+}
+
+function endpointAuthDetail(endpoint: EndpointExplain): string {
+  if (endpoint.auth === 'none' && endpoint.authJustification) {
+    return `none:${endpoint.authJustification}`;
+  }
+  return endpoint.auth ?? '-';
+}
+
+function hasSessionAuthGuard(guards: readonly string[]): boolean {
+  return guards.some((guard) => guard === 'authed' || guard.startsWith('role:'));
+}
+
+function hasSessionAuthorityGuard(guards: readonly string[]): boolean {
+  return guards.some(
+    (guard) =>
+      guard === 'authed' ||
+      guard.startsWith('role:') ||
+      guard === 'owns' ||
+      ownsGuardFact(guard) !== undefined,
+  );
+}
+
+function listFactValues(values: readonly string[] | undefined): string {
+  return values === undefined || values.length === 0 ? '-' : values.join(',');
+}
+
+function compareAuthPostureFact(left: AuthPostureFact, right: AuthPostureFact): number {
+  return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
+}
+
+function compareSessionAuthorityFact(
+  left: SessionAuthorityFact,
+  right: SessionAuthorityFact,
+): number {
+  return left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name);
+}
+
+function compareOwnershipPostureFact(
+  left: OwnershipPostureFact,
+  right: OwnershipPostureFact,
+): number {
+  return (
+    left.kind.localeCompare(right.kind) ||
+    left.name.localeCompare(right.name) ||
+    left.domain.localeCompare(right.domain) ||
+    (left.key ?? '').localeCompare(right.key ?? '')
+  );
+}
+
 const arrayFields = [
   'access',
+  'authPosture',
   'capabilities',
   'components',
   'derivedMutations',
@@ -897,6 +1161,7 @@ const arrayFields = [
   'mutations',
   'optimistic',
   'ownerDomains',
+  'ownershipPosture',
   'packageComponentPrefixes',
   'pages',
   'queryData',
@@ -906,7 +1171,9 @@ const arrayFields = [
   'renderEquivalenceChecks',
   'revealed',
   'scopeAudits',
+  'sessionAuthority',
   'sqlSafety',
+  'sqlSafetyDiagnostics',
   'tasks',
   'toctouFacts',
   'trustEscapes',

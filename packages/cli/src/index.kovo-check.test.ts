@@ -734,6 +734,35 @@ describe('kovo check', () => {
     ).not.toContain('KV414');
   });
 
+  it('discharges owner-domain accesses from producer ownership-posture facts', () => {
+    expect(
+      kovoCheck({
+        ownerDomains: [{ domain: 'order', owner: 'userId' }],
+        ownershipPosture: [
+          {
+            domain: 'order',
+            key: 'arg:id',
+            kind: 'query',
+            name: 'orderById',
+            ownerGuarded: true,
+            source: 'ownership-posture',
+          },
+        ],
+        queries: [{ domains: ['order'], guards: ['renamed-ownership-helper'], query: 'orderById' }],
+        scopeAudits: [
+          {
+            domain: 'order',
+            key: 'arg:id',
+            kind: 'query',
+            name: 'orderById',
+            scope: 'args',
+            site: 'order.queries.ts:12',
+          },
+        ],
+      }).output,
+    ).not.toContain('KV414');
+  });
+
   it('keeps same-domain different-key owns() accesses flagged as KV414 (SPEC §10.3)', () => {
     const result = kovoCheck({
       ownerDomains: [{ domain: 'order', owner: 'userId' }],
@@ -953,6 +982,32 @@ describe('kovo check', () => {
       exitCode: 0,
       output: 'kovo-check/v1\nOK\n',
     });
+  });
+
+  it('uses producer auth-posture facts instead of guard spelling for the unguarded audit', () => {
+    expect(
+      kovoCheck({
+        authPosture: [
+          {
+            detail: 'producer says guarded',
+            guarded: true,
+            kind: 'mutation',
+            name: 'cart/add',
+            source: 'access-posture',
+          },
+        ],
+        mutations: [{ guards: ['renamed-auth-helper'], key: 'cart/add' }],
+      }).output,
+    ).toBe('kovo-check/v1\nOK\n');
+  });
+
+  it('fails closed when a surface is missing its producer auth-posture fact', () => {
+    expect(
+      kovoCheck({
+        authPosture: [],
+        mutations: [{ guards: ['authed'], key: 'cart/add' }],
+      }).output,
+    ).toContain('WARN UNGUARDED cart/add mutation is reachable without an auth guard.');
   });
 
   it('derives KV310 gaps from mutation invalidations and query read sets', () => {
@@ -1915,6 +1970,51 @@ describe('kovo check', () => {
         ],
       }).output,
     ).not.toContain('KV418');
+  });
+
+  it('uses producer session-authority facts for KV418 instead of endpoint guard spelling', () => {
+    const result = kovoCheck({
+      endpoints: [
+        {
+          csrf: 'exempt',
+          csrfJustification: 'mobile client',
+          guards: ['renamed-session-helper'],
+          method: 'POST',
+          name: 'api/sync',
+          path: '/api/sync',
+        },
+      ],
+      sessionAuthority: [
+        {
+          detail: 'producer traced req.session',
+          kind: 'endpoint',
+          name: 'api/sync',
+          referencesSession: true,
+          source: 'session-authority',
+        },
+      ],
+    });
+
+    expect(result.output).toContain('KV418');
+    expect(result.exitCode).not.toBe(0);
+  });
+
+  it('fails closed when a csrf-exempt endpoint is missing its session-authority fact', () => {
+    const result = kovoCheck({
+      endpoints: [
+        {
+          csrf: 'exempt',
+          csrfJustification: 'mobile client',
+          method: 'POST',
+          name: 'api/sync',
+          path: '/api/sync',
+        },
+      ],
+      sessionAuthority: [],
+    });
+
+    expect(result.output).toContain('KV418');
+    expect(result.exitCode).not.toBe(0);
   });
 
   it('audits manual invalidate escape-hatch usage', () => {

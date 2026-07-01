@@ -1277,6 +1277,108 @@ export const ProductGrid = component({
     // Every surface without an explicit access decision is part of the
     // KV436 `missing` set that fails `kovo check`.
     expect(derived.graph.access?.filter((fact) => fact.decision === 'missing')).toHaveLength(7);
+    expect(derived.graph.authPosture).toEqual([
+      {
+        detail: 'method=POST path=/api/undecided mount=exact auth=- csrf=checked',
+        guarded: false,
+        kind: 'endpoint',
+        name: '/api/undecided',
+        source: 'access-posture',
+      },
+      {
+        detail: 'method=GET path=/healthz mount=exact auth=none csrf=checked',
+        guarded: false,
+        kind: 'endpoint',
+        name: '/healthz',
+        source: 'access-posture',
+      },
+      {
+        detail: 'guards=authed writes=cart invalidates=- manual-invalidates=-',
+        guarded: true,
+        kind: 'mutation',
+        name: 'cart/add',
+        source: 'access-posture',
+      },
+      {
+        detail: 'guards=- writes=cart invalidates=- manual-invalidates=-',
+        guarded: false,
+        kind: 'mutation',
+        name: 'cart/clear',
+        source: 'access-posture',
+      },
+      {
+        detail: 'guards=- queries=-',
+        guarded: true,
+        kind: 'page',
+        name: '/about',
+        source: 'access-posture',
+      },
+      {
+        detail: 'guards=authed queries=-',
+        guarded: true,
+        kind: 'page',
+        name: '/cart',
+        source: 'access-posture',
+      },
+      {
+        detail: 'guards=authed reads=cart',
+        guarded: true,
+        kind: 'query',
+        name: 'cart',
+        source: 'access-posture',
+      },
+      {
+        detail: 'guards=- reads=draft',
+        guarded: false,
+        kind: 'query',
+        name: 'drafts',
+        source: 'access-posture',
+      },
+      {
+        detail: 'method=POST path=/webhooks/stripe mount=exact auth=- csrf=checked',
+        guarded: true,
+        kind: 'webhook',
+        name: 'stripe',
+        source: 'access-posture',
+      },
+    ]);
+    expect(derived.graph.sessionAuthority).toEqual([
+      {
+        detail: 'auth=- guards=-',
+        kind: 'endpoint',
+        name: '/api/undecided',
+        referencesSession: false,
+        source: 'session-authority',
+      },
+      {
+        detail: 'auth=none guards=-',
+        kind: 'endpoint',
+        name: '/healthz',
+        referencesSession: false,
+        source: 'session-authority',
+      },
+      {
+        detail: 'session=- auth=- guards=authed',
+        kind: 'mutation',
+        name: 'cart/add',
+        referencesSession: true,
+        source: 'session-authority',
+      },
+      {
+        detail: 'session=- auth=- guards=-',
+        kind: 'mutation',
+        name: 'cart/clear',
+        referencesSession: false,
+        source: 'session-authority',
+      },
+      {
+        detail: 'auth=- guards=-',
+        kind: 'webhook',
+        name: 'stripe',
+        referencesSession: false,
+        source: 'session-authority',
+      },
+    ]);
   });
 
   it('preserves caller-provided access facts when deriving the app graph', () => {

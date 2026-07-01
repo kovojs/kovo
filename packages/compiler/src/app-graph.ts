@@ -1,7 +1,12 @@
 import { dirname, join } from 'node:path';
 
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-import { deriveAccessExplainFacts } from '@kovojs/core/internal/graph';
+import {
+  deriveAccessExplainFacts,
+  deriveAuthPostureFacts,
+  deriveOwnershipPostureFacts,
+  deriveSessionAuthorityFacts,
+} from '@kovojs/core/internal/graph';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
 import type { CompilerDiagnostic } from './diagnostics.js';
@@ -92,9 +97,28 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
   });
   const access = mergeAccessExplainFacts(options.graph?.access ?? [], derivedAccess);
+  const accessDerivationInput = {
+    ...(endpoints.length === 0 ? {} : { endpoints }),
+    ...(options.graph?.mutations === undefined ? {} : { mutations: options.graph.mutations }),
+    ...(pagesForAccess === undefined ? {} : { pages: pagesForAccess }),
+    ...(options.graph?.queries === undefined ? {} : { queries: options.graph.queries }),
+  };
+  const authPosture = mergeAuthPostureFacts(
+    options.graph?.authPosture ?? [],
+    deriveAuthPostureFacts(accessDerivationInput),
+  );
+  const sessionAuthority = mergeSessionAuthorityFacts(
+    options.graph?.sessionAuthority ?? [],
+    deriveSessionAuthorityFacts(accessDerivationInput),
+  );
+  const ownershipPosture = mergeOwnershipPostureFacts(
+    options.graph?.ownershipPosture ?? [],
+    deriveOwnershipPostureFacts(accessDerivationInput),
+  );
   const graph: RegistryGraphInput = {
     ...options.graph,
     ...(access.length > 0 ? { access } : {}),
+    ...(authPosture.length > 0 ? { authPosture } : {}),
     ...(capabilities.length > 0 ? { capabilities } : {}),
     components,
     ...(endpoints.length > 0 ? { endpoints } : {}),
@@ -102,6 +126,8 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
     ...(tasks.length > 0 ? { tasks } : {}),
     ...(handlerWriteSinks.length > 0 ? { handlerWriteSinks } : {}),
+    ...(ownershipPosture.length > 0 ? { ownershipPosture } : {}),
+    ...(sessionAuthority.length > 0 ? { sessionAuthority } : {}),
     // SPEC §10.2/§11.2: preserve KV422 SQL-safety diagnostics from `compile drizzle-static`
     // (analyzeSqlSafetyFromProject) so the build→graph.json the `kovo check` consumer reads carries
     // them and the check fails end-to-end. By-construction at `kovo check`: an error-severity finding
@@ -163,6 +189,73 @@ function compareAccessFacts(
     left.name.localeCompare(right.name) ||
     left.decision.localeCompare(right.decision)
   );
+}
+
+function mergeAuthPostureFacts(
+  callerFacts: readonly CoreGraph.AuthPostureFact[],
+  derivedFacts: readonly CoreGraph.AuthPostureFact[],
+): CoreGraph.AuthPostureFact[] {
+  const facts = [...callerFacts];
+  const existing = new Set(callerFacts.map(authPostureFactKey));
+  for (const fact of derivedFacts) {
+    const key = authPostureFactKey(fact);
+    if (existing.has(key)) continue;
+    facts.push(fact);
+    existing.add(key);
+  }
+  return facts.sort(
+    (left, right) => left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name),
+  );
+}
+
+function authPostureFactKey(fact: CoreGraph.AuthPostureFact): string {
+  return `${fact.kind}\0${fact.name}`;
+}
+
+function mergeSessionAuthorityFacts(
+  callerFacts: readonly CoreGraph.SessionAuthorityFact[],
+  derivedFacts: readonly CoreGraph.SessionAuthorityFact[],
+): CoreGraph.SessionAuthorityFact[] {
+  const facts = [...callerFacts];
+  const existing = new Set(callerFacts.map(sessionAuthorityFactKey));
+  for (const fact of derivedFacts) {
+    const key = sessionAuthorityFactKey(fact);
+    if (existing.has(key)) continue;
+    facts.push(fact);
+    existing.add(key);
+  }
+  return facts.sort(
+    (left, right) => left.kind.localeCompare(right.kind) || left.name.localeCompare(right.name),
+  );
+}
+
+function sessionAuthorityFactKey(fact: CoreGraph.SessionAuthorityFact): string {
+  return `${fact.kind}\0${fact.name}`;
+}
+
+function mergeOwnershipPostureFacts(
+  callerFacts: readonly CoreGraph.OwnershipPostureFact[],
+  derivedFacts: readonly CoreGraph.OwnershipPostureFact[],
+): CoreGraph.OwnershipPostureFact[] {
+  const facts = [...callerFacts];
+  const existing = new Set(callerFacts.map(ownershipPostureFactKey));
+  for (const fact of derivedFacts) {
+    const key = ownershipPostureFactKey(fact);
+    if (existing.has(key)) continue;
+    facts.push(fact);
+    existing.add(key);
+  }
+  return facts.sort(
+    (left, right) =>
+      left.kind.localeCompare(right.kind) ||
+      left.name.localeCompare(right.name) ||
+      left.domain.localeCompare(right.domain) ||
+      (left.key ?? '').localeCompare(right.key ?? ''),
+  );
+}
+
+function ownershipPostureFactKey(fact: CoreGraph.OwnershipPostureFact): string {
+  return `${fact.kind}\0${fact.name}\0${fact.domain}\0${fact.key ?? ''}`;
 }
 
 /** @internal Process-lifetime cache for app graph derivation keyed by contribution fingerprints. */
