@@ -128,6 +128,8 @@ export interface LiveTargetRenderContext<Request = unknown> {
   csrf?: CsrfValidationOptions<Request> | false;
   failure?: MutationFail;
   input: unknown;
+  /** @internal Query/list result item ceiling enforced by generated live-target query reloads. */
+  maxListItems?: number;
   mutationKey?: string;
   props: Record<string, unknown>;
   request: Request;
@@ -375,6 +377,7 @@ export function mutationWireRequestFromHeaders<Request>(
     ...(options.liveTargetRenderers === undefined
       ? {}
       : { liveTargetRenderers: options.liveTargetRenderers }),
+    ...(options.maxListItems === undefined ? {} : { maxListItems: options.maxListItems }),
     ...(options.mutationKey === undefined ? {} : { mutationKey: options.mutationKey }),
     ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
     ...(headers.idem === undefined ? {} : { idem: headers.idem }),

@@ -192,7 +192,12 @@ async function loadLiveTargetQueries<Request>(
 
   for (const binding of bindings) {
     const input = binding.args ? binding.args(context.props) : undefined;
-    const result = await runQuery(binding.query, input, context.request);
+    const result = await runQuery(
+      binding.query,
+      input,
+      context.request,
+      context.maxListItems === undefined ? {} : { maxListItems: context.maxListItems },
+    );
     if (!result.ok) {
       throw new Error(`Live target query failed: ${binding.query.key}`);
     }

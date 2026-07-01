@@ -91,6 +91,7 @@ export async function renderQueryChunks(
   defaultInput: unknown,
   request: unknown,
   changes: readonly ChangeRecord[],
+  maxListItems?: number,
 ): Promise<string[]> {
   const chunks: string[] = [];
 
@@ -106,7 +107,12 @@ export async function renderQueryChunks(
     }
 
     const input = rerunQuery.input ?? defaultInput;
-    const result = await runQuery(queryDefinition, input, request);
+    const result = await runQuery(
+      queryDefinition,
+      input,
+      request,
+      maxListItems === undefined ? {} : { maxListItems },
+    );
     if (!result.ok) {
       throw new Error(`Rerun query failed: ${queryDefinition.key}`, { cause: result });
     }
@@ -227,6 +233,7 @@ export async function renderLiveTargetChunks<Request>(
   input: unknown,
   request: Request,
   csrf: MutationWireRequest<Request>['csrf'] | undefined,
+  maxListItems?: number,
 ): Promise<string[]> {
   const renderersByComponent = liveTargetRenderersByComponent(renderers);
   const chunks: string[] = [];
@@ -239,6 +246,7 @@ export async function renderLiveTargetChunks<Request>(
       const html = await renderer.render({
         ...(csrf === undefined ? {} : { csrf }),
         input,
+        ...(maxListItems === undefined ? {} : { maxListItems }),
         props: target.props,
         request,
         target: target.target,

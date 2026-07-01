@@ -232,13 +232,20 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     });
     const request = {};
 
-    const chunks = await renderQueryChunks([cartQuery], [{ key: 'cartWarning' }], {}, request, [
-      { domain: 'cart' },
-    ]);
+    const chunks = await renderQueryChunks(
+      [cartQuery],
+      [{ key: 'cartWarning' }],
+      {},
+      request,
+      [{ domain: 'cart' }],
+      2,
+    );
 
     expect(chunks).toHaveLength(1);
+    expect(chunks[0]).toContain('{"items":[{"id":0},{"id":1}]}');
+    expect(chunks[0]).not.toContain('{"id":2}');
     expect(queryRuntimeWarningsFromRequest(request)).toEqual([
-      { code: 'QUERY_LIST_LIMIT', limit: 100, path: '$.items' },
+      { code: 'QUERY_LIST_LIMIT', limit: 2, path: '$.items' },
     ]);
   });
 });

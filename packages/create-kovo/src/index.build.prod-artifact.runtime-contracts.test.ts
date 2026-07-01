@@ -65,6 +65,37 @@ describe('create-kovo starter (build integration: production runtime contract ar
       expect(queryBody).toContain('"label":"item-1"');
       expect(queryBody).not.toContain('"label":"item-2"');
 
+      const proofRoot = rootElementWithAttribute(pageHtml, 'data-proof', 'runtime-contracts');
+      const liveTarget = requiredAttribute(proofRoot, 'kovo-fragment-target');
+      const liveComponent = requiredAttribute(proofRoot, 'kovo-live-component');
+      const liveToken = requiredAttribute(proofRoot, 'kovo-live-token');
+      const liveDeps = requiredAttribute(proofRoot, 'kovo-deps');
+      const liveProps = attributeValue(proofRoot, 'kovo-props') ?? '{}';
+      const refresh = new FormData();
+      refresh.set('reason', 'prod-artifact-contract');
+      const mutationRefresh = await fetch(
+        `${origin}/_m/runtime-contract-proofs/refresh-warning-items`,
+        {
+          body: refresh,
+          headers: {
+            'Kovo-Fragment': 'true',
+            'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,
+            'Kovo-Targets': `${liveTarget}=${liveDeps}`,
+          },
+          method: 'POST',
+        },
+      );
+      const mutationRefreshBody = await mutationRefresh.text();
+      expect(mutationRefresh.status).toBe(200);
+      expect(mutationRefresh.headers.get('kovo-warn')).toContain('QUERY_LIST_LIMIT $.rows;limit=2');
+      expect(mutationRefreshBody).toContain(
+        '<kovo-query name="runtime-contract-proofs/warning-items-query">',
+      );
+      expect(mutationRefreshBody).toContain('<kovo-fragment');
+      expect(mutationRefreshBody).toContain('data-warning-count="2"');
+      expect(mutationRefreshBody).toContain('item-0,item-1');
+      expect(mutationRefreshBody).not.toContain('item-2');
+
       const syncParse = await fetch(
         `${origin}/_q/runtime-contract-proofs/sync-verified-file-parse-query`,
       );
@@ -121,3 +152,38 @@ describe('create-kovo starter (build integration: production runtime contract ar
     }
   }, 180_000);
 });
+
+function rootElementWithAttribute(html: string, name: string, value: string): string {
+  const pattern = new RegExp(
+    `<[A-Za-z][^>]*\\b${escapeRegExp(name)}="${escapeRegExp(value)}"[^>]*>`,
+  );
+  const match = pattern.exec(html);
+  if (!match) throw new Error(`Missing element with ${name}="${value}" in built artifact.`);
+  return match[0];
+}
+
+function requiredAttribute(tag: string, name: string): string {
+  const value = attributeValue(tag, name);
+  if (value === undefined) throw new Error(`Missing ${name} in ${tag}`);
+  return value;
+}
+
+function attributeValue(tag: string, name: string): string | undefined {
+  const pattern = new RegExp(`\\b${escapeRegExp(name)}="([^"]*)"`);
+  const match = pattern.exec(tag);
+  return match === null ? undefined : decodeAttribute(match[1] ?? '');
+}
+
+function decodeAttribute(value: string): string {
+  return value
+    .replaceAll('&quot;', '"')
+    .replaceAll('&#39;', "'")
+    .replaceAll('&apos;', "'")
+    .replaceAll('&gt;', '>')
+    .replaceAll('&lt;', '<')
+    .replaceAll('&amp;', '&');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}

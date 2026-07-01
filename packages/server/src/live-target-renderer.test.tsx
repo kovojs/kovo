@@ -202,15 +202,17 @@ describe('generated component live target renderers', () => {
     });
     const request = {};
 
-    await renderer.render({
+    const html = await renderer.render({
       input: {},
+      maxListItems: 2,
       props: {},
       request,
       target: 'cart',
     });
 
+    expect(String(html)).toContain('data-count="2"');
     expect(queryRuntimeWarningsFromRequest(request)).toEqual([
-      { code: 'QUERY_LIST_LIMIT', limit: 100, path: '$.items' },
+      { code: 'QUERY_LIST_LIMIT', limit: 2, path: '$.items' },
     ]);
   });
 });

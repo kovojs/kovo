@@ -145,6 +145,45 @@ describe('server mutation primitives', () => {
     expect(accountLoad).not.toHaveBeenCalled();
   });
 
+  it('caps enhanced mutation query chunks and emits the shared query warning header', async () => {
+    const catalog = domain('catalog');
+    const catalogQuery = query('catalogItems', {
+      load: () => ({
+        rows: Array.from({ length: 4 }, (_, id) => ({ id, label: `item-${id}` })),
+      }),
+      reads: [catalog],
+    });
+    const refreshCatalog = mutation('catalog/refresh', {
+      input: s.object({ reason: s.string() }),
+      registry: {
+        queries: [catalogQuery],
+        touches: [catalog],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    await expect(
+      renderMutationEndpointResponse(refreshCatalog, {
+        headers: {
+          'Kovo-Fragment': 'true',
+          'Kovo-Targets': 'catalog-list=catalogItems',
+        },
+        maxListItems: 2,
+        rawInput: { reason: 'test' },
+        redirectTo: '/catalog',
+        request: {},
+      }),
+    ).resolves.toMatchObject({
+      body: '<kovo-query name="catalogItems">{"rows":[{"id":0,"label":"item-0"},{"id":1,"label":"item-1"}]}</kovo-query>',
+      headers: {
+        'Kovo-Warn': 'QUERY_LIST_LIMIT $.rows;limit=2',
+      },
+      status: 200,
+    });
+  });
+
   it('selects success fragments through generated reads on explicit live target bindings', async () => {
     const contact = domain('contact');
     const contactsQuery = query('generatedContacts', {
@@ -199,6 +238,62 @@ describe('server mutation primitives', () => {
       ].join('\n'),
       status: 200,
     });
+  });
+
+  it('caps generated live target query reloads and surfaces their warning header', async () => {
+    const contacts = domain('contact');
+    const contactsQuery = query('warningContacts', {
+      load: () => ({
+        rows: Array.from({ length: 4 }, (_, id) => ({ id, email: `user-${id}@example.test` })),
+      }),
+      reads: [contacts],
+    });
+    const ContactsRegion = component({
+      queries: { contacts: contactsQuery },
+      render: ({ contacts }) => {
+        const rows = (contacts as { rows: { email: string }[] }).rows;
+        return renderedHtml(
+          `<section kovo-c="contacts-region" data-count="${rows.length}">${rows.map((row) => row.email).join(',')}</section>`,
+        );
+      },
+    });
+    const addContact = mutation('contacts/add-warning', {
+      input: s.object({ email: s.string() }),
+      registry: {
+        queries: [contactsQuery],
+        touches: [contacts],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(addContact, {
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Live-Targets': `${attestedLiveTargetHeader('contacts-region', 'components/contacts/warning-region')}`,
+        'Kovo-Targets': 'contacts-region=warningContacts',
+      },
+      liveTargetRenderers: [
+        componentLiveTargetRenderer({
+          component: ContactsRegion,
+          componentId: 'components/contacts/warning-region',
+        }),
+      ],
+      maxListItems: 2,
+      rawInput: { email: 'user-4@example.test' },
+      redirectTo: '/contacts',
+      request: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.body).toContain(
+      '<kovo-query name="warningContacts">{"rows":[{"id":0,"email":"user-0@example.test"},{"id":1,"email":"user-1@example.test"}]}</kovo-query>',
+    );
+    expect(response.body).toContain('data-count="2"');
+    expect(response.body).toContain('user-0@example.test,user-1@example.test');
+    expect(response.body).not.toContain('user-2@example.test');
+    expect(response.headers['Kovo-Warn']).toBe('QUERY_LIST_LIMIT $.rows;limit=2,$.rows;limit=2');
   });
 
   it('auto-renders affected live target descriptors from generated renderers', async () => {

@@ -82,6 +82,7 @@ import {
   renderQueryChunks,
   selectMutationResponseTargets,
 } from './mutation/targets.js';
+import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
 import { mutationWithRuntimeRegistryFacts, type RuntimeRegistryFacts } from './registry-facts.js';
 import {
   canRunSqliteAsyncTransaction,
@@ -933,6 +934,7 @@ async function renderSuccessfulMutationWireResponse<
     renderInput,
     wireRequest.request,
     result.changes,
+    wireRequest.maxListItems,
   );
   const fragmentChunks = [
     ...(await renderLiveTargetChunks(
@@ -941,6 +943,7 @@ async function renderSuccessfulMutationWireResponse<
       renderInput,
       wireRequest.request,
       wireRequest.csrf,
+      wireRequest.maxListItems,
     )),
     ...(await renderFragmentChunks(
       wireRequest.fragmentRenderers ?? [],
@@ -954,6 +957,11 @@ async function renderSuccessfulMutationWireResponse<
   const buildHeaders: MutationResponseHeaders = {
     'Kovo-Build': requiredMutationBuildToken(wireRequest),
   };
+  const queryWarningHeader = queryRuntimeWarningHeaderValue(
+    queryRuntimeWarningsFromRequest(wireRequest.request),
+  );
+  const queryWarningHeaders =
+    queryWarningHeader === undefined ? undefined : { 'Kovo-Warn': queryWarningHeader };
 
   return {
     body: [...queryChunks, ...fragmentChunks].join('\n'),
@@ -964,6 +972,7 @@ async function renderSuccessfulMutationWireResponse<
       },
       buildHeaders,
       result.responseHeaders,
+      queryWarningHeaders,
     ),
     status: 200,
   };

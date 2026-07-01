@@ -121,6 +121,7 @@ export async function handleAppMutationRequest(
     ...(app.mutationReplayStore === undefined ? {} : { replayStore: app.mutationReplayStore }),
     ...(app.onError === undefined ? {} : { onError: app.onError }),
     ...(mutationResponseOptions?.csrf === undefined ? {} : { csrf: mutationResponseOptions.csrf }),
+    maxListItems: app.requestLimits.maxQueryListItems,
     ...(mutationResponseOptions?.failureTarget === undefined
       ? {}
       : { failureTarget: mutationResponseOptions.failureTarget }),

@@ -232,6 +232,55 @@ describe('server app mutation request boundary', () => {
     );
   });
 
+  it('threads app query list limits into enhanced mutation query refreshes', async () => {
+    const catalog = domain('catalog');
+    const catalogQuery = query('catalogItems', {
+      load: () => ({
+        rows: Array.from({ length: 4 }, (_, id) => ({ id, label: `item-${id}` })),
+      }),
+      reads: [catalog],
+    });
+    const refreshCatalog = mutation('catalog/refresh', {
+      csrf: false,
+      defaultRedirectTo: '/catalog',
+      input: s.object({ reason: s.string() }),
+      registry: {
+        queries: [catalogQuery],
+        touches: [catalog],
+      },
+      handler(input) {
+        return input;
+      },
+    });
+    const app = createApp({
+      mutations: [refreshCatalog],
+      requestLimits: { maxQueryListItems: 2 },
+    });
+    const form = new FormData();
+    form.set('reason', 'test');
+    const request = new Request('https://shop.example.test/_m/catalog/refresh', {
+      body: form,
+      headers: {
+        'Kovo-Fragment': 'true',
+        'Kovo-Targets': 'catalog-list=catalogItems',
+      },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(
+      app,
+      request,
+      new URL(request.url),
+      'catalog/refresh',
+    );
+    const body = await response.text();
+
+    expect(response.status, body).toBe(200);
+    expect(response.headers.get('Kovo-Warn')).toBe('QUERY_LIST_LIMIT $.rows;limit=2');
+    expect(body).toContain('"label":"item-1"');
+    expect(body).not.toContain('"label":"item-2"');
+  });
+
   it('inherits app and source-route stylesheets into enhanced failure fragments', async () => {
     const addToCart = mutation('cart/add', {
       csrf: false,
