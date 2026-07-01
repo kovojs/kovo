@@ -33,26 +33,34 @@ import {
 
 describe('create-kovo starter (build integration: production security artifacts)', () => {
   // @kovo-security-certifies KV435 local-helper-credential-laundering
+  // @kovo-security-certifies KV435 value-flow-sibling-laundering
   it('blocks local-helper Better Auth credential laundering from the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-auth-secret-'));
+    const unsafeRoot = mkdtempSync(join(tempParent, 'create-kovo-prod-auth-secret-unsafe-'));
+    const safeRoot = mkdtempSync(join(tempParent, 'create-kovo-prod-auth-secret-safe-'));
 
     try {
-      writeKovoProject(root, { name: 'Prod Auth Secret Proof' });
-      linkStarterBuildDependencies(root);
-      addAuthSecretLeakProof(root);
+      writeKovoProject(unsafeRoot, { name: 'Prod Auth Secret Proof' });
+      linkStarterBuildDependencies(unsafeRoot);
+      addAuthSecretLeakProof(unsafeRoot);
 
       try {
-        buildProductionArtifact(root);
+        buildProductionArtifact(unsafeRoot);
         throw new Error('Expected kovo build --no-cache to fail with KV435.');
       } catch (error) {
         const output = execFileSyncErrorOutput(error);
         expect(output).toContain('KV435');
         expect(output).toContain('Secret query value reaches the client wire');
       }
+
+      writeKovoProject(safeRoot, { name: 'Prod Auth Secret Safe Sibling' });
+      linkStarterBuildDependencies(safeRoot);
+      addAuthSecretLeakProof(safeRoot, { leakToWire: false });
+      buildProductionArtifact(safeRoot);
     } finally {
-      rmSync(root, { force: true, recursive: true });
+      rmSync(unsafeRoot, { force: true, recursive: true });
+      rmSync(safeRoot, { force: true, recursive: true });
     }
   }, 120_000);
 

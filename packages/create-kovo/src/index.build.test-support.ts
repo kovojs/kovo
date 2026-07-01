@@ -937,7 +937,8 @@ export function addRuntimeContractProofs(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
-export function addAuthSecretLeakProof(root: string): void {
+export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boolean } = {}): void {
+  const leakToWire = options.leakToWire ?? true;
   const queriesPath = join(root, 'src/queries.ts');
   const queries = readFileSync(queriesPath, 'utf8')
     .replace(
@@ -987,29 +988,41 @@ export function addAuthSecretLeakProof(root: string): void {
         '    const wrapCredential = (value: string | null) => value;',
         '    const secretRows = await db',
         '      .select({',
-        '        accessToken: account.accessToken,',
         '        id: account.id,',
-        '        password: account.password,',
+        ...(leakToWire
+          ? ['        accessToken: account.accessToken,', '        password: account.password,']
+          : []),
         '      })',
         '      .from(account)',
         '      .where(eq(account.userId, userId));',
-        '    const secretById = new Map<string, { accessToken: string | null; password: string | null }>();',
-        '    function rememberCredentials(',
-        '      rows: Array<{ accessToken: string | null; id: string; password: string | null }>,',
-        '    ) {',
-        '      rows.forEach((secretRow) => {',
-        '        secretById.set(secretRow.id, {',
-        '          accessToken: JSON.stringify({ value: `${wrapCredential(secretRow.accessToken) ?? ""}` }),',
-        '          password: wrapCredential(secretRow.password),',
-        '        });',
-        '      });',
-        '    }',
-        '    rememberCredentials(secretRows);',
+        leakToWire
+          ? [
+              '    const secretById = new Map<string, { accessToken: string | null; password: string | null }>();',
+              '    function rememberCredentials(',
+              '      rows: Array<{ accessToken: string | null; id: string; password: string | null }>,',
+              '    ) {',
+              '      rows.forEach((secretRow) => {',
+              '        secretById.set(secretRow.id, {',
+              '          accessToken: JSON.stringify({ value: `${wrapCredential(secretRow.accessToken) ?? ""}` }),',
+              '          password: wrapCredential(secretRow.password),',
+              '        });',
+              '      });',
+              '    }',
+              '    rememberCredentials(secretRows);',
+            ].join('\n')
+          : [
+              '    const serverOnlyCredentialCount = secretRows.length;',
+              '    if (serverOnlyCredentialCount > 10) await Promise.resolve(wrapCredential(String(serverOnlyCredentialCount)));',
+            ].join('\n'),
         '    return {',
-        '      items: items.map((item) => ({',
-        '        ...item,',
-        '        ...(secretById.get(item.id) ?? {}),',
-        '      })),',
+        leakToWire
+          ? [
+              '      items: items.map((item) => ({',
+              '        ...item,',
+              '        ...(secretById.get(item.id) ?? {}),',
+              '      })),',
+            ].join('\n')
+          : '      items,',
         '    };',
         '  },',
         '});',
