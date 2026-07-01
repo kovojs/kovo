@@ -601,21 +601,40 @@ function replaceIdentifierReferences(
 
 function parenthesizeForReplacement(expression: string): string {
   const trimmed = expression.trim();
-  return isOuterParenthesizedExpression(trimmed) ? trimmed : `(${trimmed})`;
+  return hasSingleOuterParentheses(trimmed) ? trimmed : `(${trimmed})`;
 }
 
-function isOuterParenthesizedExpression(expression: string): boolean {
-  const sourceFile = ts.createSourceFile(
-    'kovo-reactive-alias-expression.ts',
-    `const __kovoReactiveAlias = ${expression};`,
+function hasSingleOuterParentheses(expression: string): boolean {
+  const scanner = ts.createScanner(
     ts.ScriptTarget.Latest,
     true,
+    ts.LanguageVariant.Standard,
+    expression,
     ts.ScriptKind.TS,
   );
-  const statement = sourceFile.statements[0];
-  if (!statement || !ts.isVariableStatement(statement)) return false;
-  const declaration = statement.declarationList.declarations[0];
-  return !!declaration?.initializer && ts.isParenthesizedExpression(declaration.initializer);
+  let depth = 0;
+  let sawFirstToken = false;
+  let sawOuterClose = false;
+  let token = scanner.scan();
+  while (token !== ts.SyntaxKind.EndOfFileToken) {
+    if (!sawFirstToken) {
+      sawFirstToken = true;
+      if (token !== ts.SyntaxKind.OpenParenToken) return false;
+      depth = 1;
+      token = scanner.scan();
+      continue;
+    }
+    if (sawOuterClose) return false;
+    if (token === ts.SyntaxKind.OpenParenToken) {
+      depth += 1;
+    } else if (token === ts.SyntaxKind.CloseParenToken) {
+      depth -= 1;
+      if (depth === 0) sawOuterClose = true;
+      if (depth < 0) return false;
+    }
+    token = scanner.scan();
+  }
+  return sawOuterClose && depth === 0;
 }
 
 function isReferenceIdentifierToken(expression: string, start: number): boolean {
