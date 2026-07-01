@@ -102,4 +102,33 @@ describe('create-kovo starter (build integration: production raw-SQL artifacts)'
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
+
+  it('blocks trusted SQLite raw-SQL table drift before production artifact emission', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-runtime-sql-allowlist-'));
+
+    try {
+      writeKovoProject(root, {
+        dialect: 'sqlite',
+        name: 'Prod SQLite Runtime SQL Allowlist Proof',
+      });
+      linkStarterBuildDependencies(root);
+      addRuntimeMutationSafetyProofs(root, { includeRawTableDrift: true });
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail for SQLite raw table drift.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('kovo build check preflight failed');
+        expect(output).toContain('KV406');
+        expect(output).toContain('KV438');
+        expect(output).toContain('runtime-safety-proofs/raw-table-drift');
+        expect(output).toContain('raw SQL statement cannot prove governed value provenance');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
 });

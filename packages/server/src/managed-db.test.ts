@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { KovoReadonlyHandleError, managedDb, readonlyDb } from './managed-db.js';
 import type { Reader } from './managed-db.js';
-import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
 import { domain } from './domain.js';
@@ -253,6 +252,46 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       }),
     ).toThrow(KovoReadonlyHandleError);
     expect(log).toEqual([]);
+  });
+
+  it.each([
+    {
+      create(log: string[]) {
+        return readonlyDb(fakeDb(log));
+      },
+      name: 'readonlyDb',
+    },
+    {
+      create(log: string[]) {
+        return managedDb(fakeDb(log), 'read', { sqlWritePolicy: { dialect: 'sqlite' } });
+      },
+      name: "managedDb('read')",
+    },
+  ])('$name rejects SQLite write-shaped reads and still permits reads', async ({ create }) => {
+    const log: string[] = [];
+    const handle = create(log);
+
+    for (const verb of ['all', 'get', 'values'] as const) {
+      expect(() =>
+        (handle as unknown as Record<typeof verb, (statement: unknown) => unknown>)[verb](
+          stampTrustedSql(
+            { sql: 'insert into products (id) values (?) returning id', values: ['p1'] },
+            `${verb} read-handle write attempt`,
+          ),
+        ),
+      ).toThrow(KovoReadonlyHandleError);
+    }
+    expect(() =>
+      (
+        handle as unknown as { transaction(callback: (tx: unknown) => unknown): unknown }
+      ).transaction(() => {
+        log.push('transaction-callback-entered');
+      }),
+    ).toThrow(KovoReadonlyHandleError);
+
+    const rows = await (handle as unknown as ReturnType<typeof fakeDb>).select().from('products');
+    expect(rows).toEqual([{ id: 'p1' }]);
+    expect(log).toEqual(['select:products']);
   });
 
   it('read mode denies raw driver escape properties instead of exposing them', () => {
@@ -516,88 +555,129 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['$client.futureStatement']);
   });
 
-  it('statement-parses pglite-like, better-sqlite3-like, and future driver methods', async () => {
-    const log: string[] = [];
-    const pglite = managedDb(
-      {
-        query(statement: unknown) {
-          log.push('pglite.query');
-          return statement;
-        },
+  it.each([
+    {
+      dialect: undefined,
+      log: 'pglite.query',
+      method: 'query',
+      name: 'pglite query',
+      read: { text: 'select id from products where id = $1', values: ['p1'] },
+      rawDb(log: string[]) {
+        return {
+          query(statement: unknown) {
+            log.push('pglite.query');
+            return statement;
+          },
+        };
       },
-      'write',
-      { sqlWritePolicy: { tables: ['products'], touches: ['product'] } },
-    );
-    const sqlite = managedDb(
-      {
-        all(statement: unknown) {
-          log.push('sqlite.all');
-          return statement;
-        },
-        get(statement: unknown) {
-          log.push('sqlite.get');
-          return statement;
-        },
-        run(statement: unknown) {
-          log.push('sqlite.run');
-          return statement;
-        },
+      write: { text: 'update users set name = $1 where id = $2', values: ['Ada', 'u1'] },
+    },
+    {
+      dialect: 'sqlite' as const,
+      log: 'sqlite.run',
+      method: 'run',
+      name: 'better-sqlite3 run',
+      read: { sql: 'select id from products where id = ?', values: ['p1'] },
+      rawDb(log: string[]) {
+        return {
+          run(statement: unknown) {
+            log.push('sqlite.run');
+            return statement;
+          },
+        };
       },
-      'write',
-      { sqlWritePolicy: { dialect: 'sqlite', tables: ['products'], touches: ['product'] } },
-    );
-    const future = wrapManagedDbForSqlSafety(
-      {
-        futureStatement(statement: unknown) {
-          log.push('future.futureStatement');
-          return statement;
-        },
+      write: { sql: 'delete from users where id = ?', values: ['u1'] },
+    },
+    {
+      dialect: 'sqlite' as const,
+      log: 'sqlite.get',
+      method: 'get',
+      name: 'better-sqlite3 get',
+      read: { sql: 'select id from products where id = ?', values: ['p1'] },
+      rawDb(log: string[]) {
+        return {
+          get(statement: unknown) {
+            log.push('sqlite.get');
+            return statement;
+          },
+        };
       },
-      undefined,
-      { capability: 'write', tables: ['products'], touches: ['product'] },
-    );
+      write: { sql: 'insert into users (id) values (?)', values: ['u1'] },
+    },
+    {
+      dialect: 'sqlite' as const,
+      log: 'sqlite.all',
+      method: 'all',
+      name: 'better-sqlite3 all',
+      read: { sql: 'select id from products where id = ?', values: ['p1'] },
+      rawDb(log: string[]) {
+        return {
+          all(statement: unknown) {
+            log.push('sqlite.all');
+            return statement;
+          },
+        };
+      },
+      write: { sql: 'update users set name = ? where id = ?', values: ['Ada', 'u1'] },
+    },
+    {
+      dialect: 'sqlite' as const,
+      log: 'sqlite.values',
+      method: 'values',
+      name: 'better-sqlite3 values',
+      read: { sql: 'select id from products where id = ?', values: ['p1'] },
+      rawDb(log: string[]) {
+        return {
+          values(statement: unknown) {
+            log.push('sqlite.values');
+            return statement;
+          },
+        };
+      },
+      write: { sql: 'replace into users (id, name) values (?, ?)', values: ['u1', 'Ada'] },
+    },
+    {
+      dialect: undefined,
+      log: 'future.futureStatement',
+      method: 'futureStatement',
+      name: 'unknown future method',
+      read: { text: 'select id from products where id = $1', values: ['p1'] },
+      rawDb(log: string[]) {
+        return {
+          futureStatement(statement: unknown) {
+            log.push('future.futureStatement');
+            return statement;
+          },
+        };
+      },
+      write: { text: 'insert into users (id) values ($1)', values: ['u1'] },
+    },
+  ])(
+    '$name rejects raw strings and cross-table writes before execution',
+    async ({ dialect, log: expectedLog, method, read, rawDb, write }) => {
+      const log: string[] = [];
+      const handle = managedDb(rawDb(log), 'write', {
+        sqlWritePolicy: {
+          ...(dialect === undefined ? {} : { dialect }),
+          tables: ['products'],
+          touches: ['product'],
+        },
+      }) as Record<string, (statement: unknown) => unknown>;
 
-    expect(() => pglite.query('select * from products')).toThrow(/KV422/);
-    expect(() => sqlite.all('select * from products')).toThrow(/KV422/);
-    expect(() => future.futureStatement('select * from products')).toThrow(/KV422/);
-    expect(log).toEqual([]);
+      const execute = (statement: unknown) => handle[method]!(statement);
 
-    expect(
-      pglite.query({ text: 'select id from products where id = $1', values: ['p1'] }),
-    ).toMatchObject({ text: 'select id from products where id = $1' });
-    expect(
-      sqlite.get({ sql: 'select id from products where id = ?', values: ['p1'] }),
-    ).toMatchObject({ sql: 'select id from products where id = ?' });
-    expect(
-      future.futureStatement({ text: 'select id from products where id = $1', values: ['p1'] }),
-    ).toMatchObject({ text: 'select id from products where id = $1' });
+      expect(() => execute('select id from products')).toThrow(/KV422/);
+      expect(log).toEqual([]);
 
-    expect(() =>
-      pglite.query(
-        stampTrustedSql(
-          { text: 'update users set name = $1 where id = $2', values: ['Ada', 'u1'] },
-          'drifted pglite update',
-        ),
-      ),
-    ).toThrow(/KV406/);
-    expect(() =>
-      sqlite.run(
-        stampTrustedSql(
-          { sql: 'delete from users where id = ?', values: ['u1'] },
-          'drifted sqlite delete',
-        ),
-      ),
-    ).toThrow(/KV406/);
-    expect(() =>
-      future.futureStatement(
-        stampTrustedSql(
-          { text: 'insert into users (id) values ($1)', values: ['u1'] },
-          'drifted future insert',
-        ),
-      ),
-    ).toThrow(/KV406/);
-    expect(log).toEqual(['pglite.query', 'sqlite.get', 'future.futureStatement']);
-  });
+      await expect(Promise.resolve(execute(read))).resolves.toMatchObject(read);
+      expect(log).toEqual([expectedLog]);
+
+      expect(() =>
+        execute(stampTrustedSql(write, `drifted ${method} write outside declared tables`)),
+      ).toThrow(/KV406/);
+      expect(log).toEqual([expectedLog]);
+    },
+  );
 });
 
 describe('query loader threading (the chokepoint)', () => {

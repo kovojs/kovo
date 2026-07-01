@@ -19,6 +19,27 @@ import {
   buildProductionArtifact,
 } from './index.build.test-support.js';
 
+interface ReadonlyAttemptResponse {
+  blocked: boolean;
+  message?: string;
+  results?: Array<{ blocked: boolean; message: string; method: string }>;
+}
+
+async function expectReadonlyAttemptBlocked(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/readonly-mutation-attempt`);
+  expect(response.status).toBe(200);
+  const readonlyAttempt = (await response.json()) as ReadonlyAttemptResponse;
+
+  expect(readonlyAttempt).toMatchObject({ blocked: true });
+  expect(readonlyAttempt.message).toMatch(/read-only|readonly|KV433|loader cannot access/iu);
+  expect(readonlyAttempt.results).toEqual([
+    expect.objectContaining({ blocked: true, method: 'all' }),
+    expect.objectContaining({ blocked: true, method: 'get' }),
+    expect.objectContaining({ blocked: true, method: 'values' }),
+    expect.objectContaining({ blocked: true, method: 'transaction' }),
+  ]);
+}
+
 describe('create-kovo starter (build integration: production transaction artifacts)', () => {
   it('rolls back default mutation transactions in the production build artifact', async () => {
     const tempParent = tmpdir();
@@ -53,14 +74,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       };
       expect(before.count).toBe(0);
 
-      const readonlyAttempt = (await (
-        await fetch(`${origin}/api/readonly-mutation-attempt`)
-      ).json()) as {
-        blocked: boolean;
-        message?: string;
-      };
-      expect(readonlyAttempt).toMatchObject({ blocked: true });
-      expect(readonlyAttempt.message).toMatch(/read-only|readonly|KV433|loader cannot access/iu);
+      await expectReadonlyAttemptBlocked(origin);
       const afterReadonlyAttempt = (await (
         await fetch(`${origin}/api/raw-runtime-drift-count`)
       ).json()) as {
@@ -126,14 +140,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       };
       expect(positiveRead.count).toBe(0);
 
-      const readonlyAttempt = (await (
-        await fetch(`${origin}/api/readonly-mutation-attempt`)
-      ).json()) as {
-        blocked: boolean;
-        message?: string;
-      };
-      expect(readonlyAttempt).toMatchObject({ blocked: true });
-      expect(readonlyAttempt.message).toMatch(/read-only|readonly|KV433|loader cannot access/iu);
+      await expectReadonlyAttemptBlocked(origin);
 
       const afterReadonlyAttempt = (await (
         await fetch(`${origin}/api/raw-runtime-drift-count`)
