@@ -119,6 +119,28 @@ const jsToTsSiblingProofNeedle = `    requiredProofFileNeedles: ["import * as sa
 
 const weakenedJsToTsSiblingProofNeedle = `    requiredProofFileNeedles: ["import * as safeHtml from './safe-html';"],`;
 
+const kv311IslandDeriveProofEnrollmentBranch = [
+  "    claimId: 'island-derive-prod-artifact',",
+  "    code: 'KV311',",
+  "    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',",
+  '    requiredNeedles: [',
+  "      'buildProductionArtifact(root)',",
+  "      'assertProdArtifactSinkCensus(root',",
+  "      'expect(pageErrors).toEqual([])',",
+  "      'expect(consoleErrors).toEqual([])',",
+  '    ],',
+].join('\n');
+
+const weakenedKv311IslandDeriveProofEnrollmentBranch = [
+  "    claimId: 'island-derive-prod-artifact',",
+  "    code: 'KV311',",
+  "    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',",
+  '    requiredNeedles: [',
+  "      'buildProductionArtifact(root)',",
+  "      'expect(pageErrors).toEqual([])',",
+  '    ],',
+].join('\n');
+
 const productionBuildInvocationBranch = [
   '  if (!testBlockHasBuildInvocation(testBlock, proof.buildInvocation)) {',
   '    violations.push(',
@@ -360,6 +382,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: jsToTsSiblingProofNeedle,
     sourceFile: securityTestBuildGatePath,
     test: assertJsToTsSiblingProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Weakens the KV311 island-derive proof enrollment so it no longer pins sink-census and console-error evidence.',
+    expectedKiller:
+      'KV311 island-derive production proof enrollment must retain artifact census plus no-console-error evidence',
+    name: 'security-test-build-gate/weaken-kv311-island-derive-proof-enrollment',
+    replacement: weakenedKv311IslandDeriveProofEnrollmentBranch,
+    search: kv311IslandDeriveProofEnrollmentBranch,
+    sourceFile: securityTestBuildGatePath,
+    test: assertKv311IslandDeriveProofEnrollmentIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -760,6 +794,28 @@ async function assertJsToTsSiblingProofEnrollmentIsPinned(moduleUnderTest) {
         needle,
       )}`,
     );
+  }
+}
+
+async function assertKv311IslandDeriveProofEnrollmentIsPinned(moduleUnderTest) {
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV311' &&
+      candidate.claimId === 'island-derive-prod-artifact' &&
+      candidate.proofFile ===
+        'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+  );
+  if (!proof) throw new Error('KV311 island-derive production artifact proof is not enrolled');
+  const needles = [
+    'buildProductionArtifact(root)',
+    'assertProdArtifactSinkCensus(root',
+    'expect(pageErrors).toEqual([])',
+    'expect(consoleErrors).toEqual([])',
+  ];
+  for (const needle of needles) {
+    if (!proof.requiredNeedles?.includes(needle)) {
+      throw new Error(`KV311 island-derive proof must require ${JSON.stringify(needle)}`);
+    }
   }
 }
 

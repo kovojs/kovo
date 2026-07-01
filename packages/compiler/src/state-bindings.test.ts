@@ -875,6 +875,18 @@ export const StateRestDestructureAlias = component({
 });
 `,
     });
+    const defaults = compileComponentModule({
+      fileName: 'state-default-destructure-alias.tsx',
+      source: `
+export const StateDefaultDestructureAlias = component({
+  state: () => ({ count: undefined }),
+  render: (_queries, state) => {
+    const { count = 5 } = state;
+    return <state-default-destructure-alias><p>{count}</p></state-default-destructure-alias>;
+  },
+});
+`,
+    });
 
     expect(dynamic.files[1]?.source ?? '').not.toContain('value');
     expect(dynamic.diagnostics).toEqual(
@@ -891,6 +903,16 @@ export const StateRestDestructureAlias = component({
         expect.objectContaining({
           code: 'KV311',
           message: expect.stringContaining('StateRestDestructureAlias state.items expression'),
+        }),
+      ]),
+    );
+    expect(defaults.files[1]?.source ?? '').not.toContain('state.count');
+    expect(defaults.files[1]?.source ?? '').not.toContain('count = 5');
+    expect(defaults.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV311',
+          message: expect.stringContaining('StateDefaultDestructureAlias state.count expression'),
         }),
       ]),
     );

@@ -440,6 +440,23 @@ describe('security-test-build-gate', () => {
       ]),
     });
   });
+
+  it('keeps the KV311 island-derive proof enrolled in the production artifact gate', () => {
+    expect(
+      SECURITY_BUILD_PROOFS.find(
+        (proof) => proof.code === 'KV311' && proof.claimId === 'island-derive-prod-artifact',
+      ),
+    ).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+      requiredNeedles: expect.arrayContaining([
+        'buildProductionArtifact(root)',
+        'assertProdArtifactSinkCensus(root',
+        'expect(pageErrors).toEqual([])',
+        'expect(consoleErrors).toEqual([])',
+      ]),
+    });
+  });
 });
 
 function withTempRepo(callback) {

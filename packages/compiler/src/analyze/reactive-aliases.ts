@@ -266,6 +266,13 @@ function bindingPatternAliases(
       ? { kind: 'property', value: propertyName }
       : { kind: 'index', value: propertyName };
     const path = [...prefix, segment];
+    if (element.initializer) {
+      const accessPaths = initializerExpression
+        ? [bindingPathAccessPath(initializerExpression.accessPath, path)]
+        : fallbackAccessPaths;
+      aliases.push(...unresolvedBindingAliases(sourceFile, element.name, references, accessPaths));
+      continue;
+    }
     if (ts.isIdentifier(element.name)) {
       const name = element.name.text;
       if (!references.has(name)) continue;
