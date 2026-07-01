@@ -300,7 +300,7 @@ packages/drizzle/src/index.query-loader-receivers.test.ts packages/cli/src/index
 ## Latest verification
 
 - Inventory is now reproducible: `node scripts/fundamental-fixes-inventory.mjs` scans production
-  compiler/drizzle sources and reports 53 literal/import syntactic candidates, 1,769 AST-kind gates, and
+  compiler/drizzle sources and reports 57 literal/import syntactic candidates, 1,794 AST-kind gates, and
   93 KV406/fail-closed sites. Verified with
   `vp exec vitest --run scripts/fundamental-fixes-inventory.test.mjs` and `pnpm run check:vp`.
 - Integrated Phase 0 foundation plus first B/D/F/G slices on
@@ -341,3 +341,11 @@ packages/compiler/src/output-context-trusted-brand-identity.test.ts
 packages/compiler/src/query-coverage.test.ts
 packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `pnpm run check:vp`; and
   `git diff --check`.
+- Integrated Drizzle identity/metamorphic slice: declared `domain`/`tag` reads, trust-escape collection,
+  SQL projection/arithmetic recognition, and simple local `query(...)` wrapper helpers now route through
+  resolver-backed identity or fail closed; KV414/KV435/KV407 wrapper-helper metamorphic variants are
+  enforced. Verified with `vp exec vitest --run packages/drizzle/src/trust-escapes-static.test.ts
+packages/drizzle/src/index.query-shapes.test.ts
+packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `vp exec vitest --run
+packages/drizzle/src/index.recognizer-alias-bugz3.test.ts packages/drizzle/src/raw-sql-static.test.ts`;
+  and `pnpm run check:vp`.
