@@ -152,6 +152,65 @@ describe('Defer JSX primitive', () => {
     ]);
   });
 
+  it('keeps deferred render errors and raw sibling output out of streamed markup', async () => {
+    const collector = createDeferredRegionChunkCollector();
+    const payload = '<img src=x onerror=alert(1)>';
+
+    const shell = await html(
+      runWithJsxRequestContext({}, { deferredRegions: collector }, () =>
+        jsx('main', {
+          children: [
+            Defer({
+              fallback: ['Loading ', payload],
+              priority: 'after-paint',
+              render: () => {
+                throw new Error(`private deferred detail ${payload}`);
+              },
+              target: 'unsafe-region',
+            }),
+            Defer({
+              fallback: 'Loading sibling',
+              priority: 'after-paint',
+              render: () => '<strong>raw sibling</strong>',
+              target: 'safe-sibling',
+            }),
+          ],
+        }),
+      ),
+    );
+
+    expect(shell).toContain('Loading &lt;img src=x onerror=alert(1)&gt;');
+    expect(shell).not.toContain(payload);
+
+    const chunks = await collector.chunks();
+    const serialized = JSON.stringify(chunks);
+
+    expect(serialized).not.toContain('private deferred detail');
+    expect(serialized).not.toContain(payload);
+    expect(chunks).toEqual([
+      {
+        fragments: [
+          {
+            html: '<kovo-defer target="unsafe-region" state="error" data-kovo-region-priority="after-paint">Loading &lt;img src=x onerror=alert(1)&gt;</kovo-defer>',
+            priority: 'normal',
+            target: 'unsafe-region',
+          },
+        ],
+        priority: 'normal',
+      },
+      {
+        fragments: [
+          {
+            html: '&lt;strong&gt;raw sibling&lt;/strong&gt;',
+            priority: 'normal',
+            target: 'safe-sibling',
+          },
+        ],
+        priority: 'normal',
+      },
+    ]);
+  });
+
   it('bounds a hung deferred region with a per-region timeout', async () => {
     vi.useFakeTimers();
     const collector = createDeferredRegionChunkCollector();
