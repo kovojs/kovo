@@ -294,9 +294,9 @@ packages/drizzle/src/index.query-loader-receivers.test.ts packages/cli/src/index
 ## Latest verification
 
 - Inventory is now reproducible: `node scripts/fundamental-fixes-inventory.mjs` scans production
-  compiler/drizzle sources and reports 79 literal/import syntactic candidates, 1,747 AST-kind gates, and
-  92 KV406/fail-closed sites. Verified with
-  `pnpm exec vitest --run scripts/fundamental-fixes-inventory.test.mjs` and `pnpm run check:vp`.
+  compiler/drizzle sources and reports 53 literal/import syntactic candidates, 1,769 AST-kind gates, and
+  93 KV406/fail-closed sites. Verified with
+  `vp exec vitest --run scripts/fundamental-fixes-inventory.test.mjs` and `pnpm run check:vp`.
 - Integrated Phase 0 foundation plus first B/D/F/G slices on
   `agent/implement-fundamental-fixes-20260630-171240`. Latest checks: `pnpm run check:vp`;
   `pnpm run check:api-surface`; focused Drizzle identity/KV435 suites; focused server runtime/prod-artifact
@@ -327,3 +327,11 @@ packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test
   framework identity resolver for aliases, namespace imports, destructuring, package subpaths, and
   local lookalikes across the migrated compiler/static gates. Verified with Curie's focused
   compiler/server suite; `pnpm run check:api-surface`; `pnpm run check:vp`; and `git diff --check`.
+- Integrated KV426/KV311 metamorphic slice: trusted HTML provenance now catches namespace, local-alias,
+  and same-file direct wrapper-helper variants; query update coverage now follows same-render destructured
+  fields and wrapper/helper aliases. Verified with `vp exec vitest --run
+  packages/compiler/src/trusted-html-provenance.test.ts
+  packages/compiler/src/output-context-trusted-brand-identity.test.ts
+  packages/compiler/src/query-coverage.test.ts
+  packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `pnpm run check:vp`; and
+  `git diff --check`.
