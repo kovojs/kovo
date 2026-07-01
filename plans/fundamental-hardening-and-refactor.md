@@ -183,12 +183,13 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     fail-closed machine (`replay.ts` / `mutation.ts:1143-1250`); the `Cache-Control: private, no-store` + `Content-Type`
     webhook floor is inlined 5× (`webhook.ts:962,997,1013,1024,1034`).
   - Fix: lift the reservation into `replay.ts` (parameterized by store shape); add one `webhookResponse(...)` builder owning the floor.
-- [ ] **S2 — De-duplicate the Node⇄Web HTTP adapter (Set-Cookie parity).** (M · med)
+- [x] **S2 — De-duplicate the Node⇄Web HTTP adapter (Set-Cookie parity).** (M · med)
   - Problem: live `node.ts:344` (with `getSetCookie()` splitting + HTTP/2 pseudo-header rationale) vs the string-emitted
     copy in `nodeAdapterRuntimeSource()` `build.ts:606` (already diverged: `build.ts:713` guards `typeof
 headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev.ts imports node.ts) and every prod
     preset run different physical copies of the header bridge.
   - Fix: generate the emitted adapter from the same source, or add a parity test asserting Set-Cookie + pseudo-header agreement.
+  - Evidence: `pnpm exec vitest --run packages/server/src/node.test.ts packages/server/src/build.test.ts`, `vp check packages/server/src/build.ts packages/server/src/build.test.ts`, and `git diff --check HEAD~1..HEAD` passed after the emitted Node/Vercel adapter tests asserted live parity for multi-value `Set-Cookie`, HTTP/2 pseudo-header URL fallback, and pseudo-header filtering.
 - [ ] **G2 + J.3 — SQL oracle + validate J (DEC3, M12).**
   - Add `packages/server/src/sql-write-oracle.ts` (execute-and-diff-in-transaction; pglite + better-sqlite3) and
     `sql-write-allowlist.oracle.test.ts` cross-checking `writeTablesForStatement` vs the oracle over the DDL corpus,

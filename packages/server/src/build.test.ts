@@ -1,10 +1,14 @@
+import { EventEmitter } from 'node:events';
 import { mkdir, mkdtemp, readdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import {
   createServer as createHttpServer,
   request as nodeHttpRequest,
   type IncomingHttpHeaders,
+  type IncomingMessage,
   type Server,
+  type ServerResponse,
 } from 'node:http';
+import type { Socket } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -18,6 +22,10 @@ import { route } from './route.js';
 import { cloudflare, node, vercel } from './build.js';
 import { stylesheet, type StylesheetAsset } from './hints.js';
 import { writeKovoNeutralBuild } from './neutral-build.js';
+import {
+  nodeRequestToWebRequest as liveNodeRequestToWebRequest,
+  writeWebResponseToNode as liveWriteWebResponseToNode,
+} from './node.js';
 import { query } from './query.js';
 import { s } from './schema.js';
 import { task } from './api/data.js';
@@ -27,6 +35,19 @@ const runtimeClientModuleFile = /^c\/__v\/[^/]+\/kovo-runtime\.client\.js$/;
 const testRenderPlanFingerprint = computeRenderPlanFingerprint({
   test: 'field:id',
 });
+
+interface NodeAdapterModule {
+  nodeRequestToWebRequest(
+    request: IncomingMessage,
+    options?: { trustedProxy?: boolean },
+    response?: ServerResponse,
+  ): Request;
+  writeWebResponseToNode(
+    response: Response,
+    nodeResponse: ServerResponse,
+    method?: string,
+  ): Promise<void>;
+}
 
 describe('server build-time deployment API', () => {
   it('exposes the build subpath without promoting it to the runtime root', () => {
@@ -819,7 +840,11 @@ export default async function handler(request) {
       const nodeAdapter = await readFile(join(nodeOutDir, 'node-adapter.mjs'), 'utf8');
       expect(nodeAdapter).toContain('export function nodeRequestToWebRequest');
       expect(nodeAdapter).toContain('export async function writeWebResponseToNode');
+      expect(nodeAdapter).toContain('const setCookies = headers.getSetCookie();');
+      expect(nodeAdapter).not.toContain('typeof headers.getSetCookie');
       expect(nodeAdapter).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(nodeAdapter).toContain(':authority');
+      expect(nodeAdapter).toContain("name.startsWith(':')");
       expect(nodeAdapter).toContain('signal: controller.signal');
       expect(nodeAdapter).toContain('nodeRequest.socket?.remoteAddress?.trim()');
       expect(nodeAdapter).toContain("'__kovoPeerAddress'");
@@ -835,6 +860,11 @@ export default async function handler(request) {
       const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
         createKovoNodeServer(): Server;
       };
+      const emittedNodeAdapter = (await import(
+        `${pathToFileURL(join(nodeOutDir, 'node-adapter.mjs')).href}?t=${Date.now()}`
+      )) as NodeAdapterModule;
+      await expectEmittedAdapterParity(emittedNodeAdapter);
+
       const server = serverModule.createKovoNodeServer();
       expect(server.headersTimeout).toBe(10_000);
       expect(server.requestTimeout).toBe(30_000);
@@ -1115,7 +1145,11 @@ export default async function handler(request) {
       );
       expect(vercelAdapter).toContain('export function nodeRequestToWebRequest');
       expect(vercelAdapter).toContain('export async function writeWebResponseToNode');
+      expect(vercelAdapter).toContain('const setCookies = headers.getSetCookie();');
+      expect(vercelAdapter).not.toContain('typeof headers.getSetCookie');
       expect(vercelAdapter).toContain("nodeHeaders['set-cookie'] = setCookies");
+      expect(vercelAdapter).toContain(':authority');
+      expect(vercelAdapter).toContain("name.startsWith(':')");
       expect(vercelAdapter).toContain('signal: controller.signal');
       expect(vercelAdapter).toContain('nodeRequest.socket?.remoteAddress?.trim()');
       expect(vercelAdapter).toContain("'__kovoPeerAddress'");
@@ -1197,6 +1231,11 @@ export default async function handler(request) {
       )) as {
         default: (request: unknown, response: unknown) => void;
       };
+      const emittedVercelAdapter = (await import(
+        `${pathToFileURL(join(vercelOutDir, 'functions/kovo.func/node-adapter.mjs')).href}?t=${Date.now()}`
+      )) as NodeAdapterModule;
+      await expectEmittedAdapterParity(emittedVercelAdapter);
+
       const server = createHttpServer(functionModule.default);
       const baseUrl = await listen(server);
 
@@ -1885,6 +1924,69 @@ function withNoStylesheetCallerFile<T>(callback: () => T): T {
   } finally {
     Error.prepareStackTrace = previous;
   }
+}
+
+async function expectEmittedAdapterParity(adapter: NodeAdapterModule): Promise<void> {
+  const liveRequest = liveNodeRequestToWebRequest(adapterParityRequest(), { trustedProxy: true });
+  const emittedRequest = adapter.nodeRequestToWebRequest(adapterParityRequest(), {
+    trustedProxy: true,
+  });
+
+  // SPEC §9.5: the live and emitted Node adapters must agree on the HTTP/2 compat header
+  // bridge. Pseudo-headers are URL inputs only; they must never be copied into Web Headers.
+  expect(emittedRequest.url).toBe(liveRequest.url);
+  expect(emittedRequest.headers.get('x-from-test')).toBe(liveRequest.headers.get('x-from-test'));
+  expect(emittedRequest.headers.get('host')).toBeNull();
+  expect(() => emittedRequest.headers.get(':authority')).toThrow();
+
+  const liveHeaders = await capturedNodeHeaders(liveWriteWebResponseToNode);
+  const emittedHeaders = await capturedNodeHeaders(adapter.writeWebResponseToNode);
+  expect(emittedHeaders).toEqual(liveHeaders);
+  expect(emittedHeaders['set-cookie']).toEqual([
+    'session=s1; Path=/; HttpOnly',
+    'csrf=c1; Path=/; SameSite=Strict',
+  ]);
+}
+
+function adapterParityRequest(): IncomingMessage {
+  const socket = Object.assign(new EventEmitter(), {
+    encrypted: false,
+    remoteAddress: '203.0.113.9',
+  }) as Socket & { encrypted?: boolean };
+  return Object.assign(new EventEmitter(), {
+    headers: {
+      ':authority': 'h2.example.test',
+      ':method': 'GET',
+      ':path': '/from-pseudo',
+      ':scheme': 'https',
+      'x-from-test': ['one', 'two'],
+    },
+    method: 'GET',
+    socket,
+    url: '/from-url?x=1',
+  }) as IncomingMessage;
+}
+
+async function capturedNodeHeaders(
+  writeWebResponseToNode: NodeAdapterModule['writeWebResponseToNode'],
+): Promise<Record<string, string | string[]>> {
+  const response = new Response(null, { status: 204 });
+  response.headers.append('set-cookie', 'session=s1; Path=/; HttpOnly');
+  response.headers.append('set-cookie', 'csrf=c1; Path=/; SameSite=Strict');
+  response.headers.set('x-from-test', 'kept');
+  let captured: Record<string, string | string[]> = {};
+  const nodeResponse = {
+    end() {
+      return this;
+    },
+    writeHead(_status: number, _statusText: string, headers: Record<string, string | string[]>) {
+      captured = headers;
+      return this;
+    },
+  } as unknown as ServerResponse;
+
+  await writeWebResponseToNode(response, nodeResponse, 'GET');
+  return captured;
 }
 
 async function readJson(filePath: string): Promise<unknown> {

@@ -680,6 +680,9 @@ function nodeRequestUrl(nodeRequest, options) {
 }
 
 function defaultOrigin(nodeRequest, options) {
+  // E2 (SPEC §9.5): under HTTP/2 the \`Host\` header is often absent — the authority lives in
+  // the \`:authority\` pseudo-header instead. Fall back to it (then \`:scheme\`) so URL resolution
+  // works for HTTP/2 requests, not just HTTP/1.1.
   const pseudoHeaders = nodeRequest.headers;
   const host = nodeRequest.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
   const forwardedProto = options.trustedProxy
@@ -698,6 +701,10 @@ function nodeHeadersToWebHeaders(nodeRequest) {
   const headers = new Headers();
   for (const [name, value] of Object.entries(nodeRequest.headers)) {
     if (value === undefined) continue;
+    // E2 (SPEC §9.5): under Node's HTTP/2 compat API \`nodeRequest.headers\` carries pseudo-headers
+    // (\`:path\`/\`:method\`/\`:authority\`/\`:scheme\`). The web \`Headers\` constructor throws on any
+    // name starting with \`:\`, so copying them unfiltered 500'd every HTTP/2 request. Skip them
+    // — they are addressed via \`nodeRequest.method\`/\`nodeRequest.url\`/the \`:authority\` URL fallback.
     if (name.startsWith(':')) continue;
     if (Array.isArray(value)) {
       for (const entry of value) headers.append(name, entry);
@@ -709,8 +716,11 @@ function nodeHeadersToWebHeaders(nodeRequest) {
 }
 
 function responseHeadersToNodeHeaders(headers) {
+  // SPEC §9.4/§9.1.1: Node's writeHead accepts string[] for multi-value headers.
+  // Headers.forEach combines set-cookie into one entry (comma-joined), so handle
+  // it separately via getSetCookie() which preserves each cookie as a distinct value.
   const nodeHeaders = {};
-  const setCookies = typeof headers.getSetCookie === 'function' ? headers.getSetCookie() : [];
+  const setCookies = headers.getSetCookie();
   if (setCookies.length > 0) nodeHeaders['set-cookie'] = setCookies;
   headers.forEach((value, name) => {
     if (name === 'set-cookie') return;
