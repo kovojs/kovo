@@ -39,11 +39,13 @@ import {
 import {
   BUILD_ARGV_SPEC,
   BUILD_USAGE,
+  commandArgvError,
   EXPORT_ARGV_SPEC,
   EXPORT_USAGE,
   parsedBooleanOption,
   parsedStringOption,
   parseCommandArgv,
+  requireSinglePositional,
 } from '../commands-manifest.js';
 import { kovoCheck } from '../graph-output.js';
 import {
@@ -53,6 +55,7 @@ import {
   stableText,
   stableValue,
 } from '../shared.js';
+import { findNearestFile, readJsonRecord } from '../tooling.js';
 
 const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 
@@ -126,11 +129,12 @@ export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
   const parsed = parseCommandArgv(args, BUILD_ARGV_SPEC);
   if (!parsed.ok) return buildArgvError(parsed);
 
-  const [appModulePath, extraPath] = parsed.value.positionals;
-  if (extraPath)
-    return { message: `kovo: build accepts one app module path.\n${buildUsage()}`, ok: false };
-  if (!appModulePath)
-    return { message: `kovo: build requires an app module path.\n${buildUsage()}`, ok: false };
+  const appModule = requireSinglePositional(parsed.value, {
+    label: 'app module path',
+    name: 'build',
+    usage: buildUsage(),
+  });
+  if (!appModule.ok) return appModule;
 
   const presetValue = parsedStringOption(parsed.value, '--preset');
   const preset = presetValue === undefined ? undefined : parseKovoBuildPresetName(presetValue);
@@ -141,7 +145,7 @@ export function parseBuildArgs(args: readonly string[]): BuildArgParseResult {
   return {
     ok: true,
     options: {
-      appModulePath,
+      appModulePath: appModule.value,
       cache: !parsedBooleanOption(parsed.value, '--no-cache'),
       check: parsedBooleanOption(parsed.value, '--check'),
       outDir: parsedStringOption(parsed.value, '--out') ?? 'dist',
@@ -154,12 +158,7 @@ function buildArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { ok
   message: string;
   ok: false;
 } {
-  if (error.error === 'help') return { message: buildUsage(), ok: false };
-  if (error.error === 'missing-value') return { message: error.message, ok: false };
-  return {
-    message: `kovo: unknown build option ${stableValue(error.option)}.\n${buildUsage()}`,
-    ok: false,
-  };
+  return commandArgvError('build', error, buildUsage());
 }
 
 function parseKovoBuildPresetName(value: string): KovoBuildPresetName | undefined {
@@ -174,11 +173,12 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   const parsed = parseCommandArgv(args, EXPORT_ARGV_SPEC);
   if (!parsed.ok) return exportArgvError(parsed);
 
-  const [appModulePath, extraPath] = parsed.value.positionals;
-  if (extraPath)
-    return { message: `kovo: export accepts one app module path.\n${exportUsage()}`, ok: false };
-  if (!appModulePath)
-    return { message: `kovo: export requires an app module path.\n${exportUsage()}`, ok: false };
+  const appModule = requireSinglePositional(parsed.value, {
+    label: 'app module path',
+    name: 'export',
+    usage: exportUsage(),
+  });
+  if (!appModule.ok) return appModule;
 
   const assetBase = parsedStringOption(parsed.value, '--asset-base');
   const distDir = parsedStringOption(parsed.value, '--dist');
@@ -194,7 +194,7 @@ export function parseExportArgs(args: readonly string[]): ExportArgParseResult {
   return {
     ok: true,
     options: {
-      appModulePath,
+      appModulePath: appModule.value,
       ...(assetBase === undefined ? {} : { assetBase }),
       ...(distDir === undefined ? {} : { distDir }),
       ...(manifestFile === undefined ? {} : { manifestFile }),
@@ -212,12 +212,7 @@ function exportArgvError(error: Exclude<ReturnType<typeof parseCommandArgv>, { o
   message: string;
   ok: false;
 } {
-  if (error.error === 'help') return { message: exportUsage(), ok: false };
-  if (error.error === 'missing-value') return { message: error.message, ok: false };
-  return {
-    message: `kovo: unknown export option ${stableValue(error.option)}.\n${exportUsage()}`,
-    ok: false,
-  };
+  return commandArgvError('export', error, exportUsage());
 }
 
 function exportUsage(): string {
@@ -913,24 +908,7 @@ function findBuildTsconfig(appModulePath: string): string | undefined {
   const relativeAppPath = relative(process.cwd(), appModulePath);
   if (relativeAppPath.split(/[\\/]/).some((part) => part.startsWith('.'))) return undefined;
 
-  return findNearestFileWithin(dirname(appModulePath), 'tsconfig.json', process.cwd());
-}
-
-function findNearestFileWithin(
-  startDir: string,
-  fileName: string,
-  stopDir: string,
-): string | undefined {
-  const absoluteStopDir = resolve(stopDir);
-  for (let current = resolve(startDir); ; current = dirname(current)) {
-    const relativeToStop = relative(absoluteStopDir, current);
-    if (relativeToStop.startsWith('..') || isAbsolute(relativeToStop)) return undefined;
-    const candidate = join(current, fileName);
-    if (existsSync(candidate)) return candidate;
-    if (current === absoluteStopDir) return undefined;
-    const parent = dirname(current);
-    if (parent === current) return undefined;
-  }
+  return findNearestFile(dirname(appModulePath), 'tsconfig.json', { stopDir: process.cwd() });
 }
 
 function isString(value: unknown): value is string {
@@ -1554,11 +1532,8 @@ function appWithBuildStylesheetAssets(app: KovoApp, assets: KovoBuildStylesheetA
 }
 
 function kovoClientBuildRoot(appModulePath: string): string {
-  for (let current = dirname(appModulePath); ; current = dirname(current)) {
-    if (existsSync(join(current, 'index.html'))) return current;
-    const parent = dirname(current);
-    if (parent === current) return process.cwd();
-  }
+  const indexHtml = findNearestFile(dirname(appModulePath), 'index.html');
+  return indexHtml === undefined ? process.cwd() : dirname(indexHtml);
 }
 
 async function bundleKovoServerHandler(
@@ -1924,7 +1899,13 @@ async function staticExportManifestPlan(options: KovoExportOptions): Promise<Exp
 
   const manifestFile = resolve(options.manifestFile);
   const distDir = resolve(options.distDir ?? dirname(manifestFile));
-  const manifest = exportManifestFromUnknown(JSON.parse(await readFile(manifestFile, 'utf8')));
+  const manifestRead = readJsonRecord(manifestFile);
+  if (!manifestRead.ok) {
+    throw new Error(
+      `Unable to read export manifest JSON ${manifestFile}: ${manifestRead.error.kind}`,
+    );
+  }
+  const manifest = exportManifestFromUnknown(manifestRead.value);
   const assets = new Map<string, { path: string; source: string }>();
   let stylesheetHref: string | undefined;
   let stylesheetCount = 0;

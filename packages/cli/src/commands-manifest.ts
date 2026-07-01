@@ -122,6 +122,35 @@ export type ParseCommandArgvResult =
   | { error: 'missing-value'; message: string; ok: false }
   | { error: 'unknown-option'; ok: false; option: string };
 
+/** @internal Check command flags consumed by `parseCheckArgs`. */
+export const CHECK_ARGV_SPEC = {
+  options: [],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Audit command flags consumed by `parseAuditArgs`. */
+export const AUDIT_ARGV_SPEC = {
+  options: [{ flag: '--fail-on-findings', kind: 'boolean' }],
+} as const satisfies CommandArgvSpec;
+
+/** @internal Explain command flags consumed by `parseExplainArgs`. */
+export const EXPLAIN_ARGV_SPEC = {
+  options: [
+    { flag: '--access', kind: 'boolean' },
+    { flag: '--capabilities', kind: 'boolean' },
+    { flag: '--cookies', kind: 'boolean' },
+    { flag: '--endpoints', kind: 'boolean' },
+    { flag: '--fail-on-findings', kind: 'boolean' },
+    { flag: '--layouts', kind: 'boolean' },
+    { flag: '--optimistic', kind: 'boolean' },
+    { flag: '--revealed', kind: 'boolean' },
+    { flag: '--sources-sinks', kind: 'boolean' },
+    { flag: '--tasks', kind: 'boolean' },
+    { flag: '--trust', kind: 'boolean' },
+    { flag: '--unguarded', kind: 'boolean' },
+    { flag: '--unscoped', kind: 'boolean' },
+  ],
+} as const satisfies CommandArgvSpec;
+
 /** @internal Add command flags consumed by `parseAddArgs`. */
 export const ADD_ARGV_SPEC = {
   options: [
@@ -760,6 +789,53 @@ export function parseCommandArgv(
   }
 
   return { ok: true, value: { options, positionals } };
+}
+
+/** @internal Render the common command-argv parser error shape. */
+export function commandArgvError(
+  name: string,
+  error: Exclude<ParseCommandArgvResult, { ok: true }>,
+  usage: string,
+): { message: string; ok: false } {
+  if (error.error === 'help') return { message: usage, ok: false };
+  if (error.error === 'missing-value') return { message: error.message, ok: false };
+  return {
+    message: `kovo: unknown ${name} option ${stableValue(error.option)}.\n${usage}`,
+    ok: false,
+  };
+}
+
+/** @internal Require a command to have exactly one positional argument. */
+export function requireSinglePositional(
+  parsed: ParsedCommandArgv,
+  options: {
+    label: string;
+    name: string;
+    usage: string;
+  },
+): { ok: true; value: string } | { message: string; ok: false } {
+  const [value, extra] = parsed.positionals;
+  if (extra) {
+    return {
+      message: `kovo: ${options.name} accepts one ${options.label}.\n${options.usage}`,
+      ok: false,
+    };
+  }
+  if (!value) {
+    return {
+      message: `kovo: ${options.name} requires ${articleFor(options.label)} ${options.label}.\n${options.usage}`,
+      ok: false,
+    };
+  }
+  return { ok: true, value };
+}
+
+function articleFor(label: string): 'a' | 'an' {
+  return /^[aeiou]/i.test(label) ? 'an' : 'a';
+}
+
+function stableValue(value: string | undefined): string {
+  return value === undefined ? '-' : JSON.stringify(value);
 }
 
 /** @internal True when a parsed boolean flag appeared. */

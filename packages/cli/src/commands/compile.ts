@@ -4,7 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, relative, resolve } from 'node:path';
-import { pathToFileURL } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import type {
   AlgebraicQueryShape,
@@ -37,10 +37,12 @@ import {
   COMPILE_ARGV_SPECS,
   COMPILE_USAGE,
   COMPILE_USAGE_LINE,
+  commandArgvError,
   parsedBooleanOption,
   parsedStringListOption,
   parsedStringOption,
   parseCommandArgv,
+  requireSinglePositional,
 } from '../commands-manifest.js';
 import { compileCachedComponentModule } from './mcp.js';
 import {
@@ -52,6 +54,7 @@ import {
   stableText,
   stableValue,
 } from '../shared.js';
+import { findNearestFile, isRecord, readJsonRecord } from '../tooling.js';
 
 const requireFromCli = createRequire(import.meta.url);
 const cliPackageManifest = readCliPackageManifest();
@@ -77,13 +80,11 @@ function readCliPackageManifest(): { version?: string } {
   ];
 
   for (const candidate of candidates) {
-    try {
-      return JSON.parse(readFileSync(candidate, 'utf8')) as { version?: string };
-    } catch (error) {
-      const code = (error as NodeJS.ErrnoException).code;
-      if (code === 'ENOENT' || code === 'ENOTDIR') continue;
-      throw error;
-    }
+    const read = readJsonRecord(fileURLToPath(candidate));
+    if (!read.ok && read.error.kind === 'not-found') continue;
+    if (!read.ok)
+      throw new Error(`Unable to read @kovojs/cli package manifest: ${read.error.kind}`);
+    return read.value;
   }
 
   return {};
@@ -92,10 +93,6 @@ function readCliPackageManifest(): { version?: string } {
 export const addCommandShell = {
   execFileSync,
 };
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
 
 interface AddComponentOptions {
   components: readonly AddComponentName[];
@@ -340,9 +337,11 @@ function missingAddPackageDependencies(
   if (packageNames.length === 0) return [];
   const packageJsonPath = findNearestPackageJson(resolve(outDir));
   if (!packageJsonPath) return packageNames;
-  const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown;
-  if (!isRecord(parsed)) return packageNames;
-  return packageNames.filter((packageName) => !packageJsonDeclaresPackage(parsed, packageName));
+  const parsed = readJsonRecord(packageJsonPath);
+  if (!parsed.ok) return packageNames;
+  return packageNames.filter(
+    (packageName) => !packageJsonDeclaresPackage(parsed.value, packageName),
+  );
 }
 
 type EnsureAddPackageDependenciesResult =
@@ -369,8 +368,8 @@ function ensureAddPackageDependencies(
     return { installCommand, ok: true, status: 'follow-up' };
   }
 
-  const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown;
-  if (!isRecord(parsed)) {
+  const parsed = readJsonRecord(packageJsonPath);
+  if (!parsed.ok) {
     return {
       installCommand,
       ok: false,
@@ -380,7 +379,7 @@ function ensureAddPackageDependencies(
   }
 
   const missingByManifest = packageNames.filter(
-    (packageName) => !packageJsonDeclaresPackage(parsed, packageName),
+    (packageName) => !packageJsonDeclaresPackage(parsed.value, packageName),
   );
   if (missingByManifest.length === 0) {
     return { installCommand, ok: true, packageJsonPath, status: 'installed' };
@@ -389,10 +388,10 @@ function ensureAddPackageDependencies(
   const dependencySpecs = Object.fromEntries(
     missingByManifest.map((packageName) => [
       packageName,
-      inferAddDependencySpec(parsed, packageName),
+      inferAddDependencySpec(parsed.value, packageName),
     ]),
   );
-  const nextManifest = addDependenciesToPackageJson(parsed, dependencySpecs);
+  const nextManifest = addDependenciesToPackageJson(parsed.value, dependencySpecs);
   writeFileSync(packageJsonPath, `${JSON.stringify(nextManifest, null, 2)}\n`, 'utf8');
 
   const { args, command } = packageManagerInstallInvocation(packageJsonPath);
@@ -414,14 +413,7 @@ function ensureAddPackageDependencies(
 }
 
 function findNearestPackageJson(startDir: string): string | undefined {
-  let current = startDir;
-  while (true) {
-    const candidate = join(current, 'package.json');
-    if (existsSync(candidate)) return candidate;
-    const parent = dirname(current);
-    if (parent === current) return undefined;
-    current = parent;
-  }
+  return findNearestFile(startDir, 'package.json');
 }
 
 function packageJsonDeclaresPackage(
@@ -542,9 +534,10 @@ function packageManagerInstallInvocation(packageJsonPath: string): {
 }
 
 function packageManagerName(packageJsonPath: string): 'bun' | 'npm' | 'pnpm' | 'yarn' {
-  const parsed = JSON.parse(readFileSync(packageJsonPath, 'utf8')) as unknown;
-  if (isRecord(parsed) && typeof parsed.packageManager === 'string') {
-    const [name] = parsed.packageManager.split('@');
+  const parsed = readJsonRecord(packageJsonPath);
+  const packageManager = parsed.ok ? parsed.value.packageManager : undefined;
+  if (typeof packageManager === 'string') {
+    const [name] = packageManager.split('@');
     if (name === 'bun' || name === 'npm' || name === 'pnpm' || name === 'yarn') return name;
   }
   return 'pnpm';
@@ -576,31 +569,19 @@ function compileArgvError(
   target: CompileTarget,
   error: Exclude<ReturnType<typeof parseCommandArgv>, { ok: true }>,
 ): { message: string; ok: false } {
-  if (error.error === 'help') return { message: compileUsage(), ok: false };
-  if (error.error === 'missing-value') return { message: error.message, ok: false };
-  return {
-    message: `kovo: unknown compile ${target} option ${stableValue(error.option)}.\n${compileUsage()}`,
-    ok: false,
-  };
+  return commandArgvError(`compile ${target}`, error, compileUsage());
 }
 
 function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResult {
   const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS.component);
   if (!parsed.ok) return compileArgvError('component', parsed);
 
-  const [sourcePath, extraPath] = parsed.value.positionals;
-  if (extraPath) {
-    return {
-      message: `kovo: compile component accepts one source path.\n${compileUsage()}`,
-      ok: false,
-    };
-  }
-  if (!sourcePath) {
-    return {
-      message: `kovo: compile component requires a source path.\n${compileUsage()}`,
-      ok: false,
-    };
-  }
+  const sourcePath = requireSinglePositional(parsed.value, {
+    label: 'source path',
+    name: 'compile component',
+    usage: compileUsage(),
+  });
+  if (!sourcePath.ok) return sourcePath;
 
   const outPath = parsedStringOption(parsed.value, '--out');
   if (!outPath)
@@ -635,7 +616,7 @@ function parseCompileComponentArgs(args: readonly string[]): CompileArgParseResu
       ...(queryShapeFactsPath === undefined ? {} : { queryShapeFactsPath }),
       ...(registryFactsPath === undefined ? {} : { registryFactsPath }),
       renderEquivalence: parsedBooleanOption(parsed.value, '--render-equivalence'),
-      sourcePath,
+      sourcePath: sourcePath.value,
       target: 'component',
     },
   };
@@ -645,15 +626,12 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
   const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS.route);
   if (!parsed.ok) return compileArgvError('route', parsed);
 
-  const [sourcePath, extraPath] = parsed.value.positionals;
-  if (extraPath) {
-    return {
-      message: `kovo: compile route accepts one source path.\n${compileUsage()}`,
-      ok: false,
-    };
-  }
-  if (!sourcePath)
-    return { message: `kovo: compile route requires a source path.\n${compileUsage()}`, ok: false };
+  const sourcePath = requireSinglePositional(parsed.value, {
+    label: 'source path',
+    name: 'compile route',
+    usage: compileUsage(),
+  });
+  if (!sourcePath.ok) return sourcePath;
 
   const outPath = parsedStringOption(parsed.value, '--out');
   if (!outPath)
@@ -679,7 +657,7 @@ function parseCompileRouteArgs(args: readonly string[]): CompileArgParseResult {
       ...(factsOutPath === undefined ? {} : { factsOutPath }),
       ...(fileName === undefined ? {} : { fileName }),
       outPath,
-      sourcePath,
+      sourcePath: sourcePath.value,
       target: 'route',
     },
   };
@@ -689,15 +667,12 @@ function parseCompileGraphArgs(args: readonly string[]): CompileArgParseResult {
   const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS.graph);
   if (!parsed.ok) return compileArgvError('graph', parsed);
 
-  const [inputPath, extraPath] = parsed.value.positionals;
-  if (extraPath) {
-    return {
-      message: `kovo: compile graph accepts one input path.\n${compileUsage()}`,
-      ok: false,
-    };
-  }
-  if (!inputPath)
-    return { message: `kovo: compile graph requires an input path.\n${compileUsage()}`, ok: false };
+  const inputPath = requireSinglePositional(parsed.value, {
+    label: 'input path',
+    name: 'compile graph',
+    usage: compileUsage(),
+  });
+  if (!inputPath.ok) return inputPath;
   const outPath = parsedStringOption(parsed.value, '--out');
   if (!outPath)
     return { message: `kovo: compile graph requires --out.\n${compileUsage()}`, ok: false };
@@ -706,7 +681,7 @@ function parseCompileGraphArgs(args: readonly string[]): CompileArgParseResult {
     ok: true,
     options: {
       check: parsedBooleanOption(parsed.value, '--check'),
-      inputPath,
+      inputPath: inputPath.value,
       outPath,
       target: 'graph',
     },
@@ -717,18 +692,12 @@ function parseCompileMutationInputsArgs(args: readonly string[]): CompileArgPars
   const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS['mutation-inputs']);
   if (!parsed.ok) return compileArgvError('mutation-inputs', parsed);
 
-  const [sourcePath, extraPath] = parsed.value.positionals;
-  if (extraPath) {
-    return {
-      message: `kovo: compile mutation-inputs accepts one source path.\n${compileUsage()}`,
-      ok: false,
-    };
-  }
-  if (!sourcePath)
-    return {
-      message: `kovo: compile mutation-inputs requires a source path.\n${compileUsage()}`,
-      ok: false,
-    };
+  const sourcePath = requireSinglePositional(parsed.value, {
+    label: 'source path',
+    name: 'compile mutation-inputs',
+    usage: compileUsage(),
+  });
+  if (!sourcePath.ok) return sourcePath;
   const outPath = parsedStringOption(parsed.value, '--out');
   if (!outPath)
     return {
@@ -743,7 +712,7 @@ function parseCompileMutationInputsArgs(args: readonly string[]): CompileArgPars
       check: parsedBooleanOption(parsed.value, '--check'),
       ...(fileName === undefined ? {} : { fileName }),
       outPath,
-      sourcePath,
+      sourcePath: sourcePath.value,
       target: 'mutation-inputs',
     },
   };
@@ -753,18 +722,12 @@ function parseCompileDrizzleOptimisticArgs(args: readonly string[]): CompileArgP
   const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS['drizzle-optimistic']);
   if (!parsed.ok) return compileArgvError('drizzle-optimistic', parsed);
 
-  const [inputPath, extraPath] = parsed.value.positionals;
-  if (extraPath) {
-    return {
-      message: `kovo: compile drizzle-optimistic accepts one input path.\n${compileUsage()}`,
-      ok: false,
-    };
-  }
-  if (!inputPath)
-    return {
-      message: `kovo: compile drizzle-optimistic requires an input path.\n${compileUsage()}`,
-      ok: false,
-    };
+  const inputPath = requireSinglePositional(parsed.value, {
+    label: 'input path',
+    name: 'compile drizzle-optimistic',
+    usage: compileUsage(),
+  });
+  if (!inputPath.ok) return inputPath;
   const outPath = parsedStringOption(parsed.value, '--out');
   if (!outPath)
     return {
@@ -778,7 +741,7 @@ function parseCompileDrizzleOptimisticArgs(args: readonly string[]): CompileArgP
     options: {
       check: parsedBooleanOption(parsed.value, '--check'),
       ...(factsOutPath === undefined ? {} : { factsOutPath }),
-      inputPath,
+      inputPath: inputPath.value,
       outPath,
       target: 'drizzle-optimistic',
     },
@@ -789,18 +752,12 @@ function parseCompileDrizzleStaticArgs(args: readonly string[]): CompileArgParse
   const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS['drizzle-static']);
   if (!parsed.ok) return compileArgvError('drizzle-static', parsed);
 
-  const [inputPath, extraPath] = parsed.value.positionals;
-  if (extraPath) {
-    return {
-      message: `kovo: compile drizzle-static accepts one input path.\n${compileUsage()}`,
-      ok: false,
-    };
-  }
-  if (!inputPath)
-    return {
-      message: `kovo: compile drizzle-static requires an input path.\n${compileUsage()}`,
-      ok: false,
-    };
+  const inputPath = requireSinglePositional(parsed.value, {
+    label: 'input path',
+    name: 'compile drizzle-static',
+    usage: compileUsage(),
+  });
+  if (!inputPath.ok) return inputPath;
   const outPath = parsedStringOption(parsed.value, '--out');
   if (!outPath)
     return {
@@ -812,7 +769,7 @@ function parseCompileDrizzleStaticArgs(args: readonly string[]): CompileArgParse
     ok: true,
     options: {
       check: parsedBooleanOption(parsed.value, '--check'),
-      inputPath,
+      inputPath: inputPath.value,
       outPath,
       target: 'drizzle-static',
     },
@@ -823,18 +780,12 @@ function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseRes
   const parsed = parseCommandArgv(args, COMPILE_ARGV_SPECS['package-css']);
   if (!parsed.ok) return compileArgvError('package-css', parsed);
 
-  const [packageName, extraPath] = parsed.value.positionals;
-  if (extraPath) {
-    return {
-      message: `kovo: compile package-css accepts one package name.\n${compileUsage()}`,
-      ok: false,
-    };
-  }
-  if (!packageName)
-    return {
-      message: `kovo: compile package-css requires a package name.\n${compileUsage()}`,
-      ok: false,
-    };
+  const packageName = requireSinglePositional(parsed.value, {
+    label: 'package name',
+    name: 'compile package-css',
+    usage: compileUsage(),
+  });
+  if (!packageName.ok) return packageName;
   const outPath = parsedStringOption(parsed.value, '--out');
   if (!outPath)
     return { message: `kovo: compile package-css requires --out.\n${compileUsage()}`, ok: false };
@@ -846,7 +797,7 @@ function parseCompilePackageCssArgs(args: readonly string[]): CompileArgParseRes
       check: parsedBooleanOption(parsed.value, '--check'),
       ...(entryPath === undefined ? {} : { entryPath }),
       outPath,
-      packageName,
+      packageName: packageName.value,
       target: 'package-css',
     },
   };

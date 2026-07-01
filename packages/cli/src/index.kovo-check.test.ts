@@ -2337,7 +2337,9 @@ describe('kovo check', () => {
       stderrWrite.mockRestore();
     }
 
-    expect(output).toBe('kovo: unknown flag "--json"\n');
+    expect(output).toBe(
+      'kovo: unknown explain option "--json".\nkovo: usage: kovo explain component|mutation|query|page|context|task <target> [--optimistic] [--layouts] [graph.json] | kovo explain document [graph.json] | kovo explain --sources-sinks | kovo explain --tasks [graph.json] | kovo explain --endpoints [graph.json] | kovo explain --revealed [graph.json] | kovo explain --trust [graph.json] | kovo explain --capabilities [graph.json] | kovo explain --cookies [graph.json] | kovo explain --access [--fail-on-findings] [graph.json] | kovo explain --unguarded [--fail-on-findings] [graph.json] | kovo explain --unscoped [--fail-on-findings] [graph.json]\n',
+    );
   });
 
   it('reports compile usage through the synchronous dispatcher', () => {

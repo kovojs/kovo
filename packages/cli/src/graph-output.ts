@@ -1,5 +1,3 @@
-import { existsSync, readFileSync } from 'node:fs';
-
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
@@ -12,9 +10,20 @@ import {
 } from '@kovojs/core/internal/graph';
 import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 
-import { AUDIT_USAGE, CHECK_USAGE, EXPLAIN_USAGE_LINE } from './commands-manifest.js';
+import {
+  AUDIT_ARGV_SPEC,
+  AUDIT_USAGE,
+  CHECK_ARGV_SPEC,
+  CHECK_USAGE,
+  commandArgvError,
+  EXPLAIN_ARGV_SPEC,
+  EXPLAIN_USAGE_LINE,
+  parsedBooleanOption,
+  parseCommandArgv,
+} from './commands-manifest.js';
 import { type CliCommandResult, type KovoCheckResult } from './shared.js';
 import { sourcesSinksCheckResult, sourcesSinksExplainResult } from './sources-sinks.js';
+import { findNearestFile, readJsonRecord } from './tooling.js';
 
 type DocumentSourceSinkRow = ReturnType<typeof frameworkSourceSinkInventory>[number];
 
@@ -77,28 +86,10 @@ export function readGraphInput(path: string | undefined): InputReadResult {
     return readGraphInput(discoveredPath);
   }
 
-  let source: string;
-  try {
-    source = readFileSync(path, 'utf8');
-  } catch (error) {
-    return {
-      error: { kind: isNodeErrorCode(error, 'ENOENT') ? 'not-found' : 'read-error', path },
-      ok: false,
-    };
-  }
+  const read = readJsonRecord(path);
+  if (!read.ok) return { error: read.error, ok: false };
 
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(source);
-  } catch {
-    return { error: { kind: 'invalid-json', path }, ok: false };
-  }
-
-  if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-    return { error: { kind: 'invalid-shape', path }, ok: false };
-  }
-
-  const validationErrors = validateKovoExplainInput(parsed);
+  const validationErrors = validateKovoExplainInput(read.value);
   if (validationErrors.length > 0) {
     const validationError = validationErrors[0];
     if (validationError) {
@@ -106,14 +97,15 @@ export function readGraphInput(path: string | undefined): InputReadResult {
     }
   }
 
-  return { ok: true, value: parsed as CoreGraph.KovoExplainInput };
+  return { ok: true, value: read.value as CoreGraph.KovoExplainInput };
 }
 
 function discoverGraphInputPath(): string | undefined {
-  for (const path of ['graph.json', '.kovo/graph.json', 'dist/.kovo/graph.json']) {
-    if (existsSync(path)) return path;
-  }
-  return undefined;
+  return (
+    findNearestFile(process.cwd(), 'graph.json', { stopDir: process.cwd() }) ??
+    findNearestFile(process.cwd(), '.kovo/graph.json', { stopDir: process.cwd() }) ??
+    findNearestFile(process.cwd(), 'dist/.kovo/graph.json', { stopDir: process.cwd() })
+  );
 }
 
 export function inputErrorMessage(error: InputReadError): string {
@@ -143,15 +135,6 @@ function graphInputValidationReadError(
   if (error.path === '$') return { kind: 'invalid-shape', path };
 
   return { field: error.path, kind: 'invalid-value', message: error.message, path };
-}
-
-function isNodeErrorCode(error: unknown, code: string): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === code
-  );
 }
 
 /**
@@ -1038,19 +1021,31 @@ export function checkFamilyArg(value: string | undefined): KovoCheckFamily {
 
 type CheckArgParseResult =
   | { family: KovoCheckFamily; inputPath: string | undefined; ok: true }
-  | { family: string | undefined; kind: 'too-many-args' | 'unsupported-family'; ok: false };
+  | { family: string | undefined; kind: 'too-many-args' | 'unsupported-family'; ok: false }
+  | { message: string; ok: false };
 
 export function parseCheckArgs(args: readonly string[]): CheckArgParseResult {
-  const family = checkFamilyArg(args[0]);
+  const parsed = parseCommandArgv(args, CHECK_ARGV_SPEC);
+  if (!parsed.ok) return commandArgvError('check', parsed, `kovo: ${CHECK_USAGE}`);
+
+  const family = checkFamilyArg(parsed.value.positionals[0]);
   if (family !== 'all') {
-    if (args.length > 2) return { family: args[0], kind: 'too-many-args', ok: false };
-    return { family, inputPath: args[1], ok: true };
+    if (parsed.value.positionals.length > 2) {
+      return { family: parsed.value.positionals[0], kind: 'too-many-args', ok: false };
+    }
+    return { family, inputPath: parsed.value.positionals[1], ok: true };
   }
-  if (args.length > 1) return { family: args[0], kind: 'unsupported-family', ok: false };
-  return { family, inputPath: args[0], ok: true };
+  if (parsed.value.positionals.length > 1) {
+    return { family: parsed.value.positionals[0], kind: 'unsupported-family', ok: false };
+  }
+  return { family, inputPath: parsed.value.positionals[0], ok: true };
 }
 
 export function writeCheckUsageError(error: Extract<CheckArgParseResult, { ok: false }>): number {
+  if ('message' in error) {
+    process.stderr.write(`${error.message}\n`);
+    return 1;
+  }
   const message =
     error.kind === 'unsupported-family'
       ? `kovo: unsupported check family ${stableValue(error.family)}. expected optimistic, coverage, endpoint-posture, or sources-sinks.\n`
@@ -1064,15 +1059,15 @@ type AuditArgParseResult =
   | { message: string; ok: false };
 
 export function parseAuditArgs(args: readonly string[]): AuditArgParseResult {
-  const parsed = parseFlaggedArgs(args, ['--fail-on-findings']);
-  if (!parsed.ok) return parsed;
-  if (parsed.positional.length > 1) {
+  const parsed = parseCommandArgv(args, AUDIT_ARGV_SPEC);
+  if (!parsed.ok) return commandArgvError('audit', parsed, AUDIT_USAGE);
+  if (parsed.value.positionals.length > 1) {
     return { message: `kovo: ${AUDIT_USAGE}`, ok: false };
   }
 
   return {
-    failOnFindings: parsed.flags.has('--fail-on-findings'),
-    inputPath: parsed.positional[0],
+    failOnFindings: parsedBooleanOption(parsed.value, '--fail-on-findings'),
+    inputPath: parsed.value.positionals[0],
     ok: true,
   };
 }
@@ -1082,24 +1077,13 @@ type ExplainArgParseResult =
   | { message: string; ok: false };
 
 export function parseExplainArgs(args: readonly string[]): ExplainArgParseResult {
-  const parsed = parseFlaggedArgs(args, [
-    '--access',
-    '--capabilities',
-    '--cookies',
-    '--endpoints',
-    '--fail-on-findings',
-    '--layouts',
-    '--optimistic',
-    '--revealed',
-    '--sources-sinks',
-    '--tasks',
-    '--trust',
-    '--unguarded',
-    '--unscoped',
-  ]);
-  if (!parsed.ok) return parsed;
+  const parsed = parseCommandArgv(args, EXPLAIN_ARGV_SPEC);
+  if (!parsed.ok) return commandArgvError('explain', parsed, `kovo: usage: ${EXPLAIN_USAGE_LINE}`);
 
-  const { flags, positional } = parsed;
+  const flags = {
+    has: (flag: string) => parsedBooleanOption(parsed.value, flag),
+  };
+  const positional = parsed.value.positionals;
   const modeFlags = [
     '--access',
     '--capabilities',
@@ -1253,31 +1237,6 @@ function explainUsage(): ExplainArgParseResult {
     message: `kovo: usage: ${EXPLAIN_USAGE_LINE}`,
     ok: false,
   };
-}
-
-type FlagParseResult =
-  | { flags: Set<string>; ok: true; positional: string[] }
-  | { message: string; ok: false };
-
-function parseFlaggedArgs(
-  args: readonly string[],
-  allowedFlags: readonly string[],
-): FlagParseResult {
-  const allowed = new Set(allowedFlags);
-  const flags = new Set<string>();
-  const positional: string[] = [];
-
-  for (const arg of args) {
-    if (arg.startsWith('--')) {
-      if (!allowed.has(arg))
-        return { message: `kovo: unknown flag ${stableValue(arg)}`, ok: false };
-      flags.add(arg);
-    } else {
-      positional.push(arg);
-    }
-  }
-
-  return { flags, ok: true, positional };
 }
 
 function ok(lines: string[]): KovoCheckResult {

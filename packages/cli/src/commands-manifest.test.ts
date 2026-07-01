@@ -17,6 +17,7 @@ import {
   MCP_USAGE,
   UPDATE_DOCS_USAGE,
   BUILD_ARGV_SPEC,
+  commandArgvError,
   COMPILE_ARGV_SPECS,
   formatNoArgsMessage,
   formatUnknownCommandMessage,
@@ -24,6 +25,7 @@ import {
   parsedStringListOption,
   parsedStringOption,
   parseCommandArgv,
+  requireSinglePositional,
   resolveCommand,
 } from './commands-manifest.js';
 import { CLI_COMMAND_DISPATCHER_NAMES, main } from './index.js';
@@ -215,6 +217,45 @@ describe('commands manifest', () => {
       ok: false,
       option: '--check=false',
     });
+  });
+
+  it('renders shared argv errors and single-positional diagnostics', () => {
+    const missing = parseCommandArgv(['--out'], BUILD_ARGV_SPEC);
+    expect(missing).toEqual(
+      expect.objectContaining({
+        error: 'missing-value',
+        ok: false,
+      }),
+    );
+    if (!missing.ok) {
+      expect(commandArgvError('build', missing, 'usage: kovo build <app-module>')).toEqual({
+        message: 'kovo: build --out requires a directory.\n',
+        ok: false,
+      });
+    }
+
+    const unknown = parseCommandArgv(['--wat'], BUILD_ARGV_SPEC);
+    if (!unknown.ok) {
+      expect(commandArgvError('build', unknown, 'usage: kovo build <app-module>')).toEqual({
+        message: 'kovo: unknown build option "--wat".\nusage: kovo build <app-module>',
+        ok: false,
+      });
+    }
+
+    const parsed = parseCommandArgv(['one.tsx', 'two.tsx'], BUILD_ARGV_SPEC);
+    expect(parsed).toEqual(expect.objectContaining({ ok: true }));
+    if (parsed.ok) {
+      expect(
+        requireSinglePositional(parsed.value, {
+          label: 'app module path',
+          name: 'build',
+          usage: 'usage: kovo build <app-module>',
+        }),
+      ).toEqual({
+        message: 'kovo: build accepts one app module path.\nusage: kovo build <app-module>',
+        ok: false,
+      });
+    }
   });
 });
 
