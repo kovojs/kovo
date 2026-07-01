@@ -36,8 +36,10 @@ function sign(body: string): string {
 describe('server webhook primitive', () => {
   it('types webhook transaction db as transaction-scoped without a public transaction opener', () => {
     type TxDb = {
+      $client: { execute(statement: unknown): unknown };
       insert(id: string): void;
       rows: string[];
+      session: { run(statement: unknown): unknown };
       transaction<Result>(run: (tx: unknown) => Result): Result;
     };
 
@@ -47,6 +49,10 @@ describe('server webhook primitive', () => {
 
       // @ts-expect-error webhook handler tx is already transaction-scoped.
       tx.transaction((nested) => nested);
+      // @ts-expect-error WebhookTxDb hides raw driver escape handles; runtime wraps remain the floor.
+      tx.$client.execute('select 1');
+      // @ts-expect-error WebhookTxDb hides raw driver escape handles; runtime wraps remain the floor.
+      tx.session.run('select 1');
 
       return rows;
     };
