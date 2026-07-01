@@ -77,6 +77,25 @@ describe('create-kovo starter (build integration: production raw-SQL artifacts)'
     }
   }, 120_000);
 
+  it('accepts trusted SQLite raw owner-table db.run writes from the production build artifact', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-raw-sql-trusted-'));
+
+    try {
+      writeKovoProject(root, {
+        dialect: 'sqlite',
+        name: 'Prod SQLite Raw SQL Trusted Proof',
+      });
+      linkStarterBuildDependencies(root);
+      addRawSqlOwnerWriteProof(root, { trusted: true });
+
+      buildProductionArtifact(root);
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
   it('blocks trusted raw-SQL table drift before production artifact emission', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });

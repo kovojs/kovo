@@ -84,7 +84,7 @@ export function wrapManagedDbForSqlSafety<DbValue>(
     proxyCache,
     methodCache,
     writePolicy,
-    isManagedDbAdapterLike(db),
+    writePolicy !== undefined || isManagedDbAdapterLike(db),
   ) as DbValue;
 }
 
@@ -355,7 +355,14 @@ function wrapTransactionDb(
 ): unknown {
   if (!isRecord(tx)) return tx;
   if (writePolicy === undefined && !isManagedDbAdapterLike(tx)) return tx;
-  return wrapDbAdapter(tx, mode, proxyCache, methodCache, writePolicy, isManagedDbAdapterLike(tx));
+  return wrapDbAdapter(
+    tx,
+    mode,
+    proxyCache,
+    methodCache,
+    writePolicy,
+    writePolicy !== undefined || isManagedDbAdapterLike(tx),
+  );
 }
 
 function guardedPrepareMethod(
