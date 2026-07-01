@@ -15,9 +15,11 @@ export interface TouchSite {
 /** @internal */
 export interface ReadSite {
   branch?: string;
+  columns?: readonly QueryProjectedColumn[];
   domain: string;
   keys: null | string;
   predicate?: 'eq' | 'non-eq';
+  scope?: QueryReadScopeProvenance;
   site: string;
   source: string;
   via: string;
@@ -565,7 +567,41 @@ export interface QueryReadSet {
   domains: readonly string[];
   guards?: readonly string[];
   query: string;
+  readProvenance?: readonly QueryReadProvenance[];
   readOnlyDomains?: readonly string[];
+}
+
+/** @internal */
+export type QueryColumnClassification = 'public' | 'secret' | 'unresolved';
+
+/** @internal */
+export type QueryColumnProjectionKind = 'column' | 'opaque' | 'table-row' | 'unresolved';
+
+/** @internal */
+export type QueryReadScopeProvenance =
+  | { key: string; kind: 'arg' }
+  | { key: string; kind: 'guard' | 'session' | 'tenant' }
+  | { kind: 'unscoped' };
+
+/** @internal */
+export interface QueryProjectedColumn {
+  classification: QueryColumnClassification;
+  column?: string;
+  path: string;
+  projection: QueryColumnProjectionKind;
+  site: string;
+  table: string;
+}
+
+/** @internal */
+export interface QueryReadProvenance {
+  columns: readonly QueryProjectedColumn[];
+  domain: string;
+  keys: null | string;
+  scope: QueryReadScopeProvenance;
+  site: string;
+  source: 'declared' | 'helper' | 'relational-query' | 'select';
+  via: string;
 }
 
 /** @internal */

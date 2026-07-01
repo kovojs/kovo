@@ -250,9 +250,20 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         },
         {
           branch: 'discounted',
+          columns: [
+            {
+              classification: 'secret',
+              column: 'token',
+              path: 'token',
+              projection: 'column',
+              site: 'cart.domain.ts:10',
+              table: 'price_rules',
+            },
+          ],
           operation: 'update-from',
           predicate: 'eq',
           readKey: 'arg:ruleId',
+          scope: { key: 'arg:ruleId', kind: 'arg' },
           site: 'cart.domain.ts:11',
           table: priceRules,
         },
@@ -278,9 +289,20 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       reads: [
         {
           branch: 'discounted',
+          columns: [
+            {
+              classification: 'secret',
+              column: 'token',
+              path: 'token',
+              projection: 'column',
+              site: 'cart.domain.ts:10',
+              table: 'price_rules',
+            },
+          ],
           domain: 'pricing',
           keys: 'arg:ruleId',
           predicate: 'eq',
+          scope: { key: 'arg:ruleId', kind: 'arg' },
           site: 'cart.domain.ts:11',
           source: 'update-from',
           via: 'price_rules',
@@ -314,7 +336,17 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         'cart.addItem': createTouchGraphEntry({
           reads: [
             {
+              columns: [
+                {
+                  classification: 'unresolved',
+                  path: 'secret',
+                  projection: 'opaque',
+                  site: 'cart.domain.ts:10',
+                  table: 'prices',
+                },
+              ],
               operation: 'update-from',
+              scope: { kind: 'unscoped' },
               site: 'cart.domain.ts:11',
               table: annotatedTable('prices', kovo({ domain: 'price' })),
             },
@@ -338,7 +370,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       { domain: "product", via: "products", site: "cart.domain.ts:12", keys: "arg:productId", branch: "stock-check", predicate: "non-eq" },
     ],
     reads: [
-      { domain: "price", via: "prices", site: "cart.domain.ts:11", keys: null, source: "update-from" },
+      { domain: "price", via: "prices", site: "cart.domain.ts:11", keys: null, source: "update-from", scope: { kind: 'unscoped' }, columns: [{ path: "secret", table: "prices", classification: "unresolved", projection: "opaque", site: "cart.domain.ts:10" }] },
     ],
     unresolved: [
       { code: 'KV406', site: "cart.domain.ts:20", message: "Statically un-analyzable write site; manual touches required.", domain: "audit" },

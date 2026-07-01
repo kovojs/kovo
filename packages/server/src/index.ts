@@ -182,6 +182,7 @@ export type {
   AppMutationResponseContext,
   AppMutationResponseOptions,
   AppMutationResponseResolver,
+  AppReadRequest,
   AppRateLimitOptions,
   AppRequestLimitOptions,
   AppRequestRateLimitOptions,
@@ -246,6 +247,7 @@ export {
   queue,
   query,
   RedosPatternError,
+  readonlyDb,
   s,
   SchemaValidationError,
   // KV429 (SPEC §10.3/§11.1): thrown by a mutation handler when a CAS predicate matches
@@ -511,5 +513,6 @@ export type {
   WebhookResponseStatus,
   WebhookSuccessStatus,
   WebhookTransactionContext,
+  WebhookTxDb,
   WebhookWireResponse,
 } from './api/routing.js';

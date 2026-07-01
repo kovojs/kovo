@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { KovoReadonlyHandleError, managedDb, readonlyDb } from './managed-db.js';
+import type { Reader } from './managed-db.js';
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
 import { domain } from './domain.js';
@@ -66,6 +67,31 @@ function fakeDb(log: string[]) {
 }
 
 describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
+  it('brands Reader<Db> so raw write handles are not casually assignable', () => {
+    type FakeDb = ReturnType<typeof fakeDb>;
+    const raw = fakeDb([]);
+    const reader = readonlyDb(raw);
+    const acceptsReader = (db: Reader<FakeDb>) => db;
+
+    expect(acceptsReader(reader)).toBe(reader);
+
+    // SPEC §6.6: this is type-level ergonomics only; casts/any can defeat it, so the runtime proxy
+    // and static KV433 gate remain authoritative.
+    const compileOnly = () => {
+      // @ts-expect-error raw provider handles lack the module-private Reader brand.
+      acceptsReader(raw);
+      // @ts-expect-error Reader<Db> hides write verbs on framework-owned read surfaces.
+      reader.insert('products');
+      const readHandle = managedDb(raw, 'read');
+      acceptsReader(readHandle);
+      // @ts-expect-error managedDb(..., 'read') returns the branded read-only surface.
+      readHandle.update('products');
+      const writeHandle = managedDb(raw, 'write');
+      writeHandle.insert('products');
+    };
+    void compileOnly;
+  });
+
   it('throws KovoReadonlyHandleError on every write verb', () => {
     const reader = readonlyDb(fakeDb([]));
     for (const verb of ['insert', 'update', 'delete', 'execute', 'run', 'batch'] as const) {
@@ -88,7 +114,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
   it('read mode rejects writes AND raw-string SQL (the unification)', () => {
     const handle = managedDb(fakeDb([]), 'read');
     // KV433: write verb throws the readonly error.
-    expect(() => (handle as { insert(t: string): unknown }).insert('products')).toThrow(
+    expect(() => (handle as unknown as { insert(t: string): unknown }).insert('products')).toThrow(
       KovoReadonlyHandleError,
     );
     // KV422: a raw string statement is rejected by the same handle.

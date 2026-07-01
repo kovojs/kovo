@@ -581,7 +581,8 @@ export interface QueryEndpointSuccess<Value, Input = unknown> {
   warnings?: readonly QueryRuntimeWarning[];
 }
 
-interface QueryRuntimeWarning {
+/** @internal Runtime warning emitted by the shared query execution chokepoint. */
+export interface QueryRuntimeWarning {
   code: 'QUERY_LIST_LIMIT';
   limit: number;
   path: string;
@@ -978,12 +979,20 @@ function querySuccessCacheHeaders(): Record<string, string> {
 function queryWarningHeaders(
   warnings: readonly QueryRuntimeWarning[] | undefined,
 ): Record<string, string> {
-  if (warnings === undefined || warnings.length === 0) return {};
+  const value = queryRuntimeWarningHeaderValue(warnings);
+  return value === undefined ? {} : { 'Kovo-Warn': value };
+}
+
+/** @internal Format query warnings for SSR and /_q responses from the same runtime vocabulary. */
+export function queryRuntimeWarningHeaderValue(
+  warnings: readonly QueryRuntimeWarning[] | undefined,
+): string | undefined {
+  if (warnings === undefined || warnings.length === 0) return undefined;
   const listLimits = warnings
     .filter((warning) => warning.code === 'QUERY_LIST_LIMIT')
     .map((warning) => `${warning.path};limit=${warning.limit}`)
     .join(',');
-  return listLimits ? { 'Kovo-Warn': `QUERY_LIST_LIMIT ${listLimits}` } : {};
+  return listLimits ? `QUERY_LIST_LIMIT ${listLimits}` : undefined;
 }
 
 function withQueryBuildHeaders<Request>(

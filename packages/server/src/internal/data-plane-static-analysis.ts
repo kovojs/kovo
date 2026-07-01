@@ -96,6 +96,7 @@ export interface DataPlaneAnalysis {
 /** @internal Structural view of Drizzle query-read facts used by CLI graph derivation. */
 export interface QueryReadFactLike {
   readOnlyDomains?: readonly string[];
+  readProvenance?: readonly CoreGraph.QueryReadProvenance[];
   reads?: readonly string[];
   shape?: QueryShapeFact['shape'];
   site?: string;

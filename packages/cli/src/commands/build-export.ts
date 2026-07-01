@@ -732,9 +732,11 @@ function queryCheckFact(
   const fact = queryFacts.find((candidate) => candidate.query === query.key);
   const factReads = fact?.reads?.filter(isString) ?? [];
   const declaredReads = (query.reads ?? []) as readonly { key: string }[];
+  const readProvenance = fact?.readProvenance;
   return {
     domains: uniqueSorted([...declaredReads.map((read) => read.key), ...factReads]),
     query: query.key,
+    ...(readProvenance !== undefined && readProvenance.length > 0 ? { readProvenance } : {}),
     ...((fact?.readOnlyDomains?.length ?? 0) > 0
       ? { readOnlyDomains: uniqueSorted(fact?.readOnlyDomains?.filter(isString) ?? []) }
       : {}),

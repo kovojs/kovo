@@ -110,9 +110,10 @@ export type {
   TaskSchedulingRequest,
 } from '../task.js';
 // SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle. `Reader<Db>`
-// is the read-only loader-handle type mirror; `KovoReadonlyHandleError` is the fail-closed runtime
-// throw a `query()` loader's write verb raises.
-export { KovoReadonlyHandleError } from '../managed-db.js';
+// is the branded read-only loader-handle type mirror; `readonlyDb(appDb)` is the blessed
+// read-only endpoint helper; `KovoReadonlyHandleError` is the fail-closed runtime throw a
+// read-surface write verb raises.
+export { KovoReadonlyHandleError, readonlyDb } from '../managed-db.js';
 export type { Reader } from '../managed-db.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {

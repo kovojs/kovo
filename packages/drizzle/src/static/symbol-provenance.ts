@@ -7,6 +7,7 @@ import {
   symbolForIdentifierReference,
   unwrappedStaticExpressionNode,
 } from '../static.js';
+import { expressionResolvesToFrameworkExport, frameworkExport } from './framework-identity.js';
 
 /** @internal */
 export type SymbolProvenanceKind = 'input' | 'literal' | 'server' | 'unknown';
@@ -338,10 +339,16 @@ function rootProvenanceMap(
  */
 export function serverSummaryKeysForSourceFile(sourceFile: SourceFile): Set<string> {
   const keys = new Set<string>();
-  const summaries = analyzerSummaryImports(sourceFile);
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
     const callee = unwrappedStaticExpressionNode(call.getExpression());
-    if (!isAnalyzerSummaryCall(callee, summaries)) continue;
+    if (
+      !expressionResolvesToFrameworkExport(
+        callee,
+        frameworkExport('@kovojs/drizzle', 'kovoAnalyzerSummary'),
+      )
+    ) {
+      continue;
+    }
 
     const [helper, summary] = call.getArguments();
     if (!helper || !summary) continue;
@@ -355,38 +362,6 @@ export function serverSummaryKeysForSourceFile(sourceFile: SourceFile): Set<stri
     if (key) keys.add(key);
   }
   return keys;
-}
-
-interface AnalyzerSummaryImports {
-  names: ReadonlySet<string>;
-  namespaces: ReadonlySet<string>;
-}
-
-function analyzerSummaryImports(sourceFile: SourceFile): AnalyzerSummaryImports {
-  const names = new Set<string>();
-  const namespaces = new Set<string>();
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== '@kovojs/drizzle') continue;
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) namespaces.add(namespace.getText());
-    for (const named of declaration.getNamedImports()) {
-      if (named.getName() === 'kovoAnalyzerSummary') {
-        names.add(named.getAliasNode()?.getText() ?? 'kovoAnalyzerSummary');
-      }
-    }
-  }
-  return { names, namespaces };
-}
-
-function isAnalyzerSummaryCall(callee: Node, imports: AnalyzerSummaryImports): boolean {
-  if (Node.isIdentifier(callee)) return imports.names.has(callee.getText());
-  if (!Node.isPropertyAccessExpression(callee)) return false;
-  const receiver = callee.getExpression();
-  return (
-    Node.isIdentifier(receiver) &&
-    imports.namespaces.has(receiver.getText()) &&
-    callee.getName() === 'kovoAnalyzerSummary'
-  );
 }
 
 function analyzerSummaryReturnKind(node: Node): string | undefined {

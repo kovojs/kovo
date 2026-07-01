@@ -881,6 +881,48 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('fails closed when a closure-scoped local helper reads a secret table for a query', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userQuery = query("user/closure-helper", {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    const loadSecret = () => db.select({ passwordHash: users.passwordHash }).from(users);',
+            '    return loadSecret();',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toMatchObject([
+      {
+        query: 'user/closure-helper',
+        reads: [],
+        shape: {},
+        site: 'user.queries.ts:8',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toMatchObject([
+      {
+        code: 'KV406',
+        message: expect.stringContaining('Query read is hidden inside an ordinary closure'),
+        severity: 'error',
+        site: 'user.queries.ts:8',
+      },
+    ]);
+  });
+
   it('folds local query-loader helper reads through typed receiver carriers', () => {
     const facts = extractQueryFactsFromProject({
       files: [

@@ -741,7 +741,7 @@ class FileSchemaImpl implements FileSchema {
   }
 
   parse(input: unknown): FileLike {
-    return parseFileLike(input, createFileOptions(this.#maxBytes, this.#accept));
+    return parseFileLikeSync(input, createFileOptions(this.#maxBytes, this.#accept));
   }
 
   async parseAsync(input: unknown): Promise<FileLike> {
@@ -878,7 +878,7 @@ function readOwnInputField(record: Record<string, unknown>, key: string): unknow
   return Object.hasOwn(record, key) ? record[key] : undefined;
 }
 
-function parseFileLike(input: unknown, options: FileSchemaOptions): FileLike {
+function parseFileLikeSync(input: unknown, options: FileSchemaOptions): FileLike {
   const file = parseFileLikeShape(input, options);
   const accept = options.accept;
   if (isUnverifiedAcceptance(accept)) {
@@ -886,9 +886,10 @@ function parseFileLike(input: unknown, options: FileSchemaOptions): FileLike {
       throw validationError(`Expected file type ${accept.types.join(', ')}`);
     }
   } else if (accept && accept.length > 0) {
-    // SPEC §6.6/§9.1, KV428: plain `accept([...])` is verified against server-sniffed bytes.
-    // Synchronous parsing cannot await `file.arrayBuffer()`, so fail closed instead of trusting
-    // the client-declared `file.type`; `parseSchemaAsync` / mutation parsing takes the async path.
+    // SPEC §6.6/§9.1, KV428: verified `accept([...])` has one enforcing path:
+    // `parseVerifiedFileLike`, which buffers and sniffs server-side bytes. Sync parsing cannot await
+    // `file.arrayBuffer()`, so this is the intentional sync/async divergence: fail closed rather
+    // than duplicating a client-MIME check that would drift from the async sniffing contract.
     throw new Error(
       's.file().accept([...]): verified file type checks require async parsing; call parseAsync (SPEC §6.6/§9.1).',
     );

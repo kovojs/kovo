@@ -1,6 +1,13 @@
 import type { DiagnosticCode, DiagnosticSeverity } from '@kovojs/core';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
-import type { ReadSite, TouchGraph, TouchGraphEntry, TouchSite } from '@kovojs/core/internal/graph';
+import type {
+  QueryProjectedColumn,
+  QueryReadScopeProvenance,
+  ReadSite,
+  TouchGraph,
+  TouchGraphEntry,
+  TouchSite,
+} from '@kovojs/core/internal/graph';
 import type { KovoColumnRef, KovoDomainRef } from './drizzle-surface.js';
 
 interface GraphDomainTableAnnotation {
@@ -27,6 +34,7 @@ export interface WriteSummaryInput {
 /** @internal */
 export interface ReadSummaryInput {
   branch?: string;
+  columns?: readonly QueryProjectedColumn[];
   operation:
     | 'delete-predicate'
     | 'insert-select'
@@ -35,6 +43,7 @@ export interface ReadSummaryInput {
     | (string & {});
   predicate?: 'eq' | 'non-eq';
   readKey?: string;
+  scope?: QueryReadScopeProvenance;
   site: string;
   table: GraphDomainTableAnnotation & { name: string };
 }
@@ -83,9 +92,13 @@ export function createTouchGraphEntry(input: {
     reads: [...(input.reads ?? [])]
       .map((read) => ({
         ...(read.branch === undefined ? {} : { branch: read.branch }),
+        ...(read.columns === undefined || read.columns.length === 0
+          ? {}
+          : { columns: [...read.columns].sort(compareProjectedColumns) }),
         domain: domainKey(read.table.domain),
         keys: read.readKey ?? null,
         ...(read.predicate === undefined ? {} : { predicate: read.predicate }),
+        ...(read.scope === undefined ? {} : { scope: read.scope }),
         site: read.site,
         source: read.operation,
         via: read.table.name,
@@ -155,8 +168,13 @@ export function serializeTouchGraph(graph: TouchGraph): string {
     lines.push('    ],');
     lines.push('    reads: [');
     for (const read of entry.reads ?? []) {
+      const columns =
+        read.columns && read.columns.length > 0
+          ? `, columns: [${read.columns.map(serializeProjectedColumn).join(', ')}]`
+          : '';
+      const scope = read.scope === undefined ? '' : `, scope: ${serializeScope(read.scope)}`;
       lines.push(
-        `      { domain: ${JSON.stringify(read.domain)}, via: ${JSON.stringify(read.via)}, site: ${JSON.stringify(read.site)}, keys: ${JSON.stringify(read.keys)}, source: ${JSON.stringify(read.source)}${read.branch === undefined ? '' : `, branch: ${JSON.stringify(read.branch)}`}${read.predicate === undefined ? '' : `, predicate: ${JSON.stringify(read.predicate)}`} },`,
+        `      { domain: ${JSON.stringify(read.domain)}, via: ${JSON.stringify(read.via)}, site: ${JSON.stringify(read.site)}, keys: ${JSON.stringify(read.keys)}, source: ${JSON.stringify(read.source)}${scope}${read.branch === undefined ? '' : `, branch: ${JSON.stringify(read.branch)}`}${read.predicate === undefined ? '' : `, predicate: ${JSON.stringify(read.predicate)}`}${columns} },`,
       );
     }
     lines.push('    ],');
@@ -175,6 +193,23 @@ export function serializeTouchGraph(graph: TouchGraph): string {
 
   lines.push('} as const;');
   return `${lines.join('\n')}\n`;
+}
+
+function serializeScope(scope: QueryReadScopeProvenance | undefined): string {
+  if (!scope || scope.kind === 'unscoped') return "{ kind: 'unscoped' }";
+  return `{ kind: ${JSON.stringify(scope.kind)}, key: ${JSON.stringify(scope.key)} }`;
+}
+
+function serializeProjectedColumn(column: QueryProjectedColumn): string {
+  const fields = [
+    `path: ${JSON.stringify(column.path)}`,
+    `table: ${JSON.stringify(column.table)}`,
+    ...(column.column === undefined ? [] : [`column: ${JSON.stringify(column.column)}`]),
+    `classification: ${JSON.stringify(column.classification)}`,
+    `projection: ${JSON.stringify(column.projection)}`,
+    `site: ${JSON.stringify(column.site)}`,
+  ];
+  return `{ ${fields.join(', ')} }`;
 }
 
 /** @internal */
@@ -223,5 +258,14 @@ function compareReadSites(left: ReadSite, right: ReadSite): number {
     (left.branch ?? '').localeCompare(right.branch ?? '') ||
     (left.predicate ?? '').localeCompare(right.predicate ?? '') ||
     left.site.localeCompare(right.site)
+  );
+}
+
+function compareProjectedColumns(left: QueryProjectedColumn, right: QueryProjectedColumn): number {
+  return (
+    left.path.localeCompare(right.path) ||
+    left.table.localeCompare(right.table) ||
+    (left.column ?? '').localeCompare(right.column ?? '') ||
+    left.projection.localeCompare(right.projection)
   );
 }

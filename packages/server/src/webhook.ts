@@ -20,6 +20,8 @@ import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 
 const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
 
+declare const webhookTxDbBrand: unique symbol;
+
 /** HTTP statuses a webhook failure replay response may store and replay (SPEC §9.1). */
 export type WebhookFailureStatus = 400 | 401 | 422 | 429 | 500;
 
@@ -101,6 +103,22 @@ export type WebhookDeclaredWriteDomain<Writes extends WebhookDeclaredWrites | un
 >;
 
 /**
+ * Transaction-scoped DB handle threaded by the webhook lifecycle (SPEC §10.3). The private-symbol
+ * brand makes a raw app DB or long-lived module handle awkward to pass where the handler expects the
+ * framework-owned transaction capability.
+ *
+ * This is an author-time guardrail only (SPEC §6.6): webhook idempotency posture, transaction
+ * ordering, SQL provenance, and fail-closed sinks remain the enforcement. Casts/`any` can forge the
+ * type and must not be treated as proof.
+ */
+export type WebhookTxDb<Db> = Db & {
+  readonly [webhookTxDbBrand]: {
+    readonly db: Db;
+    readonly scope: 'webhook-transaction';
+  };
+};
+
+/**
  * The `context` passed to a webhook `handler` (SPEC §9.1 webhook lifecycle): the
  * transaction handle `tx`, verified `rawBody`, the raw `request`, `fail` to return a
  * typed {@link WebhookFail}, and `recordChange` to emit a declared domain change record.
@@ -121,7 +139,7 @@ export interface WebhookHandlerContext<
     options?: WebhookChangeOptions<ChangeInput>,
   ): ChangeRecord<DomainKey, ChangeInput | Input>;
   request: EndpointRequest;
-  tx: Tx;
+  tx: WebhookTxDb<Tx>;
 }
 
 /**
@@ -529,7 +547,10 @@ export async function runWebhook<
 
   try {
     const runHandler = async (tx: Tx): Promise<Value> => {
-      const value = await declaration.webhookDefinition.handler(input, { ...context, tx });
+      const value = await declaration.webhookDefinition.handler(input, {
+        ...context,
+        tx: tx as WebhookTxDb<Tx>,
+      });
       if (isWebhookFail(value)) throw new WebhookRollback(value);
       return value as Value;
     };
@@ -815,7 +836,7 @@ function webhookHandlerContext<Input, Tx>(
       return record;
     },
     request,
-    tx: undefined as Tx,
+    tx: undefined as unknown as WebhookTxDb<Tx>,
   };
 }
 

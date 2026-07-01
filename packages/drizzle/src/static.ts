@@ -17,6 +17,9 @@ import type {
 import type {
   MassAssignmentFact,
   OwnerDomainFact,
+  QueryProjectedColumn,
+  QueryReadProvenance,
+  QueryReadScopeProvenance,
   QueryWriteReachabilityFact,
   RevealExplainFact,
   ScopeAuditFact,
@@ -67,7 +70,6 @@ import {
 import {
   isDrizzleDatabaseTypeName,
   isDrizzleTableFactoryName,
-  isKovoExtraConfigCallName,
   type KovoDomainRef,
   type KovoDomainTableAnnotation,
   type KovoFanAnnotation,
@@ -113,6 +115,10 @@ import {
   type SymbolProvenanceContext,
   type SymbolProvenanceRoot,
 } from './static/symbol-provenance.js';
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+} from './static/framework-identity.js';
 import { drizzleDiagnostic } from './static/diagnostics.js';
 
 /** @internal */ export const IGNORED_LOCAL_CALL_NAMES = new Set([
@@ -263,6 +269,7 @@ import { drizzleDiagnostic } from './static/diagnostics.js';
   /** Exact private principal symbols for `ownerScopedSessionReads`, e.g. `guard:userId`. */
   ownerScopedPrivateReadKeys?: readonly OwnerPrivateScopeKey[];
   query: string;
+  readProvenance?: readonly QueryReadProvenance[];
   reads: readonly string[];
   /** Domains explicitly marked externally-owned/read-only for missed-invalidation posture. */
   readOnlyDomains?: readonly string[];
@@ -803,9 +810,6 @@ function sqlSafetyDiagnosticsForSourceFile(
 ): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = [];
   const context = sqlSafetyContextForSourceFile(sourceFile);
-  const nativeDrizzleSqlReceivers = nativeDrizzleSqlReceiverTexts(sourceFile);
-  const kovoSqlReceivers = kovoSqlReceiverTextsForSourceFile(sourceFile);
-  const kovoMutationStreamReceivers = kovoMutationStreamReceiverTexts(sourceFile);
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
   // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
   // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
@@ -825,19 +829,13 @@ function sqlSafetyDiagnosticsForSourceFile(
   }
 
   for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    const rawHelperDiagnostic = sqlRawHelperDiagnostic(
-      file,
-      call,
-      context,
-      nativeDrizzleSqlReceivers,
-      kovoSqlReceivers,
-    );
+    const rawHelperDiagnostic = sqlRawHelperDiagnostic(file, call, context);
     if (rawHelperDiagnostic) diagnostics.push(rawHelperDiagnostic);
 
     const sinkName = sqlSinkName(call);
     if (!sinkName) continue;
     if (sqlSinkReceiverIsRawDriverClient(call, rawDriverClients)) continue;
-    if (sqlSinkReceiverIsKovoMutationStream(call, kovoMutationStreamReceivers)) continue;
+    if (sqlSinkReceiverIsKovoMutationStream(call)) continue;
     const [statement] = call.getArguments();
     const safety = sqlTextSafety(statement, context);
     if (safety === 'safe') continue;
@@ -858,8 +856,6 @@ function sqlRawHelperDiagnostic(
   file: SourceFileInput,
   call: CallExpression,
   context: SqlSafetyContext,
-  nativeDrizzleSqlReceivers: ReadonlySet<string>,
-  kovoSqlReceivers: ReadonlySet<string>,
 ): TouchGraphDiagnostic | null {
   const expression = call.getExpression();
   if (!Node.isPropertyAccessExpression(expression)) return null;
@@ -868,7 +864,7 @@ function sqlRawHelperDiagnostic(
   const method = expression.getName();
   if (method !== 'raw' && method !== 'identifier') return null;
   const [first, second] = call.getArguments();
-  if (nativeDrizzleSqlReceivers.has(receiver.getText())) {
+  if (expressionResolvesToFrameworkExport(receiver, frameworkExport('drizzle-orm', 'sql'))) {
     return drizzleDiagnostic({
       code: 'KV422',
       detail: `Direct drizzle-orm sql.${method}(...) is not accepted in app code; import Kovo's sql from @kovojs/drizzle so raw chunks and identifiers are auditable.`,
@@ -880,7 +876,13 @@ function sqlRawHelperDiagnostic(
   // `@kovojs/drizzle` binding — bare `sql`, an `import { sql as s }` alias, or a
   // namespace `<ns>.sql` accessor — so `s.raw(...)` / `k.sql.raw(...)` cannot slip a
   // raw chunk past the gate the way a literal `receiver === 'sql'` check did.
-  if (!kovoSqlReceivers.has(receiver.getText())) return null;
+  if (
+    !expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
+      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+    })
+  ) {
+    return null;
+  }
   if (method === 'identifier' && sqlAllowlistSafety(second, context) === 'literal') return null;
 
   const safety = sqlTextSafety(first, context);
@@ -893,77 +895,15 @@ function sqlRawHelperDiagnostic(
   });
 }
 
-function nativeDrizzleSqlReceiverTexts(sourceFile: SourceFile): Set<string> {
-  const receivers = new Set<string>();
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== 'drizzle-orm') continue;
-    for (const named of declaration.getNamedImports()) {
-      if (named.getName() === 'sql') receivers.add(named.getAliasNode()?.getText() ?? 'sql');
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) receivers.add(`${namespace.getText()}.sql`);
-  }
-  return receivers;
-}
-
-const KOVO_DRIZZLE_MODULE_SPECIFIER = '@kovojs/drizzle';
-const kovoSqlReceiverTextsCache = new WeakMap<SourceFile, Set<string>>();
-const kovoSqlTaggedTemplateTextsCache = new WeakMap<SourceFile, Set<string>>();
-
-/**
- * SPEC §10.2/§6.6 (KV422): the receiver texts that resolve to Kovo's auditable raw-SQL
- * helper `sql` from `@kovojs/drizzle`. Mirrors {@link nativeDrizzleSqlReceiverTexts} but
- * for Kovo's own `sql`: a local alias (`import { sql as s }` → `s`) or a namespace
- * accessor (`import * as k` → `k.sql`). Bare `sql` is always seeded because the analyzer
- * treats an unqualified `sql.raw(...)` as Kovo's helper even without an explicit import
- * in a fixture. Anchoring KV422 to this resolved set keeps `sql.raw`/`sql.identifier`
- * detection sound under aliasing/namespace imports that a literal `receiver === 'sql'`
- * compare silently missed. Memoized per source file (read once per analysis pass).
- */
-function kovoSqlReceiverTextsForSourceFile(sourceFile: SourceFile): Set<string> {
-  const cached = kovoSqlReceiverTextsCache.get(sourceFile);
-  if (cached) return cached;
-
-  const receivers = new Set<string>(['sql']);
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_DRIZZLE_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      if (named.getName() === 'sql') receivers.add(named.getAliasNode()?.getText() ?? 'sql');
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) receivers.add(`${namespace.getText()}.sql`);
-  }
-
-  kovoSqlReceiverTextsCache.set(sourceFile, receivers);
-  return receivers;
-}
-
-/**
- * SPEC §10.2/§6.6 (KV422): tagged-template SQL safety follows the resolved
- * `@kovojs/drizzle` import binding, so alias/namespace imports of `sql` and
- * `staticSql` stay recognized as the same safe carriers as their bare forms.
- */
-function kovoSqlTaggedTemplateTextsForSourceFile(sourceFile: SourceFile): Set<string> {
-  const cached = kovoSqlTaggedTemplateTextsCache.get(sourceFile);
-  if (cached) return cached;
-
-  const tags = new Set<string>(['sql', 'staticSql']);
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_DRIZZLE_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      const importName = named.getName();
-      if (importName !== 'sql' && importName !== 'staticSql') continue;
-      tags.add(named.getAliasNode()?.getText() ?? importName);
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) {
-      tags.add(`${namespace.getText()}.sql`);
-      tags.add(`${namespace.getText()}.staticSql`);
-    }
-  }
-
-  kovoSqlTaggedTemplateTextsCache.set(sourceFile, tags);
-  return tags;
+function isKovoSqlTagExpression(tag: Node): boolean {
+  return (
+    expressionResolvesToFrameworkExport(tag, frameworkExport('@kovojs/drizzle', 'sql'), {
+      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+    }) ||
+    expressionResolvesToFrameworkExport(tag, frameworkExport('@kovojs/drizzle', 'staticSql'), {
+      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'staticSql')],
+    })
+  );
 }
 
 /** @internal */
@@ -972,101 +912,27 @@ export function isKovoDrizzleTrustedSqlCall(expression: CallExpression): boolean
 }
 
 function isKovoDrizzleTrustedSqlCallee(callee: Node): boolean {
-  if (Node.isIdentifier(callee)) return identifierImportsKovoDrizzleTrustedSql(callee);
-  if (!Node.isPropertyAccessExpression(callee)) return false;
-  if (callee.getName() !== 'trustedSql') return false;
-  return identifierImportsKovoDrizzleNamespace(callee.getExpression());
-}
-
-function identifierImportsKovoDrizzleTrustedSql(identifier: Node): boolean {
-  if (!Node.isIdentifier(identifier)) return false;
-  const symbols = [identifier.getSymbol(), symbolForIdentifierReference(identifier)];
-  return symbols.some((symbol) =>
-    symbol?.getDeclarations().some((declaration) => {
-      if (!Node.isImportSpecifier(declaration)) return false;
-      if (declaration.getName() !== 'trustedSql') return false;
-      return (
-        declaration.getImportDeclaration().getModuleSpecifierValue() ===
-        KOVO_DRIZZLE_MODULE_SPECIFIER
-      );
-    }),
+  return expressionResolvesToFrameworkExport(
+    callee,
+    frameworkExport('@kovojs/drizzle', 'trustedSql'),
   );
-}
-
-function identifierImportsKovoDrizzleNamespace(identifier: Node): boolean {
-  if (!Node.isIdentifier(identifier)) return false;
-  const symbols = [identifier.getSymbol(), symbolForIdentifierReference(identifier)];
-  return symbols.some((symbol) =>
-    symbol?.getDeclarations().some((declaration) => {
-      if (!Node.isNamespaceImport(declaration)) return false;
-      const importDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ImportDeclaration);
-      return importDeclaration?.getModuleSpecifierValue() === KOVO_DRIZZLE_MODULE_SPECIFIER;
-    }),
-  );
-}
-
-function kovoMutationStreamReceiverTexts(sourceFile: SourceFile): Set<string> {
-  const receivers = new Set<string>();
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_SERVER_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      if (named.getName() === 'stream') receivers.add(named.getAliasNode()?.getText() ?? 'stream');
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) receivers.add(`${namespace.getText()}.stream`);
-  }
-  return receivers;
-}
-
-const KOVO_SERVER_MODULE_SPECIFIER = '@kovojs/server';
-
-interface KovoServerImportBindings {
-  /** export name → local identifier texts bound to it (`import { query as q }` → `q`). */
-  identifiersByExport: ReadonlyMap<string, ReadonlySet<string>>;
-  /** local names of `import * as ns from '@kovojs/server'` namespace imports. */
-  namespaces: ReadonlySet<string>;
-}
-
-const kovoServerImportBindingsCache = new WeakMap<SourceFile, KovoServerImportBindings>();
-
-function kovoServerImportBindings(sourceFile: SourceFile): KovoServerImportBindings {
-  const cached = kovoServerImportBindingsCache.get(sourceFile);
-  if (cached) return cached;
-
-  const identifiersByExport = new Map<string, Set<string>>();
-  const namespaces = new Set<string>();
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_SERVER_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      const exportName = named.getName();
-      const local = named.getAliasNode()?.getText() ?? exportName;
-      const set = identifiersByExport.get(exportName) ?? new Set<string>();
-      set.add(local);
-      identifiersByExport.set(exportName, set);
-    }
-    const namespace = declaration.getNamespaceImport();
-    if (namespace) namespaces.add(namespace.getText());
-  }
-
-  const bindings: KovoServerImportBindings = { identifiersByExport, namespaces };
-  kovoServerImportBindingsCache.set(sourceFile, bindings);
-  return bindings;
 }
 
 /**
  * SPEC §6.6/§10.2/§11.1 (KV435/KV414/KV410/KV406/KV438): does `expression` name the `@kovojs/server`
- * export `exportName` (e.g. `query`/`domain`/`write`) as a call callee? Recognizes the canonical bare
- * identifier, a local import alias (`import { query as q }` → `q(...)`), and a namespace-member
- * accessor (`import * as srv` → `srv.query(...)`). Mirrors the established alias-hardening of Kovo's
- * `sql`/`kovo()`/`route()` recognizers so an aliased or namespaced loader/write/domain definition
- * cannot silently erase its security surface the way a literal `expression.getText() === 'query'`
- * compare did (bugz-3 H1/L11). The bare name is always accepted because the canonical app/fixture
- * form references these primitives globally and the un-aliased binding IS the export name.
+ * export `exportName` (e.g. `query`/`domain`/`write`) as a call callee? The shared resolver follows
+ * import aliases, namespace imports, re-exports, local const aliases, and object destructuring. The
+ * bare-name fallback exists only for unresolved legacy fixture globals; a local declaration named
+ * `query`/`domain`/`write` is not treated as Kovo.
  *
  * @internal
  */
 export function isKovoServerCalleeExpression(expression: Node, exportName: string): boolean {
-  return kovoServerCalleeExpressionMatches(expression, exportName, new Set(), 0);
+  return expressionResolvesToFrameworkExport(
+    expression,
+    frameworkExport('@kovojs/server', exportName),
+    { legacyGlobals: [frameworkExport('@kovojs/server', exportName)] },
+  );
 }
 
 interface StaticQueryDeclaration {
@@ -1194,218 +1060,6 @@ function sourceDerivedKebabCase(value: string): string {
     .toLowerCase();
 }
 
-function kovoServerCalleeExpressionMatches(
-  expression: Node,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (depth > 6) return false;
-  const callee = unwrappedStaticExpressionNode(expression);
-  if (Node.isIdentifier(callee)) {
-    if (callee.getText() === exportName) return true;
-    if (
-      kovoServerImportBindings(callee.getSourceFile())
-        .identifiersByExport.get(exportName)
-        ?.has(callee.getText()) ??
-      false
-    ) {
-      return true;
-    }
-    if (identifierImportsKovoServerExport(callee, exportName, seen, depth + 1)) return true;
-    const initializer = localConstIdentifierInitializer(callee);
-    return initializer
-      ? kovoServerCalleeExpressionMatches(initializer, exportName, seen, depth + 1)
-      : false;
-  }
-  if (Node.isPropertyAccessExpression(callee)) {
-    if (callee.getName() !== exportName) return false;
-    return kovoServerNamespaceExpressionMatches(
-      callee.getExpression(),
-      exportName,
-      seen,
-      depth + 1,
-    );
-  }
-  return false;
-}
-
-function kovoServerNamespaceExpressionMatches(
-  expression: Node,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (depth > 6) return false;
-  const receiver = unwrappedStaticExpressionNode(expression);
-  if (!Node.isIdentifier(receiver)) return false;
-  if (kovoServerImportBindings(receiver.getSourceFile()).namespaces.has(receiver.getText())) {
-    return true;
-  }
-  if (namespaceImportsKovoServerExport(receiver, exportName, seen, depth + 1)) return true;
-  const initializer = localConstIdentifierInitializer(receiver);
-  return initializer
-    ? kovoServerNamespaceExpressionMatches(initializer, exportName, seen, depth + 1)
-    : false;
-}
-
-function localConstIdentifierInitializer(identifier: Node): Node | undefined {
-  if (!Node.isIdentifier(identifier)) return undefined;
-  const symbol = symbolForIdentifierReference(identifier) ?? identifier.getSymbol();
-  const declaration = symbol?.getDeclarations()?.[0];
-  if (!declaration || !Node.isVariableDeclaration(declaration)) return undefined;
-  if (!Node.isIdentifier(declaration.getNameNode())) return undefined;
-  const declarationList = declaration.getParent();
-  if (!Node.isVariableDeclarationList(declarationList)) return undefined;
-  if ((declarationList.getDeclarationKind?.() ?? 'const') !== 'const') return undefined;
-  return declaration.getInitializer();
-}
-
-function identifierImportsKovoServerExport(
-  identifier: Node,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (!Node.isIdentifier(identifier)) return false;
-  const local = identifier.getText();
-  for (const declaration of identifier.getSourceFile().getImportDeclarations()) {
-    for (const named of declaration.getNamedImports()) {
-      const localName = named.getAliasNode()?.getText() ?? named.getName();
-      if (localName !== local) continue;
-      const importedName = named.getName();
-      const specifier = declaration.getModuleSpecifierValue();
-      if (specifier === KOVO_SERVER_MODULE_SPECIFIER) return importedName === exportName;
-      const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
-      if (
-        moduleSourceFile &&
-        moduleExportsKovoServerName(moduleSourceFile, importedName, exportName, seen, depth + 1)
-      ) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
-function namespaceImportsKovoServerExport(
-  identifier: Node,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (!Node.isIdentifier(identifier)) return false;
-  const local = identifier.getText();
-  for (const declaration of identifier.getSourceFile().getImportDeclarations()) {
-    const namespace = declaration.getNamespaceImport();
-    if (!namespace || namespace.getText() !== local) continue;
-    const specifier = declaration.getModuleSpecifierValue();
-    if (specifier === KOVO_SERVER_MODULE_SPECIFIER) return true;
-    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
-    if (
-      moduleSourceFile &&
-      moduleExportsKovoServerName(moduleSourceFile, exportName, exportName, seen, depth + 1)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
-function moduleExportsKovoServerName(
-  sourceFile: SourceFile,
-  importedName: string,
-  exportName: string,
-  seen: Set<string>,
-  depth: number,
-): boolean {
-  if (depth > 6) return false;
-  const key = `${sourceFile.getFilePath()}:${importedName}:${exportName}`;
-  if (seen.has(key)) return false;
-  seen.add(key);
-
-  for (const declaration of sourceFile.getExportDeclarations()) {
-    const specifier = declaration.getModuleSpecifierValue();
-    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
-    const namedExports = declaration.getNamedExports();
-    if (namedExports.length === 0) {
-      if (specifier === KOVO_SERVER_MODULE_SPECIFIER && importedName === exportName) return true;
-      if (
-        moduleSourceFile &&
-        moduleExportsKovoServerName(moduleSourceFile, importedName, exportName, seen, depth + 1)
-      ) {
-        return true;
-      }
-      continue;
-    }
-
-    for (const named of namedExports) {
-      const exported = named.getAliasNode()?.getText() ?? named.getName();
-      if (exported !== importedName) continue;
-      const local = named.getName();
-      if (specifier === KOVO_SERVER_MODULE_SPECIFIER) return local === exportName;
-      if (
-        moduleSourceFile &&
-        moduleExportsKovoServerName(moduleSourceFile, local, exportName, seen, depth + 1)
-      ) {
-        return true;
-      }
-      if (
-        !specifier &&
-        sourceFileIdentifierResolvesToKovoServerExport(sourceFile, local, exportName)
-      ) {
-        return true;
-      }
-    }
-  }
-
-  return sourceFileExportedConstResolvesToKovoServerExport(sourceFile, importedName, exportName);
-}
-
-function sourceFileIdentifierResolvesToKovoServerExport(
-  sourceFile: SourceFile,
-  local: string,
-  exportName: string,
-): boolean {
-  for (const declaration of sourceFile.getImportDeclarations()) {
-    if (declaration.getModuleSpecifierValue() !== KOVO_SERVER_MODULE_SPECIFIER) continue;
-    for (const named of declaration.getNamedImports()) {
-      const localName = named.getAliasNode()?.getText() ?? named.getName();
-      if (localName === local && named.getName() === exportName) return true;
-    }
-  }
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    if (declaration.getName() !== local) continue;
-    const initializer = declaration.getInitializer();
-    if (!initializer) continue;
-    if (kovoServerCalleeExpressionMatches(initializer, exportName, new Set(), 0)) return true;
-  }
-  return false;
-}
-
-function sourceFileExportedConstResolvesToKovoServerExport(
-  sourceFile: SourceFile,
-  local: string,
-  exportName: string,
-): boolean {
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    if (declaration.getName() !== local) continue;
-    const statement = declaration.getVariableStatement();
-    const exported = statement
-      ?.getModifiers()
-      .some((modifier) => modifier.getKind() === SyntaxKind.ExportKeyword);
-    const initializer = declaration.getInitializer();
-    if (
-      exported &&
-      initializer &&
-      kovoServerCalleeExpressionMatches(initializer, exportName, new Set(), 0)
-    ) {
-      return true;
-    }
-  }
-  return false;
-}
-
 function sqlSinkReceiverIsRawDriverClient(
   call: CallExpression,
   rawDriverClients: ReadonlySet<string>,
@@ -1421,17 +1075,16 @@ function sqlSinkReceiverIsRawDriverClient(
   );
 }
 
-function sqlSinkReceiverIsKovoMutationStream(
-  call: CallExpression,
-  kovoMutationStreamReceivers: ReadonlySet<string>,
-): boolean {
-  if (kovoMutationStreamReceivers.size === 0) return false;
+function sqlSinkReceiverIsKovoMutationStream(call: CallExpression): boolean {
   const expression = call.getExpression();
   const receiver =
     Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)
       ? expression.getExpression()
       : undefined;
-  return Boolean(receiver && kovoMutationStreamReceivers.has(receiver.getText()));
+  return Boolean(
+    receiver &&
+    expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/server', 'stream')),
+  );
 }
 
 function sqlSinkName(call: CallExpression): string | null {
@@ -1487,8 +1140,7 @@ function sqlTextSafety(expression: Node | undefined, context: SqlSafetyContext):
   }
   if (Node.isTaggedTemplateExpression(expression)) {
     const tag = expression.getTag();
-    const safeTags = kovoSqlTaggedTemplateTextsForSourceFile(expression.getSourceFile());
-    return safeTags.has(tag.getText()) ? 'safe' : 'unknown';
+    return isKovoSqlTagExpression(tag) ? 'safe' : 'unknown';
   }
   if (Node.isTemplateExpression(expression)) return 'tainted';
   if (Node.isCallExpression(expression)) {
@@ -1499,8 +1151,11 @@ function sqlTextSafety(expression: Node | undefined, context: SqlSafetyContext):
       // SPEC §10.2/§6.6 (KV422): resolve Kovo `sql` through its aliased/namespace
       // `@kovojs/drizzle` binding so `s.raw(...)` / `k.sql.identifier(...)` are
       // classified identically to bare `sql.*` — matching the sink-side fix above.
-      const kovoSqlReceivers = kovoSqlReceiverTextsForSourceFile(expression.getSourceFile());
-      if (kovoSqlReceivers.has(receiver.getText())) {
+      if (
+        expressionResolvesToFrameworkExport(receiver, frameworkExport('@kovojs/drizzle', 'sql'), {
+          legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+        })
+      ) {
         const method = callExpression.getName();
         if (method === 'identifier') {
           return sqlAllowlistSafety(expression.getArguments()[1], context) === 'literal'
@@ -2772,6 +2427,17 @@ function extractQueryFactsFromPreparedFiles(
       const allReads = [
         ...new Set([...reads, ...declaredReads, ...query.declaredReadDomains, ...helperReads]),
       ].sort();
+      const instanceKey = queryInstanceKey(query.instanceKeyComparisons, fileTables);
+      const readProvenance = queryReadProvenanceFacts({
+        columnShapes,
+        declaredReadExpressions: query.declaredReadExpressions,
+        helperReads: localHelperSummary.reads,
+        ...(instanceKey?.instanceKey === undefined ? {} : { instanceKey: instanceKey.instanceKey }),
+        projectedColumns: query.projectedColumns,
+        queryTableExpressions: query.tableExpressions,
+        site,
+        tables: fileTables,
+      });
       // SPEC §10.2: a `reads:` entry naming an `exempt` table is KV411 — checked over BOTH the
       // `.from()`-derived read set AND the author's declared `reads:` table set, so an exempt/outbox
       // read cannot be smuggled past the static pass through a declared `reads:` entry either.
@@ -2792,24 +2458,7 @@ function extractQueryFactsFromPreparedFiles(
         // A declared `reads:` Domain VALUE counts as a declaration too (§10.2 `reads: readonly Domain[]`).
         query.declaredReadExpressions.length > 0 || query.declaredReadDomains.length > 0,
       )
-        .concat(
-          secretProjectionBackstopDiagnostics(
-            query.query,
-            [...query.opaquePaths, ...query.unresolvedPaths],
-            query.shape,
-            // SPEC §10.2 (F2, plans/compiler-soundness.md): the KV435 secret backstop must run over
-            // the FULL folded read set — statically-extracted table expressions PLUS the author's
-            // declared `reads:` set — not `tableExpressions` alone. Otherwise an opaque projection
-            // that references a secret table only via raw SQL text (invisible to `tableExpressions`)
-            // leaks the secret column to the client wire even when the author honestly declares the
-            // table in `reads:`. Both inputs are symbol-identity table facts (hard-rule #9). Declared
-            // Domain values carry no columns, so they cannot add a secret table here.
-            [...query.tableExpressions, ...query.declaredReadExpressions],
-            columnShapes,
-            fileTables,
-            site,
-          ),
-        )
+        .concat(secretProjectionBackstopDiagnostics(query.query, readProvenance, query.shape))
         .concat(tableRowProjectionDiagnostics(query.query, query.shape, site))
         .concat(unresolvedProjectionDiagnostics(query.query, query.unresolvedPaths, site))
         .concat(query.diagnostics?.map((diagnostic) => ({ ...diagnostic, site })) ?? [])
@@ -2845,7 +2494,6 @@ function extractQueryFactsFromPreparedFiles(
         query.instanceKeyComparisons,
         fileTables,
       );
-      const instanceKey = queryInstanceKey(query.instanceKeyComparisons, fileTables);
       // A3 (SPEC §10.3): the supplemental owner-column arg signal. Omit any domain the
       // declared-key `instanceKey` already captures as `arg:*` — that domain is already
       // flagged `args` by `scopeAuditsFromQueryFacts`, so listing it here too would only
@@ -2886,6 +2534,7 @@ function extractQueryFactsFromPreparedFiles(
         ...(ownerScopedPrivateReadKeys.length > 0 ? { ownerScopedPrivateReadKeys } : {}),
         ...(ownerScopedSessionReads.length > 0 ? { ownerScopedSessionReads } : {}),
         query: query.query,
+        ...(readProvenance.length > 0 ? { readProvenance } : {}),
         reads: allReads,
         ...(readOnlyDomains.length > 0 ? { readOnlyDomains } : {}),
         ...(sessionAnchoredReads.length > 0 ? { sessionAnchoredReads } : {}),
@@ -2900,34 +2549,240 @@ function extractQueryFactsFromPreparedFiles(
 
 function secretProjectionBackstopDiagnostics(
   query: string,
-  projectionPaths: readonly string[],
+  readProvenance: readonly QueryReadProvenance[],
   shape: QueryShape,
-  tableExpressions: readonly string[],
-  columnShapes: Readonly<Record<string, QueryShape>>,
-  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
-  site: string,
 ): TouchGraphDiagnostic[] {
   const revealedPaths = revealedQueryShapePaths(shape);
-  const paths = [...new Set(projectionPaths)].filter((path) => !revealedPaths.has(path)).sort();
-  if (paths.length === 0) return [];
+  const diagnostics: TouchGraphDiagnostic[] = [];
 
-  const secretTables = tableExpressions
-    .flatMap((table) =>
-      tableHasSecretColumn(columnShapes, table)
-        ? secretBackstopTableDisplayNames(tables, table)
-        : [],
-    )
-    .sort();
-  if (secretTables.length === 0) return [];
+  for (const read of readProvenance) {
+    for (const column of read.columns) {
+      if (revealedPaths.has(column.path)) continue;
+      if (column.projection === 'column' && column.classification !== 'unresolved') continue;
+      if (column.classification !== 'secret' && column.classification !== 'unresolved') continue;
 
-  const tableList = [...new Set(secretTables)].join(', ');
-  return paths.map((path) =>
-    drizzleDiagnostic({
-      code: 'KV435',
-      detail: `Query projection ${query}.${path} is opaque or unresolved while reading secret-classified table(s): ${tableList}. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
-      site,
+      diagnostics.push(
+        drizzleDiagnostic({
+          code: 'KV435',
+          detail: `Query projection ${query}.${column.path} is opaque or unresolved while reading secret-classified table(s): ${column.table}. Remove the opaque projection, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
+          site: column.site || read.site,
+        }),
+      );
+    }
+  }
+
+  return dedupeDiagnostics(diagnostics);
+}
+
+interface QueryReadProvenanceFactsInput {
+  columnShapes: Readonly<Record<string, QueryShape>>;
+  declaredReadExpressions: readonly string[];
+  helperReads: readonly ReadSummaryInput[];
+  instanceKey?: {
+    domain: string;
+    key: string;
+  };
+  projectedColumns: readonly QueryProjectedColumn[];
+  queryTableExpressions: readonly string[];
+  site: string;
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>;
+}
+
+function queryReadProvenanceFacts(input: QueryReadProvenanceFactsInput): QueryReadProvenance[] {
+  const facts: QueryReadProvenance[] = [];
+  const directTableExpressions = new Set(input.queryTableExpressions);
+  const declaredTableExpressions = input.declaredReadExpressions.filter(
+    (table) => !directTableExpressions.has(table),
+  );
+
+  facts.push(
+    ...queryReadProvenanceFromTableExpressions({
+      ...input,
+      source: 'select',
+      tableExpressions: [...directTableExpressions],
     }),
   );
+  facts.push(
+    ...queryReadProvenanceFromTableExpressions({
+      ...input,
+      source: 'declared',
+      tableExpressions: declaredTableExpressions,
+    }),
+  );
+
+  for (const read of input.helperReads) {
+    const domain = extractedDomainKey(read.table.domain);
+    const columns = secretProjectedColumnsForRead({
+      columnShapes: input.columnShapes,
+      projectedColumns: [],
+      readSite: read.site,
+      source: 'helper',
+      table: read.table,
+      tableExpression: read.table.name,
+    });
+    if (columns.length === 0) continue;
+
+    facts.push({
+      columns,
+      domain,
+      keys: read.readKey ?? null,
+      scope: read.scope ?? readScopeFromKey(read.readKey),
+      site: read.site,
+      source: 'helper',
+      via: read.table.name,
+    });
+  }
+
+  return dedupeQueryReadProvenance(facts);
+}
+
+function queryReadProvenanceFromTableExpressions(
+  input: QueryReadProvenanceFactsInput & {
+    source: QueryReadProvenance['source'];
+    tableExpressions: readonly string[];
+  },
+): QueryReadProvenance[] {
+  const facts: QueryReadProvenance[] = [];
+
+  for (const tableExpression of input.tableExpressions) {
+    for (const table of input.tables.get(tableExpression) ?? []) {
+      if (!isDomainExtractedTableAnnotation(table.annotation)) continue;
+      const domain = extractedDomainKey(table.annotation.domain);
+      const columns = secretProjectedColumnsForRead({
+        columnShapes: input.columnShapes,
+        projectedColumns: input.projectedColumns,
+        readSite: input.site,
+        source: input.source,
+        table: table.annotation,
+        tableExpression,
+      });
+      if (columns.length === 0) continue;
+
+      const keys = input.instanceKey?.domain === domain ? input.instanceKey.key : null;
+      facts.push({
+        columns,
+        domain,
+        keys,
+        scope: readScopeFromKey(keys ?? undefined),
+        site: input.site,
+        source: input.source,
+        via: table.annotation.name,
+      });
+    }
+  }
+
+  return facts;
+}
+
+function secretProjectedColumnsForRead(input: {
+  columnShapes: Readonly<Record<string, QueryShape>>;
+  projectedColumns: readonly QueryProjectedColumn[];
+  readSite: string;
+  source: QueryReadProvenance['source'];
+  table: { name: string };
+  tableExpression: string;
+}): QueryProjectedColumn[] {
+  const secretTable = tableHasSecretColumn(input.columnShapes, input.tableExpression);
+  const columns = input.projectedColumns
+    .filter((column) =>
+      projectedColumnBelongsToRead(column, input.tableExpression, input.table.name),
+    )
+    .flatMap((column) => {
+      if (column.classification === 'secret') {
+        return [{ ...column, table: input.table.name }];
+      }
+      if (secretTable && (column.projection === 'opaque' || column.projection === 'unresolved')) {
+        return [
+          {
+            ...column,
+            classification: 'unresolved' as const,
+            table: input.table.name,
+          },
+        ];
+      }
+      return [];
+    });
+
+  if (columns.length > 0) return dedupeProjectedColumns(columns);
+  if (!secretTable || input.source !== 'helper') return [];
+
+  return [
+    {
+      classification: 'unresolved',
+      path: '$',
+      projection: 'unresolved',
+      site: input.readSite,
+      table: input.table.name,
+    },
+  ];
+}
+
+function projectedColumnBelongsToRead(
+  column: QueryProjectedColumn,
+  tableExpression: string,
+  tableName: string,
+): boolean {
+  return column.table === '' || column.table === tableExpression || column.table === tableName;
+}
+
+function readScopeFromKey(key: string | undefined): QueryReadScopeProvenance {
+  if (!key) return { kind: 'unscoped' };
+  if (key.startsWith('arg:')) return { key, kind: 'arg' };
+  if (key.startsWith('guard:')) return { key, kind: 'guard' };
+  if (key.startsWith('tenant:')) return { key, kind: 'tenant' };
+  return { key, kind: 'session' };
+}
+
+function dedupeQueryReadProvenance(facts: readonly QueryReadProvenance[]): QueryReadProvenance[] {
+  return [...new Map(facts.map((fact) => [queryReadProvenanceKey(fact), fact])).values()].sort(
+    (left, right) =>
+      left.domain.localeCompare(right.domain) ||
+      left.via.localeCompare(right.via) ||
+      left.source.localeCompare(right.source) ||
+      left.site.localeCompare(right.site),
+  );
+}
+
+function queryReadProvenanceKey(fact: QueryReadProvenance): string {
+  return [
+    fact.domain,
+    fact.via,
+    fact.source,
+    fact.keys ?? '',
+    fact.site,
+    JSON.stringify(fact.columns),
+  ].join('\0');
+}
+
+function dedupeProjectedColumns(columns: readonly QueryProjectedColumn[]): QueryProjectedColumn[] {
+  return [...new Map(columns.map((column) => [projectedColumnKey(column), column])).values()].sort(
+    (left, right) =>
+      left.path.localeCompare(right.path) ||
+      left.table.localeCompare(right.table) ||
+      (left.column ?? '').localeCompare(right.column ?? '') ||
+      left.projection.localeCompare(right.projection),
+  );
+}
+
+function projectedColumnKey(column: QueryProjectedColumn): string {
+  return [
+    column.path,
+    column.table,
+    column.column ?? '',
+    column.classification,
+    column.projection,
+    column.site,
+  ].join('\0');
+}
+
+function dedupeDiagnostics(diagnostics: readonly TouchGraphDiagnostic[]): TouchGraphDiagnostic[] {
+  return [
+    ...new Map(diagnostics.map((diagnostic) => [diagnosticKey(diagnostic), diagnostic])).values(),
+  ];
+}
+
+function diagnosticKey(diagnostic: TouchGraphDiagnostic): string {
+  return [diagnostic.code, diagnostic.message, diagnostic.site].join('\0');
 }
 
 function tableRowProjectionDiagnostics(
@@ -3116,6 +2971,7 @@ function localQueryHelperDiagnostics(summary: FunctionTouchSummary): TouchGraphD
   instanceKeyComparisons: QueryInstanceKeyComparisons;
   localHelperCalls: readonly string[];
   opaquePaths: readonly string[];
+  projectedColumns: readonly QueryProjectedColumn[];
   query: string;
   shape: QueryShape;
   tableExpressions: readonly string[];
@@ -3292,6 +3148,7 @@ function extractQueryDefinitionsFromSourceFile(
           instanceKeyComparisons: { argCandidates: [], instanceKey: [] },
           localHelperCalls: [],
           opaquePaths: [],
+          projectedColumns: [],
           query,
           shape: {},
           tableExpressions: [],
@@ -3362,6 +3219,7 @@ function extractQueryDefinitionsFromSourceFile(
       ...receiverMethodAliasQueryDiagnostics(bodyObject, receiverReferences),
       ...externalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionKeys),
       ...opaqueLocalQueryHelperDiagnostics(bodyObject, receiverReferences, localFunctionsByKey),
+      ...unresolvedQueryClosureReadDiagnostics(bodyObject, receiverReferences),
       ...unresolvedQueryReadDiagnostics(bodyObject, receiverReferences, readResolutionOptions),
       // SPEC §11.1 (v1 scope): fail-closed KV406 for a destructured loader receiver slot that
       // project mode could not type-prove. This DETECTOR never produces a positive read/write
@@ -3402,6 +3260,7 @@ function extractQueryDefinitionsFromSourceFile(
       ),
       localHelperCalls,
       opaquePaths: selection?.opaquePaths ?? [],
+      projectedColumns: selection?.projectedColumns ?? [],
       query,
       shape,
       tableExpressions: queryTableExpressions(
@@ -3988,6 +3847,7 @@ import {
   typedSqlProjectionShape,
   unclassifiedQueryReceiverDiagnostics,
   unprovenDestructuredReceiverReferences,
+  unresolvedQueryClosureReadDiagnostics,
   unresolvedProjectionDiagnostics,
   unresolvedQueryCallbackDiagnostics,
   unresolvedQueryLoadCallbackDiagnostic,
@@ -4422,6 +4282,18 @@ export {
   type SymbolProvenanceKind,
   type SymbolProvenanceRoot,
 } from './static/symbol-provenance.js';
+/** @internal */
+export {
+  canonicalFrameworkExportForExpression,
+  canonicalFrameworkExportForSymbol,
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  symbolResolvesToFrameworkExport,
+  typeAliasResolvesToFrameworkExport,
+  type CanonicalFrameworkExportIdentity,
+  type CanonicalFrameworkModule,
+  type FrameworkIdentityOptions,
+} from './static/framework-identity.js';
 /** @internal */
 export {
   computedPropertyNameExpression,

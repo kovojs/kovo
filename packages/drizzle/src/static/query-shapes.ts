@@ -11,6 +11,7 @@ import {
   type Symbol as MorphSymbol,
   type VariableDeclaration,
 } from 'ts-morph';
+import type { QueryProjectedColumn } from '@kovojs/core/internal/graph';
 import { drizzleDiagnostic } from './diagnostics.js';
 import {
   appendSourceDestructuredReceiverBinding,
@@ -47,6 +48,7 @@ import {
   isJoinReadCallName,
   isRestBindingElement,
   isQueryCallOnReceiver,
+  isQueryReadCallName,
   isProjectDrizzleReceiverContainerCallReceiver,
   isProjectDrizzleReceiverMemberExpression,
   propertyAccessCallName,
@@ -70,6 +72,7 @@ import {
   diagnostics?: readonly TouchGraphDiagnostic[];
   hasTablelessScalar: boolean;
   opaquePaths: readonly string[];
+  projectedColumns: readonly QueryProjectedColumn[];
   shape: QueryShape;
   scalarTables: ReadonlySet<string>;
   unresolvedPaths: readonly string[];
@@ -96,6 +99,7 @@ import {
       ],
       hasTablelessScalar: false,
       opaquePaths: [],
+      projectedColumns: [],
       shape: {},
       scalarTables: new Set(),
       unresolvedPaths: [],
@@ -130,10 +134,12 @@ import {
   const shape: Record<string, QueryShape> = {};
   const unresolvedPaths: string[] = [];
   const opaquePaths: string[] = [];
+  const projectedColumns: QueryProjectedColumn[] = [];
   appendRelationalProjectionShape(
     shape,
     unresolvedPaths,
     opaquePaths,
+    projectedColumns,
     table,
     projection,
     columnShapes,
@@ -144,6 +150,7 @@ import {
   return {
     hasTablelessScalar: false,
     opaquePaths,
+    projectedColumns,
     shape,
     scalarTables: new Set([table]),
     unresolvedPaths,
@@ -151,12 +158,17 @@ import {
 }
 
 interface RelationalProjection {
-  columns: readonly string[];
+  columns: readonly RelationalProjectionField[];
   // SPEC §10.2/§11.3 (bugz-3 M4): the RQB `extras` keys (computed/raw-SQL fields that ARE returned
   // on the wire). They carry no resolvable Drizzle column, so they are treated as opaque projection
   // paths — see {@link appendRelationalProjectionShape}.
-  extras: readonly string[];
+  extras: readonly RelationalProjectionField[];
   relations: Readonly<Record<string, RelationalProjection | null>>;
+}
+
+interface RelationalProjectionField {
+  name: string;
+  site: string;
 }
 
 type RelationCardinality = 'many' | 'one';
@@ -165,6 +177,7 @@ function appendRelationalProjectionShape(
   shape: Record<string, QueryShape>,
   unresolvedPaths: string[],
   opaquePaths: string[],
+  projectedColumns: QueryProjectedColumn[],
   table: string,
   projection: RelationalProjection,
   columnShapes: Readonly<Record<string, QueryShape>>,
@@ -172,11 +185,18 @@ function appendRelationalProjectionShape(
   relationCardinality: (relation: string) => RelationCardinality | undefined,
 ): void {
   for (const column of projection.columns) {
-    const columnShape = columnShapes[`${table}.${column}`];
+    const columnShape = columnShapes[`${table}.${column.name}`];
     if (columnShape) {
-      shape[column] = columnShape;
+      shape[column.name] = columnShape;
+      appendProjectedColumn(projectedColumns, {
+        column: column.name,
+        path: column.name,
+        shape: columnShape,
+        site: column.site,
+        table,
+      });
     } else {
-      unresolvedPaths.push(column);
+      unresolvedPaths.push(column.name);
     }
   }
 
@@ -184,7 +204,16 @@ function appendRelationalProjectionShape(
   // column walk and capable of returning a secret/whole-row value. Over-approximate each to an opaque
   // projection path so the KV435 secret backstop fires when the read table is secret (and KV410 fires
   // otherwise, unless the author takes the audited output+reads escape), mirroring db.select({...sql}).
-  for (const extra of projection.extras) opaquePaths.push(extra);
+  for (const extra of projection.extras) opaquePaths.push(extra.name);
+  for (const extra of projection.extras) {
+    projectedColumns.push({
+      classification: 'unresolved',
+      path: extra.name,
+      projection: 'opaque',
+      site: extra.site,
+      table,
+    });
+  }
 
   for (const [relation, relationProjection] of Object.entries(projection.relations)) {
     if (!relationProjection) continue;
@@ -192,11 +221,13 @@ function appendRelationalProjectionShape(
     const relationShape: Record<string, QueryShape> = {};
     const relationUnresolvedPaths: string[] = [];
     const relationOpaquePaths: string[] = [];
+    const relationProjectedColumns: QueryProjectedColumn[] = [];
     const relationTable = relationTargetTableName(relation) ?? relation;
     appendRelationalProjectionShape(
       relationShape,
       relationUnresolvedPaths,
       relationOpaquePaths,
+      relationProjectedColumns,
       relationTable,
       relationProjection,
       columnShapes,
@@ -206,6 +237,12 @@ function appendRelationalProjectionShape(
     shape[relation] = relationCardinality(relation) === 'many' ? [relationShape] : relationShape;
     unresolvedPaths.push(...relationUnresolvedPaths.map((path) => `${relation}.${path}`));
     opaquePaths.push(...relationOpaquePaths.map((path) => `${relation}.${path}`));
+    projectedColumns.push(
+      ...relationProjectedColumns.map((column) => ({
+        ...column,
+        path: `${relation}.${column.path}`,
+      })),
+    );
   }
 }
 
@@ -467,22 +504,23 @@ function relationalQueryProjection(call: CallExpression): RelationalProjection |
  * escape the confidentiality backstops. When `extras` is present but its fields cannot be statically
  * enumerated, fail closed with a single synthetic `extras` path.
  */
-function relationalQueryExtras(config: ObjectLiteralExpression): string[] {
+function relationalQueryExtras(config: ObjectLiteralExpression): RelationalProjectionField[] {
   const extrasProperty = config.getProperty('extras');
   if (!extrasProperty) return [];
-  if (!Node.isPropertyAssignment(extrasProperty)) return ['extras'];
+  if (!Node.isPropertyAssignment(extrasProperty))
+    return [{ name: 'extras', site: sourcePosition(config.compilerNode) }];
 
   const object = relationalExtrasObjectLiteral(extrasProperty.getInitializer());
-  if (!object) return ['extras'];
+  if (!object) return [{ name: 'extras', site: sourcePosition(extrasProperty.compilerNode) }];
 
-  const names = object
-    .getProperties()
-    .map((property) =>
+  const names = object.getProperties().map((property) => ({
+    name:
       Node.isPropertyAssignment(property) || Node.isShorthandPropertyAssignment(property)
         ? (propertyNameText(property.getNameNode()) ?? 'extras')
         : 'extras',
-    );
-  return names.length > 0 ? names : ['extras'];
+    site: sourcePosition(property.compilerNode),
+  }));
+  return names.length > 0 ? names : [{ name: 'extras', site: sourcePosition(object.compilerNode) }];
 }
 
 function relationalExtrasObjectLiteral(
@@ -512,7 +550,7 @@ function relationalExtrasObjectLiteral(
   return undefined;
 }
 
-function relationalQueryColumns(config: ObjectLiteralExpression): string[] {
+function relationalQueryColumns(config: ObjectLiteralExpression): RelationalProjectionField[] {
   const columnsProperty = config.getProperty('columns');
   if (!columnsProperty || !Node.isPropertyAssignment(columnsProperty)) return [];
 
@@ -523,7 +561,8 @@ function relationalQueryColumns(config: ObjectLiteralExpression): string[] {
     if (!Node.isPropertyAssignment(property)) return [];
     const value = property.getInitializer();
     if (!value || value.getKind() !== SyntaxKind.TrueKeyword) return [];
-    return propertyNameText(property.getNameNode()) ?? [];
+    const name = propertyNameText(property.getNameNode());
+    return name ? [{ name, site: sourcePosition(property.compilerNode) }] : [];
   });
 }
 
@@ -806,6 +845,77 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   return queryCallbackBodies(body, mode)
     .flatMap((callbackBody) => touchBodyCallExpressions(callbackBody))
     .sort((left, right) => callSourceOrder(left) - callSourceOrder(right));
+}
+
+/** @internal */ export function unresolvedQueryClosureReadDiagnostics(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+): TouchGraphDiagnostic[] {
+  if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
+
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  for (const callbackBody of queryCallbackBodies(body, queryReceiverMode(receiverReferences))) {
+    for (const call of callExpressionsWithin(callbackBody)) {
+      if (!queryOpaqueClosureAncestor(call, callbackBody)) continue;
+
+      const name = propertyAccessCallName(call);
+      if (!name || !isQueryReadCallName(name)) continue;
+      if (!isQueryCallOnReceiver(call, receiverReferences)) continue;
+
+      diagnostics.push(
+        drizzleDiagnostic({
+          code: 'KV406',
+          detail:
+            'Query read is hidden inside an ordinary closure; extract a named helper with a typed receiver parameter or declare reads:.',
+          node: call,
+        }),
+      );
+    }
+  }
+
+  return diagnostics;
+}
+
+function callExpressionsWithin(body: Node): CallExpression[] {
+  return [
+    ...(Node.isCallExpression(body) ? [body] : []),
+    ...body.getDescendantsOfKind(SyntaxKind.CallExpression),
+  ];
+}
+
+function queryOpaqueClosureAncestor(node: Node, body: Node): Node | undefined {
+  for (const ancestor of node.getAncestors()) {
+    if (ancestor === body) return undefined;
+    if (!queryClosureFunctionLike(ancestor)) continue;
+    if (queryInlineCallback(ancestor)) continue;
+    return ancestor;
+  }
+
+  return undefined;
+}
+
+function queryClosureFunctionLike(node: Node): boolean {
+  return (
+    Node.isArrowFunction(node) ||
+    Node.isFunctionDeclaration(node) ||
+    Node.isFunctionExpression(node)
+  );
+}
+
+function queryInlineCallback(callback: Node): boolean {
+  const parent = callback.getParent();
+  if (!Node.isCallExpression(parent)) return false;
+  if (!parent.getArguments().includes(callback)) return false;
+
+  const method = staticAccessName(parent.getExpression());
+  return (
+    method === 'transaction' ||
+    method === 'filter' ||
+    method === 'flatMap' ||
+    method === 'forEach' ||
+    method === 'map' ||
+    method === 'reduce'
+  );
 }
 
 /** @internal */ export function queryCallbackBodies(
@@ -1823,6 +1933,7 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
   const shape: Record<string, QueryShape> = {};
   let hasTablelessScalar = false;
   const opaquePaths: string[] = [];
+  const projectedColumns: QueryProjectedColumn[] = [];
   const scalarTables = new Set<string>();
   const unresolvedPaths: string[] = [];
   const prefix = context.prefix ?? '';
@@ -1834,6 +1945,13 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
       const expression = unwrappedTsExpression(property.expression);
       const spread = `spread:${expression.getText(object.getSourceFile())}`;
       unresolvedPaths.push(prefix ? `${prefix}.${spread}` : spread);
+      projectedColumns.push({
+        classification: 'unresolved',
+        path: prefix ? `${prefix}.${spread}` : spread,
+        projection: 'unresolved',
+        site: sourcePosition(property),
+        table: '',
+      });
       continue;
     }
 
@@ -1841,6 +1959,13 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
       // SPEC §10-§11: unsupported projection syntax stays visible instead of disappearing.
       const shorthand = property.name.text;
       unresolvedPaths.push(prefix ? `${prefix}.${shorthand}` : shorthand);
+      projectedColumns.push({
+        classification: 'unresolved',
+        path: prefix ? `${prefix}.${shorthand}` : shorthand,
+        projection: 'unresolved',
+        site: sourcePosition(property),
+        table: '',
+      });
       continue;
     }
 
@@ -1852,6 +1977,13 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
       // secret-bearing expression; preserve it as an unresolved projection fact.
       const computed = `computed:${property.name.getText(object.getSourceFile())}`;
       unresolvedPaths.push(prefix ? `${prefix}.${computed}` : computed);
+      projectedColumns.push({
+        classification: 'unresolved',
+        path: prefix ? `${prefix}.${computed}` : computed,
+        projection: 'unresolved',
+        site: sourcePosition(property),
+        table: '',
+      });
       continue;
     }
 
@@ -1864,6 +1996,7 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
       });
       shape[key] = nullableNestedShape(nested, context.nullableTables) ?? nested.shape;
       opaquePaths.push(...nested.opaquePaths);
+      projectedColumns.push(...nested.projectedColumns);
       unresolvedPaths.push(...nested.unresolvedPaths);
     } else {
       const scalarShape = scalarQueryShape(valueNode, context.columnShapes, context.nullableTables);
@@ -1874,16 +2007,41 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
         unresolvedPaths.push(path);
       }
       if (opaqueProjection) opaquePaths.push(path);
+      if (opaqueProjection) {
+        projectedColumns.push({
+          classification: 'unresolved',
+          path,
+          projection: 'opaque',
+          site: sourcePosition(property),
+          table: scalarProjectionTable(valueNode) ?? '',
+        });
+      }
       const table = scalarProjectionTable(valueNode);
       if (table) {
         scalarTables.add(table);
       } else if (scalarShape) {
         hasTablelessScalar = true;
       }
+      if (scalarShape && !opaqueProjection) {
+        const tablePath = scalarProjectionColumnPath(valueNode);
+        appendProjectedColumn(projectedColumns, {
+          path,
+          shape: scalarShape,
+          site: sourcePosition(property),
+          ...(tablePath === undefined ? {} : { tablePath }),
+        });
+      }
     }
   }
 
-  return { hasTablelessScalar, opaquePaths, shape, scalarTables, unresolvedPaths };
+  return {
+    hasTablelessScalar,
+    opaquePaths,
+    projectedColumns,
+    shape,
+    scalarTables,
+    unresolvedPaths,
+  };
 }
 
 /** @internal */ export function projectionPropertyName(name: ts.PropertyName): string | undefined {
@@ -1939,6 +2097,53 @@ function tableRowQueryShape(
       .map(([path, columnShape]) => [path.slice(prefix.length), columnShape]),
   );
   return Object.keys(shape).length > 0 ? { kind: 'table-row', shape, table } : null;
+}
+
+function scalarProjectionColumnPath(expression: ts.Expression): string | undefined {
+  const revealValue = trustedRevealValueExpression(expression);
+  if (revealValue) return scalarProjectionColumnPath(revealValue);
+  return staticTsExpressionPath(expression);
+}
+
+function appendProjectedColumn(
+  target: QueryProjectedColumn[],
+  input: {
+    column?: string;
+    path: string;
+    shape: QueryShape;
+    site: string;
+    table?: string;
+    tablePath?: string;
+  },
+): void {
+  const tableColumn = input.tablePath ? tableColumnFromPath(input.tablePath) : undefined;
+  const table = input.table ?? tableColumn?.table ?? tableRowProjectionTable(input.shape);
+  if (!table) return;
+  const column = input.column ?? tableColumn?.column;
+
+  target.push({
+    classification: queryShapeContainsSecret(input.shape) ? 'secret' : 'public',
+    ...(column ? { column } : {}),
+    path: input.path,
+    projection: tableRowProjectionTable(input.shape) ? 'table-row' : 'column',
+    site: input.site,
+    table,
+  });
+}
+
+function tableColumnFromPath(path: string): { column: string; table: string } | undefined {
+  const separator = path.lastIndexOf('.');
+  if (separator <= 0 || separator === path.length - 1) return undefined;
+  return { column: path.slice(separator + 1), table: path.slice(0, separator) };
+}
+
+function tableRowProjectionTable(shape: QueryShape): string | undefined {
+  if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return undefined;
+  if (isQueryShapeWrapper(shape)) {
+    if (shape.kind === 'table-row') return shape.table;
+    return tableRowProjectionTable(shape.shape);
+  }
+  return undefined;
 }
 
 function trustedRevealQueryShape(

@@ -10,6 +10,7 @@ import {
   secret,
   trustedReveal,
   type JsonValue,
+  type Redacted,
   type RedactedValue,
   type Secret,
   type SecretValue,
@@ -122,6 +123,12 @@ describe('Secret type bound (type-only, defeated by any — SPEC §6.6)', () => 
     // @ts-expect-error a secret is intentionally not a JsonValue (Doors 1/2/3).
     const leak: JsonValue = s;
     void leak;
+    const compileOnly = () => {
+      // @ts-expect-error Secret<T> uses a module-private symbol brand, not a public structural key.
+      const forged: Secret<string> = { __kovoSecretBrand: Symbol('kovo.secret') };
+      void forged;
+    };
+    void compileOnly;
     // Runtime poison is the backstop when `any`/casts defeat the type bound.
     expect(JSON.stringify(s)).toBe('"[secret]"');
   });
@@ -169,6 +176,12 @@ describe('runtime redacted PII wrapper (SPEC §6.6 defense-in-depth)', () => {
     // @ts-expect-error a redacted PII value is intentionally not a JsonValue.
     const leak: JsonValue = rv;
     void leak;
+    const compileOnly = () => {
+      // @ts-expect-error Redacted<T> uses a module-private symbol brand, not a public structural key.
+      const forged: Redacted<string> = { __kovoRedactedBrand: Symbol('kovo.redacted') };
+      void forged;
+    };
+    void compileOnly;
   });
 
   it('is idempotent and compares in constant time', () => {

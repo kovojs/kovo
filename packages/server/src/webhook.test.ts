@@ -12,6 +12,7 @@ import {
   webhook,
   type WebhookReplayReservation,
   type WebhookReplayStore,
+  type WebhookTxDb,
   type WebhookWireResponse,
 } from './webhook.js';
 
@@ -115,11 +116,19 @@ describe('server webhook primitive', () => {
       readonly [typeof invoice]
     >('/webhooks/stripe', {
       async handler(input, context) {
+        const txId: string = context.tx.id;
         steps.push(`handler:${context.tx.id}`);
         expect('session' in context.request).toBe(false);
         expect(input.provider_extra).toEqual({ livemode: false });
         writes += 1;
         context.recordChange(invoice, { keys: [input.id] });
+        const compileOnly = () => {
+          const acceptsWebhookTx = (tx: WebhookTxDb<{ id: string }>) => tx;
+          acceptsWebhookTx(context.tx);
+          // @ts-expect-error raw transaction handles lack the module-private webhook tx brand.
+          acceptsWebhookTx({ id: txId });
+        };
+        void compileOnly;
         return { received: input.type };
       },
       idempotency: (input) => input.id,
@@ -511,7 +520,7 @@ describe('server webhook primitive', () => {
     expect(() =>
       webhook('/webhooks/charge-no-posture', {
         handler(input, context) {
-          (context.tx as { insert(): void }).insert();
+          (context.tx as unknown as { insert(): void }).insert();
           (context as any).recordChange(ledger, { keys: [input.id] });
           return { ok: true };
         },
@@ -532,7 +541,7 @@ describe('server webhook primitive', () => {
     let writes = 0;
     const wh = webhook('/webhooks/charge-dispatch', {
       handler(input, context) {
-        (context.tx as { insert(): void }).insert();
+        (context.tx as unknown as { insert(): void }).insert();
         return { received: input.id };
       },
       idempotency: (input) => input.id,
@@ -581,7 +590,7 @@ describe('server webhook primitive', () => {
     const wh = webhook('/webhooks/durable-charge', {
       async handler(input, context) {
         enteredTotal += 1;
-        (context.tx as { write(): void }).write();
+        (context.tx as unknown as { write(): void }).write();
         context.recordChange(ledger, { keys: [input.id] });
         if (enteredTotal === 1) {
           resolveAEntered();

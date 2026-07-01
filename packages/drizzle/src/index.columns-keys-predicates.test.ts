@@ -102,6 +102,34 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(facts).toEqual([
       {
         query: 'user',
+        readProvenance: [
+          {
+            columns: [
+              {
+                classification: 'secret',
+                column: 'apiToken',
+                path: 'apiToken',
+                projection: 'column',
+                site: 'user.queries.ts:12',
+                table: 'users',
+              },
+              {
+                classification: 'secret',
+                column: 'passwordHash',
+                path: 'passwordHash',
+                projection: 'column',
+                site: 'user.queries.ts:15',
+                table: 'users',
+              },
+            ],
+            domain: 'user',
+            keys: null,
+            scope: { kind: 'unscoped' },
+            site: 'user.queries.ts:9',
+            source: 'select',
+            via: 'users',
+          },
+        ],
         reads: ['user'],
         shape: {
           apiToken: {
