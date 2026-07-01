@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { secret } from '../secret.js';
 
 import { parseWireJsonValue, stringifyWireValue, wireJsonRoundTripCorpus } from './wire-json.js';
 
@@ -33,6 +34,18 @@ describe('wire-json core contract', () => {
       ok: true,
       value: { $kovo: 'thing', value: 'x' },
     });
+  });
+
+  it('refuses runtime secret boxes before JSON serialization reaches the wire', () => {
+    expect(() => stringifyWireValue({ token: secret('sk_live_wire_json') })).toThrow(
+      /Secret runtime value cannot cross/,
+    );
+
+    try {
+      stringifyWireValue({ token: secret('sk_live_wire_json') });
+    } catch (error) {
+      expect(String(error)).not.toContain('sk_live_wire_json');
+    }
   });
 
   it('reports malformed JSON without throwing', () => {

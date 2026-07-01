@@ -34,6 +34,58 @@ describe('@kovojs/drizzle static analysis context', () => {
       touchGraph: extractTouchGraphFromProject(project),
     });
   });
+
+  it('reports KV435 when a mutation handler returns secret-classified query results to the wire', () => {
+    const facts = extractStaticBuildAnalysisFactsFromProject({
+      files: [
+        pgDatabaseTypes(['select(value?: unknown): { from(table: unknown): Promise<unknown[]> };']),
+        {
+          fileName: 'src/session.mutations.ts',
+          source: [
+            'import { trustedReveal, type Secret } from "@kovojs/core";',
+            '',
+            'export const sessions = pgTable("sessions", {',
+            '  id: text("id").primaryKey(),',
+            '  name: text("name").notNull(),',
+            '  token: text("token").notNull(),',
+            '}, kovo({ domain: "session", key: "id", secret: ["token"] }));',
+            '',
+            'export const leakSession = mutation("session/leak", {',
+            '  async handler(_input, request) {',
+            '    const rows = await request.db.select({ id: sessions.id, token: sessions.token }).from(sessions);',
+            '    return { tokens: rows.map((row) => row.token) };',
+            '  },',
+            '});',
+            '',
+            'export const listSessions = mutation("session/list", {',
+            '  async handler(_input, request) {',
+            '    const rows = await request.db.select({ id: sessions.id, name: sessions.name }).from(sessions);',
+            '    return { rows };',
+            '  },',
+            '});',
+            '',
+            'export const revealSession = mutation("session/reveal", {',
+            '  async handler(_input, request) {',
+            '    const rows = await request.db.select({',
+            '      id: sessions.id,',
+            '      digest: trustedReveal(sessions.token as unknown as Secret<string>, { justification: "audited digest" }),',
+            '    }).from(sessions);',
+            '    return { rows };',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts.sqlSafetyDiagnostics.filter((diagnostic) => diagnostic.code === 'KV435')).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining('Mutation handler result session/leak'),
+        site: 'src/session.mutations.ts:11',
+      }),
+    ]);
+  });
 });
 
 function fixtureProject(): TouchGraphProjectOptions {

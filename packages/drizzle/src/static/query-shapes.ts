@@ -495,12 +495,12 @@ function taintedValueReachesWire(
         changed = true;
       }
 
-      if (!taintedArgs) continue;
       if (
         localFunctionCallTaintedValueReachesWire(call, body, tainted, wireRoots, elementAliases)
       ) {
         return true;
       }
+      if (!taintedArgs) continue;
       if (
         args.some((argument) => expressionContainsWireRoot(argument, wireRoots, elementAliases))
       ) {

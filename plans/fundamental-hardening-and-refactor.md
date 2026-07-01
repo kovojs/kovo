@@ -318,6 +318,13 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     provenance-checked `declare off-wire` escape.
   - Verify: the arrow-closure laundering + the mutation-handler secret-return both fail closed; a legitimate non-secret
     literal return stays green (DEC10 corpus).
+  - Progress: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts`, `pnpm exec vitest --run
+    packages/drizzle/src/static-analysis-context.test.ts packages/core/src/internal/wire-json.test.ts`, `pnpm run
+    check:security-brands`, touched-file `vp check`, and `git diff --check` passed after the closure-only arrow helper
+    laundering case fired KV435, mutation handler secret returns entered static-build diagnostics, audited
+    `trustedReveal(...)` mutation projections stayed green, and runtime `secret(...)` boxes failed closed at the shared
+    wire JSON codec.
+  - Remaining: the dedicated provenance-checked `declare off-wire` escape is still not implemented; leave L open.
 - [x] **N — Source-derived census + enroll new surfaces (closes `papercuts-24` P1).**
   - Problem: `node scripts/fundamental-fixes-census-gate.mjs --require-complete` reports `complete: true` with ZERO
     durable-task rows, because it enforces a required-SET only for `resolver-expression-kind` + `dialect-sink`; the

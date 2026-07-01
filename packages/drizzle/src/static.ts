@@ -923,6 +923,194 @@ function sqlSafetyDiagnosticsForSourceFile(
   return diagnostics;
 }
 
+function mutationSecretWireDiagnosticsForSourceFile(
+  file: SourceFileInput,
+  sourceFile: SourceFile,
+  columnShapes: Readonly<Record<string, QueryShape>>,
+): TouchGraphDiagnostic[] {
+  const secretColumnPaths = new Set(
+    Object.entries(columnShapes)
+      .filter(([, shape]) => queryShapeContainsSecret(shape))
+      .map(([path]) => path),
+  );
+  if (secretColumnPaths.size === 0) return [];
+
+  const diagnostics: TouchGraphDiagnostic[] = [];
+  for (const declaration of sourceFile.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+
+    const mutationCall = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(mutationCall)) continue;
+
+    const mutation = staticMutationDeclarationFromCall(declaration, mutationCall);
+    if (!mutation) continue;
+
+    const body = queryBodyObjectLiteral(mutation.bodyArgument, 'project').body;
+    if (!body) continue;
+
+    for (const handler of mutationHandlerCallbackBodies(body)) {
+      const diagnostic = mutationHandlerSecretReturnDiagnostic(
+        file,
+        mutation.key,
+        handler,
+        secretColumnPaths,
+      );
+      if (diagnostic) diagnostics.push(diagnostic);
+    }
+  }
+
+  return dedupeDiagnostics(diagnostics);
+}
+
+function mutationHandlerCallbackBodies(body: ObjectLiteralExpression): Node[] {
+  return body.getProperties().flatMap((property) => {
+    if (
+      Node.isMethodDeclaration(property) &&
+      propertyNameText(property.getNameNode()) === 'handler'
+    ) {
+      return property.getBody() ? [property.getBodyOrThrow()] : [];
+    }
+
+    if (
+      !Node.isPropertyAssignment(property) ||
+      propertyNameText(property.getNameNode()) !== 'handler'
+    ) {
+      return [];
+    }
+
+    const initializer = property.getInitializer();
+    if (!Node.isArrowFunction(initializer) && !Node.isFunctionExpression(initializer)) return [];
+    return [functionBody(initializer)];
+  });
+}
+
+function mutationHandlerSecretReturnDiagnostic(
+  file: SourceFileInput,
+  mutationKey: string,
+  body: Node,
+  secretColumnPaths: ReadonlySet<string>,
+): TouchGraphDiagnostic | null {
+  const returnExpressions = mutationReturnExpressions(body);
+  if (returnExpressions.length === 0) return null;
+
+  const tainted = new Set<string>();
+  let firstSecretSite: string | undefined;
+  let changed = true;
+
+  while (changed) {
+    changed = false;
+    for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+      if (!mutationTopLevelDescendant(body, declaration)) continue;
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      const secretSite = firstSecretColumnSite(file, initializer, secretColumnPaths);
+      if (secretSite && !firstSecretSite) firstSecretSite = secretSite;
+      if (!secretSite && !expressionContainsAnyMutationKey(initializer, tainted)) continue;
+
+      const name = declaration.getNameNode();
+      if (!Node.isIdentifier(name)) return mutationSecretReturnDiagnostic(file, mutationKey, body);
+      const key = sqlSafetySymbolKey(name);
+      if (key && !tainted.has(key)) {
+        tainted.add(key);
+        changed = true;
+      }
+    }
+  }
+
+  for (const expression of returnExpressions) {
+    const directSecretSite = firstSecretColumnSite(file, expression, secretColumnPaths);
+    if (directSecretSite) {
+      return mutationSecretReturnDiagnostic(file, mutationKey, expression, directSecretSite);
+    }
+    if (expressionContainsAnyMutationKey(expression, tainted)) {
+      return mutationSecretReturnDiagnostic(file, mutationKey, expression, firstSecretSite);
+    }
+  }
+
+  return null;
+}
+
+function mutationReturnExpressions(body: Node): Node[] {
+  if (!Node.isBlock(body)) return [body];
+  return body
+    .getDescendantsOfKind(SyntaxKind.ReturnStatement)
+    .filter((statement) => mutationTopLevelDescendant(body, statement))
+    .flatMap((statement) => {
+      const expression = statement.getExpression();
+      return expression ? [expression] : [];
+    });
+}
+
+function firstSecretColumnSite(
+  file: SourceFileInput,
+  node: Node,
+  secretColumnPaths: ReadonlySet<string>,
+): string | undefined {
+  for (const expression of [node, ...node.getDescendants()]) {
+    const access = staticAccessSegments(expression);
+    if (!access || access.path.length === 0) continue;
+    const path = [access.root.getText(), ...access.path].join('.');
+    if (secretColumnPaths.has(path) && !isInsideTrustedRevealCall(expression)) {
+      return `${file.fileName}:${lineForIndex(file.source, expression.getStart())}`;
+    }
+  }
+  return undefined;
+}
+
+function isInsideTrustedRevealCall(node: Node): boolean {
+  for (const ancestor of node.getAncestors()) {
+    if (!Node.isCallExpression(ancestor)) continue;
+    if (
+      expressionResolvesToFrameworkExport(
+        ancestor.getExpression(),
+        frameworkExport('@kovojs/core', 'trustedReveal'),
+      )
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function expressionContainsAnyMutationKey(expression: Node, keys: ReadonlySet<string>): boolean {
+  for (const node of [expression, ...expression.getDescendants()]) {
+    if (!Node.isIdentifier(node)) continue;
+    const key = sqlSafetySymbolKey(node);
+    if (key && keys.has(key)) return true;
+  }
+  return false;
+}
+
+function mutationTopLevelDescendant(body: Node, candidate: Node): boolean {
+  let current = candidate.getParent();
+  while (current && current !== body) {
+    if (
+      Node.isArrowFunction(current) ||
+      Node.isFunctionDeclaration(current) ||
+      Node.isFunctionExpression(current) ||
+      Node.isMethodDeclaration(current)
+    ) {
+      return false;
+    }
+    current = current.getParent();
+  }
+  return current === body;
+}
+
+function mutationSecretReturnDiagnostic(
+  file: SourceFileInput,
+  mutationKey: string,
+  siteNode: Node,
+  site?: string,
+): TouchGraphDiagnostic {
+  return drizzleDiagnostic({
+    code: 'KV435',
+    detail: `Mutation handler result ${mutationKey} reads a secret-classified column before the mutation response is redirected or streamed to the wire. Prove the read stays off the mutation wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
+    site: site ?? `${file.fileName}:${lineForIndex(file.source, siteNode.getStart())}`,
+  });
+}
+
 function sqlRawHelperDiagnostic(
   file: SourceFileInput,
   call: CallExpression,
@@ -2084,6 +2272,7 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
     scopeAudits: readonly ScopeAuditFact[];
   };
   ownerDomains(): readonly OwnerDomainFact[];
+  mutationSecretWireDiagnostics(): readonly TouchGraphDiagnostic[];
   queryFacts(): readonly QueryFact[];
   queryWriteReachability(): readonly QueryWriteReachabilityFact[];
   relationCardinalities(): ReturnType<typeof projectRelationCardinalitiesByProperty>;
@@ -2108,6 +2297,7 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
       }
     | undefined;
   private cachedOwnerDomains: readonly OwnerDomainFact[] | undefined;
+  private cachedMutationSecretWireDiagnostics: readonly TouchGraphDiagnostic[] | undefined;
   private cachedQueryFacts: readonly QueryFact[] | undefined;
   private cachedQueryWriteReachability: readonly QueryWriteReachabilityFact[] | undefined;
   private cachedRelationCardinalities:
@@ -2259,6 +2449,22 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
     return this.cachedSqlSafetyDiagnostics;
   }
 
+  mutationSecretWireDiagnostics(): readonly TouchGraphDiagnostic[] {
+    if (this.cachedMutationSecretWireDiagnostics) return this.cachedMutationSecretWireDiagnostics;
+    this.cachedMutationSecretWireDiagnostics = this.contextFiles()
+      .flatMap((file, index) => {
+        const sourceFile = this.extraction.sourceFiles[index];
+        if (!sourceFile) return [];
+        const columnShapes = {
+          ...sourceColumnShapesForTables(this.tablesForFile(file)),
+          ...file.columnShapes,
+        };
+        return mutationSecretWireDiagnosticsForSourceFile(file, sourceFile, columnShapes);
+      })
+      .sort((left, right) => left.site.localeCompare(right.site));
+    return this.cachedMutationSecretWireDiagnostics;
+  }
+
   touchGraph(): TouchGraph {
     if (this.cachedTouchGraph) return this.cachedTouchGraph;
     const functions = this.functionExtractionsByFileName();
@@ -2322,7 +2528,11 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
       queries,
       queryWriteReachability: this.queryWriteReachability(),
       scopeAudits: ownerAudit.scopeAudits,
-      sqlSafetyDiagnostics: [...this.sqlSafetyDiagnostics(), ...diagnosticsForQueryFacts(queries)],
+      sqlSafetyDiagnostics: [
+        ...this.sqlSafetyDiagnostics(),
+        ...diagnosticsForQueryFacts(queries),
+        ...this.mutationSecretWireDiagnostics(),
+      ],
       toctouFacts: this.toctouFacts(),
       touchGraph: this.touchGraph(),
     };
@@ -3933,6 +4143,7 @@ import {
   selectShapeFromQueryBody,
   sourceDestructuredQueryReceiverDiagnostics,
   sourceQueryDestructuredReceiverNames,
+  staticAccessSegments,
   staticFactoryBlockReturnExpression,
   staticLiteralContainerExpression,
   staticTsElementAccessName,
