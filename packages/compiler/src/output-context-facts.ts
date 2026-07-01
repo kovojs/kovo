@@ -51,6 +51,10 @@ const TRUSTED_HTML_PURE_BRAND_EXPORTS = [
   frameworkExport('@kovojs/browser', 'trustedHtml'),
 ] as const;
 
+const TRUSTED_URL_PURE_BRAND_EXPORTS = [frameworkExport('@kovojs/browser', 'trustedUrl')] as const;
+
+const RENDERED_HTML_RAW_SINK_EXPORTS = [frameworkExport('@kovojs/server', 'renderedHtml')] as const;
+
 /**
  * @internal The local identifiers in this module that are bound to the REAL trusted-HTML brand
  * exports, resolved from canonical framework export identity.
@@ -96,6 +100,32 @@ export function expressionResolvesToTrustedHtmlPureBrand(
     sourceFile,
     expression,
     TRUSTED_HTML_PURE_BRAND_EXPORTS,
+  );
+}
+
+/** @internal Whether an AST expression resolves to the pure trustedUrl brand. */
+export function expressionResolvesToTrustedUrlPureBrand(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  return expressionResolvesToAnyFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    TRUSTED_URL_PURE_BRAND_EXPORTS,
+  );
+}
+
+/** @internal Whether an AST expression resolves to the internal renderedHtml raw-HTML sink. */
+export function expressionResolvesToRenderedHtmlRawSink(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  return expressionResolvesToAnyFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    RENDERED_HTML_RAW_SINK_EXPORTS,
   );
 }
 

@@ -4,4 +4,5 @@ export {
   kovoSafeUrl,
   kovoStyleProperty,
   kovoTrustedHtmlContent,
+  isKovoTrustedUrl,
 } from '../security-output.js';
