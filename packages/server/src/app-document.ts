@@ -33,11 +33,10 @@ import {
   type RouteDeclaration,
   type RouteRequestInput,
 } from './route.js';
-import { queryRuntimeWarningHeaderValue, type QueryRuntimeWarning } from './query.js';
+import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
 import type { KovoApp } from './app-types.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
-const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
 const fallbackBroadcastFingerprintSecret = randomBytes(32);
 
 export interface AppRouteDocumentOptions {
@@ -335,12 +334,6 @@ function hmacSessionFingerprint(input: string, secret: CsrfSecret | undefined): 
   const hmacSecret =
     secret === undefined ? fallbackBroadcastFingerprintSecret : currentCsrfSecret(secret);
   return createHmac('sha256', hmacSecret).update(input).digest('base64url');
-}
-
-function queryRuntimeWarningsFromRequest(request: unknown): readonly QueryRuntimeWarning[] {
-  if (typeof request !== 'object' || request === null) return [];
-  const warnings = (request as { [queryRuntimeWarningsKey]?: unknown })[queryRuntimeWarningsKey];
-  return Array.isArray(warnings) ? (warnings as QueryRuntimeWarning[]) : [];
 }
 
 export async function renderAppErrorDocumentResponse(

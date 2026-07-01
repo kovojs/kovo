@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 import { domain } from './domain.js';
 import { registerGeneratedQueryReadRegistry } from './generated-query-registry.js';
 import { componentLiveTargetRenderer } from './live-target-renderer.js';
-import { query } from './query.js';
+import { query, queryRuntimeWarningsFromRequest } from './query.js';
 import { s } from './schema.js';
 
 describe('generated component live target renderers', () => {
@@ -183,5 +183,34 @@ describe('generated component live target renderers', () => {
     expect(html).toContain('kovo-fragment-target="cart-form"');
     expect(html).toContain('kovo-live-component="components/cart-form/cart-form"');
     expect(html).toContain('kovo-live-token="');
+  });
+
+  it('records query warnings from live target query reloads on the lifecycle request', async () => {
+    const cartQuery = query('liveTargetWarning', {
+      load: () => ({ items: Array.from({ length: 105 }, (_, id) => ({ id })) }),
+      reads: [],
+    });
+    const Cart = component({
+      queries: { cart: cartQuery },
+      render: ({ cart }: { cart: { items: unknown[] } }) => (
+        <section data-count={cart.items.length} />
+      ),
+    });
+    const renderer = componentLiveTargetRenderer({
+      component: Cart,
+      componentId: 'components/cart/cart',
+    });
+    const request = {};
+
+    await renderer.render({
+      input: {},
+      props: {},
+      request,
+      target: 'cart',
+    });
+
+    expect(queryRuntimeWarningsFromRequest(request)).toEqual([
+      { code: 'QUERY_LIST_LIMIT', limit: 100, path: '$.items' },
+    ]);
   });
 });
