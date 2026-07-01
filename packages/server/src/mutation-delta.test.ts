@@ -7,7 +7,7 @@ import { describe, expect, it } from 'vitest';
 import { domain } from './domain.js';
 import { renderMutationResponse } from './mutation.js';
 import { renderQueryChunks } from './mutation/targets.js';
-import { query } from './query.js';
+import { query, queryRuntimeWarningsFromRequest } from './query.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
 
@@ -222,6 +222,24 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     expect(response.status).toBe(200);
     expect(response.body).not.toContain(' delta>');
     expect(response.body).toContain('"count":1');
+  });
+
+  it('records query warnings from mutation rerun chunks on the lifecycle request', async () => {
+    const cart = domain('cart');
+    const cartQuery = query('cartWarning', {
+      load: () => ({ items: Array.from({ length: 105 }, (_, id) => ({ id })) }),
+      reads: [cart],
+    });
+    const request = {};
+
+    const chunks = await renderQueryChunks([cartQuery], [{ key: 'cartWarning' }], {}, request, [
+      { domain: 'cart' },
+    ]);
+
+    expect(chunks).toHaveLength(1);
+    expect(queryRuntimeWarningsFromRequest(request)).toEqual([
+      { code: 'QUERY_LIST_LIMIT', limit: 100, path: '$.items' },
+    ]);
   });
 });
 

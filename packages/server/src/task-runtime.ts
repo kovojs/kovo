@@ -1,6 +1,6 @@
 import { runMutation } from './mutation.js';
 import type { TaskScheduler } from './mutation/definition.js';
-import { runQuery } from './query.js';
+import { recordQueryRuntimeWarnings, runQuery } from './query.js';
 import { reportServerError } from './diagnostics.js';
 import {
   PostgresRecurringTaskOccurrenceStore,
@@ -8,11 +8,7 @@ import {
   ensureRecurringTaskSchema,
   type RecurringTaskMaterializer,
 } from './task-cron.js';
-import {
-  createDurableTaskRunner,
-  durableTaskScheduleInput,
-  type DurableTaskRunner,
-} from './task-runner.js';
+import { createDurableTaskRunner, type DurableTaskRunner } from './task-runner.js';
 import {
   PostgresDurableTaskQueue,
   createDurableTaskSqlExecutor,
@@ -20,7 +16,6 @@ import {
   type DurableTaskQueueStore,
 } from './task-queue.js';
 import type { KovoApp } from './app-types.js';
-import type { TaskHandle, TaskScheduleOptions } from './task.js';
 import type { DurableTaskRunnerErrorContext } from './task-runner.js';
 
 const TASK_CRON_POLL_INTERVAL_MS = 30_000;
@@ -60,21 +55,15 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
   private runner: DurableTaskRunner | undefined;
   private startPromise: Promise<void> | undefined;
 
-  readonly scheduler: TaskScheduler = {
-    cancel: async (request, handle) => this.queueForRequest(request).cancel(handle),
-    schedule: async (request, definition, args, options) => {
-      const enqueueInput = scheduledTaskInput(this.app.tasks, {
-        args,
-        definition,
-        options,
-      });
-      return this.queueForRequest(request).enqueue(enqueueInput) as Promise<
-        TaskHandle<typeof definition.key>
-      >;
-    },
-  };
+  readonly scheduler: TaskScheduler;
 
-  constructor(private readonly app: KovoApp) {}
+  constructor(private readonly app: KovoApp) {
+    this.scheduler = {
+      registeredTasks: app.tasks,
+      cancel: async (request, handle) => this.queueForRequest(request).cancel(handle),
+      schedule: async (request, input) => this.queueForRequest(request).enqueue(input),
+    };
+  }
 
   async ensureStarted(request: Request): Promise<void> {
     if (this.runner !== undefined) return;
@@ -143,6 +132,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
               `Durable task runQuery(${definition.key}) failed with ${result.status} ${result.error.code}.`,
             );
           }
+          recordQueryRuntimeWarnings(request, result.warnings);
           return result.value;
         },
       },
@@ -212,22 +202,6 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     }
     return new PostgresDurableTaskQueue(createDurableTaskSqlExecutor(request.db));
   }
-}
-
-function scheduledTaskInput(
-  registeredTasks: readonly KovoApp['tasks'][number][],
-  input: {
-    args: unknown;
-    definition: KovoApp['tasks'][number];
-    options: TaskScheduleOptions | undefined;
-  },
-) {
-  return durableTaskScheduleInput({
-    args: input.args,
-    definition: input.definition,
-    options: input.options,
-    registeredTasks,
-  });
 }
 
 function taskInternalRequest(seed: Request): Request {

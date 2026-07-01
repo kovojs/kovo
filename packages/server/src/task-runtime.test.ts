@@ -2,9 +2,10 @@ import { describe, expect, it, vi } from 'vitest';
 import { trustedHtml } from '@kovojs/browser';
 
 import { createApp, createRequestHandler } from './app.js';
+import { mutation, runMutation } from './mutation.js';
 import { route } from './route.js';
 import { s } from './schema.js';
-import { task } from './task.js';
+import { task, type TaskSchedulingRequest } from './task.js';
 import { createAppTaskRuntime } from './task-runtime.js';
 import type { DurableTaskSqlStatement } from './task-queue.js';
 
@@ -200,9 +201,16 @@ describe('durable task runtime (SPEC §9.6)', () => {
       tasks: [registered],
     });
     const runtime = createAppTaskRuntime(app);
+    const scheduleUnregistered = mutation('runtime/schedule-unregistered', {
+      csrf: false,
+      input: s.object({}),
+      handler(_input, request: TaskSchedulingRequest) {
+        return request.schedule(unregistered, {});
+      },
+    });
 
     await expect(
-      runtime?.scheduler.schedule({ db: {} }, unregistered, {}, undefined),
+      runMutation(scheduleUnregistered, {}, { db: {} }, { taskScheduler: runtime!.scheduler }),
     ).rejects.toThrow('No durable task is registered for key "unregistered.runtime".');
   });
 

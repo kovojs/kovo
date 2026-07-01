@@ -24,7 +24,12 @@ import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import type { DeferredRegionCollector } from './jsx-context.js';
 import type { MutationFail } from './mutation.js';
-import { runQuery, type QueryDefinition, type RegisteredQueryDefinition } from './query.js';
+import {
+  recordQueryRuntimeWarnings,
+  runQuery,
+  type QueryDefinition,
+  type RegisteredQueryDefinition,
+} from './query.js';
 import {
   htmlServerErrorResponse,
   blessRedirectResponse,
@@ -781,6 +786,7 @@ async function loadLayoutQueries<Request>(
     if (!result.ok) {
       throw new Error(`Layout query '${name}' failed with ${result.error.code}.`);
     }
+    recordQueryRuntimeWarnings(request, result.warnings);
     values[name] = result.value;
   }
 

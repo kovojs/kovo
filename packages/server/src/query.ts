@@ -37,6 +37,7 @@ interface QueryDeltaListMeta {
 }
 
 const DEFAULT_QUERY_LIST_ITEMS = 100;
+const queryRuntimeWarningsKey = Symbol.for('kovo.queryRuntimeWarnings');
 
 /** Explicit cache posture for proven public, session-independent typed reads (SPEC §9.4). */
 export interface QueryReadConfig {
@@ -586,6 +587,34 @@ export interface QueryRuntimeWarning {
   code: 'QUERY_LIST_LIMIT';
   limit: number;
   path: string;
+}
+
+/** @internal Record query-runtime warnings on the lifecycle request for SSR/wire responses. */
+export function recordQueryRuntimeWarnings(
+  request: unknown,
+  warnings: readonly QueryRuntimeWarning[] | undefined,
+): void {
+  if (warnings === undefined || warnings.length === 0) return;
+  if (typeof request !== 'object' || request === null) return;
+  const target = request as { [queryRuntimeWarningsKey]?: QueryRuntimeWarning[] };
+  const existing = target[queryRuntimeWarningsKey];
+  if (existing === undefined) {
+    Object.defineProperty(target, queryRuntimeWarningsKey, {
+      configurable: true,
+      enumerable: false,
+      value: [...warnings],
+      writable: true,
+    });
+    return;
+  }
+  existing.push(...warnings);
+}
+
+/** @internal Read query-runtime warnings recorded on a lifecycle request. */
+export function queryRuntimeWarningsFromRequest(request: unknown): readonly QueryRuntimeWarning[] {
+  if (typeof request !== 'object' || request === null) return [];
+  const warnings = (request as { [queryRuntimeWarningsKey]?: unknown })[queryRuntimeWarningsKey];
+  return Array.isArray(warnings) ? (warnings as QueryRuntimeWarning[]) : [];
 }
 
 /** @internal */
