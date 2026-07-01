@@ -337,10 +337,18 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     **N.4** add a committed un-enrolled branded-sink canary the gate MUST flag (M11).
   - Verify: `--require-complete` FAILS on a source-discovered handle/channel with no row; the canary is caught.
   - Evidence: `pnpm exec vitest --run scripts/fundamental-fixes-census-gate.test.mjs`, `node scripts/fundamental-fixes-census-gate.mjs --require-complete`, `pnpm run check:security-gate-mutations`, touched-file `vp check`, and `git diff --check` passed after the census gate derived 8 write-handle classifiers and 27 wire emitters from branded source calls and required manifest `sourceDecisions` enrollment for each.
-- [ ] **P.2 / P.3 — Wire-output + egress chokes (DEC5/DEC6, M8; P.2 after S4/S5).**
+- [x] **P.2 / P.3 — Wire-output + egress chokes (DEC5/DEC6, M8; P.2 after S4/S5).**
   - P.2: route every response-emitting path through `emitToWire()`; structural test that no channel writes a
     `Response`/document/header outside it. P.3: route task `ctx.fetch` + webhook + agent-tool egress through the egress
     floor; structural test that outbound-network primitives appear only behind it.
+  - Evidence: `pnpm exec vitest --run scripts/check-wire-output-boundary.test.mjs scripts/check-egress-boundary.test.mjs
+    packages/server/src/response.test.ts packages/server/src/response-posture.test.ts packages/server/src/endpoint.test.ts
+    packages/server/src/capability-route.test.ts packages/server/src/app.test.ts
+    packages/server/src/app-mutation-request.test.ts packages/drizzle/src/static-analysis-context.test.ts
+    packages/core/src/internal/wire-json.test.ts`, `pnpm run check:wire-output-boundary && pnpm run
+    check:egress-boundary`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after structured
+    response finalization routed through `emitToWire()`, the wire-output gate rejected direct response/header canaries,
+    and the existing egress boundary gate proved outbound primitives remain behind the DEC6 egress floor.
 
 ## Phase 5 — Widen the net (M9 threat categories; one commit each + an M1 dogfood pass)
 
