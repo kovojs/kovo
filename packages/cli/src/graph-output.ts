@@ -5,7 +5,11 @@ import { diagnosticDefinitionText, diagnosticDefinitions } from '@kovojs/core/in
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import type { DerivationProof } from '@kovojs/core/internal/derivation';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
+import {
+  deriveOwnershipPostureFacts,
+  deriveSessionAuthorityFacts,
+  validateKovoExplainInput,
+} from '@kovojs/core/internal/graph';
 import { frameworkSourceSinkInventory } from '@kovojs/core/internal/source-sink-registry';
 
 import { AUDIT_USAGE, CHECK_USAGE, EXPLAIN_USAGE_LINE } from './commands-manifest.js';
@@ -23,7 +27,7 @@ interface TouchGraphDiagnosticFact {
 
 interface UnguardedAccessFact {
   detail: string;
-  kind: 'endpoint' | 'mutation' | 'page' | 'query';
+  kind: 'endpoint' | 'mutation' | 'page' | 'query' | 'webhook';
   name: string;
 }
 
@@ -954,10 +958,7 @@ export function kovoCheck(
       // or a session/cookie-derived guard: authed, role(), owns()); CSRF protection is what makes
       // session auth safe, so a session-dependent endpoint that opts out of it is a contradiction.
       // A signature/verifier-authed webhook (auth:'verifier:*') is the legitimate exempt pattern.
-      if (
-        endpoint.csrf === 'exempt' &&
-        (endpoint.auth === 'authed' || (endpoint.guards ?? []).some(isSessionDerivedGuard))
-      ) {
+      if (endpoint.csrf === 'exempt' && endpointReferencesSessionAuthority(graph, endpoint)) {
         const message = diagnosticDefinitionText('KV418', { includeHelp: true });
         pushFinding(
           `ERROR KV418 ENDPOINT ${endpointName(endpoint)} csrf-exempt endpoint runs a session-derived guard. ${message}`,
@@ -977,7 +978,7 @@ export function kovoCheck(
       // forbids. The exemption is sound only by construction: a `csrf: false` mutation is served
       // with no ambient session (cookies uninterpreted). Truly non-browser writes belong in
       // endpoint()/webhook(). Fails closed — any session-authority signal raises KV418.
-      if (mutation.csrf === 'exempt' && mutationReferencesSession(mutation)) {
+      if (mutation.csrf === 'exempt' && mutationReferencesSessionAuthority(graph, mutation)) {
         const message = diagnosticDefinitionText('KV418', { includeHelp: true });
         pushFinding(
           `ERROR KV418 MUTATION ${mutation.key} csrf-exempt mutation references ambient session authority. ${message}`,
@@ -1755,6 +1756,23 @@ function compareAccessExplain(
 }
 
 function unguardedAccesses(input: CoreGraph.KovoExplainInput): UnguardedAccessFact[] {
+  if (input.authPosture !== undefined) {
+    const postures = new Map(input.authPosture.map((fact) => [authPostureKey(fact), fact]));
+    return accessPostureSurfaces(input)
+      .flatMap((surface) => {
+        const posture = postures.get(authPostureKey(surface));
+        if (posture?.guarded) return [];
+        return [
+          {
+            detail: posture?.detail ?? 'missing auth posture fact',
+            kind: surface.kind,
+            name: surface.name,
+          },
+        ];
+      })
+      .sort(compareUnguardedAccess);
+  }
+
   const guardedAccess = guardedAccessKeys(input.access ?? []);
   return [
     ...(input.endpoints ?? [])
@@ -1807,6 +1825,35 @@ function unguardedAccesses(input: CoreGraph.KovoExplainInput): UnguardedAccessFa
         name: page.route,
       })),
   ].sort(compareUnguardedAccess);
+}
+
+function accessPostureSurfaces(input: CoreGraph.KovoExplainInput): UnguardedAccessFact[] {
+  return [
+    ...(input.endpoints ?? []).map((endpoint) => ({
+      detail: '',
+      kind: endpointAccessKind(endpoint),
+      name: endpointName(endpoint),
+    })),
+    ...(input.mutations ?? []).map((mutation) => ({
+      detail: '',
+      kind: 'mutation' as const,
+      name: mutation.key,
+    })),
+    ...(input.queries ?? []).map((query) => ({
+      detail: '',
+      kind: 'query' as const,
+      name: query.query,
+    })),
+    ...(input.pages ?? []).map((page) => ({
+      detail: '',
+      kind: 'page' as const,
+      name: page.route,
+    })),
+  ];
+}
+
+function authPostureKey(fact: Pick<CoreGraph.AuthPostureFact, 'kind' | 'name'>): string {
+  return `${fact.kind}\0${fact.name}`;
 }
 
 function guardedAccessKeys(access: readonly CoreGraph.AccessExplainFact[]): ReadonlySet<string> {
@@ -2386,7 +2433,7 @@ function renderOnceInvalidationConflictLine(conflict: RenderOnceInvalidationConf
 
 function unscopedAccesses(input: CoreGraph.KovoCheckInput): CoreGraph.ScopeAuditFact[] {
   const ownerDomains = new Set((input.ownerDomains ?? []).map((owner) => owner.domain));
-  const ownsGuarded = ownsGuardedKeysByName(input);
+  const ownershipPosture = ownershipPostureFacts(input);
 
   return (
     (input.scopeAudits ?? [])
@@ -2394,103 +2441,67 @@ function unscopedAccesses(input: CoreGraph.KovoCheckInput): CoreGraph.ScopeAudit
       // SPEC §10.3: an owner-table access discharges KV414 when its key predicate is
       // session-traceable (scope 'session') OR an `owns()` ownership guard covers it.
       .filter((fact) => fact.scope !== 'session')
-      .filter((fact) => !ownsGuardCoversFact(ownsGuarded.get(fact.name), fact))
+      .filter((fact) => !ownershipPostureCoversFact(ownershipPosture, fact))
       .sort(compareScopeAudit)
   );
 }
 
-/** Query/mutation domain+key pairs whose guard chain includes an exact `owns()` ownership guard (SPEC §10.3). */
-function ownsGuardedKeysByName(
-  input: CoreGraph.KovoCheckInput,
-): Map<string, Map<string, Set<string>>> {
-  const keysByName = new Map<string, Map<string, Set<string>>>();
-  const add = (name: string, guard: OwnsGuardFact): void => {
-    let domains = keysByName.get(name);
-    if (!domains) {
-      domains = new Map();
-      keysByName.set(name, domains);
-    }
-    let keys = domains.get(guard.domain);
-    if (!keys) {
-      keys = new Set();
-      domains.set(guard.domain, keys);
-    }
-    keys.add(guard.key ?? '');
-  };
-  for (const query of input.queries ?? []) {
-    for (const guard of query.guards ?? []) {
-      const parsed = ownsGuardFact(guard);
-      if (parsed) add(query.query, parsed);
-    }
-  }
-  for (const mutation of input.mutations ?? []) {
-    for (const guard of mutation.guards ?? []) {
-      const parsed = ownsGuardFact(guard);
-      if (parsed) add(mutation.key, parsed);
-    }
-  }
-  return keysByName;
-}
-
-interface OwnsGuardFact {
-  domain: string;
-  key?: string;
-}
-
-function ownsGuardCoversFact(
-  domains: Map<string, Set<string>> | undefined,
+function ownershipPostureCoversFact(
+  facts: readonly CoreGraph.OwnershipPostureFact[] | undefined,
   fact: CoreGraph.ScopeAuditFact,
 ): boolean {
-  const keys = domains?.get(fact.domain);
-  if (!keys) return false;
-  return keys.has(fact.key ?? '');
+  return (facts ?? []).some(
+    (posture) =>
+      posture.ownerGuarded &&
+      posture.kind === fact.kind &&
+      posture.name === fact.name &&
+      posture.domain === fact.domain &&
+      (posture.key ?? '') === (fact.key ?? ''),
+  );
 }
 
-function ownsGuardFact(guard: string): OwnsGuardFact | undefined {
-  if (guard.startsWith('owns:')) {
-    const parts = guard.slice('owns:'.length).split(':');
-    const domain = parts[0]?.trim();
-    if (!domain) return undefined;
-    const key = parts.slice(1).join(':').trim();
-    return key ? { domain, key } : { domain };
-  }
-  if (guard.startsWith('owns(') && guard.endsWith(')')) {
-    const [domainPart, keyPart] = guard.slice('owns('.length, -1).split(',');
-    const domain = domainPart?.trim();
-    if (!domain) return undefined;
-    const key = keyPart?.trim();
-    return key ? { domain, key } : { domain };
-  }
-  return undefined;
+function ownershipPostureFacts(
+  input: CoreGraph.KovoCheckInput,
+): readonly CoreGraph.OwnershipPostureFact[] {
+  if (input.ownershipPosture !== undefined) return input.ownershipPosture;
+  return deriveOwnershipPostureFacts({
+    ...(input.mutations === undefined ? {} : { mutations: input.mutations }),
+    ...(input.queries === undefined ? {} : { queries: input.queries }),
+  });
 }
 
-function isOwnsGuard(guard: string): boolean {
-  return guard === 'owns' || ownsGuardFact(guard) !== undefined;
+function sessionAuthorityFacts(
+  input: CoreGraph.KovoCheckInput,
+): readonly CoreGraph.SessionAuthorityFact[] {
+  if (input.sessionAuthority !== undefined) return input.sessionAuthority;
+  return deriveSessionAuthorityFacts({
+    ...(input.endpoints === undefined ? {} : { endpoints: input.endpoints }),
+    ...(input.mutations === undefined ? {} : { mutations: input.mutations }),
+  });
 }
 
-/**
- * SPEC §6.6/§9.1: classify a guard name as session/cookie-derived. The enumerated
- * session-authority combinators are `authed`, `role(...)`, and `owns(...)`; their authority
- * derives from `req.session`, so a CSRF-exempt endpoint or mutation that runs one is the
- * forgeable contradiction KV418 forbids. Shared by the endpoint and mutation KV418 gates.
- */
-function isSessionDerivedGuard(guard: string): boolean {
-  return guard === 'authed' || guard.startsWith('role:') || isOwnsGuard(guard);
+function endpointReferencesSessionAuthority(
+  input: CoreGraph.KovoCheckInput,
+  endpoint: CoreGraph.EndpointExplain,
+): boolean {
+  const kind = endpoint.surface === 'webhook' ? 'webhook' : 'endpoint';
+  const name = endpointName(endpoint);
+  const fact = sessionAuthorityFacts(input).find(
+    (candidate) => candidate.kind === kind && candidate.name === name,
+  );
+  if (fact === undefined && input.sessionAuthority !== undefined) return true;
+  return fact?.referencesSession === true;
 }
 
-/**
- * SPEC §6.6/§9.1: does this mutation reference ambient browser (session/cookie) authority?
- * Fails closed across every session-authority signal a `MutationExplain` can carry:
- *  (a) `session` — the handler or guard reads `req.session` (the typed session schema name);
- *  (b) a session/cookie-derived guard in the `guard:` chain (authed/role()/owns());
- *  (c) a session-derived `auth` posture (authed/role:). A `verifier:*`/`custom:*` posture is
- *      machine auth (not session-derived) and is NOT a KV418 trigger, mirroring the legitimate
- *      signature-verifier exempt pattern for endpoints/webhooks.
- */
-function mutationReferencesSession(mutation: CoreGraph.MutationExplain): boolean {
-  if (mutation.session) return true;
-  if ((mutation.guards ?? []).some(isSessionDerivedGuard)) return true;
-  return mutation.auth === 'authed' || mutation.auth?.startsWith('role:') === true;
+function mutationReferencesSessionAuthority(
+  input: CoreGraph.KovoCheckInput,
+  mutation: CoreGraph.MutationExplain,
+): boolean {
+  const fact = sessionAuthorityFacts(input).find(
+    (candidate) => candidate.kind === 'mutation' && candidate.name === mutation.key,
+  );
+  if (fact === undefined && input.sessionAuthority !== undefined) return true;
+  return fact?.referencesSession === true;
 }
 
 function unscopedLine(fact: CoreGraph.ScopeAuditFact): string {

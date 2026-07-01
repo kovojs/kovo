@@ -2,6 +2,7 @@ export type {
   AccessDecisionFact,
   AccessDerivationInput,
   AccessExplainFact,
+  AuthPostureFact,
   AttributeMergeExplain,
   CapabilityExplain,
   CaptureChannel,
@@ -29,6 +30,7 @@ export type {
   MutationFormFieldErrorExplain,
   OptimisticCoverage,
   OwnerDomainFact,
+  OwnershipPostureFact,
   PackageComponentPrefixExplain,
   PageExplain,
   PageMetaExplain,
@@ -49,6 +51,7 @@ export type {
   RenderEquivalenceCheck,
   ScopeAuditFact,
   SemanticLint,
+  SessionAuthorityFact,
   SourcePosition,
   SqlSafetyDiagnosticFact,
   SqlSafetyExplainFact,
@@ -66,4 +69,10 @@ export type {
   VerificationCoverageFact,
   VerificationDiagnosticFact,
 } from '../graph.js';
-export { deriveAccessExplainFacts, validateKovoExplainInput } from '../graph.js';
+export {
+  deriveAccessExplainFacts,
+  deriveAuthPostureFacts,
+  deriveOwnershipPostureFacts,
+  deriveSessionAuthorityFacts,
+  validateKovoExplainInput,
+} from '../graph.js';
