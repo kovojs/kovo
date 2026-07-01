@@ -61,6 +61,10 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'sql-safe-handle/drop-managed-raw-driver-escape-denial',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'check-sink-policy-gate/drop-response-fragment-trustedhtml-route-count',
           status: 'killed',
         }),

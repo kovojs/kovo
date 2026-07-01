@@ -64,7 +64,8 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
   - [ ] declared mutation/capability storage writes still work through the audited path [H]
 - [ ] raw driver `$client` / `.session` escape from any managed handle [H]
   - [ ] managed write handle `$client`/`.session` escapes fail closed before nested wrapping [H]
-  - [ ] read-only handle `$client`/`.session` escapes fail closed before execution [H]
+  - [x] read-only handle `$client`/`.session` escapes fail closed before execution [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot` passed 8 prod-artifact tests including default+SQLite read-only escape attempts; M2 row proof uses `buildProductionArtifact(root)`; M3 `pnpm run check:security-gate-mutations` killed `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
   - [ ] webhook transaction `$client`/`.session` escapes fail closed before execution [H]
 - [ ] unknown/future drizzle method OR driver dialect → **fails closed by default** (not a matrix update) [H/I]
   - [ ] unknown method with a SQL carrier is parsed before execution [H/I]

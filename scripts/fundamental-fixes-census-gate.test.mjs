@@ -46,13 +46,16 @@ describe('fundamental-fixes-census-gate', () => {
       resolverExpressionKindRows: REQUIRED_RESOLVER_EXPRESSION_KINDS.length,
       writeCapableHandleRows: 23,
     });
-    expect(report.openRows).toHaveLength(report.rowCount - 3);
+    expect(report.openRows).toHaveLength(report.rowCount - 4);
     expect(report.openRows).not.toContain(
       'kv426-blocks-trustedhtml-request-taint-in-a-prod-artifact',
     );
     expect(report.openRows).not.toContain('kv426-blocks-trustedurl-query-taint-in-a-prod-artifact');
     expect(report.openRows).not.toContain(
       'kv426-blocks-internal-renderedhtml-query-taint-in-a-prod-artifact',
+    );
+    expect(report.openRows).not.toContain(
+      'read-only-handle-client-session-escapes-fail-closed-before-execution',
     );
   });
 

@@ -29,6 +29,7 @@ const trustedHtmlProvenancePath = path.join(
   repoRoot,
   'packages/compiler/src/validate/trusted-html-provenance.ts',
 );
+const sqlSafeHandlePath = path.join(repoRoot, 'packages/server/src/sql-safe-handle.ts');
 
 const missingRealBuildProofBranch = [
   '      if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
@@ -221,6 +222,22 @@ const removedManagedDbThrowBranch = [
   '    if (false && !returnsOnValidThenThrows) {',
   '      findings.push(`${filePath}: managed DB handle must throw on failed SQL validation`);',
   '    }',
+].join('\n');
+
+const managedRawDriverEscapeBranch = [
+  '      if (writePolicy !== undefined && isManagedRawDriverEscapeProperty(prop)) {',
+  '        throw new Error(',
+  '          `KV422: managed DB raw driver escape ${describeSqlMethod(prop)} is not exposed from framework-owned handles (SPEC §10.2/§10.3). Use the managed SQL methods so statement provenance and declared-table enforcement remain attached.`,',
+  '        );',
+  '      }',
+].join('\n');
+
+const removedManagedRawDriverEscapeBranch = [
+  '      if (false && writePolicy !== undefined && isManagedRawDriverEscapeProperty(prop)) {',
+  '        throw new Error(',
+  '          `KV422: managed DB raw driver escape ${describeSqlMethod(prop)} is not exposed from framework-owned handles (SPEC §10.2/§10.3). Use the managed SQL methods so statement provenance and declared-table enforcement remain attached.`,',
+  '        );',
+  '      }',
 ].join('\n');
 
 const responseFragmentTrustedHtmlRouteBranch = [
@@ -562,6 +579,16 @@ export const SECURITY_GATE_MUTANTS = [
     search: managedDbThrowBranch,
     sourceFile: sinkPolicyGatePath,
     test: assertManagedDbThrowInvariantIsCaught,
+  },
+  {
+    description: 'Deletes the managed raw-driver escape denial before nested handle wrapping.',
+    expectedKiller: 'H/I managed raw-driver escapes must be denied before Reflect.get',
+    name: 'sql-safe-handle/drop-managed-raw-driver-escape-denial',
+    replacement: removedManagedRawDriverEscapeBranch,
+    search: managedRawDriverEscapeBranch,
+    sourceFile: sqlSafeHandlePath,
+    sourceOnly: true,
+    test: assertManagedRawDriverEscapeDenialPrecedesNestedWrapping,
   },
   {
     baseModule: sinkPolicyGate,
@@ -1161,6 +1188,26 @@ async function assertManagedDbThrowInvariantIsCaught(moduleUnderTest) {
     findings,
     'packages/server/src/sql-safe-handle.ts: managed DB handle must throw on failed SQL validation',
   );
+}
+
+async function assertManagedRawDriverEscapeDenialPrecedesNestedWrapping(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  const denial = sourceText.indexOf(
+    'if (writePolicy !== undefined && isManagedRawDriverEscapeProperty(prop))',
+  );
+  if (denial === -1) {
+    throw new Error('managed raw-driver escape denial branch is missing');
+  }
+  const firstReflectGet = sourceText.indexOf('Reflect.get(target, prop, receiver)');
+  const nestedWrap = sourceText.indexOf('isNestedSqlHandleProperty(prop)');
+  if (firstReflectGet === -1 || nestedWrap === -1) {
+    throw new Error('managed SQL handle wrapping landmarks are missing');
+  }
+  if (denial > firstReflectGet || denial > nestedWrap) {
+    throw new Error('managed raw-driver escape denial must run before Reflect.get/nested wrapping');
+  }
 }
 
 async function assertResponseFragmentTrustedHtmlRouteCountIsCaught(moduleUnderTest) {

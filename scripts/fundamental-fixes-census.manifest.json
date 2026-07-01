@@ -142,9 +142,25 @@
       "id": "read-only-handle-client-session-escapes-fail-closed-before-execution",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "raw-driver-client-session-escape-from-any-managed-handle"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot (8 passed, 135.07s); row proof uses buildProductionArtifact(root); pnpm run check:security-gate-mutations (29 mutants killed, including sql-safe-handle/drop-managed-raw-driver-escape-denial)",
+      "parent": "raw-driver-client-session-escape-from-any-managed-handle",
+      "evidenceBundles": ["m1-prod-artifact-transactions", "m3-security-gate-mutations"],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot (8 passed, 135.07s)",
+        "dialects": {
+          "postgres": "transactions prod-artifact default dialect case blocks read-only $client/session/futureStatement attempts and preserves successful writes",
+          "sqlite": "transactions prod-artifact SQLite case blocks read-only $client/session/futureStatement attempts and preserves successful writes"
+        },
+        "independentReviewer": "agent/followup-hi-sql-20260701-080440 implemented the H/I slice; main reverified the prod-artifact transaction/raw-SQL command in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving the production server artifact",
+        "noFixtureOnlyCertification": "row evidence is the prod-artifact transactions test command, not a fixture-only extraFiles/unit shortcut"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (29 mutants killed, including sql-safe-handle/drop-managed-raw-driver-escape-denial)"
+      }
     },
     {
       "id": "webhook-transaction-client-session-escapes-fail-closed-before-execution",
@@ -1293,6 +1309,10 @@
     "m3-security-gate-mutations": {
       "command": "pnpm run check:security-gate-mutations",
       "evidence": "Mutation harness kills branch removals in enrolled security and census gates."
+    },
+    "m1-prod-artifact-transactions": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot",
+      "evidence": "Production artifact transaction/raw-SQL starter tests build with kovo build --no-cache and exercise default plus SQLite runtime SQL handle paths."
     }
   }
 }
