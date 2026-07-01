@@ -60,9 +60,7 @@ const STAGED_STATIC_EXPORT_PUBLIC_ASSETS = [
 
 function findUndefinedCustomProperties(css) {
   const defined = new Set([...css.matchAll(/(?<![\w-])(--[\w-]+)\s*:/g)].map((match) => match[1]));
-  const referenced = new Set(
-    [...css.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]),
-  );
+  const referenced = new Set([...css.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]));
   return [...referenced].filter((property) => !defined.has(property)).sort();
 }
 
