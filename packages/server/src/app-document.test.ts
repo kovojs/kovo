@@ -56,6 +56,56 @@ function expectDocumentSecurityFloor(headers: Record<string, string | readonly s
   expect(headerValue(headers, 'cache-control')).toBe('private, no-store');
 }
 
+describe('trusted request scheme provenance', () => {
+  it('does not attach HSTS from a spoofed x-forwarded-proto header on an http Request', async () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+      const request = new Request('http://shop.example.test/', {
+        headers: { 'x-forwarded-proto': 'https' },
+      });
+
+      const response = await renderAppRouteDocumentResponse({
+        app: createApp({ routes: [homeRoute] }),
+        params: {},
+        request,
+        route: homeRoute,
+        url: new URL(request.url),
+      });
+
+      expect(headerValue(response.headers, 'strict-transport-security')).toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
+
+  it('attaches HSTS when the adapter-proven request URL scheme is https', async () => {
+    const previous = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+      const request = new Request('https://shop.example.test/');
+
+      const response = await renderAppRouteDocumentResponse({
+        app: createApp({ routes: [homeRoute] }),
+        params: {},
+        request,
+        route: homeRoute,
+        url: new URL(request.url),
+      });
+
+      expect(headerValue(response.headers, 'strict-transport-security')).toBe(
+        'max-age=63072000; includeSubDomains',
+      );
+    } finally {
+      if (previous === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previous;
+    }
+  });
+});
+
 // ─── DEPLOY-3: module-less app always stamps kovo-build ───────────────────────
 
 describe('kovo-build meta always stamped (DEPLOY-3, D1)', () => {

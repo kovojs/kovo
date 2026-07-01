@@ -4,6 +4,7 @@ import { createBrotliCompress, createGzip } from 'node:zlib';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import type { ReadableStream as NodeReadableStream } from 'node:stream/web';
 import type { RequestHandler } from './app-types.js';
+import { trustedNodeRequestScheme } from './request-scheme.js';
 
 /** Options for adapting a Web `RequestHandler` to a Node `http` listener. */
 export interface NodeHandlerOptions {
@@ -333,14 +334,9 @@ function defaultOrigin(request: IncomingMessage, options: NodeHandlerOptions): s
   // works for HTTP/2 requests, not just HTTP/1.1.
   const pseudoHeaders = request.headers as Record<string, string | string[] | undefined>;
   const host = request.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
-  const forwardedProto = options.trustedProxy
-    ? firstHeaderValue(request.headers['x-forwarded-proto'])
-    : undefined;
-  const pseudoScheme = firstHeaderValue(pseudoHeaders[':scheme']);
-  const proto =
-    forwardedProto ??
-    pseudoScheme ??
-    ((request.socket as { encrypted?: boolean }).encrypted ? 'https' : 'http');
+  const proto = trustedNodeRequestScheme(request, {
+    ...(options.trustedProxy === undefined ? {} : { trustedProxy: options.trustedProxy }),
+  });
 
   return `${proto}://${host}`;
 }

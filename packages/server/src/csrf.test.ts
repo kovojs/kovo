@@ -317,6 +317,18 @@ describe('csrf helpers', () => {
     expect(cookie).toContain('Path=/');
   });
 
+  it('does not make anonymous CSRF cookies Secure from spoofed x-forwarded-proto', () => {
+    const cookie = mintAnonymousCsrfCookie(
+      new Request('http://shop.example.test/login', {
+        headers: { 'x-forwarded-proto': 'https' },
+      }),
+    );
+
+    expect(cookie).toContain('HttpOnly');
+    expect(cookie).not.toContain('Secure');
+    expect(cookie).toMatch(/^kovo_csrf=/);
+  });
+
   it('forces Secure in production even when the request URL is plain http', () => {
     const previous = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';

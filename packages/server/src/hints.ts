@@ -1,4 +1,4 @@
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { fileURLToPath } from 'node:url';
 
 import {
   cspHashAttribute,
@@ -9,8 +9,13 @@ import {
 } from './csp.js';
 import { escapeAttribute, escapeHtml, escapeScriptJson, safeUrlValue } from './html.js';
 
-const stylesheetSourceSymbol = Symbol.for('kovo.stylesheet.source');
-const stylesheetSourcePathSymbol = Symbol.for('kovo.stylesheet.sourcePath');
+const stylesheetSourceProvenance = new WeakMap<
+  StylesheetAsset,
+  {
+    readonly file?: string;
+    readonly path?: string;
+  }
+>();
 
 /**
  * Per-route Speculation Rules eagerness (SPEC §8). `'conservative'` and `'moderate'`
@@ -188,21 +193,11 @@ export function stylesheet(
     ...(options.preload === undefined ? {} : { preload: options.preload }),
   };
   const sourcePath = source === undefined ? undefined : localStylesheetSourcePath(source);
-  if (sourcePath !== undefined) {
-    Object.defineProperty(asset, stylesheetSourcePathSymbol, {
-      configurable: false,
-      enumerable: false,
-      value: sourcePath,
-      writable: false,
-    });
-  }
   const sourceFile = sourcePath === undefined ? undefined : localStylesheetSourceFile(sourcePath);
-  if (sourceFile !== undefined) {
-    Object.defineProperty(asset, stylesheetSourceSymbol, {
-      configurable: false,
-      enumerable: false,
-      value: sourceFile,
-      writable: false,
+  if (sourcePath !== undefined || sourceFile !== undefined) {
+    stylesheetSourceProvenance.set(asset, {
+      ...(sourceFile === undefined ? {} : { file: sourceFile }),
+      ...(sourcePath === undefined ? {} : { path: sourcePath }),
     });
   }
   return asset;
@@ -210,12 +205,12 @@ export function stylesheet(
 
 /** @internal */
 export function stylesheetSourceFile(asset: StylesheetAsset): string | undefined {
-  return stylesheetInternalMetadata(asset, stylesheetSourceSymbol);
+  return stylesheetSourceProvenance.get(asset)?.file;
 }
 
 /** @internal */
 export function stylesheetSourcePath(asset: StylesheetAsset): string | undefined {
-  return stylesheetInternalMetadata(asset, stylesheetSourcePathSymbol);
+  return stylesheetSourceProvenance.get(asset)?.path;
 }
 
 /**
@@ -383,17 +378,13 @@ function localStylesheetSourcePath(source: string): string | undefined {
 
 function localStylesheetSourceFile(cleanSource: string): string | undefined {
   const callerFile = stylesheetCallerFile(new Error().stack);
-  const baseUrl = callerFile === undefined ? undefined : new URL('.', callerFile);
+  if (callerFile === undefined) return undefined;
+  const baseUrl = new URL('.', callerFile);
   try {
-    return fileURLToPath(new URL(cleanSource, baseUrl ?? pathToFileURL(`${process.cwd()}/`)));
+    return fileURLToPath(new URL(cleanSource, baseUrl));
   } catch {
     return undefined;
   }
-}
-
-function stylesheetInternalMetadata(asset: StylesheetAsset, key: symbol): string | undefined {
-  const value = Reflect.get(asset, key);
-  return typeof value === 'string' ? value : undefined;
 }
 
 function stylesheetCallerFile(stack: string | undefined): string | undefined {

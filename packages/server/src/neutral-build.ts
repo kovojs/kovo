@@ -553,19 +553,29 @@ function addStylesheetSource(
   if (typeof asset === 'string') return;
 
   const assetPath = localStylesheetAssetPath(asset.href);
+  if (!assetPath) return;
   const sourceFile =
-    stylesheetSourceFile(asset) ?? stylesheetSourceFileFromRoot(asset, stylesheetSourceRoot);
-  if (!assetPath || sourceFile === undefined) return;
+    stylesheetSourceFile(asset) ??
+    stylesheetSourceFileFromRoot(asset, stylesheetSourceRoot, assetPath);
+  if (sourceFile === undefined) return;
   if (!sources.has(assetPath)) sources.set(assetPath, sourceFile);
 }
 
 function stylesheetSourceFileFromRoot(
   asset: StylesheetAsset,
   stylesheetSourceRoot: string | undefined,
+  assetPath: string,
 ): string | undefined {
   const sourcePath = stylesheetSourcePath(asset);
   if (sourcePath === undefined || stylesheetSourceRoot === undefined) return undefined;
-  return path.resolve(stylesheetSourceRoot, sourcePath);
+  const sourceFile = path.resolve(stylesheetSourceRoot, sourcePath);
+  const relativeToRoot = path.relative(stylesheetSourceRoot, sourceFile);
+  if (relativeToRoot === '' || relativeToRoot.startsWith('..') || path.isAbsolute(relativeToRoot)) {
+    throw new Error(
+      `KV229 neutral build cannot materialize stylesheet '${assetPath}' from local source '${sourcePath}' outside stylesheetSourceRoot '${stylesheetSourceRoot}'. SPEC §9.5 static export writes referenced static assets with route documents.`,
+    );
+  }
+  return sourceFile;
 }
 
 function buildStylesheetCssHref(

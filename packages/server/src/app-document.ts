@@ -35,6 +35,7 @@ import {
 } from './route.js';
 import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
 import type { KovoApp } from './app-types.js';
+import { isTrustedSecureRequest } from './request-scheme.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
 const fallbackBroadcastFingerprintSecret = randomBytes(32);
@@ -189,12 +190,10 @@ export async function renderAppRouteDocumentResponse({
     request.headers.get('accept'),
   );
 
-  // SPEC §6.6: HSTS is attached only over a genuine HTTPS request (direct or via a
-  // trusted x-forwarded-proto), so non-HTTPS/localhost dev is never bricked. Conservative
-  // by design — a missing/forged proto header simply omits HSTS (fail-safe).
-  const secure =
-    new URL(request.url).protocol === 'https:' ||
-    request.headers.get('x-forwarded-proto') === 'https';
+  // SPEC §6.6: HSTS is attached only when the adapter-proven request scheme is HTTPS.
+  // Do not reread spoofable forwarding headers here; trusted proxy configuration is
+  // already reflected in Request.url by the adapter.
+  const secure = isTrustedSecureRequest(request);
 
   const documentResponse = renderRouteDocumentResponse(
     routeResponseToDocumentResponse(routeResponse),
@@ -384,9 +383,7 @@ function renderConfiguredErrorShellDocumentResponse(
   // SPEC §9.2/§9.5: configured request-shell error bodies are still framework-owned
   // documents. They therefore receive the same document security/header floor as route
   // documents instead of bypassing CSP/XFO/nosniff/cache defaults.
-  const secure =
-    new URL(request.url).protocol === 'https:' ||
-    request.headers.get('x-forwarded-proto') === 'https';
+  const secure = isTrustedSecureRequest(request);
   const documentResponse = renderRouteDocumentResponse(
     {
       ...response,

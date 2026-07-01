@@ -2,7 +2,14 @@ import { describe, expect, it } from 'vitest';
 
 import { versionedClientModuleHref } from './client-modules.js';
 import { renderDeferredStream } from './deferred-stream.js';
-import { renderPageHints, stylesheet, stylesheetsForTargets } from './hints.js';
+import {
+  renderPageHints,
+  stylesheet,
+  stylesheetSourceFile,
+  stylesheetSourcePath,
+  stylesheetsForTargets,
+  type StylesheetAsset,
+} from './hints.js';
 
 describe('page hints', () => {
   it('renders modulepreloads, opt-in speculation rules, and Early Hints headers', () => {
@@ -116,6 +123,17 @@ describe('page hints', () => {
       criticalCss: ':root{--only-theme:1}',
       href: '/assets/styles.css',
     });
+  });
+
+  it('does not trust forged stylesheet source symbols', () => {
+    const forged = {
+      href: '/assets/forged.css',
+      [Symbol.for('kovo.stylesheet.source')]: '/tmp/forged.css',
+      [Symbol.for('kovo.stylesheet.sourcePath')]: '../forged.css',
+    } as StylesheetAsset;
+
+    expect(stylesheetSourceFile(forged)).toBeUndefined();
+    expect(stylesheetSourcePath(forged)).toBeUndefined();
   });
 
   it('prunes critical theme CSS to variables reachable from critical rules', () => {
