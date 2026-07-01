@@ -10,6 +10,7 @@ import {
 
 import { offsetToPosition, type CompilerDiagnostic } from '../diagnostics.js';
 import { deriveMutationKey } from '../mutation-names.js';
+import { deriveRegistryIdentity } from '../registry-identities.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
 import type { StaticLiteralValue } from './object.js';
@@ -1401,7 +1402,9 @@ function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
   if (first && ts.isStringLiteralLike(first)) return first.text;
 
   const exported = exportedConstInitializerName(call);
-  if ('exportedConstName' in exported) return exported.exportedConstName;
+  if ('exportedConstName' in exported) {
+    return deriveRegistryIdentity(sourceFile.fileName, exported.exportedConstName).key;
+  }
   return sourceFile.fileName;
 }
 

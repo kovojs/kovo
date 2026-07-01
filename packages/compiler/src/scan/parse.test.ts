@@ -557,6 +557,24 @@ export const sendReceipt = task('email/send-receipt', {
     });
   });
 
+  it('records object-form durable task handlers with source-derived keys', () => {
+    const source = `
+export const sendReceipt = task({
+  input: receiptInput,
+  async run(args, ctx) {
+    await ctx.runQuery(orderQuery, { id: args.orderId });
+  },
+});
+`;
+    const [handler] = taskRunHandlers(parseComponentModule('src/tasks.ts', source));
+
+    expect(handler).toMatchObject({
+      key: 'tasks/send-receipt',
+      paramNames: ['args', 'ctx'],
+      runQueryEdges: ['orderQuery'],
+    });
+  });
+
   it('records task direct write sink facts separately from composition edges', () => {
     const source = `
 export const sendReceipt = task('email/send-receipt', {

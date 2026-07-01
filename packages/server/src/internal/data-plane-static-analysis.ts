@@ -15,6 +15,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
+import type { RuntimeRegistryWireFacts } from './runtime-registry-wire.js';
 
 /** @internal Compiler-compatible query shape used for KV302/KV435 validation. */
 export type QueryShape =
@@ -78,13 +79,7 @@ export interface StaticDataPlaneBuildFacts {
 }
 
 /** @internal Runtime registry facts derived from the same static query/write facts. */
-export interface DataPlaneRuntimeRegistryFacts {
-  mutationTouches: Readonly<Record<string, readonly RuntimeMutationTouchSiteLike[]>>;
-  queryReads: readonly {
-    domains: readonly string[];
-    query: string;
-  }[];
-}
+export type DataPlaneRuntimeRegistryFacts = RuntimeRegistryWireFacts;
 
 /** @internal Options for CLI build/check static data-plane fact extraction. */
 export interface StaticDataPlaneBuildFactsOptions {
@@ -114,11 +109,6 @@ export interface RuntimeMutationTouchSiteLike {
   crossTable?: true;
   domain: string;
   keys: null | string;
-}
-
-interface RuntimeQueryFactLike {
-  reads: readonly string[];
-  query: string;
 }
 
 interface RuntimeQueryShapeFactLike {
@@ -287,26 +277,19 @@ export async function collectRuntimeRegistryFacts(options: {
 }): Promise<DataPlaneRuntimeRegistryFacts> {
   const analysis = await collectDataPlaneAnalysis(options);
   if (analysis.files.length === 0) return { mutationTouches: {}, queryReads: [] };
+  const { runtimeRegistryMutationTouchesFromGraph, runtimeRegistryQueryReadsFromFacts } =
+    await importRuntimeRegistryWireModule();
 
-  const drizzle = await importKovoDrizzleStaticModule();
-  const queryReads = runtimeQueryReads(analysis.staticFacts.queries);
-  const touchGraph = analysis.staticFacts.touchGraph;
-  const touchGraphKeys =
-    touchGraph && typeof touchGraph === 'object' && !Array.isArray(touchGraph)
-      ? Object.keys(touchGraph)
-      : [];
-  const mutationTouches =
-    touchGraphKeys.length === 0
-      ? {}
-      : drizzle.deriveMutationTouchRegistry({
-          mutations: touchGraphKeys.sort().map((key) => ({
-            mutation: key,
-            touchGraphKey: key,
-          })),
-          touchGraph,
-        });
-
-  return { mutationTouches, queryReads };
+  return {
+    mutationTouches: runtimeRegistryMutationTouchesFromGraph(
+      analysis.staticFacts.touchGraph === undefined
+        ? {}
+        : { touchGraph: analysis.staticFacts.touchGraph as CoreGraph.TouchGraph },
+    ),
+    queryReads: runtimeRegistryQueryReadsFromFacts(
+      analysis.staticFacts.queries as readonly { query?: unknown; reads?: readonly unknown[] }[],
+    ),
+  };
 }
 
 /** @internal Run CLI build/check static data-plane extraction with shared resolver/cache/facts. */
@@ -698,23 +681,6 @@ function mergeCompilerQueryShapes(
     return merged;
   }
   return staticShape;
-}
-
-function runtimeQueryReads(
-  queryFacts: readonly unknown[],
-): DataPlaneRuntimeRegistryFacts['queryReads'] {
-  return queryFacts
-    .filter((fact): fact is RuntimeQueryFactLike => {
-      const candidate = fact as RuntimeQueryFactLike;
-      return (
-        typeof candidate.query === 'string' &&
-        Array.isArray(candidate.reads) &&
-        candidate.reads.every((domain) => typeof domain === 'string') &&
-        candidate.reads.length > 0
-      );
-    })
-    .map((fact) => ({ domains: [...fact.reads], query: fact.query }))
-    .sort((left, right) => left.query.localeCompare(right.query));
 }
 
 function outputSchemaQueryShapeFacts(
@@ -1215,6 +1181,18 @@ function statSafe(path: string): ReturnType<typeof statSync> | undefined {
     return statSync(path);
   } catch {
     return undefined;
+  }
+}
+
+async function importRuntimeRegistryWireModule(): Promise<
+  typeof import('./runtime-registry-wire.js')
+> {
+  try {
+    return await import('./runtime-registry-wire.js');
+  } catch (error) {
+    const sourceUrl = new URL('./runtime-registry-wire.ts', import.meta.url);
+    if (existsSync(sourceUrl)) return await import(sourceUrl.href);
+    throw error;
   }
 }
 

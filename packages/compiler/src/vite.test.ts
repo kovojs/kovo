@@ -101,13 +101,14 @@ export function renderSource() {
     });
     const transformed = await plugin.transform(
       `
-import { domain, mutation, query, tag, webhook } from '@kovojs/server';
+import { domain, mutation, query, tag, task, webhook } from '@kovojs/server';
 
 export const contact = domain();
 export const contactRow = tag();
 export const addToCart = mutation({ handler() {}, input: {} });
 export const cartQuery = query({ load: () => ({ count: 1 }), reads: [] });
 export const auditQuery = query({ load: () => ({ ok: true }), reads: [] });
+export const sendReceipt = task({ input: {}, run() {} });
 export const orderPaid = webhook('/webhooks/order-paid', {
   handler() {},
   input: {},
@@ -121,7 +122,7 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     expect(compileComponentModule).not.toHaveBeenCalled();
     expect(transformed).toMatchObject({ map: null });
     expect(transformed?.code).toContain(
-      "import { assignDerivedDomainKey as __kovoAssignDerivedDomainKey, assignDerivedMutationKey as __kovoAssignDerivedMutationKey, assignDerivedQueryKey as __kovoAssignDerivedQueryKey, assignDerivedWebhookName as __kovoAssignDerivedWebhookName } from '@kovojs/server/internal/wire';",
+      "import { assignDerivedDomainKey as __kovoAssignDerivedDomainKey, assignDerivedMutationKey as __kovoAssignDerivedMutationKey, assignDerivedQueryKey as __kovoAssignDerivedQueryKey, assignDerivedTaskKey as __kovoAssignDerivedTaskKey, assignDerivedWebhookName as __kovoAssignDerivedWebhookName } from '@kovojs/server/internal/wire';",
     );
     expect(transformed?.code).toContain(
       'export const contact = __kovoAssignDerivedDomainKey(domain(), "app-shell/contact")',
@@ -137,6 +138,9 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     );
     expect(transformed?.code).toContain(
       'export const auditQuery = __kovoAssignDerivedQueryKey(query({ load: () => ({ ok: true }), reads: [] }), "app-shell/audit-query")',
+    );
+    expect(transformed?.code).toContain(
+      'export const sendReceipt = __kovoAssignDerivedTaskKey(task({ input: {}, run() {} }), "app-shell/send-receipt")',
     );
     expect(transformed?.code).toContain(
       'export const orderPaid = __kovoAssignDerivedWebhookName(webhook',
@@ -258,7 +262,7 @@ export const ExportedRegion = component({ queries: { cart: cartQuery }, render()
       fileName: 'src/app-shell.tsx',
       source: `
 import { component as defineComponent } from '@kovojs/core';
-import { domain as defineDomain, mutation as defineMutation } from '@kovojs/server/api/data';
+import { domain as defineDomain, mutation as defineMutation, task as defineTask } from '@kovojs/server/api/data';
 import * as data from '@kovojs/server/api/data';
 import * as routing from '@kovojs/server/api/routing';
 
@@ -271,6 +275,7 @@ export const contactTag = data.tag();
 export const addToCart = defineMutation({ handler() {}, input: {} });
 export const cartQuery = DataQuery({ load: () => ({ count: 1 }), reads: [] });
 export const auditQuery = DataQuery({ load: () => ({ ok: true }), reads: [] });
+export const sendReceipt = defineTask({ input: {}, run() {} });
 export const orderPaid = routing.webhook('/webhooks/order-paid', {
   handler() {},
   input: {},
@@ -299,6 +304,9 @@ export const orderPaid = routing.webhook('/webhooks/order-paid', {
       'export const auditQuery = __kovoAssignDerivedQueryKey(DataQuery({ load: () => ({ ok: true }), reads: [] }), "app-shell/audit-query")',
     );
     expect(transformed).toContain(
+      'export const sendReceipt = __kovoAssignDerivedTaskKey(defineTask({ input: {}, run() {} }), "app-shell/send-receipt")',
+    );
+    expect(transformed).toContain(
       `export const orderPaid = __kovoAssignDerivedWebhookName(routing.webhook('/webhooks/order-paid', {
   handler() {},
   input: {},
@@ -316,12 +324,14 @@ function component(value) { return value; }
 function domain() { return {}; }
 function mutation(value) { return value; }
 function query(value) { return value; }
+function task(value) { return value; }
 const routing = { webhook(_path, value) { return value; } };
 
 const LocalRegion = component({ render() { return '<section />'; } });
 export const contact = domain();
 export const addToCart = mutation({ handler() {}, input: {} });
 export const cartQuery = query({ load: () => ({ count: 1 }), reads: [] });
+export const sendReceipt = task({ input: {}, run() {} });
 export const orderPaid = routing.webhook('/webhooks/order-paid', { handler() {} });
 `,
     });

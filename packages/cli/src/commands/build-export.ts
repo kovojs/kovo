@@ -25,6 +25,11 @@ import type {
   QueryReadFactLike,
   StaticDataPlaneBuildFacts,
 } from '@kovojs/server/internal/data-plane-static-analysis';
+import {
+  runtimeRegistryWireFactsFromGraph,
+  serializeRuntimeRegistryWireModule,
+  type RuntimeRegistryWireFacts,
+} from '@kovojs/server/internal/runtime-registry-wire';
 
 import {
   BUILD_ARGV_SPEC,
@@ -75,20 +80,6 @@ type ExportArgParseResult =
 
 type KovoBuildPresetName = 'cloudflare' | 'node' | 'vercel';
 type ExportStaticApp = (typeof import('@kovojs/server'))['exportStaticApp'];
-
-interface KovoBuildRuntimeMutationTouchSite {
-  crossTable?: true;
-  domain: string;
-  keys: null | string;
-}
-
-interface KovoBuildRuntimeRegistryFacts {
-  mutationTouches: Readonly<Record<string, readonly KovoBuildRuntimeMutationTouchSite[]>>;
-  queryReads: readonly {
-    domains: readonly string[];
-    query: string;
-  }[];
-}
 
 interface KovoBuildOptions {
   appModulePath: string;
@@ -310,7 +301,7 @@ export async function runBuildCommand(options: KovoBuildOptions): Promise<CliCom
     const serverHandlerBuild = await withKovoBuildQueryShapeFacts(queryShapeFacts, () =>
       bundleKovoServerHandler(resolvedAppModulePath, {
         queryShapeFacts,
-        runtimeRegistry: runtimeRegistryFromBuildGraph(checkGraph),
+        runtimeRegistry: runtimeRegistryWireFactsFromGraph(checkGraph),
         stylesheetAssets: buildCssAssets,
       }),
     );
@@ -485,71 +476,6 @@ function writeKovoBuildGraphArtifact(
   // in-memory preflight input. Persist it in the neutral build metadata directory
   // so `kovo explain ...` can discover it after an ordinary scaffold build.
   writeFileSync(join(neutralBuild.outDir, 'graph.json'), `${JSON.stringify(graph, null, 2)}\n`);
-}
-
-function runtimeRegistryFromBuildGraph(
-  graph: CoreGraph.KovoCheckInput,
-): KovoBuildRuntimeRegistryFacts {
-  return {
-    mutationTouches: runtimeMutationTouchesFromBuildGraph(graph),
-    queryReads: runtimeQueryReadsFromBuildGraph(graph),
-  };
-}
-
-function runtimeQueryReadsFromBuildGraph(
-  graph: CoreGraph.KovoCheckInput,
-): KovoBuildRuntimeRegistryFacts['queryReads'] {
-  return (graph.queries ?? [])
-    .filter((query) => query.domains.length > 0)
-    .map((query) => ({ domains: [...query.domains].sort(), query: query.query }))
-    .sort((left, right) => left.query.localeCompare(right.query));
-}
-
-function runtimeMutationTouchesFromBuildGraph(
-  graph: CoreGraph.KovoCheckInput,
-): KovoBuildRuntimeRegistryFacts['mutationTouches'] {
-  const touchesByMutation: Record<string, KovoBuildRuntimeMutationTouchSite[]> = {};
-  for (const [mutation, entry] of Object.entries(graph.touchGraph ?? {}).sort(([left], [right]) =>
-    left.localeCompare(right),
-  )) {
-    const touches = entry.touches.map((touch) => ({
-      ...((touch as { crossTable?: true }).crossTable === true
-        ? { crossTable: true as const }
-        : {}),
-      domain: touch.domain,
-      keys: touch.keys,
-    }));
-    if (touches.length > 0) touchesByMutation[mutation] = dedupeRuntimeTouches(touches);
-  }
-  return touchesByMutation;
-}
-
-function dedupeRuntimeTouches(
-  touches: readonly KovoBuildRuntimeMutationTouchSite[],
-): KovoBuildRuntimeMutationTouchSite[] {
-  const seen = new Set<string>();
-  const unique: KovoBuildRuntimeMutationTouchSite[] = [];
-  for (const touch of touches) {
-    const key = `${touch.domain}\0${touch.keys ?? ''}\0${touch.crossTable === true ? '1' : '0'}`;
-    if (seen.has(key)) continue;
-    seen.add(key);
-    unique.push(touch);
-  }
-  return unique.sort(
-    (left, right) =>
-      left.domain.localeCompare(right.domain) ||
-      String(left.keys ?? '').localeCompare(String(right.keys ?? '')) ||
-      Number(left.crossTable === true) - Number(right.crossTable === true),
-  );
-}
-
-function serializeKovoBuildRuntimeRegistryModule(registry: KovoBuildRuntimeRegistryFacts): string {
-  return [
-    `import { registerGeneratedMutationTouchRegistry, registerGeneratedQueryReadRegistry } from '@kovojs/server/internal/execution';`,
-    `registerGeneratedQueryReadRegistry(${JSON.stringify(registry.queryReads)});`,
-    `registerGeneratedMutationTouchRegistry(${JSON.stringify(registry.mutationTouches)});`,
-    '',
-  ].join('\n');
 }
 
 function buildCheckFailureOutput(output: string): string {
@@ -1634,7 +1560,7 @@ async function bundleKovoServerHandler(
   appModulePath: string,
   options: {
     queryShapeFacts: readonly QueryShapeFact[];
-    runtimeRegistry: KovoBuildRuntimeRegistryFacts;
+    runtimeRegistry: RuntimeRegistryWireFacts;
     stylesheetAssets?: KovoBuildStylesheetAssets;
   },
 ): Promise<{
@@ -1658,7 +1584,7 @@ async function bundleKovoServerHandler(
   try {
     writeFileSync(
       runtimeRegistryPath,
-      serializeKovoBuildRuntimeRegistryModule(options.runtimeRegistry),
+      serializeRuntimeRegistryWireModule(options.runtimeRegistry),
       'utf8',
     );
     writeFileSync(entryPath, kovoServerHandlerEntrySource(appModulePath, stylesheetAssets), 'utf8');
