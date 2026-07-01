@@ -46,7 +46,7 @@ async function expectReadonlyAttemptBlocked(origin: string): Promise<void> {
 
 describe('create-kovo starter (build integration: production transaction artifacts)', () => {
   // @kovo-security-certifies KV433 readonly-managed-handle-prod-artifact
-  it('rolls back default mutation transactions in the production build artifact', async () => {
+  it('rolls back default mutation transactions and executes webhooks in the production build artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-default-tx-'));
@@ -56,7 +56,12 @@ describe('create-kovo starter (build integration: production transaction artifac
     try {
       writeKovoProject(root, { name: 'Prod Default Transaction Proof' });
       linkStarterBuildDependencies(root);
-      addRuntimeMutationSafetyProofs(root, { includeReadonlyMutationAttempt: true });
+      addRuntimeMutationSafetyProofs(root, {
+        includeReadonlyMutationAttempt: true,
+        includeWebhookTransactionProof: true,
+      });
+      const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
+      expect(proofSource).toContain('txProofWebhook');
 
       buildProductionArtifact(root);
 
@@ -126,13 +131,42 @@ describe('create-kovo starter (build integration: production transaction artifac
         count: number;
       };
       expect(after.count).toBe(1);
+
+      const webhookId = `webhook-default-${Date.now()}`;
+      const firstWebhook = await fetch(`${origin}/webhooks/tx-proof`, {
+        body: JSON.stringify({ id: webhookId }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      await expect(firstWebhook.text()).resolves.toBe('ok');
+      expect(firstWebhook.status).toBe(200);
+      expect(firstWebhook.headers.get('kovo-changes')).toBe('[{"domain":"tx_proof"}]');
+
+      const afterFirstWebhook = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+        count: number;
+      };
+      expect(afterFirstWebhook.count).toBe(2);
+
+      const replayWebhook = await fetch(`${origin}/webhooks/tx-proof`, {
+        body: JSON.stringify({ id: webhookId }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      await expect(replayWebhook.text()).resolves.toBe('ok');
+      expect(replayWebhook.status).toBe(200);
+      expect(replayWebhook.headers.get('kovo-idem')).toBe(webhookId);
+
+      const afterReplayWebhook = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+        count: number;
+      };
+      expect(afterReplayWebhook.count).toBe(2);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
 
-  it('keeps SQLite public GET readonly handles from mutating the production artifact', async () => {
+  it('keeps SQLite readonly handles isolated and executes webhook transactions in the production artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-readonly-handle-'));
@@ -142,7 +176,12 @@ describe('create-kovo starter (build integration: production transaction artifac
     try {
       writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Readonly Handle Proof' });
       linkStarterBuildDependencies(root);
-      addRuntimeMutationSafetyProofs(root, { includeReadonlyMutationAttempt: true });
+      addRuntimeMutationSafetyProofs(root, {
+        includeReadonlyMutationAttempt: true,
+        includeWebhookTransactionProof: true,
+      });
+      const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
+      expect(proofSource).toContain('txProofWebhook');
 
       buildProductionArtifact(root);
 
@@ -192,6 +231,35 @@ describe('create-kovo starter (build integration: production transaction artifac
         count: number;
       };
       expect(afterSuccess.count).toBe(1);
+
+      const webhookId = `webhook-sqlite-${Date.now()}`;
+      const firstWebhook = await fetch(`${origin}/webhooks/tx-proof`, {
+        body: JSON.stringify({ id: webhookId }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      await expect(firstWebhook.text()).resolves.toBe('ok');
+      expect(firstWebhook.status).toBe(200);
+      expect(firstWebhook.headers.get('kovo-changes')).toBe('[{"domain":"tx_proof"}]');
+
+      const afterFirstWebhook = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+        count: number;
+      };
+      expect(afterFirstWebhook.count).toBe(2);
+
+      const replayWebhook = await fetch(`${origin}/webhooks/tx-proof`, {
+        body: JSON.stringify({ id: webhookId }),
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      });
+      await expect(replayWebhook.text()).resolves.toBe('ok');
+      expect(replayWebhook.status).toBe(200);
+      expect(replayWebhook.headers.get('kovo-idem')).toBe(webhookId);
+
+      const afterReplayWebhook = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+        count: number;
+      };
+      expect(afterReplayWebhook.count).toBe(2);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -227,85 +295,6 @@ describe('create-kovo starter (build integration: production transaction artifac
           expect(output).toContain('runtime-safety-proofs.ts');
         }
       } finally {
-        rmSync(root, { force: true, recursive: true });
-      }
-    },
-    120_000,
-  );
-
-  it.each([
-    { dialect: undefined, label: 'default' },
-    { dialect: 'sqlite' as const, label: 'SQLite' },
-  ])(
-    'executes $label webhook transaction writes through the production artifact',
-    async ({ dialect }) => {
-      const tempParent = tmpdir();
-      mkdirSync(tempParent, { recursive: true });
-      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-webhook-tx-'));
-      const port = await reservePort();
-      let server: ChildProcessWithoutNullStreams | undefined;
-
-      try {
-        writeKovoProject(root, {
-          ...(dialect === undefined ? {} : { dialect }),
-          name: 'Prod Webhook Transaction Proof',
-        });
-        linkStarterBuildDependencies(root);
-        addRuntimeMutationSafetyProofs(root, { includeWebhookTransactionProof: true });
-        const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
-        expect(proofSource).toContain('txProofWebhook');
-
-        buildProductionArtifact(root);
-
-        server = spawn(process.execPath, ['dist/server/server.mjs'], {
-          cwd: root,
-          detached: process.platform !== 'win32',
-          env: {
-            ...withRepoBinOnPath(),
-            HOST: '127.0.0.1',
-            NODE_ENV: 'production',
-            PORT: String(port),
-          },
-        });
-        const output = collectOutput(server);
-        const origin = `http://127.0.0.1:${port}`;
-
-        await fetchTextWhenReady(`${origin}/api/tx-proof-count`, output);
-        const before = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
-          count: number;
-        };
-        expect(before.count).toBe(0);
-
-        const id = `webhook-${dialect ?? 'default'}-${Date.now()}`;
-        const first = await fetch(`${origin}/webhooks/tx-proof`, {
-          body: JSON.stringify({ id }),
-          headers: { 'content-type': 'application/json' },
-          method: 'POST',
-        });
-        await expect(first.text()).resolves.toBe('ok');
-        expect(first.status).toBe(200);
-        expect(first.headers.get('kovo-changes')).toBe('[{"domain":"tx_proof"}]');
-
-        const afterFirst = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
-          count: number;
-        };
-        expect(afterFirst.count).toBe(1);
-
-        const second = await fetch(`${origin}/webhooks/tx-proof`, {
-          body: JSON.stringify({ id }),
-          headers: { 'content-type': 'application/json' },
-          method: 'POST',
-        });
-        await expect(second.text()).resolves.toBe('ok');
-        expect(second.status).toBe(200);
-        expect(second.headers.get('kovo-idem')).toBe(id);
-
-        const afterReplay = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
-          count: number;
-        };
-        expect(afterReplay.count).toBe(1);
-      } finally {
-        await stopProcess(server);
         rmSync(root, { force: true, recursive: true });
       }
     },
