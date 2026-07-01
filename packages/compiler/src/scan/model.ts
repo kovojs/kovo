@@ -27,7 +27,9 @@ export type HandlerWriteSinkOperationKind =
   | 'delete'
   | 'execute'
   | 'insert'
+  | 'put'
   | 'run'
+  | 'store'
   | 'update'
   | 'UNRESOLVED';
 

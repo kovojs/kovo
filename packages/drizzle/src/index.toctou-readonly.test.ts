@@ -374,6 +374,98 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     ]);
   });
 
+  it('flags query() loaders that reach storage put/delete authority', () => {
+    const result = reach(
+      [
+        'import type { StorageCapability } from "@kovojs/core";',
+        'declare const storage: StorageCapability;',
+        'export const downloads = query("downloads", {',
+        '  load: async () => {',
+        '    await storage.put("receipts/a.txt", "A");',
+        '    await storage.delete("receipts/a.txt");',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'storage', provenance: 'storage-receiver' },
+        operation: 'put',
+        operationKind: 'put',
+        operationProvenance: 'property-access',
+        query: 'downloads',
+        site: 'q.ts:5',
+        table: 'storage',
+      },
+      {
+        canonicalTarget: { identity: 'storage', provenance: 'storage-receiver' },
+        operation: 'delete',
+        operationKind: 'delete',
+        operationProvenance: 'property-access',
+        query: 'downloads',
+        site: 'q.ts:6',
+        table: 'storage',
+      },
+    ]);
+  });
+
+  it('fails closed on computed storage receiver methods in query() loaders', () => {
+    const result = reach(
+      [
+        'import type { StorageCapability } from "@kovojs/core";',
+        'declare const storage: StorageCapability;',
+        'export const downloads = query("downloads", {',
+        '  load: async (method: string) => {',
+        '    await storage[method]("receipts/a.txt", "A");',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'storage', provenance: 'storage-receiver' },
+        operation: 'UNRESOLVED',
+        operationKind: 'UNRESOLVED',
+        operationProvenance: 'computed-member',
+        query: 'downloads',
+        site: 'q.ts:5',
+        table: 'storage',
+        unresolved: { code: 'KV406', reason: 'computed-member' },
+      },
+    ]);
+  });
+
+  it('flags s.file().store(...) in query() loaders as storage write authority', () => {
+    const result = reach(
+      [
+        'import type { StoragePutCapability } from "@kovojs/core";',
+        'import { s } from "@kovojs/server";',
+        'declare const storage: StoragePutCapability;',
+        'declare const upload: File;',
+        'export const uploads = query("uploads", {',
+        '  load: async () => {',
+        '    const schema = s.file().store({ keyPrefix: "receipts", storage });',
+        '    await schema.parseAsync(upload);',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'storage', provenance: 'storage-receiver' },
+        operation: 'store',
+        operationKind: 'store',
+        operationProvenance: 'property-access',
+        query: 'uploads',
+        site: 'q.ts:7',
+        table: 'storage',
+      },
+    ]);
+  });
+
   it('does not flag a read-only loader', () => {
     const result = reach(
       `${QHEAD}export const dashboard = query("dashboard", { load: async () => ({ ok: true }) });`,

@@ -10,8 +10,12 @@ export type {
   S3CompatiblePutObjectInput,
   S3CompatiblePutObjectOutput,
   S3CompatibleStorageOptions,
+  StorageDeleteCapability,
+  StoragePutCapability,
+  StorageReadCapability,
 } from '../storage.js';
 export {
+  createReadOnlyStorageCapability,
   createFileSystemStorage,
   createMemoryStorage,
   createS3CompatibleStorage,

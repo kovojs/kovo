@@ -134,10 +134,13 @@ export type {
   S3CompatibleStorageOptions,
   StorageBody,
   StorageCapability,
+  StorageDeleteCapability,
   StorageGetResult,
   StorageObjectInfo,
+  StoragePutCapability,
   StoragePutOptions,
   StoragePutResult,
+  StorageReadCapability,
   StorageStreamResult,
 } from '@kovojs/core';
 // SPEC §9.1: verifier builders are part of the webhook authoring surface, so server

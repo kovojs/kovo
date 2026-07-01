@@ -327,7 +327,7 @@ export const sendReceipt = task({
       expect.objectContaining({
         canonicalTarget: { identity: 'appDb', provenance: 'property-access-path' },
         operationKind: 'insert',
-        owner: { kind: 'key', value: 'sendReceipt' },
+        owner: { kind: 'key', value: 'tasks/send-receipt' },
         path: 'appDb.insert',
         surface: 'task',
       }),
@@ -578,6 +578,47 @@ export const unsafeEndpoint = endpoint('/api/unsafe', {
         operationKind: 'insert',
         owner: { kind: 'path', value: '/api/unsafe' },
         path: 'readonlyAppDb.insert',
+        surface: 'endpoint',
+      }),
+    ]);
+  });
+
+  it('reports KV330 when endpoint handlers write through storage put authority', () => {
+    const result = compileComponentModule({
+      fileName: 'endpoints.ts',
+      source: `
+import { endpoint, publicAccess } from '@kovojs/server';
+import { storage } from './storage.js';
+
+export const unsafeEndpoint = endpoint('/api/unsafe', {
+  access: publicAccess('test'),
+  auth: { kind: 'none', justification: 'test' },
+  csrf: false,
+  csrfJustification: 'test',
+  method: 'POST',
+  async handler() {
+    await storage.put('receipts/endpoint.txt', 'bad');
+    return Response.json({ ok: true });
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV330',
+        fileName: 'endpoints.ts',
+        message:
+          'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
+        severity: kv330.severity,
+      },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'storage', provenance: 'property-access-path' },
+        operationKind: 'put',
+        owner: { kind: 'path', value: '/api/unsafe' },
+        path: 'storage.put',
         surface: 'endpoint',
       }),
     ]);

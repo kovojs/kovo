@@ -1,5 +1,5 @@
 import type { DeferredStreamChunk } from './deferred-stream.js';
-import type { StorageCapability } from '@kovojs/core';
+import type { StorageReadCapability } from '@kovojs/core';
 import {
   blessSink,
   drainRuntimeSinkSecurityEvent,
@@ -332,7 +332,11 @@ export const respond = {
    * @param storage - The storage capability to read from.
    * @param key - The opaque stored object key (from `s.file().store(...)`).
    */
-  async storedFile(storage: StorageCapability, key: string, options: RouteStoredFileOptions = {}) {
+  async storedFile(
+    storage: StorageReadCapability,
+    key: string,
+    options: RouteStoredFileOptions = {},
+  ) {
     const object = await storage.get(key);
     if (object === undefined) return undefined;
     const disposition = options.disposition ?? 'attachment';

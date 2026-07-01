@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 import { File } from 'node:buffer';
-import type { JsonValue, Secret, StorageCapability } from '@kovojs/core';
+import type { JsonValue, Secret, StorageCapability, StorageReadCapability } from '@kovojs/core';
 import { createMemoryStorage, storageBodyToBytes } from '@kovojs/core/internal/storage';
 
 import { runMutation } from './mutation.js';
@@ -419,6 +419,15 @@ describe('server schemas', () => {
     expect(stored?.contentType).toBe('image/png');
     // The client filename survives only as sanitized download metadata (no path segments).
     expect(stored?.metadata?.filename).toBe('passwd.png');
+  });
+
+  it('types stored upload schemas as requiring put authority, not read-only storage', () => {
+    const readOnly: StorageReadCapability = createMemoryStorage();
+    // @ts-expect-error s.file().store() writes upload bytes and cannot accept read-only storage.
+    s.file().store({ keyPrefix: 'avatars', storage: readOnly });
+
+    const putOnly = { put: createMemoryStorage().put };
+    expect(s.file().store({ keyPrefix: 'avatars', storage: putOnly })).toBeDefined();
   });
 
   it('enforces stored upload accept allowlists against sniffed bytes', async () => {

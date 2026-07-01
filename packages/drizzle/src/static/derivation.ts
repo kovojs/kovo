@@ -2250,6 +2250,11 @@ const KV433_DIRECT_WRITE_OPERATIONS = new Set<ResolvedQueryWriteReachabilityOper
   'update',
 ]);
 
+const KV433_STORAGE_WRITE_OPERATIONS = new Set<ResolvedQueryWriteReachabilityOperationKind>([
+  'delete',
+  'put',
+]);
+
 const KV433_RAW_RECEIVER_WRITE_OPERATIONS = new Set<QueryWriteReachabilityOperationKind>([
   'batch',
   'execute',
@@ -2261,6 +2266,7 @@ interface QueryLoaderWriteContext {
   query: string;
   receivers: ProjectDrizzleReceivers;
   resolveTable: (node: Node) => string | undefined;
+  storageReceivers: ReadonlySet<string>;
 }
 
 /**
@@ -2317,12 +2323,14 @@ function extractQueryWriteReachabilityFromDeriveExtraction(
         projectDrizzleReceivers(loader.fn),
         moduleScopeDrizzleReceivers(sourceFile),
       );
+      const storageReceivers = projectStorageReceivers(sourceFile, loader.fn);
       facts.push(
         ...queryWriteReachabilityFactsForLoader(functionBody(loader.fn), {
           file,
           query: loader.name,
           receivers,
           resolveTable,
+          storageReceivers,
         }),
       );
     }
@@ -2343,20 +2351,38 @@ function queryWriteReachabilityFactsForLoader(
   const methodAliases = receiverMethodAliasesForBody(body, (node) =>
     isProjectDrizzleReceiverIdentifier(node, context.receivers),
   );
+  const storageMethodAliases = receiverMethodAliasesForBody(body, (node) =>
+    isStorageReceiverExpression(node, context.storageReceivers),
+  );
 
   for (const call of touchBodyCallExpressions(body)) {
     const direct = directQueryLoaderWriteFact(call, context);
     if (direct) facts.push(direct);
 
+    const storage = directQueryLoaderStorageWriteFact(call, context);
+    if (storage) facts.push(storage);
+
     const aliasOperation = receiverMethodAliasCallName(call, methodAliases);
-    if (!aliasOperation) continue;
-    const alias = queryLoaderWriteFactForOperation(
-      call,
-      aliasOperation,
-      'receiver-method-alias',
-      context,
-    );
-    if (alias) facts.push(alias);
+    if (aliasOperation) {
+      const alias = queryLoaderWriteFactForOperation(
+        call,
+        aliasOperation,
+        'receiver-method-alias',
+        context,
+      );
+      if (alias) facts.push(alias);
+    }
+
+    const storageAliasOperation = receiverMethodAliasCallName(call, storageMethodAliases);
+    if (storageAliasOperation) {
+      const storageAlias = queryLoaderStorageWriteFactForOperation(
+        call,
+        storageAliasOperation,
+        'receiver-method-alias',
+        context,
+      );
+      if (storageAlias) facts.push(storageAlias);
+    }
   }
 
   return dedupeQueryWriteReachabilityFacts(facts);
@@ -2371,6 +2397,27 @@ function directQueryLoaderWriteFact(
     return undefined;
   }
   return queryLoaderWriteFactForOperation(call, surface.name, 'property-access', context);
+}
+
+function directQueryLoaderStorageWriteFact(
+  call: CallExpression,
+  context: QueryLoaderWriteContext,
+): QueryWriteReachabilityFact | undefined {
+  const surface = directDrizzleReceiverCallSurface(call);
+  if (!surface) return undefined;
+
+  if (surface.name === 'store' && isFileSchemaStoreReceiver(surface.receiver)) {
+    return queryLoaderStorageStoreFact(call, context);
+  }
+
+  if (!isStorageReceiverExpression(surface.receiver, context.storageReceivers)) return undefined;
+  return queryLoaderStorageWriteFactForOperation(
+    call,
+    surface.name,
+    'property-access',
+    context,
+    surface.receiver,
+  );
 }
 
 function queryLoaderWriteFactForOperation(
@@ -2398,12 +2445,74 @@ function queryLoaderWriteFactForOperation(
   };
 }
 
+function queryLoaderStorageWriteFactForOperation(
+  call: CallExpression,
+  operation: string,
+  operationProvenance: QueryWriteReachabilityOperationProvenance,
+  context: QueryLoaderWriteContext,
+  receiver?: Node,
+): QueryWriteReachabilityFact | undefined {
+  if (operation === COMPUTED_DRIZZLE_RECEIVER_METHOD) {
+    return queryLoaderStorageUnresolvedWriteFact(call, operationProvenance, context, receiver);
+  }
+  if (!isStorageWriteOperationKind(operation)) return undefined;
+  const target = queryStorageTarget(receiver);
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation,
+    operationKind: operation,
+    operationProvenance,
+    query: context.query,
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+  };
+}
+
+function queryLoaderStorageStoreFact(
+  call: CallExpression,
+  context: QueryLoaderWriteContext,
+): QueryWriteReachabilityFact {
+  const target = queryStorageTarget(storageObjectPropertyInitializer(call));
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation: 'store',
+    operationKind: 'store',
+    operationProvenance: 'property-access',
+    query: context.query,
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+  };
+}
+
 function queryLoaderUnresolvedWriteFact(
   call: CallExpression,
   operationProvenance: QueryWriteReachabilityOperationProvenance,
   context: QueryLoaderWriteContext,
 ): QueryWriteReachabilityFact {
   const target = queryWriteTargetForCall(call, 'UNRESOLVED', context.resolveTable);
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation: 'UNRESOLVED',
+    operationKind: 'UNRESOLVED',
+    operationProvenance:
+      operationProvenance === 'receiver-method-alias' ? operationProvenance : 'computed-member',
+    query: context.query,
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+    unresolved: { code: 'KV406', reason: 'computed-member' },
+  };
+}
+
+function queryLoaderStorageUnresolvedWriteFact(
+  call: CallExpression,
+  operationProvenance: QueryWriteReachabilityOperationProvenance,
+  context: QueryLoaderWriteContext,
+  receiver?: Node,
+): QueryWriteReachabilityFact {
+  const target = queryStorageTarget(receiver);
   return {
     canonicalTarget: target.canonicalTarget,
     operation: 'UNRESOLVED',
@@ -2455,10 +2564,109 @@ function queryWriteTargetForCall(
   return { canonicalTarget: { identity: table, provenance: 'table-argument' }, table };
 }
 
+function queryStorageTarget(receiver: Node | undefined): {
+  canonicalTarget: {
+    identity: string;
+    provenance: QueryWriteReachabilityTargetProvenance;
+  };
+  table: string;
+} {
+  const identity = receiver?.getText().trim();
+  const target = identity && identity.length > 0 ? identity : UNRESOLVED_READ_SOURCE_EXPRESSION;
+  return {
+    canonicalTarget: { identity: target, provenance: 'storage-receiver' },
+    table: target,
+  };
+}
+
 function isQueryWriteOperationKind(
   operation: string,
 ): operation is ResolvedQueryWriteReachabilityOperationKind {
   return (KV433_DIRECT_WRITE_OPERATIONS as ReadonlySet<string>).has(operation);
+}
+
+function isStorageWriteOperationKind(
+  operation: string,
+): operation is ResolvedQueryWriteReachabilityOperationKind {
+  return (KV433_STORAGE_WRITE_OPERATIONS as ReadonlySet<string>).has(operation);
+}
+
+function projectStorageReceivers(sourceFile: SourceFile, loaderFn: Node): ReadonlySet<string> {
+  const receivers = new Set<string>();
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const name = declaration.getName();
+    const initializer = declaration.getInitializer();
+    if (looksLikeStorageReceiverName(name) || hasStorageCapabilityType(declaration)) {
+      receivers.add(name);
+      continue;
+    }
+    if (initializer && isStorageConstructorExpression(initializer)) receivers.add(name);
+  }
+
+  if (
+    Node.isArrowFunction(loaderFn) ||
+    Node.isFunctionDeclaration(loaderFn) ||
+    Node.isFunctionExpression(loaderFn)
+  ) {
+    for (const parameter of loaderFn.getParameters()) {
+      const name = parameter.getName();
+      if (looksLikeStorageReceiverName(name) || hasStorageCapabilityType(parameter)) {
+        receivers.add(name);
+      }
+    }
+  }
+
+  return receivers;
+}
+
+function isStorageReceiverExpression(node: Node, receivers: ReadonlySet<string>): boolean {
+  const root = staticExpressionRootIdentifier(node);
+  if (root && receivers.has(root.getText())) return true;
+
+  const text = node.getText().trim();
+  if (receivers.has(text)) return true;
+
+  if (Node.isIdentifier(node)) return looksLikeStorageReceiverName(node.getText());
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    const name = staticAccessName(node);
+    if (name && looksLikeStorageReceiverName(name)) return true;
+  }
+  return false;
+}
+
+function looksLikeStorageReceiverName(name: string): boolean {
+  return /storage/i.test(name);
+}
+
+function hasStorageCapabilityType(node: Node): boolean {
+  const typed = Node.isVariableDeclaration(node) || Node.isParameterDeclaration(node);
+  if (!typed) return false;
+  const typeNode = node.getTypeNode();
+  return (
+    typeNode !== undefined && /\bStorage(?:Read|Put|Delete)?Capability\b/u.test(typeNode.getText())
+  );
+}
+
+function isStorageConstructorExpression(expression: Node): boolean {
+  return /\bcreate(?:Memory|FileSystem|S3Compatible)Storage\s*\(/u.test(expression.getText());
+}
+
+function isFileSchemaStoreReceiver(receiver: Node): boolean {
+  const source = receiver.getText();
+  return /\b(?:s|schema)\s*\.\s*file\s*\(/u.test(source);
+}
+
+function storageObjectPropertyInitializer(call: CallExpression): Node | undefined {
+  const [options] = call.getArguments();
+  if (!options || !Node.isObjectLiteralExpression(options)) return undefined;
+  const property = objectPropertyInitializer(options, 'storage');
+  if (property) return property;
+  for (const candidate of options.getProperties()) {
+    if (!Node.isShorthandPropertyAssignment(candidate)) continue;
+    if (candidate.getNameNode().getText() === 'storage') return candidate.getNameNode();
+  }
+  return undefined;
 }
 
 function dedupeQueryWriteReachabilityFacts(

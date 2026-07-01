@@ -116,6 +116,53 @@ export function buildProductionArtifact(root: string): void {
   });
 }
 
+export function addStorageQueryWriteProof(root: string): void {
+  const queriesPath = join(root, 'src/queries.ts');
+  let queries = readFileSync(queriesPath, 'utf8');
+  queries = replaceRequired(
+    queries,
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { createMemoryStorage, publicAccess, query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    'storage query write proof import',
+  );
+  queries = replaceRequired(
+    queries,
+    'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+    [
+      'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+      '',
+      'const storageWriteProbe = createMemoryStorage();',
+      '',
+      'export const storageWriteQuery = query({',
+      "  access: publicAccess('storage write query proof'),",
+      '  reads: [],',
+      '  async load(): Promise<{ ok: true }> {',
+      "    await storageWriteProbe.put('receipts/query-write-proof.txt', 'bad');",
+      '    return { ok: true };',
+      '  },',
+      '});',
+    ].join('\n'),
+    'storage query write proof query',
+  );
+  writeFileSync(queriesPath, queries, 'utf8');
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { contactsQuery } from './queries.js';",
+    "import { contactsQuery, storageWriteQuery } from './queries.js';",
+    'storage query write proof app import',
+  );
+  app = replaceRequired(
+    app,
+    '  queries: [contactsQuery],',
+    '  queries: [contactsQuery, storageWriteQuery],',
+    'storage query write proof app registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export function addRawSqlOwnerWriteProof(
   root: string,
   options: { declareTables?: boolean; trusted?: boolean } = {},

@@ -866,6 +866,26 @@ describe('kovo check', () => {
     expect(result.exitCode).not.toBe(0);
   });
 
+  it('reports a storage write-reaching query() loader as KV433 (SPEC §9.4)', () => {
+    const result = kovoCheck({
+      queryWriteReachability: [
+        {
+          canonicalTarget: { identity: 'storage', provenance: 'storage-receiver' },
+          operation: 'put',
+          operationKind: 'put',
+          operationProvenance: 'property-access',
+          query: 'downloads',
+          site: 'q.ts:5',
+          table: 'storage',
+        },
+      ],
+    });
+    expect(result.output).toContain(
+      'ERROR KV433 QUERY downloads operation=put table=storage site=q.ts:5',
+    );
+    expect(result.exitCode).not.toBe(0);
+  });
+
   it('reports an unresolved write-shaped query() loader site as KV406 (SPEC §10.3)', () => {
     const result = kovoCheck({
       queryWriteReachability: [
