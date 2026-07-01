@@ -16,7 +16,7 @@ that removes the broader source of drift.
 
 ## P0 - Correctness and Security Invariants
 
-- [ ] **P0.1 - Remove regex-only data-plane relevance gates and unify app source discovery.**
+- [x] **P0.1 - Remove regex-only data-plane relevance gates and unify app source discovery.**
   - Current signals: `packages/server/src/internal/data-plane-static-analysis.ts` filters Vite data-plane
     sources differently from CLI build/check, and `isBuildSecurityAnalysisSourceFile()` still decides
     whether aggregate Drizzle analysis runs by source regexes over imports, `db`/`tx`, and `sql`
@@ -30,8 +30,9 @@ that removes the broader source of drift.
     schema facts cannot disappear because aliases, wrappers, JS/JSX files, or barrel modules avoided a
     text prefilter.
   - Verification: add JS/JSX and alias/wrapper fixtures; run `pnpm exec vitest --run packages/server/src/internal/data-plane-static-analysis.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts` and `node scripts/fundamental-fixes-inventory.mjs`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/internal/data-plane-static-analysis.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts` passed with 4 files/159 passed and 1 skipped after merging `agent/hvr4-data-plane-20260701-002421`; `node scripts/fundamental-fixes-inventory.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check HEAD^..HEAD` passed.
 
-- [ ] **P0.2 - Move non-Drizzle output schema extraction to one identity-aware producer.**
+- [x] **P0.2 - Move non-Drizzle output schema extraction to one identity-aware producer.**
   - Current signals: `packages/server/src/internal/data-plane-static-analysis.ts` still has its own
     compiler output-schema walker and accepts schema calls only when the receiver is the literal
     identifier `s`, while `packages/compiler/src/scan/query-shape-source.ts` already resolves the
@@ -43,6 +44,7 @@ that removes the broader source of drift.
     understands, avoiding false KV302/KV410 behavior and stale client binding validation.
   - Verification: add fixtures for `import { s as schema }`, namespace imports, and barrel re-exports;
     run `pnpm exec vitest --run packages/compiler/src/scan/query-shape-source.test.ts packages/compiler/src/scan/mutation-inputs.test.ts packages/server/src/internal/data-plane-static-analysis.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/scan/query-shape-source.test.ts packages/compiler/src/scan/mutation-inputs.test.ts packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts` passed with 3 files/61 tests, and the shared server/Vite/CLI data-plane suite passed with 4 files/159 passed and 1 skipped after merging `agent/hvr4-data-plane-20260701-002421`; `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check HEAD^..HEAD` passed.
 
 - [x] **P0.3 - Generate one framework-identity export catalog for compiler, server, and Drizzle.**
   - Current signals: `packages/core/src/internal/framework-identity.ts` and
