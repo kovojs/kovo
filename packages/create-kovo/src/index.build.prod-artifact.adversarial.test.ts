@@ -103,6 +103,11 @@ describe('create-kovo starter (build integration: adversarial production artifac
         expectBuildFailure(root, [
           'KV435',
           'Secret query value reaches the client wire',
+          'queries/auth-secret-direct-leak-query.accessToken',
+          'queries/auth-secret-direct-leak-query.password',
+          'queries/auth-secret-transformed-leak-query.accessToken',
+          'queries/auth-secret-transformed-leak-query.password',
+          'queries/auth-secret-render-leak-query.renderPassword',
           'queries/auth-secret-leak-query.accessToken',
           'queries/auth-secret-leak-query.password',
         ]);
