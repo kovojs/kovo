@@ -13,7 +13,12 @@ import { deriveMutationKey } from '../mutation-names.js';
 import { deriveRegistryIdentity } from '../registry-identities.js';
 import { normalizeComponentFileName } from '../shared.js';
 import { ensureTypescriptRuntime, hasModifier } from '../ts-api.js';
-import { propertyNameText, unwrapExpression } from './ast.js';
+import {
+  callExpressionReceiverSegments,
+  propertyAccessPath,
+  propertyNameText,
+  unwrapExpression,
+} from './ast.js';
 import type { StaticLiteralValue } from './object.js';
 import type {
   ArrowFunctionPartsModel,
@@ -706,59 +711,6 @@ function documentElementActionFromExpression(
   return documentElementToggleOpenAction(sourceFile, body);
 }
 
-function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
-  const receiver = propertyAccessReceiverSegments(expression.expression);
-  if (!receiver) return null;
-
-  const segments = expression.questionDotToken ? markLastOptional(receiver) : receiver;
-  segments.push(expression.name.text);
-  return segments.join('.');
-}
-
-function propertyAccessReceiverSegments(expression: ts.Expression): string[] | null {
-  if (ts.isIdentifier(expression)) return [expression.text];
-  const callReceiver = callExpressionReceiverSegments(expression);
-  if (callReceiver) return callReceiver;
-
-  if (ts.isElementAccessExpression(expression)) {
-    const path = literalElementAccessPath(expression);
-    return path ? path.split('.') : null;
-  }
-
-  if (!ts.isPropertyAccessExpression(expression)) return null;
-
-  return propertyAccessPath(expression)?.split('.') ?? null;
-}
-
-function callExpressionReceiverSegments(expression: ts.Expression): string[] | null {
-  const unwrapped = unwrapExpression(expression);
-  if (!ts.isCallExpression(unwrapped) || unwrapped.arguments.length !== 0) return null;
-  if (ts.isIdentifier(unwrapped.expression)) return [`${unwrapped.expression.text}()`];
-  if (ts.isPropertyAccessExpression(unwrapped.expression)) {
-    const receiver = propertyAccessPath(unwrapped.expression);
-    return receiver ? [`${receiver}()`] : null;
-  }
-  if (ts.isElementAccessExpression(unwrapped.expression)) {
-    const receiver = literalElementAccessPath(unwrapped.expression);
-    return receiver ? [`${receiver}()`] : null;
-  }
-  return null;
-}
-
-function literalElementAccessPath(expression: ts.ElementAccessExpression): string | null {
-  const member = literalElementAccessMember(expression);
-  if (!member) return null;
-  const receiver = propertyAccessReceiverSegments(expression.expression);
-  if (!receiver) return null;
-  return [...receiver, member].join('.');
-}
-
-function literalElementAccessMember(expression: ts.ElementAccessExpression): string | undefined {
-  return ts.isStringLiteralLike(expression.argumentExpression)
-    ? expression.argumentExpression.text
-    : undefined;
-}
-
 /**
  * SPEC §4.8/§4.9 (A1): resolve the static reactive root of an element/computed access chain
  * (`rows[i]`, `rows[i].name`, `rows[0].name`, `a.b[i]`) to the leading dotted path before the
@@ -787,13 +739,6 @@ function elementAccessRootPath(node: ts.Expression): string | null {
   if (ts.isIdentifier(receiver)) return receiver.text;
   if (ts.isPropertyAccessExpression(receiver)) return propertyAccessPath(receiver);
   return null;
-}
-
-function markLastOptional(segments: readonly string[]): string[] {
-  const result = [...segments];
-  const last = result.at(-1);
-  if (last) result[result.length - 1] = last.endsWith('?') ? last : `${last}?`;
-  return result;
 }
 
 function objectLiteralPaths(expression: ts.ObjectLiteralExpression, prefix = ''): string[] {

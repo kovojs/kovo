@@ -48,3 +48,63 @@ export function propertyNameText(
 
   return null;
 }
+
+export function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
+  const receiver = propertyAccessReceiverSegments(expression.expression);
+  if (!receiver) return null;
+
+  const segments = expression.questionDotToken ? markLastOptional(receiver) : receiver;
+  segments.push(expression.name.text);
+  return segments.join('.');
+}
+
+function propertyAccessReceiverSegments(expression: ts.Expression): string[] | null {
+  if (ts.isIdentifier(expression)) return [expression.text];
+  const callReceiver = callExpressionReceiverSegments(expression);
+  if (callReceiver) return callReceiver;
+
+  if (ts.isElementAccessExpression(expression)) {
+    const path = literalElementAccessPath(expression);
+    return path ? path.split('.') : null;
+  }
+
+  if (!ts.isPropertyAccessExpression(expression)) return null;
+
+  return propertyAccessPath(expression)?.split('.') ?? null;
+}
+
+export function callExpressionReceiverSegments(expression: ts.Expression): string[] | null {
+  const unwrapped = unwrapExpression(expression);
+  if (!ts.isCallExpression(unwrapped) || unwrapped.arguments.length !== 0) return null;
+  if (ts.isIdentifier(unwrapped.expression)) return [`${unwrapped.expression.text}()`];
+  if (ts.isPropertyAccessExpression(unwrapped.expression)) {
+    const receiver = propertyAccessPath(unwrapped.expression);
+    return receiver ? [`${receiver}()`] : null;
+  }
+  if (ts.isElementAccessExpression(unwrapped.expression)) {
+    const receiver = literalElementAccessPath(unwrapped.expression);
+    return receiver ? [`${receiver}()`] : null;
+  }
+  return null;
+}
+
+function literalElementAccessPath(expression: ts.ElementAccessExpression): string | null {
+  const member = literalElementAccessMember(expression);
+  if (!member) return null;
+  const receiver = propertyAccessReceiverSegments(expression.expression);
+  if (!receiver) return null;
+  return [...receiver, member].join('.');
+}
+
+function literalElementAccessMember(expression: ts.ElementAccessExpression): string | undefined {
+  return ts.isStringLiteralLike(expression.argumentExpression)
+    ? expression.argumentExpression.text
+    : undefined;
+}
+
+function markLastOptional(segments: readonly string[]): string[] {
+  const result = [...segments];
+  const last = result.at(-1);
+  if (last) result[result.length - 1] = last.endsWith('?') ? last : `${last}?`;
+  return result;
+}

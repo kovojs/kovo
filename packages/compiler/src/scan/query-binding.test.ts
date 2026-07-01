@@ -4,12 +4,20 @@ import { queryBindingFromExpression, queryExpressionFromBinding } from './query-
 
 describe('query binding structural grammar', () => {
   it('parses refresh and args chain modifiers as binding metadata', () => {
-    const expression = 'productQuery.refresh().args((params) => ({ id: params.id }))';
+    const expression =
+      "productQuery.refresh().args((params) => ({ id: params.id, sku: params.items['sku'].value, tenant: params.scope().tenant }))";
 
     expect(queryBindingFromExpression(expression)).toEqual({
-      argsExpression: '({ id: params.id })',
+      argsExpression:
+        "({ id: params.id, sku: params.items['sku'].value, tenant: params.scope().tenant })",
       argsParam: 'params',
-      argsPropertyAccesses: ['params.id'],
+      argsPropertyAccesses: [
+        'params.id',
+        'params.items.sku.value',
+        'params.items',
+        'params.scope().tenant',
+        'params.scope',
+      ],
       hasRefresh: true,
       queryExpression: 'productQuery',
     });

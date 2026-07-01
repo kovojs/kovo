@@ -312,7 +312,7 @@ export const QuestionDetail = component({
 import { route } from '@kovojs/server';
 
 export const detail = route('/questions/:id', {
-  page: ({ params }) => <QuestionDetail key={params.id} questionId={params.id} />,
+  page: ({ params, request }) => <QuestionDetail key={params['id']} questionId={request.scope().params?.id} />,
 });
 `,
     });
@@ -320,17 +320,21 @@ export const detail = route('/questions/:id', {
     const registry = component.files[2]?.source ?? '';
 
     expect(route.routePageFacts[0]?.components[0]).toEqual({
-      keyExpression: 'params.id',
+      keyExpression: "params['id']",
       localName: 'QuestionDetail',
       props: [
         {
-          expression: 'params.id',
+          expression: 'request.scope().params?.id',
           name: 'questionId',
-          propertyAccesses: ['params.id'],
+          propertyAccesses: [
+            'request.scope().params?.id',
+            'request.scope().params',
+            'request.scope',
+          ],
         },
       ],
-      propsExpression: '{ questionId: params.id }',
-      serializedPropsExpression: 'JSON.stringify({ questionId: params.id })',
+      propsExpression: '{ questionId: request.scope().params?.id }',
+      serializedPropsExpression: 'JSON.stringify({ questionId: request.scope().params?.id })',
     });
     expect(registry).toContain(
       `'components/questions/question-detail/question-detail': { component: 'components/questions/question-detail/question-detail'; targetBase: 'question-detail'; identityProps: readonly ['questionId']; queries: readonly ['question', 'answers']; queryBindings: readonly [{ name: 'question'; queryExpression: "questionQuery"; argsExpression: "({ id: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }, { name: 'answers'; queryExpression: "answerListQuery"; argsExpression: "({ questionId: props.questionId })"; argsParam: 'props'; argsPropertyAccesses: readonly ['props.questionId'] }]; props: { questionId: string }; coverage: readonly [{ query: 'question.title'; position: "binding"; status: 'plan' }, { query: 'answers.items.length'; position: "binding"; status: 'plan' }]; };`,

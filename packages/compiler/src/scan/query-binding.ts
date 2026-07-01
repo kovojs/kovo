@@ -1,5 +1,6 @@
 import * as ts from 'typescript';
 
+import { propertyAccessPath } from './ast.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 import type { LiveTargetQueryBindingFact } from '../types.js';
 
@@ -141,19 +142,6 @@ function propertyAccessPaths(node: ts.Node): string[] {
 
   visit(node);
   return [...new Set(paths)];
-}
-
-function propertyAccessPath(expression: ts.PropertyAccessExpression): string | null {
-  const receiver = propertyAccessReceiverSegments(expression.expression);
-  if (!receiver) return null;
-  return [...receiver, expression.name.text].join('.');
-}
-
-function propertyAccessReceiverSegments(expression: ts.Expression): string[] | null {
-  if (ts.isIdentifier(expression)) return [expression.text];
-  if (!ts.isPropertyAccessExpression(expression)) return null;
-  const path = propertyAccessPath(expression);
-  return path ? path.split('.') : null;
 }
 
 function queryKeyReadableExpression(
