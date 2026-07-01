@@ -602,7 +602,7 @@ describe('Drizzle pinned subset conformance', () => {
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call spread.db.execute().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses spread.db.execute().',
             severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:12',
           },

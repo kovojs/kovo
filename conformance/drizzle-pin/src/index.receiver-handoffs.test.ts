@@ -817,14 +817,14 @@ describe('Drizzle pinned subset conformance', () => {
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.execute().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses nested.inner.db.execute().',
             severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:16',
           },
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call nested.inner.db.update().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses nested.inner.db.update().',
             severity: 'error',
             site: 'conformance/drizzle-pin/src/product.queries.ts:16',
           },
