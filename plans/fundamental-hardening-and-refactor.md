@@ -77,7 +77,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
 
 ## Phase 0 — Stop the live bleed (self-verified HIGH; isolated files; no gate deps)
 
-- [ ] **J.1 — Classify DDL as a write in `writeTablesForStatement`.**
+- [x] **J.1 — Classify DDL as a write in `writeTablesForStatement`.**
   - Problem: `packages/server/src/sql-write-allowlist.ts:119-134` switches only on
     `insert/update/delete/truncate table/with/with recursive`; `drop/alter/create table` (parsed fine by
     `pgsql-ast-parser`) hit `default: return []` → "not a write".
@@ -85,6 +85,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     `drop/alter/create table`, `create/drop index/trigger/view`, `attach database`, write-`pragma`, `vacuum`,
     `reindex`, and procedural blocks.
   - Verify: `parseSqlWriteTables('DROP TABLE contacts',{dialect:'sqlite'})` returns non-empty; `DELETE FROM contacts` still returns `['contacts']`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/sql-write-allowlist.test.ts packages/server/src/managed-db.test.ts` proves DDL/procedural statements return `UNTABLED_SQL_WRITE` while `DELETE FROM contacts` remains `['contacts']`.
 - [ ] **J.2 — Make both enforcement sites fail closed on non-proven-reads (closes `bugz-26` B1).**
   - Problem (self-verified both sites): `packages/server/src/sql-safe-handle.ts:582` (`assertReadSqlStatement`, the
     read-only floor) and `:550` (`assertSqlWriteTablesAllowed`, the declared-tables allowlist) both `if (writeTables.length === 0) return;`

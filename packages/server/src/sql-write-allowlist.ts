@@ -24,11 +24,17 @@ export interface ParseSqlWriteTablesOptions {
   dialect?: 'postgres' | 'sqlite' | undefined;
 }
 
+export const UNTABLED_SQL_WRITE = '\0kovo:untabled-sql-write';
+export type ParsedSqlWriteTarget = string | typeof UNTABLED_SQL_WRITE;
+
 /** Parse a SQL statement into the physical tables it mutates (SPEC §10.3/§11.2). */
 export function parseSqlWriteTables(
   statement: string,
   options: ParseSqlWriteTablesOptions = {},
-): string[] {
+): ParsedSqlWriteTarget[] {
+  const lexicalWrite = unparsedSqliteWriteStatement(statement);
+  if (lexicalWrite) return [UNTABLED_SQL_WRITE];
+
   const sql = options.dialect === 'sqlite' ? normalizeSqlitePlaceholders(statement) : statement;
   return [
     ...new Set(
@@ -115,7 +121,7 @@ function readQuoted(
 function writeTablesForStatement(
   statement: Statement | WithStatementBinding,
   cteAliases: ReadonlySet<string>,
-): string[] {
+): ParsedSqlWriteTarget[] {
   switch (statement.type) {
     case 'insert':
       return writeTablesForInsert(statement, cteAliases);
@@ -129,15 +135,57 @@ function writeTablesForStatement(
       return writeTablesForWith(statement, cteAliases);
     case 'with recursive':
       return writeTablesForWithRecursive(statement, cteAliases);
-    default:
+    case 'select':
+    case 'show':
+    case 'union':
+    case 'union all':
+    case 'values':
       return [];
+    case 'alter enum':
+    case 'alter index':
+    case 'alter sequence':
+    case 'alter table':
+    case 'begin':
+    case 'comment':
+    case 'commit':
+    case 'create composite type':
+    case 'create enum':
+    case 'create extension':
+    case 'create function':
+    case 'create index':
+    case 'create materialized view':
+    case 'create schema':
+    case 'create sequence':
+    case 'create table':
+    case 'create view':
+    case 'deallocate':
+    case 'do':
+    case 'drop function':
+    case 'drop index':
+    case 'drop sequence':
+    case 'drop table':
+    case 'drop trigger':
+    case 'drop type':
+    case 'prepare':
+    case 'raise':
+    case 'refresh materialized view':
+    case 'rollback':
+    case 'set':
+    case 'set names':
+    case 'set timezone':
+    case 'start transaction':
+    case 'tablespace':
+      return [UNTABLED_SQL_WRITE];
+    default:
+      statement satisfies never;
+      return [UNTABLED_SQL_WRITE];
   }
 }
 
 function writeTablesForInsert(
   statement: InsertStatement,
   cteAliases: ReadonlySet<string>,
-): string[] {
+): ParsedSqlWriteTarget[] {
   return [
     tableName(statement.into),
     ...writeTablesForNestedStatements(
@@ -150,7 +198,7 @@ function writeTablesForInsert(
 function writeTablesForUpdate(
   statement: UpdateStatement,
   cteAliases: ReadonlySet<string>,
-): string[] {
+): ParsedSqlWriteTarget[] {
   return [
     tableName(statement.table),
     ...writeTablesForNestedStatements(
@@ -163,20 +211,23 @@ function writeTablesForUpdate(
 function writeTablesForDelete(
   statement: DeleteStatement,
   cteAliases: ReadonlySet<string>,
-): string[] {
+): ParsedSqlWriteTarget[] {
   return [
     tableName(statement.from),
     ...writeTablesForNestedStatements([statement.where, statement.returning], cteAliases),
   ];
 }
 
-function writeTablesForTruncate(statement: TruncateTableStatement): string[] {
+function writeTablesForTruncate(statement: TruncateTableStatement): ParsedSqlWriteTarget[] {
   return statement.tables.map((table) => tableName(table));
 }
 
-function writeTablesForWith(statement: WithStatement, cteAliases: ReadonlySet<string>): string[] {
+function writeTablesForWith(
+  statement: WithStatement,
+  cteAliases: ReadonlySet<string>,
+): ParsedSqlWriteTarget[] {
   let aliases = cteAliases;
-  const tables: string[] = [];
+  const tables: ParsedSqlWriteTarget[] = [];
 
   for (const binding of statement.bind) {
     tables.push(...writeTablesForStatement(binding.statement, aliases));
@@ -189,7 +240,7 @@ function writeTablesForWith(statement: WithStatement, cteAliases: ReadonlySet<st
 function writeTablesForWithRecursive(
   statement: WithRecursiveStatement,
   cteAliases: ReadonlySet<string>,
-): string[] {
+): ParsedSqlWriteTarget[] {
   return writeTablesForStatement(statement.in, withAliases(cteAliases, [statement.alias.name]));
 }
 
@@ -203,11 +254,14 @@ function withAliases(
 function writeTablesForNestedStatements(
   values: readonly unknown[],
   cteAliases: ReadonlySet<string>,
-): string[] {
+): ParsedSqlWriteTarget[] {
   return values.flatMap((value) => writeTablesForNestedStatement(value, cteAliases));
 }
 
-function writeTablesForNestedStatement(value: unknown, cteAliases: ReadonlySet<string>): string[] {
+function writeTablesForNestedStatement(
+  value: unknown,
+  cteAliases: ReadonlySet<string>,
+): ParsedSqlWriteTarget[] {
   if (Array.isArray(value)) {
     return value.flatMap((item) => writeTablesForNestedStatement(item, cteAliases));
   }
@@ -220,10 +274,79 @@ function writeTablesForNestedStatement(value: unknown, cteAliases: ReadonlySet<s
   return Object.values(value).flatMap((item) => writeTablesForNestedStatement(item, cteAliases));
 }
 
+const SQL_STATEMENT_TYPES = new Set<string>([
+  'alter enum',
+  'alter index',
+  'alter sequence',
+  'alter table',
+  'begin',
+  'comment',
+  'commit',
+  'create composite type',
+  'create enum',
+  'create extension',
+  'create function',
+  'create index',
+  'create materialized view',
+  'create schema',
+  'create sequence',
+  'create table',
+  'create view',
+  'deallocate',
+  'delete',
+  'do',
+  'drop function',
+  'drop index',
+  'drop sequence',
+  'drop table',
+  'drop trigger',
+  'drop type',
+  'insert',
+  'prepare',
+  'raise',
+  'refresh materialized view',
+  'rollback',
+  'select',
+  'set',
+  'set names',
+  'set timezone',
+  'show',
+  'start transaction',
+  'tablespace',
+  'truncate table',
+  'union',
+  'union all',
+  'update',
+  'values',
+  'with',
+  'with recursive',
+]);
+
 function isStatement(value: object): value is Statement {
-  return 'type' in value && typeof value.type === 'string';
+  return (
+    'type' in value && typeof value.type === 'string' && SQL_STATEMENT_TYPES.has(value.type)
+  );
 }
 
 function tableName(identifier: QName): string {
   return identifier.name;
+}
+
+function unparsedSqliteWriteStatement(statement: string): boolean {
+  const head = firstSqlToken(statement);
+  if (
+    head === 'attach' ||
+    head === 'detach' ||
+    head === 'pragma' ||
+    head === 'reindex' ||
+    head === 'vacuum'
+  ) {
+    return true;
+  }
+  return false;
+}
+
+function firstSqlToken(statement: string): string | undefined {
+  const match = /^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*([a-z]+)/iu.exec(statement);
+  return match?.[1]?.toLowerCase();
 }
