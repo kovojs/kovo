@@ -4,35 +4,69 @@ import { execFileSync } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { readNpmPublishedState } from './npm-registry-state.mjs';
 import { manifestPath, repoRoot } from './release-packages.mjs';
 
-const tag = readTag(process.argv);
-const dryRun = process.argv.includes('--dry-run');
+export function publishPackedPackages(
+  args = process.argv,
+  {
+    env = process.env,
+    exec = execFileSync,
+    log = console.log,
+    manifest = null,
+    npmPublishedState = readNpmPublishedState,
+    verifyPackedAttestationFn = verifyPackedAttestation,
+  } = {},
+) {
+  const tag = readTag(args);
+  const dryRun = args.includes('--dry-run');
 
-if (!existsSync(manifestPath)) {
-  throw new Error(`Missing packed package manifest: ${manifestPath}`);
+  if (manifest === null && !existsSync(manifestPath)) {
+    throw new Error(`Missing packed package manifest: ${manifestPath}`);
+  }
+
+  const loadedManifest = manifest ?? JSON.parse(readFileSync(manifestPath, 'utf8'));
+  if (!Array.isArray(loadedManifest.packages) || loadedManifest.packages.length === 0) {
+    throw new Error(`${manifestPath} does not contain any packed packages`);
+  }
+
+  for (const pkg of loadedManifest.packages) {
+    const tarball = path.resolve(repoRoot, pkg.tarball);
+    verifyPackedAttestationFn(pkg, tarball);
+    const state = npmPublishedState(pkg.name, pkg.version);
+    if (state.state === 'published') {
+      log(`Skipping ${pkg.name}@${pkg.version}; version is already published.`);
+      continue;
+    }
+    if (state.state === 'error') {
+      if (dryRun) {
+        log(
+          `Dry run: unable to verify published state for ${pkg.name}@${pkg.version}; continuing without publish.\n${state.detail}`,
+        );
+        continue;
+      }
+      if (env.SKIP_NPM_PUBLISHED_CHECK !== '1') {
+        throw new Error(
+          `Failed to verify npm published state for ${pkg.name}@${pkg.version}:\n${state.detail}`,
+        );
+      }
+      log(
+        `Warning: skipping published-state verification for ${pkg.name}@${pkg.version} because SKIP_NPM_PUBLISHED_CHECK=1.\n${state.detail}`,
+      );
+    }
+    log(`Publishing ${pkg.name}@${pkg.version} with dist-tag ${tag}`);
+    if (dryRun) {
+      continue;
+    }
+    exec('npm', ['publish', tarball, '--tag', tag, '--access', 'public', '--provenance'], {
+      cwd: repoRoot,
+      stdio: 'inherit',
+    });
+  }
 }
 
-const manifest = JSON.parse(readFileSync(manifestPath, 'utf8'));
-if (!Array.isArray(manifest.packages) || manifest.packages.length === 0) {
-  throw new Error(`${manifestPath} does not contain any packed packages`);
-}
-
-for (const pkg of manifest.packages) {
-  const tarball = path.resolve(repoRoot, pkg.tarball);
-  verifyPackedAttestation(pkg, tarball);
-  if (publishedVersion(pkg.name, pkg.version) === pkg.version) {
-    console.log(`Skipping ${pkg.name}@${pkg.version}; version is already published.`);
-    continue;
-  }
-  console.log(`Publishing ${pkg.name}@${pkg.version} with dist-tag ${tag}`);
-  if (dryRun) {
-    continue;
-  }
-  execFileSync('npm', ['publish', tarball, '--tag', tag, '--access', 'public', '--provenance'], {
-    cwd: repoRoot,
-    stdio: 'inherit',
-  });
+if (isMainModule()) {
+  publishPackedPackages(process.argv);
 }
 
 function verifyPackedAttestation(pkg, tarball) {
@@ -60,19 +94,6 @@ function verifyPackedAttestation(pkg, tarball) {
   }
 }
 
-function publishedVersion(name, version) {
-  try {
-    return execFileSync('npm', ['view', `${name}@${version}`, 'version', '--json'], {
-      encoding: 'utf8',
-      stdio: ['ignore', 'pipe', 'pipe'],
-    })
-      .trim()
-      .replace(/^"|"$/g, '');
-  } catch {
-    return null;
-  }
-}
-
 function readTag(args) {
   const index = args.indexOf('--tag');
   if (index === -1) return 'latest';
@@ -84,4 +105,8 @@ function readTag(args) {
     throw new Error(`Invalid npm dist-tag: ${value}`);
   }
   return value;
+}
+
+function isMainModule() {
+  return process.argv[1] === new URL(import.meta.url).pathname;
 }
