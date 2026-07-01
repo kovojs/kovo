@@ -5,6 +5,7 @@ export type StaticLiteralValue =
   | null
   | number
   | string
+  | readonly StaticLiteralValue[]
   | {
       readonly [key: string]: StaticLiteralValue;
     };
@@ -28,6 +29,9 @@ export function literalValue(value: string): StaticLiteralValue | undefined {
   if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
     return parseLiteralObject(trimmed) ?? undefined;
   }
+  if (trimmed.startsWith('[') && trimmed.endsWith(']')) {
+    return parseLiteralArray(trimmed) ?? undefined;
+  }
 
   const stringValue = literalStringValue(trimmed);
   if (stringValue !== null) return stringValue;
@@ -36,6 +40,27 @@ export function literalValue(value: string): StaticLiteralValue | undefined {
   if (trimmed === 'false') return false;
   if (trimmed === 'null') return null;
   return undefined;
+}
+
+function parseLiteralArray(source: string): readonly StaticLiteralValue[] | null {
+  const values: StaticLiteralValue[] = [];
+  let index = 1;
+
+  while (index < source.length - 1) {
+    index = skipWhitespaceAndComments(source, index);
+    if (source[index] === ',') {
+      index += 1;
+      continue;
+    }
+
+    const valueEnd = skipObjectValue(source, index);
+    const value = literalValue(source.slice(index, valueEnd).trim());
+    if (value === undefined) return null;
+    values.push(value);
+    index = valueEnd;
+  }
+
+  return values;
 }
 
 export function literalStringValue(value: string): string | null {

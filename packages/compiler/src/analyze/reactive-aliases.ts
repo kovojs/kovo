@@ -78,6 +78,9 @@ function identifierConstReadAliasesForExpression(
 
   const declarations = identifierConstDeclarationsBefore(model.sourceFile, body, expression.start);
   const functions = functionDeclarationsBefore(model.sourceFile, body, expression.start);
+  const destructuredAliases = aliasMap(
+    destructuredAliasDeclarationsBefore(model.sourceFile, body, expression.start),
+  );
   const aliases: ReactiveAliasModel[] = [];
   for (const name of expression.references) {
     const declaration = declarations.get(name);
@@ -88,6 +91,7 @@ function identifierConstReadAliasesForExpression(
       declaration.initializer,
       declarations,
       functions,
+      destructuredAliases,
     );
     if (accesses.length === 0) continue;
     const aliasExpression = ts.isIdentifier(declaration.initializer)
@@ -135,9 +139,18 @@ function destructuredAliasesForExpression(
   const body = smallestFunctionBlockContaining(model.sourceFile, expression.start);
   if (!body) return [];
 
+  return destructuredAliasDeclarationsBefore(model.sourceFile, body, expression.start, references);
+}
+
+function destructuredAliasDeclarationsBefore(
+  sourceFile: ts.SourceFile,
+  body: ts.Block,
+  expressionStart: number,
+  references?: ReadonlySet<string>,
+): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
   const visit = (node: ts.Node): void => {
-    if (node.getStart(model.sourceFile) >= expression.start) return;
+    if (node.getStart(sourceFile) >= expressionStart) return;
     if (node !== body && isFunctionOrClassLike(node)) return;
     if (
       ts.isVariableDeclaration(node) &&
@@ -145,8 +158,10 @@ function destructuredAliasesForExpression(
       node.initializer &&
       isConstVariableDeclaration(node)
     ) {
+      const aliasReferences =
+        references ?? new Set(bindingIdentifiers(node.name).map((identifier) => identifier.text));
       aliases.push(
-        ...bindingPatternAliases(model.sourceFile, node.name, node.initializer, references, []),
+        ...bindingPatternAliases(sourceFile, node.name, node.initializer, aliasReferences, []),
       );
     }
     ts.forEachChild(node, visit);
@@ -202,11 +217,15 @@ function resolvedInitializerAccesses(
   initializer: ts.Expression,
   declarations: ReadonlyMap<string, ts.VariableDeclaration>,
   functions: ReadonlyMap<string, ts.FunctionDeclaration>,
+  destructuredAliases: ReadonlyMap<string, readonly ReactiveAliasModel[]> = new Map(),
   seen: ReadonlySet<string> = new Set(),
 ): readonly PropertyAccessPathModel[] {
   const direct = propertyAccessPathModels(sourceFile, initializer);
   const nested = identifierReferences(initializer).flatMap((name) => {
     if (seen.has(name)) return [];
+    const destructured = destructuredAliases.get(name);
+    if (destructured) return destructured.flatMap((alias) => alias.accesses);
+
     const declaration = declarations.get(name);
     if (declaration?.initializer) {
       return resolvedInitializerAccesses(
@@ -214,6 +233,7 @@ function resolvedInitializerAccesses(
         declaration.initializer,
         declarations,
         functions,
+        destructuredAliases,
         new Set([...seen, name]),
       );
     }
@@ -235,16 +255,29 @@ function bindingPatternAliases(
 ): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
   const initializerExpression = initializerExpressionFromExpression(sourceFile, initializer);
-  if (!initializerExpression) return [];
+  const fallbackAccessPaths = initializerExpression
+    ? [bindingPathAccessPath(initializerExpression.accessPath, prefix)]
+    : unresolvedInitializerAccessPaths(sourceFile, initializer);
+  if (fallbackAccessPaths.length === 0) return [];
 
   for (const [index, element] of pattern.elements.entries()) {
     if (ts.isOmittedExpression(element)) continue;
-    if (element.dotDotDotToken) continue;
+    if (element.dotDotDotToken) {
+      aliases.push(
+        ...unresolvedBindingAliases(sourceFile, element.name, references, fallbackAccessPaths),
+      );
+      continue;
+    }
 
     const propertyName = ts.isObjectBindingPattern(pattern)
       ? bindingPropertyName(element)
       : index.toString();
-    if (propertyName === null) continue;
+    if (propertyName === null) {
+      aliases.push(
+        ...unresolvedBindingAliases(sourceFile, element.name, references, fallbackAccessPaths),
+      );
+      continue;
+    }
 
     const segment: BindingPathSegment = ts.isObjectBindingPattern(pattern)
       ? { kind: 'property', value: propertyName }
@@ -253,6 +286,12 @@ function bindingPatternAliases(
     if (ts.isIdentifier(element.name)) {
       const name = element.name.text;
       if (!references.has(name)) continue;
+      if (!initializerExpression) {
+        aliases.push(
+          ...unresolvedBindingAliases(sourceFile, element.name, references, fallbackAccessPaths),
+        );
+        continue;
+      }
       const resolvedPath = bindingPathAccessPath(initializerExpression.accessPath, path);
       const resolvedExpression = bindingPathExpression(initializerExpression.expression, path);
       aliases.push({
@@ -271,7 +310,7 @@ function bindingPatternAliases(
       continue;
     }
 
-    if (ts.isObjectBindingPattern(element.name)) {
+    if (ts.isObjectBindingPattern(element.name) || ts.isArrayBindingPattern(element.name)) {
       aliases.push(
         ...bindingPatternAliases(sourceFile, element.name, initializer, references, path),
       );
@@ -300,9 +339,46 @@ function initializerExpressionFromExpression(
   return { accessPath, expression: initializer.getText(sourceFile) };
 }
 
+function unresolvedInitializerAccessPaths(
+  sourceFile: ts.SourceFile,
+  initializer: ts.Expression,
+): readonly string[] {
+  return [
+    ...new Set(propertyAccessPathModels(sourceFile, initializer).map((access) => access.path)),
+  ];
+}
+
 function exactInitializerPath(accesses: readonly PropertyAccessPathModel[]): string | null {
   const paths = [...new Set(accesses.map((access) => access.path))];
   return paths.length === 1 ? (paths[0] ?? null) : null;
+}
+
+function unresolvedBindingAliases(
+  sourceFile: ts.SourceFile,
+  name: ts.BindingName,
+  references: ReadonlySet<string>,
+  accessPaths: readonly string[],
+): readonly ReactiveAliasModel[] {
+  return bindingIdentifiers(name)
+    .filter((identifier) => references.has(identifier.text))
+    .map((identifier) => ({
+      accesses: accessPaths.map((accessPath) => ({
+        end: identifier.getEnd(),
+        path: accessPath,
+        start: identifier.getStart(sourceFile),
+        terminalName: accessPath.split('.').at(-1) ?? accessPath,
+      })),
+      name: identifier.text,
+      start: identifier.getStart(sourceFile),
+    }));
+}
+
+function bindingIdentifiers(name: ts.BindingName): readonly ts.Identifier[] {
+  if (ts.isIdentifier(name)) return [name];
+  return name.elements.flatMap((element) => {
+    if (ts.isOmittedExpression(element)) return [];
+    return bindingIdentifiers(element.name);
+  });
 }
 
 function identifierReferences(root: ts.Node): readonly string[] {
@@ -453,6 +529,21 @@ function dedupeAliases(aliases: readonly ReactiveAliasModel[]): readonly Reactiv
     deduped.push(alias);
   }
   return deduped;
+}
+
+function aliasMap(
+  aliases: readonly ReactiveAliasModel[],
+): ReadonlyMap<string, readonly ReactiveAliasModel[]> {
+  const mapped = new Map<string, ReactiveAliasModel[]>();
+  for (const alias of aliases) {
+    const existing = mapped.get(alias.name);
+    if (existing) {
+      existing.push(alias);
+    } else {
+      mapped.set(alias.name, [alias]);
+    }
+  }
+  return mapped;
 }
 
 function dedupeAccesses(

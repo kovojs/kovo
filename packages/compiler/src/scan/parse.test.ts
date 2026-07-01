@@ -243,7 +243,7 @@ export const CartBadge = component({
   it('records static literal state return values', () => {
     const source = `
 export const CartBadge = component({
-  state: () => ({ label: "it's ready", count: -2, open: false, meta: { empty: null } }),
+  state: () => ({ label: "it's ready", count: -2, open: false, meta: { empty: null }, items: ['first', { label: 'second' }] }),
   render: () => <cart-badge>Ready</cart-badge>,
 });
 `;
@@ -251,6 +251,7 @@ export const CartBadge = component({
 
     expect(component?.stateReturnObject?.staticValue).toEqual({
       count: -2,
+      items: ['first', { label: 'second' }],
       label: "it's ready",
       meta: { empty: null },
       open: false,
@@ -1202,7 +1203,7 @@ export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count ===
       undefined,
     ]);
     expect(derive?.argumentStringLiteralArrayValues).toEqual([['cart'], null]);
-    expect(derive?.argumentStaticValues).toEqual([undefined, undefined]);
+    expect(derive?.argumentStaticValues).toEqual([['cart'], undefined]);
     expect(derive?.argumentArrowFunctionParts).toEqual([
       null,
       {
