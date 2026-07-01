@@ -212,16 +212,76 @@ export function frameworkIdentityExpressionKindRows(
   ts: FrameworkIdentityTypeScript,
 ): readonly FrameworkIdentityExpressionKindRow[] {
   return [
-    { kind: ts.SyntaxKind.Identifier, resolution: 'resolve-identifier' },
-    { kind: ts.SyntaxKind.PropertyAccessExpression, resolution: 'resolve-property-access' },
-    { kind: ts.SyntaxKind.ElementAccessExpression, resolution: 'resolve-element-access' },
-    { kind: ts.SyntaxKind.ParenthesizedExpression, resolution: 'unwrap-expression' },
-    { kind: ts.SyntaxKind.AsExpression, resolution: 'unwrap-expression' },
-    { kind: ts.SyntaxKind.SatisfiesExpression, resolution: 'unwrap-expression' },
-    { kind: ts.SyntaxKind.TypeAssertionExpression, resolution: 'unwrap-expression' },
-    { kind: ts.SyntaxKind.NonNullExpression, resolution: 'unwrap-expression' },
+    ...frameworkIdentityExpressionSyntaxKinds(ts).map((kind) => ({
+      kind,
+      resolution: frameworkIdentityExpressionKindResolution(ts, kind),
+    })),
     { kind: 'default', resolution: 'fail-closed' },
   ];
+}
+
+function frameworkIdentityExpressionSyntaxKinds(
+  ts: FrameworkIdentityTypeScript,
+): readonly TypeScript.SyntaxKind[] {
+  // Mirrors TypeScript's internal isExpressionKind classifier. SPEC §6.6 and §11 require every
+  // security recognizer to resolve by provenance or fail closed; keeping a row for every expression
+  // kind makes a missing resolver branch visible instead of silently treating it as clean.
+  return uniqueSyntaxKinds([
+    ts.SyntaxKind.PropertyAccessExpression,
+    ts.SyntaxKind.ElementAccessExpression,
+    ts.SyntaxKind.NewExpression,
+    ts.SyntaxKind.CallExpression,
+    ts.SyntaxKind.JsxElement,
+    ts.SyntaxKind.JsxSelfClosingElement,
+    ts.SyntaxKind.JsxFragment,
+    ts.SyntaxKind.TaggedTemplateExpression,
+    ts.SyntaxKind.ArrayLiteralExpression,
+    ts.SyntaxKind.ParenthesizedExpression,
+    ts.SyntaxKind.ObjectLiteralExpression,
+    ts.SyntaxKind.ClassExpression,
+    ts.SyntaxKind.FunctionExpression,
+    ts.SyntaxKind.Identifier,
+    ts.SyntaxKind.PrivateIdentifier,
+    ts.SyntaxKind.RegularExpressionLiteral,
+    ts.SyntaxKind.NumericLiteral,
+    ts.SyntaxKind.BigIntLiteral,
+    ts.SyntaxKind.StringLiteral,
+    ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+    ts.SyntaxKind.TemplateExpression,
+    ts.SyntaxKind.FalseKeyword,
+    ts.SyntaxKind.NullKeyword,
+    ts.SyntaxKind.ThisKeyword,
+    ts.SyntaxKind.TrueKeyword,
+    ts.SyntaxKind.SuperKeyword,
+    ts.SyntaxKind.NonNullExpression,
+    ts.SyntaxKind.ExpressionWithTypeArguments,
+    ts.SyntaxKind.MetaProperty,
+    ts.SyntaxKind.ImportKeyword,
+    ts.SyntaxKind.MissingDeclaration,
+    ts.SyntaxKind.PrefixUnaryExpression,
+    ts.SyntaxKind.PostfixUnaryExpression,
+    ts.SyntaxKind.DeleteExpression,
+    ts.SyntaxKind.TypeOfExpression,
+    ts.SyntaxKind.VoidExpression,
+    ts.SyntaxKind.AwaitExpression,
+    ts.SyntaxKind.TypeAssertionExpression,
+    ts.SyntaxKind.ConditionalExpression,
+    ts.SyntaxKind.YieldExpression,
+    ts.SyntaxKind.ArrowFunction,
+    ts.SyntaxKind.BinaryExpression,
+    ts.SyntaxKind.SpreadElement,
+    ts.SyntaxKind.AsExpression,
+    ts.SyntaxKind.OmittedExpression,
+    ts.SyntaxKind.CommaListExpression,
+    ts.SyntaxKind.PartiallyEmittedExpression,
+    ts.SyntaxKind.SatisfiesExpression,
+  ]);
+}
+
+function uniqueSyntaxKinds(
+  kinds: readonly TypeScript.SyntaxKind[],
+): readonly TypeScript.SyntaxKind[] {
+  return [...new Set(kinds)];
 }
 
 /** @internal Register extra local source files that source-only identity resolution may inspect. */

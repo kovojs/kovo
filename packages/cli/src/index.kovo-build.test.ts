@@ -1317,7 +1317,7 @@ export default createApp({
     }
   }, 90_000);
 
-  it('resolves local trustedHtml barrels during production build preflight', async () => {
+  it('resolves local trustedHtml/trustedUrl barrels during production build preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-trustedhtml-barrel-'));
     const appPath = join(root, 'app.ts');
     const outDir = join(root, 'dist');
@@ -1332,7 +1332,7 @@ export default createApp({
       writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
       writeFileSync(
         join(root, 'safe-html.ts'),
-        "export { trustedHtml } from '@kovojs/browser';\n",
+        "export { trustedHtml, trustedUrl } from '@kovojs/browser';\n",
         'utf8',
       );
       writeFileSync(join(root, 'promo.tsx'), trustedHtmlBarrelPreflightComponentSource(), 'utf8');
@@ -1345,6 +1345,7 @@ export default createApp({
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
       expect(errorOutput).toMatch(/ERROR KV426 promo\.tsx:\d+:\d+/);
+      expect(errorOutput.match(/ERROR KV426 promo\.tsx/g) ?? []).toHaveLength(2);
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -1353,7 +1354,7 @@ export default createApp({
     }
   }, 90_000);
 
-  it('resolves star trustedHtml barrels and literal element access during production build preflight', async () => {
+  it('resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-trustedhtml-star-barrel-'));
     const appPath = join(root, 'app.ts');
     const outDir = join(root, 'dist');
@@ -1368,7 +1369,7 @@ export default createApp({
       writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
       writeFileSync(
         join(root, 'safe-html-root.ts'),
-        "export { trustedHtml } from '@kovojs/browser';\n",
+        "export { trustedHtml, trustedUrl } from '@kovojs/browser';\n",
         'utf8',
       );
       writeFileSync(join(root, 'safe-html.ts'), "export * from './safe-html-root';\n", 'utf8');
@@ -1386,7 +1387,7 @@ export default createApp({
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
       expect(errorOutput).toMatch(/ERROR KV426 promo\.tsx:\d+:\d+/);
-      expect(errorOutput.match(/ERROR KV426 promo\.tsx/g) ?? []).toHaveLength(2);
+      expect(errorOutput.match(/ERROR KV426 promo\.tsx/g) ?? []).toHaveLength(4);
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -3087,17 +3088,22 @@ export default createApp({
 function trustedHtmlBarrelPreflightComponentSource(): string {
   return `
 import { component, publicAccess, query, s } from '@kovojs/server';
-import { trustedHtml } from './safe-html';
+import { trustedHtml, trustedUrl } from './safe-html';
 
 export const postQuery = query('post', {
   access: publicAccess('trustedHtml barrel build preflight fixture'),
-  load: () => ({ body: '<img src=x onerror=alert(1)>' }),
-  output: s.object({ body: s.string() }),
+  load: () => ({ body: '<img src=x onerror=alert(1)>', href: '/promo' }),
+  output: s.object({ body: s.string(), href: s.string() }),
 });
 
 export const Promo = component({
   queries: { post: postQuery },
-  render: ({ post }) => <article>{trustedHtml(post.body)}</article>,
+  render: ({ post }) => (
+    <article>
+      {trustedHtml(post.body)}
+      <a href={trustedUrl(post.href)}>read</a>
+    </article>
+  ),
 });
 `;
 }
@@ -3110,8 +3116,8 @@ import * as safeHtml from './safe-html';
 
 export const postQuery = query('post', {
   access: publicAccess('trustedHtml star barrel build preflight fixture'),
-  load: () => ({ body: '<img src=x onerror=alert(1)>' }),
-  output: s.object({ body: s.string() }),
+  load: () => ({ body: '<img src=x onerror=alert(1)>', href: '/promo' }),
+  output: s.object({ body: s.string(), href: s.string() }),
 });
 
 export const Promo = component({
@@ -3119,7 +3125,9 @@ export const Promo = component({
   render: ({ post }) => (
     <article>
       {browser['trustedHtml'](post.body)}
+      <a href={browser['trustedUrl'](post.href)}>browser</a>
       {safeHtml['trustedHtml'](post.body)}
+      <a href={safeHtml['trustedUrl'](post.href)}>safe</a>
     </article>
   ),
 });
