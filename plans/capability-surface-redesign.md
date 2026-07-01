@@ -31,13 +31,26 @@ preserving compatibility for a model that is hard to explain.
     loaders receive only read handles, Drizzle/static tests proving query write reachability always
     fails closed, and migration of existing tests/docs/examples away from `query.elevated()`.
 
-- [ ] **Redesign webhook transaction/write authority.**
-  - Decide whether webhook handlers receive only a branded transaction/request writer, a declared
-    domain operation surface, or another typed write context.
-  - Preserve the idempotency/replay/write-posture floor: a write-capable webhook must be visible to
-    static analysis and runtime lifecycle checks.
-  - Evidence to close: server webhook lifecycle tests, compiler/build preflight diagnostics, and a
-    prod-artifact or integration proof for a declared write webhook.
+- [ ] **Move webhook writes through audited mutation calls.**
+  - Decision: webhook handlers should be machine-ingress coordinators, not owners of raw transaction
+    writes. A webhook verifies/parses provider input, reserves replay/idempotency, then calls an
+    audited mutation that owns the DB write, touch set, and static diagnostics.
+  - Add a webhook handler capability such as `context.runMutation(...)`, mirroring the durable task
+    composition model. The called mutation must carry the same registry/touch proof normal app
+    writes use.
+  - Remove or demote generic `context.tx` as the primary public write path. If a transaction wrapper
+    remains internally, it should bracket the webhook lifecycle and the dispatched audited mutation,
+    not become an ambient raw handle for app-authored handler code.
+  - Make `recordChange()` either derived from the called mutation's touch set or a narrow
+    compatibility bridge during migration; the long-term audit source should be the invoked mutation
+    fact, not a separate manual change record after an arbitrary `tx` write.
+  - Preserve the idempotency/replay floor: any webhook that can dispatch writes must declare
+    `idempotency()` and `replayStore` before the handler runs, and repeated provider deliveries must
+    replay the committed response rather than re-executing the write.
+  - Evidence to close: server webhook lifecycle tests for `runMutation` dispatch, compiler/build
+    preflight diagnostics rejecting raw webhook DB writes, `kovo explain` endpoint audit showing the
+    called mutation and touched domains, and a prod-artifact or integration proof that a mutation
+    dispatching webhook deduplicates provider replay while refreshing the touched domain.
 
 - [ ] **Continue direct-DB detector hardening outside starter cleanup.**
   - Keep alias/destructure/helper gaps assigned to the A/B/C verifier workstreams instead of
