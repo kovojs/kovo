@@ -48,7 +48,11 @@ the IR/fact-store migration in C1.
   - Integrated C1 worker: `019f1bec-9c84-7a02-9094-ff29e559e1b9` as `a26704542`,
     plus main-thread build-preflight coverage for the same sink family.
   - Integrated D2 worker: `019f1c04-239a-7273-9175-fc31d38a0faa` as `3bd002c1a`.
-  - No active `fundamental-fixes` workers remain.
+  - Integrated B2 schema-receiver worker: `019f1c1b-96f0-7e92-b13a-e4c1610153fa` as
+    `49e287410`.
+  - Integrated B2 residual compiler-recognizer worker: `019f1c27-8f34-7050-b86a-ccf166bd9282`
+    as `4d66ed78f`.
+  - Active sidecar work remains for Drizzle residual recognizers and the capability-surface plan.
 
 ## Active Worker Slices
 
@@ -158,10 +162,15 @@ packages/cli/src/index.kovo-check.test.ts`.
         schema-receiver identity slice.
   - [x] Convert the `@kovojs/server` `s` schema-receiver recognizer family to framework identity.
         Evidence: `vp exec vitest --run packages/compiler/src/scan/mutation-inputs.test.ts packages/compiler/src/scan/query-shape-source.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.identity-resolver.test.ts`.
+  - [x] Convert or explicitly mark compiler parser/emit residual recognizers not owned by the capability
+        redesign, including unshadowed browser globals, structural query-binding metadata, and internal
+        generated-helper import de-dupe.
+        Evidence: `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts packages/compiler/src/scan/query-binding.test.ts packages/compiler/src/scan/optimistic-inline.test.ts packages/compiler/src/scan/query-shape-source.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/platform-lowering.test.ts`;
+        `node scripts/fundamental-fixes-inventory.mjs` reports 40 syntactic candidates.
   - [ ] Review and convert or explicitly mark the remaining Drizzle alias/table recognizers.
   - [ ] Review and convert or explicitly mark trust-escape DOM/`Function` recognizers.
-  - [ ] Review and convert or explicitly mark compiler parser/emit comparisons such as `recordChange`,
-        `query.elevated`, and internal helper import checks.
+  - [ ] Finish capability-owned compiler comparisons for `recordChange` and `query.elevated` through
+        `plans/capability-surface-redesign.md`.
   - Acceptance: inventory count drops for security-relevant literal/import recognizers; new/changed tests
     prove alias, re-export, namespace, and local-shadow behavior.
 
