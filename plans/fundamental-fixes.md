@@ -33,11 +33,13 @@ the IR/fact-store migration in C1.
 ## Current Priority
 
 - [x] **Repair latest pushed CI before merging another batch.**
-  - Current run: `28492646197` for `847ca02c9`.
-  - Failure: `static-safety` job `84452379922`, `tests/compiler-perf.test.ts` reports
-    `many-small-components cold compile took 617.6ms, budget is 600ms`.
-  - Evidence: `473060818` raised only the `many-small-components` Linux cold budget to 750ms; local
-    `pnpm run test:compiler-perf`, `pnpm run check:vp`, and GitHub CI run `28493223012` passed.
+  - Current run: `28495756389` for `551687410`.
+  - Failure: `test (1, 3)` and `conformance` reported a wrapped Drizzle projection regression: generic
+    `output: {}` plus `reads:` no longer suppressed KV410.
+  - Evidence: restored generic object-literal output declarations while preserving framework-identity
+    schema receiver checks; verified with `vp exec vitest --run packages/drizzle/src/index.serialization.test.ts -t "resolves wrapped query projection expressions"`,
+    `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts -t "output schema|opaque query projections"`,
+    and `pnpm --filter @kovojs/conformance-drizzle-pin test -- --run src/index.imports-and-query-shapes.test.ts -t "pins wrapped project query projection expressions"`.
 
 - [x] **Do not duplicate active worker work.**
   - Integrated B worker: `019f1bdd-fc74-78e1-9fe2-e26e138a629d` as `dcb8202ed`.

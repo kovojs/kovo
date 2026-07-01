@@ -3509,11 +3509,14 @@ function extractQueryDefinitionsFromSourceFile(
         options.relationalRelationCardinality,
       );
     const outputShape = queryOutputShape(bodyObject);
+    const outputInitializer = objectPropertyInitializer(bodyObject, 'output');
     const shape =
       selection && !isEmptyQueryShape(selection.shape)
         ? selection.shape
         : (outputShape ?? selection?.shape ?? {});
-    const hasOutputSchema = outputShape !== undefined;
+    const hasOutputSchema =
+      outputShape !== undefined ||
+      (outputInitializer !== undefined && Node.isObjectLiteralExpression(outputInitializer));
     const declaredReadExpressions = queryDeclaredReadExpressions(
       bodyObject,
       options.readTableIdentifier,
