@@ -18,6 +18,7 @@ import {
 } from './package-prefixes.js';
 import { firstComponentModel, parseComponentModule } from './scan/parse.js';
 import { compileRouteModule } from './scan/route-pages.js';
+import { uniqueSorted } from './shared.js';
 import { extractKovoStyles } from './style.js';
 import type { RoutePageFact } from './types.js';
 
@@ -293,10 +294,6 @@ function routePageFactsWithFragmentTargets(
       },
     };
   });
-}
-
-function uniqueSorted(values: readonly string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function appFragmentTargetsByCssSourceFileName(

@@ -42,6 +42,8 @@ import {
   bindPropStampAttributeName,
   escapeAttribute,
   isPropertyAuthoritativeAttribute,
+  outputWriteFact,
+  sanitizeIdentifier,
   type SourceReplacement,
 } from '../shared.js';
 import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
@@ -1692,10 +1694,6 @@ function recordQueryTextDerive(
   });
 }
 
-function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFact {
-  return fact;
-}
-
 /**
  * SPEC.md §5.2 derive ABI chokepoint (FN11, plans/compiler-refactoring.md): the single
  * owner of the `export const X = derive(<inputs>, (<params>) => <expression>);` template,
@@ -2024,11 +2022,6 @@ function isComponentTag(tag: string): boolean {
 
 function staticStringValue(value: StaticLiteralValue | undefined): string | null {
   return typeof value === 'string' ? value : null;
-}
-
-function sanitizeIdentifier(value: string): string {
-  const sanitized = value.replace(/[^A-Za-z0-9_$]/g, '_');
-  return /^[A-Za-z_$]/.test(sanitized) ? sanitized : `_${sanitized}`;
 }
 
 const booleanPresenceAttributes = new Set([

@@ -24,6 +24,7 @@ import {
   type ObjectLiteralEntry,
 } from './scan/parse.js';
 import { queryBindingFromExpression, queryExpressionFromBinding } from './scan/query-binding.js';
+import { uniqueSorted } from './shared.js';
 import type {
   CompileAppGraphOptions,
   CompileAppGraphResult,
@@ -978,10 +979,6 @@ function routePageComponentQueryNamesByLocalName(
 
 function routePageComponentExportName(component: RoutePageFact['components'][number]): string {
   return component.exportName ?? component.localName;
-}
-
-function uniqueSorted(values: readonly string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function componentQueryNamesForModule(
