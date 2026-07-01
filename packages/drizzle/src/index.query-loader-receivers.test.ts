@@ -1142,6 +1142,20 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           key: 'arg:id',
         },
         query: 'note/inline-context-db',
+        readProvenance: [
+          {
+            columns: [],
+            domain: 'note',
+            keys: 'arg:id',
+            scope: {
+              key: 'arg:id',
+              kind: 'arg',
+            },
+            site: 'note.queries.ts:14',
+            source: 'select',
+            via: 'notes',
+          },
+        ],
         reads: ['note'],
         shape: {
           id: 'string',
@@ -1204,6 +1218,20 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           key: 'arg:id',
         },
         query: 'note/non-null-context-db',
+        readProvenance: [
+          {
+            columns: [],
+            domain: 'note',
+            keys: 'arg:id',
+            scope: {
+              key: 'arg:id',
+              kind: 'arg',
+            },
+            site: 'note.queries.ts:14',
+            source: 'select',
+            via: 'notes',
+          },
+        ],
         reads: ['note'],
         shape: {
           id: 'string',
@@ -1265,6 +1293,20 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           key: 'arg:id',
         },
         query: 'note/unresolved-reader-context-db',
+        readProvenance: [
+          {
+            columns: [],
+            domain: 'note',
+            keys: 'arg:id',
+            scope: {
+              key: 'arg:id',
+              kind: 'arg',
+            },
+            site: 'note.queries.ts:14',
+            source: 'select',
+            via: 'notes',
+          },
+        ],
         reads: ['note'],
         shape: {
           id: 'string',

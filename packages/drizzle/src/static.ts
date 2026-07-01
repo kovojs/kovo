@@ -400,99 +400,248 @@ function compareRevealExplainFacts(left: RevealExplainFact, right: RevealExplain
   const audits: ScopeAuditFact[] = [];
 
   for (const fact of facts) {
-    for (const domain of fact.reads) {
+    for (const read of scopeAuditReadProvenance(fact, ownerScopes)) {
+      const domain = read.domain;
       if (!owners.has(domain)) continue;
 
-      // SPEC §10.3 / KV414. `args` is the IDOR signal and is fail-closed: a
-      // client-visible `input.*` arg keying the declared key column (A1/legacy),
-      // OR any owner-table column (A3, `argScopedReads`), flags KV414 even when the
-      // same predicate is also session-anchored.
-      const argKeys = new Set<string>();
-      if (fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:')) {
-        argKeys.add(fact.instanceKey.key);
-      }
-      for (const scoped of fact.argScopedReadKeys ?? []) {
-        if (scoped.domain === domain) argKeys.add(scoped.key);
-      }
-      if (argKeys.size === 0 && (fact.argScopedReads ?? []).includes(domain)) {
-        argKeys.add('');
-      }
-      if (argKeys.size > 0) {
-        for (const key of argKeys) {
-          audits.push({
-            domain,
-            ...(key ? { key } : {}),
-            kind: 'query',
-            name: fact.query,
-            scope: 'args',
-            site: fact.site,
-          });
-        }
-        continue;
-      }
-
-      const ownerSessionScoped = (fact.ownerScopedSessionReads ?? []).includes(domain);
-      if (ownerSessionScoped) {
-        const privateKey = (fact.ownerScopedPrivateReadKeys ?? []).find(
-          (scoped) => scoped.domain === domain,
-        )?.privateKey;
+      // SPEC §10.3 / §11.1 KV414: query read-scope enforcement is now a graph
+      // operation over canonical read provenance rows. The extraction pass owns
+      // source recognition and fail-closed unresolved rows; this gate only checks
+      // each owner-domain read's proven scope.
+      if (read.scope.kind === 'arg') {
         audits.push({
-          ...(privateKey
-            ? {
-                detail: ownerAuthorizationDataProofDetail(
-                  ownerScopes,
-                  domain,
-                  privateKey,
-                  fact.acceptedGuardPrivateKeys,
-                ),
-              }
-            : {}),
           domain,
+          ...(read.scope.key ? { key: read.scope.key } : {}),
           kind: 'query',
           name: fact.query,
-          scope: 'session',
-          site: fact.site,
+          scope: 'args',
+          site: read.site || fact.site,
         });
         continue;
       }
 
-      const sessionScoped = (fact.sessionAnchoredReads ?? []).includes(domain);
-      const ownerScope = ownerScopes.find((owner) => owner.domain === domain);
-      if (sessionScoped && !ownerScope?.owner) {
-        audits.push({ domain, kind: 'query', name: fact.query, scope: 'session', site: fact.site });
-        continue;
-      }
-
-      const detail = ownerAuthorizationDataDetail(ownerScope, sessionScoped);
-      // Join-keyed bypass: an owner read that is neither directly arg-keyed nor
-      // session/`owns()`-scoped, but is reachable from a client `input.*` predicate
-      // (on this or a joined non-owner table). Fail-closed to `args`/KV414.
-      if (fact.hasClientArgPredicate) {
+      if (isPrivateQueryReadScope(read.scope) && read.scope.ownerProof) {
         audits.push({
-          detail,
+          detail: ownerAuthorizationDataProofDetail(
+            ownerScopes,
+            domain,
+            read.scope.key,
+            fact.acceptedGuardPrivateKeys,
+          ),
           domain,
           kind: 'query',
           name: fact.query,
-          scope: 'args',
-          site: fact.site,
+          scope: 'session',
+          site: read.site || fact.site,
+        });
+        continue;
+      }
+
+      const ownerScope = ownerScopes.find((owner) => owner.domain === domain);
+      const privateScoped = isPrivateQueryReadScope(read.scope);
+      if (privateScoped && !ownerScope?.owner) {
+        audits.push({
+          domain,
+          kind: 'query',
+          name: fact.query,
+          scope: 'session',
+          site: read.site || fact.site,
         });
         continue;
       }
 
       if (ownerScope?.owner) {
         audits.push({
-          detail,
+          detail: ownerAuthorizationDataDetail(ownerScope, privateScoped),
           domain,
           kind: 'query',
           name: fact.query,
           scope: 'unknown',
-          site: fact.site,
+          site: read.site || fact.site,
         });
       }
     }
   }
 
-  return audits;
+  return dedupeScopeAuditFacts(audits);
+}
+
+function scopeAuditReadProvenance(
+  fact: QueryFact,
+  ownerScopes: readonly OwnerDomainScope[],
+): QueryReadProvenance[] {
+  const owners = new Set(ownerScopes.map((owner) => owner.domain));
+  const provenance =
+    fact.readProvenance && fact.readProvenance.length > 0
+      ? [...fact.readProvenance]
+      : legacyQueryReadProvenanceForScopeAudit(fact, owners);
+  const provenDomains = new Set(provenance.map((read) => read.domain));
+
+  // Fail closed: an owner domain present in the canonical read set but missing a
+  // provenance row is not treated as green. It becomes an unscoped owner read and
+  // therefore KV414/unknown in the audit.
+  for (const domain of fact.reads) {
+    if (!owners.has(domain) || provenDomains.has(domain)) continue;
+    provenance.push(unresolvedScopeAuditRead(fact, domain));
+  }
+
+  return prioritizedScopeAuditReadProvenance(provenance, owners);
+}
+
+function legacyQueryReadProvenanceForScopeAudit(
+  fact: QueryFact,
+  owners: ReadonlySet<string>,
+): QueryReadProvenance[] {
+  return fact.reads
+    .filter((domain) => owners.has(domain))
+    .map((domain) => {
+      const scope = legacyQueryReadScopeForDomain(fact, domain, owners);
+      return {
+        columns: [],
+        domain,
+        keys: fact.instanceKey?.domain === domain ? fact.instanceKey.key : null,
+        scope,
+        site: fact.site,
+        source: 'select',
+        via: domain,
+      };
+    });
+}
+
+function unresolvedScopeAuditRead(fact: QueryFact, domain: string): QueryReadProvenance {
+  return {
+    columns: [],
+    domain,
+    keys: null,
+    scope: { kind: 'unscoped' },
+    site: fact.site,
+    source: 'declared',
+    via: domain,
+  };
+}
+
+function prioritizedScopeAuditReadProvenance(
+  provenance: readonly QueryReadProvenance[],
+  owners: ReadonlySet<string>,
+): QueryReadProvenance[] {
+  const byDomain = new Map<string, QueryReadProvenance[]>();
+  for (const read of provenance) {
+    if (!owners.has(read.domain)) continue;
+    byDomain.set(read.domain, [...(byDomain.get(read.domain) ?? []), read]);
+  }
+
+  const prioritized: QueryReadProvenance[] = [];
+  for (const reads of byDomain.values()) {
+    const argReads = reads.filter((read) => read.scope.kind === 'arg');
+    if (argReads.length > 0) {
+      prioritized.push(...dedupeQueryReadProvenanceByScope(argReads));
+      continue;
+    }
+
+    const ownerProof = reads.find(
+      (read) => isPrivateQueryReadScope(read.scope) && read.scope.ownerProof,
+    );
+    if (ownerProof) {
+      prioritized.push(ownerProof);
+      continue;
+    }
+
+    const privateScope = reads.find((read) => isPrivateQueryReadScope(read.scope));
+    const first = reads[0];
+    if (first) prioritized.push(privateScope ?? first);
+  }
+
+  return prioritized.sort(
+    (left, right) =>
+      left.domain.localeCompare(right.domain) ||
+      (left.scope.kind === right.scope.kind
+        ? 0
+        : left.scope.kind.localeCompare(right.scope.kind)) ||
+      (scopeKey(left.scope) ?? '').localeCompare(scopeKey(right.scope) ?? '') ||
+      left.site.localeCompare(right.site),
+  );
+}
+
+function dedupeQueryReadProvenanceByScope(
+  provenance: readonly QueryReadProvenance[],
+): QueryReadProvenance[] {
+  return [
+    ...new Map(
+      provenance.map((read) => [
+        [read.domain, read.scope.kind, scopeKey(read.scope) ?? '', read.site].join('\0'),
+        read,
+      ]),
+    ).values(),
+  ];
+}
+
+function legacyQueryReadScopeForDomain(
+  fact: QueryFact,
+  domain: string,
+  owners: ReadonlySet<string>,
+): QueryReadScopeProvenance {
+  const argKey = legacyArgReadKeyForDomain(fact, domain);
+  if (argKey !== undefined) return argKey ? { key: argKey, kind: 'arg' } : { kind: 'arg' };
+
+  const privateKey = (fact.ownerScopedPrivateReadKeys ?? []).find(
+    (scoped) => scoped.domain === domain,
+  )?.privateKey;
+  if (privateKey) return privateScopeFromKey(privateKey, true);
+
+  if (owners.has(domain) && fact.hasClientArgPredicate) return { kind: 'arg' };
+  if (fact.instanceKey?.domain === domain) return readScopeFromKey(fact.instanceKey.key);
+  if ((fact.sessionAnchoredReads ?? []).includes(domain)) {
+    return privateScopeFromKey('session:<unknown>');
+  }
+  return { kind: 'unscoped' };
+}
+
+function legacyArgReadKeyForDomain(fact: QueryFact, domain: string): string | undefined {
+  if (fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:')) {
+    return fact.instanceKey.key;
+  }
+  const scoped = (fact.argScopedReadKeys ?? []).find((candidate) => candidate.domain === domain);
+  if (scoped) return scoped.key;
+  if ((fact.argScopedReads ?? []).includes(domain)) return '';
+  return undefined;
+}
+
+function isPrivateQueryReadScope(
+  scope: QueryReadScopeProvenance,
+): scope is Extract<QueryReadScopeProvenance, { key: string }> {
+  return scope.kind === 'guard' || scope.kind === 'session' || scope.kind === 'tenant';
+}
+
+function privateScopeFromKey(key: string, ownerProof = false): QueryReadScopeProvenance {
+  const kind = key.startsWith('guard:')
+    ? 'guard'
+    : key.startsWith('tenant:')
+      ? 'tenant'
+      : 'session';
+  return ownerProof ? { key, kind, ownerProof: true } : { key, kind };
+}
+
+function scopeKey(scope: QueryReadScopeProvenance): string | undefined {
+  return 'key' in scope ? scope.key : undefined;
+}
+
+function dedupeScopeAuditFacts(audits: readonly ScopeAuditFact[]): ScopeAuditFact[] {
+  return [
+    ...new Map(
+      audits.map((audit) => [
+        [
+          audit.kind,
+          audit.name,
+          audit.domain,
+          audit.scope,
+          audit.key ?? '',
+          audit.site ?? '',
+          audit.detail ?? '',
+        ].join('\0'),
+        audit,
+      ]),
+    ).values(),
+  ];
 }
 
 function ownerDomainScopes(ownerDomains: Iterable<string | OwnerDomainScope>): OwnerDomainScope[] {
@@ -695,6 +844,12 @@ function ownerDomainsFromTables(
   return [...byDomain]
     .map(([domain, owner]) => ({ domain, owner }))
     .sort((a, b) => (a.domain < b.domain ? -1 : a.domain > b.domain ? 1 : 0));
+}
+
+function ownerDomainSetFromTables(
+  tables: ReadonlyMap<string, readonly ExtractedTable[]>,
+): ReadonlySet<string> {
+  return new Set(ownerDomainsFromTables([...tables.values()].flat()).map((owner) => owner.domain));
 }
 
 /** @internal */
@@ -2428,13 +2583,61 @@ function extractQueryFactsFromPreparedFiles(
         ...new Set([...reads, ...declaredReads, ...query.declaredReadDomains, ...helperReads]),
       ].sort();
       const instanceKey = queryInstanceKey(query.instanceKeyComparisons, fileTables);
+      const sessionAnchoredReads = querySessionAnchoredDomains(
+        query.instanceKeyComparisons,
+        fileTables,
+      );
+      const ownerScopedSessionReads = queryOwnerSessionAnchoredDomains(
+        query.instanceKeyComparisons,
+        fileTables,
+      );
+      const ownerScopedPrivateReadKeys = queryOwnerPrivateScopedKeys(
+        query.instanceKeyComparisons,
+        fileTables,
+      );
+      // A3 (SPEC §10.3): the supplemental owner-column arg signal. Omit any domain the
+      // declared-key `instanceKey` already captures as `arg:*` — that domain is already
+      // flagged `args` by `scopeAuditsFromQueryFacts`, so listing it here too would only
+      // add redundant output. `argScopedReads` carries the cases the declared-key path
+      // misses (an arg keyed on an owner column other than `key:`).
+      const argScopedReads = queryArgScopedDomains(query.instanceKeyComparisons, fileTables).filter(
+        (domain) =>
+          !(
+            instanceKey?.instanceKey?.domain === domain &&
+            instanceKey.instanceKey.key.startsWith('arg:')
+          ),
+      );
+      const argScopedReadKeys = queryArgScopedDomainKeys(
+        query.instanceKeyComparisons,
+        fileTables,
+      ).filter(
+        (scoped) =>
+          !(
+            instanceKey?.instanceKey?.domain === scoped.domain &&
+            instanceKey.instanceKey.key === scoped.key
+          ),
+      );
+      // SPEC §10.3 / KV414 join-keyed bypass: does the predicate key any table column
+      // (owner or not) by a client `input.*` arg? An owner table joined into the read
+      // set but keyed only through a non-owner table's arg is still client-pivotable;
+      // `scopeAuditsFromQueryFacts` fails it closed to `args` when the owner domain is
+      // neither directly arg-keyed nor session/`owns()`-scoped.
+      const hasClientArgPredicate = queryHasClientArgPredicate(query.instanceKeyComparisons);
+      const ownerReadDomains = ownerDomainSetFromTables(fileTables);
       const readProvenance = queryReadProvenanceFacts({
+        argScopedReadKeys,
+        argScopedReads,
         columnShapes,
+        declaredReadDomains: query.declaredReadDomains,
         declaredReadExpressions: query.declaredReadExpressions,
+        hasClientArgPredicate,
         helperReads: localHelperSummary.reads,
         ...(instanceKey?.instanceKey === undefined ? {} : { instanceKey: instanceKey.instanceKey }),
+        ownerReadDomains,
+        ownerScopedPrivateReadKeys,
         projectedColumns: query.projectedColumns,
         queryTableExpressions: query.tableExpressions,
+        sessionAnchoredReads,
         site,
         tables: fileTables,
       });
@@ -2482,46 +2685,6 @@ function extractQueryFactsFromPreparedFiles(
         .concat(localQueryHelperDiagnostics(localHelperSummary));
       if (!query.hasSelection && allReads.length === 0 && diagnostics.length === 0) continue;
 
-      const sessionAnchoredReads = querySessionAnchoredDomains(
-        query.instanceKeyComparisons,
-        fileTables,
-      );
-      const ownerScopedSessionReads = queryOwnerSessionAnchoredDomains(
-        query.instanceKeyComparisons,
-        fileTables,
-      );
-      const ownerScopedPrivateReadKeys = queryOwnerPrivateScopedKeys(
-        query.instanceKeyComparisons,
-        fileTables,
-      );
-      // A3 (SPEC §10.3): the supplemental owner-column arg signal. Omit any domain the
-      // declared-key `instanceKey` already captures as `arg:*` — that domain is already
-      // flagged `args` by `scopeAuditsFromQueryFacts`, so listing it here too would only
-      // add redundant output. `argScopedReads` carries the cases the declared-key path
-      // misses (an arg keyed on an owner column other than `key:`).
-      const argScopedReads = queryArgScopedDomains(query.instanceKeyComparisons, fileTables).filter(
-        (domain) =>
-          !(
-            instanceKey?.instanceKey?.domain === domain &&
-            instanceKey.instanceKey.key.startsWith('arg:')
-          ),
-      );
-      const argScopedReadKeys = queryArgScopedDomainKeys(
-        query.instanceKeyComparisons,
-        fileTables,
-      ).filter(
-        (scoped) =>
-          !(
-            instanceKey?.instanceKey?.domain === scoped.domain &&
-            instanceKey.instanceKey.key === scoped.key
-          ),
-      );
-      // SPEC §10.3 / KV414 join-keyed bypass: does the predicate key any table column
-      // (owner or not) by a client `input.*` arg? An owner table joined into the read
-      // set but keyed only through a non-owner table's arg is still client-pivotable;
-      // `scopeAuditsFromQueryFacts` fails it closed to `args` when the owner domain is
-      // neither directly arg-keyed nor session/`owns()`-scoped.
-      const hasClientArgPredicate = queryHasClientArgPredicate(query.instanceKeyComparisons);
       facts.push({
         ...(argScopedReads.length > 0 ? { argScopedReads } : {}),
         ...(argScopedReadKeys.length > 0 ? { argScopedReadKeys } : {}),
@@ -2575,15 +2738,22 @@ function secretProjectionBackstopDiagnostics(
 }
 
 interface QueryReadProvenanceFactsInput {
+  argScopedReadKeys: readonly OwnerScopeKey[];
+  argScopedReads: readonly string[];
   columnShapes: Readonly<Record<string, QueryShape>>;
+  declaredReadDomains: readonly string[];
   declaredReadExpressions: readonly string[];
+  hasClientArgPredicate: boolean;
   helperReads: readonly ReadSummaryInput[];
   instanceKey?: {
     domain: string;
     key: string;
   };
+  ownerReadDomains: ReadonlySet<string>;
+  ownerScopedPrivateReadKeys: readonly OwnerPrivateScopeKey[];
   projectedColumns: readonly QueryProjectedColumn[];
   queryTableExpressions: readonly string[];
+  sessionAnchoredReads: readonly string[];
   site: string;
   tables: ReadonlyMap<string, readonly ExtractedTable[]>;
 }
@@ -2609,6 +2779,7 @@ function queryReadProvenanceFacts(input: QueryReadProvenanceFactsInput): QueryRe
       tableExpressions: declaredTableExpressions,
     }),
   );
+  facts.push(...queryReadProvenanceFromDeclaredDomains(input));
 
   for (const read of input.helperReads) {
     const domain = extractedDomainKey(read.table.domain);
@@ -2620,17 +2791,27 @@ function queryReadProvenanceFacts(input: QueryReadProvenanceFactsInput): QueryRe
       table: read.table,
       tableExpression: read.table.name,
     });
-    if (columns.length === 0) continue;
+    if (columns.length === 0 && !input.ownerReadDomains.has(domain)) continue;
 
-    facts.push({
-      columns,
-      domain,
-      keys: read.readKey ?? null,
-      scope: read.scope ?? readScopeFromKey(read.readKey),
-      site: read.site,
-      source: 'helper',
-      via: read.table.name,
-    });
+    const ownerScopes = ownerQueryReadScopesForDomain(input, domain);
+    const firstOwnerScope = ownerScopes[0];
+    const scopes =
+      read.scope !== undefined
+        ? [read.scope]
+        : firstOwnerScope && ownerScopes.length === 1 && firstOwnerScope.kind === 'unscoped'
+          ? [readScopeFromKey(read.readKey)]
+          : ownerScopes;
+    for (const scope of scopes) {
+      facts.push({
+        columns,
+        domain,
+        keys: read.readKey ?? null,
+        scope,
+        site: read.site,
+        source: 'helper',
+        via: read.table.name,
+      });
+    }
   }
 
   return dedupeQueryReadProvenance(facts);
@@ -2656,22 +2837,78 @@ function queryReadProvenanceFromTableExpressions(
         table: table.annotation,
         tableExpression,
       });
-      if (columns.length === 0) continue;
+      const ownerRead = input.ownerReadDomains.has(domain);
+      if (columns.length === 0 && !ownerRead) continue;
 
       const keys = input.instanceKey?.domain === domain ? input.instanceKey.key : null;
-      facts.push({
-        columns,
-        domain,
-        keys,
-        scope: readScopeFromKey(keys ?? undefined),
-        site: input.site,
-        source: input.source,
-        via: table.annotation.name,
-      });
+      for (const scope of ownerQueryReadScopesForDomain(input, domain)) {
+        facts.push({
+          columns,
+          domain,
+          keys,
+          scope,
+          site: input.site,
+          source: input.source,
+          via: table.annotation.name,
+        });
+      }
     }
   }
 
   return facts;
+}
+
+function queryReadProvenanceFromDeclaredDomains(
+  input: QueryReadProvenanceFactsInput,
+): QueryReadProvenance[] {
+  return input.declaredReadDomains
+    .filter((domain) => input.ownerReadDomains.has(domain))
+    .flatMap((domain) =>
+      ownerQueryReadScopesForDomain(input, domain).map((scope) => ({
+        columns: [],
+        domain,
+        keys: input.instanceKey?.domain === domain ? input.instanceKey.key : null,
+        scope,
+        site: input.site,
+        source: 'declared' as const,
+        via: domain,
+      })),
+    );
+}
+
+function ownerQueryReadScopesForDomain(
+  input: QueryReadProvenanceFactsInput,
+  domain: string,
+): QueryReadScopeProvenance[] {
+  const argKeys = queryReadArgKeysForDomain(input, domain);
+  if (argKeys.length > 0) {
+    return argKeys.map(
+      (key): QueryReadScopeProvenance => (key ? { key, kind: 'arg' } : { kind: 'arg' }),
+    );
+  }
+
+  const privateKey = input.ownerScopedPrivateReadKeys.find(
+    (scoped) => scoped.domain === domain,
+  )?.privateKey;
+  if (privateKey) return [privateScopeFromKey(privateKey, true)];
+
+  if (input.ownerReadDomains.has(domain) && input.hasClientArgPredicate) return [{ kind: 'arg' }];
+  if (input.sessionAnchoredReads.includes(domain))
+    return [privateScopeFromKey('session:<unknown>')];
+  if (input.instanceKey?.domain === domain) return [readScopeFromKey(input.instanceKey.key)];
+  return [{ kind: 'unscoped' }];
+}
+
+function queryReadArgKeysForDomain(input: QueryReadProvenanceFactsInput, domain: string): string[] {
+  if (input.instanceKey?.domain === domain && input.instanceKey.key.startsWith('arg:')) {
+    return [input.instanceKey.key];
+  }
+  const keys = input.argScopedReadKeys
+    .filter((candidate) => candidate.domain === domain)
+    .map((candidate) => candidate.key);
+  if (keys.length > 0) return [...new Set(keys)].sort();
+  if (input.argScopedReads.includes(domain)) return [''];
+  return [];
 }
 
 function secretProjectedColumnsForRead(input: {
@@ -2749,6 +2986,7 @@ function queryReadProvenanceKey(fact: QueryReadProvenance): string {
     fact.via,
     fact.source,
     fact.keys ?? '',
+    JSON.stringify(fact.scope),
     fact.site,
     JSON.stringify(fact.columns),
   ].join('\0');
