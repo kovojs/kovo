@@ -280,6 +280,15 @@ export interface PublishToClientOptions {
 }
 
 /**
+ * Options for {@link declareOffWire}. The justification is emitted into source review and must
+ * explain why the wrapped server-only computation cannot affect the client wire.
+ */
+export interface DeclareOffWireOptions {
+  /** Reviewable, non-sensitive reason this block is intentionally server-only/off-wire. */
+  justification: string;
+}
+
+/**
  * Audited escape for the client-handler secret-emit gate (SPEC §6.6/§6.2; secure-framework Phase 4 /
  * Tier 0 item 3, KV437).
  *
@@ -302,6 +311,22 @@ export function publishToClient<T>(value: T, options: PublishToClientOptions): T
     throw new Error('publishToClient requires a non-empty reason.');
   }
   return value;
+}
+
+/**
+ * Audited declaration that a server-side computation using confidential values is intentionally
+ * off the client wire (SPEC §6.2/§10.2/§11.3).
+ *
+ * This is not a runtime taint proof and it does not return a value, deliberately: the wrapped block
+ * cannot be assigned and later returned to the client. Static analyzers may recognize the call as a
+ * reviewable escape for helper calls that touch secret projections but do not affect the query or
+ * mutation response.
+ */
+export function declareOffWire(run: () => void, options: DeclareOffWireOptions): void {
+  if (!options.justification.trim()) {
+    throw new Error('declareOffWire requires a non-empty justification.');
+  }
+  run();
 }
 
 interface ComparableBytes {

@@ -1888,6 +1888,18 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         'return items;',
       ],
     ],
+    [
+      'local arrow helper reading a closed-over secret projection without an off-wire declaration',
+      [
+        'const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);',
+        'const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);',
+        'const inspectSecret = () => {',
+        '  for (const row of secretRows) void row.secret;',
+        '};',
+        'inspectSecret();',
+        'return items;',
+      ],
+    ],
   ])('reports KV435 for cross-select laundering through %s', (_label, loadBody) => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -1903,6 +1915,85 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const contactList = query("contacts", {
             async load(_input, db: PgAsyncDatabase<any, any>) {
               ${loadBody.join('\n')}
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining('reads a secret-classified'),
+      }),
+    ]);
+  });
+
+  it('allows an audited declareOffWire block for a server-only secret helper', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'contact.queries.ts',
+          source: `
+          import { declareOffWire } from "@kovojs/core";
+
+          export const contacts = pgTable("contacts", {
+            company: text("company").notNull(),
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "contact", key: "id", secret: ["company"] }));
+
+          export const contactList = query("contacts", {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
+              const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);
+              const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);
+              const inspectSecret = () => {
+                for (const row of secretRows) void row.secret;
+              };
+              declareOffWire(() => {
+                inspectSecret();
+              }, { justification: "internal cache partition only" });
+              return items;
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(
+      diagnosticsForQueryFacts(facts).filter((diagnostic) => diagnostic.code === 'KV435'),
+    ).toEqual([]);
+  });
+
+  it('does not let declareOffWire hide secret writes to the returned query shape', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'contact.queries.ts',
+          source: `
+          import { declareOffWire } from "@kovojs/core";
+
+          export const contacts = pgTable("contacts", {
+            company: text("company").notNull(),
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "contact", key: "id", secret: ["company"] }));
+
+          export const contactList = query("contacts", {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
+              const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);
+              const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);
+              const collect = () => {
+                for (const row of secretRows) {
+                  items.push({ id: row.id, name: row.secret });
+                }
+              };
+              declareOffWire(() => {
+                collect();
+              }, { justification: "internal cache partition only" });
+              return items;
             },
           });
         `,

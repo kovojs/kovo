@@ -6,6 +6,7 @@ import { buildRoutePatternHref } from './internal/route-pattern.js';
 export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type { JsonValue } from './json.js';
 export {
+  declareOffWire,
   isRedacted,
   isSecret,
   publishToClient,
@@ -16,6 +17,7 @@ export {
   trustedReveal,
 } from './secret.js';
 export type {
+  DeclareOffWireOptions,
   PublishToClientOptions,
   Redacted,
   RedactedOptions,

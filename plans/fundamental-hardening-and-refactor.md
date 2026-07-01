@@ -301,7 +301,7 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     dynamic plain strings and unbranded objects in raw HTML sinks"`, `pnpm run check:security-brands`, and
     `git diff --check` passed after the source-only identity resolver learned static object-literal member aliases and the
     prod-artifact KV426 proof enrolled `trustedOutputAlias.html(request-header)`.
-- [ ] **L — Value-flow: narrow proven-off-wire allowlist + mutation-handler wire (closes `bugz-26` B3, B4).**
+- [x] **L — Value-flow: narrow proven-off-wire allowlist + mutation-handler wire (closes `bugz-26` B3, B4).**
   - Problem B3 (verified): a second `{id, secret: contacts.apiKey}` select laundered onto the returned array via
     `const collect = () => { for (const r of secretRows) out.push({name:r.secret,…}); }; collect();` builds GREEN and
     the prod artifact serves the secret over `/_q` (top-level loop → KV435 RED). Root: `query-shapes.ts`
@@ -318,13 +318,13 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     provenance-checked `declare off-wire` escape.
   - Verify: the arrow-closure laundering + the mutation-handler secret-return both fail closed; a legitimate non-secret
     literal return stays green (DEC10 corpus).
-  - Progress: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts`, `pnpm exec vitest --run
-    packages/drizzle/src/static-analysis-context.test.ts packages/core/src/internal/wire-json.test.ts`, `pnpm run
-    check:security-brands`, touched-file `vp check`, and `git diff --check` passed after the closure-only arrow helper
-    laundering case fired KV435, mutation handler secret returns entered static-build diagnostics, audited
-    `trustedReveal(...)` mutation projections stayed green, and runtime `secret(...)` boxes failed closed at the shared
-    wire JSON codec.
-  - Remaining: the dedicated provenance-checked `declare off-wire` escape is still not implemented; leave L open.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts
+    packages/drizzle/src/static-analysis-context.test.ts packages/core/src/internal/wire-json.test.ts
+    packages/core/src/secret.test.ts packages/core/src/index.test.ts`, `pnpm run check:green-corpus`, `pnpm run
+    check:api-surface`, `pnpm run check:security-brands`, touched-file `vp check --fix`, and `git diff --check` passed
+    after closure helper laundering and mutation-handler secret returns fired KV435, runtime `secret(...)` boxes failed
+    closed at the shared wire JSON codec, and `declareOffWire(() => ..., { justification })` provided a non-returning
+    reviewed escape for server-only helper reads while still rejecting hidden writes to returned query data.
 - [x] **N — Source-derived census + enroll new surfaces (closes `papercuts-24` P1).**
   - Problem: `node scripts/fundamental-fixes-census-gate.mjs --require-complete` reports `complete: true` with ZERO
     durable-task rows, because it enforces a required-SET only for `resolver-expression-kind` + `dialect-sink`; the

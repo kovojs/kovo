@@ -5,6 +5,7 @@ import {
   createFileSystemStorage,
   createMemoryStorage,
   createS3CompatibleStorage,
+  declareOffWire,
   FieldError,
   form,
   FormError,
@@ -118,6 +119,7 @@ describe('core authoring APIs', () => {
     expect('createMemoryStorage' in coreRoot).toBe(true);
     expect('createFileSystemStorage' in coreRoot).toBe(true);
     expect('createS3CompatibleStorage' in coreRoot).toBe(true);
+    expect(coreRoot.declareOffWire).toBe(declareOffWire);
     expect('normalizeStorageKey' in coreRoot).toBe(false);
     expect('storageBodyToBytes' in coreRoot).toBe(false);
   });

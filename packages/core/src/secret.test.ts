@@ -2,6 +2,7 @@ import { inspect } from 'node:util';
 import { describe, expect, it } from 'vitest';
 
 import {
+  declareOffWire,
   isRedacted,
   isSecret,
   redacted,
@@ -114,6 +115,22 @@ describe('runtime Secret poison wrapper (SPEC §6.6 defense-in-depth)', () => {
   it('trustedReveal unwraps a runtime box', () => {
     const s = secret('hunter2');
     expect(trustedReveal(s, { justification: 'test' })).toBe('hunter2');
+  });
+
+  it('declareOffWire runs a justified server-only block without returning a value', () => {
+    const calls: string[] = [];
+    const result = declareOffWire(
+      () => {
+        calls.push(revealSecret(secret('server-only-token')));
+      },
+      { justification: 'used only to choose an internal cache partition' },
+    );
+
+    expect(result).toBeUndefined();
+    expect(calls).toEqual(['server-only-token']);
+    expect(() => declareOffWire(() => {}, { justification: '   ' })).toThrow(
+      'declareOffWire requires a non-empty justification.',
+    );
   });
 });
 

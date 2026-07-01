@@ -78,6 +78,7 @@ import {
 } from '../static.js';
 
 const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core', 'trustedReveal');
+const DECLARE_OFF_WIRE_IDENTITY = frameworkExport('@kovojs/core', 'declareOffWire');
 const KOVO_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'sql');
 const DRIZZLE_SQL_IDENTITY = frameworkExport('drizzle-orm', 'sql');
 const DRIZZLE_AGGREGATE_HELPER_IDENTITIES: readonly FrameworkExportIdentity[] = [
@@ -428,7 +429,10 @@ function taintedValueReachesWire(
   wireRoots: ReadonlySet<string>,
   elementAliases: ReadonlySet<string>,
   returnExpressions: readonly Node[],
+  options: TaintedWireOptions = {},
 ): boolean {
+  const declarationScope = options.declarationScope ?? body;
+  const localSecretHelperReadsReachWire = options.localSecretHelperReadsReachWire ?? true;
   let changed = true;
   while (changed) {
     changed = false;
@@ -440,7 +444,12 @@ function taintedValueReachesWire(
 
       const nestedBody = functionBody(declaration);
       if (!expressionContainsAnyKey(nestedBody, tainted)) continue;
-      if (taintedValueReachesWire(nestedBody, new Set(tainted), wireRoots, elementAliases, [])) {
+      if (
+        taintedValueReachesWire(nestedBody, new Set(tainted), wireRoots, elementAliases, [], {
+          ...options,
+          declarationScope,
+        })
+      ) {
         return true;
       }
 
@@ -491,14 +500,36 @@ function taintedValueReachesWire(
       const receiverTainted = receiverRoot !== undefined && tainted.has(receiverRoot);
       const taintedArgs = args.some((argument) => expressionContainsAnyKey(argument, tainted));
 
+      if (isDeclareOffWireCall(call)) {
+        if (declareOffWireCallbackReachesWire(call, body, tainted, wireRoots, elementAliases)) {
+          return true;
+        }
+        continue;
+      }
+
       if (receiverTainted && appendCallbackIdentifierTaint(call, tainted)) {
         changed = true;
       }
 
-      if (
-        localFunctionCallTaintedValueReachesWire(call, body, tainted, wireRoots, elementAliases)
-      ) {
-        return true;
+      const localFunction = localFunctionDefinitionForCall(call, body, declarationScope);
+      if (localFunction) {
+        if (
+          localFunctionCallTaintedValueReachesWire(
+            call,
+            body,
+            localFunction,
+            tainted,
+            wireRoots,
+            elementAliases,
+            { ...options, declarationScope },
+          )
+        )
+          return true;
+        if (
+          localSecretHelperReadsReachWire &&
+          localFunctionTouchesTaintedValue(localFunction, tainted, taintedArgs)
+        )
+          return true;
       }
       if (!taintedArgs) continue;
       if (
@@ -554,16 +585,64 @@ function taintedValueReachesWire(
   return false;
 }
 
-function localFunctionCallTaintedValueReachesWire(
+interface TaintedWireOptions {
+  readonly declarationScope?: Node;
+  readonly localSecretHelperReadsReachWire?: boolean;
+}
+
+function declareOffWireCallbackReachesWire(
   call: CallExpression,
   body: Node,
   tainted: ReadonlySet<string>,
   wireRoots: ReadonlySet<string>,
   elementAliases: ReadonlySet<string>,
 ): boolean {
-  const declaration = localFunctionDefinitionForCall(call, body);
-  if (declaration === undefined) return false;
+  const callback = call
+    .getArguments()
+    .find((argument) => Node.isArrowFunction(argument) || Node.isFunctionExpression(argument));
+  if (!callback || (!Node.isArrowFunction(callback) && !Node.isFunctionExpression(callback))) {
+    return true;
+  }
 
+  return taintedValueReachesWire(
+    functionBody(callback),
+    new Set(tainted),
+    wireRoots,
+    elementAliases,
+    [],
+    {
+      declarationScope: body,
+      localSecretHelperReadsReachWire: false,
+    },
+  );
+}
+
+function isDeclareOffWireCall(call: CallExpression): boolean {
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    call.getSourceFile().compilerNode,
+    call.getExpression().compilerNode,
+    DECLARE_OFF_WIRE_IDENTITY,
+  );
+}
+
+function localFunctionTouchesTaintedValue(
+  declaration: ArrowFunction | FunctionDeclaration | FunctionExpression,
+  tainted: ReadonlySet<string>,
+  taintedArgs: boolean,
+): boolean {
+  return taintedArgs || expressionContainsAnyKey(functionBody(declaration), tainted);
+}
+
+function localFunctionCallTaintedValueReachesWire(
+  call: CallExpression,
+  body: Node,
+  declaration: ArrowFunction | FunctionDeclaration | FunctionExpression,
+  tainted: ReadonlySet<string>,
+  wireRoots: ReadonlySet<string>,
+  elementAliases: ReadonlySet<string>,
+  options: TaintedWireOptions,
+): boolean {
   const nestedTaint = new Set<string>();
   const parameters = declaration.getParameters();
   call.getArguments().forEach((argument, index) => {
@@ -583,12 +662,14 @@ function localFunctionCallTaintedValueReachesWire(
     wireRoots,
     elementAliases,
     [],
+    options,
   );
 }
 
 function localFunctionDefinitionForCall(
   call: CallExpression,
   body: Node,
+  declarationScope: Node = body,
 ): ArrowFunction | FunctionDeclaration | FunctionExpression | undefined {
   const callee = unwrappedStaticExpressionNode(call.getExpression());
   if (!Node.isIdentifier(callee)) return undefined;
@@ -596,6 +677,18 @@ function localFunctionDefinitionForCall(
   const calleeKey = localSymbolKey(callee);
   if (calleeKey === undefined) return undefined;
 
+  return (
+    localFunctionDefinitionInBody(calleeKey, body) ??
+    (declarationScope === body
+      ? undefined
+      : localFunctionDefinitionInBody(calleeKey, declarationScope))
+  );
+}
+
+function localFunctionDefinitionInBody(
+  calleeKey: string,
+  body: Node,
+): ArrowFunction | FunctionDeclaration | FunctionExpression | undefined {
   const declaredFunction = body
     .getDescendantsOfKind(SyntaxKind.FunctionDeclaration)
     .find((declaration) => {

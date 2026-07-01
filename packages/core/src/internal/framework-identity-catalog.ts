@@ -169,7 +169,7 @@ export const frameworkIdentityCatalog = [
       ? serverWriteGovernance(exportName)
       : serverData(exportName),
   ),
-  ...['component', 'publishToClient', 'trustedReveal'].map(coreAuthoring),
+  ...['component', 'declareOffWire', 'publishToClient', 'trustedReveal'].map(coreAuthoring),
   serverRendering('safeRichHtml', '@kovojs/browser'),
   ...['kovo', 'kovoAnalyzerSummary', 'sql', 'staticSql', 'trustedSql'].map(drizzleSql),
   ...[
