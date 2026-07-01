@@ -63,9 +63,12 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 - [ ] `WebhookTxDb` webhook transaction handle [H]
   - [ ] `WebhookTxDb` declared transaction writes still execute through the audited path [H]
   - [ ] `WebhookTxDb` raw `$client`/`.session` escape handles fail closed [H]
-- [ ] storage / capability write handles (upload/store/delete) [H]
-  - [ ] query/load storage upload, store, delete, and put writes fail closed [H]
-  - [ ] declared mutation/capability storage writes still work through the audited path [H]
+- [x] storage / capability write handles (upload/store/delete) [H]
+  - Evidence: children closed by current prod-artifact M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] query/load storage upload, store, delete, and put writes fail closed [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot` passed postgres+SQLite prod-artifact red/flip build-fail cases; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 31 mutants including KV433 storage-delete proof enrollment.
+  - [x] declared mutation/capability storage writes still work through the audited path [H]
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'storage' --reporter=dot` served the production artifact and observed declared mutation `put`/`delete` storage effects.
 - [ ] raw driver `$client` / `.session` escape from any managed handle [H]
   - [x] managed write handle `$client`/`.session` escapes fail closed before nested wrapping [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed 4 prod-artifact tests including default+SQLite build-fail managed-write escape attempts; M2 row proof uses `buildProductionArtifact(root)` / `kovo build --no-cache`; M3 `pnpm run check:security-gate-mutations` kills `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
@@ -79,32 +82,52 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 
 **(b) Output / wire sinks** — close via C2 (enumerate from the emitted artifact; proof-or-KV406):
 
-- [ ] SSR document HTML [C2]
-  - [ ] SSR route render text is escaped in the production document [C2]
-  - [ ] SSR raw/trusted HTML boundaries require proof-or-KV406 [C2]
+- [x] SSR document HTML [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] SSR route render text is escaped in the production document [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot` served the no-cache production artifact and observed escaped attacker text; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
+  - [x] SSR raw/trusted HTML boundaries require proof-or-KV406 [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot` enrolled production sink-census witnesses for framework-owned `trustedHtml`/escaped SSR boundaries; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
 - [x] `/_q` query response [C2]
       Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
   - [x] `/_q` query response body escapes client-visible HTML [C2]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot` passed the default+SQLite prod-artifact `/_q` attacker body proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` killed `server-wire-html/drop-query-wire-body-escaping`.
   - [x] `/_q` query response headers do not expose session data to shared caches [C2]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot` passed the default+SQLite prod-artifact `/_q` private-cache proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` killed `server-wire-html/drop-query-wire-body-escaping`.
-- [ ] mutation delta / enhanced-mutation response [C2]
-  - [ ] enhanced mutation fragment bodies escape client-visible HTML [C2]
-  - [ ] mutation-triggered query refreshes preserve query wire bounds [C2]
-- [ ] streaming / `<Defer>` chunks [C2]
-  - [ ] `<Defer>` shell streams before slow regions complete [C2]
-  - [ ] `<Defer>` region failures isolate to their own fallback [C2]
-  - [ ] streamed `<Defer>` chunks escape attacker markup and private details [C2]
-- [ ] response headers (incl. `Set-Cookie`, redirects) [C2]
-  - [ ] route outcome headers reject CRLF injection [C2]
-  - [ ] typed and raw `Set-Cookie` paths normalize safe cookies and reject unsafe cookies [C2]
-  - [ ] redirect `Location` headers are sanitized before send [C2]
-- [ ] error shells / 500 bodies [C2]
-  - [ ] 500 shells escape request-controlled payloads [C2]
-  - [ ] 500 shells exclude private exception details [C2]
-- [ ] capability URLs / signed payloads [C2]
-  - [ ] capability URLs mint and verify against the production artifact [C2]
-  - [ ] tampered capability path/query payloads reject before read [C2]
+- [x] mutation delta / enhanced-mutation response [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] enhanced mutation fragment bodies escape client-visible HTML [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot` passed default+SQLite prod-artifact enhanced mutation proofs and observed escaped fragment HTML; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
+  - [x] mutation-triggered query refreshes preserve query wire bounds [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot` passed default+SQLite prod-artifact enhanced mutation proofs and observed escaped `<kovo-query>` refresh wire; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
+- [x] streaming / `<Defer>` chunks [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] `<Defer>` shell streams before slow regions complete [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.defer.test.ts --reporter=dot` passed the default+SQLite prod-artifact stream proof; M2 proof calls `buildProductionArtifact(root)` and serves `dist/server/server.mjs`; M3 `pnpm run check:security-gate-mutations` killed 30 mutants.
+  - [x] `<Defer>` region failures isolate to their own fallback [C2]
+        Evidence: M1 same Defer prod-artifact shard returned HTTP 200 for a throwing region, streamed that region's error fallback, and still rendered a safe sibling fragment; M2 real-build proof and M3 30-mutant gate same as parent.
+  - [x] streamed `<Defer>` chunks escape attacker markup and private details [C2]
+        Evidence: M1 same Defer prod-artifact shard asserted attacker markup is escaped in fallback/chunks, raw sibling text is escaped, and private thrown details stay off the stream; M2 real-build proof and M3 30-mutant gate same as parent.
+- [x] response headers (incl. `Set-Cookie`, redirects) [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] route outcome headers reject CRLF injection [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot` passed the no-cache prod-artifact route-header CRLF rejection proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled header/security gates.
+  - [x] typed and raw `Set-Cookie` paths normalize safe cookies and reject unsafe cookies [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot` passed typed mutation cookie, raw endpoint cookie normalization, and unsafe cookie rejection in the production artifact; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled header/security gates.
+  - [x] redirect `Location` headers are sanitized before send [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot` passed the no-cache prod-artifact raw redirect sanitization proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled header/security gates.
+- [x] error shells / 500 bodies [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] 500 shells escape request-controlled payloads [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot` passed the no-cache prod-artifact no-JS 500 body proof and excluded submitted `<script>` payload; M2 proof calls `buildProductionArtifact(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
+  - [x] 500 shells exclude private exception details [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot` passed the no-cache prod-artifact no-JS 500 body proof and excluded private exception detail; M2 proof calls `buildProductionArtifact(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
+- [x] capability URLs / signed payloads [C2]
+  - Evidence: children closed by current prod-artifact M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] capability URLs mint and verify against the production artifact [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:output-wire' --reporter=dot` passed postgres+SQLite served-artifact capability URL cases; focused `redirect-capability` prod-artifact test passed.
+  - [x] tampered capability path/query payloads reject before read [C2]
+        Evidence: focused `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot` served `dist/server/server.mjs`, tampered the signed path, received generic 404, and storage guard did not expose pre-verification read errors.
 - [ ] raw-HTML sinks (`trustedHtml`, `trustedUrl`, `@internal renderedHtml`) [C2/B3]
   - [x] KV426 blocks `trustedHtml()` request taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
@@ -113,7 +136,8 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
   - [ ] `TrustedUrl` values are rejected in non-URL JSX attributes [C2]
   - [x] KV426 blocks `@internal renderedHtml()` query taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
-  - [ ] real build resolves local/star barrels and literal element access for raw-HTML sinks [B3/E2]
+  - [x] real build resolves local/star barrels and literal element access for raw-HTML sinks [B3/E2]
+        Evidence: M1 `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight" --reporter=dot` passed and asserted `kovo build --no-cache` failed with four KV426 diagnostics and no `dist`; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 30 mutants.
 - [x] client-derive bodies (leak / `ReferenceError` boundary) [C2]
   - Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot` passed 2 prod-artifact tests; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
   - [x] emitted client derives use state paths instead of render-local aliases [C2]
@@ -122,12 +146,18 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
     - Evidence: M1 same prod-artifact browser test clicked the state-only control, observed all derived outputs update, `pageErrors=[]`, `consoleErrors=[]`, and no post-interaction `/_q` or `/_m` requests.
   - [x] module-helper-in-derive stays either lowered safely or fails KV311 [C2]
     - Evidence: M1 same prod-artifact shard passed the helper proof asserting built artifacts do not ship `format(state.count)`/`format =`; focused compiler shard `pnpm exec vitest --run packages/compiler/src/state-bindings.test.ts -t "state aliases|helper" --reporter=dot` passed 9 alias/helper tests including KV311 helper failures.
-- [ ] secret-column-to-wire across ALL value-flow paths [C2]
-  - [ ] direct secret projection to query wire fails KV435 in every supported dialect [C2]
-  - [ ] transformed query-loader return laundering fails KV435/KV406 [C2]
-  - [ ] render value-flow laundering of secret-selected rows fails KV435/KV406 [C2]
-  - [ ] cross-select laundering of secret columns fails KV435 [C2]
-  - [ ] explicit non-secret projection sibling builds in every supported dialect [C2]
+- [x] secret-column-to-wire across ALL value-flow paths [C2]
+  - Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:secret-wire --reporter=dot` passed 2 dialect cases and asserted direct, transformed, render-bound, and cross-select KV435 diagnostics plus the green non-secret sibling; M2 `pnpm run check:security-test-builds` passed 18 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 30 mutants.
+  - [x] direct secret projection to query wire fails KV435 in every supported dialect [C2]
+    - Evidence: M1 same prod-artifact shard asserted `queries/auth-secret-direct-leak-query.accessToken` and `.password` fail KV435 for postgres and sqlite.
+  - [x] transformed query-loader return laundering fails KV435/KV406 [C2]
+    - Evidence: M1 same prod-artifact shard asserted `queries/auth-secret-transformed-leak-query.password` fails KV435; focused static shard `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts -t "secret|cross-select|transformed" --reporter=dot` passed 16 tests including transformed KV435/KV406 cases.
+  - [x] render value-flow laundering of secret-selected rows fails KV435/KV406 [C2]
+    - Evidence: M1 same prod-artifact shard asserted `queries/auth-secret-render-leak-query.renderPassword` fails KV435 before the rendered query prop can ship; the focused static shard passed the secret value-flow cases.
+  - [x] cross-select laundering of secret columns fails KV435 [C2]
+    - Evidence: M1 same prod-artifact shard asserted `queries/auth-secret-leak-query.accessToken` and `.password` fail KV435; the focused static shard passed cross-select laundering cases.
+  - [x] explicit non-secret projection sibling builds in every supported dialect [C2]
+    - Evidence: M1 same prod-artifact shard built the `addAuthSecretLeakProof(root, { leakToWire: false })` sibling for postgres and sqlite; focused security shard `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "local-helper Better Auth credential" --reporter=dot` passed the unsafe/safe production build proof.
 
 ## Traceability (finding → workstream); the census above is the master closure list
 
@@ -215,26 +245,33 @@ to change. Do not open a broad audit before the concrete items are implemented, 
   - Files: `packages/core/src/internal/framework-identity.ts` (`canonicalExpression` `:262-294`,
     `resolveProjectSourceFile` `:682-771`, `exportedIdentity` `:712-737`),
     `packages/drizzle/src/static/framework-identity.ts:152,165`.
-  - [ ] Build a **resolver expression-kind table** (feeds M4): every `ts.SyntaxKind` an expression can be ×
+  - [x] Build a **resolver expression-kind table** (feeds M4): every `ts.SyntaxKind` an expression can be ×
         {resolved | fails-closed}. No blank cell — an unhandled kind falls to **fail-closed**, not silent
         `undefined`/clean.
-  - [ ] Add `ElementAccessExpression` (literal key resolves like property access; non-literal computed key
+        Evidence: M1 `pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t "framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache" --reporter=dot` passed 6 focused tests, including the resolver expression-kind table plus default fail-closed row; M3 killed the resolver denominator/status/coverage mutants.
+  - [x] Add `ElementAccessExpression` (literal key resolves like property access; non-literal computed key
         fails closed) — `bugz-25` B6; also fixes computed `request['db']` in the write-sink/explain
         extraction (`papercuts-23` A3). Add `export *` to `exportedIdentity`.
-  - [ ] Populate the resolver's cross-file edge in the REAL build (see E2/M2), so cross-file re-export gates
+        Evidence: M1 `pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t "literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases" --reporter=dot` passed 4 focused KV426 resolver tests; `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts -t "records literal element request db write sink facts" --reporter=dot` passed the literal `request['db']` write-fact proof; M3 killed the element-access and export-star resolver mutants.
+  - [x] Populate the resolver's cross-file edge in the REAL build (see E2/M2), so cross-file re-export gates
         in production, not only fixtures — `bugz-25` B7.
+        Evidence: M1 `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight" --reporter=dot` passed, using `./safe-html.js` -> TS sibling `export *` barrels in a real `kovo build --no-cache`; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs.
   - Acceptance: `ns['trustedHtml'](taint)`, a local `export { trustedHtml } from '@kovojs/browser'` barrel,
     and `export *` barrels all fire KV426 in a real `kovo build`; computed `request['db']` appears in
     `kovo explain`; the expression-kind table has no blank/silent-clean cell; M1–M3 green.
 
-- [ ] **E2. Harness fidelity (the concrete implementation of M2).** Closes the divergence behind `bugz-25` B7.
-  - [ ] Register project sibling files with the resolver in the real Vite/compile transform + build driver so
+- [x] **E2. Harness fidelity (the concrete implementation of M2).** Closes the divergence behind `bugz-25` B7.
+  - [x] Register project sibling files with the resolver in the real Vite/compile transform + build driver so
         `resolveProjectSourceFile` runs in production (today it is fed only by conformance `extraFiles`).
-  - [ ] Route the metamorphic harness through the SAME production build/resolve path — a green metamorphic
+        Evidence: `pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t "framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache" --reporter=dot` passed 6 focused tests covering `viteFrameworkIdentityFiles`, compile registration, cache invalidation, and resolver lookup.
+  - [x] Route the metamorphic harness through the SAME production build/resolve path — a green metamorphic
         result MUST imply a green production result.
-  - [ ] Add the M2 lint/gate: any security test not exercising the real build path fails CI.
+        Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight" --reporter=dot` passed the KV426 export-star/literal element-access case through `mainAsync(["build", "./app.ts", "--out", "./dist", "--no-cache"])`.
+  - [x] Add the M2 lint/gate: any security test not exercising the real build path fails CI.
+        Evidence: `pnpm run check:security-test-builds` passed 14 real-build proofs and keeps the KV426 export-star resolver proof enrolled with `buildInvocation=cli-main-build`; `pnpm run check:security-gate-mutations` killed `security-test-build-gate/drop-production-build-invocation-check`.
   - Acceptance: a cross-file re-export barrel the metamorphic suite marks caught is ALSO caught by a real
     `kovo build`; no security gate has fixture-only or `it.todo` coverage.
+  - Evidence: M1 CLI real-build proof above failed before artifact emission with KV426; M2 real-build gate passed 14 proofs; M3 mutation gate killed 30 mutants, including the E2 production compile and Vite sibling-candidate mutants.
 
 ## Phased delivery
 
