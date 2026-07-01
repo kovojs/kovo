@@ -853,6 +853,7 @@ export function kovoCheck(
       graph.queries ?? [],
       graph.optimistic ?? [],
       graph.touchGraph ?? {},
+      graph.updateCoverage ?? [],
     )) {
       pushFinding(warning, true);
     }
@@ -2325,9 +2326,11 @@ function optimisticCoverageWarnings(
   queries: readonly CoreGraph.QueryReadSet[],
   coverages: readonly CoreGraph.OptimisticCoverage[],
   touchGraph: CoreGraph.TouchGraph,
+  updateCoverage: readonly CoreGraph.UpdateCoverageFact[],
 ): string[] {
-  const clientQueries = optimisticClientQueryConsumers(components, pages);
-  const hasClientConsumerFacts = components.length > 0 || pages.length > 0;
+  const clientQueries = optimisticClientQueryConsumers(components, pages, updateCoverage);
+  const hasClientConsumerFacts =
+    components.length > 0 || pages.length > 0 || updateCoverage.length > 0;
   const covered = new Map(
     coverages
       .filter(
@@ -2388,11 +2391,34 @@ function pushOptimisticCoverageWarning(
 function optimisticClientQueryConsumers(
   components: readonly CoreGraph.ComponentExplain[],
   pages: readonly CoreGraph.PageExplain[],
+  updateCoverage: readonly CoreGraph.UpdateCoverageFact[],
 ): ReadonlySet<string> {
-  return new Set([
+  const clientQueries = new Set([
     ...components.flatMap((component) => component.queries ?? []),
     ...pages.flatMap((page) => page.queries ?? []),
   ]);
+  if (updateCoverage.length === 0) return clientQueries;
+
+  const statusesByQuery = new Map<string, Set<CoreGraph.UpdateCoverageFact['status']>>();
+  for (const fact of updateCoverage) {
+    const statuses =
+      statusesByQuery.get(fact.query) ?? new Set<CoreGraph.UpdateCoverageFact['status']>();
+    statuses.add(fact.status);
+    statusesByQuery.set(fact.query, statuses);
+  }
+
+  const fragmentOnlyQueries: string[] = [];
+  for (const query of clientQueries) {
+    const statuses = statusesByQuery.get(query);
+    // SPEC §8 and §10.6: a fragment-only query consumer re-renders on the server fragment path,
+    // so a hand-written client optimistic transform cannot discharge KV310 for that query.
+    if (statuses && [...statuses].every((status) => status === 'fragment')) {
+      fragmentOnlyQueries.push(query);
+    }
+  }
+  for (const query of fragmentOnlyQueries) clientQueries.delete(query);
+
+  return clientQueries;
 }
 
 function optimisticTransformIsDead(

@@ -1120,6 +1120,40 @@ describe('kovo check', () => {
     });
   });
 
+  it('does not count hand-written optimistic transforms whose only consumers are fragment-target regions', () => {
+    expect(
+      kovoCheck({
+        components: [{ name: 'ContactsRegion', queries: ['contacts'] }],
+        mutations: [
+          {
+            guards: ['authed'],
+            key: 'contacts/add',
+            writes: ['contact'],
+          },
+        ],
+        optimistic: [{ mutation: 'contacts/add', query: 'contacts', status: 'hand-written' }],
+        pages: [{ queries: ['contacts'], route: '/' }],
+        queries: [{ domains: ['contact'], query: 'contacts' }],
+        updateCoverage: [
+          {
+            component: 'ContactsRegion',
+            position: 'root',
+            query: 'contacts',
+            status: 'fragment',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'WARN KV310 contacts/add -> contacts Invalidated query lacks optimistic transform.',
+        'COVERAGE component=ContactsRegion query=contacts position="root" status=fragment',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('derives KV310 gaps from manual invalidations', () => {
     expect(
       kovoCheck({

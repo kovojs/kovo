@@ -320,9 +320,10 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
 - [x] **O.1** `task-observability.ts` redacts `lastError` on the same footing as `args` (`createDurableTaskStatus`
       returns `lastError` verbatim while `args` is redacted — a secret in a task error reaches the status surface). (`papercuts-24` P2)
   - Evidence: `pnpm exec vitest --run packages/server/src/task-observability.test.ts`, `vp check packages/server/src/task-observability.ts packages/server/src/task-observability.test.ts`, and `git diff --check` passed after the default status/failure surfaces redacted both `args` and `lastError`, with `{ includeArgs: true }` preserving privileged diagnostics.
-- [ ] **O.2** KV310 warns (not certifies-clean) when a hand-written optimistic transform's only consumers are
+- [x] **O.2** KV310 warns (not certifies-clean) when a hand-written optimistic transform's only consumers are
       fragment-target regions with no client optimism (SPEC §8:442 makes the fragment path a runtime no-op; the gap is
       the false-green certification — extend `papercuts-super-5` C1 from the no-consumer to the fragment-consumer case). (`papercuts-24` P3)
+  - Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/compiler/src/scan/optimistic-inline.test.ts`, `vp check packages/cli/src/graph-output.ts packages/cli/src/index.kovo-check.test.ts`, and `git diff --check HEAD~1..HEAD` passed after KV310 treated fragment-only update coverage as a warning-worthy dead optimistic transform instead of a clean certification.
 - Independent hvr fan-out (no dependency on the above):
   - [x] **C4** generic `mergeFactsByKey` for 7 byte-identical app-graph merge triplets (`app-graph.ts:164/194/215/236/316/351/361`, each with an unenforced key-fn/comparator, e.g. `mergeAccessExplainFacts` dedups on `kind\0name` but sorts on `kind,name,decision`). S · low.
     - Evidence: `pnpm exec vitest --run packages/compiler/src/registry.test.ts`, `vp check packages/compiler/src/app-graph.ts packages/compiler/src/registry.test.ts`, and `git diff --check` passed after extracting the four current key+sort fact merge triplets into `mergeFactsByKey`; task/handler/endpoint merges remain separate because they aggregate fields rather than doing simple caller/derived dedupe.
