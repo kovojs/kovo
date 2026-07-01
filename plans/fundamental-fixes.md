@@ -283,7 +283,7 @@ name-and-bypass (turn the gate off).**
 
 ## Latest verification
 
-- Evidence grep (read-only): 65 syntactic-recognition sites and 121 existing `KV406`/fail-closed sites in
-  `packages/compiler/src` + `packages/drizzle/src`; `static.ts:1063` self-aware comment; the
-  finding→recognizer table maps each cited site to a filed `claude-bugz-*` item.
-- No code, templates, `SPEC.md`, or other plans changed by this document.
+- Inventory is now reproducible: `node scripts/fundamental-fixes-inventory.mjs` scans production
+  compiler/drizzle sources and reports 79 literal/import syntactic candidates, 1,747 AST-kind gates, and
+  92 KV406/fail-closed sites. Verified with
+  `pnpm exec vitest --run scripts/fundamental-fixes-inventory.test.mjs` and `pnpm run check:vp`.
