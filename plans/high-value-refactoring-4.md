@@ -191,7 +191,7 @@ that removes the broader source of drift.
     runtime paths.
   - Verification: `pnpm exec vitest --run packages/browser/src/query-refetch.test.ts packages/browser/src/query-visible-return-refetch.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/inline-loader-parser-parity.test.ts packages/browser/src/inline-loader-build.test.ts`.
 
-- [ ] **P1.7 - Scope clock tick scheduling per loader or owner document.**
+- [x] **P1.7 - Scope clock tick scheduling per loader or owner document.**
   - Current signals: `packages/browser/src/clock-tick-bus.ts` stores subscriptions, interval state,
     animation-frame state, and visibility/page listeners as package-level singletons consumed by
     `loader-query.ts`.
@@ -200,6 +200,7 @@ that removes the broader source of drift.
   - Risk reduced: multiple Kovo apps in one JS realm, embedded documents, and test environments cannot
     leak timers/listeners or visibility behavior into each other.
   - Verification: `pnpm exec vitest --run packages/browser/src/clock-tick-bus.test.ts packages/browser/src/loader-query.test.ts packages/compiler/src/query-coverage.test.ts examples/gallery/src/interactive-gallery.compile.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/browser/src/clock-tick-bus.test.ts packages/browser/src/loader-query.test.ts packages/compiler/src/query-coverage.test.ts examples/gallery/src/interactive-gallery.compile.test.ts` passed with 4 files/52 tests after merging `agent/hvr4-browser-runtime-20260630-235736`; `git diff --check HEAD^..HEAD` passed.
 
 - [x] **P1.8 - Share core, UI, and headless safe-URL policy.**
   - Current signals: `packages/ui/src/safe-url.ts` and `packages/headless-ui/src/lib/safe-url.ts` maintain
