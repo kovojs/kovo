@@ -290,12 +290,14 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
         await db.get("delete from orders returning id");
         await db.all("delete from orders returning id");
         await db.values("delete from orders returning id");
+        await db.futureStatement("delete from orders");
         await db[input.method]("delete from orders");
         await db.insert(orders).values({ id: input.method });
       }
     `);
 
     expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV422',
       'KV422',
       'KV422',
       'KV422',
@@ -310,9 +312,28 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
         expect.stringContaining('get() receives unbranded literal SQL text'),
         expect.stringContaining('all() receives unbranded literal SQL text'),
         expect.stringContaining('values() receives unbranded literal SQL text'),
+        expect.stringContaining('futureStatement() receives unbranded literal SQL text'),
         expect.stringContaining('<computed-sql-method>() receives unbranded literal SQL text'),
       ]),
     );
+  });
+
+  it('treats unknown future driver methods on managed receivers as SQL sinks by construction', () => {
+    const diagnostics = diagnosticsFor(`
+      import { staticSql } from '@kovojs/drizzle';
+      export async function loadProducts(db: any) {
+        await db.futureStatement({ mode: "read" }, "select * from products");
+        await db.futureStatement({ mode: "read" }, staticSql\`select * from products\`);
+      }
+    `);
+
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV422',
+        message: expect.stringContaining('futureStatement() receives unbranded literal SQL text'),
+        site: 'app.ts:4',
+      },
+    ]);
   });
 
   it('does not classify reusable write-definition run methods as SQLite SQL sinks', () => {

@@ -954,18 +954,21 @@ function sqlSafetyDiagnosticsForSourceFile(
     const rawHelperDiagnostic = sqlRawHelperDiagnostic(file, call, context);
     if (rawHelperDiagnostic) diagnostics.push(rawHelperDiagnostic);
 
-    const sinkName = sqlSinkName(call);
-    if (!sinkName) continue;
+    const sink = sqlSink(call);
+    if (!sink) continue;
     if (sqlSinkReceiverIsRawDriverClient(call, rawDriverClients)) continue;
     if (sqlSinkReceiverIsKovoMutationStream(call)) continue;
-    const [statement] = call.getArguments();
+    const statement = sink.statementArguments.find(
+      (candidate) => sqlTextSafety(candidate, context) !== 'safe',
+    );
+    if (!statement) continue;
     const safety = sqlTextSafety(statement, context);
     if (safety === 'safe') continue;
 
     diagnostics.push(
       drizzleDiagnostic({
         code: 'KV422',
-        detail: `${sinkName}() receives ${sqlSafetyDescription(safety)} SQL text; use Kovo sql\`...\`, staticSql\`...\`, a separated parameter carrier, or trustedSql(...).`,
+        detail: `${sink.name}() receives ${sqlSafetyDescription(safety)} SQL text; use Kovo sql\`...\`, staticSql\`...\`, a separated parameter carrier, or trustedSql(...).`,
         site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
       }),
     );
@@ -1296,14 +1299,21 @@ function sqlSinkReceiverIsKovoMutationStream(call: CallExpression): boolean {
   );
 }
 
-function sqlSinkName(call: CallExpression): string | null {
+interface SqlSink {
+  name: string;
+  statementArguments: readonly Node[];
+}
+
+function sqlSink(call: CallExpression): SqlSink | null {
   const expression = call.getExpression();
   if (Node.isPropertyAccessExpression(expression)) {
     const name = expression.getName();
     if (name === 'exec' && isRegExpExecReceiver(expression.getExpression())) return null;
-    return RAW_SQL_RECEIVER_SINK_METHODS.has(name) && sqlSinkReceiverCanCarrySql(expression, name)
-      ? name
-      : null;
+    if (RAW_SQL_RECEIVER_SINK_METHODS.has(name) && sqlSinkReceiverCanCarrySql(expression, name)) {
+      const statement = call.getArguments()[0];
+      return statement ? { name, statementArguments: [statement] } : null;
+    }
+    return futureSqlSink(call, expression, name);
   }
 
   if (Node.isElementAccessExpression(expression)) {
@@ -1311,16 +1321,61 @@ function sqlSinkName(call: CallExpression): string | null {
     if (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument)) {
       const name = argument.getLiteralText();
       if (name === 'exec' && isRegExpExecReceiver(expression.getExpression())) return null;
-      return RAW_SQL_RECEIVER_SINK_METHODS.has(name) && sqlSinkReceiverCanCarrySql(expression, name)
-        ? name
-        : null;
+      if (RAW_SQL_RECEIVER_SINK_METHODS.has(name) && sqlSinkReceiverCanCarrySql(expression, name)) {
+        const statement = call.getArguments()[0];
+        return statement ? { name, statementArguments: [statement] } : null;
+      }
+      return futureSqlSink(call, expression, name);
     }
-    return sqlSinkReceiverCanCarrySql(expression, '<computed-sql-method>')
-      ? '<computed-sql-method>'
-      : null;
+    if (!sqlSinkReceiverCanCarrySql(expression, '<computed-sql-method>')) return null;
+    const statement = call.getArguments()[0];
+    return statement ? { name: '<computed-sql-method>', statementArguments: [statement] } : null;
   }
 
   return null;
+}
+
+function futureSqlSink(call: CallExpression, expression: Node, name: string): SqlSink | null {
+  if (CLASSIFIED_DRIZZLE_RECEIVER_METHODS.has(name)) return null;
+
+  const receiver = staticAccessExpression(expression);
+  if (!receiver || !sqlSinkReceiverLooksLikeDriver(receiver)) return null;
+
+  const statementArguments = call.getArguments().filter(sqlArgumentLooksExecutable);
+  return statementArguments.length > 0 ? { name, statementArguments } : null;
+}
+
+function sqlArgumentLooksExecutable(argument: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(argument);
+
+  if (Node.isStringLiteral(expression) || Node.isNoSubstitutionTemplateLiteral(expression)) {
+    return true;
+  }
+  if (Node.isTemplateExpression(expression) || Node.isTaggedTemplateExpression(expression)) {
+    return true;
+  }
+  if (Node.isObjectLiteralExpression(expression)) {
+    return objectHasProperty(expression, 'text') || objectHasProperty(expression, 'sql');
+  }
+  if (Node.isCallExpression(expression)) {
+    if (isKovoDrizzleTrustedSqlCall(expression)) return true;
+    const callee = expression.getExpression();
+    return (
+      Node.isPropertyAccessExpression(callee) &&
+      expressionResolvesToFrameworkExport(
+        callee.getExpression(),
+        frameworkExport('@kovojs/drizzle', 'sql'),
+        { legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')] },
+      )
+    );
+  }
+  if (Node.isBinaryExpression(expression)) {
+    return (
+      sqlArgumentLooksExecutable(expression.getLeft()) ||
+      sqlArgumentLooksExecutable(expression.getRight())
+    );
+  }
+  return false;
 }
 
 function sqlSinkReceiverCanCarrySql(expression: Node, methodName: string): boolean {

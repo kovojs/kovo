@@ -2709,6 +2709,38 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('reports undeclared SQLite raw query receivers as raw reads, not write sites', () => {
+    const facts = extractQueryFactsFromProjectBase({
+      files: [
+        sqliteDatabaseTypes(['get(query: unknown): Promise<unknown>;']),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          export const products = sqliteTable("products", { id: text("id").primaryKey() }, kovo({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product/sqlite-raw", {
+            load(_input, db: BaseSQLiteDatabase<any, any, any, any>) {
+              return db.get(sql\`select id from products\`);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    const diagnostics = diagnosticsForQueryFacts(facts);
+    expect(diagnostics).toMatchObject([
+      {
+        code: 'KV406',
+        message: expect.stringContaining('raw/opaque query read; declare output and reads:'),
+        severity: 'error',
+      },
+    ]);
+    expect(diagnostics[0]?.message).toContain('Query uses db.get().');
+    expect(diagnostics[0]?.message).not.toContain('write site');
+  });
+
   it('honors explicit reads and output for opaque raw query receiver calls', () => {
     const facts = extractQueryFactsFromProject({
       files: [
