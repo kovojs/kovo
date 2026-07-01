@@ -58,6 +58,10 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(options.graph?.tasks ?? []),
     ...(options.components ?? []).flatMap((component) => component.taskGraphFacts ?? []),
   ]);
+  const handlerWriteSinks = mergeHandlerWriteSinkFacts([
+    ...(options.graph?.handlerWriteSinks ?? []),
+    ...(options.components ?? []).flatMap((component) => component.handlerWriteSinkFacts ?? []),
+  ]);
   const routePages = (options.routePages ?? []).flatMap((routePage) => routePage.routePageFacts);
   const publishToClientCapabilities = (options.components ?? []).flatMap((component) =>
     publishToClientCapabilitiesFromFacts(component.publishToClientFacts ?? []),
@@ -92,6 +96,7 @@ export function deriveAppGraph(options: CompileAppGraphOptions): CompileAppGraph
     ...(mergedPages === undefined ? {} : { pages: mergedPages }),
     ...(packageComponentPrefixes.length > 0 ? { packageComponentPrefixes } : {}),
     ...(tasks.length > 0 ? { tasks } : {}),
+    ...(handlerWriteSinks.length > 0 ? { handlerWriteSinks } : {}),
     // SPEC §10.2/§11.2: preserve KV422 SQL-safety diagnostics from `compile drizzle-static`
     // (analyzeSqlSafetyFromProject) so the build→graph.json the `kovo check` consumer reads carries
     // them and the check fails end-to-end. By-construction at `kovo check`: an error-severity finding
@@ -180,6 +185,10 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
     .flatMap((component) => component.taskGraphFacts ?? [])
     .map((fact) => factHash(fact))
     .sort();
+  const handlerWriteSinkHashes = (options.components ?? [])
+    .flatMap((component) => component.handlerWriteSinkFacts ?? [])
+    .map((fact) => factHash(fact))
+    .sort();
   const routeHashes = (options.routePages ?? [])
     .flatMap((routePage) => routePage.routePageFacts)
     .map((fact) => factHash(fact))
@@ -188,6 +197,7 @@ export function appGraphContributionHash(options: CompileAppGraphOptions): strin
   return factHash({
     components: componentHashes,
     graph: options.graph ?? null,
+    handlerWriteSinks: handlerWriteSinkHashes,
     packageComponentPrefixes: options.packageComponentPrefixes ?? null,
     previousRegistryFacts: options.previousRegistryFacts ?? null,
     registryTypes: options.registryTypes ?? null,
@@ -233,6 +243,31 @@ function mergeTaskExplainFacts(tasks: readonly CoreGraph.TaskExplain[]): CoreGra
         : { schedules: task.schedules }),
     }))
     .sort((left, right) => left.key.localeCompare(right.key));
+}
+
+function mergeHandlerWriteSinkFacts(
+  facts: readonly CoreGraph.HandlerWriteSinkExplain[],
+): CoreGraph.HandlerWriteSinkExplain[] {
+  const byKey = new Map<string, CoreGraph.HandlerWriteSinkExplain>();
+  for (const fact of facts) {
+    byKey.set(factHash(fact), fact);
+  }
+  return [...byKey.values()].sort(compareHandlerWriteSinkFacts);
+}
+
+function compareHandlerWriteSinkFacts(
+  left: CoreGraph.HandlerWriteSinkExplain,
+  right: CoreGraph.HandlerWriteSinkExplain,
+): number {
+  return (
+    left.surface.localeCompare(right.surface) ||
+    left.owner.kind.localeCompare(right.owner.kind) ||
+    left.owner.value.localeCompare(right.owner.value) ||
+    left.span.start - right.span.start ||
+    left.span.end - right.span.end ||
+    left.operationKind.localeCompare(right.operationKind) ||
+    left.path.localeCompare(right.path)
+  );
 }
 
 function mergeSortedStrings(

@@ -27,6 +27,7 @@ import {
   type JsxElementModel,
   jsxElements,
   type NamedImportModel,
+  type HandlerWriteSinkFact,
   type PropertyAccessPathModel,
   type RenderInputModel,
 } from '../scan/parse.js';
@@ -469,42 +470,19 @@ export function validateDirectDbAccess(
   }
 
   for (const handler of taskRunHandlers(model)) {
-    const directWrite = handlerDirectDbWrite(handler, handler.paramNames[1]);
-
-    if (directWrite) {
-      found.push({
-        ...diagnostics.at('KV330', {
-          start: directWrite.start,
-          length: directWrite.path.length,
-        }),
-        help: [
-          'Would lower to: a durable task graph node whose database effects compose through audited mutations.',
-          'Blocked reason: direct DB writes in task.run bypass ctx.runMutation, so KV414/KV438/KV407 write audits cannot see the effect.',
-          'Fixes: move the write into a mutation/domain write and call ctx.runMutation(...) from the task, or expose a statically audited mutation that owns the touch set.',
-          'SPEC §9.6 requires task DB writes to go through ctx.runMutation; SPEC §10.3 makes mutation/domain writes the audited write surface.',
-        ].join('\n'),
-        message: 'Direct db access in a task run body; route through ctx.runMutation.',
-      });
-    }
+    found.push(
+      ...(handler.handlerWriteSinks ?? [])
+        .filter((sink) => sink.surface === 'task')
+        .map((sink) => handlerWriteSinkDiagnostic(diagnostics, sink)),
+    );
   }
 
   for (const handler of webhookHandlers(model)) {
-    const directWrite = handlerDirectDbWrite(handler);
-    if (!directWrite) continue;
-    found.push({
-      ...diagnostics.at('KV330', {
-        start: directWrite.start,
-        length: directWrite.path.length,
-      }),
-      help: [
-        'Would lower to: a machine-authenticated webhook whose database effects compose through an audited mutation/domain write.',
-        'Blocked reason: direct DB writes in a webhook handler bypass the mutation/domain write-surface audit.',
-        'Fixes: move the write into a mutation/domain write with declared touch metadata, or keep the webhook handler to verification plus mutation dispatch.',
-        'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
-      ].join('\n'),
-      message:
-        'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
-    });
+    found.push(
+      ...(handler.handlerWriteSinks ?? [])
+        .filter((sink) => sink.surface === 'webhook')
+        .map((sink) => handlerWriteSinkDiagnostic(diagnostics, sink)),
+    );
   }
 
   for (const handler of endpointHandlers(model)) {
@@ -527,6 +505,62 @@ export function validateDirectDbAccess(
   }
 
   return found;
+}
+
+function handlerWriteSinkDiagnostic(
+  diagnostics: DiagnosticFactory,
+  sink: HandlerWriteSinkFact,
+): CompilerDiagnostic {
+  const length = Math.max(1, sink.span.end - sink.span.start);
+  if (handlerWriteSinkIsUnresolved(sink)) {
+    return {
+      ...diagnostics.at('KV406', { start: sink.span.start, length }),
+      help: [
+        'Would lower to: a typed handler write-sink fact that records the audited mutation/domain write surface.',
+        'Blocked reason: the handler contains a write-shaped call whose target or owner could not be statically resolved, so treating the handler as write-safe would be a fail-open verifier result.',
+        'Fixes: route the write through a statically named mutation/domain write, or rewrite the handler so the compiler can see the write target and audited touch surface.',
+        'SPEC §11 requires statically un-analyzable write sites to fail closed; SPEC §10.3 makes mutation/domain writes the audited write surface.',
+      ].join('\n'),
+      message:
+        sink.surface === 'task'
+          ? 'Unresolved write sink in a task run body; route through ctx.runMutation.'
+          : 'Unresolved write sink in a webhook handler; route writes through an audited mutation/domain write.',
+    };
+  }
+
+  if (sink.surface === 'task') {
+    return {
+      ...diagnostics.at('KV330', { start: sink.span.start, length }),
+      help: [
+        'Would lower to: a durable task graph node whose database effects compose through audited mutations.',
+        'Blocked reason: direct DB writes in task.run bypass ctx.runMutation, so KV414/KV438/KV407 write audits cannot see the effect.',
+        'Fixes: move the write into a mutation/domain write and call ctx.runMutation(...) from the task, or expose a statically audited mutation that owns the touch set.',
+        'SPEC §9.6 requires task DB writes to go through ctx.runMutation; SPEC §10.3 makes mutation/domain writes the audited write surface.',
+      ].join('\n'),
+      message: 'Direct db access in a task run body; route through ctx.runMutation.',
+    };
+  }
+
+  return {
+    ...diagnostics.at('KV330', { start: sink.span.start, length }),
+    help: [
+      'Would lower to: a machine-authenticated webhook whose database effects compose through an audited mutation/domain write.',
+      'Blocked reason: direct DB writes in a webhook handler bypass the mutation/domain write-surface audit.',
+      'Fixes: move the write into a mutation/domain write with declared touch metadata, or keep the webhook handler to verification plus mutation dispatch.',
+      'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
+    ].join('\n'),
+    message:
+      'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+  };
+}
+
+function handlerWriteSinkIsUnresolved(sink: HandlerWriteSinkFact): boolean {
+  return (
+    sink.operationKind === 'UNRESOLVED' ||
+    sink.path === 'UNRESOLVED' ||
+    sink.owner.value === 'UNRESOLVED' ||
+    sink.canonicalTarget.identity === 'UNRESOLVED'
+  );
 }
 
 function handlerDirectDbWrite(

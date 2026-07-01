@@ -63,6 +63,7 @@ export interface KovoCheckInput {
   endpointPosture?: readonly EndpointPostureVerificationFact[];
   eventPayloads?: readonly EventPayloadFact[];
   fixpointChecks?: readonly FixpointCheck[];
+  handlerWriteSinks?: readonly HandlerWriteSinkExplain[];
   lints?: readonly SemanticLint[];
   massAssignmentFacts?: readonly MassAssignmentFact[];
   mutations?: readonly MutationExplain[];
@@ -103,6 +104,44 @@ export interface TaskExplain {
   runMutations?: readonly string[];
   runQueries?: readonly string[];
   schedules?: readonly string[];
+}
+
+/** @internal */
+export type HandlerWriteSinkSurface = 'task' | 'webhook';
+
+/** @internal */
+export type HandlerWriteSinkOperationKind =
+  | 'batch'
+  | 'delete'
+  | 'execute'
+  | 'insert'
+  | 'run'
+  | 'update'
+  | 'UNRESOLVED';
+
+/** @internal */
+export type HandlerWriteSinkTargetProvenance =
+  | 'computed-member'
+  | 'property-access-path'
+  | 'unresolved-property-access';
+
+/** @internal */
+export interface HandlerWriteSinkExplain {
+  canonicalTarget: {
+    identity: string;
+    provenance: HandlerWriteSinkTargetProvenance;
+  };
+  operationKind: HandlerWriteSinkOperationKind;
+  owner: {
+    kind: 'key' | 'path';
+    value: string;
+  };
+  path: string;
+  span: {
+    end: number;
+    start: number;
+  };
+  surface: HandlerWriteSinkSurface;
 }
 
 /** @internal */
@@ -817,6 +856,7 @@ const arrayFields = [
   'endpointPosture',
   'eventPayloads',
   'fixpointChecks',
+  'handlerWriteSinks',
   'lints',
   'massAssignmentFacts',
   'mutations',

@@ -3,6 +3,7 @@ import * as ts from 'typescript';
 import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
+  registerFrameworkIdentityProject,
   type FrameworkExportIdentity,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
@@ -19,6 +20,9 @@ import type {
   ComponentModuleModel,
   ComponentOptionEntry,
   DocumentElementActionModel,
+  HandlerWriteSinkFact,
+  HandlerWriteSinkOperationKind,
+  HandlerWriteSinkOwner,
   IdentifierReferenceModel,
   JsxCommentModel,
   JsxElementChildBody,
@@ -56,6 +60,15 @@ const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
 const WEBHOOK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
+const HANDLER_WRITE_SINK_OPERATIONS = new Set<HandlerWriteSinkOperationKind>([
+  'batch',
+  'delete',
+  'execute',
+  'insert',
+  'run',
+  'update',
+]);
+const TASK_CONTEXT_COMPOSITION_METHODS = new Set(['runMutation', 'runQuery', 'schedule']);
 
 /**
  * @internal FN7 (plans/compiler-refactoring.md): the canonical source parse. The scanner uses it,
@@ -74,6 +87,13 @@ export function parseSourceFile(fileName: string, source: string): ts.SourceFile
 }
 
 export { normalizeComponentFileName };
+
+export interface ParseComponentModuleOptions {
+  readonly frameworkIdentityFiles?: readonly {
+    readonly fileName: string;
+    readonly source: string;
+  }[];
+}
 
 export function parseDiagnosticsForSourceFile(
   sourceFile: ts.SourceFile,
@@ -108,8 +128,18 @@ export function parseDiagnosticsForSourceFile(
  * @internal Parse one authored component module into the compiler's source model. Shared by
  * compiler phases and build-time graph preflight only; app authors must not depend on this shape.
  */
-export function parseComponentModule(fileName: string, source: string): ComponentModuleModel {
+export function parseComponentModule(
+  fileName: string,
+  source: string,
+  options: ParseComponentModuleOptions = {},
+): ComponentModuleModel {
   const sourceFile = parseSourceFile(fileName, source);
+  if (options.frameworkIdentityFiles?.length) {
+    registerFrameworkIdentityProject(
+      sourceFile,
+      options.frameworkIdentityFiles.map((file) => parseSourceFile(file.fileName, file.source)),
+    );
+  }
   const componentFactories = componentFactoryBindings(sourceFile);
   const calls: CallExpressionModel[] = [];
   const components: ComponentModel[] = [];
@@ -167,7 +197,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
         taskRunHandlers.push(...taskRunHandlerModels(sourceFile, source, node));
       }
       if (isFrameworkExpression(sourceFile, node.expression, WEBHOOK_FACTORY_IDENTITY)) {
-        webhookHandlers.push(...handlerPropertyModels(sourceFile, source, node));
+        webhookHandlers.push(...webhookHandlerModels(sourceFile, source, node));
       }
     }
     if (isExportedRenderSourceFunction(node)) {
@@ -587,6 +617,13 @@ export function endpointHandlers(model: ComponentModuleModel): MutationHandlerMo
 
 export function webhookHandlers(model: ComponentModuleModel): MutationHandlerModel[] {
   return [...model.webhookHandlers];
+}
+
+export function handlerWriteSinks(model: ComponentModuleModel): HandlerWriteSinkFact[] {
+  return [
+    ...model.taskRunHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
+    ...model.webhookHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
+  ];
 }
 
 function stringLiteralArrayValuesFromExpression(expression: ts.Expression): string[] | null {
@@ -1079,6 +1116,14 @@ function handlerPropertyModels(
   source: string,
   call: ts.CallExpression,
 ): MutationHandlerModel[] {
+  return handlerPropertyEntries(sourceFile, source, call).map((entry) => entry.model);
+}
+
+function handlerPropertyEntries(
+  sourceFile: ts.SourceFile,
+  source: string,
+  call: ts.CallExpression,
+): Array<{ body: ts.ConciseBody; model: MutationHandlerModel }> {
   const options = [...call.arguments].find(ts.isObjectLiteralExpression);
   if (!options || !ts.isObjectLiteralExpression(options)) return [];
 
@@ -1087,18 +1132,8 @@ function handlerPropertyModels(
       return property.body
         ? [
             {
-              body: source.slice(property.body.getStart(sourceFile), property.body.getEnd()),
-              bodyEnd: property.body.getEnd(),
-              bodyPropertyAccesses: propertyAccessPathModels(sourceFile, property.body),
-              bodyStart: property.body.getStart(sourceFile),
-              paramNames: property.parameters.map((param) => parameterName(param.name)),
-              params: property.parameters.map((param) =>
-                source.slice(param.getStart(sourceFile), param.getEnd()),
-              ),
-              paramSpans: property.parameters.map((param) => ({
-                end: param.getEnd(),
-                start: param.getStart(sourceFile),
-              })),
+              body: property.body,
+              model: functionBodyModel(sourceFile, source, property.body, property.parameters),
             },
           ]
         : [];
@@ -1113,21 +1148,26 @@ function handlerPropertyModels(
 
     return [
       {
-        body: source.slice(initializer.body.getStart(sourceFile), initializer.body.getEnd()),
-        bodyEnd: initializer.body.getEnd(),
-        bodyPropertyAccesses: propertyAccessPathModels(sourceFile, initializer.body),
-        bodyStart: initializer.body.getStart(sourceFile),
-        paramNames: initializer.parameters.map((param) => parameterName(param.name)),
-        params: initializer.parameters.map((param) =>
-          source.slice(param.getStart(sourceFile), param.getEnd()),
-        ),
-        paramSpans: initializer.parameters.map((param) => ({
-          end: param.getEnd(),
-          start: param.getStart(sourceFile),
-        })),
+        body: initializer.body,
+        model: functionBodyModel(sourceFile, source, initializer.body, initializer.parameters),
       },
     ];
   });
+}
+
+function webhookHandlerModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  call: ts.CallExpression,
+): MutationHandlerModel[] {
+  const owner = webhookOwner(sourceFile, call);
+  return handlerPropertyEntries(sourceFile, source, call).map(({ body, model }) => ({
+    ...model,
+    handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
+      owner,
+      surface: 'webhook',
+    }),
+  }));
 }
 
 function taskRunHandlerModels(
@@ -1150,6 +1190,10 @@ function taskRunHandlerModels(
       {
         ...handler.model,
         ...(cron === undefined ? {} : { cron }),
+        handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, handler.body, {
+          owner: { kind: 'key', value: key },
+          surface: 'task',
+        }),
         key,
         runMutationEdges: taskCompositionEdges(
           sourceFile,
@@ -1177,6 +1221,19 @@ function taskKey(sourceFile: ts.SourceFile, call: ts.CallExpression): string {
   const exported = exportedConstInitializerName(call);
   if ('exportedConstName' in exported) return exported.exportedConstName;
   return sourceFile.fileName;
+}
+
+function webhookOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): HandlerWriteSinkOwner {
+  const [first] = call.arguments;
+  if (first && ts.isStringLiteralLike(first)) return { kind: 'path', value: first.text };
+
+  const definition = taskDefinitionObject(call);
+  const path = definition ? staticStringObjectProperty(definition, 'path') : undefined;
+  if (path !== undefined) return { kind: 'path', value: path };
+
+  const exported = exportedConstInitializerName(call);
+  if ('exportedConstName' in exported) return { kind: 'path', value: exported.exportedConstName };
+  return { kind: 'path', value: 'UNRESOLVED' };
 }
 
 function runHandlerModel(
@@ -1229,6 +1286,130 @@ function staticStringObjectProperty(
 ): string | undefined {
   const initializer = componentPropertyInitializer(object, propertyName);
   return initializer && ts.isStringLiteralLike(initializer) ? initializer.text : undefined;
+}
+
+function handlerWriteSinkFacts(
+  sourceFile: ts.SourceFile,
+  source: string,
+  body: ts.ConciseBody,
+  options: {
+    readonly owner: HandlerWriteSinkOwner;
+    readonly surface: 'task' | 'webhook';
+  },
+): HandlerWriteSinkFact[] {
+  const facts = new Map<string, HandlerWriteSinkFact>();
+  const bodyPropertyAccesses = propertyAccessPathModels(sourceFile, body);
+
+  for (const access of bodyPropertyAccesses) {
+    if (!isHandlerWriteSinkOperation(access.terminalName)) continue;
+    const fact = resolvedHandlerWriteSinkFact(access, options);
+    facts.set(handlerWriteSinkFactKey(fact), fact);
+  }
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node)) {
+      const unresolved = unresolvedHandlerWriteSinkFact(sourceFile, source, node, options);
+      if (unresolved) facts.set(handlerWriteSinkFactKey(unresolved), unresolved);
+    }
+    ts.forEachChild(node, visit);
+  };
+
+  visit(body);
+  return [...facts.values()].sort((left, right) => left.span.start - right.span.start);
+}
+
+function resolvedHandlerWriteSinkFact(
+  access: PropertyAccessPathModel,
+  options: {
+    readonly owner: HandlerWriteSinkOwner;
+    readonly surface: 'task' | 'webhook';
+  },
+): HandlerWriteSinkFact {
+  const operationKind = handlerWriteSinkOperation(access.terminalName);
+  const suffix = `.${access.terminalName}`;
+  const targetIdentity = access.path.endsWith(suffix)
+    ? access.path.slice(0, -1 * suffix.length)
+    : 'UNRESOLVED';
+  return {
+    canonicalTarget: {
+      identity: targetIdentity.length === 0 ? 'UNRESOLVED' : targetIdentity,
+      provenance:
+        targetIdentity.length === 0 ? 'unresolved-property-access' : 'property-access-path',
+    },
+    operationKind,
+    owner: options.owner,
+    path: access.path,
+    span: { end: access.end, start: access.start },
+    surface: options.surface,
+  };
+}
+
+function unresolvedHandlerWriteSinkFact(
+  sourceFile: ts.SourceFile,
+  source: string,
+  node: ts.CallExpression,
+  options: {
+    readonly owner: HandlerWriteSinkOwner;
+    readonly surface: 'task' | 'webhook';
+  },
+): HandlerWriteSinkFact | null {
+  const callee = unwrapParentheses(node.expression);
+  if (ts.isPropertyAccessExpression(callee)) {
+    if (!isHandlerWriteSinkOperation(callee.name.text)) return null;
+    if (propertyAccessPath(callee)) return null;
+    const operationKind = handlerWriteSinkOperation(callee.name.text);
+    return {
+      canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-property-access' },
+      operationKind,
+      owner: options.owner,
+      path: 'UNRESOLVED',
+      span: {
+        end: callee.getEnd(),
+        start: callee.getStart(sourceFile),
+      },
+      surface: options.surface,
+    };
+  }
+
+  if (ts.isElementAccessExpression(callee)) {
+    const receiver = source
+      .slice(callee.expression.getStart(sourceFile), callee.expression.getEnd())
+      .trim();
+    if (TASK_CONTEXT_COMPOSITION_METHODS.has(receiver)) return null;
+    return {
+      canonicalTarget: { identity: 'UNRESOLVED', provenance: 'computed-member' },
+      operationKind: 'UNRESOLVED',
+      owner: options.owner,
+      path: 'UNRESOLVED',
+      span: {
+        end: callee.getEnd(),
+        start: callee.getStart(sourceFile),
+      },
+      surface: options.surface,
+    };
+  }
+
+  return null;
+}
+
+function isHandlerWriteSinkOperation(name: string): boolean {
+  return HANDLER_WRITE_SINK_OPERATIONS.has(name as HandlerWriteSinkOperationKind);
+}
+
+function handlerWriteSinkOperation(name: string): HandlerWriteSinkOperationKind {
+  return isHandlerWriteSinkOperation(name) ? (name as HandlerWriteSinkOperationKind) : 'UNRESOLVED';
+}
+
+function handlerWriteSinkFactKey(fact: HandlerWriteSinkFact): string {
+  return [
+    fact.surface,
+    fact.owner.kind,
+    fact.owner.value,
+    fact.operationKind,
+    fact.path,
+    fact.span.start,
+    fact.span.end,
+  ].join('\0');
 }
 
 function taskCompositionEdges(

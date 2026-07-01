@@ -16,16 +16,19 @@ export const PHASE0_METAMORPHIC_REQUIRED_CODES = [
   'KV426',
   'KV407',
   'KV311',
+  'KV330',
 ] as const;
 
 export type Phase0MetamorphicCode = (typeof PHASE0_METAMORPHIC_REQUIRED_CODES)[number];
 
 export type MetamorphicVariantKind =
   | 'control'
+  | 'closure'
   | 'import-alias'
   | 'namespace-import'
   | 're-export-barrel'
   | 'local-alias'
+  | 'local-shadow'
   | 'wrapper-helper'
   | 'function-helper'
   | 'destructured-binding';
@@ -162,6 +165,15 @@ export const metamorphicRecognitionSeeds: readonly MetamorphicRecognitionSeed[] 
     label: 'update coverage',
     variants: updateCoverageVariants().map((variant) =>
       variantCase(variant, () => runCompilerDiagnosticVariant('KV311', variant)),
+    ),
+  },
+  {
+    code: 'KV330',
+    description:
+      'Task and webhook direct DB writes must emit handler write-sink facts and fail the direct-write policy gate.',
+    label: 'task/webhook direct DB writes',
+    variants: directDbHandlerVariants().map((variant) =>
+      variantCase(variant, () => runDirectDbHandlerVariant(variant)),
     ),
   },
 ];
@@ -593,6 +605,144 @@ export const CartBadge = component({
   ];
 }
 
+function directDbHandlerVariants(): readonly CompilerExpressionVariant[] {
+  return [
+    {
+      expectation: 'enforced',
+      importLine: 'import { task, webhook } from "@kovojs/server";',
+      kind: 'control',
+      label: 'direct task/webhook imports',
+      source: directDbTaskWebhookSource({ taskCallee: 'task', webhookCallee: 'webhook' }),
+    },
+    {
+      expectation: 'enforced',
+      importLine: 'import { task as defineTask, webhook as defineWebhook } from "@kovojs/server";',
+      kind: 'import-alias',
+      label: 'task/webhook named import aliases',
+      source: directDbTaskWebhookSource({
+        taskCallee: 'defineTask',
+        webhookCallee: 'defineWebhook',
+      }),
+    },
+    {
+      expectation: 'enforced',
+      importLine: 'import * as srv from "@kovojs/server";',
+      kind: 'namespace-import',
+      label: 'task/webhook namespace members',
+      source: directDbTaskWebhookSource({ taskCallee: 'srv.task', webhookCallee: 'srv.webhook' }),
+    },
+    {
+      expectation: 'enforced',
+      extraFiles: [
+        {
+          fileName: 'server-barrel.ts',
+          source: 'export { task as defineTask, webhook as defineWebhook } from "@kovojs/server";',
+        },
+      ],
+      importLine: 'import { defineTask, defineWebhook } from "./server-barrel";',
+      kind: 're-export-barrel',
+      label: 'task/webhook local barrel re-export',
+      source: directDbTaskWebhookSource({
+        taskCallee: 'defineTask',
+        webhookCallee: 'defineWebhook',
+      }),
+    },
+    {
+      expectation: 'enforced',
+      importLine: 'import { task, webhook } from "@kovojs/server";',
+      kind: 'wrapper-helper',
+      label: 'handler-local wrapper helper write',
+      source: directDbTaskWebhookSource({
+        taskBody: [
+          'function writeAudit() {',
+          '  return appDb.insert(auditRows).values({ id: input.id });',
+          '}',
+          'await writeAudit();',
+        ],
+        taskCallee: 'task',
+        webhookBody: [
+          'function writeAudit() {',
+          '  return appDb.insert(auditRows).values({ id: request.headers.get("x-id") });',
+          '}',
+          'await writeAudit();',
+        ],
+        webhookCallee: 'webhook',
+      }),
+    },
+    {
+      expectation: 'enforced',
+      importLine: 'import { task, webhook } from "@kovojs/server";',
+      kind: 'closure',
+      label: 'handler-local closure write',
+      source: directDbTaskWebhookSource({
+        taskBody: [
+          'const writeAudit = () => appDb.insert(auditRows).values({ id: input.id });',
+          'await writeAudit();',
+        ],
+        taskCallee: 'task',
+        webhookBody: [
+          'const writeAudit = () => appDb.insert(auditRows).values({ id: request.headers.get("x-id") });',
+          'await writeAudit();',
+        ],
+        webhookCallee: 'webhook',
+      }),
+    },
+    {
+      expectation: 'enforced',
+      importLine: 'import { task, webhook } from "@kovojs/server";',
+      kind: 'local-shadow',
+      label: 'handler-local insert shadow fails closed',
+      source: directDbTaskWebhookSource({
+        taskBody: [
+          'const local = { insert() { return { values() {} }; } };',
+          'await local.insert(auditRows).values({ id: input.id });',
+        ],
+        taskCallee: 'task',
+        webhookBody: [
+          'const local = { insert() { return { values() {} }; } };',
+          'await local.insert(auditRows).values({ id: request.headers.get("x-id") });',
+        ],
+        webhookCallee: 'webhook',
+      }),
+    },
+  ];
+}
+
+function directDbTaskWebhookSource(options: {
+  readonly taskBody?: readonly string[];
+  readonly taskCallee: string;
+  readonly webhookBody?: readonly string[];
+  readonly webhookCallee: string;
+}): string {
+  const taskBody = options.taskBody ?? ['await appDb.insert(auditRows).values({ id: input.id });'];
+  const webhookBody = options.webhookBody ?? [
+    'await appDb.insert(auditRows).values({ id: request.headers.get("x-id") });',
+  ];
+
+  return `
+export const auditTask = ${options.taskCallee}('audit/task', {
+  async run(input, ctx) {
+${indentLines(taskBody, 4)}
+    await ctx.runMutation(recordAudit, input);
+  },
+});
+
+export const auditWebhook = ${options.webhookCallee}('/webhooks/audit', {
+  access: verifiedAccess,
+  auth: auditAuth,
+  async handler(request) {
+${indentLines(webhookBody, 4)}
+    return Response.json({ ok: true });
+  },
+});
+`;
+}
+
+function indentLines(lines: readonly string[], spaces: number): string {
+  const prefix = ' '.repeat(spaces);
+  return lines.map((line) => `${prefix}${line}`).join('\n');
+}
+
 function runOwnerReadIdorVariant(variant: KovoServerBindingVariant): MetamorphicRunResult {
   const files = ownerSecretQueryFiles(variant);
   const audit = extractOwnerAuditFromProject(withPgDatabaseTypes({ files }));
@@ -680,6 +830,30 @@ function runCompilerDiagnosticVariant(
   return {
     codes: diagnostics.map((diagnostic) => diagnostic.code),
     detail: diagnostics.map((diagnostic) => diagnostic.message),
+  };
+}
+
+function runDirectDbHandlerVariant(variant: CompilerExpressionVariant): MetamorphicRunResult {
+  const result = compileComponentModule({
+    ...(variant.extraFiles ? { extraFiles: variant.extraFiles } : {}),
+    fileName: `kv330-${variant.kind}.ts`,
+    source: [variant.importLine ?? '', variant.source].filter(Boolean).join('\n'),
+  });
+  const diagnostics = result.diagnostics.filter(
+    (diagnostic) => diagnostic.code === 'KV330' || diagnostic.code === 'KV406',
+  );
+  const surfaces = new Set(result.handlerWriteSinkFacts.map((fact) => fact.surface));
+  const hasRequiredFacts = surfaces.has('task') && surfaces.has('webhook');
+
+  return {
+    codes: hasRequiredFacts ? diagnostics.map((diagnostic) => diagnostic.code) : [],
+    detail: [
+      ...diagnostics.map((diagnostic) => diagnostic.message),
+      ...result.handlerWriteSinkFacts.map(
+        (fact) =>
+          `${fact.surface}:${fact.owner.kind}:${fact.owner.value}:${fact.operationKind}:${fact.canonicalTarget.identity}`,
+      ),
+    ],
   };
 }
 

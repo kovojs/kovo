@@ -100,6 +100,21 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
           'function-helper',
         ],
       },
+      {
+        code: 'KV330',
+        enforced: 7,
+        label: 'task/webhook direct DB writes',
+        todo: 0,
+        variants: [
+          'control',
+          'import-alias',
+          'namespace-import',
+          're-export-barrel',
+          'wrapper-helper',
+          'closure',
+          'local-shadow',
+        ],
+      },
     ]);
 
     expect(metamorphicRecognitionCoverageRows().map((row) => row.code)).toEqual([

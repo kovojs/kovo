@@ -53,6 +53,7 @@ import {
 } from './lower/handlers.js';
 import { runLoweringPipeline } from './lowering-pipeline.js';
 import {
+  handlerWriteSinks,
   inferComponentName,
   jsxElements,
   normalizeComponentFileName,
@@ -90,6 +91,7 @@ import type {
   ClockUpdatePlanFact,
   CompileDependencyFootprint,
   ComponentGraphFact,
+  HandlerWriteSinkFact,
   HandlerLowering,
   QueryUpdatePlanFact,
   QueryShape,
@@ -248,7 +250,11 @@ function parseComponentPhase(rawOptions: CompileComponentOptions): ParseComponen
     };
   }
 
-  const originalModel = parseComponentModuleModel(options.fileName, options.source);
+  const originalModel = parseComponentModuleModel(
+    options.fileName,
+    options.source,
+    parseComponentProjectOptions(options),
+  );
   registerFrameworkIdentityProjectForOptions(originalModel.sourceFile, options);
   const parseDiagnostics = parseDiagnosticsForSourceFile(originalModel.sourceFile, options.source);
   if (parseDiagnostics.length > 0) return { kind: 'parse-error', options, parseDiagnostics };
@@ -319,6 +325,10 @@ function registerFrameworkIdentityProjectForOptions(
     sourceFile,
     options.extraFiles.map((file) => parseSourceFile(file.fileName, file.source)),
   );
+}
+
+function parseComponentProjectOptions(options: CompileComponentProjectOptions) {
+  return options.extraFiles?.length ? { frameworkIdentityFiles: options.extraFiles } : {};
 }
 
 function validateComponentPhase(
@@ -716,6 +726,7 @@ function assembleCompileResult(
       ...facts.stateDerives.map((derive) => derive.exportName),
     ],
     cssAssets: facts.componentCssAssets,
+    handlerWriteSinkFacts: facts.handlerWriteSinkFacts,
     handlerExports: client.versionedHandlers.map((handler) => handler.exportName),
     hmrImpact: createComponentHmrImpactMetadata({
       clientHref: client.clientHref,
@@ -779,6 +790,9 @@ function componentCompileFactSnapshot(
   ledger.append('taskGraphFacts', { phase: 'graph', pass: 'task-graph' }, [
     ...taskGraphFactsFromModel(originalModel),
   ]);
+  ledger.append('handlerWriteSinkFacts', { phase: 'graph', pass: 'handler-write-sinks' }, [
+    ...handlerWriteSinkFactsFromModel(originalModel),
+  ]);
   ledger.append('fragmentTargetFacts', { phase: 'graph', pass: 'fragment-targets' }, [
     ...registryCss.fragmentTargetFacts,
   ]);
@@ -812,6 +826,10 @@ function taskGraphFactsFromModel(model: ComponentModuleModel): TaskGraphFact[] {
     ...(handler.runQueryEdges.length === 0 ? {} : { runQueries: handler.runQueryEdges }),
     ...(handler.scheduleEdges.length === 0 ? {} : { schedules: handler.scheduleEdges }),
   }));
+}
+
+function handlerWriteSinkFactsFromModel(model: ComponentModuleModel): HandlerWriteSinkFact[] {
+  return handlerWriteSinks(model);
 }
 
 function registryFileName(parsed: ParsedComponentPhaseResult): string {

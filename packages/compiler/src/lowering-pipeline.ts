@@ -61,11 +61,21 @@ function reparse(ctx: LoweringPipelineContext): void {
   const patch = applyModelPatchPlanPass(
     ctx.state,
     ctx.pending.plan(ctx.state.source.length),
-    parseComponentModule,
+    (fileName, source) =>
+      parseComponentModule(fileName, source, parseComponentProjectOptions(ctx.options)),
   );
   ctx.state = patch.state;
   ctx.offsetMaps.push(patch.sourceOffsetMap);
   ctx.pending.clear();
+}
+
+function parseComponentProjectOptions(options: CompileComponentOptions) {
+  const extraFiles = (
+    options as {
+      readonly extraFiles?: readonly { readonly fileName: string; readonly source: string }[];
+    }
+  ).extraFiles;
+  return extraFiles?.length ? { frameworkIdentityFiles: extraFiles } : {};
 }
 
 /**

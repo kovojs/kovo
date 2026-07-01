@@ -20,9 +20,45 @@ export interface ObjectLiteralEntry {
   valuePropertyAccesses?: readonly PropertyAccessPathModel[];
 }
 
+export type HandlerWriteSinkSurface = 'task' | 'webhook';
+
+export type HandlerWriteSinkOperationKind =
+  | 'batch'
+  | 'delete'
+  | 'execute'
+  | 'insert'
+  | 'run'
+  | 'update'
+  | 'UNRESOLVED';
+
+export type HandlerWriteSinkTargetProvenance =
+  | 'computed-member'
+  | 'property-access-path'
+  | 'unresolved-property-access';
+
+export interface HandlerWriteSinkOwner {
+  kind: 'key' | 'path';
+  value: string;
+}
+
+export interface HandlerWriteSinkTarget {
+  identity: string;
+  provenance: HandlerWriteSinkTargetProvenance;
+}
+
+export interface HandlerWriteSinkFact {
+  canonicalTarget: HandlerWriteSinkTarget;
+  operationKind: HandlerWriteSinkOperationKind;
+  owner: HandlerWriteSinkOwner;
+  path: string;
+  span: SourceSpan;
+  surface: HandlerWriteSinkSurface;
+}
+
 export interface MutationHandlerModel {
   body: string;
   bodyEnd: number;
+  handlerWriteSinks?: readonly HandlerWriteSinkFact[];
   bodyPropertyAccesses: readonly PropertyAccessPathModel[];
   bodyStart: number;
   paramNames: readonly (string | undefined)[];

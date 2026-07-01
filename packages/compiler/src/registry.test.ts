@@ -1376,6 +1376,51 @@ export const recordDurableTask = task('durable-task-proofs/record', {
     expect(derived.graph.tasks).toEqual(result.taskGraphFacts);
   });
 
+  it('derives task write-sink facts separately from task composition edges', () => {
+    const result = compileComponentModule({
+      fileName: 'src/durable-task-proofs.ts',
+      source: `
+export const recordDurableTask = task('durable-task-proofs/record', {
+  input: s.object({ proofId: s.string() }),
+  async run(input, context) {
+    await appDb.insert(taskProofs).values({ proofId: input.proofId });
+    await context.runQuery(taskProofQuery, { proofId: input.proofId });
+    await context.runMutation(recordTaskEffect, { proofId: input.proofId });
+    await context.schedule(recordDurableTask, input);
+  },
+});
+`,
+    });
+    const derived = deriveAppGraph({
+      components: [
+        {
+          componentGraphFacts: result.componentGraphFacts,
+          handlerWriteSinkFacts: result.handlerWriteSinkFacts,
+          taskGraphFacts: result.taskGraphFacts,
+        },
+      ],
+    });
+
+    expect(result.taskGraphFacts).toEqual([
+      {
+        key: 'durable-task-proofs/record',
+        runMutations: ['recordTaskEffect'],
+        runQueries: ['taskProofQuery'],
+        schedules: ['recordDurableTask'],
+      },
+    ]);
+    expect(derived.graph.tasks).toEqual(result.taskGraphFacts);
+    expect(derived.graph.handlerWriteSinks).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'appDb', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'durable-task-proofs/record' },
+        path: 'appDb.insert',
+        surface: 'task',
+      }),
+    ]);
+  });
+
   it('derives page access facts from compiled JSX route pages', () => {
     const routes = compileRouteModule({
       fileName: 'src/routes.tsx',

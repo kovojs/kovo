@@ -8,6 +8,7 @@ import type {
   ClockUpdatePlanFact,
   ComponentGraphFact,
   FragmentTargetFact,
+  HandlerWriteSinkFact,
   LiveTargetFact,
   PublishToClientFact,
   QueryUpdateCoverageFact,
@@ -32,6 +33,7 @@ export interface CompileFactFamilyMap {
   readonly componentCssAssets: ComponentCssAsset;
   readonly componentGraphFacts: ComponentGraphFact;
   readonly fragmentTargetFacts: FragmentTargetFact;
+  readonly handlerWriteSinkFacts: HandlerWriteSinkFact;
   readonly liveTargetFacts: LiveTargetFact;
   readonly outputContexts: GeneratedOutputWriteFact;
   readonly platformSubstitutions: PlatformSubstitution;
@@ -64,6 +66,7 @@ const compileFactFamilies = [
   'componentCssAssets',
   'componentGraphFacts',
   'fragmentTargetFacts',
+  'handlerWriteSinkFacts',
   'liveTargetFacts',
   'outputContexts',
   'platformSubstitutions',
@@ -103,6 +106,7 @@ export class CompileFactLedger {
       componentCssAssets: dedupeByJson(this.#facts('componentCssAssets')),
       componentGraphFacts: dedupeByJson(this.#facts('componentGraphFacts')),
       fragmentTargetFacts: dedupeByJson(this.#facts('fragmentTargetFacts')),
+      handlerWriteSinkFacts: dedupeByJson(this.#facts('handlerWriteSinkFacts')),
       liveTargetFacts: dedupeByJson(this.#facts('liveTargetFacts')),
       outputContexts: dedupeOutputContextFacts(this.#facts('outputContexts')),
       platformSubstitutions: dedupeByJson(this.#facts('platformSubstitutions')),

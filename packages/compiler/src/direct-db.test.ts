@@ -174,6 +174,15 @@ export const sendReceipt = task({
         length: 12,
       },
     ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'appDb', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'sendReceipt' },
+        path: 'appDb.insert',
+        surface: 'task',
+      }),
+    ]);
   });
 
   it('reports KV330 when task run bodies write through the app db provider', () => {
@@ -202,6 +211,40 @@ export const sendReceipt = task({
     ]);
   });
 
+  it('reports KV406 for unresolved task run write sinks', () => {
+    const result = compileComponentModule({
+      fileName: 'tasks.ts',
+      source: `
+export const sendReceipt = task('email/send-receipt', {
+  input: receiptInput,
+  async run(args, ctx) {
+    await dbFor(args.tenant).insert(ownerTable).values({ ownerId: args.userId });
+    await ctx.runMutation(recordReceipt, args);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV406',
+        fileName: 'tasks.ts',
+        message: 'Unresolved write sink in a task run body; route through ctx.runMutation.',
+        severity: 'error',
+        start: { column: 11, line: 5 },
+      },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-property-access' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'email/send-receipt' },
+        path: 'UNRESOLVED',
+        surface: 'task',
+      }),
+    ]);
+  });
+
   it('does not report KV330 for task bodies that compose through ctx', () => {
     const result = compileComponentModule({
       fileName: 'tasks.ts',
@@ -218,6 +261,7 @@ export const sendReceipt = task({
     });
 
     expect(result.diagnostics).toEqual([]);
+    expect(result.handlerWriteSinkFacts).toEqual([]);
   });
 
   it('reports KV330 when webhook handlers write through the app db provider', () => {
@@ -246,6 +290,15 @@ export const paymentWebhook = webhook('/webhooks/payment', {
           'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
         severity: kv330.severity,
       },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'appRuntimeDbProvider()', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        path: 'appRuntimeDbProvider().insert',
+        surface: 'webhook',
+      }),
     ]);
   });
 

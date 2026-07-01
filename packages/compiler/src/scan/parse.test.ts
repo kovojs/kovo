@@ -5,6 +5,7 @@ import {
   componentOptionObjectEntries,
   componentRenderHostElement,
   componentRenderSlotsParam,
+  handlerWriteSinks,
   jsxElementChildBody,
   jsxElements,
   jsxExpressions,
@@ -445,6 +446,91 @@ export const sendReceipt = task('email/send-receipt', {
       runQueryEdges: ['orderQuery'],
       scheduleEdges: ['sendReceipt'],
     });
+  });
+
+  it('records task direct write sink facts separately from composition edges', () => {
+    const source = `
+export const sendReceipt = task('email/send-receipt', {
+  async run(args, ctx) {
+    await appDb.insert(receipts).values({ id: args.id });
+    await ctx.runMutation(markSent, { id: args.id });
+  },
+});
+`;
+    const model = parseComponentModule('tasks.ts', source);
+    const [handler] = taskRunHandlers(model);
+
+    expect(handler).toMatchObject({
+      key: 'email/send-receipt',
+      runMutationEdges: ['markSent'],
+    });
+    expect(handlerWriteSinks(model)).toEqual([
+      {
+        canonicalTarget: { identity: 'appDb', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'email/send-receipt' },
+        path: 'appDb.insert',
+        span: {
+          end: source.indexOf('appDb.insert') + 'appDb.insert'.length,
+          start: source.indexOf('appDb.insert'),
+        },
+        surface: 'task',
+      },
+    ]);
+  });
+
+  it('records unresolved task write sink facts instead of an empty safe set', () => {
+    const source = `
+export const sendReceipt = task('email/send-receipt', {
+  async run(args, ctx) {
+    await dbFor(args.tenant).insert(receipts).values({ id: args.id });
+    await ctx.runMutation(markSent, { id: args.id });
+  },
+});
+`;
+    const facts = handlerWriteSinks(parseComponentModule('tasks.ts', source));
+
+    expect(facts).toEqual([
+      {
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-property-access' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'email/send-receipt' },
+        path: 'UNRESOLVED',
+        span: {
+          end: source.indexOf('dbFor(args.tenant).insert') + 'dbFor(args.tenant).insert'.length,
+          start: source.indexOf('dbFor(args.tenant).insert'),
+        },
+        surface: 'task',
+      },
+    ]);
+  });
+
+  it('records webhook direct write sink facts with the webhook path owner', () => {
+    const source = `
+import { webhook } from '@kovojs/server';
+
+export const paymentWebhook = webhook('/webhooks/payment', {
+  async handler(request) {
+    await appDb.update(payments).set({ paid: true });
+    return Response.json({ ok: true });
+  },
+});
+`;
+    const facts = handlerWriteSinks(parseComponentModule('webhooks.ts', source));
+
+    expect(facts).toEqual([
+      {
+        canonicalTarget: { identity: 'appDb', provenance: 'property-access-path' },
+        operationKind: 'update',
+        owner: { kind: 'path', value: '/webhooks/payment' },
+        path: 'appDb.update',
+        span: {
+          end: source.indexOf('appDb.update') + 'appDb.update'.length,
+          start: source.indexOf('appDb.update'),
+        },
+        surface: 'webhook',
+      },
+    ]);
   });
 
   it('records durable task handlers through namespace and local aliases', () => {

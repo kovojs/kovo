@@ -65,6 +65,9 @@ export type ComponentGraphFact = Pick<
 /** @internal Durable task graph fact emitted from scanned `task().run` handlers (SPEC §9.6). */
 export type TaskGraphFact = CoreGraph.TaskExplain;
 
+/** @internal Compiler-owned task/webhook handler write-sink fact (SPEC §10.3/§11). */
+export type HandlerWriteSinkFact = CoreGraph.HandlerWriteSinkExplain;
+
 /**
  * @internal A component's fragment-target fact (target name + props type) used when building
  * the registry. Lowered-IR fact shape; in-repo use only (SPEC.md §5.2).
@@ -186,6 +189,7 @@ export type RegistryGraphInput = Pick<
   | 'capabilities'
   | 'components'
   | 'endpoints'
+  | 'handlerWriteSinks'
   | 'mutations'
   | 'packageComponentPrefixes'
   | 'pages'
@@ -211,6 +215,7 @@ export interface RegistryTypeFactOptions {
 export interface CompileAppGraphOptions {
   components?: readonly {
     componentGraphFacts: readonly ComponentGraphFact[];
+    handlerWriteSinkFacts?: readonly HandlerWriteSinkFact[];
     publishToClientFacts?: readonly PublishToClientFact[];
     taskGraphFacts?: readonly TaskGraphFact[];
   }[];
@@ -361,6 +366,7 @@ export interface CompileResult {
   dependencyFootprint: CompileDependencyFootprint;
   diagnostics: readonly CompilerDiagnostic[];
   files: readonly EmittedFile[];
+  handlerWriteSinkFacts: readonly HandlerWriteSinkFact[];
   handlerExports: readonly string[];
   hmrImpact: HmrImpactMetadata | null;
   loweredSource: string | null;
@@ -572,6 +578,7 @@ export function createEmptyCompileResult(): CompileResult {
     dependencyFootprint: {},
     diagnostics: [],
     files: [],
+    handlerWriteSinkFacts: [],
     handlerExports: [],
     hmrImpact: null,
     loweredSource: null,
