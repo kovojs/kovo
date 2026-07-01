@@ -666,6 +666,42 @@ export const C = component({
     ).toHaveLength(0);
   });
 
+  it('resolves @internal renderedHtml through local aliases and re-export barrels', () => {
+    expect(
+      kv426(`
+import { renderedHtml } from '@kovojs/server/internal/html';
+const raw = renderedHtml;
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => raw(post.body),
+});
+`),
+    ).toHaveLength(1);
+
+    expect(
+      kv426(
+        `
+import { raw } from './raw-barrel';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => raw(post.body),
+});
+`,
+        'pages/probe.tsx',
+        [
+          {
+            fileName: 'pages/raw-root.ts',
+            source: "export { renderedHtml as raw } from '@kovojs/server/internal/html';",
+          },
+          {
+            fileName: 'pages/raw-barrel.ts',
+            source: "export * from './raw-root';",
+          },
+        ],
+      ),
+    ).toHaveLength(1);
+  });
+
   it('fails closed for @internal renderedHtml over unprovable raw bytes', () => {
     const messages = kv426(`
 import { renderedHtml } from '@kovojs/server/internal/html';
@@ -676,6 +712,19 @@ export const C = component({
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toContain('renderedHtml() sends data whose provenance cannot be proven');
+  });
+
+  it('flags a same-file wrapper helper that directly mints renderedHtml', () => {
+    expect(
+      kv426(`
+import { renderedHtml } from '@kovojs/server/internal/html';
+const unsafeRender = (value: string) => renderedHtml(value);
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => unsafeRender(post.body),
+});
+`),
+    ).toHaveLength(2);
   });
 
   it('fails closed for computed @internal renderedHtml namespace calls', () => {
