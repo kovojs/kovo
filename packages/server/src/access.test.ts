@@ -103,7 +103,7 @@ describe('structured access metadata', () => {
       input: s.object({ id: s.string() }),
       handler: () => 'ok',
     });
-    const request = { session: { user: { roles: ['staff'] } } };
+    const request = { session: { user: { id: 'u1', roles: ['staff'] } } };
 
     const routeForbidden = await renderRoutePageResponse(guardedRoute, {}, request, String, {
       renderForbidden: () => '<main>Forbidden</main>',
@@ -137,9 +137,10 @@ describe('structured access metadata', () => {
       status: 403,
     });
     await expect(runMutation(guardedMutation, { id: '1' }, request)).resolves.toEqual({
+      auth: 'unauthorized',
       error: { code: 'UNAUTHORIZED', payload: {} },
       ok: false,
-      status: 422,
+      status: 403,
     });
   });
 

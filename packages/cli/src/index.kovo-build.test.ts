@@ -3414,11 +3414,14 @@ function styleCreateHostComponentSource(name: string, host: string, color: strin
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
-const styles = style.create({
-  root: {
-    color: '${color}',
+const styles = style.create(
+  {
+    root: {
+      color: '${color}',
+    },
   },
-});
+  { namespace: '${host}' },
+);
 
 export const ${name} = component({
   render: () => <${host} {...style.attrs(styles.root)}>${name}</${host}>,

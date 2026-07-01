@@ -957,7 +957,7 @@ describe('server mutation response replay', () => {
     let handlerCalls = 0;
     const protectedMutation = mutation('cart/add', {
       guard(request: { authed: boolean; sessionId?: string }) {
-        return request.authed;
+        return request.authed ? true : { kind: 'unauthenticated' as const };
       },
       input: s.object({ productId: s.string() }),
       handler(input) {

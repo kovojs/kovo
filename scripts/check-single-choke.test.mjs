@@ -17,9 +17,12 @@ describe('single managed DB choke gate', () => {
   it('accepts driver execution inside enforceManagedSql() choke plumbing', () => {
     const result = runFixture({
       'packages/server/src/sql-safe-handle.ts': `
-export function enforceManagedSql(statement, mode, writePolicy) {
-  return validate(statement, mode, writePolicy);
-}
+export const enforceManagedSql = securityClassifier(
+  'server.sql.enforce-managed-sql',
+  function (statement, mode, writePolicy) {
+    return validate(statement, mode, writePolicy);
+  },
+);
 export function wrap(db) {
   db.execute(statement);
   db.query(statement);
@@ -79,7 +82,7 @@ export function leak(handle) {
     const result = runFixture({
       'packages/server/src/sql-safe-handle.ts': `
 export function enforceManagedSql(statement) { return statement; }
-export function enforceManagedSql(statement, mode) { return mode; }
+export const enforceManagedSql = securityClassifier('server.sql.enforce-managed-sql', function (statement, mode) { return mode; });
 `,
     });
 

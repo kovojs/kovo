@@ -84,9 +84,9 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
   it('emits each @keyframes block once for keyframes-using components (SPEC §13.1)', () => {
     const css = uiExtraction().css ?? '';
     // skeleton pulse, progress indeterminate slide, tabs panel fade are restored.
-    const keyframeNames = [
-      ...css.matchAll(/@keyframes (kv-keyframes-[a-z0-9]+)\{/g),
-    ].map((match) => match[1]);
+    const keyframeNames = [...css.matchAll(/@keyframes (kv-keyframes-[a-z0-9]+)\{/g)].map(
+      (match) => match[1],
+    );
     expect(new Set(keyframeNames).size).toBe(keyframeNames.length);
     expect(keyframeNames.length).toBeGreaterThanOrEqual(3);
     for (const name of keyframeNames) {
@@ -98,7 +98,9 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
       'kv-tabs-animation-',
     ]) {
       expect(css).toMatch(
-        new RegExp(`\\.${prefix}[a-z0-9]+(?:\\[[^\\]]+\\])?\\{animation-name:kv-keyframes-[a-z0-9]+\\}`),
+        new RegExp(
+          `\\.${prefix}[a-z0-9]+(?:\\[[^\\]]+\\])?\\{animation-name:kv-keyframes-[a-z0-9]+\\}`,
+        ),
       );
     }
     // Keyframes carry no cascade priority, so they are emitted outside @layer.

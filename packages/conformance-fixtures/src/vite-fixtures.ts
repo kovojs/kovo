@@ -373,6 +373,9 @@ export async function viteRedGreenBuildFixtureFact(
         `      '@kovojs/core/internal/route-pattern': ${JSON.stringify(
           join(options.projectRoot, 'dist/core/src/internal/route-pattern.mjs'),
         )},`,
+        `      '@kovojs/core/internal/security-markers': ${JSON.stringify(
+          join(options.projectRoot, 'dist/core/src/internal/security-markers.mjs'),
+        )},`,
         `      '@kovojs/core/internal/module-ref': ${JSON.stringify(
           join(options.projectRoot, 'dist/core/src/internal/module-ref.mjs'),
         )},`,

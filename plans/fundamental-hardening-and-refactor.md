@@ -261,9 +261,9 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     import/alias shapes). `scripts/check-green-corpus.mjs` builds the DEC10 corpus on both dialects and asserts zero new
     KV errors; wire into `check`.
   - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/adversarial-corpus.test.ts
-    packages/conformance-fixtures/src/adversarial-corpus.green.test.ts
-    packages/conformance-fixtures/src/package-exports.test.ts scripts/check-green-corpus.test.mjs`, `pnpm run
-    check:green-corpus`, `pnpm run check:api-surface`, touched-file `vp check`, and `git diff --check` passed after the
+packages/conformance-fixtures/src/adversarial-corpus.green.test.ts
+packages/conformance-fixtures/src/package-exports.test.ts scripts/check-green-corpus.test.mjs`, `pnpm run
+check:green-corpus`, `pnpm run check:api-surface`, touched-file `vp check`, and `git diff --check` passed after the
     DEC10 corpus added SQL, taint-expression, and import-alias adversarial seeds plus 18 dialect-expanded green rows
     proving no compiler KV diagnostics and SQL allowlist/static/trusted/separated-carrier validation.
 - [x] **G5 — Matrix + adversary map (DEC8/DEC9, M13).**
@@ -271,14 +271,14 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     `packages/conformance-fixtures/src/gate-adversary-map.ts` encoding DEC9 + a test that every branded gate has an
     adversary and a matching hostile test.
   - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts
-    packages/conformance-fixtures/src/gate-adversary-map.test.ts
-    packages/conformance-fixtures/src/package-exports.test.ts` proves the CI kovo-check matrix equals the six DEC8
+packages/conformance-fixtures/src/gate-adversary-map.test.ts
+packages/conformance-fixtures/src/package-exports.test.ts` proves the CI kovo-check matrix equals the six DEC8
     rows and every branded gate has a DEC9 adversary plus an existing hostile test; strict standalone `pnpm exec tsc
-    --ignoreConfig --noEmit --pretty false --module NodeNext --moduleResolution NodeNext --target ES2024 --types
-    node,vitest --strict --skipLibCheck --allowImportingTsExtensions --exactOptionalPropertyTypes
-    --noUncheckedIndexedAccess packages/conformance-fixtures/src/gate-adversary-map.ts
-    packages/conformance-fixtures/src/gate-adversary-map.test.ts packages/conformance-fixtures/src/command-fixtures.ts
-    packages/conformance-fixtures/src/command-fixtures.test.ts`, `pnpm run check:api-surface`, Ruby YAML parse of
+--ignoreConfig --noEmit --pretty false --module NodeNext --moduleResolution NodeNext --target ES2024 --types
+node,vitest --strict --skipLibCheck --allowImportingTsExtensions --exactOptionalPropertyTypes
+--noUncheckedIndexedAccess packages/conformance-fixtures/src/gate-adversary-map.ts
+packages/conformance-fixtures/src/gate-adversary-map.test.ts packages/conformance-fixtures/src/command-fixtures.ts
+packages/conformance-fixtures/src/command-fixtures.test.ts`, `pnpm run check:api-surface`, Ruby YAML parse of
     `.github/workflows/ci.yml`, and `git diff --check` passed.
 - [x] **K — Fail-closed KV426 recognizer (closes `bugz-26` B2; after C2).**
   - Problem (verified): direct `trustedHtml(request.headers.get('x-xss')??'')` → KV426 RED, but
@@ -295,10 +295,10 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     refuses an un-branded raw-HTML value.
   - Verify: object-literal member fires KV426 in a real `kovo build`; alias/as-cast/comma still fire (they already do).
   - Evidence: `pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts
-    packages/compiler/src/trusted-html-provenance.test.ts`, `pnpm exec vitest --run
-    packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "blocks trusted output provenance leaks through
-    the production build artifact"`, `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts -t "safely no-ops
-    dynamic plain strings and unbranded objects in raw HTML sinks"`, `pnpm run check:security-brands`, and
+packages/compiler/src/trusted-html-provenance.test.ts`, `pnpm exec vitest --run
+packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "blocks trusted output provenance leaks through
+the production build artifact"`, `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts -t "safely no-ops
+dynamic plain strings and unbranded objects in raw HTML sinks"`, `pnpm run check:security-brands`, and
     `git diff --check` passed after the source-only identity resolver learned static object-literal member aliases and the
     prod-artifact KV426 proof enrolled `trustedOutputAlias.html(request-header)`.
 - [x] **L — Value-flow: narrow proven-off-wire allowlist + mutation-handler wire (closes `bugz-26` B3, B4).**
@@ -319,9 +319,9 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
   - Verify: the arrow-closure laundering + the mutation-handler secret-return both fail closed; a legitimate non-secret
     literal return stays green (DEC10 corpus).
   - Evidence: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts
-    packages/drizzle/src/static-analysis-context.test.ts packages/core/src/internal/wire-json.test.ts
-    packages/core/src/secret.test.ts packages/core/src/index.test.ts`, `pnpm run check:green-corpus`, `pnpm run
-    check:api-surface`, `pnpm run check:security-brands`, touched-file `vp check --fix`, and `git diff --check` passed
+packages/drizzle/src/static-analysis-context.test.ts packages/core/src/internal/wire-json.test.ts
+packages/core/src/secret.test.ts packages/core/src/index.test.ts`, `pnpm run check:green-corpus`, `pnpm run
+check:api-surface`, `pnpm run check:security-brands`, touched-file `vp check --fix`, and `git diff --check` passed
     after closure helper laundering and mutation-handler secret returns fired KV435, runtime `secret(...)` boxes failed
     closed at the shared wire JSON codec, and `declareOffWire(() => ..., { justification })` provided a non-returning
     reviewed escape for server-only helper reads while still rejecting hidden writes to returned query data.
@@ -342,11 +342,11 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     `Response`/document/header outside it. P.3: route task `ctx.fetch` + webhook + agent-tool egress through the egress
     floor; structural test that outbound-network primitives appear only behind it.
   - Evidence: `pnpm exec vitest --run scripts/check-wire-output-boundary.test.mjs scripts/check-egress-boundary.test.mjs
-    packages/server/src/response.test.ts packages/server/src/response-posture.test.ts packages/server/src/endpoint.test.ts
-    packages/server/src/capability-route.test.ts packages/server/src/app.test.ts
-    packages/server/src/app-mutation-request.test.ts packages/drizzle/src/static-analysis-context.test.ts
-    packages/core/src/internal/wire-json.test.ts`, `pnpm run check:wire-output-boundary && pnpm run
-    check:egress-boundary`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after structured
+packages/server/src/response.test.ts packages/server/src/response-posture.test.ts packages/server/src/endpoint.test.ts
+packages/server/src/capability-route.test.ts packages/server/src/app.test.ts
+packages/server/src/app-mutation-request.test.ts packages/drizzle/src/static-analysis-context.test.ts
+packages/core/src/internal/wire-json.test.ts`, `pnpm run check:wire-output-boundary && pnpm run
+check:egress-boundary`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after structured
     response finalization routed through `emitToWire()`, the wire-output gate rejected direct response/header canaries,
     and the existing egress boundary gate proved outbound primitives remain behind the DEC6 egress floor.
 

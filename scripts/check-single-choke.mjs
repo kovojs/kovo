@@ -57,7 +57,7 @@ export function checkSingleChoke(options = {}) {
     findings.push(`${chokePath}: managed SQL choke file is missing`);
   } else {
     const chokeText = readText(chokePath);
-    const declarations = [...chokeText.matchAll(/\bfunction\s+enforceManagedSql\s*\(/gu)];
+    const declarations = [...enforceManagedSqlDeclarationIndexes(chokeText)];
     if (declarations.length !== 1) {
       findings.push(
         `${chokePath}: expected exactly one enforceManagedSql() declaration, found ${declarations.length}`,
@@ -119,6 +119,16 @@ function isAllowedManagedHandleFactoryFile(filePath) {
     filePath === 'packages/server/src/guards.ts' ||
     filePath === 'packages/server/src/webhook.ts'
   );
+}
+
+function* enforceManagedSqlDeclarationIndexes(sourceText) {
+  const patterns = [
+    /\bfunction\s+enforceManagedSql\s*\(/gu,
+    /\b(?:export\s+)?const\s+enforceManagedSql\s*=\s*securityClassifier\s*\(/gu,
+  ];
+  for (const pattern of patterns) {
+    for (const match of sourceText.matchAll(pattern)) yield match.index ?? 0;
+  }
 }
 
 function* sqlDriverPropertyUses(sourceText) {

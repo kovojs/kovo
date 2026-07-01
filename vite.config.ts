@@ -334,6 +334,7 @@ export default defineConfig({
       'packages/core/src/internal/query-delta.ts',
       'packages/core/src/internal/render-plan-token.ts',
       'packages/core/src/internal/route-pattern.ts',
+      'packages/core/src/internal/security-markers.ts',
       'packages/core/src/internal/security-url.ts',
       'packages/core/src/internal/semantic-attributes.ts',
       'packages/core/src/internal/sink-policy.ts',

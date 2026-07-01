@@ -24,6 +24,7 @@ export type {
   SelectChangeDetail,
   SelectOpenChangeDetail,
   SelectChangeOptions,
+  SelectKeyDownOptions,
   SelectChangeResult,
   SelectOpenChangeResult,
   SelectMoveResult,

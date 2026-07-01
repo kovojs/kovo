@@ -236,7 +236,10 @@ function inferStyleCallSite(): StyleCallSite | null {
   const site = styleStackCallSite();
   if (!site) return null;
   const filePath = slashPath(site.filePath);
-  if (!filePath.includes('/packages/ui/src/') && !filePath.includes('/node_modules/@kovojs/ui/src/')) {
+  if (
+    !filePath.includes('/packages/ui/src/') &&
+    !filePath.includes('/node_modules/@kovojs/ui/src/')
+  ) {
     return null;
   }
 

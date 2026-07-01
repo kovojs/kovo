@@ -104,6 +104,7 @@ describe('vite-fixtures', () => {
         'const requiredAliases = [',
         "  '@kovojs/core/internal/module-ref',",
         "  '@kovojs/core/internal/route-pattern',",
+        "  '@kovojs/core/internal/security-markers',",
         "  '@kovojs/core/internal/wire-json',",
         '];',
         'for (const alias of requiredAliases) {',

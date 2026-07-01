@@ -435,6 +435,7 @@ describe('server app-shell public API barrels', () => {
       // SPEC §6.6 / plans/most-secure-web-framework.md §3: shell-free command
       // execution is available only through this minted command sink primitive.
       cmd: commandApi.cmd,
+      commandAllowlist: commandApi.commandAllowlist,
       runCommand: commandApi.runCommand,
       // SPEC §6.6 / plans/most-secure-web-framework.md OPP-10: argon2id-only password sink.
       PASSWORD_ARGON2ID_DEFAULTS: passwordApi.PASSWORD_ARGON2ID_DEFAULTS,

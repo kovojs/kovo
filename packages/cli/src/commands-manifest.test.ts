@@ -157,8 +157,6 @@ describe('commands manifest', () => {
     // hard-coding the usage literals, so they cannot diverge.
     expect(cliCommandSource).toMatch(/from '\.\.?\/commands-manifest\.js'/);
     for (const constant of [
-      'CHECK_USAGE',
-      'AUDIT_USAGE',
       'ADD_USAGE',
       'BUILD_USAGE',
       'COMPILE_USAGE',

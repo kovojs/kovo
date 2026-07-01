@@ -144,9 +144,11 @@ describe('create-kovo starter (build integration: production response header art
       expect(rawCookies[0]).toContain('SameSite=Lax');
 
       const rawRedirect = await fetch(`${origin}/raw-header-redirect`, { redirect: 'manual' });
-      expect(rawRedirect.status).toBe(303);
-      expect(rawRedirect.headers.get('location')).toBe('/');
+      const rawRedirectBody = await rawRedirect.text();
+      expect(rawRedirect.status, rawRedirectBody).toBe(500);
+      expect(rawRedirect.headers.get('location')).toBeNull();
       expect(rawRedirect.headers.getSetCookie()).toEqual([]);
+      expect(rawRedirectBody).toContain('Server Error');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });

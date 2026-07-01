@@ -211,7 +211,7 @@ describe('route and query guard responses', () => {
     const routeForbidden = await renderRoutePageResponse(
       adminRoute,
       {},
-      { session: { user: { roles: ['staff'] } } },
+      { session: { user: { id: 'u1', roles: ['staff'] } } },
       String,
       {
         renderForbidden: () => '<main>Forbidden</main>',
@@ -246,7 +246,7 @@ describe('route and query guard responses', () => {
     });
     const queryForbidden = await renderQueryEndpointResponse(adminQuery, {
       renderForbidden: () => '<main>Query forbidden</main>',
-      request: { session: { user: { roles: ['staff'] } } },
+      request: { session: { user: { id: 'u1', roles: ['staff'] } } },
     });
     expect(queryForbidden).toMatchObject({
       body: '<main>Query forbidden</main>',
