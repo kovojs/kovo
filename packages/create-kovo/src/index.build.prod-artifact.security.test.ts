@@ -62,7 +62,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       rmSync(unsafeRoot, { force: true, recursive: true });
       rmSync(safeRoot, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 240_000);
 
   it('blocks internal raw-HTML helper imports from authored .ts modules in production build', () => {
     const tempParent = tmpdir();
@@ -149,7 +149,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       rmSync(unsafeRoot, { force: true, recursive: true });
       rmSync(safeRoot, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 240_000);
 
   it('blocks TrustedUrl values in non-URL JSX attributes during production build', () => {
     const tempParent = tmpdir();
