@@ -147,6 +147,10 @@ const weakenedKv311IslandDeriveProofEnrollmentBranch = [
   '    ],',
 ].join('\n');
 
+const kv435SafeSiblingProofNeedle = `      'addAuthSecretLeakProof(safeRoot, { leakToWire: false })',`;
+
+const weakenedKv435SafeSiblingProofNeedle = `      'addAuthSecretLeakProof(safeRoot)',`;
+
 const productionBuildInvocationBranch = [
   '  if (!testBlockHasBuildInvocation(testBlock, proof.buildInvocation)) {',
   '    violations.push(',
@@ -470,6 +474,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: kv311IslandDeriveProofEnrollmentBranch,
     sourceFile: securityTestBuildGatePath,
     test: assertKv311IslandDeriveProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Weakens the KV435 value-flow proof enrollment so the safe sibling no longer proves server-only secret reads stay green.',
+    expectedKiller:
+      'KV435 value-flow proof enrollment must retain the explicit safe sibling build needle',
+    name: 'security-test-build-gate/weaken-kv435-safe-sibling-proof-enrollment',
+    replacement: weakenedKv435SafeSiblingProofNeedle,
+    search: kv435SafeSiblingProofNeedle,
+    sourceFile: securityTestBuildGatePath,
+    test: assertKv435SafeSiblingProofEnrollmentIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -969,6 +985,22 @@ async function assertKv311IslandDeriveProofEnrollmentIsPinned(moduleUnderTest) {
     if (!proof.requiredNeedles?.includes(needle)) {
       throw new Error(`KV311 island-derive proof must require ${JSON.stringify(needle)}`);
     }
+  }
+}
+
+async function assertKv435SafeSiblingProofEnrollmentIsPinned(moduleUnderTest) {
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV435' &&
+      candidate.claimId === 'value-flow-sibling-laundering' &&
+      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  );
+  if (!proof) throw new Error('KV435 value-flow sibling production build proof is not enrolled');
+  const needle = 'addAuthSecretLeakProof(safeRoot, { leakToWire: false })';
+  if (!proof.requiredNeedles?.includes(needle)) {
+    throw new Error(
+      `KV435 value-flow proof must require the safe sibling build needle ${JSON.stringify(needle)}`,
+    );
   }
 }
 

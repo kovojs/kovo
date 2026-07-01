@@ -2504,6 +2504,11 @@ function queryInlineCallback(callback: Node): boolean {
           table: scalarProjectionTable(valueNode) ?? '',
         });
       }
+      if (!scalarShape && !opaqueProjection) {
+        projectedColumns.push(
+          ...secretValueFlowProjectedColumns(valueNode, path, context.columnShapes),
+        );
+      }
       const table = scalarProjectionTable(valueNode);
       if (table) {
         scalarTables.add(table);
@@ -2530,6 +2535,80 @@ function queryInlineCallback(callback: Node): boolean {
     scalarTables,
     unresolvedPaths,
   };
+}
+
+function secretValueFlowProjectedColumns(
+  expression: ts.Expression,
+  path: string,
+  columnShapes: Readonly<Record<string, QueryShape>>,
+): QueryProjectedColumn[] {
+  const columns: QueryProjectedColumn[] = [];
+  const seen = new Set<string>();
+
+  const appendSecretExpression = (node: ts.Expression): void => {
+    const columnPath = staticTsExpressionPath(node);
+    if (columnPath) {
+      const columnShape = columnShapes[columnPath];
+      if (columnShape && queryShapeContainsSecret(columnShape)) {
+        const key = `column:${columnPath}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          appendProjectedColumn(columns, {
+            path,
+            shape: columnShape,
+            site: sourcePosition(node),
+            tablePath: columnPath,
+          });
+        }
+      }
+
+      const tableRow = tableRowQueryShape(node, columnShapes);
+      if (tableRow && queryShapeContainsSecret(tableRow)) {
+        const key = `row:${tableRow.table}`;
+        if (!seen.has(key)) {
+          seen.add(key);
+          appendProjectedColumn(columns, {
+            path,
+            shape: tableRow,
+            site: sourcePosition(node),
+          });
+        }
+      }
+      return;
+    }
+
+    node.forEachChild((child) => {
+      if (ts.isExpression(child)) {
+        appendSecretExpression(unwrappedTsExpression(child));
+        return;
+      }
+      visitSecretExpressionChildren(child);
+    });
+  };
+
+  const visitSecretExpressionChildren = (node: ts.Node): void => {
+    node.forEachChild((child) => {
+      if (ts.isExpression(child)) {
+        appendSecretExpression(unwrappedTsExpression(child));
+        return;
+      }
+      visitSecretExpressionChildren(child);
+    });
+  };
+
+  // SPEC §11.1 / §11.3 KV435: a returned value expression that wraps a secret column
+  // (JSON/template/call/binary/logical/nullish/reduce/map/etc.) is still a secret read
+  // reaching the query wire. Unknown expression forms remain KV406 via unresolvedPaths above.
+  appendSecretExpression(unwrappedTsExpression(expression));
+
+  return dedupeProjectedColumns(columns).map((column) => ({
+    ...column,
+    site: column.site || sourcePosition(expression),
+  }));
+}
+
+function dedupeProjectedColumns(columns: readonly QueryProjectedColumn[]): QueryProjectedColumn[] {
+  return [...new Map(columns.map((column) => [JSON.stringify(column), column])).values()];
 }
 
 /** @internal */ export function projectionPropertyName(name: ts.PropertyName): string | undefined {

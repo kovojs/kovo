@@ -90,8 +90,25 @@ export const SECURITY_BUILD_PROOFS = [
     code: 'KV435',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     requiredNeedles: [
-      'addAuthSecretLeakProof(root)',
-      'buildProductionArtifact(root)',
+      'addAuthSecretLeakProof(unsafeRoot)',
+      'buildProductionArtifact(unsafeRoot)',
+      'KV435',
+      'Secret query value reaches the client wire',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'blocks local-helper Better Auth credential laundering from the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'value-flow-sibling-laundering',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addAuthSecretLeakProof(unsafeRoot)',
+      'buildProductionArtifact(unsafeRoot)',
+      'addAuthSecretLeakProof(safeRoot, { leakToWire: false })',
+      'buildProductionArtifact(safeRoot)',
       'KV435',
       'Secret query value reaches the client wire',
     ],

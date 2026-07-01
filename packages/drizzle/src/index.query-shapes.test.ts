@@ -1550,6 +1550,72 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('reports KV435 and KV406 for transformed secret column projections', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: `
+          function wrap(value: string | null): string {
+            return value ?? "";
+          }
+
+          export const users = pgTable("users", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+            passwordHash: text("password_hash"),
+          }, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));
+
+          export const userList = query("user", {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.select({
+                binary: users.passwordHash ?? "",
+                call: wrap(users.passwordHash),
+                json: JSON.stringify({ value: users.passwordHash }),
+                logical: users.passwordHash || users.name,
+                template: \`\${users.passwordHash}\`,
+              }).from(users);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    const diagnostics = diagnosticsForQueryFacts(facts);
+    expect(diagnostics.filter((diagnostic) => diagnostic.code === 'KV435')).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining('Query projection user.binary reads a secret-classified'),
+      }),
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining('Query projection user.call reads a secret-classified'),
+      }),
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining('Query projection user.json reads a secret-classified'),
+      }),
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining('Query projection user.logical reads a secret-classified'),
+      }),
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining(
+          'Query projection user.template reads a secret-classified',
+        ),
+      }),
+    ]);
+    expect(diagnostics.filter((diagnostic) => diagnostic.code === 'KV406')).toEqual([
+      expect.objectContaining({ code: 'KV406', message: expect.stringContaining('user.binary') }),
+      expect.objectContaining({ code: 'KV406', message: expect.stringContaining('user.call') }),
+      expect.objectContaining({ code: 'KV406', message: expect.stringContaining('user.json') }),
+      expect.objectContaining({ code: 'KV406', message: expect.stringContaining('user.logical') }),
+      expect.objectContaining({ code: 'KV406', message: expect.stringContaining('user.template') }),
+    ]);
+  });
+
   it('reports KV435 when a second select launders a secret through find and assignment', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -1648,6 +1714,18 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         '  const payload = { ...secretRow, encoded: JSON.stringify({ value: `${wrapSecret(secretRow.secret)}` }) };',
         '  secretById.set(payload.id, payload.encoded);',
         '});',
+        'return items.map((item) => ({ ...item, company: secretById.get(item.id) ?? null }));',
+      ],
+    ],
+    [
+      'reduce into a Map plus nullish/template wrappers',
+      [
+        'const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);',
+        'const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);',
+        'const secretById = secretRows.reduce((acc, secretRow) => {',
+        '  acc.set(secretRow.id, `${secretRow.secret ?? ""}`);',
+        '  return acc;',
+        '}, new Map<string, string>());',
         'return items.map((item) => ({ ...item, company: secretById.get(item.id) ?? null }));',
       ],
     ],
