@@ -48,8 +48,8 @@ the IR/fact-store migration in C1.
 
 ## Active Worker Slices
 
-- [ ] **B1. Finish remaining TS-AST semantic identity hardening.**
-  - Owner: worker `019f1bdd-fc74-78e1-9fe2-e26e138a629d`.
+- [x] **B1. Finish remaining TS-AST semantic identity hardening.**
+  - Owner: worker `019f1bdd-fc74-78e1-9fe2-e26e138a629d`, integrated as `dcb8202ed`.
   - Files:
     `packages/compiler/src/validate/client-capture.ts`,
     `packages/compiler/src/client-secret-capture.test.ts`,
@@ -58,17 +58,18 @@ the IR/fact-store migration in C1.
     `packages/drizzle/src/index.query-shapes.test.ts`,
     `packages/server/src/internal/data-plane-static-analysis.ts`,
     `packages/server/src/vite-data-plane-gate.test.ts`.
-  - [ ] Route KV437 `publishToClient` handling through framework identity, not raw callee text.
-  - [ ] Cover `publishToClient` import alias, namespace import, local re-export barrel, and local-shadow
+  - [x] Route KV437 `publishToClient` handling through framework identity, not raw callee text.
+  - [x] Cover `publishToClient` import alias, namespace import, local re-export barrel, and local-shadow
         with real import.
-  - [ ] Route Drizzle `trustedReveal`, typed `sql<T>` projection, and aggregate helper projection
+  - [x] Route Drizzle `trustedReveal`, typed `sql<T>` projection, and aggregate helper projection
         recognition through resolver-backed identity with scope-aware shadow rejection.
-  - [ ] Add missing Drizzle identity exports for `avgDistinct` and `sumDistinct` if still absent.
-  - [ ] Cover Drizzle local shadow with real import, import alias, namespace import, local const alias, and
+  - [x] Add missing Drizzle identity exports for `avgDistinct` and `sumDistinct` if still absent.
+  - [x] Cover Drizzle local shadow with real import, import alias, namespace import, local const alias, and
         local barrel re-export for the projection helpers above.
-  - [ ] Register sibling source files for non-Drizzle output-schema extraction so a local barrel re-export
+  - [x] Register sibling source files for non-Drizzle output-schema extraction so a local barrel re-export
         of `query` still produces output shape facts and KV302.
-  - Acceptance: `node scripts/fundamental-fixes-inventory.mjs`; `vp exec vitest --run
+  - Evidence: `node scripts/fundamental-fixes-inventory.mjs` now reports 47 literal/import candidates;
+    `vp exec vitest --run
 packages/compiler/src/client-secret-capture.test.ts packages/drizzle/src/index.query-shapes.test.ts
 packages/server/src/vite-data-plane-gate.test.ts
 packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `git diff --check`;
