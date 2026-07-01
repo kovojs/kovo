@@ -336,6 +336,10 @@ describe('deriveDownloadKey: request-derived expected key', () => {
     expect(deriveDownloadKey(`${BASE}/receipts/ord_1.pdf`, BASE)).toBe('receipts/ord_1.pdf');
   });
 
+  it('normalizes a trailing slash on the mount base before deriving the key', () => {
+    expect(deriveDownloadKey(`${BASE}/receipts/ord_1.pdf`, `${BASE}/`)).toBe('receipts/ord_1.pdf');
+  });
+
   it('returns undefined for a path not under the mount', () => {
     expect(deriveDownloadKey('/other/a.pdf', BASE)).toBeUndefined();
   });
@@ -346,6 +350,14 @@ describe('deriveDownloadKey: request-derived expected key', () => {
 
   it('returns undefined for a traversal key (fail closed)', () => {
     expect(deriveDownloadKey(`${BASE}/../etc/passwd`, BASE)).toBeUndefined();
+  });
+
+  it('returns undefined for an unsafe capability base path', () => {
+    expect(deriveDownloadKey(`${BASE}/a.pdf`, 'https://evil.example/downloads')).toBeUndefined();
+    expect(deriveDownloadKey(`${BASE}/a.pdf`, '//evil.example/downloads')).toBeUndefined();
+    expect(
+      deriveDownloadKey(`${BASE}/a.pdf`, '/downloads\r\nSet-Cookie: c2=owned'),
+    ).toBeUndefined();
   });
 });
 
@@ -359,6 +371,35 @@ describe('ctx.signUrl: mint shape + audit facts', () => {
     expect(url).toContain(encodeURIComponent(token));
     expect(key).toBe('receipts/ord_1.pdf');
     expect(oneTime).toBe(false);
+  });
+
+  it('rejects unsafe capability URL base paths before minting bearer URLs', () => {
+    for (const basePath of [
+      '/',
+      'https://evil.example/downloads',
+      '//evil.example/downloads',
+      '/\\evil.example/downloads',
+      '/downloads\\evil',
+      '/downloads?next=/other',
+      '/downloads#fragment',
+      '/downloads\r\nSet-Cookie: c2=owned',
+    ]) {
+      expect(() => createSignUrl({ basePath, secret: SECRET }), basePath).toThrow(
+        /Capability URL basePath/u,
+      );
+    }
+  });
+
+  it('rejects unsafe storage download endpoint mount paths at the verify sink', async () => {
+    const storage = await storageWith('a.pdf', 'A');
+
+    expect(() =>
+      createStorageDownloadEndpoint({
+        basePath: 'https://evil.example/downloads',
+        secret: SECRET,
+        storage,
+      }),
+    ).toThrow(/Capability URL basePath/u);
   });
 
   it('refuses to mint one-time URLs unless the signer is bound to a replay-store endpoint', async () => {

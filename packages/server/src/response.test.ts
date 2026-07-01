@@ -233,6 +233,22 @@ describe('server response adapters', () => {
     }
   });
 
+  it('revalidates mutable blessed redirect Location headers at the final sink', () => {
+    const response = blessRedirectResponse({
+      body: '',
+      headers: { Location: redirectLocationHeader('/account') },
+      status: 303,
+    });
+    response.headers.Location = 'https://evil.example/phish\r\nSet-Cookie: c2=owned';
+
+    const finalized = serverResponseToWebResponse(response, { method: 'GET' });
+
+    expect(finalized.headers.get('location')).toBe('/');
+    expect((finalized.headers as Headers & { getSetCookie(): string[] }).getSetCookie()).toEqual(
+      [],
+    );
+  });
+
   it('fails closed for unblessed redirect Location headers at the web response boundary', () => {
     const events: unknown[] = [];
     const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
