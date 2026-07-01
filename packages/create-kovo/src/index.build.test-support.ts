@@ -893,6 +893,7 @@ export function addTrustedOutputProvenanceBuildProof(
     [
       "const dynamicTrustedUrlKey: 'trustedUrl' = 'trustedUrl';",
       "const dynamicTrustedHtmlKey: 'trustedHtml' = 'trustedHtml';",
+      'const trustedOutputAlias = { html: trustedHtml };',
       '',
       'const TrustedOutputProvenanceProof = component({',
       '  queries: { contacts: contactsQuery },',
@@ -921,6 +922,9 @@ export function addTrustedOutputProvenanceBuildProof(
       unsafe
         ? '      {browserTrust[dynamicTrustedHtmlKey](slots.request?.headers.get("x-dynamic-proof") ?? "")}'
         : '      {trustedHtml(slots.request?.headers.get("x-dynamic-proof") ?? "", "reviewed dynamic trusted output request header")}',
+      unsafe
+        ? '      {trustedOutputAlias.html(slots.request?.headers.get("x-object-proof") ?? "")}'
+        : '      {trustedHtml(slots.request?.headers.get("x-object-proof") ?? "", "reviewed object trusted output request header")}',
       '    </main>',
       '  ),',
       '});',

@@ -525,6 +525,21 @@ export const C = component({
     ).toHaveLength(0);
   });
 
+  it('resolves trustedHtml through a local object-literal member alias', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+const trust = { html: trustedHtml };
+export const C = component({
+  render: ({}, _state, { request }) => {
+    const reflected = request.headers.get('x-xss') ?? '';
+    return <article>{trust.html(reflected)}</article>;
+  },
+});
+`),
+    ).toHaveLength(1);
+  });
+
   it('resolves literal element access and fails closed for computed Kovo namespace keys', () => {
     expect(
       kv426(`

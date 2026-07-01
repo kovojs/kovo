@@ -50,9 +50,11 @@ export type FrameworkIdentityTypeScript = Pick<
   | 'isNamespaceImport'
   | 'isNonNullExpression'
   | 'isObjectBindingPattern'
+  | 'isObjectLiteralExpression'
   | 'isParameter'
   | 'isParenthesizedExpression'
   | 'isPropertyAccessExpression'
+  | 'isPropertyAssignment'
   | 'isSatisfiesExpression'
   | 'isSourceFile'
   | 'isStringLiteralLike'
@@ -498,6 +500,42 @@ function namespaceMemberIdentity(
       depth + 1,
     );
     return receiverIdentity?.exportName === member ? receiverIdentity : undefined;
+  }
+
+  if (ts.isObjectLiteralExpression(expression)) {
+    return objectLiteralMemberIdentity(
+      ts,
+      sourceFile,
+      expression,
+      member,
+      options,
+      seen,
+      depth + 1,
+    );
+  }
+
+  return undefined;
+}
+
+function objectLiteralMemberIdentity(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  object: TypeScript.ObjectLiteralExpression,
+  member: string,
+  options: FrameworkIdentityOptions,
+  seen: Set<string>,
+  depth: number,
+): FrameworkExportIdentity | undefined {
+  if (depth > MAX_RESOLUTION_DEPTH) return undefined;
+  const key = `object:${object.getStart(sourceFile)}:${member}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property)) continue;
+    const propertyName = propertyNameText(ts, property.name);
+    if (propertyName !== member) continue;
+    return canonicalExpression(ts, sourceFile, property.initializer, options, seen, depth + 1);
   }
 
   return undefined;

@@ -203,6 +203,50 @@ describe('framework identity resolver', () => {
     ).toBeUndefined();
   });
 
+  it('resolves framework exports through local object literal members', () => {
+    const usage = sourceFile(
+      '/app/usage.tsx',
+      [
+        "import { trustedHtml } from '@kovojs/browser';",
+        'const trust = { html: trustedHtml };',
+        'const alias = trust;',
+        "trust.html('<strong>ok</strong>');",
+        "alias.html('<strong>ok</strong>');",
+        "trust['html']('<strong>ok</strong>');",
+        "trust[String('html')]('<strong>opaque</strong>');",
+      ].join('\n'),
+    );
+
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        usage,
+        callExpressionByText(usage, 'trust.html').expression,
+      ),
+    ).toEqual(trustedHtmlIdentity);
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        usage,
+        callExpressionByText(usage, 'alias.html').expression,
+      ),
+    ).toEqual(trustedHtmlIdentity);
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        usage,
+        callExpressionByText(usage, "trust['html']").expression,
+      ),
+    ).toEqual(trustedHtmlIdentity);
+    expect(
+      canonicalFrameworkExportForExpression(
+        ts,
+        usage,
+        callExpressionByText(usage, "trust[String('html')]").expression,
+      ),
+    ).toBeUndefined();
+  });
+
   it('indexes fail-closed expression kinds for source span lookups', () => {
     const usage = sourceFile(
       '/app/usage.tsx',

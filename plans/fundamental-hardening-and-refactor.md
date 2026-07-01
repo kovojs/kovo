@@ -274,7 +274,7 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     packages/conformance-fixtures/src/gate-adversary-map.test.ts packages/conformance-fixtures/src/command-fixtures.ts
     packages/conformance-fixtures/src/command-fixtures.test.ts`, `pnpm run check:api-surface`, Ruby YAML parse of
     `.github/workflows/ci.yml`, and `git diff --check` passed.
-- [ ] **K — Fail-closed KV426 recognizer (closes `bugz-26` B2; after C2).**
+- [x] **K — Fail-closed KV426 recognizer (closes `bugz-26` B2; after C2).**
   - Problem (verified): direct `trustedHtml(request.headers.get('x-xss')??'')` → KV426 RED, but
     `const trust = { html: trustedHtml }; trust.html(reflected)` → GREEN, and the prod artifact reflects
     `<script>alert(document.cookie)</script>` from an `x-xss` header verbatim. Root: the KV426 recognizer
@@ -288,6 +288,13 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     incl. `trustedUrl` and every raw-HTML/URL sink); **K.3** runtime twin (M10) — the SSR renderer (DEC5 wire choke)
     refuses an un-branded raw-HTML value.
   - Verify: object-literal member fires KV426 in a real `kovo build`; alias/as-cast/comma still fire (they already do).
+  - Evidence: `pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts
+    packages/compiler/src/trusted-html-provenance.test.ts`, `pnpm exec vitest --run
+    packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "blocks trusted output provenance leaks through
+    the production build artifact"`, `pnpm exec vitest --run packages/server/src/jsx-runtime.test.ts -t "safely no-ops
+    dynamic plain strings and unbranded objects in raw HTML sinks"`, `pnpm run check:security-brands`, and
+    `git diff --check` passed after the source-only identity resolver learned static object-literal member aliases and the
+    prod-artifact KV426 proof enrolled `trustedOutputAlias.html(request-header)`.
 - [ ] **L — Value-flow: narrow proven-off-wire allowlist + mutation-handler wire (closes `bugz-26` B3, B4).**
   - Problem B3 (verified): a second `{id, secret: contacts.apiKey}` select laundered onto the returned array via
     `const collect = () => { for (const r of secretRows) out.push({name:r.secret,…}); }; collect();` builds GREEN and
