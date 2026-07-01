@@ -657,12 +657,11 @@ function isNullishType(type: MorphType): boolean {
 }
 
 /** @internal */ export function isProjectDrizzleAliasCall(call: CallExpression): boolean {
-  const expression = call.getExpression();
-  if (!Node.isIdentifier(expression) || expression.getText() !== 'alias') return false;
-
+  const expression = unwrappedStaticExpressionNode(call.getExpression());
   const symbol = expression.getSymbol()?.getAliasedSymbol() ?? expression.getSymbol();
   return (
-    symbol?.getDeclarations().some((declaration) => isDrizzleOrmDeclaration(declaration)) ?? false
+    symbol?.getName() === 'alias' &&
+    symbol.getDeclarations().some((declaration) => isDrizzleOrmDeclaration(declaration))
   );
 }
 

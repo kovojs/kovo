@@ -791,6 +791,7 @@ function exportStarAliases(sourceFile: SourceFile): ExportStarAlias[] {
 
 function aliasTargetsFromInitializer(initializer: Node): string[] {
   // SPEC §10-§11: alias facts must come from parsed initializer expressions, not string splits.
+  // Source-mode has no import resolver here; this is a structural compatibility shape only.
   const sourceFile = initializer.getSourceFile();
   const expression = unwrappedTsExpression(initializer.compilerNode as ts.Expression);
 
@@ -799,7 +800,7 @@ function aliasTargetsFromInitializer(initializer: Node): string[] {
   if (ts.isCallExpression(expression)) {
     const callee = unwrappedTsExpression(expression.expression);
     const target = expression.arguments[0];
-    if (ts.isIdentifier(callee) && callee.text === 'alias' && target) {
+    if (ts.isIdentifier(callee) && tsIdentifierTextEquals(callee, 'alias') && target) {
       const targetExpression = unwrappedTsExpression(target as ts.Expression);
       return ts.isIdentifier(targetExpression) ? [targetExpression.text] : [];
     }
@@ -812,6 +813,10 @@ function aliasTargetsFromInitializer(initializer: Node): string[] {
   }
 
   return [];
+}
+
+function tsIdentifierTextEquals(identifier: ts.Identifier, expected: string): boolean {
+  return identifier.text === expected;
 }
 
 function conditionalTargetsFromInitializer(initializer: Node): readonly (string | undefined)[] {

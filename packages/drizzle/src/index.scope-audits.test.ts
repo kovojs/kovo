@@ -2354,6 +2354,14 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
               '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, userId));',
               '  },',
               '});',
+              '',
+              'export const orderLocalInput = query("orderLocalInput", {',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_args: unknown, db: PgAsyncDatabase<any, any>) {',
+              '    const input = { userId: "u1" };',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, input.userId));',
+              '  },',
+              '});',
             ].join('\n'),
           },
         ],
@@ -2361,6 +2369,7 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     );
 
     expect(audit.scopeAudits.map((a) => ({ domain: a.domain, scope: a.scope }))).toEqual([
+      { domain: 'order', scope: 'unknown' },
       { domain: 'order', scope: 'unknown' },
     ]);
   });
@@ -5707,6 +5716,80 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
         name: 'ordersForUnsummarizedGuard',
         scope: 'unknown',
       },
+    ]);
+  });
+
+  it('keeps local guards shadows from proving accepted guard principals', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              'function currentGuardUser(ctx: { guard?: { userId?: string } | null }) { return ctx.guard?.userId; }',
+              'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+              'const guards = { all(..._items: unknown[]) { return () => true; } };',
+              '',
+              'export const ordersForShadowedGuards = query("ordersForShadowedGuards", {',
+              '  guard: guards.all(currentGuardUser),',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ctx.guard?.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.scopeAudits.map((a) => ({ name: a.name, scope: a.scope }))).toEqual([
+      { name: 'ordersForShadowedGuards', scope: 'unknown' },
+    ]);
+  });
+
+  it('accepts imported server guards aliases for accepted guard principals', () => {
+    const audit = extractOwnerAuditFromProject(
+      withPgDatabaseTypes({
+        files: [
+          pgDatabaseTypes([
+            'select(value?: unknown): { from(table: unknown): { where(value: unknown): Promise<unknown[]> } };',
+          ]),
+          {
+            fileName: 'order.queries.ts',
+            source: [
+              'import { eq } from "drizzle-orm";',
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              'import { guards as serverGuards } from "@kovojs/server";',
+              'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
+              '',
+              'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: (t) => t.id, owner: (t) => t.userId }));',
+              'function currentGuardUser(ctx: { guard?: { userId?: string } | null }) { return ctx.guard?.userId; }',
+              'kovoAnalyzerSummary(currentGuardUser, { returns: { kind: "guard", path: "userId" } });',
+              '',
+              'export const ordersForAliasedServerGuards = query("ordersForAliasedServerGuards", {',
+              '  guard: serverGuards.all(currentGuardUser),',
+              '  output: s.object({ id: s.string() }),',
+              '  async load(_input: unknown, db: PgAsyncDatabase<any, any>, ctx: { guard?: { userId?: string } | null }) {',
+              '    return db.select({ id: orders.id }).from(orders).where(eq(orders.userId, ctx.guard?.userId));',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(audit.scopeAudits.map((a) => ({ name: a.name, scope: a.scope }))).toEqual([
+      { name: 'ordersForAliasedServerGuards', scope: 'session' },
     ]);
   });
 

@@ -86,7 +86,8 @@ export function symbolProvenanceContextForNodes(
     }
 
     for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
-      if (assignment.getOperatorToken().getText() !== '=') continue;
+      // Structural alias propagation only; provenance proof still comes from resolved symbols.
+      if (assignment.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
       assignBindingProvenance(
         assignment.getLeft(),
         symbolProvenanceForExpression(assignment.getRight(), context),

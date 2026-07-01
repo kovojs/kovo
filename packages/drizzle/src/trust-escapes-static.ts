@@ -406,7 +406,7 @@ function unregisteredSinksForSourceFile(
     }
     for (const construct of handler.getDescendantsOfKind(SyntaxKind.NewExpression)) {
       const callee = construct.getExpression();
-      if (Node.isIdentifier(callee) && callee.getText() === 'Function') {
+      if (unshadowedGlobalIdentifier(callee, 'Function')) {
         const [arg] = construct.getArguments();
         facts.push({
           sink: 'Function',
@@ -450,8 +450,7 @@ function dangerousCallSink(call: Node): DangerousSinkMatch | null {
     const method = callee.getName();
     if (
       (method === 'write' || method === 'writeln') &&
-      Node.isIdentifier(receiver) &&
-      receiver.getText() === 'document'
+      unshadowedGlobalIdentifier(receiver, 'document')
     ) {
       const [arg] = call.getArguments();
       return {
@@ -463,6 +462,20 @@ function dangerousCallSink(call: Node): DangerousSinkMatch | null {
   }
 
   return null;
+}
+
+function unshadowedGlobalIdentifier(node: Node, expectedName: string): boolean {
+  if (!Node.isIdentifier(node) || !identifierTextEquals(node, expectedName)) return false;
+
+  // Syntactic trust pass: global built-in/DOM recognizer only; local/imported shadows fail closed.
+  return !(node.getSymbol()?.getDeclarations() ?? []).some(
+    (declaration) =>
+      declaration.getSourceFile().getFilePath() === node.getSourceFile().getFilePath(),
+  );
+}
+
+function identifierTextEquals(identifier: Node & { getText(): string }, expected: string): boolean {
+  return identifier.getText() === expected;
 }
 
 function sourceField(node: Node | undefined): { source?: string } {

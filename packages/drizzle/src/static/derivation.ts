@@ -1693,7 +1693,8 @@ function encryptedAtRestAliasKeysForNodes(bodies: readonly Node[]): ReadonlySet<
       if (symbolKey) aliases.add(symbolKey);
     }
     for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
-      if (assignment.getOperatorToken().getText() !== '=') continue;
+      // Structural assignment form; encrypted-value proof comes from RHS framework identity.
+      if (assignment.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
       if (!isEncryptedExpression(assignment.getRight())) continue;
       const left = assignment.getLeft();
       if (!Node.isIdentifier(left)) continue;
@@ -1734,7 +1735,8 @@ function passwordSinkAliasKeysForNodes(bodies: readonly Node[]): ReadonlySet<str
       if (symbolKey) aliases.add(symbolKey);
     }
     for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
-      if (assignment.getOperatorToken().getText() !== '=') continue;
+      // Structural assignment form; password-sink proof comes from RHS framework identity.
+      if (assignment.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
       if (!isPasswordSinkExpression(assignment.getRight())) continue;
       const left = assignment.getLeft();
       if (!Node.isIdentifier(left)) continue;

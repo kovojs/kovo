@@ -14,6 +14,7 @@ import {
   type FunctionExpression,
   type ObjectLiteralExpression,
   type SourceFile,
+  type Symbol as MorphSymbol,
   type VariableDeclaration,
 } from 'ts-morph';
 import { drizzleDiagnostic } from './diagnostics.js';
@@ -27,6 +28,7 @@ import {
   isSourceDestructuredReceiverIdentifier,
   symbolForIdentifierReference,
 } from './receiver-surface.js';
+import { isKovoServerDeclaration } from './schema.js';
 import { callExpressionsInNode, touchBodyCallExpressions } from './project-receivers.js';
 import {
   emptySessionProvenanceContext,
@@ -996,7 +998,60 @@ function isKovoGuardCompositionCall(expression: Node): boolean {
   const name = expression.getName();
   if (name !== 'all' && name !== 'compose') return false;
   const receiver = unwrappedStaticExpressionNode(expression.getExpression());
-  return Node.isIdentifier(receiver) && receiver.getText() === 'guards';
+  return kovoServerGuardsReceiver(receiver);
+}
+
+function kovoServerGuardsReceiver(receiver: Node): boolean {
+  if (!Node.isIdentifier(receiver)) return false;
+
+  const symbols = uniqueSymbols([symbolForIdentifierReference(receiver), receiver.getSymbol()]);
+  const declarations = symbols.flatMap((symbol) => symbol.getDeclarations());
+  if (localImportResolvesToKovoServerExport(receiver, 'guards')) return true;
+  if (declarations.length === 0) {
+    return identifierTextEquals(receiver, 'guards');
+  }
+  if (
+    declarations.some((declaration) => declarationResolvesToKovoServerExport(declaration, 'guards'))
+  ) {
+    return true;
+  }
+
+  return symbols.some((symbol) => {
+    const resolved = symbol.getAliasedSymbol() ?? symbol;
+    return (
+      resolved.getName() === 'guards' &&
+      resolved
+        .getDeclarations()
+        .some((declaration) => declarationResolvesToKovoServerExport(declaration, 'guards'))
+    );
+  });
+}
+
+function declarationResolvesToKovoServerExport(declaration: Node, exportName: string): boolean {
+  if (Node.isImportSpecifier(declaration) && declaration.getName() !== exportName) return false;
+  return isKovoServerDeclaration(declaration);
+}
+
+function localImportResolvesToKovoServerExport(identifier: Node, exportName: string): boolean {
+  if (!Node.isIdentifier(identifier)) return false;
+  const localName = identifier.getText();
+  return identifier
+    .getSourceFile()
+    .getImportDeclarations()
+    .some((declaration) => {
+      if (declaration.getModuleSpecifierValue() !== '@kovojs/server') return false;
+      return declaration
+        .getNamedImports()
+        .some(
+          (specifier) =>
+            specifier.getName() === exportName &&
+            (specifier.getAliasNode()?.getText() ?? specifier.getName()) === localName,
+        );
+    });
+}
+
+function uniqueSymbols(symbols: readonly (MorphSymbol | undefined)[]): MorphSymbol[] {
+  return [...new Set(symbols.filter((symbol): symbol is MorphSymbol => !!symbol))];
 }
 
 function acceptedGuardPrivateKeysDominatingNode(node: Node): readonly string[] {
@@ -1984,13 +2039,7 @@ function isObjectFreezeCall(value: Node): value is CallExpression {
   if (!Node.isPropertyAccessExpression(expression)) return false;
   if (expression.getName() !== 'freeze') return false;
   const receiver = unwrappedStaticExpressionNode(expression.getExpression());
-  if (!Node.isIdentifier(receiver) || receiver.getText() !== 'Object') return false;
-
-  const symbol = symbolForIdentifierReference(receiver) ?? receiver.getSymbol();
-  return !(symbol?.getDeclarations() ?? []).some(
-    (declaration) =>
-      declaration.getSourceFile().getFilePath() === receiver.getSourceFile().getFilePath(),
-  );
+  return unshadowedGlobalIdentifier(receiver, 'Object');
 }
 
 function singleObjectFreezeArgument(value: CallExpression): Node | undefined {
@@ -2306,7 +2355,7 @@ function inputPathSegmentsForExpression(expression: Node, depth = 0): string[] |
   const node = unwrappedStaticExpressionNode(expression);
 
   const segments = staticAccessSegments(expression);
-  if (segments && Node.isIdentifier(segments.root) && segments.root.getText() === 'input') {
+  if (segments && inputRootIdentifier(segments.root)) {
     return segments.path;
   }
 
@@ -3517,13 +3566,43 @@ function singleArrayConcatElement(node: Node): Node | undefined {
 }
 
 function unshadowedGlobalArrayIdentifier(node: Node): boolean {
-  if (!Node.isIdentifier(node) || node.getText() !== 'Array') return false;
+  return unshadowedGlobalIdentifier(node, 'Array');
+}
 
+function unshadowedGlobalIdentifier(node: Node, expectedName: string): boolean {
+  if (!Node.isIdentifier(node) || !identifierTextEquals(node, expectedName)) return false;
+
+  // Structural global wrapper recognition only; local/imported shadows fail closed.
   const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
   return !(symbol?.getDeclarations() ?? []).some(
     (declaration) =>
       declaration.getSourceFile().getFilePath() === node.getSourceFile().getFilePath(),
   );
+}
+
+function inputRootIdentifier(node: Node): boolean {
+  if (!Node.isIdentifier(node) || !identifierTextEquals(node, 'input')) return false;
+
+  const symbol = symbolForIdentifierReference(node) ?? node.getSymbol();
+  const declarations = symbol?.getDeclarations() ?? [];
+  if (declarations.length === 0) return true;
+
+  return declarations.some(isFunctionParameter);
+}
+
+function isFunctionParameter(declaration: Node): boolean {
+  if (!Node.isParameterDeclaration(declaration)) return false;
+  const parent = declaration.getParent();
+  return (
+    Node.isArrowFunction(parent) ||
+    Node.isFunctionExpression(parent) ||
+    Node.isFunctionDeclaration(parent) ||
+    Node.isMethodDeclaration(parent)
+  );
+}
+
+function identifierTextEquals(identifier: Node & { getText(): string }, expected: string): boolean {
+  return identifier.getText() === expected;
 }
 
 function literalArrayElements(node: Node): readonly Node[] | undefined {

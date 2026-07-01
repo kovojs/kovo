@@ -226,6 +226,26 @@ describe('@kovojs/drizzle dangerous-sink collector (KV424, conservative)', () =>
     expect(sinks).toEqual(['Function', 'document.write', 'eval', 'setTimeout']);
   });
 
+  it('does NOT flag local Function or document shadows as global sinks', () => {
+    const facts = sinksFor(`
+      export function Widget(markup: string) {
+        return (
+          <button
+            onClick={() => {
+              const document = { write(_value: string) {} };
+              const Function = class {};
+              document.write(markup);
+              new Function();
+            }}
+          >
+            go
+          </button>
+        );
+      }
+    `);
+    expect(facts).toEqual([]);
+  });
+
   it('does NOT flag dangerous sinks outside handler bodies (conservative)', () => {
     const facts = sinksFor(`
       export function buildHtml(markup: string) {
