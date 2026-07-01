@@ -4,6 +4,7 @@ import {
   type FrameworkExportIdentity as CanonicalFrameworkExportIdentity,
   type FrameworkIdentityModule as CanonicalFrameworkModule,
 } from '@kovojs/core/internal/framework-identity';
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
 export type {
   FrameworkExportIdentity as CanonicalFrameworkExportIdentity,
   FrameworkIdentityModule as CanonicalFrameworkModule,
@@ -37,6 +38,28 @@ export type FrameworkIdentityExpressionKindResolution =
 
 /** @internal Completeness status for an expression-kind resolver row. */
 export type FrameworkIdentityExpressionKindStatus = 'fails-closed' | 'resolved';
+
+const frameworkIdentityExpressionKindResolution = securityClassifier(
+  'drizzle.framework-identity.expression-kind-resolution',
+  function (kind: SyntaxKind): FrameworkIdentityExpressionKindResolution {
+    switch (kind) {
+      case SyntaxKind.Identifier:
+        return 'resolve-identifier';
+      case SyntaxKind.PropertyAccessExpression:
+        return 'resolve-property-access';
+      case SyntaxKind.ElementAccessExpression:
+        return 'resolve-element-access';
+      case SyntaxKind.ParenthesizedExpression:
+      case SyntaxKind.AsExpression:
+      case SyntaxKind.SatisfiesExpression:
+      case SyntaxKind.TypeAssertionExpression:
+      case SyntaxKind.NonNullExpression:
+        return 'unwrap-expression';
+      default:
+        return 'fail-closed';
+    }
+  },
+);
 
 const frameworkIdentityExpressionSyntaxKinds = uniqueSyntaxKinds([
   SyntaxKind.PropertyAccessExpression,
@@ -154,12 +177,15 @@ export function typeAliasResolvesToFrameworkExport(
 }
 
 /** @internal */
-export function canonicalFrameworkExportForExpression(
-  expression: Node,
-  options: FrameworkIdentityOptions = {},
-): CanonicalFrameworkExportIdentity | undefined {
-  return canonicalExpression(unwrappedExpression(expression), options, new Set(), 0);
-}
+export const canonicalFrameworkExportForExpression = securityClassifier(
+  'drizzle.framework-identity.canonical-expression',
+  function (
+    expression: Node,
+    options: FrameworkIdentityOptions = {},
+  ): CanonicalFrameworkExportIdentity | undefined {
+    return canonicalExpression(unwrappedExpression(expression), options, new Set(), 0);
+  },
+);
 
 /** @internal */
 export function canonicalFrameworkExportForSymbol(
@@ -169,56 +195,59 @@ export function canonicalFrameworkExportForSymbol(
   return canonicalSymbol(symbol, options, new Set(), 0);
 }
 
-function canonicalExpression(
-  expression: Node,
-  options: FrameworkIdentityOptions,
-  seen: Set<string>,
-  depth: number,
-): CanonicalFrameworkExportIdentity | undefined {
-  if (depth > 12) return undefined;
-  const node = unwrappedExpression(expression);
+const canonicalExpression = securityClassifier(
+  'drizzle.framework-identity.expression',
+  function (
+    expression: Node,
+    options: FrameworkIdentityOptions,
+    seen: Set<string>,
+    depth: number,
+  ): CanonicalFrameworkExportIdentity | undefined {
+    if (depth > 12) return undefined;
+    const node = unwrappedExpression(expression);
 
-  switch (frameworkIdentityExpressionKindResolution(node.getKind())) {
-    case 'resolve-identifier': {
-      if (!Node.isIdentifier(node)) return undefined;
-      const symbolIdentity = canonicalSymbol(symbolForIdentifier(node), options, seen, depth + 1);
-      if (symbolIdentity) return symbolIdentity;
+    switch (frameworkIdentityExpressionKindResolution(node.getKind())) {
+      case 'resolve-identifier': {
+        if (!Node.isIdentifier(node)) return undefined;
+        const symbolIdentity = canonicalSymbol(symbolForIdentifier(node), options, seen, depth + 1);
+        if (symbolIdentity) return symbolIdentity;
 
-      const initializer = localConstIdentifierInitializer(node);
-      if (initializer) return canonicalExpression(initializer, options, seen, depth + 1);
+        const initializer = localConstIdentifierInitializer(node);
+        if (initializer) return canonicalExpression(initializer, options, seen, depth + 1);
 
-      const localBinding = localBindingIdentityByName(node, options, seen, depth + 1);
-      if (localBinding) return localBinding;
+        const localBinding = localBindingIdentityByName(node, options, seen, depth + 1);
+        if (localBinding) return localBinding;
 
-      return legacyGlobalIdentity(node, options);
+        return legacyGlobalIdentity(node, options);
+      }
+
+      case 'resolve-property-access': {
+        if (!Node.isPropertyAccessExpression(node)) return undefined;
+        const direct = canonicalSymbol(node.getSymbol(), options, seen, depth + 1);
+        if (direct) return direct;
+        return canonicalNamespaceMember(
+          node.getExpression(),
+          node.getName(),
+          options,
+          seen,
+          depth + 1,
+        );
+      }
+
+      case 'resolve-element-access': {
+        if (!Node.isElementAccessExpression(node)) return undefined;
+        const member = propertyNameText(node.getArgumentExpression());
+        return member
+          ? canonicalNamespaceMember(node.getExpression(), member, options, seen, depth + 1)
+          : undefined;
+      }
+
+      case 'fail-closed':
+      case 'unwrap-expression':
+        return undefined;
     }
-
-    case 'resolve-property-access': {
-      if (!Node.isPropertyAccessExpression(node)) return undefined;
-      const direct = canonicalSymbol(node.getSymbol(), options, seen, depth + 1);
-      if (direct) return direct;
-      return canonicalNamespaceMember(
-        node.getExpression(),
-        node.getName(),
-        options,
-        seen,
-        depth + 1,
-      );
-    }
-
-    case 'resolve-element-access': {
-      if (!Node.isElementAccessExpression(node)) return undefined;
-      const member = propertyNameText(node.getArgumentExpression());
-      return member
-        ? canonicalNamespaceMember(node.getExpression(), member, options, seen, depth + 1)
-        : undefined;
-    }
-
-    case 'fail-closed':
-    case 'unwrap-expression':
-      return undefined;
-  }
-}
+  },
+);
 
 function canonicalSymbol(
   symbol: MorphSymbol | undefined,
@@ -450,29 +479,32 @@ function canonicalNamespaceMember(
   return undefined;
 }
 
-function namespaceMemberIdentityForIdentifier(
-  identifier: Node,
-  member: string,
-  options: FrameworkIdentityOptions,
-  seen: Set<string>,
-  depth: number,
-): CanonicalFrameworkExportIdentity | undefined {
-  if (!Node.isIdentifier(identifier)) return undefined;
-  const local = identifier.getText();
-  for (const declaration of identifier.getSourceFile().getImportDeclarations()) {
-    const namespace = declaration.getNamespaceImport();
-    if (!namespace || namespace.getText() !== local) continue;
-    const specifier = declaration.getModuleSpecifierValue();
-    const direct = moduleSpecifierIdentity(specifier, member);
-    if (direct) return direct;
-    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
-    if (moduleSourceFile) {
-      const exported = moduleExportIdentity(moduleSourceFile, member, options, seen, depth + 1);
-      if (exported) return exported;
+const namespaceMemberIdentityForIdentifier = securityClassifier(
+  'drizzle.framework-identity.namespace-member',
+  function (
+    identifier: Node,
+    member: string,
+    options: FrameworkIdentityOptions,
+    seen: Set<string>,
+    depth: number,
+  ): CanonicalFrameworkExportIdentity | undefined {
+    if (!Node.isIdentifier(identifier)) return undefined;
+    const local = identifier.getText();
+    for (const declaration of identifier.getSourceFile().getImportDeclarations()) {
+      const namespace = declaration.getNamespaceImport();
+      if (!namespace || namespace.getText() !== local) continue;
+      const specifier = declaration.getModuleSpecifierValue();
+      const direct = moduleSpecifierIdentity(specifier, member);
+      if (direct) return direct;
+      const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
+      if (moduleSourceFile) {
+        const exported = moduleExportIdentity(moduleSourceFile, member, options, seen, depth + 1);
+        if (exported) return exported;
+      }
     }
-  }
-  return undefined;
-}
+    return undefined;
+  },
+);
 
 function bindingElementIdentity(
   binding: BindingElement,
@@ -744,27 +776,6 @@ function unwrappedExpression(node: Node): Node {
     current = current.getExpression();
   }
   return current;
-}
-
-function frameworkIdentityExpressionKindResolution(
-  kind: SyntaxKind,
-): FrameworkIdentityExpressionKindResolution {
-  switch (kind) {
-    case SyntaxKind.Identifier:
-      return 'resolve-identifier';
-    case SyntaxKind.PropertyAccessExpression:
-      return 'resolve-property-access';
-    case SyntaxKind.ElementAccessExpression:
-      return 'resolve-element-access';
-    case SyntaxKind.ParenthesizedExpression:
-    case SyntaxKind.AsExpression:
-    case SyntaxKind.SatisfiesExpression:
-    case SyntaxKind.TypeAssertionExpression:
-    case SyntaxKind.NonNullExpression:
-      return 'unwrap-expression';
-    default:
-      return 'fail-closed';
-  }
 }
 
 function frameworkIdentityExpressionKindDisposition(kind: SyntaxKind): {

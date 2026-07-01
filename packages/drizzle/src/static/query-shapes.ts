@@ -19,6 +19,7 @@ import {
   type FrameworkExportIdentity,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import type { QueryProjectedColumn, RevealExplainFact } from '@kovojs/core/internal/graph';
 import { drizzleDiagnostic, sourceSiteForNode } from './diagnostics.js';
 import {
@@ -90,23 +91,24 @@ const DRIZZLE_AGGREGATE_HELPER_IDENTITIES: readonly FrameworkExportIdentity[] = 
   'sumDistinct',
 ].map((name) => frameworkExport('drizzle-orm', name));
 
-/** @internal */ export function isQueryShapeWrapper(
-  shape: QueryShape,
-): shape is QueryShapeWrapper {
-  return (
-    typeof shape === 'object' &&
-    shape !== null &&
-    !Array.isArray(shape) &&
-    'kind' in shape &&
-    'shape' in shape &&
-    (shape.kind === 'nullable' ||
-      shape.kind === 'optional' ||
-      shape.kind === 'secret' ||
-      shape.kind === 'table-row' ||
-      shape.kind === 'volatile-time' ||
-      (shape.kind === 'revealed' && 'reveal' in shape))
-  );
-}
+/** @internal */ export const isQueryShapeWrapper = securityClassifier(
+  'drizzle.query-shapes.is-wrapper',
+  function (shape: QueryShape): shape is QueryShapeWrapper {
+    return (
+      typeof shape === 'object' &&
+      shape !== null &&
+      !Array.isArray(shape) &&
+      'kind' in shape &&
+      'shape' in shape &&
+      (shape.kind === 'nullable' ||
+        shape.kind === 'optional' ||
+        shape.kind === 'secret' ||
+        shape.kind === 'table-row' ||
+        shape.kind === 'volatile-time' ||
+        (shape.kind === 'revealed' && 'reveal' in shape))
+    );
+  },
+);
 
 /** @internal */ export interface QueryShapeSelection {
   diagnostics?: readonly TouchGraphDiagnostic[];
@@ -118,44 +120,47 @@ const DRIZZLE_AGGREGATE_HELPER_IDENTITIES: readonly FrameworkExportIdentity[] = 
   unresolvedPaths: readonly string[];
 }
 
-/** @internal */ export function selectShapeFromQueryBody(
-  body: ObjectLiteralExpression,
-  receiverReferences: QueryReceiverReferences,
-  columnShapes: Readonly<Record<string, QueryShape>> = {},
-  mode: 'project' | 'source' = 'source',
-): QueryShapeSelection | null {
-  const selectCall = selectCallFromQueryBody(body, receiverReferences, mode);
-  if (!selectCall) return null;
+/** @internal */ export const selectShapeFromQueryBody = securityClassifier(
+  'drizzle.query-shapes.select-shape-from-body',
+  function (
+    body: ObjectLiteralExpression,
+    receiverReferences: QueryReceiverReferences,
+    columnShapes: Readonly<Record<string, QueryShape>> = {},
+    mode: 'project' | 'source' = 'source',
+  ): QueryShapeSelection | null {
+    const selectCall = selectCallFromQueryBody(body, receiverReferences, mode);
+    if (!selectCall) return null;
 
-  const projection = selectProjectionArgument(selectCall);
-  if (!projection) {
-    return {
-      diagnostics: [
-        drizzleDiagnostic({
-          code: 'KV406',
-          detail: `Query uses ${selectCallDisplayName(selectCall)} without an explicit projection.`,
-          node: selectCall,
-        }),
-      ],
-      hasTablelessScalar: false,
-      opaquePaths: [],
-      projectedColumns: [],
-      shape: {},
-      scalarTables: new Set(),
-      unresolvedPaths: [],
-    };
-  }
+    const projection = selectProjectionArgument(selectCall);
+    if (!projection) {
+      return {
+        diagnostics: [
+          drizzleDiagnostic({
+            code: 'KV406',
+            detail: `Query uses ${selectCallDisplayName(selectCall)} without an explicit projection.`,
+            node: selectCall,
+          }),
+        ],
+        hasTablelessScalar: false,
+        opaquePaths: [],
+        projectedColumns: [],
+        shape: {},
+        scalarTables: new Set(),
+        unresolvedPaths: [],
+      };
+    }
 
-  if (!Node.isObjectLiteralExpression(projection)) return null;
+    if (!Node.isObjectLiteralExpression(projection)) return null;
 
-  const selection = queryShapeFromObjectLiteralNode(projection.compilerNode, {
-    columnShapes,
-    nullableTables: nullableJoinTables(body, receiverReferences, mode),
-  });
-  return queryBodyHasTimeVolatileWhere(body, receiverReferences, mode)
-    ? { ...selection, shape: volatileTimeShape(selection.shape) }
-    : selection;
-}
+    const selection = queryShapeFromObjectLiteralNode(projection.compilerNode, {
+      columnShapes,
+      nullableTables: nullableJoinTables(body, receiverReferences, mode),
+    });
+    return queryBodyHasTimeVolatileWhere(body, receiverReferences, mode)
+      ? { ...selection, shape: volatileTimeShape(selection.shape) }
+      : selection;
+  },
+);
 
 /** @internal */ export function relationalShapeFromQueryBody(
   body: ObjectLiteralExpression,
@@ -1318,25 +1323,28 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
 // project mode could not type-prove. `receiverReferences` here are the unproven destructured
 // bindings (see unprovenDestructuredReceiverReferences); this never produces a positive
 // read/write fact, it only flags an un-analyzable Drizzle receiver surface.
-/** @internal */ export function sourceDestructuredQueryReceiverDiagnostics(
-  body: ObjectLiteralExpression,
-  localFunctionKeys: ReadonlySet<string>,
-  receiverReferences: QueryReceiverReferences,
-): TouchGraphDiagnostic[] {
-  if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
+/** @internal */ export const sourceDestructuredQueryReceiverDiagnostics = securityClassifier(
+  'drizzle.query-shapes.source-destructured-receiver-diagnostics',
+  function (
+    body: ObjectLiteralExpression,
+    localFunctionKeys: ReadonlySet<string>,
+    receiverReferences: QueryReceiverReferences,
+  ): TouchGraphDiagnostic[] {
+    if (receiverReferences.names.size === 0 && receiverReferences.symbolKeys.size === 0) return [];
 
-  return queryCallbackBodies(body, 'project').flatMap((callbackBody) =>
-    extractSourceReceiverSurfaceCallsFromBody(callbackBody, localFunctionKeys, (node) =>
-      isSourceDestructuredReceiverIdentifier(node, receiverReferences),
-    ).map((call) =>
-      drizzleDiagnostic({
-        code: 'KV406' as const,
-        detail: `Query uses an un-provable destructured Drizzle receiver surface ${call.name}() without project type proof.`,
-        node: callbackBody,
-      }),
-    ),
-  );
-}
+    return queryCallbackBodies(body, 'project').flatMap((callbackBody) =>
+      extractSourceReceiverSurfaceCallsFromBody(callbackBody, localFunctionKeys, (node) =>
+        isSourceDestructuredReceiverIdentifier(node, receiverReferences),
+      ).map((call) =>
+        drizzleDiagnostic({
+          code: 'KV406' as const,
+          detail: `Query uses an un-provable destructured Drizzle receiver surface ${call.name}() without project type proof.`,
+          node: callbackBody,
+        }),
+      ),
+    );
+  },
+);
 
 /** @internal */ export function queryExecutableCallExpressions(
   body: ObjectLiteralExpression,
@@ -3003,21 +3011,24 @@ function trustedRevealValueExpression(expression: ts.Expression): ts.Expression 
   return node.arguments[0];
 }
 
-/** @internal */ export function isOpaqueProjection(expression: ts.Expression): boolean {
-  const revealValue = trustedRevealValueExpression(expression);
-  if (revealValue) return isOpaqueProjection(revealValue);
-  const node = unwrappedTsExpression(expression);
-  if (ts.isTaggedTemplateExpression(node)) return isTsKovoSqlExpression(node.tag);
-  if (!ts.isCallExpression(node)) return false;
+/** @internal */ export const isOpaqueProjection = securityClassifier(
+  'drizzle.query-shapes.is-opaque-projection',
+  function (expression: ts.Expression): boolean {
+    const revealValue = trustedRevealValueExpression(expression);
+    if (revealValue) return isOpaqueProjection(revealValue);
+    const node = unwrappedTsExpression(expression);
+    if (ts.isTaggedTemplateExpression(node)) return isTsKovoSqlExpression(node.tag);
+    if (!ts.isCallExpression(node)) return false;
 
-  const callee = unwrappedTsExpression(node.expression);
-  return (
-    isTsKovoSqlExpression(callee) ||
-    (ts.isPropertyAccessExpression(callee) && isTsKovoSqlExpression(callee.expression)) ||
-    staticTsExpressionPath(callee) === 'raw' ||
-    isDrizzleAggregateHelperProjection(node)
-  );
-}
+    const callee = unwrappedTsExpression(node.expression);
+    return (
+      isTsKovoSqlExpression(callee) ||
+      (ts.isPropertyAccessExpression(callee) && isTsKovoSqlExpression(callee.expression)) ||
+      staticTsExpressionPath(callee) === 'raw' ||
+      isDrizzleAggregateHelperProjection(node)
+    );
+  },
+);
 
 function isDrizzleAggregateHelperProjection(call: ts.CallExpression): boolean {
   return DRIZZLE_AGGREGATE_HELPER_IDENTITIES.some((identity) =>
@@ -3030,35 +3041,36 @@ function isDrizzleAggregateHelperProjection(call: ts.CallExpression): boolean {
   );
 }
 
-/** @internal */ export function typedSqlProjectionShape(
-  expression: ts.Expression,
-): QueryShape | null {
-  const node = unwrappedTsExpression(expression);
-  const typeArguments = ts.isTaggedTemplateExpression(node)
-    ? node.typeArguments
-    : ts.isCallExpression(node)
+/** @internal */ export const typedSqlProjectionShape = securityClassifier(
+  'drizzle.query-shapes.typed-sql-projection-shape',
+  function (expression: ts.Expression): QueryShape | null {
+    const node = unwrappedTsExpression(expression);
+    const typeArguments = ts.isTaggedTemplateExpression(node)
       ? node.typeArguments
-      : undefined;
-  const callee = ts.isTaggedTemplateExpression(node)
-    ? node.tag
-    : ts.isCallExpression(node)
-      ? node.expression
-      : undefined;
-  if (!callee || !isTsKovoSqlExpression(callee) || typeArguments?.length !== 1) return null;
+      : ts.isCallExpression(node)
+        ? node.typeArguments
+        : undefined;
+    const callee = ts.isTaggedTemplateExpression(node)
+      ? node.tag
+      : ts.isCallExpression(node)
+        ? node.expression
+        : undefined;
+    if (!callee || !isTsKovoSqlExpression(callee) || typeArguments?.length !== 1) return null;
 
-  const typeText = typeArguments[0]?.getText(node.getSourceFile()).trim();
-  const shape =
-    typeText === 'number'
-      ? 'number'
-      : typeText === 'boolean'
-        ? 'boolean'
-        : typeText === 'string'
-          ? 'string'
-          : null;
-  if (!shape) return null;
-  if (isTimeVolatileSqlProjection(expression)) return { kind: 'volatile-time', shape };
-  return shape;
-}
+    const typeText = typeArguments[0]?.getText(node.getSourceFile()).trim();
+    const shape =
+      typeText === 'number'
+        ? 'number'
+        : typeText === 'boolean'
+          ? 'boolean'
+          : typeText === 'string'
+            ? 'string'
+            : null;
+    if (!shape) return null;
+    if (isTimeVolatileSqlProjection(expression)) return { kind: 'volatile-time', shape };
+    return shape;
+  },
+);
 
 function isTsKovoSqlExpression(expression: ts.Expression): boolean {
   const sourceFile = expression.getSourceFile();

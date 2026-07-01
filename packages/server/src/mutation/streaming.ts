@@ -1,4 +1,5 @@
 import { reportServerError } from '../diagnostics.js';
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
 import { generatedFragmentHtmlValue, type FragmentHtml } from '../html.js';
 import type { BufferedMutationWireResponse, MutationWireResponse } from '../mutation-wire.js';
@@ -147,102 +148,105 @@ export interface StreamingMutationErrorContext {
   onError?: ServerErrorHandler | undefined;
 }
 
-export function renderStreamingMutationWireResponse(
-  chunks: MutationStreamSource<unknown, unknown, unknown>,
-  finalResponse: BufferedMutationWireResponse,
-  reservation?: MutationReplayReservation<BufferedMutationWireResponse>,
-  errorContext?: StreamingMutationErrorContext,
-): MutationWireResponse {
-  const encoder = new TextEncoder();
-  // H4 (SPEC §9): retain a reference to the raw source iterator so the cancel
-  // handler can call return() on it directly — the coalesce layer's inner await
-  // on a pending read won't propagate the cancel signal automatically.
-  const sourceIterator = toAsyncIterator(chunks);
-  const sourceIterable: AsyncIterable<MutationStreamChunk> = {
-    [Symbol.asyncIterator]: () => sourceIterator,
-  };
-  const source = coalesceMutationStreamChunks(sourceIterable);
-  const iterator = source[Symbol.asyncIterator]();
+export const renderStreamingMutationWireResponse = wireEmitter(
+  'server.wire.mutation-stream',
+  function (
+    chunks: MutationStreamSource<unknown, unknown, unknown>,
+    finalResponse: BufferedMutationWireResponse,
+    reservation?: MutationReplayReservation<BufferedMutationWireResponse>,
+    errorContext?: StreamingMutationErrorContext,
+  ): MutationWireResponse {
+    const encoder = new TextEncoder();
+    // H4 (SPEC §9): retain a reference to the raw source iterator so the cancel
+    // handler can call return() on it directly — the coalesce layer's inner await
+    // on a pending read won't propagate the cancel signal automatically.
+    const sourceIterator = toAsyncIterator(chunks);
+    const sourceIterable: AsyncIterable<MutationStreamChunk> = {
+      [Symbol.asyncIterator]: () => sourceIterator,
+    };
+    const source = coalesceMutationStreamChunks(sourceIterable);
+    const iterator = source[Symbol.asyncIterator]();
 
-  return {
-    body: new ReadableStream<Uint8Array>({
-      async start(controller) {
-        // A3 (SPEC §10.3:1063): buffer all emitted bytes so we can commit the full
-        // settled body (stream chunks + finalResponse.body + <kovo-done>) to the
-        // replay store after the stream completes, not the head-only body before.
-        const buffered: string[] = [];
+    return {
+      body: new ReadableStream<Uint8Array>({
+        async start(controller) {
+          // A3 (SPEC §10.3:1063): buffer all emitted bytes so we can commit the full
+          // settled body (stream chunks + finalResponse.body + <kovo-done>) to the
+          // replay store after the stream completes, not the head-only body before.
+          const buffered: string[] = [];
 
-        const enqueue = (text: string): void => {
-          const line = `${text}\n`;
-          buffered.push(line);
-          controller.enqueue(encoder.encode(line));
-        };
+          const enqueue = (text: string): void => {
+            const line = `${text}\n`;
+            buffered.push(line);
+            controller.enqueue(encoder.encode(line));
+          };
 
-        try {
-          for (;;) {
-            const { done, value: chunk } = await iterator.next();
-            if (done) break;
-            enqueue(renderMutationStreamChunk(chunk));
-            if (chunk.kind === 'done') {
-              controller.close();
-              // Commit the full settled body so replays re-serve the complete stream.
-              reservation?.commit({
-                body: buffered.join(''),
-                headers: finalResponse.headers,
-                status: finalResponse.status,
-              });
-              return;
-            }
-          }
-          // Generator exhausted without an explicit done chunk; emit the reconciled
-          // fragment body (pre-rendered query/fragment HTML) and kovo-done.
-          if (finalResponse.body) enqueue(finalResponse.body);
-          enqueue(renderDoneWireHtml());
-          controller.close();
-          // Commit after the generator exhausted (no explicit done chunk).
-          reservation?.commit({
-            body: buffered.join(''),
-            headers: finalResponse.headers,
-            status: finalResponse.status,
-          });
-        } catch (error) {
-          // L10-1 (SPEC §9): a streaming generator threw mid-stream. Report it via the
-          // server error hook and emit a `<kovo-done reason="error">` terminator so the
-          // client observes a clean, in-band end-of-stream (mirroring the explicit
-          // `stream.done({ reason: 'error' })` path) instead of a silent hang. The
-          // reservation is aborted, never committed, so the failed stream is not replayed.
-          if (errorContext) {
-            reportServerError(
-              errorContext.onError,
-              error,
-              errorContext.context as ServerErrorDiagnosticContext,
-            );
-          }
           try {
-            enqueue(renderDoneWireHtml({ reason: 'error' }));
+            for (;;) {
+              const { done, value: chunk } = await iterator.next();
+              if (done) break;
+              enqueue(renderMutationStreamChunk(chunk));
+              if (chunk.kind === 'done') {
+                controller.close();
+                // Commit the full settled body so replays re-serve the complete stream.
+                reservation?.commit({
+                  body: buffered.join(''),
+                  headers: finalResponse.headers,
+                  status: finalResponse.status,
+                });
+                return;
+              }
+            }
+            // Generator exhausted without an explicit done chunk; emit the reconciled
+            // fragment body (pre-rendered query/fragment HTML) and kovo-done.
+            if (finalResponse.body) enqueue(finalResponse.body);
+            enqueue(renderDoneWireHtml());
             controller.close();
-          } catch {
-            // The controller may already be errored/closed (e.g. the consumer cancelled
-            // concurrently); fall back to surfacing the original error on the stream.
-            controller.error(error);
+            // Commit after the generator exhausted (no explicit done chunk).
+            reservation?.commit({
+              body: buffered.join(''),
+              headers: finalResponse.headers,
+              status: finalResponse.status,
+            });
+          } catch (error) {
+            // L10-1 (SPEC §9): a streaming generator threw mid-stream. Report it via the
+            // server error hook and emit a `<kovo-done reason="error">` terminator so the
+            // client observes a clean, in-band end-of-stream (mirroring the explicit
+            // `stream.done({ reason: 'error' })` path) instead of a silent hang. The
+            // reservation is aborted, never committed, so the failed stream is not replayed.
+            if (errorContext) {
+              reportServerError(
+                errorContext.onError,
+                error,
+                errorContext.context as ServerErrorDiagnosticContext,
+              );
+            }
+            try {
+              enqueue(renderDoneWireHtml({ reason: 'error' }));
+              controller.close();
+            } catch {
+              // The controller may already be errored/closed (e.g. the consumer cancelled
+              // concurrently); fall back to surfacing the original error on the stream.
+              controller.error(error);
+            }
+            // Do not commit on error; let the reservation remain pending/aborted.
+            reservation?.abort?.();
           }
-          // Do not commit on error; let the reservation remain pending/aborted.
-          reservation?.abort?.();
-        }
-      },
-      cancel() {
-        // H4 (SPEC §9): propagate client disconnect to the author generator so its
-        // finally block runs. We call return() on the raw sourceIterator (not the
-        // coalesced iterator) because the coalesce layer holds a pending .next() call
-        // that won't resolve until the source yields — the return() must reach the
-        // source generator directly to interrupt it.
-        void sourceIterator.return?.();
-      },
-    }),
-    headers: finalResponse.headers,
-    status: finalResponse.status,
-  };
-}
+        },
+        cancel() {
+          // H4 (SPEC §9): propagate client disconnect to the author generator so its
+          // finally block runs. We call return() on the raw sourceIterator (not the
+          // coalesced iterator) because the coalesce layer holds a pending .next() call
+          // that won't resolve until the source yields — the return() must reach the
+          // source generator directly to interrupt it.
+          void sourceIterator.return?.();
+        },
+      }),
+      headers: finalResponse.headers,
+      status: finalResponse.status,
+    };
+  },
+);
 
 export async function* coalesceMutationStreamChunks(
   chunks: MutationStreamSource<unknown, unknown, unknown>,

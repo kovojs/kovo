@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import type {
   DeleteStatement,
   InsertStatement,
@@ -28,22 +29,22 @@ export const UNTABLED_SQL_WRITE: unique symbol = Symbol('kovo:untabled-sql-write
 export type ParsedSqlWriteTarget = string | typeof UNTABLED_SQL_WRITE;
 
 /** Parse a SQL statement into the physical tables it mutates (SPEC §10.3/§11.2). */
-export function parseSqlWriteTables(
-  statement: string,
-  options: ParseSqlWriteTablesOptions = {},
-): ParsedSqlWriteTarget[] {
-  const lexicalWrite = unparsedSqliteWriteStatement(statement);
-  if (lexicalWrite) return [UNTABLED_SQL_WRITE];
+export const parseSqlWriteTables = securityClassifier(
+  'server.sql.parse-write-tables',
+  function (statement: string, options: ParseSqlWriteTablesOptions = {}): ParsedSqlWriteTarget[] {
+    const lexicalWrite = unparsedSqliteWriteStatement(statement);
+    if (lexicalWrite) return [UNTABLED_SQL_WRITE];
 
-  const sql = options.dialect === 'sqlite' ? normalizeSqlitePlaceholders(statement) : statement;
-  return [
-    ...new Set(
-      sqlParser()
-        .parse(sql)
-        .flatMap((parsed) => writeTablesForStatement(parsed, new Set())),
-    ),
-  ].sort(compareSqlWriteTargets);
-}
+    const sql = options.dialect === 'sqlite' ? normalizeSqlitePlaceholders(statement) : statement;
+    return [
+      ...new Set(
+        sqlParser()
+          .parse(sql)
+          .flatMap((parsed) => writeTablesForStatement(parsed, new Set())),
+      ),
+    ].sort(compareSqlWriteTargets);
+  },
+);
 
 function normalizeSqlitePlaceholders(statement: string): string {
   let normalized = '';
@@ -118,69 +119,72 @@ function readQuoted(
   return [statement.slice(start), statement.length - 1];
 }
 
-function writeTablesForStatement(
-  statement: Statement | WithStatementBinding,
-  cteAliases: ReadonlySet<string>,
-): ParsedSqlWriteTarget[] {
-  switch (statement.type) {
-    case 'insert':
-      return writeTablesForInsert(statement, cteAliases);
-    case 'update':
-      return writeTablesForUpdate(statement, cteAliases);
-    case 'delete':
-      return writeTablesForDelete(statement, cteAliases);
-    case 'truncate table':
-      return writeTablesForTruncate(statement);
-    case 'with':
-      return writeTablesForWith(statement, cteAliases);
-    case 'with recursive':
-      return writeTablesForWithRecursive(statement, cteAliases);
-    case 'select':
-    case 'show':
-    case 'union':
-    case 'union all':
-    case 'values':
-      return [];
-    case 'alter enum':
-    case 'alter index':
-    case 'alter sequence':
-    case 'alter table':
-    case 'begin':
-    case 'comment':
-    case 'commit':
-    case 'create composite type':
-    case 'create enum':
-    case 'create extension':
-    case 'create function':
-    case 'create index':
-    case 'create materialized view':
-    case 'create schema':
-    case 'create sequence':
-    case 'create table':
-    case 'create view':
-    case 'deallocate':
-    case 'do':
-    case 'drop function':
-    case 'drop index':
-    case 'drop sequence':
-    case 'drop table':
-    case 'drop trigger':
-    case 'drop type':
-    case 'prepare':
-    case 'raise':
-    case 'refresh materialized view':
-    case 'rollback':
-    case 'set':
-    case 'set names':
-    case 'set timezone':
-    case 'start transaction':
-    case 'tablespace':
-      return [UNTABLED_SQL_WRITE];
-    default:
-      statement satisfies never;
-      return [UNTABLED_SQL_WRITE];
-  }
-}
+const writeTablesForStatement = securityClassifier(
+  'server.sql.classify-write-statement',
+  function (
+    statement: Statement | WithStatementBinding,
+    cteAliases: ReadonlySet<string>,
+  ): ParsedSqlWriteTarget[] {
+    switch (statement.type) {
+      case 'insert':
+        return writeTablesForInsert(statement, cteAliases);
+      case 'update':
+        return writeTablesForUpdate(statement, cteAliases);
+      case 'delete':
+        return writeTablesForDelete(statement, cteAliases);
+      case 'truncate table':
+        return writeTablesForTruncate(statement);
+      case 'with':
+        return writeTablesForWith(statement, cteAliases);
+      case 'with recursive':
+        return writeTablesForWithRecursive(statement, cteAliases);
+      case 'select':
+      case 'show':
+      case 'union':
+      case 'union all':
+      case 'values':
+        return [];
+      case 'alter enum':
+      case 'alter index':
+      case 'alter sequence':
+      case 'alter table':
+      case 'begin':
+      case 'comment':
+      case 'commit':
+      case 'create composite type':
+      case 'create enum':
+      case 'create extension':
+      case 'create function':
+      case 'create index':
+      case 'create materialized view':
+      case 'create schema':
+      case 'create sequence':
+      case 'create table':
+      case 'create view':
+      case 'deallocate':
+      case 'do':
+      case 'drop function':
+      case 'drop index':
+      case 'drop sequence':
+      case 'drop table':
+      case 'drop trigger':
+      case 'drop type':
+      case 'prepare':
+      case 'raise':
+      case 'refresh materialized view':
+      case 'rollback':
+      case 'set':
+      case 'set names':
+      case 'set timezone':
+      case 'start transaction':
+      case 'tablespace':
+        return [UNTABLED_SQL_WRITE];
+      default:
+        statement satisfies never;
+        return [UNTABLED_SQL_WRITE];
+    }
+  },
+);
 
 function writeTablesForInsert(
   statement: InsertStatement,
@@ -338,19 +342,22 @@ function sqlWriteTargetSortKey(target: ParsedSqlWriteTarget): string {
   return target === UNTABLED_SQL_WRITE ? '\0' : target;
 }
 
-function unparsedSqliteWriteStatement(statement: string): boolean {
-  const head = firstSqlToken(statement);
-  if (
-    head === 'attach' ||
-    head === 'detach' ||
-    head === 'pragma' ||
-    head === 'reindex' ||
-    head === 'vacuum'
-  ) {
-    return true;
-  }
-  return false;
-}
+const unparsedSqliteWriteStatement = securityClassifier(
+  'server.sql.unparsed-sqlite-write',
+  function (statement: string): boolean {
+    const head = firstSqlToken(statement);
+    if (
+      head === 'attach' ||
+      head === 'detach' ||
+      head === 'pragma' ||
+      head === 'reindex' ||
+      head === 'vacuum'
+    ) {
+      return true;
+    }
+    return false;
+  },
+);
 
 function firstSqlToken(statement: string): string | undefined {
   const match = /^(?:\s|--[^\n]*(?:\n|$)|\/\*[\s\S]*?\*\/)*([a-z]+)/iu.exec(statement);
