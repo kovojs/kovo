@@ -106,6 +106,45 @@ describe('SigningKeyRing', () => {
     ).toEqual({ ok: false, reason: 'unknown-key' });
   });
 
+  it('rejects malformed-length signatures through the same fixed-width compare path', () => {
+    const keyRing = createSigningKeyRing({
+      keys: [{ id: 'current', secret: NEW_SECRET, state: 'active' }],
+    });
+    const signed = keyRing.sign({
+      audience: 'csrf:cart/add',
+      payload: 'session-1',
+      purpose: 'csrf',
+    });
+
+    expect(
+      keyRing.verify({
+        audience: 'csrf:cart/add',
+        keyId: signed.keyId,
+        payload: 'session-1',
+        purpose: 'csrf',
+        signature: signed.signature.slice(0, -1),
+      }),
+    ).toEqual({ ok: false, reason: 'bad-signature' });
+    expect(
+      keyRing.verify({
+        audience: 'csrf:cart/add',
+        keyId: signed.keyId,
+        payload: 'session-1',
+        purpose: 'csrf',
+        signature: `${signed.signature}a`,
+      }),
+    ).toEqual({ ok: false, reason: 'bad-signature' });
+    expect(
+      keyRing.verify({
+        audience: 'csrf:cart/add',
+        keyId: signed.keyId,
+        payload: 'session-1',
+        purpose: 'csrf',
+        signature: signed.signature,
+      }),
+    ).toEqual({ ok: true, keyId: signed.keyId });
+  });
+
   it('fails closed for missing or invalid signing material', () => {
     expect(() => createSigningKeyRing({ keys: [] })).toThrow(/exactly one active key/);
     expect(() =>

@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 import type { Redirect } from '@kovojs/core';
 import { isProvenPrincipal } from './auth-principal.js';
@@ -602,10 +602,18 @@ function canonicalJson(value: unknown): string {
 }
 
 function secureEqual(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  if (leftBuffer.byteLength !== rightBuffer.byteLength) return false;
-  return timingSafeEqual(leftBuffer, rightBuffer);
+  return timingSafeEqual(digestComparableAttestation(left), digestComparableAttestation(right));
+}
+
+function digestComparableAttestation(value: string): Buffer {
+  const bytes = Buffer.from(value);
+  return createHash('sha256')
+    .update('kovo-live-target-attestation-v1')
+    .update('\0')
+    .update(String(bytes.byteLength))
+    .update('\0')
+    .update(bytes)
+    .digest();
 }
 
 function parseLiveTargetProps(value: string): Record<string, unknown> | null {

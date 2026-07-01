@@ -1,4 +1,4 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 /** Minimum HMAC root secret bytes accepted by framework signing helpers (SPEC §6.6). */
 export const SIGNING_SECRET_MIN_BYTES = 32;
@@ -206,8 +206,16 @@ function toBytes(value: string | Uint8Array): Buffer {
 }
 
 function secureEqual(left: string, right: string): boolean {
-  const leftBuffer = Buffer.from(left);
-  const rightBuffer = Buffer.from(right);
-  if (leftBuffer.byteLength !== rightBuffer.byteLength) return false;
-  return timingSafeEqual(leftBuffer, rightBuffer);
+  return timingSafeEqual(digestComparableSignature(left), digestComparableSignature(right));
+}
+
+function digestComparableSignature(value: string): Buffer {
+  const bytes = Buffer.from(value);
+  return createHash('sha256')
+    .update('kovo-signature-v1')
+    .update('\0')
+    .update(String(bytes.byteLength))
+    .update('\0')
+    .update(bytes)
+    .digest();
 }

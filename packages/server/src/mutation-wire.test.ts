@@ -167,6 +167,30 @@ describe('mutation wire headers', () => {
         buildToken: 'build-a',
         csrf,
         headers: {
+          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token.slice(0, -1)}:{"productId":"p1"}`,
+        },
+        rawInput: {},
+        request,
+      }).liveTargetDescriptors,
+    ).toEqual([]);
+
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'build-a',
+        csrf,
+        headers: {
+          'Kovo-Live-Targets': `product-form:p1#components/product-form/product-form@${token}a:{"productId":"p1"}`,
+        },
+        rawInput: {},
+        request,
+      }).liveTargetDescriptors,
+    ).toEqual([]);
+
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'build-a',
+        csrf,
+        headers: {
           'Kovo-Live-Targets':
             'product-form:p1#components/product-form/product-form:{"productId":"p1"}',
         },
