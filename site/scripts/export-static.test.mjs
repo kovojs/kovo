@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, it } from 'vitest';
 
 import {
+  assertExportedAppStyleClassCoverage,
   assertExtractedComponentCss,
   assertExtractedSiteAppCss,
   assertServedStylesheetContent,
@@ -18,11 +19,11 @@ const siteRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 describe('site export CSS guards', () => {
   const goodSiteCss = `
     :root{--site-token:1}
-    .kv-landing-a{}
-    .kv-chrome-b{}
-    .kv-docs-layout-c{}
-    .kv-gallery-d{}
-    .kv-search-e{}
+    .kv-style-bg-a{}
+    .kv-style-fg-b{}
+    .kv-style-d-c{}
+    .kv-style-pad-d{}
+    .kv-style-font-e{}
   `.padEnd(12_000, ' ');
 
   it('passes for a healthy global app stylesheet', () => {
@@ -58,21 +59,54 @@ describe('site export CSS guards', () => {
   it('throws when the served stylesheet references undefined custom properties', () => {
     const css = `
       :root{--site-token:1}
-      .kv-landing-a{}
-      .kv-chrome-b{}
-      .kv-docs-layout-c{}
-      .kv-gallery-d{}
-      .kv-search-e{color:var(--missing-token)}
+      .kv-style-bg-a{}
+      .kv-style-fg-b{}
+      .kv-style-d-c{}
+      .kv-style-pad-d{}
+      .kv-style-font-e{color:var(--missing-token)}
     `.padEnd(12_000, ' ');
     expect(() => assertServedStylesheetContent(css, '/dist-css/assets/site.css')).toThrow(
       /undefined CSS custom properties \(--missing-token\)/,
     );
   });
 
+  it('throws when exported HTML app style classes are missing from the served stylesheet', () => {
+    const artifacts = [
+      {
+        body: '<main class="kv-style-bg-abc manual kv-style-fg-def">Home</main>',
+        headers: {},
+        path: '/index.html',
+        status: 200,
+      },
+    ];
+    const css = '.kv-style-bg-abc{background:red}.manual{display:block}';
+
+    expect(() =>
+      assertExportedAppStyleClassCoverage(artifacts, css, '/dist-css/assets/site.css'),
+    ).toThrow(/kv-style-fg-def/);
+  });
+
+  it('passes when exported HTML app style classes are present in the served stylesheet', () => {
+    const artifacts = [
+      {
+        body: '<main class="kv-style-bg-abc manual kv-style-fg-def">Home</main>',
+        headers: {},
+        path: '/index.html',
+        status: 200,
+      },
+    ];
+    const css =
+      '.kv-style-bg-abc{background:red}.kv-style-fg-def{color:white}.manual{display:block}';
+
+    expect(() =>
+      assertExportedAppStyleClassCoverage(artifacts, css, '/dist-css/assets/site.css'),
+    ).not.toThrow();
+  });
+
   it('validates extracted site app CSS atoms', () => {
     expect(() => assertExtractedSiteAppCss(goodSiteCss)).not.toThrow();
-    expect(() => assertExtractedSiteAppCss('.kv-landing-a{}')).toThrow(
-      /kv-chrome-, kv-docs-layout-, kv-gallery-, kv-search-/,
+    expect(() => assertExtractedSiteAppCss('.kv-style-bg-a{}')).toThrow(
+      /kv-style-fg-, kv-style-d-, kv-style-pad-, kv-style-font-/,
     );
   });
 

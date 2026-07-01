@@ -111,6 +111,12 @@ export function extractAppComponentCss(
 ): AppComponentCssResult {
   const rootDir = dirname(resolve(options.fileName));
   return extractComponentCssFromFiles(appComponentSourceFiles(rootDir), {
+    defaultStyleIdentity: {
+      keyframes: 'keyframes',
+      styles: 'style',
+      theme: 'theme',
+      vars: 'tokens',
+    },
     rootDir,
     resolveStaticImport: resolveLocalStaticImport(rootDir),
   });
@@ -154,6 +160,12 @@ export function extractAppRouteCssTargets(
 }
 
 interface ExtractComponentCssFromFilesOptions {
+  readonly defaultStyleIdentity?: {
+    readonly keyframes?: string;
+    readonly styles?: string;
+    readonly theme?: string;
+    readonly vars?: string;
+  };
   readonly resolveStaticImport: (fromFileName: string, specifier: string) => string | null;
   readonly rootDir: string;
 }
@@ -178,6 +190,9 @@ function extractComponentCssFromFiles(
 
     const model = parseComponentModule(fileName, source);
     const extraction = extractKovoStyles(fileName, source, model, 'Component', {
+      ...(options.defaultStyleIdentity === undefined
+        ? {}
+        : { defaultStyleIdentity: options.defaultStyleIdentity }),
       resolveStaticImport: options.resolveStaticImport,
     });
     if (extraction.css) {

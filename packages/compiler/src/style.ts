@@ -86,6 +86,13 @@ interface StyleIdentityOptions {
   readonly source?: string;
 }
 
+interface StyleIdentityDefaults {
+  readonly keyframes?: string;
+  readonly styles?: string;
+  readonly theme?: string;
+  readonly vars?: string;
+}
+
 function createAtomicStylesWithIdentity(
   styles: Record<string, StyleObject>,
   identity: StyleIdentityOptions,
@@ -180,6 +187,7 @@ export function extractKovoStyles(
   model: ComponentModuleModel,
   componentName = 'Component',
   options: Pick<CompileComponentOptions, 'queryShapeFacts' | 'queryShapes' | 'registryFacts'> & {
+    readonly defaultStyleIdentity?: StyleIdentityDefaults;
     readonly resolveStaticImport?: StyleStaticImportResolver;
   } = {},
 ): KovoStyleExtraction {
@@ -199,6 +207,7 @@ export function extractKovoStyles(
     model.sourceFile,
     styleImports,
     importedStaticValues,
+    options.defaultStyleIdentity,
   );
   if (
     environment.bindings.size === 0 &&
@@ -301,6 +310,7 @@ function collectStyleEnvironment(
   sourceFile: ts.SourceFile,
   styleImports: StyleImports,
   importedStaticValues: ReadonlyMap<string, unknown> = new Map(),
+  defaultStyleIdentity: StyleIdentityDefaults = {},
 ): StyleEnvironment {
   const bindings = new Map<string, StyleBinding>();
   const themeClassBindings = new Map<string, string>();
@@ -330,7 +340,9 @@ function collectStyleEnvironment(
       if (frames) {
         const result = createKeyframesWithIdentity(frames.frames, {
           namespace:
-            frames.options.namespace ?? derivedKeyframesNamespace(fileName, node.name.text),
+            frames.options.namespace ??
+            defaultStyleIdentity.keyframes ??
+            'keyframes',
           source: frames.options.source ?? fileName,
         });
         staticValues.set(node.name.text, result.name);
@@ -349,7 +361,10 @@ function collectStyleEnvironment(
           continue;
         }
         const result = defineVarsWithIdentity(tokens, {
-          namespace: vars.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
+          namespace:
+            vars.options.namespace ??
+            defaultStyleIdentity.vars ??
+            derivedStyleNamespace(fileName, node.name.text),
           source: vars.options.source ?? fileName,
         });
         const resultRules = atomicRulesFromMetadata(result.__rules);
@@ -373,7 +388,10 @@ function collectStyleEnvironment(
           baseTokens as Parameters<typeof createTheme>[0],
           overrides,
           {
-            namespace: theme.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
+            namespace:
+              theme.options.namespace ??
+              defaultStyleIdentity.theme ??
+              derivedStyleNamespace(fileName, node.name.text),
             source: theme.options.source ?? fileName,
           },
         );
@@ -388,7 +406,10 @@ function collectStyleEnvironment(
       const created = styleCreateCall(node.initializer, styleImports, localObjects, staticValues);
       if (created) {
         const identity = {
-          namespace: created.options.namespace ?? derivedStyleNamespace(fileName, node.name.text),
+          namespace:
+            created.options.namespace ??
+            defaultStyleIdentity.styles ??
+            derivedStyleNamespace(fileName, node.name.text),
           source: created.options.source ?? fileName,
         };
         const result = createAtomicStylesWithIdentity(created.styles, {
@@ -484,19 +505,6 @@ function derivedStyleNamespace(fileName: string, bindingName: string): string {
   if (binding === 'variants') return `${fileNamespace}-variant`;
 
   return binding;
-}
-
-function derivedKeyframesNamespace(fileName: string, bindingName: string): string {
-  const fileBase = fileName
-    .split(/[\\/]/)
-    .filter(Boolean)
-    .at(-1)
-    ?.replace(/\.[cm]?[tj]sx?$/, '');
-  const fileNamespace = fileBase && fileBase.length > 0 ? fileBase : 'keyframes';
-  const binding = toKebabCase(bindingName).replace(/-(keyframes|animation|slide)$/, '');
-  if (binding.length === 0 || binding === fileNamespace) return fileNamespace;
-  if (binding.startsWith(`${fileNamespace}-`)) return binding;
-  return `${fileNamespace}-${binding}`;
 }
 
 function toKebabCase(value: string): string {

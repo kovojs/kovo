@@ -46,7 +46,6 @@ export {
   ProgressDemo,
   TooltipDemo,
 } from './demo-fixtures-controls.js';
-import * as style from '@kovojs/style';
 import {
   Accordion,
   AccordionContent,
@@ -1370,12 +1369,6 @@ export function HoverCardDemo(): string {
 }
 
 export function KbdDemo(): string {
-  const kbdDemoStyles = style.create({
-    uppercase: {
-      textTransform: 'uppercase',
-    },
-  });
-
   return (
     <section data-gallery-demo="kbd">
       <p data-demo-summary="no-js">
@@ -1383,7 +1376,7 @@ export function KbdDemo(): string {
       </p>
       <div data-ui-demo="kbd">
         {Kbd.definition.render({ children: 'Ctrl' })}
-        {Kbd.definition.render({ children: 'K', style: kbdDemoStyles.uppercase })}
+        {Kbd.definition.render({ children: 'K', style: [null, { textTransform: 'uppercase' }] })}
       </div>
       {renderBehaviorContract({
         changeReasons: 'not stateful',

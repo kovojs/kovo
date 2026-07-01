@@ -1,6 +1,5 @@
 /** @jsxImportSource @kovojs/server */
 import { tabsRootAttributes } from '@kovojs/headless-ui/tabs';
-import * as style from '@kovojs/style';
 import { Drawer } from '@kovojs/ui/drawer';
 import { Meter } from '@kovojs/ui/meter';
 import {
@@ -595,12 +594,6 @@ export function SelectDemo(): string {
 }
 
 export function SeparatorDemo(): string {
-  const separatorDemoStyles = style.create({
-    short: {
-      width: 256,
-    },
-  });
-
   return (
     <section data-gallery-demo="separator">
       <p data-demo-summary="no-js">
@@ -608,7 +601,7 @@ export function SeparatorDemo(): string {
       </p>
       <div style="display:grid;gap:1rem" data-ui-demo="separator">
         <span data-fixture-state="decorative">
-          {Separator.definition.render({ style: separatorDemoStyles.short })}
+          {Separator.definition.render({ style: [null, { width: 256 }] })}
         </span>
         <span
           style="display:flex;height:4rem;align-items:stretch;gap:1rem"
@@ -684,7 +677,7 @@ export function SkeletonDemo(): string {
   // as "a profile row is loading" instead of two anonymous gray blocks — the
   // shadcn skeleton card shape. The Skeleton component's own background/shimmer
   // comes from @kovojs/ui CSS; only the demo-local sizing/layout is inlined,
-  // because app-authored style.create(...) atoms in demo files are not collected
+  // because app-authored atomic style atoms in demo files are not collected
   // by the build and would render as 0px.
   return (
     <section data-gallery-demo="skeleton">

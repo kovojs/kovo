@@ -38,11 +38,11 @@ const uiStylesheetPath = path.join(cssDistDir, 'assets/kovo-ui.css');
 const SITE_CSS_MIN_BYTES = 5_000;
 const SITE_CSS_REQUIRED_ATOMS = ['kv-button-', 'kv-switch-', 'kv-dialog-'];
 const SITE_APP_CSS_REQUIRED_ATOMS = [
-  'kv-landing-',
-  'kv-chrome-',
-  'kv-docs-layout-',
-  'kv-gallery-',
-  'kv-search-',
+  'kv-style-bg-',
+  'kv-style-fg-',
+  'kv-style-d-',
+  'kv-style-pad-',
+  'kv-style-font-',
 ];
 const STAGED_STATIC_EXPORT_PUBLIC_ASSETS = [
   {
@@ -62,6 +62,42 @@ function findUndefinedCustomProperties(css) {
   const defined = new Set([...css.matchAll(/(?<![\w-])(--[\w-]+)\s*:/g)].map((match) => match[1]));
   const referenced = new Set([...css.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]));
   return [...referenced].filter((property) => !defined.has(property)).sort();
+}
+
+function stylesheetClassSelectors(css) {
+  return new Set([...css.matchAll(/\.(-?[_a-zA-Z]+[_a-zA-Z0-9-]*)/g)].map((match) => match[1]));
+}
+
+function htmlClassNames(html) {
+  const classes = new Set();
+  for (const match of html.matchAll(/\bclass="([^"]*)"/g)) {
+    for (const className of match[1].split(/\s+/)) {
+      if (className) classes.add(className);
+    }
+  }
+  return classes;
+}
+
+export function assertExportedAppStyleClassCoverage(artifacts, css, stylesheetPath) {
+  const selectors = stylesheetClassSelectors(css);
+  const missing = [];
+  for (const artifact of artifacts) {
+    const missingForArtifact = [...htmlClassNames(artifact.body)]
+      .filter((className) => className.startsWith('kv-style-') && !selectors.has(className))
+      .sort();
+    if (missingForArtifact.length === 0) continue;
+    missing.push(
+      `${artifact.path}: ${missingForArtifact.slice(0, 12).join(', ')}${
+        missingForArtifact.length > 12 ? ` (+${missingForArtifact.length - 12} more)` : ''
+      }`,
+    );
+  }
+  if (missing.length === 0) return;
+
+  throw new Error(
+    `site export: exported HTML uses app style classes that are missing from ${stylesheetPath}. ` +
+      `This would ship the site unstyled. Missing selectors: ${missing.slice(0, 8).join('; ')}`,
+  );
 }
 
 // Pure content guard for the served stylesheet: throw a clear, actionable error
@@ -238,30 +274,42 @@ export function assertExtractedSiteAppCss(css) {
 }
 
 async function appendSiteAppCssToBuiltStylesheet() {
-  const appModulePath = path.join(siteRoot, 'src/app.tsx');
+  const appStyleEntryPaths = [
+    path.join(siteRoot, 'src/app.tsx'),
+    // Component pages fold static gallery fixture HTML from examples/gallery into
+    // the site document; extract those authored style.create(...) atoms too.
+    path.resolve(siteRoot, '../examples/gallery/src/demo-fixtures.tsx'),
+  ];
   const { extractAppComponentCss } = await import('@kovojs/compiler');
-  const result = extractAppComponentCss({
-    fileName: appModulePath,
-    packagePrefixDiscoveryRoot: path.dirname(appModulePath),
-    source: readFileSync(appModulePath, 'utf8'),
-  });
-  if (!result.css) {
+  const results = appStyleEntryPaths.map((fileName) =>
+    extractAppComponentCss({
+      fileName,
+      packagePrefixDiscoveryRoot: path.dirname(fileName),
+      source: readFileSync(fileName, 'utf8'),
+    }),
+  );
+  const diagnostics = results.flatMap((result) => result.diagnostics);
+  const css = results
+    .map((result) => result.css)
+    .filter((chunk) => typeof chunk === 'string' && chunk.length > 0)
+    .join('\n\n');
+  if (!css) {
     throw new Error(
       'site export: no site app CSS was extracted; the docs shell would render unstyled.',
     );
   }
-  if (result.diagnostics.length > 0) {
+  if (diagnostics.length > 0) {
     throw new Error(
-      `site export: site app CSS extraction warnings:\n${result.diagnostics
+      `site export: site app CSS extraction warnings:\n${diagnostics
         .map((diagnostic) => `- ${diagnostic.fileName}: ${diagnostic.message}`)
         .join('\n')}`,
     );
   }
 
-  assertExtractedSiteAppCss(result.css);
+  assertExtractedSiteAppCss(css);
   const stylesheetPath = builtStylesheetPath();
   const currentCss = readFileSync(stylesheetPath, 'utf8');
-  writeFileSync(stylesheetPath, `${currentCss.trimEnd()}\n\n${result.css.trim()}\n`);
+  writeFileSync(stylesheetPath, `${currentCss.trimEnd()}\n\n${css.trim()}\n`);
 }
 
 export async function exportSiteStaticApp({
@@ -319,6 +367,13 @@ export async function exportSiteStaticApp({
   } finally {
     await viteServer.close();
   }
+
+  const stylesheetPath = builtStylesheetPath();
+  assertExportedAppStyleClassCoverage(
+    staticExportResult.artifacts,
+    readFileSync(stylesheetPath, 'utf8'),
+    stylesheetPath,
+  );
 
   // public/ (fonts + the gallery runtime shim) is verbatim static hosting,
   // outside the manifest; copy it alongside the replayed documents.

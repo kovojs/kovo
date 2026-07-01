@@ -84,19 +84,25 @@ describe('extractPackageComponentCss over @kovojs/ui', () => {
   it('emits each @keyframes block once for keyframes-using components (SPEC §13.1)', () => {
     const css = uiExtraction().css ?? '';
     // skeleton pulse, progress indeterminate slide, tabs panel fade are restored.
-    for (const prefix of [
-      'kv-skeleton-pulse-',
-      'kv-progress-indeterminate-',
-      'kv-tabs-panel-fade-',
-    ]) {
-      const blocks = [...css.matchAll(new RegExp(`@keyframes (${prefix}[a-z0-9]+)\\{`, 'g'))];
-      expect(blocks.length, prefix).toBe(1);
-      // Each is defined exactly once across the combined, deduped stylesheet.
-      const name = blocks[0]?.[1] ?? '';
+    const keyframeNames = [
+      ...css.matchAll(/@keyframes (kv-keyframes-[a-z0-9]+)\{/g),
+    ].map((match) => match[1]);
+    expect(new Set(keyframeNames).size).toBe(keyframeNames.length);
+    expect(keyframeNames.length).toBeGreaterThanOrEqual(3);
+    for (const name of keyframeNames) {
       expect(css.split(`@keyframes ${name}{`).length - 1, name).toBe(1);
     }
+    for (const prefix of [
+      'kv-skeleton-animation-',
+      'kv-progress-animation-',
+      'kv-tabs-animation-',
+    ]) {
+      expect(css).toMatch(
+        new RegExp(`\\.${prefix}[a-z0-9]+(?:\\[[^\\]]+\\])?\\{animation-name:kv-keyframes-[a-z0-9]+\\}`),
+      );
+    }
     // Keyframes carry no cascade priority, so they are emitted outside @layer.
-    expect(css).toMatch(/@keyframes kv-skeleton-pulse-[a-z0-9]+\{0%, 100%\{opacity:1\}/);
+    expect(css).toMatch(/@keyframes kv-keyframes-[a-z0-9]+\{0%, 100%\{opacity:1\}/);
   });
 });
 
@@ -172,6 +178,8 @@ const generatedStyles = style.create({ root: { color: 'red' } });
       expect(result.css).toContain('background-color:teal');
       expect(result.css).toContain('color:var(--kovo-theme-sys-color-primary)');
       expect(result.css).toContain('padding:8px');
+      expect(result.css).toContain('.kv-style-bg-');
+      expect(result.css).not.toContain('.kv-app-bg-');
       expect(result.css).not.toContain('red');
       expect(result.cssAssets).toEqual([
         expect.objectContaining({
