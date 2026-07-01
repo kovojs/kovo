@@ -151,9 +151,10 @@ packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/in
     extract facts once, fail closed when extraction is incomplete, and let policy checks become set
     operations over canonical facts. The completed KV435/KV414 column-provenance spike is the precedent; the
     next C slice should make that pattern repeatable for another sink family.
-  - Preferred next sink family: task/webhook writes or raw SQL executions, because both are security-relevant,
-    artifact-observable, and tied to already-open A/F findings. If a targeted audit shows another listed sink
-    is lower-risk to land first, record the reason under this item before switching.
+  - Selected sink family: task/webhook direct DB writes outside audited mutation channels. A targeted C1
+    inspection chose this over raw SQL because task/webhook writes already have compiler-owned handler
+    models and task graph facts, while raw SQL is more entangled with Drizzle static extraction and starter
+    DB cleanup.
   - Candidate sink families:
     - [ ] Task/webhook writes outside audited mutation channels.
     - [ ] Raw SQL executions and trusted-escape waivers.
@@ -161,36 +162,49 @@ packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/in
     - [ ] Raw HTML writes and trusted HTML provenance.
     - [ ] Client-derive free identifiers and client/server leak boundaries.
   - Extraction model:
-    - [ ] Name the selected sink family and enumerate its current source-AST gates and runtime/artifact paths.
-    - [ ] Define the emitted fact shape for the sink: canonical target identity, operation kind, provenance
-          proof, source span, and `UNRESOLVED` state.
-    - [ ] Extend the graph/fact writer so every selected sink emits either a complete fact or a fail-closed
-          diagnostic; never encode "unknown" as an empty safe set.
-    - [ ] Preserve actionable source spans from the authored TSX/TS source to the fact and diagnostic.
-    - [ ] Add fixture output or snapshot coverage for the emitted fact shape.
+    - [ ] Enumerate the current task/webhook write gates in
+          `packages/compiler/src/validate/component-contracts.ts` and handler models in
+          `packages/compiler/src/scan/parse.ts`.
+    - [ ] Define a compiler-owned handler write-sink fact shape carrying surface (`task` or `webhook`),
+          owner key/path, operation kind, canonical target identity, provenance proof, source span, and
+          `UNRESOLVED`.
+    - [ ] Extend task/webhook handler extraction so every selected sink emits either a complete fact or a
+          fail-closed diagnostic; never encode "unknown" as an empty safe set.
+    - [ ] Thread the fact through `packages/compiler/src/types.ts`, `packages/compiler/src/compile.ts`,
+          `packages/compiler/src/app-graph.ts`, and `packages/core/src/graph.ts` only as far as needed for
+          policy checks and artifact/explain coverage.
+    - [ ] Preserve existing KV330 source span quality from direct-write path starts and lengths.
+    - [ ] Add fact-output or graph/explain coverage proving task composition edges stay distinct from
+          direct DB write sinks.
   - Policy migration:
-    - [ ] Change the selected gate to read only the fact model for policy decisions.
-    - [ ] Remove or demote the old source re-walk so it cannot silently disagree with the fact model.
+    - [ ] Change the task/webhook branches of KV330 direct-DB validation to read only the handler write-sink
+          facts.
+    - [ ] Leave mutation and endpoint KV330 on their current implementation unless they are needed for shared
+          helper extraction.
+    - [ ] Remove or demote the old task/webhook source re-walk so it cannot silently disagree with the fact
+          model.
     - [ ] Keep diagnostics stable or deliberately tighten them, citing `SPEC.md` §11 where ambiguity would be
           easy to reintroduce.
     - [ ] Verify that an unresolved fact emits KV406 or a stricter diagnostic before the policy check would
           otherwise pass.
   - Runtime/artifact cross-check:
-    - [ ] For runtime-observable sinks, add an instrumentation or prod-artifact assertion that observed sinks
-          are a subset of static/declaration facts.
-    - [ ] For build-only sinks, add `kovo check` and `kovo build` coverage so dev/prod behavior cannot diverge.
-    - [ ] If declarations are needed as an escape hatch, verify declaration identity through B's resolver and
-          treat declarations as runtime-checked claims, not waivers.
+    - [ ] Add a compiler/graph assertion that task artifacts expose declared composition edges (`runMutation`,
+          `runQuery`, `schedule`) separately from forbidden direct DB write sinks.
+    - [ ] Add `kovo check`/`kovo build` coverage for task and webhook direct DB writes so dev/prod behavior
+          cannot diverge.
+    - [ ] If webhook write declarations are involved, verify declarations are treated as checked claims and do
+          not waive direct DB write sinks by name.
   - Metamorphic coverage:
     - [ ] Add a known-unsafe seed for the selected sink to
           `packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`.
     - [ ] Cover at least import alias, namespace import, local re-export barrel, helper wrapper, closure, and
-          local-shadow variants where those spellings apply to the selected sink.
+          local-shadow variants for task/webhook direct DB writes where those spellings apply.
     - [ ] Prove each variant either produces the same canonical fact or fails closed with KV406/a stricter
           diagnostic.
-  - Acceptance: focused gate tests for the selected sink; fact-output/snapshot coverage; relevant
+  - Acceptance: `vp exec vitest --run packages/compiler/src/direct-db.test.ts
+packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`; relevant
     `packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts` cases; `kovo check` and
-    prod-artifact coverage when artifact observable; `git diff --check`; `pnpm run check:vp`.
+    prod-artifact/build coverage when artifact observable; `git diff --check`; `pnpm run check:vp`.
 
 - [ ] **D2. Close D after D1 lands.**
   - [ ] Confirm SSR, `/_q`, and enhanced mutation paths all use the same query warning/list-limit contract.
