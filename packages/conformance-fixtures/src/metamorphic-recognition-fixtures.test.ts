@@ -59,9 +59,9 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
       },
       {
         code: 'KV426',
-        enforced: 6,
+        enforced: 7,
         label: 'trusted HTML provenance',
-        todo: 1,
+        todo: 0,
         variants: [
           'control',
           'import-alias',
@@ -121,22 +121,43 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
     );
   });
 
-  it('makes known-failing variants explicit instead of hiding xfails', () => {
+  it('keeps phase-0 TODOs empty unless a test explicitly approves them', () => {
     const todoRows = metamorphicRecognitionTodoRows();
+    const approvedTodoSeed = {
+      code: 'KV414' as const,
+      description: 'approved TODO fixture',
+      label: 'approved TODO',
+      variants: [
+        {
+          expectation: 'enforced' as const,
+          kind: 'control' as const,
+          label: 'control',
+          run: () => ({ codes: ['KV414'], detail: [] }),
+        },
+        {
+          blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity],
+          expectation: 'todo' as const,
+          kind: 'import-alias' as const,
+          label: 'approved TODO',
+          reason: 'temporary explicitly approved TODO in this guard fixture',
+        },
+      ],
+    };
+    const seedsWithTodo = [
+      approvedTodoSeed,
+      ...metamorphicRecognitionSeeds.filter((seed) => seed.code !== 'KV414'),
+    ];
 
-    expect(todoRows).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: 'KV426',
-          kind: 're-export-barrel',
-          blockers: [
-            METAMORPHIC_RECOGNITION_BLOCKERS.compilerMultiFileFixture,
-            METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity,
-          ],
-        }),
-      ]),
-    );
+    expect(todoRows).toEqual([]);
     expect(todoRows.every((row) => row.reason.length > 0 && row.blockers.length > 0)).toBe(true);
+    expect(metamorphicRecognitionGateViolations(seedsWithTodo)).toContain(
+      'KV414/import-alias: TODO variant lacks explicit approval',
+    );
+    expect(
+      metamorphicRecognitionGateViolations(seedsWithTodo, {
+        approvedTodos: ['KV414/import-alias'],
+      }),
+    ).not.toContain('KV414/import-alias: TODO variant lacks explicit approval');
   });
 
   for (const seed of metamorphicRecognitionSeeds) {

@@ -70,6 +70,10 @@ export interface MetamorphicCoverageRow {
   variants: readonly MetamorphicVariantKind[];
 }
 
+export interface MetamorphicRecognitionGateOptions {
+  readonly approvedTodos?: readonly string[];
+}
+
 interface KovoServerBindingVariant {
   blockers?: readonly MetamorphicRecognitionBlocker[];
   callee: string;
@@ -97,7 +101,7 @@ interface SqlBindingVariant {
 interface CompilerExpressionVariant {
   blockers?: readonly MetamorphicRecognitionBlocker[];
   expectation: MetamorphicExpectation;
-  extraFilesUnsupported?: true;
+  extraFiles?: readonly SourceFileInput[];
   importLine?: string;
   kind: MetamorphicVariantKind;
   label: string;
@@ -197,8 +201,10 @@ export function metamorphicRecognitionTodoRows(
 
 export function metamorphicRecognitionGateViolations(
   seeds: readonly MetamorphicRecognitionSeed[] = metamorphicRecognitionSeeds,
+  options: MetamorphicRecognitionGateOptions = {},
 ): string[] {
   const failures: string[] = [];
+  const approvedTodos = new Set(options.approvedTodos ?? []);
   const requiredCodes = new Set(PHASE0_METAMORPHIC_REQUIRED_CODES);
   const seenCodes = new Map<Phase0MetamorphicCode, number>();
   const validBlockers = new Set<string>(Object.values(METAMORPHIC_RECOGNITION_BLOCKERS));
@@ -231,6 +237,10 @@ export function metamorphicRecognitionGateViolations(
       }
 
       if (variant.expectation === 'todo') {
+        const todoKey = `${seed.code}/${variant.kind}`;
+        if (!approvedTodos.has(todoKey)) {
+          failures.push(`${todoKey}: TODO variant lacks explicit approval`);
+        }
         if ((variant.reason ?? '').trim().length === 0) {
           failures.push(`${seed.code}/${variant.kind}: TODO variants require a precise reason`);
         }
@@ -456,17 +466,16 @@ export const Post = component({
 `,
     },
     {
-      blockers: [
-        METAMORPHIC_RECOGNITION_BLOCKERS.compilerMultiFileFixture,
-        METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity,
+      expectation: 'enforced',
+      extraFiles: [
+        {
+          fileName: 'browser-barrel.ts',
+          source: 'export { trustedHtml as th } from "@kovojs/browser";',
+        },
       ],
-      expectation: 'todo',
-      extraFilesUnsupported: true,
       importLine: 'import { th } from "./browser-barrel";',
       kind: 're-export-barrel',
       label: 'trustedHtml local barrel re-export',
-      reason:
-        'Compiler multi-file component fixture harness / Workstream B semantic identity resolver: compileComponentModule is currently single-file and KV426 does not follow browser re-export barrels.',
       source: `
 export const Post = component({
   queries: { post: postQuery },
@@ -643,6 +652,7 @@ function runCompilerDiagnosticVariant(
   variant: CompilerExpressionVariant,
 ): MetamorphicRunResult {
   const result = compileComponentModule({
+    ...(variant.extraFiles ? { extraFiles: variant.extraFiles } : {}),
     fileName: `${code.toLowerCase()}-${variant.kind}.tsx`,
     source: [variant.importLine ?? '', variant.source].filter(Boolean).join('\n'),
   });
