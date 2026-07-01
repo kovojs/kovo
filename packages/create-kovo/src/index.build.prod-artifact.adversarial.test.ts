@@ -16,6 +16,7 @@ import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject, type CreateKovoDialect } from './index.js';
 import {
+  addAuthSecretLeakProof,
   addEscapedAttackerTextProof,
   addRuntimeContractProofs,
   addRawSqlOwnerWriteProof,
@@ -86,6 +87,30 @@ describe('create-kovo starter (build integration: adversarial production artifac
           'renderedHtml() sends query-derived data',
           'trustedHtml() sends request-derived data',
         ]);
+      });
+    },
+    240_000,
+  );
+
+  it.each([
+    ['postgres', undefined],
+    ['sqlite', 'sqlite'],
+  ] as const)(
+    'blocks secret-column-to-wire value-flow in the %s production artifact',
+    (_label: string, dialect: CreateKovoDialect | undefined) => {
+      withProject(`create-kovo-m1-secret-value-flow-${_label}-red-`, dialect, (root) => {
+        addAuthSecretLeakProof(root);
+        expectBuildFailure(root, [
+          'KV435',
+          'Secret query value reaches the client wire',
+          'queries/auth-secret-leak-query.accessToken',
+          'queries/auth-secret-leak-query.password',
+        ]);
+      });
+
+      withProject(`create-kovo-m1-secret-value-flow-${_label}-green-`, dialect, (root) => {
+        addAuthSecretLeakProof(root, { leakToWire: false });
+        buildProductionArtifact(root);
       });
     },
     240_000,
