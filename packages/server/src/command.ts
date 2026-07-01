@@ -3,10 +3,12 @@ import { execFile } from 'node:child_process';
 import { blessSink, isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 declare const commandBrand: unique symbol;
+declare const commandAllowlistBrand: unique symbol;
 
 type CommandExecFileSink = 'server:command-exec-file';
 
 const COMMAND_EXEC_FILE_SINK: CommandExecFileSink = 'server:command-exec-file';
+const commandAllowlists = new WeakMap<CommandAllowlist, ReadonlySet<string>>();
 
 /** A shell-free command minted by {@link cmd}. */
 export interface Command {
@@ -15,6 +17,19 @@ export interface Command {
   /** Arguments passed as the `args` array to `child_process.execFile`. */
   readonly argv: readonly string[];
   readonly [commandBrand]: true;
+}
+
+/** Explicit allowlist required before a program can become an executable command. */
+export interface CommandAllowlist {
+  /** Human-reviewable reason this process boundary exists. */
+  readonly justification: string;
+  readonly [commandAllowlistBrand]: true;
+}
+
+/** Options for constructing a shell-free {@link Command}. */
+export interface CommandOptions {
+  /** Explicit set of executable programs allowed at this command boundary. */
+  readonly allow: CommandAllowlist;
 }
 
 /** Options for executing a shell-free {@link Command}. */
@@ -36,6 +51,52 @@ export interface CommandResult {
 }
 
 /**
+ * Declare the exact executable programs a command boundary may run.
+ *
+ * SPEC §6.6 / KV424: subprocess execution is default-deny for framework/runtime
+ * paths. A command is mintable only when its program is present in this explicit
+ * allowlist and the allowlist carries an audit-readable justification.
+ */
+export function commandAllowlist(
+  programs: readonly string[],
+  options: { justification: string },
+): CommandAllowlist {
+  if (!Array.isArray(programs)) {
+    throw new TypeError(
+      'Command allowlist programs must be an array of strings (SPEC.md §6.6, KV424).',
+    );
+  }
+  if (programs.length === 0) {
+    throw new TypeError('Command allowlist must name at least one program (SPEC.md §6.6, KV424).');
+  }
+  if (options === null || typeof options !== 'object') {
+    throw new TypeError(
+      'Command allowlist requires options with a justification (SPEC.md §6.6, KV424).',
+    );
+  }
+  assertSafeCommandText(options.justification, 'allowlist justification', {
+    allowWhitespace: true,
+  });
+
+  const normalizedPrograms = programs.map((program, index) => {
+    assertSafeCommandText(program, `allowlist[${index}]`, { rejectWhitespace: true });
+    return program;
+  });
+  const uniquePrograms = new Set(normalizedPrograms);
+  if (uniquePrograms.size !== normalizedPrograms.length) {
+    throw new TypeError(
+      'Command allowlist must not contain duplicate programs (SPEC.md §6.6, KV424).',
+    );
+  }
+
+  const allowlist = Object.freeze({
+    justification: options.justification,
+  }) as CommandAllowlist;
+  commandAllowlists.set(allowlist, Object.freeze(uniquePrograms));
+  return allowlist;
+}
+
+/**
  * Create a framework-owned, shell-free command capability.
  *
  * SPEC §6.6 / KV424 and `plans/most-secure-web-framework.md` SINK-02: this is a
@@ -43,8 +104,19 @@ export interface CommandResult {
  * imports elsewhere are impossible. The only execution helper Kovo exposes for
  * this value uses `execFile(..., { shell: false })`.
  */
-export function cmd(program: string, argv: readonly string[] = []): Command {
+export function cmd(program: string, argv: readonly string[], options: CommandOptions): Command {
   assertSafeCommandText(program, 'program', { rejectWhitespace: true });
+  const allowedPrograms = commandAllowlists.get(options?.allow);
+  if (allowedPrograms === undefined) {
+    throw new TypeError(
+      'Command construction requires commandAllowlist(...) (SPEC.md §6.6, KV424).',
+    );
+  }
+  if (!allowedPrograms.has(program)) {
+    throw new TypeError(
+      `Command program ${JSON.stringify(program)} is not in the explicit allowlist (SPEC.md §6.6, KV424).`,
+    );
+  }
   if (!Array.isArray(argv)) {
     throw new TypeError('Command argv must be an array of strings (SPEC.md §6.6, KV424).');
   }
