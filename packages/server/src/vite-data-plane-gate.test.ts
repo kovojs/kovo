@@ -353,6 +353,20 @@ const NON_DRIZZLE_OUTPUT_IMPORTED_QUERY_ALIAS_SOURCE = [
   '});',
 ].join('\n');
 
+const NON_DRIZZLE_OUTPUT_BARREL_QUERY_SOURCE = [
+  'import { s } from "@kovojs/server";',
+  'import { query } from "./query-barrel";',
+  '',
+  'export const status = query({',
+  '  reads: [],',
+  '  output: s.object({',
+  '    summary: s.string(),',
+  '    generatedAt: s.string(),',
+  '  }),',
+  '  load: () => ({ summary: "ready", generatedAt: "now" }),',
+  '});',
+].join('\n');
+
 const NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT = [
   'import { component } from "@kovojs/core";',
   'import { statusQuery } from "../status";',
@@ -723,6 +737,39 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     const componentReport = captured.find((report) => report.fileName.endsWith('status-card.tsx'));
     expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
       false,
+    );
+  });
+
+  it('reports KV302 from a non-Drizzle query imported through a local re-export barrel', async () => {
+    const root = await fixture({
+      'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_INVALID_COMPONENT,
+      'src/query-barrel.ts': 'export { query } from "@kovojs/server";',
+      'src/status.ts': NON_DRIZZLE_OUTPUT_BARREL_QUERY_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(
+        NON_DRIZZLE_OUTPUT_INVALID_COMPONENT,
+        join(root, 'src/components/status-card.tsx'),
+      ),
+    ).rejects.toThrow(/KV302[\s\S]*status\.missing/);
+
+    const componentReport = captured.find((report) => report.fileName.endsWith('status-card.tsx'));
+    expect(componentReport?.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain(
+      'KV227',
+    );
+    expect(componentReport?.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV302',
+          message: expect.stringContaining('status.missing'),
+        }),
+      ]),
     );
   });
 

@@ -1,5 +1,11 @@
 import * as ts from 'typescript';
 
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
+
 import type { CompilerDiagnostic, DiagnosticFactory } from '../diagnostics.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 import type { PublishToClientFact } from '../types.js';
@@ -38,8 +44,7 @@ import type { PublishToClientFact } from '../types.js';
  * gate closes the inlined-value channel, not arbitrary cross-module code trust.
  */
 
-const PUBLISH_TO_CLIENT = 'publishToClient';
-const CORE_MODULE = '@kovojs/core';
+const PUBLISH_TO_CLIENT_IDENTITY = frameworkExport('@kovojs/core', 'publishToClient');
 const PUBLISH_TO_CLIENT_REASON_PROPERTY = 'reason';
 
 interface ImportBinding {
@@ -140,17 +145,6 @@ function moduleConstantBindings(model: ComponentModuleModel): ModuleConstantBind
   }));
 }
 
-/** True when `publishToClient` is imported from @kovojs/core under that exact local name. */
-function publishToClientIsBound(bindings: readonly ImportBinding[]): boolean {
-  return bindings.some(
-    (binding) =>
-      binding.kind === 'named' &&
-      binding.localName === PUBLISH_TO_CLIENT &&
-      binding.importedName === PUBLISH_TO_CLIENT &&
-      binding.moduleSpecifier === CORE_MODULE,
-  );
-}
-
 /** Every event-handler arrow body in the module (the closures lowered into the client bundle). */
 function handlerArrowBodies(sourceFile: ts.SourceFile): ts.Node[] {
   const bodies: ts.Node[] = [];
@@ -190,7 +184,6 @@ function isDomEventName(name: string): boolean {
 function classifyCaptures(
   body: ts.Node,
   bindingByName: ReadonlyMap<string, CaptureBinding>,
-  publishBound: boolean,
   fileName: string,
   uses: CaptureUse[],
   publishFacts: PublishToClientFact[],
@@ -205,11 +198,10 @@ function classifyCaptures(
       const binding = bindingByName.get(node.text);
       if (binding && !shadowed.has(node.text)) {
         const parent = node.parent;
-        const callee = ts.isCallExpression(parent) && parent.expression === node;
-        const publishReason =
-          publishBound && isPublishToClientArgument(node, parent)
-            ? publishToClientReason(parent as ts.CallExpression)
-            : null;
+        const callee = isCalleeReferenceIdentifier(node);
+        const publishReason = isPublishToClientArgument(node, parent)
+          ? publishToClientReason(parent as ts.CallExpression)
+          : null;
         const published = publishReason !== null && publishReason.trim().length > 0;
         if (published) {
           publishFacts.push({
@@ -237,13 +229,26 @@ function classifyCaptures(
   visit(body);
 }
 
+function isCalleeReferenceIdentifier(node: ts.Identifier): boolean {
+  let current: ts.Node = node;
+  let parent = current.parent;
+  while (parent && ts.isPropertyAccessExpression(parent) && parent.expression === current) {
+    current = parent;
+    parent = current.parent;
+  }
+  return !!parent && ts.isCallExpression(parent) && parent.expression === current;
+}
+
 /** True when `node` is the first argument of a `publishToClient(value, …)` call. */
 function isPublishToClientArgument(node: ts.Identifier, parent: ts.Node): boolean {
   if (!ts.isCallExpression(parent)) return false;
-  if (!ts.isIdentifier(parent.expression) || parent.expression.text !== PUBLISH_TO_CLIENT) {
-    return false;
-  }
-  return parent.arguments[0] === node;
+  if (parent.arguments[0] !== node) return false;
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    parent.getSourceFile(),
+    parent.expression,
+    PUBLISH_TO_CLIENT_IDENTITY,
+  );
 }
 
 /** Extract the `reason` string from `publishToClient(value, { reason: '…' })` for the audit ledger. */
@@ -308,12 +313,11 @@ export function analyzeClientCaptures(model: ComponentModuleModel): ClientCaptur
   const bindingByName = new Map(
     [...bindings, ...constants].map((binding) => [binding.localName, binding]),
   );
-  const publishBound = publishToClientIsBound(bindings);
 
   const allUses: CaptureUse[] = [];
   const publishFacts: PublishToClientFact[] = [];
   for (const body of handlerArrowBodies(sourceFile)) {
-    classifyCaptures(body, bindingByName, publishBound, fileName, allUses, publishFacts);
+    classifyCaptures(body, bindingByName, fileName, allUses, publishFacts);
   }
 
   // An import is UNSAFE at a use iff that use is value-position (not callee) and not published.

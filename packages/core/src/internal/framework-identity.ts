@@ -1,7 +1,12 @@
 import type * as TypeScript from 'typescript';
 
-/** @internal Canonical Kovo package identity used by compiler/static gates. */
-export type FrameworkIdentityModule = '@kovojs/browser' | '@kovojs/core' | '@kovojs/server';
+/** @internal Canonical package identity used by compiler/static gates. */
+export type FrameworkIdentityModule =
+  | '@kovojs/browser'
+  | '@kovojs/core'
+  | '@kovojs/drizzle'
+  | '@kovojs/server'
+  | 'drizzle-orm';
 
 /** @internal Canonical framework export identity after import/subpath/re-export normalization. */
 export interface FrameworkExportIdentity {
@@ -81,7 +86,19 @@ const SERVER_ROUTING_EXPORTS = new Set([
 const SERVER_RENDERING_EXPORTS = new Set(['safeRichHtml', 'trustedHtml', 'trustedUrl']);
 const SERVER_ROOT_ONLY_EXPORTS = new Set(['rootedFiles']);
 const BROWSER_EXPORTS = new Set(['safeRichHtml', 'trustedHtml', 'trustedUrl']);
-const CORE_EXPORTS = new Set(['component', 'trustedReveal']);
+const CORE_EXPORTS = new Set(['component', 'publishToClient', 'trustedReveal']);
+const DRIZZLE_EXPORTS = new Set(['sql']);
+const DRIZZLE_ORM_EXPORTS = new Set([
+  'avg',
+  'avgDistinct',
+  'count',
+  'countDistinct',
+  'max',
+  'min',
+  'sql',
+  'sum',
+  'sumDistinct',
+]);
 
 const MAX_RESOLUTION_DEPTH = 12;
 
@@ -348,7 +365,11 @@ function namespaceMemberIdentity(
           ts.isImportDeclaration(importDeclaration) &&
           ts.isStringLiteralLike(importDeclaration.moduleSpecifier)
         ) {
-          return specifierExportIdentity(importDeclaration.moduleSpecifier.text, member);
+          const specifier = importDeclaration.moduleSpecifier.text;
+          return (
+            specifierExportIdentity(specifier, member) ??
+            localModuleExportIdentity(ts, sourceFile, specifier, member, options, seen, depth + 1)
+          );
         }
       }
       if (ts.isVariableDeclaration(declaration) && declaration.initializer) {
@@ -628,6 +649,12 @@ function specifierExportIdentity(
   }
   if (specifier === '@kovojs/core' && CORE_EXPORTS.has(exportName)) {
     return frameworkExport('@kovojs/core', exportName);
+  }
+  if (specifier === '@kovojs/drizzle' && DRIZZLE_EXPORTS.has(exportName)) {
+    return frameworkExport('@kovojs/drizzle', exportName);
+  }
+  if (specifier === 'drizzle-orm' && DRIZZLE_ORM_EXPORTS.has(exportName)) {
+    return frameworkExport('drizzle-orm', exportName);
   }
   if (specifier === '@kovojs/server/api/data' && SERVER_DATA_EXPORTS.has(exportName)) {
     return frameworkExport('@kovojs/server', exportName);

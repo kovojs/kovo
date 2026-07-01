@@ -11,16 +11,24 @@ import { analyzeClientCaptures } from './validate/client-capture.js';
 // is whole-channel fail-closed: refuse to emit any value-position captured import (KV437) unless it
 // is callee-only client code or wrapped in publishToClient. KV435 covers only the query wire.
 
-function compile(source: string) {
-  return compileComponentModule({ fileName: 'pay-button.tsx', source });
+interface TestExtraFile {
+  fileName: string;
+  source: string;
 }
 
-function clientSource(source: string): string {
-  return compile(source).files.find((file) => file.kind === 'client')?.source ?? '';
+function compile(source: string, extraFiles: readonly TestExtraFile[] = []) {
+  const options = { fileName: 'pay-button.tsx', source, extraFiles } as Parameters<
+    typeof compileComponentModule
+  >[0] & { extraFiles: readonly TestExtraFile[] };
+  return compileComponentModule(options);
 }
 
-function codes(source: string): string[] {
-  return compile(source).diagnostics.map((diagnostic) => diagnostic.code);
+function clientSource(source: string, extraFiles: readonly TestExtraFile[] = []): string {
+  return compile(source, extraFiles).files.find((file) => file.kind === 'client')?.source ?? '';
+}
+
+function codes(source: string, extraFiles: readonly TestExtraFile[] = []): string[] {
+  return compile(source, extraFiles).diagnostics.map((diagnostic) => diagnostic.code);
 }
 
 describe('KV437 client-handler secret-capture gate', () => {
@@ -218,6 +226,110 @@ export const PayButton = component({
           site: 'pay-button.tsx:7',
           target: 'STRIPE_PUBLISHABLE_KEY',
         },
+      ]);
+    });
+
+    it('allows publishToClient import aliases through framework identity', () => {
+      const source = `
+import { component, publishToClient as publish } from '@kovojs/core';
+import { STRIPE_PUBLISHABLE_KEY } from './config';
+
+export const PayButton = component({
+  render: () => (
+    <button onClick={() => mountStripe(publish(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' }))}>Pay</button>
+  ),
+});
+`;
+      const result = compile(source);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('KV437');
+      expect(result.publishToClientFacts).toEqual([
+        expect.objectContaining({
+          localName: 'STRIPE_PUBLISHABLE_KEY',
+          reason: 'publishable key is public',
+        }),
+      ]);
+      expect(clientSource(source)).toContain('import { STRIPE_PUBLISHABLE_KEY } from "./config";');
+    });
+
+    it('allows namespace publishToClient calls through framework identity', () => {
+      const source = `
+import { component } from '@kovojs/core';
+import * as core from '@kovojs/core';
+import { STRIPE_PUBLISHABLE_KEY } from './config';
+
+export const PayButton = component({
+  render: () => (
+    <button onClick={() => mountStripe(core.publishToClient(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' }))}>Pay</button>
+  ),
+});
+`;
+      const result = compile(source);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('KV437');
+      expect(result.publishToClientFacts).toEqual([
+        expect.objectContaining({
+          localName: 'STRIPE_PUBLISHABLE_KEY',
+          reason: 'publishable key is public',
+        }),
+      ]);
+    });
+
+    it('allows publishToClient through a registered local re-export barrel', () => {
+      const extraFiles = [
+        {
+          fileName: 'client-framework.ts',
+          source: `export { publishToClient as publish } from '@kovojs/core';`,
+        },
+      ];
+      const source = `
+import { component } from '@kovojs/core';
+import { publish } from './client-framework';
+import { STRIPE_PUBLISHABLE_KEY } from './config';
+
+export const PayButton = component({
+  render: () => (
+    <button onClick={() => mountStripe(publish(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' }))}>Pay</button>
+  ),
+});
+`;
+      const result = compile(source, extraFiles);
+      expect(result.diagnostics.map((diagnostic) => diagnostic.code)).not.toContain('KV437');
+      expect(result.publishToClientFacts).toEqual([
+        expect.objectContaining({
+          localName: 'STRIPE_PUBLISHABLE_KEY',
+          reason: 'publishable key is public',
+        }),
+      ]);
+    });
+
+    it('rejects a local publishToClient shadow even when the real import is present', () => {
+      const source = `
+import { component, publishToClient as realPublishToClient } from '@kovojs/core';
+import { STRIPE_PUBLISHABLE_KEY } from './config';
+
+function publishToClient<T>(value: T): T {
+  return value;
+}
+
+export const PayButton = component({
+  render: () => (
+    <button onClick={() => mountStripe(publishToClient(STRIPE_PUBLISHABLE_KEY))}>Pay</button>
+  ),
+});
+
+export const AuditButton = component({
+  render: () => (
+    <button onClick={() => mountStripe(realPublishToClient(STRIPE_PUBLISHABLE_KEY, { reason: 'publishable key is public' }))}>Audit</button>
+  ),
+});
+`;
+      const result = compile(source);
+      const kv437 = result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV437');
+      expect(kv437).toHaveLength(1);
+      expect(result.publishToClientFacts).toEqual([
+        expect.objectContaining({
+          localName: 'STRIPE_PUBLISHABLE_KEY',
+          reason: 'publishable key is public',
+        }),
       ]);
     });
 

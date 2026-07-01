@@ -127,6 +127,88 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('recognizes typed sql projections through aliases, namespaces, local aliases, and barrels', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'sql-barrel.ts',
+          source: 'export { sql as barrelSql } from "drizzle-orm";',
+        },
+        {
+          fileName: 'cart.queries.ts',
+          source: [
+            'import { sql as aliasedSql } from "drizzle-orm";',
+            'import * as orm from "drizzle-orm";',
+            'import { barrelSql } from "./sql-barrel";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'const localSql = aliasedSql;',
+            'export const cartItems = pgTable("cart_items", { id: text("id").primaryKey() }, kovo({ domain: "cart", key: "id" }));',
+            'export const cartQuery = query("cart/counts", {',
+            '  output: s.object({ aliasCount: s.number(), namespaceCount: s.number(), localCount: s.number(), barrelCount: s.number() }),',
+            '  reads: [cartItems],',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({',
+            '      aliasCount: aliasedSql<number>`count(*)`,',
+            '      namespaceCount: orm.sql<number>`count(*)`,',
+            '      localCount: localSql<number>`count(*)`,',
+            '      barrelCount: barrelSql<number>`count(*)`,',
+            '    }).from(cartItems);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(facts[0]?.shape).toEqual({
+      aliasCount: 'number',
+      barrelCount: 'number',
+      localCount: 'number',
+      namespaceCount: 'number',
+    });
+  });
+
+  it('keeps a local sql shadow fail-closed even when the real import is present', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: [
+            'import { sql as realSql } from "drizzle-orm";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'function sql<T>(_strings: TemplateStringsArray): T { return 0 as T; }',
+            'export const cartItems = pgTable("cart_items", { id: text("id").primaryKey() }, kovo({ domain: "cart", key: "id" }));',
+            'export const cartQuery = query("cart/counts", {',
+            '  output: s.object({ safeCount: s.number(), shadowCount: s.number() }),',
+            '  reads: [cartItems],',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({',
+            '      safeCount: realSql<number>`count(*)`,',
+            '      shadowCount: sql<number>`count(*)`,',
+            '    }).from(cartItems);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts[0]?.shape).toEqual({ safeCount: 'number' });
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV406',
+        message: expect.stringContaining(
+          'Query projection cart/counts.shadowCount could not be resolved',
+        ),
+        severity: 'error',
+        site: 'cart.queries.ts:6',
+      },
+    ]);
+  });
+
   it('extracts project query facts from Drizzle distinct selects', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -1116,6 +1198,57 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(facts[0]?.reads).toEqual(['cart']);
   });
 
+  it('recognizes aggregate helper projections through aliases, namespaces, local aliases, and barrels', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'aggregate-barrel.ts',
+          source: 'export { sumDistinct as barrelSumDistinct } from "drizzle-orm";',
+        },
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+          import { avg, count as aliasedCount } from 'drizzle-orm';
+          import * as orm from 'drizzle-orm';
+          import { barrelSumDistinct } from './aggregate-barrel';
+
+          const localAvg = avg;
+          export const cartItems = pgTable("cart_items", {
+            cartId: text("cart_id").notNull(),
+            qty: integer("qty").notNull(),
+          }, kovo({ domain: "cart", key: "cartId" }));
+
+          export const cartStats = query("cart/stats", {
+            output: s.object({
+              aliasTotal: s.number(),
+              namespaceQuantity: s.number(),
+              localAverage: s.number(),
+              barrelQuantity: s.number(),
+            }),
+            reads: [cartItems],
+            async load(input, db: PgAsyncDatabase<any, any>) {
+              return db.select({
+                aliasTotal: aliasedCount(),
+                namespaceQuantity: orm.sum(cartItems.qty),
+                localAverage: localAvg(cartItems.qty),
+                barrelQuantity: barrelSumDistinct(cartItems.qty),
+              }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(facts[0]?.shape).toEqual({
+      aliasTotal: 'number',
+      barrelQuantity: 'number',
+      localAverage: 'number',
+      namespaceQuantity: 'number',
+    });
+  });
+
   it('uses declared output shape when an aggregate loader reaches db through a typed helper', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -1198,6 +1331,50 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         message: expect.stringContaining('Query projection cart/stats.total could not be resolved'),
         severity: 'error',
         site: 'cart.queries.ts:11',
+      },
+    ]);
+  });
+
+  it('keeps a local aggregate shadow fail-closed even when the real import is present', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: `
+          import { count as realCount } from 'drizzle-orm';
+
+          export const cartItems = pgTable("cart_items", {
+            cartId: text("cart_id").notNull(),
+            qty: integer("qty").notNull(),
+          }, kovo({ domain: "cart", key: "cartId" }));
+
+          function count() {
+            return Math.random();
+          }
+
+          export const cartStats = query("cart/stats", {
+            output: s.object({ safeTotal: s.number(), shadowTotal: s.number() }),
+            reads: [cartItems],
+            async load(input, db: PgAsyncDatabase<any, any>) {
+              return db.select({
+                safeTotal: realCount(),
+                shadowTotal: count(),
+              }).from(cartItems).where(eq(cartItems.cartId, input.cartId));
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV406',
+        message: expect.stringContaining(
+          'Query projection cart/stats.shadowTotal could not be resolved',
+        ),
+        severity: 'error',
+        site: 'cart.queries.ts:13',
       },
     ]);
   });
@@ -1381,6 +1558,93 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         site: 'user.queries.ts:11',
         source: 'users.id',
       },
+    ]);
+  });
+
+  it('recognizes trustedReveal through aliases, local aliases, and barrels', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'core-barrel.ts',
+          source: 'export { trustedReveal as barrelReveal } from "@kovojs/core";',
+        },
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import { trustedReveal as reveal } from "@kovojs/core";',
+            'import { barrelReveal } from "./core-barrel";',
+            '',
+            'const localReveal = reveal;',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userDetail = query("user", {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({',
+            '      aliasDigest: reveal(users.passwordHash, { justification: "alias reveal", source: "users.passwordHash" }),',
+            '      localDigest: localReveal(users.passwordHash, { justification: "local reveal", source: "users.passwordHash" }),',
+            '      barrelDigest: barrelReveal(users.passwordHash, { justification: "barrel reveal", source: "users.passwordHash" }),',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(
+      revealFactsFromQueryFacts(facts)
+        .map((fact) => fact.justification)
+        .sort(),
+    ).toEqual(['alias reveal', 'barrel reveal', 'local reveal']);
+  });
+
+  it('keeps a local trustedReveal shadow untrusted even when the real import is present', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import { trustedReveal as realReveal } from "@kovojs/core";',
+            '',
+            'function trustedReveal<T>(value: T): T { return value; }',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userDetail = query("user", {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({',
+            '      fakePublic: trustedReveal(users.id),',
+            '      realDigest: realReveal(users.passwordHash, { justification: "real reveal", source: "users.passwordHash" }),',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV406',
+        message: expect.stringContaining('Query projection user.fakePublic could not be resolved'),
+        severity: 'error',
+        site: 'user.queries.ts:9',
+      },
+    ]);
+    expect(facts[0]?.shape).toMatchObject({
+      realDigest: { kind: 'revealed' },
+    });
+    expect(revealFactsFromQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        justification: 'real reveal',
+        path: 'realDigest',
+      }),
     ]);
   });
 

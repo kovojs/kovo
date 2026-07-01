@@ -52,7 +52,17 @@ const SERVER_EXPORTS = new Set([
 const DRIZZLE_EXPORTS = new Set(['kovo', 'kovoAnalyzerSummary', 'sql', 'staticSql', 'trustedSql']);
 const BROWSER_EXPORTS = new Set(['trustedHtml', 'trustedUrl']);
 const CORE_EXPORTS = new Set(['trustedReveal']);
-const DRIZZLE_ORM_EXPORTS = new Set(['avg', 'count', 'countDistinct', 'max', 'min', 'sql', 'sum']);
+const DRIZZLE_ORM_EXPORTS = new Set([
+  'avg',
+  'avgDistinct',
+  'count',
+  'countDistinct',
+  'max',
+  'min',
+  'sql',
+  'sum',
+  'sumDistinct',
+]);
 
 const MODULE_EXPORTS: Readonly<Record<CanonicalFrameworkModule, ReadonlySet<string>>> = {
   '@kovojs/browser': BROWSER_EXPORTS,

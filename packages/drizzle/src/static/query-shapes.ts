@@ -11,6 +11,12 @@ import {
   type Symbol as MorphSymbol,
   type VariableDeclaration,
 } from 'ts-morph';
+import {
+  expressionResolvesToFrameworkExport,
+  frameworkExport,
+  type FrameworkExportIdentity,
+  type FrameworkIdentityTypeScript,
+} from '@kovojs/core/internal/framework-identity';
 import type { QueryProjectedColumn } from '@kovojs/core/internal/graph';
 import { drizzleDiagnostic } from './diagnostics.js';
 import {
@@ -67,6 +73,20 @@ import {
   unwrappedTsExpression,
   DRIZZLE_STATIC_PROJECT_ROOT,
 } from '../static.js';
+
+const TRUSTED_REVEAL_IDENTITY = frameworkExport('@kovojs/core', 'trustedReveal');
+const KOVO_SQL_IDENTITY = frameworkExport('@kovojs/drizzle', 'sql');
+const DRIZZLE_SQL_IDENTITY = frameworkExport('drizzle-orm', 'sql');
+const DRIZZLE_AGGREGATE_HELPER_IDENTITIES: readonly FrameworkExportIdentity[] = [
+  'avg',
+  'avgDistinct',
+  'count',
+  'countDistinct',
+  'max',
+  'min',
+  'sum',
+  'sumDistinct',
+].map((name) => frameworkExport('drizzle-orm', name));
 
 /** @internal */ export interface QueryShapeSelection {
   diagnostics?: readonly TouchGraphDiagnostic[];
@@ -2165,42 +2185,12 @@ function trustedRevealQueryShape(
 }
 
 function isTrustedRevealCall(call: ts.CallExpression): boolean {
-  const imports = trustedRevealImports(call.getSourceFile());
-  const callee = unwrappedTsExpression(call.expression);
-
-  if (ts.isIdentifier(callee)) return imports.named.has(callee.text);
-  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== 'trustedReveal') return false;
-
-  const receiver = unwrappedTsExpression(callee.expression);
-  return ts.isIdentifier(receiver) && imports.namespaces.has(receiver.text);
-}
-
-function trustedRevealImports(sourceFile: ts.SourceFile): {
-  named: ReadonlySet<string>;
-  namespaces: ReadonlySet<string>;
-} {
-  const named = new Set<string>();
-  const namespaces = new Set<string>();
-
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    const moduleSpecifier = statement.moduleSpecifier;
-    if (!ts.isStringLiteral(moduleSpecifier) || moduleSpecifier.text !== '@kovojs/core') continue;
-
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings) continue;
-    if (ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
-      continue;
-    }
-
-    for (const specifier of bindings.elements) {
-      const imported = specifier.propertyName?.text ?? specifier.name.text;
-      if (imported === 'trustedReveal') named.add(specifier.name.text);
-    }
-  }
-
-  return { named, namespaces };
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    call.getSourceFile(),
+    call.expression,
+    TRUSTED_REVEAL_IDENTITY,
+  );
 }
 
 function trustedRevealMetadata(
@@ -2373,56 +2363,13 @@ function trustedRevealValueExpression(expression: ts.Expression): ts.Expression 
 }
 
 function isDrizzleAggregateHelperProjection(call: ts.CallExpression): boolean {
-  const imports = drizzleAggregateImports(call.getSourceFile());
-  const callee = unwrappedTsExpression(call.expression);
-
-  if (ts.isIdentifier(callee)) return imports.named.has(callee.text);
-  if (!ts.isPropertyAccessExpression(callee) || !isAggregateHelperName(callee.name.text)) {
-    return false;
-  }
-
-  const receiver = unwrappedTsExpression(callee.expression);
-  return ts.isIdentifier(receiver) && imports.namespaces.has(receiver.text);
-}
-
-function drizzleAggregateImports(sourceFile: ts.SourceFile): {
-  named: ReadonlySet<string>;
-  namespaces: ReadonlySet<string>;
-} {
-  const named = new Set<string>();
-  const namespaces = new Set<string>();
-
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    const moduleSpecifier = statement.moduleSpecifier;
-    if (!ts.isStringLiteral(moduleSpecifier) || moduleSpecifier.text !== 'drizzle-orm') continue;
-
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings) continue;
-    if (ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
-      continue;
-    }
-
-    for (const specifier of bindings.elements) {
-      const imported = specifier.propertyName?.text ?? specifier.name.text;
-      if (isAggregateHelperName(imported)) named.add(specifier.name.text);
-    }
-  }
-
-  return { named, namespaces };
-}
-
-function isAggregateHelperName(name: string): boolean {
-  return (
-    name === 'avg' ||
-    name === 'avgDistinct' ||
-    name === 'count' ||
-    name === 'countDistinct' ||
-    name === 'max' ||
-    name === 'min' ||
-    name === 'sum' ||
-    name === 'sumDistinct'
+  return DRIZZLE_AGGREGATE_HELPER_IDENTITIES.some((identity) =>
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      call.getSourceFile(),
+      call.expression,
+      identity,
+    ),
   );
 }
 
@@ -2457,106 +2404,22 @@ function isAggregateHelperName(name: string): boolean {
 }
 
 function isTsKovoSqlExpression(expression: ts.Expression): boolean {
-  const node = unwrappedTsExpression(expression);
-  const bindings = kovoSqlBindings(node.getSourceFile());
-
-  if (ts.isIdentifier(node)) {
-    if (bindings.named.has(node.text)) return true;
-    if (bindings.aliases.has(node.text)) return true;
-    return node.text === 'sql' && !hasTsLocalBinding(node.getSourceFile(), node.text);
-  }
-
-  if (ts.isPropertyAccessExpression(node) && node.name.text === 'sql') {
-    const receiver = unwrappedTsExpression(node.expression);
-    return ts.isIdentifier(receiver) && bindings.namespaces.has(receiver.text);
-  }
-
-  return false;
-}
-
-function kovoSqlBindings(sourceFile: ts.SourceFile): {
-  aliases: ReadonlySet<string>;
-  named: ReadonlySet<string>;
-  namespaces: ReadonlySet<string>;
-} {
-  const aliases = new Set<string>();
-  const named = new Set<string>();
-  const namespaces = new Set<string>();
-
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement)) continue;
-    const moduleSpecifier = statement.moduleSpecifier;
-    if (
-      !ts.isStringLiteral(moduleSpecifier) ||
-      (moduleSpecifier.text !== '@kovojs/drizzle' && moduleSpecifier.text !== 'drizzle-orm')
-    ) {
-      continue;
-    }
-    const bindings = statement.importClause?.namedBindings;
-    if (!bindings) continue;
-    if (ts.isNamespaceImport(bindings)) {
-      namespaces.add(bindings.name.text);
-      continue;
-    }
-    for (const specifier of bindings.elements) {
-      const imported = specifier.propertyName?.text ?? specifier.name.text;
-      if (imported === 'sql') named.add(specifier.name.text);
-    }
-  }
-
-  let changed = true;
-  while (changed) {
-    changed = false;
-    for (const statement of sourceFile.statements) {
-      if (!ts.isVariableStatement(statement)) continue;
-      if ((ts.getCombinedNodeFlags(statement.declarationList) & ts.NodeFlags.Const) === 0) {
-        continue;
-      }
-      for (const declaration of statement.declarationList.declarations) {
-        if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
-        if (!isTsKovoSqlReference(declaration.initializer, named, namespaces, aliases)) continue;
-        const before = aliases.size;
-        aliases.add(declaration.name.text);
-        changed ||= aliases.size !== before;
-      }
-    }
-  }
-
-  return { aliases, named, namespaces };
-}
-
-function isTsKovoSqlReference(
-  expression: ts.Expression,
-  named: ReadonlySet<string>,
-  namespaces: ReadonlySet<string>,
-  aliases: ReadonlySet<string>,
-): boolean {
-  const node = unwrappedTsExpression(expression);
-  if (ts.isIdentifier(node)) return named.has(node.text) || aliases.has(node.text);
-  if (!ts.isPropertyAccessExpression(node) || node.name.text !== 'sql') return false;
-  const receiver = unwrappedTsExpression(node.expression);
-  return ts.isIdentifier(receiver) && namespaces.has(receiver.text);
-}
-
-function hasTsLocalBinding(sourceFile: ts.SourceFile, name: string): boolean {
-  for (const statement of sourceFile.statements) {
-    if (ts.isImportDeclaration(statement)) {
-      const bindings = statement.importClause?.namedBindings;
-      if (bindings && ts.isNamedImports(bindings)) {
-        if (bindings.elements.some((element) => element.name.text === name)) return true;
-      }
-      if (bindings && ts.isNamespaceImport(bindings) && bindings.name.text === name) return true;
-      if (statement.importClause?.name?.text === name) return true;
-    }
-    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return true;
-    if (ts.isClassDeclaration(statement) && statement.name?.text === name) return true;
-    if (ts.isVariableStatement(statement)) {
-      for (const declaration of statement.declarationList.declarations) {
-        if (ts.isIdentifier(declaration.name) && declaration.name.text === name) return true;
-      }
-    }
-  }
-  return false;
+  const sourceFile = expression.getSourceFile();
+  return (
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      KOVO_SQL_IDENTITY,
+      { legacyGlobals: [KOVO_SQL_IDENTITY] },
+    ) ||
+    expressionResolvesToFrameworkExport(
+      ts as FrameworkIdentityTypeScript,
+      sourceFile,
+      expression,
+      DRIZZLE_SQL_IDENTITY,
+    )
+  );
 }
 
 function sourcePosition(node: ts.Node): string {

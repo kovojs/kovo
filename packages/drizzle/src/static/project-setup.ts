@@ -1,5 +1,6 @@
 import { isAbsolute, join } from 'node:path';
 import { Node, Project, SyntaxKind, ts, type CompilerOptions, type SourceFile } from 'ts-morph';
+import { registerFrameworkIdentityProject } from '@kovojs/core/internal/framework-identity';
 import { extractedFunctionKey, functionReceiverParametersByKey } from './domain-writes.js';
 import {
   extractLocalFunctionCallsFromBody,
@@ -114,6 +115,12 @@ interface ProjectExtractionMemo {
       overwrite: true,
     }),
   );
+  for (const sourceFile of sourceFiles) {
+    registerFrameworkIdentityProject(
+      sourceFile.compilerNode,
+      sourceFiles.map((file) => file.compilerNode),
+    );
+  }
   const tableNamesBySymbol = new Map(projectTableNamesBySymbol(sourceFiles));
   const unmodeledRelationNamesBySymbol = new Map(
     projectUnmodeledRelationNamesBySymbol(sourceFiles),

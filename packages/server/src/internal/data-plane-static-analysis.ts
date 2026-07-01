@@ -11,6 +11,7 @@ import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/d
 import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
+  registerFrameworkIdentityProject,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
@@ -173,6 +174,7 @@ const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 interface OutputSchemaQueryShapeWorkerData {
   files: readonly DataPlaneSourceFile[];
   kind: typeof OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND;
+  projectFiles?: readonly DataPlaneSourceFile[];
 }
 
 type TypeScriptModule = typeof import('typescript');
@@ -192,7 +194,12 @@ class DataPlaneStaticAnalysisError extends Error {
 }
 
 if (!isMainThread && isOutputSchemaQueryShapeWorkerData(workerData)) {
-  parentPort?.postMessage(outputSchemaQueryShapeFactsSerial(workerData.files));
+  parentPort?.postMessage(
+    outputSchemaQueryShapeFactsSerial(
+      workerData.files,
+      workerData.projectFiles ?? workerData.files,
+    ),
+  );
 }
 
 /** @internal Build the analyzer SourceFileInput[] for a Vite app source tree. */
@@ -738,10 +745,10 @@ async function outputSchemaQueryShapeFactsAsync(
       .filter((chunk) => chunk.length > 0)
       .map(async (chunk) => {
         try {
-          return await outputSchemaQueryShapeFactsInWorker(chunk);
+          return await outputSchemaQueryShapeFactsInWorker(chunk, files);
         } catch (error) {
           if (process.env.KOVO_TEST_REQUIRE_OUTPUT_SCHEMA_WORKER === '1') throw error;
-          return outputSchemaQueryShapeFactsSerial(chunk);
+          return outputSchemaQueryShapeFactsSerial(chunk, files);
         }
       }),
   );
@@ -750,22 +757,32 @@ async function outputSchemaQueryShapeFactsAsync(
 
 function outputSchemaQueryShapeFactsSerial(
   files: readonly DataPlaneSourceFile[],
-): readonly QueryShapeFact[] {
-  return files.flatMap((file) => outputSchemaQueryShapeFactsFromSource(file.fileName, file.source));
-}
-
-function outputSchemaQueryShapeFactsFromSource(
-  fileName: string,
-  source: string,
+  projectFiles: readonly DataPlaneSourceFile[] = files,
 ): readonly QueryShapeFact[] {
   const ts = typeScript();
-  const sourceFile = ts.createSourceFile(
-    fileName,
-    source,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
+  const sourceFiles = projectFiles.map((file) =>
+    ts.createSourceFile(
+      file.fileName,
+      file.source,
+      ts.ScriptTarget.Latest,
+      true,
+      ts.ScriptKind.TSX,
+    ),
   );
+  for (const sourceFile of sourceFiles) {
+    registerFrameworkIdentityProject(sourceFile, sourceFiles);
+  }
+
+  const scanFileNames = new Set(files.map((file) => file.fileName));
+  return sourceFiles
+    .filter((sourceFile) => scanFileNames.has(sourceFile.fileName))
+    .flatMap((sourceFile) => outputSchemaQueryShapeFactsFromSourceFile(ts, sourceFile));
+}
+
+function outputSchemaQueryShapeFactsFromSourceFile(
+  ts: TypeScriptModule,
+  sourceFile: import('typescript').SourceFile,
+): readonly QueryShapeFact[] {
   const facts: QueryShapeFact[] = [];
 
   const visit = (node: import('typescript').Node): void => {
@@ -973,6 +990,7 @@ function unwrapTsExpression(
 
 function outputSchemaQueryShapeFactsInWorker(
   files: readonly DataPlaneSourceFile[],
+  projectFiles: readonly DataPlaneSourceFile[],
 ): Promise<readonly QueryShapeFact[]> {
   return new Promise((resolve, reject) => {
     let settled = false;
@@ -980,6 +998,7 @@ function outputSchemaQueryShapeFactsInWorker(
       workerData: {
         files,
         kind: OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND,
+        projectFiles,
       } satisfies OutputSchemaQueryShapeWorkerData,
     });
     worker.once('message', (message: unknown) => {
@@ -1047,7 +1066,10 @@ function isOutputSchemaQueryShapeWorkerData(
   return (
     value.kind === OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND &&
     Array.isArray(value.files) &&
-    value.files.every(isOutputSchemaWorkerSourceFile)
+    value.files.every(isOutputSchemaWorkerSourceFile) &&
+    (value.projectFiles === undefined ||
+      (Array.isArray(value.projectFiles) &&
+        value.projectFiles.every(isOutputSchemaWorkerSourceFile)))
   );
 }
 
