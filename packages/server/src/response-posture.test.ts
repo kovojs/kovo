@@ -121,7 +121,7 @@ describe('central response posture finalization', () => {
   it('enforces per-surface lifecycle capabilities instead of treating surface as pass-through', async () => {
     const db = {
       insert: () => 'wrote',
-      read: () => 'read',
+      select: () => 'read',
     };
 
     const documentRequest = await resolveKovoLifecycleRequest(
@@ -134,8 +134,10 @@ describe('central response posture finalization', () => {
     );
 
     expect(documentRequest.session).toEqual({ user: { id: 'u1' } });
-    expect(documentRequest.db.read()).toBe('read');
-    expect(() => documentRequest.db.insert()).toThrow(/loaders are read-only|cannot insert/);
+    expect(documentRequest.db.select()).toBe('read');
+    expect(() => documentRequest.db.insert()).toThrow(
+      /loaders receive a read-only DB capability|cannot insert/,
+    );
 
     const mutationRequest = await resolveKovoLifecycleRequest(
       new Request('https://example.test/_m/cart/add', { method: 'POST' }),

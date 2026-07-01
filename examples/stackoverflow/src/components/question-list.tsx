@@ -188,7 +188,10 @@ export const QuestionListRegion = component({
 
         <ul>
           {questions.map((question) =>
-            trustedHtml(renderQuestionRow(question, { interactive: true })),
+            trustedHtml(
+              renderQuestionRow(question, { interactive: true }),
+              'StackOverflow demo question rows are rendered by framework JSX helpers that escape user text before this raw row boundary.',
+            ),
           )}
         </ul>
 

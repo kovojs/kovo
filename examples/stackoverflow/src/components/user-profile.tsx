@@ -272,7 +272,10 @@ export const UserProfileRegion = component({
           {theirQuestions.length > 0 ? (
             <ul style={cardStyles.list}>
               {theirQuestions.map((question) =>
-                trustedHtml(renderQuestionRow(question, { interactive: false })),
+                trustedHtml(
+                  renderQuestionRow(question, { interactive: false }),
+                  'StackOverflow demo question rows are rendered by framework JSX helpers that escape user text before this raw row boundary.',
+                ),
               )}
             </ul>
           ) : (
