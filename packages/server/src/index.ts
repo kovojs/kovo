@@ -474,6 +474,7 @@ export type {
   NotFound,
   RateLimitedDenial,
   RateLimitOptions,
+  RedirectLocationAllowlistEntry,
   Redirect,
   ResponseHeaders,
   ResponseHeaderValue,

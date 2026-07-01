@@ -125,6 +125,44 @@ describe('central response posture finalization', () => {
     await expect(sameOriginRedirect.text()).resolves.toBe('redirect body');
   });
 
+  it('allows raw endpoint redirect Location headers only for declared external origins', async () => {
+    const allowed = finalizeRawWebResponse(
+      new Response(null, {
+        headers: { Location: 'https://accounts.example.test/oauth/start' },
+        status: 303,
+      }),
+      { method: 'GET' },
+      {
+        redirectAllowlist: [
+          {
+            origin: 'https://accounts.example.test',
+            reason: 'Delegated OAuth flow redirects through the identity provider',
+          },
+        ],
+      },
+    );
+
+    expect(allowed.headers.get('location')).toBe('https://accounts.example.test/oauth/start');
+
+    const denied = finalizeRawWebResponse(
+      new Response(null, {
+        headers: { Location: 'https://evil.example/phish' },
+        status: 303,
+      }),
+      { method: 'GET' },
+      {
+        redirectAllowlist: [
+          {
+            origin: 'https://accounts.example.test',
+            reason: 'Delegated OAuth flow redirects through the identity provider',
+          },
+        ],
+      },
+    );
+
+    expect(denied.headers.get('location')).toBe('/');
+  });
+
   it('keeps redirect location sanitization in the shared framework finalizer', () => {
     const blessed = blessRedirectResponse({
       body: null,

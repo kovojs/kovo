@@ -328,7 +328,8 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
   - Evidence: `pnpm exec vitest --run packages/server/src/guards.test.ts packages/server/src/capability-url.test.ts packages/server/src/app-document.test.ts packages/server/src/mutation-wire.test.ts`, `pnpm run check:security-brands`, `pnpm run check:fail-closed-classifiers`, `pnpm run check:api-surface`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after guard evaluation, `verifyCapability`, document fingerprinting, and live-target attestation rejected unresolved principals fail-closed.
 - [ ] **Q.7 DoS / rate-limit** — per-principal bucket keyed on a proven identity, not a shared `unknown` bucket.
 - [ ] **Q.8 timing side-channel** — constant-time compare on secret-tagged material.
-- [ ] **Q.9 open-redirect / navigation** — `redirect()` / `Location` route through the DEC5 choke; same-origin or allowlisted target.
+- [x] **Q.9 open-redirect / navigation** — `redirect()` / `Location` route through the DEC5 choke; same-origin or allowlisted target.
+  - Evidence: `pnpm exec vitest --run packages/server/src/response.test.ts packages/server/src/response-posture.test.ts packages/server/src/endpoint.test.ts packages/server/src/app-dispatch.test.ts scripts/check-sink-policy-gate.test.mjs`, `pnpm run check:sink-policy`, `pnpm run check:api-surface`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after redirect `Location` construction moved through `redirectLocationHeader()` with same-origin defaults and explicit cross-origin allowlist entries.
 
 ## Phase 6 — Honesty edges + independent refactors (parallel worktrees)
 

@@ -151,7 +151,34 @@ describe('server app matched dispatch boundary', () => {
         reservedHeaders: ['Location'],
       },
     });
-    const app = createApp({ endpoints: [cookieEndpoint, redirectEndpoint] });
+    const allowedRedirectEndpoint = endpoint('/raw-redirect-allowed', {
+      handler() {
+        return new Response(null, {
+          headers: {
+            'Cache-Control': 'no-store',
+            Location: 'https://accounts.example.test/oauth/start',
+          },
+          status: 303,
+        });
+      },
+      method: 'GET',
+      reason: 'raw endpoint external redirect allowlist proof',
+      response: {
+        appOwnedSafety: true,
+        body: 'redirect',
+        cache: 'no-store',
+        redirectAllowlist: [
+          {
+            origin: 'https://accounts.example.test',
+            reason: 'Delegated OAuth flow redirects through the identity provider',
+          },
+        ],
+        reservedHeaders: ['Location'],
+      },
+    });
+    const app = createApp({
+      endpoints: [cookieEndpoint, redirectEndpoint, allowedRedirectEndpoint],
+    });
 
     const cookie = await dispatchMatchedAppRequest(
       matchedAppRequest(app, new Request('https://shop.example.test/raw-cookie')),
@@ -169,6 +196,14 @@ describe('server app matched dispatch boundary', () => {
     expect(redirect.status).toBe(303);
     expect(redirect.headers.get('location')).toBe('/');
     expect(redirect.headers.getSetCookie()).toEqual([]);
+
+    const allowedRedirect = await dispatchMatchedAppRequest(
+      matchedAppRequest(app, new Request('https://shop.example.test/raw-redirect-allowed')),
+    );
+    expect(allowedRedirect.status).toBe(303);
+    expect(allowedRedirect.headers.get('location')).toBe(
+      'https://accounts.example.test/oauth/start',
+    );
   });
 
   it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(

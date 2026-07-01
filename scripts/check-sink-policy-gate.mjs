@@ -59,6 +59,8 @@ export const defaultLogChannelRoots = ['packages/server/src'];
 
 export const defaultLogChannelNeutralizerFiles = ['packages/server/src/logging.ts'];
 
+export const defaultRedirectLocationHeaderFiles = productionSourceRoots;
+
 export const defaultResponseFragmentApplyPath = 'packages/browser/src/response-fragment-apply.ts';
 
 export const defaultQueryWireHtmlPath = 'packages/server/src/wire-html.ts';
@@ -182,6 +184,9 @@ export function checkSinkPolicyGate(options = {}) {
   const logChannelRoots = options.logChannelRoots ?? defaultLogChannelRoots;
   const logChannelNeutralizerFiles =
     options.logChannelNeutralizerFiles ?? defaultLogChannelNeutralizerFiles;
+  const redirectLocationHeaderFiles =
+    options.redirectLocationHeaderFiles ??
+    collectSourceFiles(root, defaultRedirectLocationHeaderFiles);
   const responseFragmentApplyPath = Object.hasOwn(options, 'responseFragmentApplyPath')
     ? options.responseFragmentApplyPath
     : defaultResponseFragmentApplyPath;
@@ -415,6 +420,26 @@ export function checkSinkPolicyGate(options = {}) {
     }
   }
 
+  for (const filePath of redirectLocationHeaderFiles) {
+    if (!exists(filePath) || !isProductionSourceFile(filePath)) continue;
+    findings.push(...rawLocationHeaderFindings(filePath, readText(filePath)));
+  }
+
+  return findings;
+}
+
+export function rawLocationHeaderFindings(filePath, text) {
+  const findings = [];
+  const source = text.replace(/\/\*[\s\S]*?\*\//g, '').replace(/\/\/.*$/gm, '');
+  const locationHeaderPattern = /\bLocation\s*:\s*([^,\n\r}]+)/g;
+  let match;
+  while ((match = locationHeaderPattern.exec(source)) !== null) {
+    const value = match[1] ?? '';
+    if (/\bredirectLocationHeader\s*\(/.test(value)) continue;
+    findings.push(
+      `${filePath}: raw Location header write must route through redirectLocationHeader() so open-redirect policy stays at the DEC5 response choke`,
+    );
+  }
   return findings;
 }
 

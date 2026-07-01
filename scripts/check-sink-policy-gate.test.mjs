@@ -12,6 +12,7 @@ import {
   logChannelNeutralizerInvariantFindings,
   logChannelSinkFindings,
   publicSinkPolicyEscapeFindings,
+  rawLocationHeaderFindings,
   requestBodyParserChokeFindings,
   responseFragmentApplyInvariantFindings,
   rootedFileServeRawSinkFindings,
@@ -42,6 +43,7 @@ function runFixture(files) {
     exists: (file) => Object.hasOwn(files, file),
     publicEntrypointFiles: Object.hasOwn(files, 'public.ts') ? ['public.ts'] : [],
     queryWireHtmlPath: undefined,
+    redirectLocationHeaderFiles: [],
     readText: (file) => files[file],
     responseFragmentApplyPath: undefined,
     rootedFileServeSinkFiles: [],
@@ -1543,6 +1545,60 @@ describe('sink-policy gate', () => {
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: raw console.info of request-derived values is a KV439 log sink; route values through neutralizeLogValue()/formatLogMessage() before logging',
+    ]);
+  });
+
+  it('flags raw Location header writes outside the redirect-location choke', () => {
+    expect(
+      rawLocationHeaderFindings(
+        'packages/server/src/unsafe-redirect.ts',
+        `
+          export function unsafe(next) {
+            return { status: 303, headers: { Location: next } };
+          }
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe-redirect.ts: raw Location header write must route through redirectLocationHeader() so open-redirect policy stays at the DEC5 response choke',
+    ]);
+
+    expect(
+      rawLocationHeaderFindings(
+        'packages/server/src/safe-redirect.ts',
+        `
+          import { redirectLocationHeader } from './response.js';
+          export function safe(next) {
+            return { status: 303, headers: { Location: redirectLocationHeader(next) } };
+          }
+        `,
+      ),
+    ).toEqual([]);
+  });
+
+  it('runs the raw Location header gate over configured server source files', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: [],
+        deserializationFiles: [],
+        exists: (file) => file === 'sink-policy.ts' || file === 'packages/server/src/unsafe.ts',
+        logChannelFiles: [],
+        publicEntrypointFiles: [],
+        queryWireHtmlPath: undefined,
+        redirectLocationHeaderFiles: ['packages/server/src/unsafe.ts'],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'export function redirect(next) { return { headers: { Location: next } }; }',
+        responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: raw Location header write must route through redirectLocationHeader() so open-redirect policy stays at the DEC5 response choke',
     ]);
   });
 
