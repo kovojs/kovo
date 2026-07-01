@@ -1,56 +1,124 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  METAMORPHIC_RECOGNITION_BLOCKERS,
   PHASE0_METAMORPHIC_REQUIRED_CODES,
   metamorphicRecognitionCoverageRows,
+  metamorphicRecognitionGateViolations,
   metamorphicRecognitionSeeds,
   metamorphicRecognitionTodoRows,
 } from './metamorphic-recognition-fixtures.js';
 
 describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
-  it('keeps the seed corpus on the required Phase 0 gates', () => {
-    expect(metamorphicRecognitionCoverageRows()).toMatchObject([
+  it('keeps the CI-gated seed corpus explicit for every required Phase 0 gate', () => {
+    expect(metamorphicRecognitionCoverageRows()).toEqual([
       {
         code: 'KV414',
-        enforced: 5,
+        enforced: 6,
         label: 'owner read IDOR',
-        todo: 2,
+        todo: 1,
+        variants: [
+          'control',
+          'import-alias',
+          'namespace-import',
+          're-export-barrel',
+          'local-alias',
+          'destructured-binding',
+          'wrapper-helper',
+        ],
       },
       {
         code: 'KV435',
-        enforced: 5,
+        enforced: 6,
         label: 'secret query wire',
-        todo: 2,
+        todo: 1,
+        variants: [
+          'control',
+          'import-alias',
+          'namespace-import',
+          're-export-barrel',
+          'local-alias',
+          'destructured-binding',
+          'wrapper-helper',
+        ],
       },
       {
         code: 'KV422',
         enforced: 7,
         label: 'SQL text provenance',
         todo: 0,
+        variants: [
+          'control',
+          'import-alias',
+          'namespace-import',
+          're-export-barrel',
+          'local-alias',
+          'destructured-binding',
+          'wrapper-helper',
+        ],
       },
       {
         code: 'KV426',
         enforced: 3,
         label: 'trusted HTML provenance',
         todo: 4,
+        variants: [
+          'control',
+          'import-alias',
+          'destructured-binding',
+          'namespace-import',
+          're-export-barrel',
+          'local-alias',
+          'wrapper-helper',
+        ],
       },
       {
         code: 'KV407',
-        enforced: 5,
+        enforced: 6,
         label: 'undeclared query read',
-        todo: 2,
+        todo: 1,
+        variants: [
+          'control',
+          'import-alias',
+          'namespace-import',
+          're-export-barrel',
+          'local-alias',
+          'destructured-binding',
+          'wrapper-helper',
+        ],
       },
       {
         code: 'KV311',
         enforced: 2,
         label: 'update coverage',
         todo: 2,
+        variants: ['control', 'local-alias', 'destructured-binding', 'wrapper-helper'],
       },
     ]);
 
     expect(metamorphicRecognitionCoverageRows().map((row) => row.code)).toEqual([
       ...PHASE0_METAMORPHIC_REQUIRED_CODES,
     ]);
+  });
+
+  it('fails the CI gate when a required seed or TODO blocker is missing', () => {
+    expect(metamorphicRecognitionGateViolations()).toEqual([]);
+    expect(
+      metamorphicRecognitionGateViolations([
+        {
+          code: 'KV414',
+          description: 'missing runner fixture',
+          label: 'broken',
+          variants: [{ expectation: 'todo', kind: 'control', label: 'unblocked TODO' }],
+        },
+      ]),
+    ).toEqual(
+      expect.arrayContaining([
+        'KV414/control: TODO variants require a precise reason',
+        'KV414/control: TODO variants require named blockers',
+        'KV435: missing CI-gated metamorphic seed',
+      ]),
+    );
   });
 
   it('makes known-failing variants explicit instead of hiding xfails', () => {
@@ -60,22 +128,31 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
       expect.arrayContaining([
         expect.objectContaining({
           code: 'KV414',
-          kind: 'destructured-binding',
-          reason: expect.stringContaining('Workstream B'),
+          kind: 'wrapper-helper',
+          blockers: [
+            METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
+            METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
+          ],
         }),
         expect.objectContaining({
           code: 'KV426',
           kind: 're-export-barrel',
-          reason: expect.stringContaining('re-export'),
+          blockers: [
+            METAMORPHIC_RECOGNITION_BLOCKERS.compilerMultiFileFixture,
+            METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity,
+          ],
         }),
         expect.objectContaining({
           code: 'KV311',
           kind: 'wrapper-helper',
-          reason: expect.stringContaining('closure-shaped read'),
+          blockers: [
+            METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
+            METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
+          ],
         }),
       ]),
     );
-    expect(todoRows.every((row) => row.reason.length > 0)).toBe(true);
+    expect(todoRows.every((row) => row.reason.length > 0 && row.blockers.length > 0)).toBe(true);
   });
 
   for (const seed of metamorphicRecognitionSeeds) {

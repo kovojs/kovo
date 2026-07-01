@@ -54,6 +54,8 @@ jobs:
             packages/core/src/diagnostics.test.ts \
             packages/test/src/pglite-harness.test.ts \
             packages/test/src/sqlite-harness.test.ts
+      - name: Metamorphic recognition
+        run: vp exec vitest --run packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts
       - name: Compiler perf
         run: vp run compiler-perf
       - name: Publish readiness
