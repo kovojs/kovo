@@ -450,13 +450,10 @@ export const Post = component({
 `,
     },
     {
-      blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity],
-      expectation: 'todo',
+      expectation: 'enforced',
       importLine: 'import * as browser from "@kovojs/browser";',
       kind: 'namespace-import',
       label: 'trustedHtml namespace member',
-      reason:
-        'Workstream B semantic identity resolver: the current KV426 validator records direct named browser imports, not browser.trustedHtml namespace members.',
       source: `
 export const Post = component({
   queries: { post: postQuery },
@@ -484,13 +481,10 @@ export const Post = component({
 `,
     },
     {
-      blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity],
-      expectation: 'todo',
+      expectation: 'enforced',
       importLine: 'import { trustedHtml } from "@kovojs/browser";',
       kind: 'local-alias',
       label: 'trustedHtml local const alias',
-      reason:
-        'Workstream B semantic identity resolver: the current KV426 recognizer tracks imported local names, not same-scope aliases of the trustedHtml binding.',
       source: `
 const th = trustedHtml;
 export const Post = component({
@@ -500,16 +494,10 @@ export const Post = component({
 `,
     },
     {
-      blockers: [
-        METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
-        METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
-      ],
-      expectation: 'todo',
+      expectation: 'enforced',
       importLine: 'import { trustedHtml } from "@kovojs/browser";',
       kind: 'wrapper-helper',
       label: 'trustedHtml wrapper helper',
-      reason:
-        'Workstream A fail-closed default / Workstream C IR verification: function-call return provenance is the documented KV426 interprocedural residue until fail-closed provenance lands.',
       source: `
 const unsafeTrust = (value: string) => trustedHtml(value);
 export const Post = component({

@@ -49,11 +49,7 @@ export function validateTrustedHtmlProvenance(
 
   const found: CompilerDiagnostic[] = [];
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      expressionResolvesToTrustedHtmlPureBrand(sourceFile, node.expression) &&
-      node.arguments.length > 0
-    ) {
+    if (ts.isCallExpression(node) && callResolvesToTrustedHtmlPureBrand(sourceFile, node)) {
       const value = node.arguments[0];
       if (value !== undefined && !ts.isSpreadElement(value) && !hasAuditedReason(node)) {
         const provenance = classifyExpression(value, {
@@ -103,6 +99,50 @@ const COMPONENT_FACTORY_NAME = 'component';
 const CORE_MODULE_SPECIFIER = '@kovojs/core';
 const QUERIES_PROPERTY = 'queries';
 const RENDER_PROPERTY = 'render';
+
+function callResolvesToTrustedHtmlPureBrand(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+): boolean {
+  if (expressionResolvesToTrustedHtmlPureBrand(sourceFile, call.expression)) return true;
+  return wrapperHelperResolvesToTrustedHtmlPureBrand(sourceFile, call);
+}
+
+/**
+ * Same-file wrapper-helper recognition for KV426's pure brand sink. This is intentionally narrower
+ * than TypeScript type inference: it follows AST symbol identity to a local helper whose body
+ * directly calls the real `trustedHtml(param)` pure brand. The call-site argument still owns
+ * request/query provenance per SPEC §6.6; the helper return type or brand annotation is not proof.
+ */
+function wrapperHelperResolvesToTrustedHtmlPureBrand(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+): boolean {
+  const callee = unwrap(call.expression);
+  if (!ts.isIdentifier(callee)) return false;
+  const declaration = localCallableDeclaration(callee, callee.text);
+  if (declaration === undefined) return false;
+
+  const body =
+    ts.isVariableDeclaration(declaration) && declaration.initializer
+      ? callableBody(declaration.initializer)
+      : ts.isFunctionDeclaration(declaration)
+        ? declaration.body
+        : undefined;
+  if (body === undefined) return false;
+
+  const parameterName = callableFirstParameterName(declaration);
+  if (parameterName === undefined) return false;
+
+  const trustedCall = directReturnExpression(body);
+  if (trustedCall === undefined || !ts.isCallExpression(trustedCall)) return false;
+  if (!expressionResolvesToTrustedHtmlPureBrand(sourceFile, trustedCall.expression)) return false;
+
+  const brandedValue = trustedCall.arguments[0];
+  if (brandedValue === undefined) return false;
+  const unwrappedValue = unwrap(brandedValue);
+  return ts.isIdentifier(unwrappedValue) && unwrappedValue.text === parameterName;
+}
 
 /**
  * Classify an expression's data provenance from typed AST facts. Returns `'request'`/`'query'` when
@@ -213,6 +253,88 @@ function localConstInitializer(node: ts.Node, name: string): ts.Expression | und
     cursor = cursor.parent;
   }
   return undefined;
+}
+
+function localCallableDeclaration(
+  node: ts.Node,
+  name: string,
+): ts.VariableDeclaration | ts.FunctionDeclaration | undefined {
+  const position = node.getStart();
+  let cursor: ts.Node | undefined = node.parent;
+  while (cursor) {
+    if (isFunctionLikeWithParameters(cursor) && cursor.getStart() < position) {
+      if (cursor.parameters.some((parameter) => bindingNameBinds(parameter.name, name))) {
+        return undefined;
+      }
+    }
+    if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
+      for (const statement of cursor.statements) {
+        if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) {
+          return statement;
+        }
+        if (!ts.isVariableStatement(statement)) continue;
+        for (const declaration of statement.declarationList.declarations) {
+          if (
+            declaration.getStart() < position &&
+            ts.isIdentifier(declaration.name) &&
+            declaration.name.text === name
+          ) {
+            return declaration;
+          }
+        }
+      }
+    }
+    cursor = cursor.parent;
+  }
+  return undefined;
+}
+
+function callableBody(initializer: ts.Expression): ts.ConciseBody | undefined {
+  const value = unwrap(initializer);
+  if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return value.body;
+  return undefined;
+}
+
+function callableFirstParameterName(
+  declaration: ts.VariableDeclaration | ts.FunctionDeclaration,
+): string | undefined {
+  const parameters = ts.isVariableDeclaration(declaration)
+    ? callableParameters(declaration.initializer)
+    : declaration.parameters;
+  const first = parameters?.[0];
+  return first !== undefined && ts.isIdentifier(first.name) ? first.name.text : undefined;
+}
+
+function callableParameters(
+  initializer: ts.Expression | undefined,
+): ts.NodeArray<ts.ParameterDeclaration> | undefined {
+  if (initializer === undefined) return undefined;
+  const value = unwrap(initializer);
+  if (ts.isArrowFunction(value) || ts.isFunctionExpression(value)) return value.parameters;
+  return undefined;
+}
+
+function directReturnExpression(body: ts.ConciseBody): ts.Expression | undefined {
+  if (ts.isExpression(body)) return body;
+  for (const statement of body.statements) {
+    if (ts.isReturnStatement(statement)) return statement.expression;
+  }
+  return undefined;
+}
+
+function isFunctionLikeWithParameters(
+  node: ts.Node,
+): node is ts.ArrowFunction | ts.FunctionDeclaration | ts.FunctionExpression {
+  return (
+    ts.isArrowFunction(node) || ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node)
+  );
+}
+
+function bindingNameBinds(name: ts.BindingName, target: string): boolean {
+  if (ts.isIdentifier(name)) return name.text === target;
+  return name.elements.some(
+    (element) => ts.isBindingElement(element) && bindingNameBinds(element.name, target),
+  );
 }
 
 function objectBindingPatternBindsName(pattern: ts.ObjectBindingPattern, name: string): boolean {
