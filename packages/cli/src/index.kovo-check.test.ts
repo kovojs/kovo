@@ -1079,6 +1079,36 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails task and webhook direct-write diagnostics carried by the build graph', () => {
+    expect(
+      kovoCheck({
+        diagnostics: [
+          {
+            code: 'KV330',
+            message: 'Direct db access in a task run body; route through ctx.runMutation.',
+            severity: 'error',
+            site: 'app.ts:15:11',
+          },
+          {
+            code: 'KV330',
+            message:
+              'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+            severity: 'error',
+            site: 'app.ts:23:5',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR KV330 app.ts:15:11 Direct db access in a task run body; route through ctx.runMutation.',
+        'ERROR KV330 app.ts:23:5 Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('prints KV302 data-bind path lints using the SPEC §11.3 diagnostic registry message', () => {
     expect(
       kovoCheck({

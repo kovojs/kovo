@@ -264,12 +264,14 @@ export const sendReceipt = task({
     expect(result.handlerWriteSinkFacts).toEqual([]);
   });
 
-  it('reports KV330 when webhook handlers write through the app db provider', () => {
+  it('reports KV330 when webhook handlers with declared writes write through the app db provider', () => {
     const result = compileComponentModule({
       fileName: 'webhooks.ts',
       source: `
 import { webhook } from '@kovojs/server';
 import { appRuntimeDbProvider } from './db.js';
+
+const payment = domain('payment');
 
 export const paymentWebhook = webhook('/webhooks/payment', {
   access: verifiedMachineAccess('payment signature'),
@@ -278,6 +280,7 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     await appRuntimeDbProvider().insert(payments).values({ id: request.headers.get('x-id') });
     return Response.json({ ok: true });
   },
+  writes: [payment],
 });
 `,
     });

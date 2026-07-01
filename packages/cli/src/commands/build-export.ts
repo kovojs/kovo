@@ -468,7 +468,11 @@ interface KovoBuildCheckArtifacts {
 
 type SourceComponentGraphFacts = Pick<
   CompileResult,
-  'componentGraphFacts' | 'publishToClientFacts' | 'taskGraphFacts'
+  | 'componentGraphFacts'
+  | 'diagnostics'
+  | 'handlerWriteSinkFacts'
+  | 'publishToClientFacts'
+  | 'taskGraphFacts'
 >;
 
 type SourceRoutePageFacts = Pick<CompileRouteModuleResult, 'routePageFacts'>;
@@ -580,25 +584,35 @@ async function buildCheckGraph(
     },
     ...(staticArtifacts.routePages === undefined ? {} : { routePages: staticArtifacts.routePages }),
   });
-  if (result.diagnostics.length > 0) {
+  const diagnostics = [
+    ...(graph.diagnostics ?? []),
+    ...((staticArtifacts.components ?? []).flatMap((component) => component.diagnostics) ?? []).map(
+      staticDiagnosticFact,
+    ),
+    ...result.diagnostics.map(staticDiagnosticFact),
+  ];
+  if (diagnostics.length > 0) {
     return {
       graph: {
         ...result.graph,
-        diagnostics: [
-          ...(graph.diagnostics ?? []),
-          ...result.diagnostics.map((diagnostic) => ({
-            code: diagnostic.code,
-            message: diagnostic.message,
-            severity: diagnostic.severity ?? 'error',
-            site: diagnostic.fileName,
-            ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
-          })),
-        ],
+        diagnostics,
       },
       queryShapeFacts: staticArtifacts.queryShapeFacts,
     };
   }
   return { graph: result.graph, queryShapeFacts: staticArtifacts.queryShapeFacts };
+}
+
+function staticDiagnosticFact(
+  diagnostic: CompileResult['diagnostics'][number],
+): CoreGraph.StaticDiagnosticFact {
+  return {
+    code: diagnostic.code,
+    message: diagnostic.message,
+    severity: diagnostic.severity ?? 'error',
+    site: diagnostic.fileName,
+    ...(diagnostic.start === undefined ? {} : { start: diagnostic.start }),
+  };
 }
 
 async function staticBuildCheckGraph(
@@ -684,6 +698,8 @@ async function sourceGraphFactsFromFiles(
     });
     if (
       component.componentGraphFacts.length > 0 ||
+      component.diagnostics.length > 0 ||
+      component.handlerWriteSinkFacts.length > 0 ||
       component.publishToClientFacts.length > 0 ||
       component.taskGraphFacts.length > 0
     ) {

@@ -1242,6 +1242,41 @@ export default createApp({
     }
   }, 90_000);
 
+  it('blocks task and webhook direct DB writes during build check preflight', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-handler-write-sinks-'));
+    const appPath = join(root, 'app.ts');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(appPath, handlerWriteSinkPreflightAppModuleSource(), 'utf8');
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toMatch(
+        /ERROR KV330 app\.ts:\d+:\d+ Direct db access in a task run body; route through ctx\.runMutation\./,
+      );
+      expect(errorOutput).toMatch(
+        /ERROR KV330 app\.ts:\d+:\d+ Direct db access in a webhook handler; route writes through an audited mutation\/domain write\./,
+      );
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
   it('surfaces fatal optimistic coverage gaps as build errors', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fatal-kv310-'));
     const appPath = join(root, 'app.mjs');
@@ -2834,6 +2869,46 @@ export default createApp({
       page: () => '<main>Security preflight</main>',
     }),
   ],
+});
+`;
+}
+
+function handlerWriteSinkPreflightAppModuleSource(): string {
+  return `
+import { createApp, createMemoryWebhookReplayStore, s, task, webhook } from '@kovojs/server';
+
+const appDb = {
+  insert() {
+    return { values() {} };
+  },
+};
+const payments = {};
+const receipts = {};
+
+const sendReceipt = task('tasks/send-receipt', {
+  input: s.object({ id: s.string() }),
+  async run(input) {
+    await appDb.insert(receipts).values({ id: input.id });
+    return { ok: true };
+  },
+});
+
+const paymentWebhook = webhook('/webhooks/payment', {
+  access: { kind: 'public', reason: 'build preflight regression fixture' },
+  handler(input) {
+    appDb.insert(payments).values({ id: input.id });
+    return { ok: true };
+  },
+  idempotency: (input) => input.id,
+  input: s.object({ id: s.string() }),
+  replayStore: createMemoryWebhookReplayStore(),
+  verify: 'none',
+  verifyJustification: 'build preflight regression fixture',
+});
+
+export default createApp({
+  endpoints: [paymentWebhook],
+  tasks: [sendReceipt],
 });
 `;
 }

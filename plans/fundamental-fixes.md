@@ -39,11 +39,13 @@ the IR/fact-store migration in C1.
   - Evidence: `473060818` raised only the `many-small-components` Linux cold budget to 750ms; local
     `pnpm run test:compiler-perf`, `pnpm run check:vp`, and GitHub CI run `28493223012` passed.
 
-- [ ] **Do not duplicate active worker work.**
+- [x] **Do not duplicate active worker work.**
   - Integrated B worker: `019f1bdd-fc74-78e1-9fe2-e26e138a629d` as `dcb8202ed`.
   - Integrated D worker: `019f1bde-43ab-7080-86a9-042631d99076` as `552865d74`.
-  - Active F1 worker: `019f1be8-5499-76c2-9d40-1ac56bd6d269` owns starter DB encapsulation.
-  - Active C1 worker: `019f1bec-9c84-7a02-9094-ff29e559e1b9` owns task/webhook handler write-sink facts.
+  - Integrated F1 worker: `019f1be8-5499-76c2-9d40-1ac56bd6d269` as `37237bffe`.
+  - Integrated C1 worker: `019f1bec-9c84-7a02-9094-ff29e559e1b9` as `a26704542`,
+    plus main-thread build-preflight coverage for the same sink family.
+  - No active `fundamental-fixes` workers remain.
 
 ## Active Worker Slices
 
@@ -131,7 +133,9 @@ packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/in
 - [ ] **A1. Close the fail-closed acceptance cases.**
   - [x] Closure-scoped secret/owner read fails the build with KV406 or a stricter security diagnostic. - Evidence: `vp exec vitest --run packages/drizzle/src/index.query-loader-receivers.test.ts
 packages/cli/src/index.kovo-check.test.ts`.
-  - [ ] `task` and webhook DB writes outside audited channels fail the build.
+  - [x] `task` and webhook DB writes outside audited channels fail the build. - Evidence:
+        `vp exec vitest --run packages/compiler/src/direct-db.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`;
+        `vp exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts -t "task and webhook direct-write diagnostics|blocks task and webhook direct DB writes"`.
   - [ ] `recordChange` to an undeclared domain fails the build.
   - [ ] Existing green-path apps still build after B1 and F1.
   - Acceptance: focused compiler/drizzle tests for each case plus a create-kovo prod-artifact build where
@@ -146,7 +150,7 @@ packages/cli/src/index.kovo-check.test.ts`.
   - Acceptance: inventory count drops for security-relevant literal/import recognizers; new/changed tests
     prove alias, re-export, namespace, and local-shadow behavior.
 
-- [ ] **C1. Move the next sink family onto IR/fact-store verification.**
+- [x] **C1. Move the next sink family onto IR/fact-store verification.**
   - Rationale: source-AST policy gates keep rediscovering adjacent spellings. The IR/fact-store path should
     extract facts once, fail closed when extraction is incomplete, and let policy checks become set
     operations over canonical facts. The completed KV435/KV414 column-provenance spike is the precedent; the
@@ -155,56 +159,56 @@ packages/cli/src/index.kovo-check.test.ts`.
     inspection chose this over raw SQL because task/webhook writes already have compiler-owned handler
     models and task graph facts, while raw SQL is more entangled with Drizzle static extraction and starter
     DB cleanup.
-  - Candidate sink families:
-    - [ ] Task/webhook writes outside audited mutation channels.
-    - [ ] Raw SQL executions and trusted-escape waivers.
-    - [ ] Owner-table mutations and owner-domain proof.
-    - [ ] Raw HTML writes and trusted HTML provenance.
-    - [ ] Client-derive free identifiers and client/server leak boundaries.
+  - Candidate sink family closed:
+    - [x] Task/webhook writes outside audited mutation channels.
+  - Future IR/fact-store candidates, not part of this C1 closure: raw SQL executions and trusted-escape
+    waivers, owner-table mutations and owner-domain proof, raw HTML writes and trusted HTML provenance,
+    client-derive free identifiers and client/server leak boundaries.
   - Extraction model:
-    - [ ] Enumerate the current task/webhook write gates in
+    - [x] Enumerate the current task/webhook write gates in
           `packages/compiler/src/validate/component-contracts.ts` and handler models in
           `packages/compiler/src/scan/parse.ts`.
-    - [ ] Define a compiler-owned handler write-sink fact shape carrying surface (`task` or `webhook`),
+    - [x] Define a compiler-owned handler write-sink fact shape carrying surface (`task` or `webhook`),
           owner key/path, operation kind, canonical target identity, provenance proof, source span, and
           `UNRESOLVED`.
-    - [ ] Extend task/webhook handler extraction so every selected sink emits either a complete fact or a
+    - [x] Extend task/webhook handler extraction so every selected sink emits either a complete fact or a
           fail-closed diagnostic; never encode "unknown" as an empty safe set.
-    - [ ] Thread the fact through `packages/compiler/src/types.ts`, `packages/compiler/src/compile.ts`,
+    - [x] Thread the fact through `packages/compiler/src/types.ts`, `packages/compiler/src/compile.ts`,
           `packages/compiler/src/app-graph.ts`, and `packages/core/src/graph.ts` only as far as needed for
           policy checks and artifact/explain coverage.
-    - [ ] Preserve existing KV330 source span quality from direct-write path starts and lengths.
-    - [ ] Add fact-output or graph/explain coverage proving task composition edges stay distinct from
+    - [x] Preserve existing KV330 source span quality from direct-write path starts and lengths.
+    - [x] Add fact-output or graph/explain coverage proving task composition edges stay distinct from
           direct DB write sinks.
   - Policy migration:
-    - [ ] Change the task/webhook branches of KV330 direct-DB validation to read only the handler write-sink
+    - [x] Change the task/webhook branches of KV330 direct-DB validation to read only the handler write-sink
           facts.
-    - [ ] Leave mutation and endpoint KV330 on their current implementation unless they are needed for shared
+    - [x] Leave mutation and endpoint KV330 on their current implementation unless they are needed for shared
           helper extraction.
-    - [ ] Remove or demote the old task/webhook source re-walk so it cannot silently disagree with the fact
+    - [x] Remove or demote the old task/webhook source re-walk so it cannot silently disagree with the fact
           model.
-    - [ ] Keep diagnostics stable or deliberately tighten them, citing `SPEC.md` §11 where ambiguity would be
+    - [x] Keep diagnostics stable or deliberately tighten them, citing `SPEC.md` §11 where ambiguity would be
           easy to reintroduce.
-    - [ ] Verify that an unresolved fact emits KV406 or a stricter diagnostic before the policy check would
+    - [x] Verify that an unresolved fact emits KV406 or a stricter diagnostic before the policy check would
           otherwise pass.
   - Runtime/artifact cross-check:
-    - [ ] Add a compiler/graph assertion that task artifacts expose declared composition edges (`runMutation`,
+    - [x] Add a compiler/graph assertion that task artifacts expose declared composition edges (`runMutation`,
           `runQuery`, `schedule`) separately from forbidden direct DB write sinks.
-    - [ ] Add `kovo check`/`kovo build` coverage for task and webhook direct DB writes so dev/prod behavior
+    - [x] Add `kovo check`/`kovo build` coverage for task and webhook direct DB writes so dev/prod behavior
           cannot diverge.
-    - [ ] If webhook write declarations are involved, verify declarations are treated as checked claims and do
+    - [x] If webhook write declarations are involved, verify declarations are treated as checked claims and do
           not waive direct DB write sinks by name.
   - Metamorphic coverage:
-    - [ ] Add a known-unsafe seed for the selected sink to
+    - [x] Add a known-unsafe seed for the selected sink to
           `packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`.
-    - [ ] Cover at least import alias, namespace import, local re-export barrel, helper wrapper, closure, and
+    - [x] Cover at least import alias, namespace import, local re-export barrel, helper wrapper, closure, and
           local-shadow variants for task/webhook direct DB writes where those spellings apply.
-    - [ ] Prove each variant either produces the same canonical fact or fails closed with KV406/a stricter
+    - [x] Prove each variant either produces the same canonical fact or fails closed with KV406/a stricter
           diagnostic.
-  - Acceptance: `vp exec vitest --run packages/compiler/src/direct-db.test.ts
-packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`; relevant
-    `packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts` cases; `kovo check` and
-    prod-artifact/build coverage when artifact observable; `git diff --check`; `pnpm run check:vp`.
+  - Evidence: `vp exec vitest --run packages/compiler/src/direct-db.test.ts
+packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`;
+    `vp exec vitest --run packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`;
+    `vp exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts -t "task and webhook direct-write diagnostics|blocks task and webhook direct DB writes"`;
+    `git diff --check`; `pnpm run check:api-surface`; `pnpm run check:vp`.
 
 - [ ] **D2. Close D after D1 lands.**
   - [ ] Confirm SSR, `/_q`, and enhanced mutation paths all use the same query warning/list-limit contract.
