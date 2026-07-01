@@ -144,6 +144,12 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
     expect(rows).toEqual([{ id: 'p1' }]);
     expect(log).toEqual(['select:products']);
   });
+
+  it('does not expose then as a denied capability', async () => {
+    const reader = readonlyDb(fakeDb([]));
+    expect((reader as unknown as { then?: unknown }).then).toBeUndefined();
+    await expect(Promise.resolve(reader)).resolves.toBe(reader);
+  });
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {

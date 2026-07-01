@@ -78,6 +78,7 @@ export type ManagedDbMode = 'read' | 'write';
 export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
   return new Proxy(db, {
     get(target, prop, receiver) {
+      if (prop === 'then') return undefined;
       if (typeof prop === 'string' && !READ_CAPABILITY_PROPERTIES.has(prop)) {
         return () => {
           throw new KovoReadonlyHandleError(
