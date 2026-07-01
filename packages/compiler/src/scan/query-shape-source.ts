@@ -1,14 +1,20 @@
 import * as ts from 'typescript';
 
 import {
-  mergeQueryShapeFactSets,
+  mergeQueryShapeFactSets as mergeQueryShapeFactSetsCore,
   outputSchemaQueryShapeFactsFromProject as outputSchemaQueryShapeFactsFromProjectCore,
   outputSchemaQueryShapeFactsFromSource as outputSchemaQueryShapeFactsFromSourceCore,
 } from '@kovojs/core/internal/query-shape-source';
 
 import type { QueryShapeFact } from '../types.js';
 
-export { mergeQueryShapeFactSets };
+/** @internal Merge projected query-shape facts from multiple analyzers. */
+export function mergeQueryShapeFactSets(
+  primary: readonly QueryShapeFact[],
+  secondary: readonly QueryShapeFact[],
+): QueryShapeFact[] {
+  return mergeQueryShapeFactSetsCore(primary, secondary) as QueryShapeFact[];
+}
 
 /**
  * @internal Extract declared non-Drizzle query output schemas into compiler query-shape facts.
