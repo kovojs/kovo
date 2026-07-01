@@ -89,9 +89,9 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
       },
       {
         code: 'KV311',
-        enforced: 2,
+        enforced: 4,
         label: 'update coverage',
-        todo: 2,
+        todo: 0,
         variants: ['control', 'local-alias', 'destructured-binding', 'wrapper-helper'],
       },
     ]);
@@ -140,14 +140,6 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
           blockers: [
             METAMORPHIC_RECOGNITION_BLOCKERS.compilerMultiFileFixture,
             METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity,
-          ],
-        }),
-        expect.objectContaining({
-          code: 'KV311',
-          kind: 'wrapper-helper',
-          blockers: [
-            METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
-            METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
           ],
         }),
       ]),

@@ -828,6 +828,109 @@ export const QueryAlias = component({
     );
   });
 
+  it('reports KV311 for destructured query fields used in render positions', () => {
+    const result = compileComponentModule({
+      fileName: 'query-destructure.tsx',
+      source: `
+export const QueryDestructure = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: () => {
+    const { count } = cart;
+    return <query-destructure><p>{count}</p></query-destructure>;
+  },
+});
+`,
+    });
+
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'QueryDestructure',
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: 'cart.count',
+        status: 'UNHANDLED',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV311',
+        fileName: 'query-destructure.tsx',
+        message:
+          'Query/state-dependent DOM position has no update status. QueryDestructure cart.count expression',
+      }),
+    );
+  });
+
+  it('reports KV311 for query reads returned from same-render closure helpers', () => {
+    const result = compileComponentModule({
+      fileName: 'query-wrapper.tsx',
+      source: `
+export const QueryWrapper = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: () => {
+    const label = (() => cart.count + 1)();
+    return <query-wrapper><p>{label}</p></query-wrapper>;
+  },
+});
+`,
+    });
+
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'QueryWrapper',
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: 'cart.count',
+        status: 'UNHANDLED',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV311',
+        fileName: 'query-wrapper.tsx',
+        message:
+          'Query/state-dependent DOM position has no update status. QueryWrapper cart.count expression',
+      }),
+    );
+  });
+
+  it('reports KV311 for query reads hidden behind same-render wrapper helper chains', () => {
+    const result = compileComponentModule({
+      fileName: 'query-wrapper-chain.tsx',
+      source: `
+export const QueryWrapperChain = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: () => {
+    const readCount = () => cart.count + 1;
+    const label = readCount();
+    return <query-wrapper-chain><p>{label}</p></query-wrapper-chain>;
+  },
+});
+`,
+    });
+
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'QueryWrapperChain',
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: 'cart.count',
+        status: 'UNHANDLED',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV311',
+        fileName: 'query-wrapper-chain.tsx',
+        message:
+          'Query/state-dependent DOM position has no update status. QueryWrapperChain cart.count expression',
+      }),
+    );
+  });
+
   it('classifies fragment-target query expressions as fragment-covered without KV311', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',

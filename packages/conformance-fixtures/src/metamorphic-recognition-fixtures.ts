@@ -551,12 +551,9 @@ export const CartBadge = component({
 `,
     },
     {
-      blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.irVerification],
-      expectation: 'todo',
+      expectation: 'enforced',
       kind: 'destructured-binding',
       label: 'destructured query field',
-      reason:
-        'Workstream C IR verification: the current KV311 coverage pass does not follow destructured query fields into query-read positions.',
       source: `
 export const CartBadge = component({
   queries: { cart: {} },
@@ -569,15 +566,9 @@ export const CartBadge = component({
 `,
     },
     {
-      blockers: [
-        METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
-        METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
-      ],
-      expectation: 'todo',
+      expectation: 'enforced',
       kind: 'wrapper-helper',
       label: 'closure helper returning query value',
-      reason:
-        'Workstream A fail-closed default / Workstream C IR verification: closure-shaped query reads remain residual because current coverage extraction does not traverse ordinary closures.',
       source: `
 export const CartBadge = component({
   queries: { cart: {} },
