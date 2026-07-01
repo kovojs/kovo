@@ -35,21 +35,72 @@ export type FrameworkIdentityExpressionKindResolution =
   | 'resolve-property-access'
   | 'unwrap-expression';
 
+const frameworkIdentityExpressionSyntaxKinds = uniqueSyntaxKinds([
+  SyntaxKind.PropertyAccessExpression,
+  SyntaxKind.ElementAccessExpression,
+  SyntaxKind.NewExpression,
+  SyntaxKind.CallExpression,
+  SyntaxKind.JsxElement,
+  SyntaxKind.JsxSelfClosingElement,
+  SyntaxKind.JsxFragment,
+  SyntaxKind.TaggedTemplateExpression,
+  SyntaxKind.ArrayLiteralExpression,
+  SyntaxKind.ParenthesizedExpression,
+  SyntaxKind.ObjectLiteralExpression,
+  SyntaxKind.ClassExpression,
+  SyntaxKind.FunctionExpression,
+  SyntaxKind.Identifier,
+  SyntaxKind.PrivateIdentifier,
+  SyntaxKind.RegularExpressionLiteral,
+  SyntaxKind.NumericLiteral,
+  SyntaxKind.BigIntLiteral,
+  SyntaxKind.StringLiteral,
+  SyntaxKind.NoSubstitutionTemplateLiteral,
+  SyntaxKind.TemplateExpression,
+  SyntaxKind.FalseKeyword,
+  SyntaxKind.NullKeyword,
+  SyntaxKind.ThisKeyword,
+  SyntaxKind.TrueKeyword,
+  SyntaxKind.SuperKeyword,
+  SyntaxKind.NonNullExpression,
+  SyntaxKind.ExpressionWithTypeArguments,
+  SyntaxKind.MetaProperty,
+  SyntaxKind.ImportKeyword,
+  SyntaxKind.MissingDeclaration,
+  SyntaxKind.PrefixUnaryExpression,
+  SyntaxKind.PostfixUnaryExpression,
+  SyntaxKind.DeleteExpression,
+  SyntaxKind.TypeOfExpression,
+  SyntaxKind.VoidExpression,
+  SyntaxKind.AwaitExpression,
+  SyntaxKind.TypeAssertionExpression,
+  SyntaxKind.ConditionalExpression,
+  SyntaxKind.YieldExpression,
+  SyntaxKind.ArrowFunction,
+  SyntaxKind.BinaryExpression,
+  SyntaxKind.SpreadElement,
+  SyntaxKind.AsExpression,
+  SyntaxKind.OmittedExpression,
+  SyntaxKind.CommaListExpression,
+  SyntaxKind.PartiallyEmittedExpression,
+  SyntaxKind.SatisfiesExpression,
+]);
+
 /** @internal Expression-kind coverage table for the ts-morph framework identity adapter. */
 export const frameworkIdentityExpressionKindRows = [
-  { kind: SyntaxKind.Identifier, resolution: 'resolve-identifier' },
-  { kind: SyntaxKind.PropertyAccessExpression, resolution: 'resolve-property-access' },
-  { kind: SyntaxKind.ElementAccessExpression, resolution: 'resolve-element-access' },
-  { kind: SyntaxKind.ParenthesizedExpression, resolution: 'unwrap-expression' },
-  { kind: SyntaxKind.AsExpression, resolution: 'unwrap-expression' },
-  { kind: SyntaxKind.SatisfiesExpression, resolution: 'unwrap-expression' },
-  { kind: SyntaxKind.TypeAssertionExpression, resolution: 'unwrap-expression' },
-  { kind: SyntaxKind.NonNullExpression, resolution: 'unwrap-expression' },
-  { kind: 'default', resolution: 'fail-closed' },
-] as const satisfies readonly {
+  ...frameworkIdentityExpressionSyntaxKinds.map((kind) => ({
+    kind,
+    resolution: frameworkIdentityExpressionKindResolution(kind),
+  })),
+  { kind: 'default' as const, resolution: 'fail-closed' as const },
+] satisfies readonly {
   readonly kind: SyntaxKind | 'default';
   readonly resolution: FrameworkIdentityExpressionKindResolution;
 }[];
+
+function uniqueSyntaxKinds(kinds: readonly SyntaxKind[]): readonly SyntaxKind[] {
+  return [...new Set(kinds)];
+}
 
 /** @internal */
 export function frameworkExport(

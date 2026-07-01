@@ -96,19 +96,88 @@ const sqlUsageViaBridge: SourceFileInput = {
   ].join('\n'),
 };
 
+function expectedExpressionSyntaxKinds(): readonly SyntaxKind[] {
+  return [
+    SyntaxKind.PropertyAccessExpression,
+    SyntaxKind.ElementAccessExpression,
+    SyntaxKind.NewExpression,
+    SyntaxKind.CallExpression,
+    SyntaxKind.JsxElement,
+    SyntaxKind.JsxSelfClosingElement,
+    SyntaxKind.JsxFragment,
+    SyntaxKind.TaggedTemplateExpression,
+    SyntaxKind.ArrayLiteralExpression,
+    SyntaxKind.ParenthesizedExpression,
+    SyntaxKind.ObjectLiteralExpression,
+    SyntaxKind.ClassExpression,
+    SyntaxKind.FunctionExpression,
+    SyntaxKind.Identifier,
+    SyntaxKind.PrivateIdentifier,
+    SyntaxKind.RegularExpressionLiteral,
+    SyntaxKind.NumericLiteral,
+    SyntaxKind.BigIntLiteral,
+    SyntaxKind.StringLiteral,
+    SyntaxKind.NoSubstitutionTemplateLiteral,
+    SyntaxKind.TemplateExpression,
+    SyntaxKind.FalseKeyword,
+    SyntaxKind.NullKeyword,
+    SyntaxKind.ThisKeyword,
+    SyntaxKind.TrueKeyword,
+    SyntaxKind.SuperKeyword,
+    SyntaxKind.NonNullExpression,
+    SyntaxKind.ExpressionWithTypeArguments,
+    SyntaxKind.MetaProperty,
+    SyntaxKind.ImportKeyword,
+    SyntaxKind.MissingDeclaration,
+    SyntaxKind.PrefixUnaryExpression,
+    SyntaxKind.PostfixUnaryExpression,
+    SyntaxKind.DeleteExpression,
+    SyntaxKind.TypeOfExpression,
+    SyntaxKind.VoidExpression,
+    SyntaxKind.AwaitExpression,
+    SyntaxKind.TypeAssertionExpression,
+    SyntaxKind.ConditionalExpression,
+    SyntaxKind.YieldExpression,
+    SyntaxKind.ArrowFunction,
+    SyntaxKind.BinaryExpression,
+    SyntaxKind.SpreadElement,
+    SyntaxKind.AsExpression,
+    SyntaxKind.OmittedExpression,
+    SyntaxKind.CommaListExpression,
+    SyntaxKind.PartiallyEmittedExpression,
+    SyntaxKind.SatisfiesExpression,
+  ];
+}
+
 describe('@kovojs/drizzle static framework identity resolver', () => {
   it('exposes expression-kind resolver coverage with an explicit default row', () => {
-    expect(frameworkIdentityExpressionKindRows).toEqual([
-      { kind: SyntaxKind.Identifier, resolution: 'resolve-identifier' },
-      { kind: SyntaxKind.PropertyAccessExpression, resolution: 'resolve-property-access' },
-      { kind: SyntaxKind.ElementAccessExpression, resolution: 'resolve-element-access' },
-      { kind: SyntaxKind.ParenthesizedExpression, resolution: 'unwrap-expression' },
-      { kind: SyntaxKind.AsExpression, resolution: 'unwrap-expression' },
-      { kind: SyntaxKind.SatisfiesExpression, resolution: 'unwrap-expression' },
-      { kind: SyntaxKind.TypeAssertionExpression, resolution: 'unwrap-expression' },
-      { kind: SyntaxKind.NonNullExpression, resolution: 'unwrap-expression' },
-      { kind: 'default', resolution: 'fail-closed' },
-    ]);
+    const expressionRows = frameworkIdentityExpressionKindRows.filter(
+      (row) => row.kind !== 'default',
+    );
+    const resolutionByKind = new Map(expressionRows.map((row) => [row.kind, row.resolution]));
+
+    expect(frameworkIdentityExpressionKindRows.at(-1)).toEqual({
+      kind: 'default',
+      resolution: 'fail-closed',
+    });
+    expect(new Set(expressionRows.map((row) => row.kind))).toEqual(
+      new Set(expectedExpressionSyntaxKinds()),
+    );
+    expect(frameworkIdentityExpressionKindRows).toHaveLength(
+      expectedExpressionSyntaxKinds().length + 1,
+    );
+    expect(resolutionByKind.get(SyntaxKind.Identifier)).toBe('resolve-identifier');
+    expect(resolutionByKind.get(SyntaxKind.PropertyAccessExpression)).toBe(
+      'resolve-property-access',
+    );
+    expect(resolutionByKind.get(SyntaxKind.ElementAccessExpression)).toBe('resolve-element-access');
+    expect(resolutionByKind.get(SyntaxKind.ParenthesizedExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(SyntaxKind.AsExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(SyntaxKind.SatisfiesExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(SyntaxKind.TypeAssertionExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(SyntaxKind.NonNullExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(SyntaxKind.CallExpression)).toBe('fail-closed');
+    expect(resolutionByKind.get(SyntaxKind.BinaryExpression)).toBe('fail-closed');
   });
 
   it('recognizes re-exported, destructured, and aliased framework constructs', () => {

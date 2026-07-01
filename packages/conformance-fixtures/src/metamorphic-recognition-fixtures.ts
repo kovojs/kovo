@@ -519,17 +519,26 @@ export const Post = component({
       expectation: 'enforced',
       extraFiles: [
         {
+          fileName: 'browser-root.ts',
+          source: 'export { trustedHtml, trustedUrl } from "@kovojs/browser";',
+        },
+        {
           fileName: 'browser-barrel.ts',
-          source: 'export { trustedHtml as th } from "@kovojs/browser";',
+          source: 'export * from "./browser-root";',
         },
       ],
-      importLine: 'import { th } from "./browser-barrel";',
+      importLine: 'import * as browser from "./browser-barrel";',
       kind: 're-export-barrel',
-      label: 'trustedHtml local barrel re-export',
+      label: 'trustedHtml/trustedUrl export-star literal element access',
       source: `
 export const Post = component({
   queries: { post: postQuery },
-  render: ({ post }) => <article>{th(post.body)}</article>,
+  render: ({ post }) => (
+    <article>
+      {browser['trustedHtml'](post.body)}
+      <a href={browser['trustedUrl'](post.href)}>read</a>
+    </article>
+  ),
 });
 `,
     },

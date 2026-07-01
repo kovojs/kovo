@@ -277,6 +277,50 @@ describe('kovo explain', () => {
     });
   });
 
+  it('explains computed literal request db write-sink facts from compiler extraction', async () => {
+    const { compileComponentModule, deriveAppGraph } = await import('@kovojs/compiler');
+    const compiled = compileComponentModule({
+      fileName: 'src/mutations/cart.ts',
+      source: `
+export const save = mutation('cart/save', {
+  input: s.object({ id: s.string() }),
+  handler(input, request) {
+    return request['db'].insert(input);
+  },
+});
+`,
+    });
+
+    expect(compiled.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'request.db', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'cart/save' },
+        path: 'request.db.insert',
+        surface: 'mutation',
+      }),
+    ]);
+
+    const merged = deriveAppGraph({
+      components: [
+        {
+          componentGraphFacts: compiled.componentGraphFacts,
+          handlerWriteSinkFacts: compiled.handlerWriteSinkFacts,
+          taskGraphFacts: compiled.taskGraphFacts,
+        },
+      ],
+      graph: { mutations: [{ key: 'cart/save', writes: ['cart'] }] },
+    });
+    const result = kovoExplain(
+      JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoExplain>[0],
+      { endpoints: true },
+    );
+
+    expect(result.output).toContain(
+      'WRITE-SINK surface=mutation owner=key:cart/save operation=insert target=request.db targetProvenance=property-access-path path=request.db.insert',
+    );
+  });
+
   it('explains query write-reachability facts on query targets', () => {
     expect(
       kovoExplain(

@@ -44,19 +44,84 @@ function initializerByName(source: ts.SourceFile, name: string): ts.Expression {
   return found;
 }
 
+function expectedExpressionSyntaxKinds(): readonly ts.SyntaxKind[] {
+  return [
+    ts.SyntaxKind.PropertyAccessExpression,
+    ts.SyntaxKind.ElementAccessExpression,
+    ts.SyntaxKind.NewExpression,
+    ts.SyntaxKind.CallExpression,
+    ts.SyntaxKind.JsxElement,
+    ts.SyntaxKind.JsxSelfClosingElement,
+    ts.SyntaxKind.JsxFragment,
+    ts.SyntaxKind.TaggedTemplateExpression,
+    ts.SyntaxKind.ArrayLiteralExpression,
+    ts.SyntaxKind.ParenthesizedExpression,
+    ts.SyntaxKind.ObjectLiteralExpression,
+    ts.SyntaxKind.ClassExpression,
+    ts.SyntaxKind.FunctionExpression,
+    ts.SyntaxKind.Identifier,
+    ts.SyntaxKind.PrivateIdentifier,
+    ts.SyntaxKind.RegularExpressionLiteral,
+    ts.SyntaxKind.NumericLiteral,
+    ts.SyntaxKind.BigIntLiteral,
+    ts.SyntaxKind.StringLiteral,
+    ts.SyntaxKind.NoSubstitutionTemplateLiteral,
+    ts.SyntaxKind.TemplateExpression,
+    ts.SyntaxKind.FalseKeyword,
+    ts.SyntaxKind.NullKeyword,
+    ts.SyntaxKind.ThisKeyword,
+    ts.SyntaxKind.TrueKeyword,
+    ts.SyntaxKind.SuperKeyword,
+    ts.SyntaxKind.NonNullExpression,
+    ts.SyntaxKind.ExpressionWithTypeArguments,
+    ts.SyntaxKind.MetaProperty,
+    ts.SyntaxKind.ImportKeyword,
+    ts.SyntaxKind.MissingDeclaration,
+    ts.SyntaxKind.PrefixUnaryExpression,
+    ts.SyntaxKind.PostfixUnaryExpression,
+    ts.SyntaxKind.DeleteExpression,
+    ts.SyntaxKind.TypeOfExpression,
+    ts.SyntaxKind.VoidExpression,
+    ts.SyntaxKind.AwaitExpression,
+    ts.SyntaxKind.TypeAssertionExpression,
+    ts.SyntaxKind.ConditionalExpression,
+    ts.SyntaxKind.YieldExpression,
+    ts.SyntaxKind.ArrowFunction,
+    ts.SyntaxKind.BinaryExpression,
+    ts.SyntaxKind.SpreadElement,
+    ts.SyntaxKind.AsExpression,
+    ts.SyntaxKind.OmittedExpression,
+    ts.SyntaxKind.CommaListExpression,
+    ts.SyntaxKind.PartiallyEmittedExpression,
+    ts.SyntaxKind.SatisfiesExpression,
+  ];
+}
+
 describe('framework identity resolver', () => {
   it('publishes an expression-kind table with a fail-closed default', () => {
-    expect(frameworkIdentityExpressionKindRows(ts)).toEqual([
-      { kind: ts.SyntaxKind.Identifier, resolution: 'resolve-identifier' },
-      { kind: ts.SyntaxKind.PropertyAccessExpression, resolution: 'resolve-property-access' },
-      { kind: ts.SyntaxKind.ElementAccessExpression, resolution: 'resolve-element-access' },
-      { kind: ts.SyntaxKind.ParenthesizedExpression, resolution: 'unwrap-expression' },
-      { kind: ts.SyntaxKind.AsExpression, resolution: 'unwrap-expression' },
-      { kind: ts.SyntaxKind.SatisfiesExpression, resolution: 'unwrap-expression' },
-      { kind: ts.SyntaxKind.TypeAssertionExpression, resolution: 'unwrap-expression' },
-      { kind: ts.SyntaxKind.NonNullExpression, resolution: 'unwrap-expression' },
-      { kind: 'default', resolution: 'fail-closed' },
-    ]);
+    const rows = frameworkIdentityExpressionKindRows(ts);
+    const expressionRows = rows.filter((row) => row.kind !== 'default');
+    const resolutionByKind = new Map(expressionRows.map((row) => [row.kind, row.resolution]));
+
+    expect(rows.at(-1)).toEqual({ kind: 'default', resolution: 'fail-closed' });
+    expect(new Set(expressionRows.map((row) => row.kind))).toEqual(
+      new Set(expectedExpressionSyntaxKinds()),
+    );
+    expect(rows).toHaveLength(expectedExpressionSyntaxKinds().length + 1);
+    expect(resolutionByKind.get(ts.SyntaxKind.Identifier)).toBe('resolve-identifier');
+    expect(resolutionByKind.get(ts.SyntaxKind.PropertyAccessExpression)).toBe(
+      'resolve-property-access',
+    );
+    expect(resolutionByKind.get(ts.SyntaxKind.ElementAccessExpression)).toBe(
+      'resolve-element-access',
+    );
+    expect(resolutionByKind.get(ts.SyntaxKind.ParenthesizedExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(ts.SyntaxKind.AsExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(ts.SyntaxKind.SatisfiesExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(ts.SyntaxKind.TypeAssertionExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(ts.SyntaxKind.NonNullExpression)).toBe('unwrap-expression');
+    expect(resolutionByKind.get(ts.SyntaxKind.CallExpression)).toBe('fail-closed');
+    expect(resolutionByKind.get(ts.SyntaxKind.BinaryExpression)).toBe('fail-closed');
   });
 
   it('resolves star-barrel literal element access and rejects non-literal computed keys', () => {
