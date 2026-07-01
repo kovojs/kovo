@@ -156,7 +156,7 @@ packages/cli/src/index.kovo-check.test.ts`.
   - Acceptance: focused compiler/drizzle tests for each case plus a create-kovo prod-artifact build where
     the bug is observable in the artifact.
 
-- [ ] **B2. Convert remaining security-relevant syntactic recognizers after B1.**
+- [x] **B2. Convert remaining security-relevant syntactic recognizers after B1.**
   - Starting inventory: `node scripts/fundamental-fixes-inventory.mjs` currently reports 57 literal/import
     candidates, 1,798 AST-kind gates, and 95 KV406/fail-closed sites.
   - [x] Re-run inventory after B1 and identify only residual recognizers that decide security or proof facts.
@@ -176,8 +176,13 @@ packages/cli/src/index.kovo-check.test.ts`.
   - [x] Review and convert or explicitly mark trust-escape DOM/`Function` recognizers.
         Evidence: `pnpm exec vitest run packages/drizzle/src/trust-escapes-static.test.ts` covers
         unshadowed global `Function`/`document.write` recognition and local shadows.
-  - [ ] Finish the remaining capability-owned compiler comparisons for `recordChange` through
+  - [x] Finish the remaining capability-owned compiler comparisons for `recordChange` through
         `plans/capability-surface-redesign.md`.
+        Evidence: `packages/compiler/src/webhook-record-change.test.ts` keeps `recordChange` as a
+        checked compatibility/manual-change bridge, while `packages/compiler/src/registry.test.ts` and
+        `packages/cli/src/index.kovo-explain.test.ts` prove webhook mutation dispatch facts now own
+        called-mutation audit output; `node scripts/fundamental-fixes-inventory.mjs` reports 26
+        syntactic candidates after the completed B2/capability slices.
   - Acceptance: inventory count drops for security-relevant literal/import recognizers; new/changed tests
     prove alias, re-export, namespace, and local-shadow behavior.
 

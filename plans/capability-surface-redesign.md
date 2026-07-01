@@ -36,7 +36,7 @@ preserving compatibility for a model that is hard to explain.
     `pnpm exec vitest run packages/core/src/diagnostics.test.ts`; `pnpm run check:api-surface`;
     `git diff --check`; `pnpm run check:vp`.
 
-- [ ] **Move webhook writes through audited mutation calls.**
+- [x] **Move webhook writes through audited mutation calls.**
   - Decision: webhook handlers should be machine-ingress coordinators, not owners of raw transaction
     writes. A webhook verifies/parses provider input, reserves replay/idempotency, then calls an
     audited mutation that owns the DB write, touch set, and static diagnostics.
@@ -52,10 +52,16 @@ preserving compatibility for a model that is hard to explain.
   - Preserve the idempotency/replay floor: any webhook that can dispatch writes must declare
     `idempotency()` and `replayStore` before the handler runs, and repeated provider deliveries must
     replay the committed response rather than re-executing the write.
-  - Evidence to close: server webhook lifecycle tests for `runMutation` dispatch, compiler/build
-    preflight diagnostics rejecting raw webhook DB writes, `kovo explain` endpoint audit showing the
-    called mutation and touched domains, and a prod-artifact or integration proof that a mutation
-    dispatching webhook deduplicates provider replay while refreshing the touched domain.
+  - Evidence: `packages/server/src/webhook.ts` exposes `context.runMutation(...)` with replay posture
+    gating; `packages/server/src/app-dispatch.ts` threads app mutation runtime options into webhook
+    dispatch; `packages/compiler/src/scan/parse.ts` and `packages/compiler/src/app-graph.ts` emit webhook
+    mutation-dispatch endpoint facts; `packages/cli/src/graph-output.ts` prints called mutations and
+    derived writes in `kovo explain --endpoints`; `spec/09-wire-protocol.md` names the audited mutation
+    dispatch lifecycle.
+  - Evidence: `pnpm vitest run packages/server/src/webhook.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts`;
+    `pnpm vitest run packages/compiler/src/registry.test.ts packages/compiler/src/direct-db.test.ts packages/cli/src/index.kovo-explain.test.ts`;
+    `pnpm exec playwright test --config tests/integration/playwright.config.ts tests/integration/specs/webhook-idempotency.spec.ts`;
+    `pnpm run check:api-surface`; `git diff --check`; `pnpm run check:vp`.
 
 - [ ] **Move direct-DB gates onto canonical facts/IR instead of source-pattern expansion.**
   - Decision: do not keep broadening ad hoc source recognizers as the long-term detector strategy.
