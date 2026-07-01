@@ -73,6 +73,11 @@ export type ManagedDbMode = 'read' | 'write';
  * fail-closed runtime floor plus a branded type, not the SPEC §6.6 security proof.
  */
 export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
+  const safe = wrapManagedDbForSqlSafety(db, undefined, { capability: 'read' });
+  return readonlyCapabilityDb(safe as object) as Reader<Db>;
+}
+
+function readonlyCapabilityDb<Db extends object>(db: Db): Reader<Db> {
   return new Proxy(db, {
     get(target, prop, receiver) {
       if (prop === 'then') return undefined;
@@ -122,5 +127,5 @@ export function managedDb<Db>(
   });
   if (mode === 'write') return safe;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
-  return readonlyDb(safe as unknown as object) as Reader<Db>;
+  return readonlyCapabilityDb(safe as unknown as object) as Reader<Db>;
 }

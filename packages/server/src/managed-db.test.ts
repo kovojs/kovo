@@ -148,6 +148,29 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
     expect(log).toEqual(['select:products']);
   });
 
+  it('parses allowed SQL-shaped read methods instead of trusting the allowlist alone', async () => {
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log));
+    const queryMethod = (reader as unknown as { query(statement: unknown): Promise<unknown> })
+      .query;
+
+    expect(() => queryMethod('select * from products')).toThrow(/KV422/);
+    expect(() =>
+      queryMethod(
+        stampTrustedSql(
+          { sql: 'delete from products where id = ? returning id', values: ['p1'] },
+          'attempted public read-handle write',
+        ),
+      ),
+    ).toThrow(/KV433/);
+    expect(log).toEqual([]);
+
+    await expect(
+      queryMethod({ sql: 'select id from products where id = ?', values: ['p1'] }),
+    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(log).toEqual(['query']);
+  });
+
   it('binds allowed read methods to the wrapped DB target', async () => {
     const log: string[] = [];
     const raw = {
@@ -444,6 +467,53 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/KV406/);
     expect(log).toEqual(['$client.execute']);
+  });
+
+  it('write mode parses unknown nested driver methods before execution', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        $client: {
+          futureStatement(statement: unknown) {
+            log.push('$client.futureStatement');
+            return statement;
+          },
+        },
+        session: {
+          futureStatement(statement: unknown) {
+            log.push('session.futureStatement');
+            return statement;
+          },
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    );
+
+    expect(() => handle.$client.futureStatement('select id from products')).toThrow(/KV422/);
+    expect(log).toEqual([]);
+
+    expect(
+      handle.$client.futureStatement({
+        sql: 'select id from products where id = ?',
+        values: ['p1'],
+      }),
+    ).toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(() =>
+      handle.session.futureStatement(
+        stampTrustedSql(
+          { sql: 'update users set name = ? where id = ?', values: ['Ada', 'u1'] },
+          'drifted nested future update',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['$client.futureStatement']);
   });
 
   it('statement-parses pglite-like, better-sqlite3-like, and future driver methods', async () => {
