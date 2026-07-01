@@ -1707,6 +1707,61 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it.each([
+    [
+      'local function returning a closed-over secret projection',
+      [
+        'const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);',
+        'const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);',
+        'function pickSecret() {',
+        '  return secretRows[0]?.secret ?? null;',
+        '}',
+        'return items.map((item) => ({ ...item, company: pickSecret() }));',
+      ],
+    ],
+    [
+      'local function mutating the returned shape from a secret argument',
+      [
+        'const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);',
+        'const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);',
+        'function attachSecret(rows: Array<{ id: string; secret: string }>) {',
+        '  const first = rows[0];',
+        '  if (first) items.push({ id: first.id, name: "redacted", company: first.secret });',
+        '}',
+        'attachSecret(secretRows);',
+        'return items;',
+      ],
+    ],
+  ])('reports KV435 for cross-select laundering through %s', (_label, loadBody) => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'contact.queries.ts',
+          source: `
+          export const contacts = pgTable("contacts", {
+            company: text("company").notNull(),
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "contact", key: "id", secret: ["company"] }));
+
+          export const contactList = query("contacts", {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
+              ${loadBody.join('\n')}
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining('reads a secret-classified'),
+      }),
+    ]);
+  });
+
   it('keeps a second secret select green when its value is proven off the returned query wire', () => {
     const facts = extractQueryFactsFromProject({
       files: [

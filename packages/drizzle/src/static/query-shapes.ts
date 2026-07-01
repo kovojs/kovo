@@ -4,6 +4,7 @@ import {
   ts,
   type BindingElement,
   type CallExpression,
+  type FunctionDeclaration,
   type FunctionExpression,
   type ObjectLiteralExpression,
   type ParameterDeclaration,
@@ -400,9 +401,37 @@ function taintedValueReachesTopLevelReturn(body: Node, selectedKey: string): boo
   const elementAliases = wireElementAliasRoots(body, wireRoots);
   const tainted = new Set<string>([selectedKey]);
 
+  return taintedValueReachesWire(body, tainted, wireRoots, elementAliases, returnExpressions);
+}
+
+function taintedValueReachesWire(
+  body: Node,
+  tainted: Set<string>,
+  wireRoots: ReadonlySet<string>,
+  elementAliases: ReadonlySet<string>,
+  returnExpressions: readonly Node[],
+): boolean {
   let changed = true;
   while (changed) {
     changed = false;
+
+    for (const declaration of body.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
+      if (!topLevelDescendant(body, declaration)) continue;
+      const name = declaration.getNameNode();
+      if (name === undefined || !Node.isIdentifier(name)) continue;
+
+      const nestedBody = functionBody(declaration);
+      if (!expressionContainsAnyKey(nestedBody, tainted)) continue;
+      if (taintedValueReachesWire(nestedBody, new Set(tainted), wireRoots, elementAliases, [])) {
+        return true;
+      }
+
+      const key = localSymbolKey(name);
+      if (key && !tainted.has(key)) {
+        tainted.add(key);
+        changed = true;
+      }
+    }
 
     for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
       if (!topLevelDescendant(body, declaration)) continue;
@@ -449,6 +478,11 @@ function taintedValueReachesTopLevelReturn(body: Node, selectedKey: string): boo
       }
 
       if (!taintedArgs) continue;
+      if (
+        localFunctionCallTaintedValueReachesWire(call, body, tainted, wireRoots, elementAliases)
+      ) {
+        return true;
+      }
       if (
         args.some((argument) => expressionContainsWireRoot(argument, wireRoots, elementAliases))
       ) {
@@ -500,6 +534,63 @@ function taintedValueReachesTopLevelReturn(body: Node, selectedKey: string): boo
   }
 
   return false;
+}
+
+function localFunctionCallTaintedValueReachesWire(
+  call: CallExpression,
+  body: Node,
+  tainted: ReadonlySet<string>,
+  wireRoots: ReadonlySet<string>,
+  elementAliases: ReadonlySet<string>,
+): boolean {
+  const declaration = localFunctionDeclarationForCall(call, body);
+  if (declaration === undefined) return false;
+
+  const nestedTaint = new Set<string>();
+  const parameters = declaration.getParameters();
+  call.getArguments().forEach((argument, index) => {
+    if (!expressionContainsAnyKey(argument, tainted)) return;
+    const parameter = parameters[index];
+    if (parameter === undefined) return;
+    for (const key of bindingNameIdentifierKeys(parameter.getNameNode())) {
+      nestedTaint.add(key);
+    }
+  });
+  for (const key of tainted) nestedTaint.add(key);
+  if (nestedTaint.size === 0) return false;
+
+  return taintedValueReachesWire(
+    functionBody(declaration),
+    nestedTaint,
+    wireRoots,
+    elementAliases,
+    [],
+  );
+}
+
+function localFunctionDeclarationForCall(
+  call: CallExpression,
+  body: Node,
+): FunctionDeclaration | undefined {
+  const callee = unwrappedStaticExpressionNode(call.getExpression());
+  if (!Node.isIdentifier(callee)) return undefined;
+
+  const calleeKey = localSymbolKey(callee);
+  if (calleeKey === undefined) return undefined;
+
+  return body.getDescendantsOfKind(SyntaxKind.FunctionDeclaration).find((declaration) => {
+    if (!topLevelDescendant(body, declaration)) return false;
+    const name = declaration.getNameNode();
+    return name !== undefined && Node.isIdentifier(name) && localSymbolKey(name) === calleeKey;
+  });
+}
+
+function bindingNameIdentifierKeys(name: Node): string[] {
+  if (Node.isIdentifier(name)) {
+    const key = localSymbolKey(name);
+    return key === undefined ? [] : [key];
+  }
+  return expressionIdentifierKeys(name);
 }
 
 function isAssignmentOperatorKind(kind: SyntaxKind): boolean {

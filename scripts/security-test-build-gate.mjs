@@ -64,7 +64,7 @@ export const SECURITY_BUILD_PROOFS = [
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
     testName:
-      'blocks cross-select Better Auth credential laundering from the production build artifact',
+      'blocks local-helper Better Auth credential laundering from the production build artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',

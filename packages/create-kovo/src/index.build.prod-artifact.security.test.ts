@@ -32,7 +32,7 @@ import {
 } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production security artifacts)', () => {
-  it('blocks cross-select Better Auth credential laundering from the production build artifact', () => {
+  it('blocks local-helper Better Auth credential laundering from the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-auth-secret-'));

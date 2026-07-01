@@ -477,6 +477,36 @@ export const C = component({
     ).toHaveLength(1);
   });
 
+  it('resolves trustedHtml and trustedUrl through export-star barrels', () => {
+    expect(
+      kv426(
+        `
+import { th, tu } from './browser-barrel';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => (
+    <article>
+      {th(post.body)}
+      <a href={tu(post.href)}>read</a>
+    </article>
+  ),
+});
+`,
+        'pages/probe.tsx',
+        [
+          {
+            fileName: 'pages/browser-root.ts',
+            source: "export { trustedHtml as th, trustedUrl as tu } from '@kovojs/browser';",
+          },
+          {
+            fileName: 'pages/browser-barrel.ts',
+            source: "export * from './browser-root';",
+          },
+        ],
+      ),
+    ).toHaveLength(2);
+  });
+
   it('does not trust local barrel lookalikes or foreign re-exports', () => {
     expect(
       kv426(
