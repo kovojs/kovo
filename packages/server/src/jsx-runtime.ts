@@ -301,6 +301,10 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
       continue;
     }
 
+    if (isKovoTrustedUrl(value) && !isUrlAttributeName(name)) {
+      continue;
+    }
+
     if (styleAttrs && name === 'style') {
       continue;
     }
@@ -791,15 +795,8 @@ export declare namespace JSX {
     key?: number | string;
     'kovo-key'?: number | string;
   }
-  type AttributeValue =
-    | boolean
-    | number
-    | RenderedHtml
-    | string
-    | TrustedHtml
-    | TrustedUrl
-    | null
-    | undefined;
+  type AttributeValue = boolean | number | RenderedHtml | string | TrustedHtml | null | undefined;
+  type UrlAttributeValue = AttributeValue | TrustedUrl;
   type StyleProperties = Record<string, boolean | number | string | null | undefined>;
   type AriaBoolean = boolean | 'false' | 'true';
   interface AriaAttributes {
@@ -839,7 +836,7 @@ export declare namespace JSX {
     [attribute: `data-${string}`]: AttributeValue;
     [attribute: `kovo-${string}`]: AttributeValue;
     [attribute: `on:${string}`]: string | undefined;
-    action?: AttributeValue;
+    action?: UrlAttributeValue;
     accept?: AttributeValue;
     alt?: AttributeValue;
     acceptCharset?: AttributeValue;
@@ -873,10 +870,12 @@ export declare namespace JSX {
     focusable?: boolean | 'false' | 'true';
     for?: AttributeValue;
     form?: AttributeValue;
+    formaction?: UrlAttributeValue;
+    formAction?: UrlAttributeValue;
     height?: number | string;
     hidden?: AttributeValue;
     high?: AttributeValue;
-    href?: AttributeValue;
+    href?: UrlAttributeValue;
     htmlFor?: AttributeValue;
     html?: TrustedHtml;
     id?: AttributeValue;
@@ -909,6 +908,11 @@ export declare namespace JSX {
     popover?: AttributeValue;
     popovertarget?: AttributeValue;
     popovertargetaction?: AttributeValue;
+    poster?: UrlAttributeValue;
+    background?: UrlAttributeValue;
+    cite?: UrlAttributeValue;
+    data?: UrlAttributeValue;
+    ping?: UrlAttributeValue;
     points?: string;
     r?: number | string;
     rawHtml?: TrustedHtml;
@@ -925,7 +929,7 @@ export declare namespace JSX {
     scope?: AttributeValue;
     selected?: AttributeValue;
     sizes?: AttributeValue;
-    src?: AttributeValue;
+    src?: UrlAttributeValue;
     srcset?: AttributeValue;
     srcSet?: AttributeValue;
     stroke?: string;
@@ -949,6 +953,7 @@ export declare namespace JSX {
     x?: number | string;
     x1?: number | string;
     x2?: number | string;
+    'xlink:href'?: UrlAttributeValue;
     xmlns?: string;
     y?: number | string;
     y1?: number | string;

@@ -574,6 +574,21 @@ describe('server jsx runtime', () => {
     );
   });
 
+  it('drops TrustedUrl values placed on non-URL attributes at runtime', () => {
+    expect(
+      html(
+        jsx('span', {
+          'data-next': trustedUrl('/account'),
+          children: 'next',
+          title: trustedUrl('javascript:alert(1)'),
+        }),
+      ),
+    ).toBe('<span>next</span>');
+    expect(
+      html(jsx('button', { formaction: trustedUrl('javascript:alert(1)'), children: 'go' })),
+    ).toBe('<button formaction="javascript:alert(1)">go</button>');
+  });
+
   it('renders void elements without closing tags', () => {
     expect(html(jsx('input', { name: 'quantity', type: 'number', min: 1 }))).toBe(
       '<input name="quantity" type="number" min="1">',
