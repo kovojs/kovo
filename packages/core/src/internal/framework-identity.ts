@@ -97,6 +97,14 @@ const canonicalExpressionCache = new WeakMap<
   TypeScript.SourceFile,
   WeakMap<TypeScript.Expression, FrameworkExportIdentity | null>
 >();
+const callExpressionSpanCache = new WeakMap<
+  TypeScript.SourceFile,
+  Map<string, TypeScript.CallExpression>
+>();
+const expressionSpanCache = new WeakMap<
+  TypeScript.SourceFile,
+  Map<string, TypeScript.Expression>
+>();
 
 /** @internal */
 export function frameworkExport(
@@ -201,22 +209,7 @@ export function callExpressionAtSpan(
   sourceFile: TypeScript.SourceFile,
   span: { readonly end: number; readonly start: number },
 ): TypeScript.CallExpression | undefined {
-  let found: TypeScript.CallExpression | undefined;
-  const visit = (node: TypeScript.Node): void => {
-    if (found) return;
-    if (node.getStart(sourceFile) > span.start || node.getEnd() < span.end) return;
-    if (
-      ts.isCallExpression(node) &&
-      node.getStart(sourceFile) === span.start &&
-      node.getEnd() === span.end
-    ) {
-      found = node;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return found;
+  return callExpressionSpanIndex(ts, sourceFile).get(spanCacheKey(span));
 }
 
 /** @internal Return the expression whose span exactly matches a parser model span. */
@@ -225,22 +218,7 @@ export function expressionAtSpan(
   sourceFile: TypeScript.SourceFile,
   span: { readonly end: number; readonly start: number },
 ): TypeScript.Expression | undefined {
-  let found: TypeScript.Expression | undefined;
-  const visit = (node: TypeScript.Node): void => {
-    if (found) return;
-    if (node.getStart(sourceFile) > span.start || node.getEnd() < span.end) return;
-    if (
-      isExpressionNode(ts, node) &&
-      node.getStart(sourceFile) === span.start &&
-      node.getEnd() === span.end
-    ) {
-      found = node;
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return found;
+  return expressionSpanIndex(ts, sourceFile).get(spanCacheKey(span));
 }
 
 function canonicalExpression(
@@ -466,7 +444,7 @@ function declarationIndexForContainer(
   };
 
   const visit = (node: TypeScript.Node): void => {
-    for (const declaration of namedDeclarations(ts, node)) add(declaration.name, declaration.node);
+    addNamedDeclarations(ts, node, add);
     if (
       node !== container &&
       (isFunctionLikeWithParameters(ts, node) || ts.isClassDeclaration(node))
@@ -495,50 +473,102 @@ function canonicalExpressionCacheForSource(
   return sourceCache;
 }
 
-function namedDeclarations(
+function callExpressionSpanIndex(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+): Map<string, TypeScript.CallExpression> {
+  const cached = callExpressionSpanCache.get(sourceFile);
+  if (cached) return cached;
+
+  const index = new Map<string, TypeScript.CallExpression>();
+  const visit = (node: TypeScript.Node): void => {
+    if (ts.isCallExpression(node)) index.set(nodeSpanCacheKey(sourceFile, node), node);
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  callExpressionSpanCache.set(sourceFile, index);
+  return index;
+}
+
+function expressionSpanIndex(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+): Map<string, TypeScript.Expression> {
+  const cached = expressionSpanCache.get(sourceFile);
+  if (cached) return cached;
+
+  const index = new Map<string, TypeScript.Expression>();
+  const visit = (node: TypeScript.Node): void => {
+    if (isExpressionNode(ts, node)) {
+      const key = nodeSpanCacheKey(sourceFile, node);
+      if (!index.has(key)) index.set(key, node);
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  expressionSpanCache.set(sourceFile, index);
+  return index;
+}
+
+function nodeSpanCacheKey(sourceFile: TypeScript.SourceFile, node: TypeScript.Node): string {
+  return `${node.getStart(sourceFile)}:${node.getEnd()}`;
+}
+
+function spanCacheKey(span: { readonly end: number; readonly start: number }): string {
+  return `${span.start}:${span.end}`;
+}
+
+function addNamedDeclarations(
   ts: FrameworkIdentityTypeScript,
   node: TypeScript.Node,
-): { readonly name: string; readonly node: TypeScript.Node }[] {
-  if (ts.isImportDeclaration(node)) return importDeclarationBindings(ts, node);
-  if (ts.isVariableDeclaration(node)) {
-    if (ts.isIdentifier(node.name)) return [{ name: node.name.text, node }];
-    if (ts.isObjectBindingPattern(node.name)) return objectBindingElements(ts, node.name);
+  add: (name: string, declaration: TypeScript.Node) => void,
+): void {
+  if (ts.isImportDeclaration(node)) {
+    addImportDeclarationBindings(ts, node, add);
+    return;
   }
-  if (ts.isFunctionDeclaration(node) && node.name) return [{ name: node.name.text, node }];
-  if (ts.isClassDeclaration(node) && node.name) return [{ name: node.name.text, node }];
-  if (ts.isInterfaceDeclaration(node)) return [{ name: node.name.text, node }];
-  if (ts.isTypeAliasDeclaration(node)) return [{ name: node.name.text, node }];
-  return [];
+  if (ts.isVariableDeclaration(node)) {
+    if (ts.isIdentifier(node.name)) {
+      add(node.name.text, node);
+      return;
+    }
+    if (ts.isObjectBindingPattern(node.name)) addObjectBindingElements(ts, node.name, add);
+    return;
+  }
+  if (ts.isFunctionDeclaration(node) && node.name) add(node.name.text, node);
+  if (ts.isClassDeclaration(node) && node.name) add(node.name.text, node);
+  if (ts.isInterfaceDeclaration(node)) add(node.name.text, node);
+  if (ts.isTypeAliasDeclaration(node)) add(node.name.text, node);
 }
 
-function importDeclarationBindings(
+function addImportDeclarationBindings(
   ts: FrameworkIdentityTypeScript,
   node: TypeScript.ImportDeclaration,
-): { readonly name: string; readonly node: TypeScript.Node }[] {
+  add: (name: string, declaration: TypeScript.Node) => void,
+): void {
   const clause = node.importClause;
-  if (!clause) return [];
-  const declarations: { name: string; node: TypeScript.Node }[] = [];
-  if (clause.name) declarations.push({ name: clause.name.text, node: clause });
+  if (!clause) return;
+  if (clause.name) add(clause.name.text, clause);
   const bindings = clause.namedBindings;
-  if (!bindings) return declarations;
+  if (!bindings) return;
   if (ts.isNamespaceImport(bindings)) {
-    declarations.push({ name: bindings.name.text, node: bindings });
-    return declarations;
+    add(bindings.name.text, bindings);
+    return;
   }
-  if (!ts.isNamedImports(bindings)) return declarations;
+  if (!ts.isNamedImports(bindings)) return;
   for (const element of bindings.elements) {
-    declarations.push({ name: element.name.text, node: element });
+    add(element.name.text, element);
   }
-  return declarations;
 }
 
-function objectBindingElements(
+function addObjectBindingElements(
   ts: FrameworkIdentityTypeScript,
   pattern: TypeScript.ObjectBindingPattern,
-): { readonly name: string; readonly node: TypeScript.Node }[] {
-  return pattern.elements.flatMap((element) =>
-    ts.isIdentifier(element.name) ? [{ name: element.name.text, node: element }] : [],
-  );
+  add: (name: string, declaration: TypeScript.Node) => void,
+): void {
+  for (const element of pattern.elements) {
+    if (ts.isIdentifier(element.name)) add(element.name.text, element);
+  }
 }
 
 function bindingNameBinds(
