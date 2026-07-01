@@ -65,6 +65,16 @@ describe('create-kovo starter (build integration: production runtime contract ar
       expect(queryBody).toContain('"label":"item-1"');
       expect(queryBody).not.toContain('"label":"item-2"');
 
+      const syncParse = await fetch(
+        `${origin}/_q/runtime-contract-proofs/sync-verified-file-parse-query`,
+      );
+      const syncParseBody = await syncParse.text();
+      expect(syncParse.status).toBe(200);
+      expect(syncParseBody).toContain('"ok":true');
+      expect(syncParseBody).toContain(
+        'verified file type checks require async parsing; call parseAsync',
+      );
+
       const forgedHtmlUpload = new FormData();
       forgedHtmlUpload.set(
         'avatar',

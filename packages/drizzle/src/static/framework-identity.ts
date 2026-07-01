@@ -43,6 +43,7 @@ const SERVER_EXPORTS = new Set([
   'route',
   'serverValue',
   'stream',
+  'tag',
   'task',
   'webhook',
   'write',

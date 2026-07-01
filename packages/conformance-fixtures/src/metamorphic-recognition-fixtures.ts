@@ -327,17 +327,11 @@ function kovoServerBindingVariants(): readonly KovoServerBindingVariant[] {
       setupLines: ['const { query: q } = srv;'],
     },
     {
-      blockers: [
-        METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
-        METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
-      ],
       callee: 'defineQuery',
-      expectation: 'todo',
+      expectation: 'enforced',
       importLine: 'import { query } from "@kovojs/server";',
       kind: 'wrapper-helper',
       label: 'wrapper helper call',
-      reason:
-        'Workstream A fail-closed default / Workstream C IR verification: helper-indirect query declarations need either a KV406 unresolved-declaration diagnostic or IR-level sink facts; current query extraction is declaration-call based.',
       setupLines: [
         'const defineQuery = (key: string, body: unknown) => query(key, body as never);',
       ],
@@ -450,13 +444,10 @@ export const Post = component({
 `,
     },
     {
-      blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity],
-      expectation: 'todo',
+      expectation: 'enforced',
       importLine: 'import * as browser from "@kovojs/browser";',
       kind: 'namespace-import',
       label: 'trustedHtml namespace member',
-      reason:
-        'Workstream B semantic identity resolver: the current KV426 validator records direct named browser imports, not browser.trustedHtml namespace members.',
       source: `
 export const Post = component({
   queries: { post: postQuery },
@@ -484,13 +475,10 @@ export const Post = component({
 `,
     },
     {
-      blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.semanticIdentity],
-      expectation: 'todo',
+      expectation: 'enforced',
       importLine: 'import { trustedHtml } from "@kovojs/browser";',
       kind: 'local-alias',
       label: 'trustedHtml local const alias',
-      reason:
-        'Workstream B semantic identity resolver: the current KV426 recognizer tracks imported local names, not same-scope aliases of the trustedHtml binding.',
       source: `
 const th = trustedHtml;
 export const Post = component({
@@ -500,16 +488,10 @@ export const Post = component({
 `,
     },
     {
-      blockers: [
-        METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
-        METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
-      ],
-      expectation: 'todo',
+      expectation: 'enforced',
       importLine: 'import { trustedHtml } from "@kovojs/browser";',
       kind: 'wrapper-helper',
       label: 'trustedHtml wrapper helper',
-      reason:
-        'Workstream A fail-closed default / Workstream C IR verification: function-call return provenance is the documented KV426 interprocedural residue until fail-closed provenance lands.',
       source: `
 const unsafeTrust = (value: string) => trustedHtml(value);
 export const Post = component({
@@ -551,12 +533,9 @@ export const CartBadge = component({
 `,
     },
     {
-      blockers: [METAMORPHIC_RECOGNITION_BLOCKERS.irVerification],
-      expectation: 'todo',
+      expectation: 'enforced',
       kind: 'destructured-binding',
       label: 'destructured query field',
-      reason:
-        'Workstream C IR verification: the current KV311 coverage pass does not follow destructured query fields into query-read positions.',
       source: `
 export const CartBadge = component({
   queries: { cart: {} },
@@ -569,15 +548,9 @@ export const CartBadge = component({
 `,
     },
     {
-      blockers: [
-        METAMORPHIC_RECOGNITION_BLOCKERS.failClosedDefault,
-        METAMORPHIC_RECOGNITION_BLOCKERS.irVerification,
-      ],
-      expectation: 'todo',
+      expectation: 'enforced',
       kind: 'wrapper-helper',
       label: 'closure helper returning query value',
-      reason:
-        'Workstream A fail-closed default / Workstream C IR verification: closure-shaped query reads remain residual because current coverage extraction does not traverse ordinary closures.',
       source: `
 export const CartBadge = component({
   queries: { cart: {} },

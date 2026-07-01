@@ -311,6 +311,35 @@ describe('server createApp request shell', () => {
     expect(await response.text()).toContain('<main>100</main>');
   });
 
+  it('emits Kovo-Warn when a layout query caps a primary list read', async () => {
+    const contactsQuery = query('layoutContacts', {
+      load: () => ({ items: Array.from({ length: 4 }, (_, index) => ({ id: index })) }),
+      reads: [],
+    });
+    const Shell = layout({
+      queries: { contacts: contactsQuery },
+      render({ contacts }, _state, slots) {
+        return jsx('main', {
+          children: [
+            jsx('span', {
+              children: String((contacts as { items: unknown[] }).items.length),
+            }),
+            slots.children,
+          ],
+        });
+      },
+    });
+    const app = createApp({
+      requestLimits: { maxQueryListItems: 2 },
+      routes: [route('/', { layout: Shell, page: () => jsx('strong', { children: 'ready' }) })],
+    });
+    const response = await createRequestHandler(app)(new Request('https://example.test/'));
+
+    expect(response.status).toBe(200);
+    expect(response.headers.get('kovo-warn')).toBe('QUERY_LIST_LIMIT $.items;limit=2');
+    expect(await response.text()).toContain('<span>2</span>');
+  });
+
   it('derives the document BroadcastChannel fingerprint from the stable CSRF signing secret', async () => {
     const csrf = {
       secret: 'stable-session-fingerprint-secret-012345',

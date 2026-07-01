@@ -25,7 +25,7 @@ import {
   seedDemoUser,
   type AppRequest,
 } from './auth.js';
-import { appDbProvider, appDbReady } from './db.js';
+import { appRuntimeDbProvider, appDbReady } from './db.js';
 import { addContact } from './mutations.js';
 import { contactsQuery } from './queries.js';
 import { appTheme } from './theme.js';
@@ -168,7 +168,7 @@ function HomePage({ request }: { request: AppRequest }): string {
 const app = createApp({
   clientModules: createMemoryVersionedClientModuleRegistry(),
   csrf: appCsrf,
-  db: appDbProvider,
+  db: appRuntimeDbProvider,
   document: { lang: 'en' },
   endpoints: [healthEndpoint],
   mutationReplayStore,

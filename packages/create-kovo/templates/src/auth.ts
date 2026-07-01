@@ -8,7 +8,7 @@ import {
 } from '@kovojs/better-auth';
 import { publicAccess, s, session, type CsrfValidationOptions } from '@kovojs/server';
 
-import { appDbProvider, type AppDb } from './db.js';
+import { appRuntimeDbProvider, type AppDb } from './db.js';
 import { authSchema } from './schema.js';
 
 // Load .env into process.env for runtimes that don't do it automatically (plain
@@ -77,7 +77,7 @@ const auth = betterAuth({
   // (SPEC.md §6.6), and these endpoints are reached server-side via `auth.api`,
   // so Better Auth's own origin-based CSRF check is redundant here.
   advanced: { disableCSRFCheck: true },
-  database: drizzleAdapter(appDbProvider(), { provider: 'pg', schema: authSchema }),
+  database: drizzleAdapter(appRuntimeDbProvider(), { provider: 'pg', schema: authSchema }),
 });
 
 export const appSessionProvider = appSession.provider(

@@ -716,7 +716,13 @@ function sqlTemplateArith(
 ): SymbolicValue | undefined {
   if (!Node.isTaggedTemplateExpression(node)) return undefined;
   const tag = node.getTag();
-  if (!Node.isIdentifier(tag) || tag.getText() !== 'sql') return undefined;
+  if (
+    !expressionResolvesToFrameworkExport(tag, frameworkExport('@kovojs/drizzle', 'sql'), {
+      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+    })
+  ) {
+    return undefined;
+  }
   const template = node.getTemplate();
   if (!Node.isTemplateExpression(template)) return undefined;
 

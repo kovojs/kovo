@@ -5,6 +5,7 @@ import { generatedFragmentHtmlValue } from '../html.js';
 import {
   readQueryInstanceKey,
   readQueryVersion,
+  recordQueryRuntimeWarnings,
   runQuery,
   type QueryDefinition,
 } from '../query.js';
@@ -109,6 +110,7 @@ export async function renderQueryChunks(
     if (!result.ok) {
       throw new Error(`Rerun query failed: ${queryDefinition.key}`, { cause: result });
     }
+    recordQueryRuntimeWarnings(request, result.warnings);
 
     chunks.push(
       renderQueryRerunChunk(queryDefinition, result.input, result.value, affectedKeysByDomain),

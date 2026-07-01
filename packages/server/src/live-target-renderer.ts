@@ -15,7 +15,7 @@ import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { queryWithGeneratedReads } from './generated-query-registry.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { renderServerRenderable } from './renderable.js';
-import { runQuery, type QueryDefinition } from './query.js';
+import { recordQueryRuntimeWarnings, runQuery, type QueryDefinition } from './query.js';
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
 import type { ErrorBoundaryRenderer } from './mutation-wire.js';
 
@@ -196,6 +196,7 @@ async function loadLiveTargetQueries<Request>(
     if (!result.ok) {
       throw new Error(`Live target query failed: ${binding.query.key}`);
     }
+    recordQueryRuntimeWarnings(context.request, result.warnings);
     values[binding.name] = result.value;
   }
 

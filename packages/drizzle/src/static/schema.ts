@@ -1088,14 +1088,17 @@ export function declaredDomainValueKey(expression: Node): string | undefined {
 function domainFactoryCallKey(expression: Node): string | undefined {
   if (!Node.isCallExpression(expression)) return undefined;
   const callee = unwrappedStaticExpressionNode(expression.getExpression());
-  // `domain(...)` and `tag(...)` are the @kovojs/server domain constructors (`tag` is a `Domain`
-  // alias). Mirror the textual-name convention used for domain extraction in static/domain-writes.ts.
-  const name = Node.isIdentifier(callee)
-    ? callee.getText()
-    : Node.isPropertyAccessExpression(callee)
-      ? callee.getName()
-      : undefined;
-  if (name !== 'domain' && name !== 'tag') return undefined;
+  // SPEC §10.2/§11.1: `domain(...)` and `tag(...)` are the @kovojs/server Domain constructors.
+  // Resolve the callee identity so aliases/namespaces/barrel re-exports fold into declared reads,
+  // while local shadows do not masquerade as framework Domain values.
+  const isDomainFactory =
+    expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/server', 'domain'), {
+      legacyGlobals: [frameworkExport('@kovojs/server', 'domain')],
+    }) ||
+    expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/server', 'tag'), {
+      legacyGlobals: [frameworkExport('@kovojs/server', 'tag')],
+    });
+  if (!isDomainFactory) return undefined;
 
   const argument = expression.getArguments()[0];
   const argNode = argument ? unwrappedStaticExpressionNode(argument) : undefined;

@@ -619,11 +619,12 @@ describe('server mutation lifecycle', () => {
         { db },
         {
           taskScheduler: {
-            schedule(request, definition, args) {
+            registeredTasks: [sendReceipt],
+            schedule(request, input) {
               const db = (request as { db: ReturnType<typeof createTransactionalTaskDb> }).db;
               schedulerRequests.push(db.transactionScoped);
-              db.enqueueJob({ args, task: definition.key });
-              return { id: 'job-1', task: definition.key };
+              db.enqueueJob({ args: input.args, task: input.task });
+              return { id: 'job-1', task: input.task };
             },
             cancel() {
               return false;
@@ -664,8 +665,9 @@ describe('server mutation lifecycle', () => {
         {},
         {
           taskScheduler: {
-            schedule(_request, _definition, args) {
-              calls.push(args);
+            registeredTasks: [sendReceipt],
+            schedule(_request, input) {
+              calls.push(input);
               return { id: 'job-1', task: 'receipt/send-invalid' };
             },
             cancel() {
@@ -705,12 +707,13 @@ describe('server mutation lifecycle', () => {
         { db },
         {
           taskScheduler: {
-            schedule(request, definition, args) {
+            registeredTasks: [sendReceipt],
+            schedule(request, input) {
               (request as { db: ReturnType<typeof createTransactionalTaskDb> }).db.enqueueJob({
-                args,
-                task: definition.key,
+                args: input.args,
+                task: input.task,
               });
-              return { id: 'job-1', task: definition.key };
+              return { id: 'job-1', task: input.task };
             },
             cancel() {
               return false;
@@ -761,6 +764,7 @@ describe('server mutation lifecycle', () => {
         { marker: 'request-1' },
         {
           taskScheduler: {
+            registeredTasks: [],
             schedule() {
               throw new Error('not used');
             },

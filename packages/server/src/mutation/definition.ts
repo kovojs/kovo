@@ -14,7 +14,8 @@ import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
 import type { JsonSerializable } from '../json-boundary.js';
-import type { TaskDefinition, TaskHandle, TaskInput, TaskScheduleOptions } from '../task.js';
+import type { TaskDefinition, TaskHandle } from '../task.js';
+import type { DurableTaskEnqueueInput } from '../task-queue.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
 
 declare const mutationRequestDbBrand: unique symbol;
@@ -395,13 +396,9 @@ export interface RunMutationOptions<
 
 /** @internal Runtime adapter implemented by the durable task queue/runner integration. */
 export interface TaskScheduler {
+  readonly registeredTasks: readonly TaskDefinition<string, Schema<unknown>, any>[];
   cancel(request: unknown, handle: TaskHandle): Promise<boolean> | boolean;
-  schedule<const Task extends TaskDefinition<string, Schema<unknown>, any>>(
-    request: unknown,
-    definition: Task,
-    args: TaskInput<Task>,
-    options?: TaskScheduleOptions,
-  ): Promise<TaskHandle<Task['key']>> | TaskHandle<Task['key']>;
+  schedule(request: unknown, input: DurableTaskEnqueueInput): Promise<TaskHandle> | TaskHandle;
 }
 
 /** App-scoped mutation factory. `createApp()` uses this to contextually type handlers from configured request providers (SPEC §9.5/§10.3). */

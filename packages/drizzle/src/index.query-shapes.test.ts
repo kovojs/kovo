@@ -2714,6 +2714,81 @@ describe('declared reads: Domain-value resolution (SPEC §10.2/§11.1)', () => {
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
   });
 
+  it('folds declared Domain values through aliases, namespaces, local aliases, and barrels', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'server-barrel.ts',
+          source: 'export { domain as barrelDomain } from "@kovojs/server";',
+        },
+        {
+          fileName: 'post.queries.ts',
+          source: `
+          import { domain as dom, query, s } from "@kovojs/server";
+          import * as server from "@kovojs/server";
+          import { sql } from "@kovojs/drizzle";
+          import { barrelDomain } from "./server-barrel";
+          import type { PgAsyncDatabase } from "drizzle-orm/pg-core";
+          const localDomain = dom;
+
+          export const posts = pgTable("posts", { id: text("id").primaryKey() }, kovo({ domain: "post", key: "id" }));
+
+          export const postQuery = query("post", {
+            output: s.object({ id: s.string(), tagCount: s.number() }),
+            reads: [dom("tag"), server.tag("topic"), localDomain("local"), barrelDomain("barrel")],
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db
+                .select({ id: posts.id, tagCount: sql<number>\`(SELECT count(*) FROM tags)\` })
+                .from(posts);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts[0]?.reads).toEqual(['barrel', 'local', 'post', 'tag', 'topic']);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('does not fold a local domain() shadow as a framework declared read', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'post.queries.ts',
+          source: `
+          import { query, s } from "@kovojs/server";
+          import { sql } from "@kovojs/drizzle";
+          import type { PgAsyncDatabase } from "drizzle-orm/pg-core";
+          function domain(value: string) { return { key: value }; }
+
+          export const posts = pgTable("posts", { id: text("id").primaryKey() }, kovo({ domain: "post", key: "id" }));
+
+          export const postQuery = query("post", {
+            output: s.object({ id: s.string(), tagCount: s.number() }),
+            reads: [domain("tag")],
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db
+                .select({ id: posts.id, tagCount: sql<number>\`(SELECT count(*) FROM tags)\` })
+                .from(posts);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts[0]?.reads).toEqual(['post']);
+    expect(diagnosticsForQueryFacts(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV410',
+          message: expect.stringContaining('dynamic or spread reads fail closed'),
+        }),
+      ]),
+    );
+  });
+
   it('reports KV410 for a fully-raw opaque read whose reads: resolves to no domain', () => {
     const facts = extractQueryFactsFromProject({
       files: [

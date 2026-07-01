@@ -220,6 +220,16 @@ export const C = component({
   it('resolves namespace trustedHtml without trusting local lookalikes', () => {
     expect(
       kv426(`
+import * as browser from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{browser.trustedHtml(post.body)}</article>,
+});
+`),
+    ).toHaveLength(1);
+
+    expect(
+      kv426(`
 import * as kovo from '@kovojs/server';
 export const C = component({
   queries: { post: postQuery },
@@ -237,5 +247,44 @@ export const C = component({
 });
 `),
     ).toHaveLength(0);
+  });
+
+  it('resolves a local const alias of the real trustedHtml binding', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+const th = trustedHtml;
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{th(post.body)}</article>,
+});
+`),
+    ).toHaveLength(1);
+  });
+
+  it('flags a same-file wrapper helper that directly brands its argument as trustedHtml', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+const unsafeTrust = (value: string) => trustedHtml(value);
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{unsafeTrust(post.body)}</article>,
+});
+`),
+    ).toHaveLength(1);
+
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+function unsafeTrust(value: string) {
+  return trustedHtml(value);
+}
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{unsafeTrust(post.body)}</article>,
+});
+`),
+    ).toHaveLength(1);
   });
 });

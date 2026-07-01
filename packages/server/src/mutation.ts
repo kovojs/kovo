@@ -56,7 +56,8 @@ import {
   type NoJsMutationResponse,
 } from './mutation-wire.js';
 import type { GeneratedFragmentRenderable } from './renderable.js';
-import type { TaskInput, TaskSchedulingRequest } from './task.js';
+import type { TaskHandle, TaskInput, TaskSchedulingRequest } from './task.js';
+import { durableTaskScheduleInput } from './task-runner.js';
 import {
   commitReservedMutationReplay,
   canonicalRequestFingerprint,
@@ -614,7 +615,14 @@ function requestWithTaskScheduling<Request>(
     const parsedArgs = (await parseSchemaAsync(definition.input, args)) as TaskInput<
       typeof definition
     >;
-    return scheduler.schedule(scheduledRequest, definition, parsedArgs, options);
+    const enqueueInput = durableTaskScheduleInput({
+      args: parsedArgs,
+      definition,
+      options,
+      registeredTasks: scheduler.registeredTasks,
+    });
+    const handle = await scheduler.schedule(scheduledRequest, enqueueInput);
+    return handle as TaskHandle<typeof definition.key>;
   };
 
   const cancel: TaskSchedulingRequest['cancel'] = async (handle) => {
