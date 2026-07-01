@@ -126,14 +126,17 @@ jobs:
       matrix:
         include:
           # Grouped from the 2026-07-01 starter timings to keep each shard near
-          # 3-6 minutes while avoiding one runner setup per small file.
+          # 3-6 minutes while avoiding one runner setup per small file. The M1
+          # adversarial sweep is dialect-complete and runs alone.
           - shard: raw-sql-typecheck
             files: >-
               packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
               packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
-          - shard: security-assets
+          - shard: m1-adversarial
             files: >-
               packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
+          - shard: security-assets
+            files: >-
               packages/create-kovo/src/index.build.prod-artifact.security.test.ts
               packages/create-kovo/src/index.build.prod-artifact.assets.test.ts
           - shard: runtime-sqlite-check

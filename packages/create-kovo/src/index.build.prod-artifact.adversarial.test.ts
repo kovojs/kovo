@@ -56,33 +56,40 @@ describe('create-kovo starter (build integration: adversarial production artifac
     240_000,
   );
 
-  it('tracks trusted output provenance gates from current production source, not stale cache', () => {
-    withProject('create-kovo-m1-trusted-output-red-', undefined, (root) => {
-      addTrustedOutputProvenanceBuildProof(root);
-      expectBuildFailure(root, [
-        'KV426',
-        'trustedUrl() sends query-derived data',
-        'renderedHtml() sends query-derived data',
-        'trustedHtml() sends request-derived data',
-      ]);
-    });
+  it.each([
+    ['postgres', undefined],
+    ['sqlite', 'sqlite'],
+  ] as const)(
+    'tracks trusted output provenance gates from current %s production source, not stale cache',
+    (_label: string, dialect: CreateKovoDialect | undefined) => {
+      withProject(`create-kovo-m1-trusted-output-${_label}-red-`, dialect, (root) => {
+        addTrustedOutputProvenanceBuildProof(root);
+        expectBuildFailure(root, [
+          'KV426',
+          'trustedUrl() sends query-derived data',
+          'renderedHtml() sends query-derived data',
+          'trustedHtml() sends request-derived data',
+        ]);
+      });
 
-    withProject('create-kovo-m1-trusted-output-green-', undefined, (root) => {
-      addEscapedAttackerTextProof(root);
-      buildProductionArtifact(root);
-    });
+      withProject(`create-kovo-m1-trusted-output-${_label}-green-`, dialect, (root) => {
+        addEscapedAttackerTextProof(root);
+        buildProductionArtifact(root);
+      });
 
-    withProject('create-kovo-m1-trusted-output-flip-', undefined, (root) => {
-      buildProductionArtifact(root);
-      addTrustedOutputProvenanceBuildProof(root);
-      expectBuildFailure(root, [
-        'KV426',
-        'trustedUrl() sends query-derived data',
-        'renderedHtml() sends query-derived data',
-        'trustedHtml() sends request-derived data',
-      ]);
-    });
-  }, 240_000);
+      withProject(`create-kovo-m1-trusted-output-${_label}-flip-`, dialect, (root) => {
+        buildProductionArtifact(root);
+        addTrustedOutputProvenanceBuildProof(root);
+        expectBuildFailure(root, [
+          'KV426',
+          'trustedUrl() sends query-derived data',
+          'renderedHtml() sends query-derived data',
+          'trustedHtml() sends request-derived data',
+        ]);
+      });
+    },
+    240_000,
+  );
 
   it.each([
     ['postgres', undefined],
@@ -103,221 +110,202 @@ describe('create-kovo starter (build integration: adversarial production artifac
     240_000,
   );
 
-  it('tracks SSR document, /_q, and enhanced mutation wire sinks after a warmed prod build', async () => {
-    await withRunningProject(
-      'create-kovo-m1-output-wire-flip-',
-      undefined,
-      (root) => {
-        buildProductionArtifact(root);
-        addRuntimeContractProofs(root);
-        addEscapedAttackerTextProof(root);
-        buildProductionArtifact(root);
-      },
-      async ({ origin, output }) => {
-        const html = await fetchTextWhenReady(`${origin}/xss-escape-proof`, output);
-        expect(html).toContain('data-proof="xss-escape"');
-        expect(html).toContain('&lt;img src=x onerror="alert(1)"&gt;');
-        expect(html).not.toContain('<img src=x onerror="alert(1)">');
+  it.each([
+    ['postgres', undefined],
+    ['sqlite', 'sqlite'],
+  ] as const)(
+    'tracks output-wire sinks after a warmed %s prod build',
+    async (_label: string, dialect: CreateKovoDialect | undefined) => {
+      await withRunningProject(
+        `create-kovo-m1-output-wire-${_label}-flip-`,
+        dialect,
+        (root) => {
+          buildProductionArtifact(root);
+          addRuntimeContractProofs(root);
+          addEscapedAttackerTextProof(root);
+          addM1DeferAndShellProof(root);
+          addM1HeaderRedirectCapabilityProof(root);
+          addM1ClientDeriveProof(root);
+          configureNodeRetention(root);
+          buildProductionArtifact(root);
+          const census = assertProdArtifactSinkCensus(root, [
+            {
+              proof: { evidence: 'M1 adversarial no-cache Defer source flip', kind: 'proof' },
+              sink: 'streaming/<Defer> chunks',
+              witnesses: ['m1-defer-region', 'renderDeferredStreamingResponse', '<kovo-defer'],
+            },
+            {
+              proof: { evidence: 'M1 adversarial no-cache error shell source flip', kind: 'proof' },
+              sink: 'error shells / 500 bodies',
+              witnesses: ['data-shell="m1"', 'Set-Cookie: m1=owned'],
+            },
+            {
+              proof: {
+                evidence: 'M1 adversarial no-cache response header source flip',
+                kind: 'proof',
+              },
+              sink: 'response headers (incl. Set-Cookie, redirects)',
+              witnesses: ['m1-header-unsafe', 'm1_cookie', 'redirectLocationHeaderValue'],
+            },
+            {
+              proof: {
+                evidence: 'M1 adversarial no-cache capability URL source flip',
+                kind: 'proof',
+              },
+              sink: 'capability URLs / signed payloads',
+              witnesses: ['m1-capability-download', 'verifyCapability', 'deriveDownloadKey'],
+            },
+            {
+              proof: {
+                evidence: 'M1 adversarial no-cache client derive source flip',
+                kind: 'proof',
+              },
+              sink: 'client-derive bodies',
+              witnesses: ['M1ClientDeriveProof', 'state.count', 'state.items[0]', 'state.extra'],
+            },
+          ]);
+          expect(census.entries).toHaveLength(5);
+          const clientSources = clientArtifactSources(root).join('\n');
+          expect(clientSources).not.toMatch(/\b(?:countAlias|firstItem|computedValue)\b/u);
+        },
+        async ({ origin, output }) => {
+          const html = await fetchTextWhenReady(`${origin}/xss-escape-proof`, output);
+          expect(html).toContain('data-proof="xss-escape"');
+          expect(html).toContain('&lt;img src=x onerror="alert(1)"&gt;');
+          expect(html).not.toContain('<img src=x onerror="alert(1)">');
 
-        const queryRead = await fetch(`${origin}/_q/runtime-contract-proofs/warning-items-query`);
-        const queryBody = await queryRead.text();
-        expect(queryRead.status).toBe(200);
-        expect(queryRead.headers.get('cache-control')).toContain('private');
-        expect(queryRead.headers.get('kovo-warn')).toBe('QUERY_LIST_LIMIT $.rows;limit=2');
-        expect(queryBody).toContain(
-          '<kovo-query name="runtime-contract-proofs/warning-items-query">',
-        );
-        expect(queryBody).toContain('"label":"item-1"');
-        expect(queryBody).not.toContain('"label":"item-2"');
+          const queryRead = await fetch(`${origin}/_q/runtime-contract-proofs/warning-items-query`);
+          const queryBody = await queryRead.text();
+          expect(queryRead.status).toBe(200);
+          expect(queryRead.headers.get('cache-control')).toContain('private');
+          expect(queryRead.headers.get('kovo-warn')).toBe('QUERY_LIST_LIMIT $.rows;limit=2');
+          expect(queryBody).toContain(
+            '<kovo-query name="runtime-contract-proofs/warning-items-query">',
+          );
+          expect(queryBody).toContain('"label":"item-1"');
+          expect(queryBody).not.toContain('"label":"item-2"');
 
-        await fetchTextWhenReady(`${origin}/runtime-contracts-proof`, output);
-        const page = await fetch(`${origin}/runtime-contracts-proof`);
-        const pageHtml = await page.text();
-        expect(page.status, pageHtml).toBe(200);
-        expect(pageHtml).toContain('data-proof="runtime-contracts"');
-        const proofRoot = rootElementWithAttribute(pageHtml, 'data-proof', 'runtime-contracts');
-        const liveTarget = requiredAttribute(proofRoot, 'kovo-fragment-target');
-        const liveComponent = requiredAttribute(proofRoot, 'kovo-live-component');
-        const liveToken = requiredAttribute(proofRoot, 'kovo-live-token');
-        const liveDeps = requiredAttribute(proofRoot, 'kovo-deps');
-        const liveProps = attributeValue(proofRoot, 'kovo-props') ?? '{}';
-        const mutationRefresh = await fetch(
-          `${origin}/_m/runtime-contract-proofs/refresh-warning-items`,
-          {
-            body: new URLSearchParams({ reason: 'm1-output-wire' }),
+          await fetchTextWhenReady(`${origin}/runtime-contracts-proof`, output);
+          const page = await fetch(`${origin}/runtime-contracts-proof`);
+          const pageHtml = await page.text();
+          expect(page.status, pageHtml).toBe(200);
+          expect(pageHtml).toContain('data-proof="runtime-contracts"');
+          const proofRoot = rootElementWithAttribute(pageHtml, 'data-proof', 'runtime-contracts');
+          const liveTarget = requiredAttribute(proofRoot, 'kovo-fragment-target');
+          const liveComponent = requiredAttribute(proofRoot, 'kovo-live-component');
+          const liveToken = requiredAttribute(proofRoot, 'kovo-live-token');
+          const liveDeps = requiredAttribute(proofRoot, 'kovo-deps');
+          const liveProps = attributeValue(proofRoot, 'kovo-props') ?? '{}';
+          const mutationRefresh = await fetch(
+            `${origin}/_m/runtime-contract-proofs/refresh-warning-items`,
+            {
+              body: new URLSearchParams({ reason: 'm1-output-wire' }),
+              headers: {
+                'content-type': 'application/x-www-form-urlencoded',
+                'Kovo-Fragment': 'true',
+                'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,
+                'Kovo-Targets': `${liveTarget}=${liveDeps}`,
+              },
+              method: 'POST',
+            },
+          );
+          const mutationBody = await mutationRefresh.text();
+          expect(mutationRefresh.status).toBe(200);
+          expect(mutationRefresh.headers.get('content-type')).toContain(
+            'text/vnd.kovo.fragment+html',
+          );
+          expect(mutationBody).toContain('<kovo-query');
+          expect(mutationBody).toContain('<kovo-fragment');
+          expect(mutationBody).toContain('item-0,item-1');
+          expect(mutationBody).not.toContain('item-2');
+
+          await fetchTextWhenReady(`${origin}/m1/defer`, output);
+          const defer = await fetch(`${origin}/m1/defer`);
+          const deferBody = await defer.text();
+          expect(defer.status, deferBody).toBe(200);
+          expect(deferBody).toContain(
+            '<kovo-defer target="m1-defer-region" state="pending" data-kovo-region-priority="after-paint"><section>Loading &lt;img src=x onerror=alert(1)&gt;</section></kovo-defer>',
+          );
+          expect(deferBody).toContain(
+            '<kovo-defer target="m1-defer-region" state="error" data-kovo-region-priority="after-paint"><section>Loading &lt;img src=x onerror=alert(1)&gt;</section></kovo-defer>',
+          );
+          expect(deferBody).not.toContain('<img src=x onerror=alert(1)>');
+          expect(deferBody).not.toContain('private m1 defer detail');
+
+          const shell = await fetch(
+            `${origin}/m1/error-shell?payload=${encodeURIComponent('<script>owned()</script>')}`,
+          );
+          const shellBody = await shell.text();
+          expect(shell.status, shellBody).toBe(500);
+          expect(shellBody).toContain('&lt;main data-shell="m1"&gt;');
+          expect(shellBody).toContain('&lt;script&gt;owned()&lt;/script&gt;');
+          expect(shellBody).not.toContain('<script>owned()</script>');
+          expect(shellBody).not.toContain('private m1 route detail');
+
+          await fetchTextWhenReady(`${origin}/m1/header-safe.txt`, output);
+          const safe = await fetch(`${origin}/m1/header-safe.txt`);
+          await expect(safe.text()).resolves.toBe('m1 safe\n');
+          expect(safe.headers.get('x-m1-proof')).toBe('safe');
+
+          const unsafe = await fetch(`${origin}/m1/header-unsafe.txt`);
+          const unsafeBody = await unsafe.text();
+          expect(unsafe.status, unsafeBody).toBe(500);
+          expect(unsafe.headers.get('x-m1-proof')).toBeNull();
+          expect(unsafe.headers.getSetCookie()).toEqual([]);
+
+          const cookie = await fetch(`${origin}/_m/m1/header-cookie-proof`, {
+            body: new URLSearchParams({ 'Kovo-Idem': `m1-cookie-${Date.now()}`, mode: 'safe' }),
             headers: {
-              'content-type': 'application/x-www-form-urlencoded',
               'Kovo-Fragment': 'true',
-              'Kovo-Live-Targets': `${liveTarget}#${liveComponent}@${liveToken}:${liveProps}`,
-              'Kovo-Targets': `${liveTarget}=${liveDeps}`,
+              'content-type': 'application/x-www-form-urlencoded',
             },
             method: 'POST',
-          },
-        );
-        const mutationBody = await mutationRefresh.text();
-        expect(mutationRefresh.status).toBe(200);
-        expect(mutationRefresh.headers.get('content-type')).toContain(
-          'text/vnd.kovo.fragment+html',
-        );
-        expect(mutationBody).toContain('<kovo-query');
-        expect(mutationBody).toContain('<kovo-fragment');
-        expect(mutationBody).toContain('item-0,item-1');
-        expect(mutationBody).not.toContain('item-2');
-      },
-    );
-  }, 240_000);
+          });
+          await cookie.text();
+          expect(cookie.status).toBe(200);
+          expect(cookie.headers.getSetCookie()).toEqual([
+            expect.stringContaining('m1_cookie=safe'),
+          ]);
 
-  it('tracks streaming Defer chunks and error shells after a warmed prod build', async () => {
-    await withRunningProject(
-      'create-kovo-m1-defer-shell-flip-',
-      'sqlite',
-      (root) => {
-        buildProductionArtifact(root);
-        addM1DeferAndShellProof(root);
-        buildProductionArtifact(root);
-        const census = assertProdArtifactSinkCensus(root, [
-          {
-            proof: { evidence: 'M1 adversarial no-cache Defer source flip', kind: 'proof' },
-            sink: 'streaming/<Defer> chunks',
-            witnesses: ['m1-defer-region', 'renderDeferredStreamingResponse', '<kovo-defer'],
-          },
-          {
-            proof: { evidence: 'M1 adversarial no-cache error shell source flip', kind: 'proof' },
-            sink: 'error shells / 500 bodies',
-            witnesses: ['data-shell="m1"', 'Set-Cookie: m1=owned'],
-          },
-        ]);
-        expect(census.entries).toHaveLength(2);
-      },
-      async ({ origin, output }) => {
-        await fetchTextWhenReady(`${origin}/m1/defer`, output);
-        const defer = await fetch(`${origin}/m1/defer`);
-        const deferBody = await defer.text();
-        expect(defer.status, deferBody).toBe(200);
-        expect(deferBody).toContain(
-          '<kovo-defer target="m1-defer-region" state="pending" data-kovo-region-priority="after-paint"><section>Loading &lt;img src=x onerror=alert(1)&gt;</section></kovo-defer>',
-        );
-        expect(deferBody).toContain(
-          '<kovo-defer target="m1-defer-region" state="error" data-kovo-region-priority="after-paint"><section>Loading &lt;img src=x onerror=alert(1)&gt;</section></kovo-defer>',
-        );
-        expect(deferBody).not.toContain('<img src=x onerror=alert(1)>');
-        expect(deferBody).not.toContain('private m1 defer detail');
-
-        const shell = await fetch(
-          `${origin}/m1/error-shell?payload=${encodeURIComponent('<script>owned()</script>')}`,
-        );
-        const shellBody = await shell.text();
-        expect(shell.status, shellBody).toBe(500);
-        expect(shellBody).toContain('&lt;main data-shell="m1"&gt;');
-        expect(shellBody).toContain('&lt;script&gt;owned()&lt;/script&gt;');
-        expect(shellBody).not.toContain('<script>owned()</script>');
-        expect(shellBody).not.toContain('private m1 route detail');
-      },
-    );
-  }, 240_000);
-
-  it('tracks header, Set-Cookie, redirect, and capability URL sinks after a warmed prod build', async () => {
-    await withRunningProject(
-      'create-kovo-m1-header-capability-flip-',
-      undefined,
-      (root) => {
-        buildProductionArtifact(root);
-        addM1HeaderRedirectCapabilityProof(root);
-        buildProductionArtifact(root);
-        const census = assertProdArtifactSinkCensus(root, [
-          {
-            proof: {
-              evidence: 'M1 adversarial no-cache response header source flip',
-              kind: 'proof',
+          const unsafeCookie = await fetch(`${origin}/_m/m1/header-cookie-proof`, {
+            body: new URLSearchParams({
+              'Kovo-Idem': `m1-unsafe-cookie-${Date.now()}`,
+              mode: 'unsafe',
+            }),
+            headers: {
+              'Kovo-Fragment': 'true',
+              'content-type': 'application/x-www-form-urlencoded',
             },
-            sink: 'response headers (incl. Set-Cookie, redirects)',
-            witnesses: ['m1-header-unsafe', 'm1_cookie', 'redirectLocationHeaderValue'],
-          },
-          {
-            proof: {
-              evidence: 'M1 adversarial no-cache capability URL source flip',
-              kind: 'proof',
-            },
-            sink: 'capability URLs / signed payloads',
-            witnesses: ['m1-capability-download', 'verifyCapability', 'deriveDownloadKey'],
-          },
-        ]);
-        expect(census.entries).toHaveLength(2);
-      },
-      async ({ origin, output }) => {
-        await fetchTextWhenReady(`${origin}/m1/header-safe.txt`, output);
-        const safe = await fetch(`${origin}/m1/header-safe.txt`);
-        await expect(safe.text()).resolves.toBe('m1 safe\n');
-        expect(safe.headers.get('x-m1-proof')).toBe('safe');
+            method: 'POST',
+          });
+          await unsafeCookie.text();
+          expect(unsafeCookie.status).toBe(500);
+          expect(unsafeCookie.headers.getSetCookie()).toEqual([]);
 
-        const unsafe = await fetch(`${origin}/m1/header-unsafe.txt`);
-        const unsafeBody = await unsafe.text();
-        expect(unsafe.status, unsafeBody).toBe(500);
-        expect(unsafe.headers.get('x-m1-proof')).toBeNull();
-        expect(unsafe.headers.getSetCookie()).toEqual([]);
+          const redirect = await fetch(`${origin}/m1/redirect`, { redirect: 'manual' });
+          expect(redirect.status).toBe(303);
+          expect(redirect.headers.get('location')).toBe('/');
+          expect(redirect.headers.getSetCookie()).toEqual([]);
 
-        const cookie = await fetch(`${origin}/_m/m1/header-cookie-proof`, {
-          body: new URLSearchParams({ 'Kovo-Idem': `m1-cookie-${Date.now()}`, mode: 'safe' }),
-          headers: { 'Kovo-Fragment': 'true', 'content-type': 'application/x-www-form-urlencoded' },
-          method: 'POST',
-        });
-        await cookie.text();
-        expect(cookie.status).toBe(200);
-        expect(cookie.headers.getSetCookie()).toEqual([expect.stringContaining('m1_cookie=safe')]);
-
-        const unsafeCookie = await fetch(`${origin}/_m/m1/header-cookie-proof`, {
-          body: new URLSearchParams({
-            'Kovo-Idem': `m1-unsafe-cookie-${Date.now()}`,
-            mode: 'unsafe',
-          }),
-          headers: { 'Kovo-Fragment': 'true', 'content-type': 'application/x-www-form-urlencoded' },
-          method: 'POST',
-        });
-        await unsafeCookie.text();
-        expect(unsafeCookie.status).toBe(500);
-        expect(unsafeCookie.headers.getSetCookie()).toEqual([]);
-
-        const redirect = await fetch(`${origin}/m1/redirect`, { redirect: 'manual' });
-        expect(redirect.status).toBe(303);
-        expect(redirect.headers.get('location')).toBe('/');
-        expect(redirect.headers.getSetCookie()).toEqual([]);
-
-        const page = await fetch(`${origin}/m1/capability-url`);
-        const href = (await page.text()).match(
-          /<a\b[^>]*id="m1-capability-link"[^>]*href="([^"]+)"/,
-        )?.[1];
-        expect(href).toMatch(/^\/m1-capability-download\/receipts\/m1\.txt\?kovo-cap=/u);
-        if (!href) throw new Error('Expected M1 capability href.');
-        const download = await fetch(`${origin}${href}`);
-        await expect(download.text()).resolves.toBe('m1 capability secret\n');
-        expect(download.status).toBe(200);
-        const tampered = await fetch(
-          `${origin}${href.replace('/receipts/m1.txt?', '/receipts/not-m1.txt?')}`,
-        );
-        await expect(tampered.text()).resolves.toBe('Not Found');
-        expect(tampered.status).toBe(404);
-      },
-    );
-  }, 240_000);
-
-  it('tracks client-derive bodies after a warmed prod build', () => {
-    withProject('create-kovo-m1-client-derive-flip-', undefined, (root) => {
-      buildProductionArtifact(root);
-      addM1ClientDeriveProof(root);
-      configureNodeRetention(root);
-      buildProductionArtifact(root);
-      const census = assertProdArtifactSinkCensus(root, [
-        {
-          proof: { evidence: 'M1 adversarial no-cache client derive source flip', kind: 'proof' },
-          sink: 'client-derive bodies',
-          witnesses: ['M1ClientDeriveProof', 'state.count', 'state.items[0]', 'state.extra'],
+          const capabilityPage = await fetch(`${origin}/m1/capability-url`);
+          const href = (await capabilityPage.text()).match(
+            /<a\b[^>]*id="m1-capability-link"[^>]*href="([^"]+)"/,
+          )?.[1];
+          expect(href).toMatch(/^\/m1-capability-download\/receipts\/m1\.txt\?kovo-cap=/u);
+          if (!href) throw new Error('Expected M1 capability href.');
+          const download = await fetch(`${origin}${href}`);
+          await expect(download.text()).resolves.toBe('m1 capability secret\n');
+          expect(download.status).toBe(200);
+          const tampered = await fetch(
+            `${origin}${href.replace('/receipts/m1.txt?', '/receipts/not-m1.txt?')}`,
+          );
+          await expect(tampered.text()).resolves.toBe('Not Found');
+          expect(tampered.status).toBe(404);
         },
-      ]);
-      expect(census.entries).toHaveLength(1);
-      const clientSources = clientArtifactSources(root).join('\n');
-      expect(clientSources).not.toMatch(/\b(?:countAlias|firstItem|computedValue)\b/u);
-    });
-  }, 180_000);
+      );
+    },
+    300_000,
+  );
 });
 
 function withProject(
@@ -424,9 +412,8 @@ function addM1DeferAndShellProof(root: string): void {
       ].join('\n'),
     )
     .replace(
-      "  routes: [\n    route('/', {",
+      "    route('/', {",
       [
-        '  routes: [',
         "    route('/m1/defer', {",
         "      access: publicAccess('public M1 Defer sink proof'),",
         '      layout: AppLayout,',
@@ -523,14 +510,10 @@ function addM1HeaderRedirectCapabilityProof(root: string): void {
       '  endpoints: [healthEndpoint],',
       '  endpoints: [healthEndpoint, m1CapabilityEndpoint],',
     )
+    .replace('  mutations: [addContact,', '  mutations: [addContact, m1HeaderCookieProof,')
     .replace(
-      '  mutations: [addContact, appSignIn, appSignOut],',
-      '  mutations: [addContact, m1HeaderCookieProof, appSignIn, appSignOut],',
-    )
-    .replace(
-      "  routes: [\n    route('/', {",
+      "    route('/', {",
       [
-        '  routes: [',
         "    route('/m1/header-safe.txt', {",
         "      access: publicAccess('public M1 header sink proof'),",
         '      page() {',
@@ -593,16 +576,15 @@ function addM1ClientDeriveProof(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
     .replace(
-      "import { ContactsRegion } from './components/contacts.js';",
+      "import { addContact } from './mutations.js';",
       [
-        "import { ContactsRegion } from './components/contacts.js';",
+        "import { addContact } from './mutations.js';",
         "import { M1ClientDeriveProof } from './m1-client-derive-proof.js';",
       ].join('\n'),
     )
     .replace(
-      "  routes: [\n    route('/', {",
+      "    route('/', {",
       [
-        '  routes: [',
         "    route('/m1/client-derive', {",
         "      access: publicAccess('public M1 client derive proof'),",
         '      layout: AppLayout,',
