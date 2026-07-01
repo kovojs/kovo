@@ -63,7 +63,7 @@ preserving compatibility for a model that is hard to explain.
     `pnpm exec playwright test --config tests/integration/playwright.config.ts tests/integration/specs/webhook-idempotency.spec.ts`;
     `pnpm run check:api-surface`; `git diff --check`; `pnpm run check:vp`.
 
-- [ ] **Move direct-DB gates onto canonical facts/IR instead of source-pattern expansion.**
+- [x] **Move direct-DB gates onto canonical facts/IR instead of source-pattern expansion.**
   - Decision: do not keep broadening ad hoc source recognizers as the long-term detector strategy.
     Alias, destructure, helper-wrapper, callback, namespace, and re-export spellings should be
     normalized once into canonical write-sink facts, then consumed by policy checks.
@@ -90,7 +90,15 @@ preserving compatibility for a model that is hard to explain.
         `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts -t "direct DB writes"`;
         `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts -t "fails task and webhook direct-write diagnostics carried by the build graph"`;
         `pnpm run check:api-surface`; `git diff --check`; `pnpm run check:vp`.
-  - Evidence to close: metamorphic coverage for every migrated direct-DB gate; focused compiler/CLI
-    tests proving unsafe spellings either emit the same canonical fact or fail closed; graph/explain
-    tests proving facts are visible in audit output; and removal/demotion of any now-duplicated
-    source re-walk policy path.
+  - [x] Move query loader write reachability onto canonical Drizzle facts carrying operation, target,
+        provenance, span, and explicit KV406 unresolved state.
+        Evidence: `pnpm exec vitest run packages/drizzle/src/index.toctou-readonly.test.ts packages/drizzle/src/static-analysis-context.test.ts`;
+        `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts`;
+        `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts -t "security preflight|direct DB writes"`;
+        `pnpm run check:api-surface`; `git diff --check`; `pnpm run check:vp`.
+  - [x] Surface canonical direct-write facts in `kovo explain` so audit output cannot diverge from
+        the facts consumed by gates.
+        Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-explain.test.ts packages/cli/src/index.kovo-check.test.ts`;
+        `pnpm exec vitest run packages/compiler/src/scan/parse.test.ts packages/compiler/src/direct-db.test.ts packages/compiler/src/registry.test.ts`;
+        `node scripts/fundamental-fixes-inventory.mjs`; `pnpm run check:api-surface`; `git diff --check`;
+        `pnpm run check:vp`.

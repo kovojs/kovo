@@ -54,7 +54,8 @@ the IR/fact-store migration in C1.
     as `4d66ed78f`.
   - Integrated B2 residual Drizzle-recognizer worker: `019f1c27-8ed0-7cd0-adf6-63e2da47640e`
     as `25fdd8114`.
-  - Active sidecar work remains for the webhook capability-surface plan.
+  - Capability-surface sidecar work is integrated through query, webhook, endpoint, and mutation
+    write-authority slices; only the final broad completion gate remains open.
 
 ## Active Worker Slices
 
@@ -275,8 +276,9 @@ packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`
   - [x] Leave webhook transaction API redesign open unless a dedicated worker owns that public API change.
   - [x] Leave direct-DB detector alias/destructure gaps to A/B/C workstreams, not starter cleanup.
   - Acceptance: after F1, plan has explicit open items for any remaining write-capable public API seam.
-  - Evidence: `plans/capability-surface-redesign.md` tracks query write authority, webhook
-    write-authority, and direct-DB detector hardening decisions as separate checkboxes.
+  - Evidence: `plans/capability-surface-redesign.md` now closes query write authority, webhook
+    write-authority, and direct-DB detector hardening decisions with focused compiler/Drizzle/CLI
+    evidence.
 
 - [x] **G. Branded provenance types are complete for the current defense-in-depth scope.**
   - Evidence: `Reader<Db>`, `WebhookTxDb`, `TrustedHtml`, and `TrustedUrl` use module-private

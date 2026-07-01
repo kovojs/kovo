@@ -235,6 +235,93 @@ describe('kovo explain', () => {
     });
   });
 
+  it('explains canonical handler write-sink facts in the endpoint audit', () => {
+    expect(
+      kovoExplain(
+        {
+          endpoints: [{ method: 'POST', name: '/api/sync', path: '/api/sync' }],
+          handlerWriteSinks: [
+            {
+              canonicalTarget: { identity: 'request.db', provenance: 'property-access-path' },
+              operationKind: 'insert',
+              owner: { kind: 'key', value: '/api/sync' },
+              path: 'request.db.insert',
+              span: { end: 44, start: 27 },
+              surface: 'endpoint',
+            },
+            {
+              canonicalTarget: { identity: 'UNRESOLVED', provenance: 'computed-member' },
+              operationKind: 'UNRESOLVED',
+              owner: { kind: 'key', value: 'cart/save' },
+              path: 'UNRESOLVED',
+              span: { end: 19, start: 12 },
+              surface: 'mutation',
+            },
+          ],
+          mutations: [{ guards: ['authed'], key: 'cart/save', writes: ['cart'] }],
+        },
+        { endpoints: true },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'ENDPOINTS',
+        'ENDPOINT /api/sync surface=endpoint method=POST path=/api/sync mount=exact auth=- csrf=checked cache=- body=- bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-',
+        'MUTATION cart/save method=POST auth=authed csrf=checked session=- writes=cart',
+        'WRITE-SINK surface=endpoint owner=key:/api/sync operation=insert target=request.db targetProvenance=property-access-path path=request.db.insert span=27-44 status=resolved',
+        'WRITE-SINK surface=mutation owner=key:cart/save operation=UNRESOLVED target=UNRESOLVED targetProvenance=computed-member path=UNRESOLVED span=12-19 status=unresolved',
+        'SUMMARY total=2 writeSinks=2',
+        '',
+      ].join('\n'),
+    });
+  });
+
+  it('explains query write-reachability facts on query targets', () => {
+    expect(
+      kovoExplain(
+        {
+          queries: [{ domains: ['log'], guards: ['authed'], query: 'dashboard' }],
+          queryWriteReachability: [
+            {
+              canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+              operation: 'delete',
+              operationKind: 'delete',
+              operationProvenance: 'receiver-method-alias',
+              query: 'dashboard',
+              site: 'q.ts:4',
+              table: 'logs',
+            },
+            {
+              canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+              operation: 'UNRESOLVED',
+              operationKind: 'UNRESOLVED',
+              operationProvenance: 'computed-member',
+              query: 'dashboard',
+              site: 'q.ts:5',
+              table: 'logs',
+              unresolved: { code: 'KV406', reason: 'computed-member' },
+            },
+          ],
+        },
+        { kind: 'query', target: 'dashboard' },
+      ),
+    ).toEqual({
+      exitCode: 0,
+      output: [
+        'kovo-explain/v1',
+        'QUERY dashboard',
+        'reads: log',
+        'consumers: -',
+        'invalidated-by: -',
+        'domain-writes: -',
+        'WRITE-REACH operation=delete operationProvenance=receiver-method-alias target=logs targetProvenance=table-argument site=q.ts:4 status=resolved diagnostic=KV433',
+        'WRITE-REACH operation=UNRESOLVED operationProvenance=computed-member target=logs targetProvenance=table-argument site=q.ts:5 status=unresolved diagnostic=KV406',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('explains missing optimistic coverage as derived UNHANDLED rows and ignores unrelated statuses', () => {
     expect(
       kovoExplain(

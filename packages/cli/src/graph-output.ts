@@ -342,6 +342,7 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     const mutations = [...(graph.mutations ?? [])].sort((left, right) =>
       left.key.localeCompare(right.key),
     );
+    const writeSinks = sortedHandlerWriteSinks(graph.handlerWriteSinks ?? []);
     lines.push('ENDPOINTS');
 
     for (const endpoint of endpoints) {
@@ -350,8 +351,18 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     for (const mutation of mutations) {
       lines.push(mutationEndpointExplainLine(mutation));
     }
+    for (const sink of writeSinks) {
+      lines.push(handlerWriteSinkExplainLine(sink));
+    }
 
-    lines.push(`SUMMARY total=${endpoints.length + mutations.length}`);
+    lines.push(
+      [
+        `SUMMARY total=${endpoints.length + mutations.length}`,
+        writeSinks.length > 0 ? `writeSinks=${writeSinks.length}` : '',
+      ]
+        .filter(Boolean)
+        .join(' '),
+    );
     return ok(lines);
   }
 
@@ -625,6 +636,9 @@ export function kovoExplain(input: KovoExplainInput, options: KovoExplainOptions
     lines.push(`consumers: ${list(queryConsumers(query.query, graph))}`);
     lines.push(`invalidated-by: ${list(invalidatedBy(query, graph))}`);
     lines.push(`domain-writes: ${list(domainWritesFor(query, graph))}`);
+    for (const fact of queryWriteReachabilityForQuery(graph, query.query)) {
+      lines.push(queryWriteReachabilityExplainLine(fact));
+    }
     for (const fact of sqlSafetyFactsForTarget(graph, 'query', query.query)) {
       lines.push(sqlSafetyLine(fact));
     }
@@ -1479,6 +1493,42 @@ function taskSummaryLine(task: CoreGraph.TaskExplain): string {
     `runQueries=${list(task.runQueries)}`,
     `schedules=${list(task.schedules)}`,
   ].join(' ');
+}
+
+function sortedHandlerWriteSinks(
+  facts: readonly CoreGraph.HandlerWriteSinkExplain[],
+): CoreGraph.HandlerWriteSinkExplain[] {
+  return [...facts].sort(
+    (left, right) =>
+      left.surface.localeCompare(right.surface) ||
+      left.owner.value.localeCompare(right.owner.value) ||
+      left.span.start - right.span.start ||
+      left.operationKind.localeCompare(right.operationKind) ||
+      left.path.localeCompare(right.path),
+  );
+}
+
+function handlerWriteSinkExplainLine(fact: CoreGraph.HandlerWriteSinkExplain): string {
+  return [
+    'WRITE-SINK',
+    `surface=${fact.surface}`,
+    `owner=${fact.owner.kind}:${fact.owner.value}`,
+    `operation=${fact.operationKind}`,
+    `target=${fact.canonicalTarget.identity}`,
+    `targetProvenance=${fact.canonicalTarget.provenance}`,
+    `path=${fact.path}`,
+    `span=${fact.span.start}-${fact.span.end}`,
+    `status=${handlerWriteSinkIsUnresolved(fact) ? 'unresolved' : 'resolved'}`,
+  ].join(' ');
+}
+
+function handlerWriteSinkIsUnresolved(fact: CoreGraph.HandlerWriteSinkExplain): boolean {
+  return (
+    fact.operationKind === 'UNRESOLVED' ||
+    fact.path === 'UNRESOLVED' ||
+    fact.owner.value === 'UNRESOLVED' ||
+    fact.canonicalTarget.identity === 'UNRESOLVED'
+  );
 }
 
 function sqlSafetyFactsForTarget(
@@ -2520,6 +2570,28 @@ function sortedToctou(facts: readonly CoreGraph.ToctouFact[]): readonly CoreGrap
 function queryWriteReachabilityLine(fact: CoreGraph.QueryWriteReachabilityFact): string {
   if (fact.unresolved?.code === 'KV406') return queryWriteReachabilityKv406Line(fact);
   return queryWriteReachabilityKv433Line(fact);
+}
+
+function queryWriteReachabilityForQuery(
+  graph: CoreGraph.KovoExplainInput,
+  query: string,
+): readonly CoreGraph.QueryWriteReachabilityFact[] {
+  return sortedQueryWriteReachability(graph.queryWriteReachability ?? []).filter(
+    (fact) => fact.query === query,
+  );
+}
+
+function queryWriteReachabilityExplainLine(fact: CoreGraph.QueryWriteReachabilityFact): string {
+  return [
+    'WRITE-REACH',
+    `operation=${fact.operationKind ?? fact.operation}`,
+    `operationProvenance=${fact.operationProvenance ?? '-'}`,
+    `target=${fact.canonicalTarget?.identity ?? fact.table}`,
+    `targetProvenance=${fact.canonicalTarget?.provenance ?? '-'}`,
+    `site=${fact.site}`,
+    `status=${fact.unresolved ? 'unresolved' : 'resolved'}`,
+    `diagnostic=${fact.unresolved?.code ?? 'KV433'}`,
+  ].join(' ');
 }
 
 /** The enforced KV433 (read-only query) error line for a write-reaching loader (SPEC §9.4). */
