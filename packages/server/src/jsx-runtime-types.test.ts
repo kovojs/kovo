@@ -35,6 +35,7 @@ describe('server JSX runtime types', () => {
         `
 /** @jsxImportSource @kovojs/server */
 import { trustedHtml, trustedUrl } from '@kovojs/browser';
+import type { TrustedUrl } from '@kovojs/browser';
 import type { JsxChild } from '@kovojs/server/jsx-runtime';
 
 type PanelProps = { title: string; children?: JsxChild };
@@ -66,6 +67,8 @@ const interactive = (
 
 const raw = <section html={trustedHtml('<em>safe</em>')} />;
 const trustedHref = <a href={trustedUrl('/safe')}>Safe</a>;
+const typedTrustedHref: TrustedUrl = trustedUrl('/typed-safe');
+const trustedTypedHref = <a href={typedTrustedHref}>Typed safe</a>;
 const streaming = (
   <form enhance stream mutation={{ key: 'chat/send' }}>
     <p streamText="assistant:a1" aria-live="polite" />
@@ -89,6 +92,7 @@ void ok;
 void interactive;
 void raw;
 void trustedHref;
+void trustedTypedHref;
 void streaming;
 void uploadInput;
 void missingRequiredProp;
