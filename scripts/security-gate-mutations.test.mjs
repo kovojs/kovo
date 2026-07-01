@@ -17,6 +17,14 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'security-test-build-gate/drop-security-certification-marker-extractor',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'security-test-build-gate/drop-stale-proof-row-rejection',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'security-test-build-gate/drop-production-build-invocation-check',
           status: 'killed',
         }),

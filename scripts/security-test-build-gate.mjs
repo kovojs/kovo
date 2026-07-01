@@ -17,6 +17,7 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
 
 export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   {
+    claimExtractor: 'metamorphic-seed-codes',
     description: 'Phase 0 metamorphic fixture-only security seeds',
     file: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
   },
@@ -113,7 +114,7 @@ export function securityTestBuildGateViolations({
 } = {}) {
   const violations = [];
   const enrolledSecurityCodes = new Set(securityCodes);
-  const sourceCodes = new Map();
+  const sourceClaims = new Map();
   const knownSources = new Set(certificationSources.map((source) => source.file));
 
   for (const source of certificationSources) {
@@ -123,14 +124,14 @@ export function securityTestBuildGateViolations({
       continue;
     }
     const sourceText = readFileSync(sourcePath, 'utf8');
-    const codes = extractMetamorphicSeedCodes(sourceText).filter((code) =>
-      enrolledSecurityCodes.has(code),
+    const claims = extractCertificationClaims(source, sourceText, violations).filter((claim) =>
+      enrolledSecurityCodes.has(claim.code),
     );
-    sourceCodes.set(source.file, new Set(codes));
-    for (const code of codes) {
-      if (!proofs.some((proof) => proof.sourceFile === source.file && proof.code === code)) {
+    sourceClaims.set(source.file, claims);
+    for (const claim of claims) {
+      if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {
         violations.push(
-          `${source.file} ${code}: security certification has no real kovo build proof`,
+          `${formatClaimLabel(source.file, claim)}: security certification has no real kovo build proof`,
         );
       }
     }
@@ -141,7 +142,7 @@ export function securityTestBuildGateViolations({
       enrolledSecurityCodes,
       knownSources,
       repoRoot,
-      sourceCodes,
+      sourceClaims,
       violations,
     });
   }
@@ -153,6 +154,21 @@ export function extractMetamorphicSeedCodes(sourceText) {
   return [
     ...new Set([...sourceText.matchAll(/\bcode:\s*['"](KV\d{3})['"]/g)].map((match) => match[1])),
   ].sort((left, right) => left.localeCompare(right));
+}
+
+export function extractSecurityCertificationMarkers(sourceText) {
+  return [
+    ...sourceText.matchAll(/@kovo-security-certifies\s+(KV\d{3})(?:\s+([A-Za-z0-9_.:/-]+))?/g),
+  ]
+    .map((match) => ({
+      claimId: match[2] ?? 'source-marker',
+      code: match[1],
+    }))
+    .sort((left, right) =>
+      left.code === right.code
+        ? left.claimId.localeCompare(right.claimId)
+        : left.code.localeCompare(right.code),
+    );
 }
 
 export function extractNamedTestBlock(sourceText, testName) {
@@ -168,17 +184,22 @@ export function extractNamedTestBlock(sourceText, testName) {
 
 function validateProof(
   proof,
-  { enrolledSecurityCodes, knownSources, repoRoot, sourceCodes, violations },
+  { enrolledSecurityCodes, knownSources, repoRoot, sourceClaims, violations },
 ) {
-  const label = `${proof.sourceFile} ${proof.code} -> ${proof.proofFile}`;
+  const label = formatProofLabel(proof);
   if (!enrolledSecurityCodes.has(proof.code)) {
     violations.push(`${label}: proof code is not enrolled as a security certification code`);
   }
   if (!knownSources.has(proof.sourceFile)) {
     violations.push(`${label}: proof references an unknown certification source`);
   }
-  if (sourceCodes.has(proof.sourceFile) && !sourceCodes.get(proof.sourceFile).has(proof.code)) {
-    violations.push(`${label}: proof is stale; source does not certify ${proof.code}`);
+  if (
+    sourceClaims.has(proof.sourceFile) &&
+    !sourceClaims
+      .get(proof.sourceFile)
+      .some((claim) => proofMatchesClaim(proof, proof.sourceFile, claim))
+  ) {
+    violations.push(`${label}: proof is stale; source does not certify ${formatProofClaim(proof)}`);
   }
 
   const proofPath = path.join(repoRoot, proof.proofFile);
@@ -219,6 +240,42 @@ function validateProof(
     );
   }
   validateBuildHelper(proof.buildInvocation, { repoRoot, violations });
+}
+
+function extractCertificationClaims(source, sourceText, violations) {
+  const extractor = source.claimExtractor ?? 'metamorphic-seed-codes';
+  if (extractor === 'metamorphic-seed-codes') {
+    return extractMetamorphicSeedCodes(sourceText).map((code) => ({
+      claimId: undefined,
+      code,
+    }));
+  }
+  if (extractor === 'security-certification-markers') {
+    return extractSecurityCertificationMarkers(sourceText);
+  }
+  violations.push(`${source.file}: unknown security certification claim extractor ${extractor}`);
+  return [];
+}
+
+function proofMatchesClaim(proof, sourceFile, claim) {
+  if (proof.sourceFile !== sourceFile || proof.code !== claim.code) return false;
+  return claim.claimId === undefined || proof.claimId === claim.claimId;
+}
+
+function formatClaimLabel(sourceFile, claim) {
+  return `${sourceFile} ${formatClaim(claim)}`;
+}
+
+function formatProofLabel(proof) {
+  return `${proof.sourceFile} ${formatProofClaim(proof)} -> ${proof.proofFile}`;
+}
+
+function formatProofClaim(proof) {
+  return proof.claimId === undefined ? proof.code : `${proof.code}/${proof.claimId}`;
+}
+
+function formatClaim(claim) {
+  return claim.claimId === undefined ? claim.code : `${claim.code}/${claim.claimId}`;
 }
 
 function proofTestIsSkippedOrTodo(testBlock) {

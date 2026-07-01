@@ -21,19 +21,54 @@ const fundamentalFixesFollowupPlanPath = path.join(repoRoot, 'plans/fundamental-
 const securityTestBuildGatePath = path.join(scriptsDir, 'security-test-build-gate.mjs');
 
 const missingRealBuildProofBranch = [
-  '      if (!proofs.some((proof) => proof.sourceFile === source.file && proof.code === code)) {',
+  '      if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
   '        violations.push(',
-  '          `${source.file} ${code}: security certification has no real kovo build proof`,',
+  '          `${formatClaimLabel(source.file, claim)}: security certification has no real kovo build proof`,',
   '        );',
   '      }',
 ].join('\n');
 
 const removedMissingRealBuildProofBranch = [
-  '      if (false && !proofs.some((proof) => proof.sourceFile === source.file && proof.code === code)) {',
+  '      if (false && !proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
   '        violations.push(',
-  '          `${source.file} ${code}: security certification has no real kovo build proof`,',
+  '          `${formatClaimLabel(source.file, claim)}: security certification has no real kovo build proof`,',
   '        );',
   '      }',
+].join('\n');
+
+const securityCertificationMarkerExtractorBranch = [
+  "  if (extractor === 'security-certification-markers') {",
+  '    return extractSecurityCertificationMarkers(sourceText);',
+  '  }',
+].join('\n');
+
+const removedSecurityCertificationMarkerExtractorBranch = [
+  "  if (false && extractor === 'security-certification-markers') {",
+  '    return extractSecurityCertificationMarkers(sourceText);',
+  '  }',
+].join('\n');
+
+const staleProofRowBranch = [
+  '  if (',
+  '    sourceClaims.has(proof.sourceFile) &&',
+  '    !sourceClaims',
+  '      .get(proof.sourceFile)',
+  '      .some((claim) => proofMatchesClaim(proof, proof.sourceFile, claim))',
+  '  ) {',
+  '    violations.push(`${label}: proof is stale; source does not certify ${formatProofClaim(proof)}`);',
+  '  }',
+].join('\n');
+
+const removedStaleProofRowBranch = [
+  '  if (',
+  '    false &&',
+  '    sourceClaims.has(proof.sourceFile) &&',
+  '    !sourceClaims',
+  '      .get(proof.sourceFile)',
+  '      .some((claim) => proofMatchesClaim(proof, proof.sourceFile, claim))',
+  '  ) {',
+  '    violations.push(`${label}: proof is stale; source does not certify ${formatProofClaim(proof)}`);',
+  '  }',
 ].join('\n');
 
 const skippedProofBranch = [
@@ -193,6 +228,28 @@ export const SECURITY_GATE_MUTANTS = [
     search: missingRealBuildProofBranch,
     sourceFile: securityTestBuildGatePath,
     test: assertMissingRealBuildProofIsCaught,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Deletes the branch that reads explicit non-metamorphic security certification markers.',
+    expectedKiller:
+      'enrolled unit or fixture security certification markers must require real build proof',
+    name: 'security-test-build-gate/drop-security-certification-marker-extractor',
+    replacement: removedSecurityCertificationMarkerExtractorBranch,
+    search: securityCertificationMarkerExtractorBranch,
+    sourceFile: securityTestBuildGatePath,
+    test: assertSecurityCertificationMarkerIsCaught,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description: 'Deletes the branch that rejects stale proof rows.',
+    expectedKiller: 'stale security proof rows must not certify a removed or renamed source claim',
+    name: 'security-test-build-gate/drop-stale-proof-row-rejection',
+    replacement: removedStaleProofRowBranch,
+    search: staleProofRowBranch,
+    sourceFile: securityTestBuildGatePath,
+    test: assertStaleProofRowIsCaught,
   },
   {
     baseModule: securityTestBuildGate,
@@ -406,6 +463,78 @@ async function assertMissingRealBuildProofIsCaught(moduleUnderTest) {
     assertIncludes(
       violations,
       'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security certification has no real kovo build proof',
+    );
+  });
+}
+
+async function assertSecurityCertificationMarkerIsCaught(moduleUnderTest) {
+  withTempRepo((repoRoot) => {
+    writeUnitCertificationSource(
+      repoRoot,
+      [
+        "it('unit trustedHtml certification', () => {",
+        "  expect(diagnostics).toContain('KV426');",
+        '});',
+        '// @kovo-security-certifies KV426 trusted-html-unit',
+      ].join('\n'),
+    );
+    const violations = moduleUnderTest.securityTestBuildGateViolations({
+      certificationSources: [
+        {
+          claimExtractor: 'security-certification-markers',
+          description: 'unit security certification declarations',
+          file: 'packages/drizzle/src/unit-security.test.ts',
+        },
+      ],
+      proofs: [],
+      repoRoot,
+    });
+    assertIncludes(
+      violations,
+      'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-unit: security certification has no real kovo build proof',
+    );
+  });
+}
+
+async function assertStaleProofRowIsCaught(moduleUnderTest) {
+  withTempRepo((repoRoot) => {
+    writeUnitCertificationSource(
+      repoRoot,
+      '// @kovo-security-certifies KV426 trusted-html-current\n',
+    );
+    writeCliBuildProofFile(
+      repoRoot,
+      [
+        "it('build trustedHtml proof', async () => {",
+        "  const exitCode = await mainAsync(['build', './app.ts', '--out', './dist']);",
+        "  expect(errorOutput).toContain('KV426');",
+        '});',
+      ].join('\n'),
+    );
+
+    const violations = moduleUnderTest.securityTestBuildGateViolations({
+      certificationSources: [
+        {
+          claimExtractor: 'security-certification-markers',
+          description: 'unit security certification declarations',
+          file: 'packages/drizzle/src/unit-security.test.ts',
+        },
+      ],
+      proofs: [
+        {
+          buildInvocation: 'cli-main-build',
+          claimId: 'trusted-html-old',
+          code: 'KV426',
+          proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+          sourceFile: 'packages/drizzle/src/unit-security.test.ts',
+          testName: 'build trustedHtml proof',
+        },
+      ],
+      repoRoot,
+    });
+    assertIncludes(
+      violations,
+      'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-old -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not certify KV426/trusted-html-old',
     );
   });
 }
@@ -726,6 +855,10 @@ function writeFixtureSource(repoRoot, source) {
 
 function writeCliBuildProofFile(repoRoot, source) {
   writeFile(repoRoot, 'packages/cli/src/index.kovo-build.test.ts', source);
+}
+
+function writeUnitCertificationSource(repoRoot, source) {
+  writeFile(repoRoot, 'packages/drizzle/src/unit-security.test.ts', source);
 }
 
 function writeStarterSecurityProofFile(repoRoot, source) {

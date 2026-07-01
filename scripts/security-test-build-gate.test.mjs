@@ -8,6 +8,7 @@ import {
   SECURITY_BUILD_CERTIFICATION_SOURCES,
   SECURITY_BUILD_PROOFS,
   extractMetamorphicSeedCodes,
+  extractSecurityCertificationMarkers,
   securityTestBuildGateViolations,
 } from './security-test-build-gate.mjs';
 
@@ -27,6 +28,122 @@ describe('security-test-build-gate', () => {
         ];
       `),
     ).toEqual(['KV330', 'KV426']);
+  });
+
+  it('extracts explicit security certification markers without treating incidental KV mentions as certification', () => {
+    expect(
+      extractSecurityCertificationMarkers(`
+        expect(output).toContain('KV426');
+        // @kovo-security-certifies KV426 trusted-html-barrel
+        /* @kovo-security-certifies KV435 secret-wire */
+      `),
+    ).toEqual([
+      { claimId: 'trusted-html-barrel', code: 'KV426' },
+      { claimId: 'secret-wire', code: 'KV435' },
+    ]);
+  });
+
+  it('requires real build proof for explicitly enrolled non-metamorphic security certifications', () => {
+    withTempRepo((repoRoot) => {
+      writeUnitCertificationSource(
+        repoRoot,
+        [
+          "it('unit trustedHtml certification', () => {",
+          "  expect(diagnostics).toContain('KV426');",
+          '});',
+          '// @kovo-security-certifies KV426 trusted-html-unit',
+        ].join('\n'),
+      );
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: [
+            {
+              claimExtractor: 'security-certification-markers',
+              description: 'unit security certification declarations',
+              file: 'packages/drizzle/src/unit-security.test.ts',
+            },
+          ],
+          proofs: [],
+          repoRoot,
+        }),
+      ).toContain(
+        'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-unit: security certification has no real kovo build proof',
+      );
+    });
+  });
+
+  it('does not require every unit test that mentions a security code to be a build proof', () => {
+    withTempRepo((repoRoot) => {
+      writeUnitCertificationSource(
+        repoRoot,
+        [
+          "it('diagnostic formatting stays stable', () => {",
+          "  expect(formatDiagnostic('KV426')).toContain('KV426');",
+          '});',
+        ].join('\n'),
+      );
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: [
+            {
+              claimExtractor: 'security-certification-markers',
+              description: 'unit security certification declarations',
+              file: 'packages/drizzle/src/unit-security.test.ts',
+            },
+          ],
+          proofs: [],
+          repoRoot,
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  it('rejects stale marker proof rows that cite a security fact no longer certified by the source', () => {
+    withTempRepo((repoRoot) => {
+      writeUnitCertificationSource(
+        repoRoot,
+        '// @kovo-security-certifies KV426 trusted-html-current\n',
+      );
+      writeProofFile(
+        repoRoot,
+        [
+          "it('build trustedHtml proof', async () => {",
+          "  const exitCode = await mainAsync(['build', './app.ts', '--out', './dist']);",
+          "  expect(errorOutput).toContain('KV426');",
+          '});',
+        ].join('\n'),
+      );
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: [
+            {
+              claimExtractor: 'security-certification-markers',
+              description: 'unit security certification declarations',
+              file: 'packages/drizzle/src/unit-security.test.ts',
+            },
+          ],
+          proofs: [
+            {
+              buildInvocation: 'cli-main-build',
+              claimId: 'trusted-html-old',
+              code: 'KV426',
+              proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+              sourceFile: 'packages/drizzle/src/unit-security.test.ts',
+              testName: 'build trustedHtml proof',
+            },
+          ],
+          repoRoot,
+        }),
+      ).toEqual(
+        expect.arrayContaining([
+          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-current: security certification has no real kovo build proof',
+          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-old -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not certify KV426/trusted-html-old',
+        ]),
+      );
+    });
   });
 
   it('fails when a fixture-only security seed has no production build proof', () => {
@@ -360,6 +477,10 @@ function writeIslandDeriveProofFile(repoRoot, source) {
 
 function writeStarterBuildHelper(repoRoot, source) {
   writeFile(repoRoot, 'packages/create-kovo/src/index.build.test-support.ts', source);
+}
+
+function writeUnitCertificationSource(repoRoot, source) {
+  writeFile(repoRoot, 'packages/drizzle/src/unit-security.test.ts', source);
 }
 
 function validStarterBuildHelperSource() {
