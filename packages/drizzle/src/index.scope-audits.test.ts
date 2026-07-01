@@ -21,14 +21,24 @@ function auditScopes(audit: { scopeAudits: { domain: string; kind: string; scope
 }
 
 describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => {
-  // The classifier is the security-critical core: a client-arg-keyed owner read is
-  // the IDOR signal (`args`); a directly session-anchored read is safe; anything
-  // else (e.g. keyed by a local bound from the session) emits NO fact — so a safe
-  // app is never false-positived, without needing session data-flow tracing.
-  it('emits a fact only for arg-keyed (IDOR) and direct-session owner reads', () => {
+  // The classifier is the security-critical core: a canonical client-arg-keyed owner
+  // read is the IDOR signal (`args`), a canonical session-anchored read is safe, and
+  // missing canonical provenance fails closed instead of consulting legacy shadow fields.
+  it('requires canonical read provenance for owner read scope audits', () => {
     const facts: QueryFact[] = [
       {
         query: 'orderById',
+        readProvenance: [
+          {
+            columns: [],
+            domain: 'order',
+            keys: 'arg:id',
+            scope: { key: 'arg:id', kind: 'arg' },
+            site: 'q.ts:1',
+            source: 'select',
+            via: 'orders',
+          },
+        ],
         reads: ['order'],
         instanceKey: { domain: 'order', key: 'arg:id' },
         shape: {},
@@ -36,13 +46,29 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
       },
       {
         query: 'orderBySession',
+        readProvenance: [
+          {
+            columns: [],
+            domain: 'order',
+            keys: null,
+            scope: { key: 'session:<unknown>', kind: 'session', ownerProof: true },
+            site: 'q.ts:2',
+            source: 'select',
+            via: 'orders',
+          },
+        ],
         reads: ['order'],
         sessionAnchoredReads: ['order'],
         shape: {},
         site: 'q.ts:2',
       },
-      // keyed by a local var (not input.*) -> not the IDOR pattern -> no fact.
-      { query: 'orderMine', reads: ['order'], shape: {}, site: 'q.ts:3' },
+      {
+        query: 'orderLegacyOnly',
+        reads: ['order'],
+        instanceKey: { domain: 'order', key: 'arg:legacyId' },
+        shape: {},
+        site: 'q.ts:3',
+      },
       // product is not owner-annotated -> never audited.
       {
         query: 'productGrid',
@@ -54,10 +80,14 @@ describe('@kovojs/drizzle owner scope-audit producer (SPEC §10.3 IDOR)', () => 
     ];
 
     expect(
-      scopeAuditsFromQueryFacts(facts, ['order']).map((a) => ({ name: a.name, scope: a.scope })),
+      scopeAuditsFromQueryFacts(facts, [{ domain: 'order', owner: 'userId' }]).map((a) => ({
+        name: a.name,
+        scope: a.scope,
+      })),
     ).toEqual([
       { name: 'orderById', scope: 'args' },
       { name: 'orderBySession', scope: 'session' },
+      { name: 'orderLegacyOnly', scope: 'unknown' },
     ]);
   });
 
