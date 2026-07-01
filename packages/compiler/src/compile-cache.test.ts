@@ -191,6 +191,55 @@ describe('CompileCache', () => {
     expect(compile).toHaveBeenCalledTimes(1);
   });
 
+  it('does not reuse learned-footprint entries across production render-plan gates', () => {
+    const cache = new CompileCache<{
+      dependencyFootprint: CompileDependencyFootprint;
+      value: number;
+    }>();
+    let value = 0;
+    const compile = vi.fn(
+      (): { dependencyFootprint: CompileDependencyFootprint; value: number } => ({
+        dependencyFootprint: {
+          queryShapes: { cart: { count: 'number' } },
+          reads: { queryShapeNames: ['cart'] },
+        },
+        value: value++,
+      }),
+    );
+
+    const first = cache.getOrCreate(
+      compileComponentCacheKeyInput({
+        fileName: 'cart.tsx',
+        queryShapes: { cart: { count: 'number' }, product: { name: 'string' } },
+        source: 'component({})',
+      }),
+      compile,
+    );
+    const second = cache.getOrCreate(
+      compileComponentCacheKeyInput({
+        fileName: 'cart.tsx',
+        productionRenderPlanGate: { previous: { cart: 'tok-1' } },
+        queryShapes: { cart: { count: 'number' }, product: { name: 'string' } },
+        source: 'component({})',
+      }),
+      compile,
+    );
+    const third = cache.getOrCreate(
+      compileComponentCacheKeyInput({
+        fileName: 'cart.tsx',
+        productionRenderPlanGate: { previous: { cart: 'tok-2' } },
+        queryShapes: { cart: { count: 'number' }, product: { name: 'string' } },
+        source: 'component({})',
+      }),
+      compile,
+    );
+
+    expect(first).toEqual(expect.objectContaining({ value: 0 }));
+    expect(second).toEqual(expect.objectContaining({ value: 1 }));
+    expect(third).toEqual(expect.objectContaining({ value: 2 }));
+    expect(compile).toHaveBeenCalledTimes(3);
+  });
+
   it('productionRenderPlanGate is included in the cache key (SPEC §5.2.1 total-function)', () => {
     // Two compiles of identical source differing only in productionRenderPlanGate must produce
     // different cache keys — the gate flips the KV435 confidentiality and KV416 token-monotonicity
@@ -234,6 +283,34 @@ describe('CompileCache', () => {
         }),
       ),
     ).toBe(compileCacheKey(withGate));
+  });
+
+  it('preserves productionRenderPlanGate when projecting by a dependency footprint', () => {
+    const footprint: CompileDependencyFootprint = {
+      queryShapes: { cart: { count: 'number' } },
+      reads: { queryShapeNames: ['cart'] },
+    };
+
+    const withGate = compileComponentCacheKeyInput(
+      {
+        fileName: 'cart.tsx',
+        productionRenderPlanGate: { previous: { cart: 'tok-1' } },
+        queryShapes: { cart: { count: 'number' }, ignored: { name: 'string' } },
+        source: 'component({})',
+      },
+      footprint,
+    );
+    const withDifferentGate = compileComponentCacheKeyInput(
+      {
+        fileName: 'cart.tsx',
+        productionRenderPlanGate: { previous: { cart: 'tok-2' } },
+        queryShapes: { cart: { count: 'number' }, ignored: { title: 'string' } },
+        source: 'component({})',
+      },
+      footprint,
+    );
+
+    expect(compileCacheKey(withDifferentGate)).not.toBe(compileCacheKey(withGate));
   });
 
   it('includes every declared component compile input that can affect lowering', () => {

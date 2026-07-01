@@ -158,7 +158,7 @@ export function compileComponentCacheKeyInput(
   options: CompileComponentOptions,
   dependencyFootprint?: CompileDependencyFootprint,
 ): CompileCacheKeyInput {
-  const input = {
+  const input = compileCacheProjection({
     fileName: options.fileName,
     ...(options.packageComponentPrefixes === undefined
       ? {}
@@ -187,7 +187,7 @@ export function compileComponentCacheKeyInput(
     ...(options.sourceProvenance === undefined
       ? {}
       : { sourceProvenance: options.sourceProvenance }),
-  };
+  });
   return dependencyFootprint ? narrowCompileCacheKeyInput(input, dependencyFootprint) : input;
 }
 
@@ -232,11 +232,36 @@ export function narrowCompileCacheKeyInput(
     if (registryFacts !== undefined) narrowedFootprint.registryFacts = registryFacts;
   }
 
-  return {
+  return compileCacheProjection({
     dependencyFootprint: narrowedFootprint,
     fileName: input.fileName,
-    source: input.source,
+    productionRenderPlanGate: input.productionRenderPlanGate,
     ...(input.root === undefined ? {} : { root: input.root }),
+    source: input.source,
+    ...(input.sourceProvenance === undefined ? {} : { sourceProvenance: input.sourceProvenance }),
+  });
+}
+
+function compileCacheProjection(input: CompileCacheKeyInput): CompileCacheKeyInput {
+  return {
+    ...(input.dependencyFootprint === undefined
+      ? {}
+      : { dependencyFootprint: input.dependencyFootprint }),
+    fileName: input.fileName,
+    ...(input.packageComponentPrefixes === undefined
+      ? {}
+      : { packageComponentPrefixes: input.packageComponentPrefixes }),
+    ...(input.previousRegistryFacts === undefined
+      ? {}
+      : { previousRegistryFacts: input.previousRegistryFacts }),
+    ...(input.productionRenderPlanGate === undefined
+      ? {}
+      : { productionRenderPlanGate: input.productionRenderPlanGate }),
+    ...(input.queryShapeFacts === undefined ? {} : { queryShapeFacts: input.queryShapeFacts }),
+    ...(input.queryShapes === undefined ? {} : { queryShapes: input.queryShapes }),
+    ...(input.registryFacts === undefined ? {} : { registryFacts: input.registryFacts }),
+    ...(input.root === undefined ? {} : { root: input.root }),
+    source: input.source,
     ...(input.sourceProvenance === undefined ? {} : { sourceProvenance: input.sourceProvenance }),
   };
 }
