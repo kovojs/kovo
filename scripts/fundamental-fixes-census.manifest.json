@@ -1,0 +1,758 @@
+{
+  "version": 1,
+  "planPath": "plans/fundamental-fixes-followup.md",
+  "adversarialGate": {
+    "prodArtifact": true,
+    "dialects": ["postgres", "sqlite"],
+    "independentReviewer": true
+  },
+  "rows": [
+    {
+      "id": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2",
+      "kind": "write-capable-handle",
+      "owner": ["H", "I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "webhooktxdb-webhook-transaction-handle",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "storage-capability-write-handles-upload-store-delete",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "raw-driver-client-session-escape-from-any-managed-handle",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update",
+      "kind": "write-capable-handle",
+      "owner": ["H", "I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "ssr-document-html",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "q-query-response",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "mutation-delta-enhanced-mutation-response",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "streaming-defer-chunks",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "response-headers-incl-set-cookie-redirects",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "error-shells-500-bodies",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "capability-urls-signed-payloads",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
+      "kind": "output-wire-sink",
+      "owner": ["C2", "B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "client-derive-bodies-leak-referenceerror-boundary",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "secret-column-to-wire-across-all-value-flow-paths",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-property-access-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "PropertyAccessExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-element-access-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ElementAccessExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-new-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "NewExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-call-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "CallExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-jsx-element",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "JsxElement",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-jsx-self-closing-element",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "JsxSelfClosingElement",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-jsx-fragment",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "JsxFragment",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-tagged-template-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "TaggedTemplateExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-array-literal-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ArrayLiteralExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-parenthesized-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ParenthesizedExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-object-literal-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ObjectLiteralExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-class-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ClassExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-function-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "FunctionExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-identifier",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "Identifier",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-private-identifier",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "PrivateIdentifier",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-regular-expression-literal",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "RegularExpressionLiteral",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-numeric-literal",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "NumericLiteral",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-big-int-literal",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "BigIntLiteral",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-string-literal",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "StringLiteral",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-no-substitution-template-literal",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "NoSubstitutionTemplateLiteral",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-template-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "TemplateExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-false-keyword",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "FalseKeyword",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-null-keyword",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "NullKeyword",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-this-keyword",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ThisKeyword",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-true-keyword",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "TrueKeyword",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-super-keyword",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "SuperKeyword",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-non-null-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "NonNullExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-expression-with-type-arguments",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ExpressionWithTypeArguments",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-meta-property",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "MetaProperty",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-import-keyword",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ImportKeyword",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-missing-declaration",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "MissingDeclaration",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-prefix-unary-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "PrefixUnaryExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-postfix-unary-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "PostfixUnaryExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-delete-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "DeleteExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-type-of-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "TypeOfExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-void-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "VoidExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-await-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "AwaitExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-type-assertion-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "TypeAssertionExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-conditional-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ConditionalExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-yield-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "YieldExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-arrow-function",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "ArrowFunction",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-binary-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "BinaryExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-spread-element",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "SpreadElement",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-as-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "AsExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-omitted-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "OmittedExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-comma-list-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "CommaListExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-partially-emitted-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "PartiallyEmittedExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-satisfies-expression",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "SatisfiesExpression",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "resolver-default",
+      "kind": "resolver-expression-kind",
+      "expressionKind": "default",
+      "owner": ["B3"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-pglite-execute",
+      "kind": "dialect-sink",
+      "dialect": "pglite",
+      "sink": "execute",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-pglite-query",
+      "kind": "dialect-sink",
+      "dialect": "pglite",
+      "sink": "query",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-pglite-run",
+      "kind": "dialect-sink",
+      "dialect": "pglite",
+      "sink": "run",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-pglite-get",
+      "kind": "dialect-sink",
+      "dialect": "pglite",
+      "sink": "get",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-pglite-all",
+      "kind": "dialect-sink",
+      "dialect": "pglite",
+      "sink": "all",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-pglite-values",
+      "kind": "dialect-sink",
+      "dialect": "pglite",
+      "sink": "values",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-pglite-transaction",
+      "kind": "dialect-sink",
+      "dialect": "pglite",
+      "sink": "transaction",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-pglite-with",
+      "kind": "dialect-sink",
+      "dialect": "pglite",
+      "sink": "with",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-pglite-unknown-method",
+      "kind": "dialect-sink",
+      "dialect": "pglite",
+      "sink": "unknown-method",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-better-sqlite3-execute",
+      "kind": "dialect-sink",
+      "dialect": "better-sqlite3",
+      "sink": "execute",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-better-sqlite3-query",
+      "kind": "dialect-sink",
+      "dialect": "better-sqlite3",
+      "sink": "query",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-better-sqlite3-run",
+      "kind": "dialect-sink",
+      "dialect": "better-sqlite3",
+      "sink": "run",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-better-sqlite3-get",
+      "kind": "dialect-sink",
+      "dialect": "better-sqlite3",
+      "sink": "get",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-better-sqlite3-all",
+      "kind": "dialect-sink",
+      "dialect": "better-sqlite3",
+      "sink": "all",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-better-sqlite3-values",
+      "kind": "dialect-sink",
+      "dialect": "better-sqlite3",
+      "sink": "values",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-better-sqlite3-transaction",
+      "kind": "dialect-sink",
+      "dialect": "better-sqlite3",
+      "sink": "transaction",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-better-sqlite3-with",
+      "kind": "dialect-sink",
+      "dialect": "better-sqlite3",
+      "sink": "with",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-better-sqlite3-unknown-method",
+      "kind": "dialect-sink",
+      "dialect": "better-sqlite3",
+      "sink": "unknown-method",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-unknown-execute",
+      "kind": "dialect-sink",
+      "dialect": "unknown",
+      "sink": "execute",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-unknown-query",
+      "kind": "dialect-sink",
+      "dialect": "unknown",
+      "sink": "query",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-unknown-run",
+      "kind": "dialect-sink",
+      "dialect": "unknown",
+      "sink": "run",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-unknown-get",
+      "kind": "dialect-sink",
+      "dialect": "unknown",
+      "sink": "get",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-unknown-all",
+      "kind": "dialect-sink",
+      "dialect": "unknown",
+      "sink": "all",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-unknown-values",
+      "kind": "dialect-sink",
+      "dialect": "unknown",
+      "sink": "values",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-unknown-transaction",
+      "kind": "dialect-sink",
+      "dialect": "unknown",
+      "sink": "transaction",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-unknown-with",
+      "kind": "dialect-sink",
+      "dialect": "unknown",
+      "sink": "with",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    },
+    {
+      "id": "dialect-unknown-unknown-method",
+      "kind": "dialect-sink",
+      "dialect": "unknown",
+      "sink": "unknown-method",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder"
+    }
+  ]
+}

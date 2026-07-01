@@ -82,6 +82,8 @@ export function summarizeInventory(entries, metadata = {}) {
     categories.literalTextComparisons.count + categories.importSpecifierComparisons.count;
 
   return {
+    completionGate: 'node scripts/fundamental-fixes-census-gate.mjs --require-complete',
+    candidateCountIsDoneSignal: false,
     roots: metadata.roots ?? DEFAULT_ROOTS,
     includeTests: metadata.includeTests === true,
     filesScanned: metadata.files?.length ?? unique(entries.map((entry) => entry.file)).length,
@@ -101,7 +103,8 @@ export function formatInventoryReport(report) {
     `roots: ${report.roots.join(', ')}`,
     `includeTests: ${String(report.includeTests)}`,
     `filesScanned: ${report.filesScanned}`,
-    `syntacticRecognitionCandidates: ${report.syntacticRecognitionCandidates}`,
+    `syntacticRecognitionCandidates: ${report.syntacticRecognitionCandidates} (informational; not a done signal)`,
+    `completionGate: ${report.completionGate}`,
   ];
   for (const [key, value] of Object.entries(report.categories)) {
     lines.push(`${key}: ${value.count} (${value.label})`);

@@ -1,0 +1,503 @@
+#!/usr/bin/env node
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+const thisFile = fileURLToPath(import.meta.url);
+const scriptsDir = path.dirname(thisFile);
+const repoRoot = path.resolve(scriptsDir, '..');
+
+export const defaultPlanPath = 'plans/fundamental-fixes-followup.md';
+export const defaultManifestPath = 'scripts/fundamental-fixes-census.manifest.json';
+
+export const CENSUS_KINDS = [
+  'write-capable-handle',
+  'output-wire-sink',
+  'resolver-expression-kind',
+  'dialect-sink',
+];
+
+export const ALLOWED_STATUSES = ['open', 'in-progress', 'closed'];
+export const FORBIDDEN_STATUS_PATTERN =
+  /\b(?:deferred|out[-_\s]*of[-_\s]*scope|future|later|parked)\b/iu;
+export const PLACEHOLDER_EVIDENCE_PATTERN = /^(?:placeholder|pending|todo|tbd|none|open)$/iu;
+
+export const REQUIRED_RESOLVER_EXPRESSION_KINDS = [
+  'PropertyAccessExpression',
+  'ElementAccessExpression',
+  'NewExpression',
+  'CallExpression',
+  'JsxElement',
+  'JsxSelfClosingElement',
+  'JsxFragment',
+  'TaggedTemplateExpression',
+  'ArrayLiteralExpression',
+  'ParenthesizedExpression',
+  'ObjectLiteralExpression',
+  'ClassExpression',
+  'FunctionExpression',
+  'Identifier',
+  'PrivateIdentifier',
+  'RegularExpressionLiteral',
+  'NumericLiteral',
+  'BigIntLiteral',
+  'StringLiteral',
+  'NoSubstitutionTemplateLiteral',
+  'TemplateExpression',
+  'FalseKeyword',
+  'NullKeyword',
+  'ThisKeyword',
+  'TrueKeyword',
+  'SuperKeyword',
+  'NonNullExpression',
+  'ExpressionWithTypeArguments',
+  'MetaProperty',
+  'ImportKeyword',
+  'MissingDeclaration',
+  'PrefixUnaryExpression',
+  'PostfixUnaryExpression',
+  'DeleteExpression',
+  'TypeOfExpression',
+  'VoidExpression',
+  'AwaitExpression',
+  'TypeAssertionExpression',
+  'ConditionalExpression',
+  'YieldExpression',
+  'ArrowFunction',
+  'BinaryExpression',
+  'SpreadElement',
+  'AsExpression',
+  'OmittedExpression',
+  'CommaListExpression',
+  'PartiallyEmittedExpression',
+  'SatisfiesExpression',
+  'default',
+];
+
+export const REQUIRED_DIALECT_MATRIX_DIALECTS = ['pglite', 'better-sqlite3', 'unknown'];
+export const REQUIRED_DIALECT_MATRIX_SINKS = [
+  'execute',
+  'query',
+  'run',
+  'get',
+  'all',
+  'values',
+  'transaction',
+  'with',
+  'unknown-method',
+];
+
+export const DEFAULT_M1_AXES = {
+  prodArtifact: true,
+  dialects: ['postgres', 'sqlite'],
+  independentReviewer: true,
+};
+export const CENSUS_AUTHORITY = [
+  'SPEC.md 1.3 machine-auditable generation',
+  'spec/11-verification.md 11.2 runtime verification',
+  'plans/fundamental-fixes-followup.md M1/M4/M5',
+];
+
+const PLAN_CENSUS_SECTIONS = [
+  {
+    endMarker: '**(b) Output / wire sinks**',
+    kind: 'write-capable-handle',
+    startMarker: '**(a) Write-capable handle surfaces**',
+  },
+  {
+    endMarker: '## Traceability',
+    kind: 'output-wire-sink',
+    startMarker: '**(b) Output / wire sinks**',
+  },
+];
+
+export function loadCensusManifest(manifestPath = path.join(repoRoot, defaultManifestPath)) {
+  return JSON.parse(readFileSync(manifestPath, 'utf8'));
+}
+
+export function loadPlanText(planPath = path.join(repoRoot, defaultPlanPath)) {
+  return readFileSync(planPath, 'utf8');
+}
+
+export function extractPlanCensusRows(planText) {
+  const rows = [];
+  for (const section of PLAN_CENSUS_SECTIONS) {
+    const sectionText = extractBetween(planText, section.startMarker, section.endMarker);
+    const baseLine = lineNumberAtOffset(planText, planText.indexOf(section.startMarker));
+    const lines = sectionText.split(/\r?\n/u);
+    for (let index = 0; index < lines.length; index += 1) {
+      const match = /^- \[(?<checkbox>[ xX])\]\s+(?<body>.+?)\s*$/u.exec(lines[index].trim());
+      if (!match?.groups) continue;
+
+      const ownerMatch = /\s+\[(?<owner>[A-Z0-9/]+)\]\s*$/u.exec(match.groups.body);
+      const label = ownerMatch
+        ? match.groups.body.slice(0, ownerMatch.index).trim()
+        : match.groups.body.trim();
+      rows.push({
+        checkbox: match.groups.checkbox.toLowerCase() === 'x' ? 'closed' : 'open',
+        id: planCensusRowId(label),
+        kind: section.kind,
+        label,
+        line: baseLine + index,
+        owner: splitOwners(ownerMatch?.groups?.owner),
+      });
+    }
+  }
+  return rows;
+}
+
+export function planCensusRowId(label) {
+  return label
+    .replace(/`([^`]+)`/gu, '$1')
+    .replace(/\*\*/gu, '')
+    .replace(/[^A-Za-z0-9]+/gu, '-')
+    .replace(/^-+|-+$/gu, '')
+    .toLowerCase();
+}
+
+export function evaluateFundamentalFixesCensus({
+  manifest = loadCensusManifest(),
+  planPath = defaultPlanPath,
+  planText = loadPlanText(path.join(repoRoot, planPath)),
+  requireComplete = false,
+} = {}) {
+  const violations = [];
+  const rows = Array.isArray(manifest?.rows) ? manifest.rows : [];
+  const planRows = extractPlanCensusRows(planText);
+  const rowsById = new Map();
+
+  if (manifest?.planPath !== planPath) {
+    violations.push(
+      `${defaultManifestPath}: planPath must be ${JSON.stringify(planPath)}; found ${JSON.stringify(
+        manifest?.planPath,
+      )}`,
+    );
+  }
+
+  validatePlanDenominatorText(planText, violations);
+  validateAdversarialGate(manifest?.adversarialGate, violations);
+
+  for (const planRow of planRows) {
+    if (planRow.owner.length === 0) {
+      violations.push(`${planPath}:${planRow.line}: plan census row is missing an owner tag`);
+    }
+  }
+
+  for (const row of rows) {
+    validateRowShape(row, violations);
+    if (typeof row?.id === 'string') {
+      if (rowsById.has(row.id)) violations.push(`${row.id}: duplicate census row id`);
+      rowsById.set(row.id, row);
+    }
+  }
+
+  validatePlanLinkedRows(planRows, rows, violations);
+  validateResolverRows(rows, violations);
+  validateDialectMatrixRows(rows, violations);
+
+  for (const row of rows) {
+    if (!row || typeof row !== 'object') continue;
+    if (row.status === 'closed') validateClosedRow(row, manifest?.adversarialGate, violations);
+    if (requireComplete && row.status !== 'closed') {
+      violations.push(`${row.id ?? '<missing-id>'}: M4 completion requires status "closed"`);
+    }
+  }
+
+  const denominator = {
+    dialectMatrixRows: rows.filter((row) => row?.kind === 'dialect-sink').length,
+    outputWireSinkRows: rows.filter((row) => row?.kind === 'output-wire-sink').length,
+    resolverExpressionKindRows: rows.filter((row) => row?.kind === 'resolver-expression-kind')
+      .length,
+    writeCapableHandleRows: rows.filter((row) => row?.kind === 'write-capable-handle').length,
+  };
+  const openRows = rows.filter((row) => row?.status !== 'closed').map((row) => row.id);
+  const complete = violations.length === 0 && rows.length > 0 && openRows.length === 0;
+
+  return {
+    authority: CENSUS_AUTHORITY,
+    complete,
+    denominator,
+    manifestVersion: manifest?.version,
+    ok: violations.length === 0,
+    openRows,
+    planRows: {
+      outputWireSinkRows: planRows.filter((row) => row.kind === 'output-wire-sink').length,
+      writeCapableHandleRows: planRows.filter((row) => row.kind === 'write-capable-handle').length,
+    },
+    requireComplete,
+    rowCount: rows.length,
+    violations,
+  };
+}
+
+function validatePlanDenominatorText(planText, violations) {
+  for (const marker of [
+    'Sink & handle census',
+    'resolver expression-kind table',
+    'Dialect \u00d7 sink metamorphic matrix',
+  ]) {
+    if (!planText.includes(marker)) {
+      violations.push(
+        `${defaultPlanPath}: M4 denominator marker ${JSON.stringify(marker)} missing`,
+      );
+    }
+  }
+}
+
+function validateAdversarialGate(adversarialGate, violations) {
+  if (!adversarialGate || typeof adversarialGate !== 'object') {
+    violations.push(`${defaultManifestPath}: adversarialGate must record the M1 required axes`);
+    return;
+  }
+  if (adversarialGate.prodArtifact !== true) {
+    violations.push(`${defaultManifestPath}: adversarialGate.prodArtifact must be true`);
+  }
+  if (adversarialGate.independentReviewer !== true) {
+    violations.push(`${defaultManifestPath}: adversarialGate.independentReviewer must be true`);
+  }
+  if (!sameStringSet(adversarialGate.dialects, DEFAULT_M1_AXES.dialects)) {
+    violations.push(
+      `${defaultManifestPath}: adversarialGate.dialects must enumerate ${DEFAULT_M1_AXES.dialects.join(
+        ', ',
+      )}`,
+    );
+  }
+}
+
+function validateRowShape(row, violations) {
+  if (!row || typeof row !== 'object') {
+    violations.push('census manifest row must be an object');
+    return;
+  }
+  const label = typeof row.id === 'string' && row.id.length > 0 ? row.id : '<missing-id>';
+  if (typeof row.id !== 'string' || row.id.length === 0) {
+    violations.push(`${label}: census row is missing id`);
+  }
+  if (!CENSUS_KINDS.includes(row.kind)) {
+    violations.push(`${label}: census row kind must be one of ${CENSUS_KINDS.join(', ')}`);
+  }
+  const owners = splitOwners(row.owner);
+  if (owners.length === 0) {
+    violations.push(`${label}: census row is missing owner`);
+  }
+  if (typeof row.status !== 'string' || row.status.length === 0) {
+    violations.push(`${label}: census row is missing status`);
+  } else if (FORBIDDEN_STATUS_PATTERN.test(row.status)) {
+    violations.push(`${label}: M5 forbids status ${JSON.stringify(row.status)}`);
+  } else if (!ALLOWED_STATUSES.includes(row.status)) {
+    violations.push(`${label}: unsupported status ${JSON.stringify(row.status)}`);
+  }
+  if (typeof row.evidence !== 'string' || row.evidence.trim().length === 0) {
+    violations.push(`${label}: census row is missing evidence placeholder`);
+  }
+}
+
+function validatePlanLinkedRows(planRows, rows, violations) {
+  const manifestRowsByKindAndId = new Map(
+    rows
+      .filter((row) => row?.kind === 'write-capable-handle' || row?.kind === 'output-wire-sink')
+      .map((row) => [`${row.kind}:${row.id}`, row]),
+  );
+  const planRowsByKindAndId = new Map(planRows.map((row) => [`${row.kind}:${row.id}`, row]));
+
+  for (const planRow of planRows) {
+    const row = manifestRowsByKindAndId.get(`${planRow.kind}:${planRow.id}`);
+    if (!row) {
+      violations.push(
+        `${defaultManifestPath}: missing manifest row for ${planRow.kind} plan row ${planRow.id}`,
+      );
+      continue;
+    }
+    if (!sameStringSet(splitOwners(row.owner), planRow.owner)) {
+      violations.push(
+        `${row.id}: owner ${JSON.stringify(splitOwners(row.owner))} does not match plan owner ${JSON.stringify(
+          planRow.owner,
+        )}`,
+      );
+    }
+  }
+
+  for (const row of manifestRowsByKindAndId.values()) {
+    if (!planRowsByKindAndId.has(`${row.kind}:${row.id}`)) {
+      violations.push(`${row.id}: ${row.kind} row is not present in ${defaultPlanPath}`);
+    }
+  }
+}
+
+function validateResolverRows(rows, violations) {
+  const resolverRows = rows.filter((row) => row?.kind === 'resolver-expression-kind');
+  const kinds = new Map();
+  for (const row of resolverRows) {
+    if (typeof row.expressionKind !== 'string' || row.expressionKind.length === 0) {
+      violations.push(`${row.id ?? '<missing-id>'}: resolver row is missing expressionKind`);
+      continue;
+    }
+    if (kinds.has(row.expressionKind)) {
+      violations.push(`${row.id}: duplicate resolver expressionKind ${row.expressionKind}`);
+    }
+    kinds.set(row.expressionKind, row);
+  }
+  for (const requiredKind of REQUIRED_RESOLVER_EXPRESSION_KINDS) {
+    if (!kinds.has(requiredKind)) {
+      violations.push(
+        `${defaultManifestPath}: missing resolver expression-kind row ${requiredKind}`,
+      );
+    }
+  }
+}
+
+function validateDialectMatrixRows(rows, violations) {
+  const matrixRows = rows.filter((row) => row?.kind === 'dialect-sink');
+  const cells = new Set();
+  for (const row of matrixRows) {
+    if (!REQUIRED_DIALECT_MATRIX_DIALECTS.includes(row.dialect)) {
+      violations.push(
+        `${row.id ?? '<missing-id>'}: unsupported dialect matrix dialect ${row.dialect}`,
+      );
+    }
+    if (!REQUIRED_DIALECT_MATRIX_SINKS.includes(row.sink)) {
+      violations.push(`${row.id ?? '<missing-id>'}: unsupported dialect matrix sink ${row.sink}`);
+    }
+    const cell = `${row.dialect}:${row.sink}`;
+    if (cells.has(cell)) violations.push(`${row.id}: duplicate dialect matrix cell ${cell}`);
+    cells.add(cell);
+  }
+  for (const dialect of REQUIRED_DIALECT_MATRIX_DIALECTS) {
+    for (const sink of REQUIRED_DIALECT_MATRIX_SINKS) {
+      if (!cells.has(`${dialect}:${sink}`)) {
+        violations.push(
+          `${defaultManifestPath}: missing dialect x sink matrix row ${dialect}/${sink}`,
+        );
+      }
+    }
+  }
+}
+
+function validateClosedRow(row, adversarialGate, violations) {
+  if (PLACEHOLDER_EVIDENCE_PATTERN.test(row.evidence.trim())) {
+    violations.push(`${row.id}: closed row must replace placeholder evidence`);
+  }
+
+  const m1 = row.m1;
+  if (!m1 || typeof m1 !== 'object') {
+    violations.push(`${row.id}: closed row is missing M1 adversarial evidence`);
+    return;
+  }
+
+  if (!isConcreteEvidence(m1.prodArtifact)) {
+    violations.push(`${row.id}: closed row is missing M1 prod artifact evidence`);
+  }
+
+  const requiredDialects = Array.isArray(adversarialGate?.dialects)
+    ? adversarialGate.dialects
+    : DEFAULT_M1_AXES.dialects;
+  for (const dialect of requiredDialects) {
+    if (!isConcreteEvidence(m1.dialects?.[dialect])) {
+      violations.push(`${row.id}: closed row is missing M1 dialect evidence for ${dialect}`);
+    }
+  }
+
+  if (!isConcreteEvidence(m1.independentReviewer)) {
+    violations.push(`${row.id}: closed row is missing M1 independent reviewer evidence`);
+  }
+}
+
+function isConcreteEvidence(value) {
+  return (
+    typeof value === 'string' &&
+    value.trim().length > 0 &&
+    !PLACEHOLDER_EVIDENCE_PATTERN.test(value.trim())
+  );
+}
+
+function splitOwners(owner) {
+  if (Array.isArray(owner)) return owner.flatMap(splitOwners);
+  if (typeof owner !== 'string') return [];
+  return owner
+    .split('/')
+    .map((part) => part.trim())
+    .filter(Boolean);
+}
+
+function sameStringSet(left, right) {
+  if (!Array.isArray(left) || !Array.isArray(right)) return false;
+  const leftSet = new Set(left);
+  const rightSet = new Set(right);
+  if (leftSet.size !== rightSet.size) return false;
+  return [...leftSet].every((value) => rightSet.has(value));
+}
+
+function extractBetween(text, startMarker, endMarker) {
+  const start = text.indexOf(startMarker);
+  if (start === -1) return '';
+  const end = text.indexOf(endMarker, start + startMarker.length);
+  return text.slice(start, end === -1 ? undefined : end);
+}
+
+function lineNumberAtOffset(text, offset) {
+  if (offset < 0) return 1;
+  return text.slice(0, offset).split(/\r?\n/u).length;
+}
+
+function parseArgs(argv) {
+  const options = {
+    json: false,
+    manifestPath: path.join(repoRoot, defaultManifestPath),
+    planPath: path.join(repoRoot, defaultPlanPath),
+    requireComplete: false,
+  };
+  for (let index = 0; index < argv.length; index += 1) {
+    const arg = argv[index];
+    if (arg === '--json') {
+      options.json = true;
+      continue;
+    }
+    if (arg === '--require-complete') {
+      options.requireComplete = true;
+      continue;
+    }
+    if (arg === '--manifest') {
+      options.manifestPath = path.resolve(argv[index + 1] ?? '');
+      index += 1;
+      continue;
+    }
+    if (arg === '--plan') {
+      options.planPath = path.resolve(argv[index + 1] ?? '');
+      index += 1;
+      continue;
+    }
+    throw new Error(`Unknown argument: ${arg}`);
+  }
+  return options;
+}
+
+function main() {
+  const options = parseArgs(process.argv.slice(2));
+  const manifest = existsSync(options.manifestPath)
+    ? loadCensusManifest(options.manifestPath)
+    : { rows: [] };
+  const planText = existsSync(options.planPath) ? readFileSync(options.planPath, 'utf8') : '';
+  const report = evaluateFundamentalFixesCensus({
+    manifest,
+    planPath: path.relative(repoRoot, options.planPath).split(path.sep).join('/'),
+    planText,
+    requireComplete: options.requireComplete,
+  });
+
+  if (options.json) {
+    process.stdout.write(`${JSON.stringify(report, null, 2)}\n`);
+  } else if (report.violations.length > 0) {
+    process.stderr.write(`Fundamental fixes census gate failed:\n`);
+    for (const violation of report.violations) process.stderr.write(`  - ${violation}\n`);
+  } else {
+    process.stdout.write(
+      `Fundamental fixes census gate passed (${report.rowCount} rows; complete: ${String(
+        report.complete,
+      )}).\n`,
+    );
+  }
+
+  if (!report.ok) process.exitCode = 1;
+}
+
+if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) main();

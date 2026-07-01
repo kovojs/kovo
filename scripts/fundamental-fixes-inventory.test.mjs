@@ -21,6 +21,10 @@ describe('fundamental-fixes-inventory', () => {
     const report = summarizeInventory(entries);
 
     expect(report.syntacticRecognitionCandidates).toBe(3);
+    expect(report.candidateCountIsDoneSignal).toBe(false);
+    expect(report.completionGate).toBe(
+      'node scripts/fundamental-fixes-census-gate.mjs --require-complete',
+    );
     expect(report.categories.literalTextComparisons.count).toBe(2);
     expect(report.categories.importSpecifierComparisons.count).toBe(1);
     expect(report.categories.astKindGates.count).toBe(1);
@@ -35,5 +39,11 @@ describe('fundamental-fixes-inventory', () => {
 
     expect(formatInventoryReport(report)).toContain('fundamental-fixes inventory');
     expect(formatInventoryReport(report)).toContain('filesScanned: 1');
+    expect(formatInventoryReport(report)).toContain(
+      'syntacticRecognitionCandidates: 0 (informational; not a done signal)',
+    );
+    expect(formatInventoryReport(report)).toContain(
+      'completionGate: node scripts/fundamental-fixes-census-gate.mjs --require-complete',
+    );
   });
 });
