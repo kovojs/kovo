@@ -370,10 +370,12 @@ function expectStorageWriteBuildFailure(root: string): void {
   expectBuildFailure(root, [
     'KV433',
     'storage-put-write-query',
+    'storage-delete-write-query',
     'storage-computed-write-query',
     'storage-file-store-write-query',
     'storage-upload-write-query',
     'operation=put',
+    'operation=delete',
     'operation=store',
     'operation=upload',
   ]);

@@ -165,6 +165,10 @@ const kv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvena
 
 const weakenedKv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvenanceBuildProof(safeRoot)',`;
 
+const kv433StorageDeleteProofNeedle = `      'operation=delete',`;
+
+const weakenedKv433StorageDeleteProofNeedle = `      'storage-delete-write-query',`;
+
 const trustedHtmlCallTaintFailClosedBranch = `    return firstProvenance([argumentProvenance, calleeProvenance]) ?? 'unprovable';`;
 
 const weakenedTrustedHtmlCallTaintFailClosedBranch = `    return firstProvenance([argumentProvenance, calleeProvenance]);`;
@@ -536,6 +540,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: kv426TrustedOutputSafeSiblingProofNeedle,
     sourceFile: securityTestBuildGatePath,
     test: assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Weakens the KV433 storage-query proof enrollment so it no longer pins direct delete write detection.',
+    expectedKiller:
+      'KV433 storage-query proof enrollment must retain direct storage delete operation evidence',
+    name: 'security-test-build-gate/weaken-kv433-storage-delete-proof-enrollment',
+    replacement: weakenedKv433StorageDeleteProofNeedle,
+    search: kv433StorageDeleteProofNeedle,
+    sourceFile: securityTestBuildGatePath,
+    test: assertKv433StorageDeleteProofEnrollmentIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -1104,6 +1120,29 @@ async function assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned(module
         needle,
       )}`,
     );
+  }
+}
+
+async function assertKv433StorageDeleteProofEnrollmentIsPinned(moduleUnderTest) {
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV433' &&
+      candidate.claimId === 'storage-query-write-prod-artifact' &&
+      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  );
+  if (!proof) throw new Error('KV433 storage-query production build proof is not enrolled');
+  const needles = [
+    'addStorageQueryWriteProof(root)',
+    'buildProductionArtifact(root)',
+    'operation=put',
+    'operation=delete',
+    'operation=store',
+    'operation=upload',
+  ];
+  for (const needle of needles) {
+    if (!proof.requiredNeedles?.includes(needle)) {
+      throw new Error(`KV433 storage-query proof must require ${JSON.stringify(needle)}`);
+    }
   }
 }
 
