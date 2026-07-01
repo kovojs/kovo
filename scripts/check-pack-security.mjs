@@ -13,6 +13,7 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { derivePublishPlan } from './build-publish.mjs';
 import { normalizePackageExports, resolveSourceExportTarget } from './package-exports.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
@@ -532,9 +533,4 @@ function main() {
   }
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)
-) {
-  main();
-}
+if (isMainEntry(import.meta.url)) await runGate(main);

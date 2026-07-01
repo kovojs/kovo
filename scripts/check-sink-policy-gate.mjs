@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-export const repoRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+
+export const repoRoot = findRepoRoot();
 export const defaultSinkPolicyPath = 'packages/core/src/internal/sink-policy.ts';
 
 export const defaultBlessedSinkFiles = [
@@ -2485,12 +2487,15 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
-  const findings = checkSinkPolicyGate();
-  if (findings.length > 0) {
-    console.error(`Sink policy gate failed with ${findings.length} finding(s):`);
-    for (const finding of findings) console.error(`- ${finding}`);
-    process.exit(1);
-  }
-  console.log('Sink policy gate passed.');
+if (isMainEntry(import.meta.url)) {
+  await runGate(() => {
+    const findings = checkSinkPolicyGate();
+    if (findings.length > 0) {
+      console.error(`Sink policy gate failed with ${findings.length} finding(s):`);
+      for (const finding of findings) console.error(`- ${finding}`);
+      return 1;
+    }
+    console.log('Sink policy gate passed.');
+    return 0;
+  });
 }

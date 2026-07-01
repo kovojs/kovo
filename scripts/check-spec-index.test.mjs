@@ -1,6 +1,8 @@
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { spawnSync } from 'node:child_process';
+import { copyFile, mkdir, mkdtemp, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
@@ -99,6 +101,33 @@ describe('spec-index gate', () => {
       'SPEC.md must map old SPEC §8 citations to spec/07-navigation.md',
     );
   });
+
+  it('runs as a gate when the checkout path contains spaces', async () => {
+    const rootDir = await completeSplitFixture({
+      prefix: 'kovo spec gate with spaces ',
+    });
+    await mkdir(path.join(rootDir, 'scripts', 'lib'), { recursive: true });
+    await copyFile(
+      scriptFixturePath('check-spec-index.mjs'),
+      path.join(rootDir, 'scripts', 'check-spec-index.mjs'),
+    );
+    await copyFile(
+      scriptFixturePath('lib/cli-entry.mjs'),
+      path.join(rootDir, 'scripts', 'lib', 'cli-entry.mjs'),
+    );
+    await copyFile(
+      scriptFixturePath('lib/repo-root.mjs'),
+      path.join(rootDir, 'scripts', 'lib', 'repo-root.mjs'),
+    );
+
+    const result = spawnSync('node', [path.join(rootDir, 'scripts', 'check-spec-index.mjs')], {
+      encoding: 'utf8',
+    });
+
+    expect(result.status).toBe(0);
+    expect(result.stdout).toContain('check-spec-index/v1');
+    expect(result.stdout).toContain('OK spec index is complete');
+  });
 });
 
 async function completeSplitFixture({
@@ -107,8 +136,9 @@ async function completeSplitFixture({
   includeDiagnosticOwner = true,
   omittedMappings = [],
   omittedRequiredLinks = [],
+  prefix,
 } = {}) {
-  const rootDir = await fixtureRoot();
+  const rootDir = await fixtureRoot(prefix);
   await mkdir(path.join(rootDir, 'spec'), { recursive: true });
 
   for (const specModule of [...requiredSpecModules, ...extraSpecFiles]) {
@@ -150,6 +180,10 @@ async function completeSplitFixture({
   return rootDir;
 }
 
-async function fixtureRoot() {
-  return mkdtemp(path.join(tmpdir(), 'kovo-spec-index-'));
+async function fixtureRoot(prefix = 'kovo-spec-index-') {
+  return mkdtemp(path.join(tmpdir(), prefix));
+}
+
+function scriptFixturePath(relativePath) {
+  return path.join(fileURLToPath(new URL('.', import.meta.url)), relativePath);
 }

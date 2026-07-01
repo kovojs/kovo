@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const scriptDir = path.dirname(fileURLToPath(import.meta.url));
-export const defaultRepoRoot = path.resolve(scriptDir, '..');
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { repoRoot } from './lib/repo-root.mjs';
+
+export const defaultRepoRoot = repoRoot();
 
 export const requiredSpecModules = [
   'spec/04-component-model.md',
@@ -235,6 +236,4 @@ function escapeRegExp(value) {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
-  process.exit(runSpecIndexCheck());
-}
+if (isMainEntry(import.meta.url)) await runGate(runSpecIndexCheck);

@@ -2,6 +2,7 @@
 import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot } from './public-packages.mjs';
 
 export const ciEgressPolicies = Object.freeze({
@@ -106,13 +107,7 @@ function main() {
     stdio: 'inherit',
   });
   if (result.error) throw result.error;
-  if (result.status !== null) process.exit(result.status);
-  process.exit(1);
+  return result.status ?? 1;
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)
-) {
-  main();
-}
+if (isMainEntry(import.meta.url)) await runGate(main);
