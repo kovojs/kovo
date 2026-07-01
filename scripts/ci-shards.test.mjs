@@ -137,7 +137,24 @@ describe('ci-shards', () => {
       includeVitest('packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts'),
     ).toBe(false);
     expect(includeVitest('packages/create-kovo/src/index.build.runtime.test.ts')).toBe(false);
-    expect(includeVitest('packages/create-kovo/src/index.build.scaffold.test.ts')).toBe(false);
+    expect(
+      includeVitest('packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts'),
+    ).toBe(false);
+    expect(
+      includeVitest('packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts'),
+    ).toBe(false);
+    expect(
+      includeVitest('packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts'),
+    ).toBe(false);
+    expect(includeVitest('packages/create-kovo/src/index.build.scaffold.production.test.ts')).toBe(
+      false,
+    );
+    expect(includeVitest('packages/create-kovo/src/index.build.scaffold.sqlite.test.ts')).toBe(
+      false,
+    );
+    expect(includeVitest('packages/create-kovo/src/index.build.scaffold.typecheck.test.ts')).toBe(
+      false,
+    );
     expect(includeVitest('packages/core/src/sql-safety.test.ts')).toBe(false);
     expect(includeVitest('packages/server/src/guards.test.ts')).toBe(false);
   });

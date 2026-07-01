@@ -123,8 +123,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: scaffold
-            file: packages/create-kovo/src/index.build.scaffold.test.ts
+          - shard: scaffold-typecheck
+            file: packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
+          - shard: scaffold-sqlite
+            file: packages/create-kovo/src/index.build.scaffold.sqlite.test.ts
+          - shard: scaffold-production
+            file: packages/create-kovo/src/index.build.scaffold.production.test.ts
+          - shard: scaffold-packed-postgres
+            file: packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts
+          - shard: scaffold-packed-sqlite
+            file: packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts
+          - shard: scaffold-packed-runtime
+            file: packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts
           - shard: prod-artifact-contacts
             file: packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts
           - shard: prod-artifact-assets
