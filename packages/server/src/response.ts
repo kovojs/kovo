@@ -442,7 +442,10 @@ export function blessRedirectResponse<
 
 /** @internal Unwrap a redirect Location sink value or fail closed to `/` with a KV236 event. */
 export function redirectLocationHeaderValue(value: ResponseHeaderValue, blessed: boolean): string {
-  if (blessed) return Array.isArray(value) ? (value[0] ?? '/') : value;
+  if (blessed) {
+    const location = Array.isArray(value) ? (value[0] ?? '/') : value;
+    return sanitizeRedirectLocation(location);
+  }
   const text = Array.isArray(value) ? value.join(', ') : String(value);
   drainRuntimeSinkSecurityEvent({
     action: 'neutralize',

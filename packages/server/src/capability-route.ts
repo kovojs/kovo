@@ -142,7 +142,7 @@ export function drainCapabilityMintFacts(): readonly CapabilityMintFact[] {
  * (canonicalized) key segments, and the token in the `kovo-cap` query param.
  */
 function buildCapabilityUrl(basePath: string, key: string, token: string): string {
-  const base = basePath.replace(/\/+$/, '');
+  const base = normalizeCapabilityBasePath(basePath);
   const encodedKey = key.split('/').map(encodeURIComponent).join('/');
   return `${base}/${encodedKey}?${CAPABILITY_TOKEN_PARAM}=${encodeURIComponent(token)}`;
 }
@@ -162,7 +162,9 @@ export function createSignUrl(options: {
   oneTimeReplayStore?: boolean;
   now?: () => number;
 }): SignUrlContext {
-  const basePath = options.basePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH;
+  const basePath = normalizeCapabilityBasePath(
+    options.basePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
+  );
   return {
     async signUrl(signOptions: SignUrlOptions): Promise<SignedUrl> {
       // Canonicalize-before-sign: normalize the key the same way the storage adapters + the route
@@ -254,7 +256,12 @@ function downloadRejected(): Response {
  * traversal/odd-segment key throws there and is treated as a miss (fail closed, no read).
  */
 export function deriveDownloadKey(pathname: string, basePath: string): string | undefined {
-  const base = basePath.replace(/\/+$/, '');
+  let base: string;
+  try {
+    base = normalizeCapabilityBasePath(basePath);
+  } catch {
+    return undefined;
+  }
   if (pathname !== base && !pathname.startsWith(`${base}/`)) return undefined;
   const rest = pathname.slice(base.length).replace(/^\/+/, '');
   if (rest.length === 0) return undefined;
@@ -285,7 +292,9 @@ export function deriveDownloadKey(pathname: string, basePath: string): string | 
 export function createStorageDownloadEndpoint(
   options: StorageDownloadEndpointOptions,
 ): EndpointDeclaration<string, 'GET', 'prefix'> {
-  const basePath = options.basePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH;
+  const basePath = normalizeCapabilityBasePath(
+    options.basePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
+  );
 
   const handler = async (request: Request): Promise<Response> => {
     const method = request.method.toUpperCase();
@@ -393,7 +402,35 @@ export function createStorageDownloadEndpoint(
 }
 
 function capabilityRouteAudience(basePath: string): string {
-  return `storage-download:${basePath.replace(/\/+$/, '')}`;
+  return `storage-download:${normalizeCapabilityBasePath(basePath)}`;
+}
+
+function normalizeCapabilityBasePath(basePath: string): string {
+  const normalized = basePath.replace(/\/+$/, '');
+  if (
+    normalized.length === 0 ||
+    hasUrlControlCharacter(basePath) ||
+    !basePath.startsWith('/') ||
+    basePath.startsWith('//') ||
+    basePath.startsWith('/\\') ||
+    basePath.includes('\\') ||
+    basePath.includes('?') ||
+    basePath.includes('#')
+  ) {
+    throw new TypeError(
+      'Capability URL basePath must be a non-root same-origin absolute path without control ' +
+        'characters, query, hash, or backslashes (SPEC §6.6).',
+    );
+  }
+  return normalized;
+}
+
+function hasUrlControlCharacter(value: string): boolean {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code <= 0x1f || code === 0x7f) return true;
+  }
+  return false;
 }
 
 /** @internal */
