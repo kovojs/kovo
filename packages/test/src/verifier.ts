@@ -5,11 +5,7 @@ import {
   isSqlHandleLike,
   isSqlHandleProperty,
 } from '@kovojs/core/internal/sql-safety';
-import {
-  observeSqlEngineSideEffects,
-  observeSqlStatementArgument,
-  tableObservationSnapshots,
-} from './sql-observer.js';
+import { observeSqlEngineSideEffects, tableObservationSnapshots } from './sql-observer.js';
 import {
   assertObservedReadsCovered,
   assertObservedWritesCovered,
@@ -19,6 +15,7 @@ import {
 import {
   cachedMethod,
   createObservationRecorder,
+  observeSqlExecution,
   observableSqlMethod,
   observableTableMethod,
   type CachedMethod,
@@ -277,13 +274,22 @@ function observablePrepareMethod(
   return (statement: unknown, ...args: unknown[]) => {
     const prepared = value.call(target, statement, ...args);
     return typeof prepared === 'object' && prepared !== null
-      ? wrapPreparedSqlStatement(prepared, statement, config, recorder, proxyCache, methodCache)
+      ? wrapPreparedSqlStatement(
+          prepared,
+          target,
+          statement,
+          config,
+          recorder,
+          proxyCache,
+          methodCache,
+        )
       : prepared;
   };
 }
 
 function wrapPreparedSqlStatement<Statement extends object>(
   statementHandle: Statement,
+  executionTarget: object,
   statement: unknown,
   config: DbVerificationConfig,
   recorder: ObservationRecorder,
@@ -299,7 +305,7 @@ function wrapPreparedSqlStatement<Statement extends object>(
 
       if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
         return cachedMethod(target, prop, value, methodCache, () =>
-          observablePreparedSqlMethod(target, value, statement, config, recorder),
+          observablePreparedSqlMethod(executionTarget, target, value, statement, config, recorder),
         );
       }
 
@@ -314,6 +320,7 @@ function wrapPreparedSqlStatement<Statement extends object>(
 }
 
 function observablePreparedSqlMethod(
+  executionTarget: object,
   target: object,
   value: Function,
   statement: unknown,
@@ -321,8 +328,13 @@ function observablePreparedSqlMethod(
   recorder: ObservationRecorder,
 ): (...args: unknown[]) => unknown {
   return (...args: unknown[]) => {
-    observeSqlStatementArgument(statement, config, recorder);
-    return value.call(target, ...args);
+    return observeSqlExecution(
+      executionTarget,
+      statement,
+      () => value.call(target, ...args),
+      config,
+      recorder,
+    );
   };
 }
 

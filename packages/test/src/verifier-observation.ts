@@ -3,9 +3,11 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import {
   hasTableCountHandle,
   observeSqlEngineSideEffects,
+  observeSqlEngineSideEffectsSync,
   observeSqlStatementArgument,
   sqlStatementText,
   tableObservationSnapshots,
+  tableObservationSnapshotsSync,
 } from './sql-observer.js';
 
 /** @internal Verification config: which tables map to which domains/keys (SPEC.md §11). */
@@ -111,48 +113,58 @@ export function observableSqlMethod(
   recorder: ObservationRecorder,
 ): (statement: unknown, ...args: unknown[]) => unknown {
   return (statement: unknown, ...args: unknown[]) => {
-    const explicitOperations = observeSqlStatementArgument(statement, config, recorder);
-
-    // SPEC.md §11.2 meta-soundness (E1): the row-count backstop must be
-    // UNCONDITIONAL. Gating it behind a parsed write let unrecognized
-    // destructive writes (`TRUNCATE`/`MERGE`/`DELETE…USING`) that parse to no
-    // ops — and statements the parser rejects (fail-open `[]`) — slip past
-    // `assertCovered()` green. Always snapshot/compare configured table counts
-    // so any row delta the explicit parse missed is still recorded as a write.
-    //
-    // The count net only applies to the real async DB seam (a db exposing an
-    // asynchronous raw count query handle). When none is reachable — including
-    // every synchronous test double — run the call straight through so adapter
-    // results pass through unwrapped (SPEC.md §11.4): a synchronous db cannot be
-    // count-netted across the awaited before/after snapshot boundary.
-    if (!hasTableCountHandle(target, config.sqlDialect)) {
-      return value.call(target, statement, ...args);
-    }
-
-    const sql = sqlStatementText(statement);
-    // Snapshot before-counts fully (so the count queries are dispatched and
-    // executed before the mutating call), then run the statement and compare.
-    const before = tableObservationSnapshots(
+    return observeSqlExecution(
       target,
-      Object.keys(config.domainByTable),
-      config.sqlDialect,
+      statement,
+      () => value.call(target, statement, ...args),
+      config,
+      recorder,
     );
-    return Promise.resolve(before).then((counts) => {
-      if (counts.size === 0) return value.call(target, statement, ...args);
-
-      return Promise.resolve(value.call(target, statement, ...args)).then(async (result) => {
-        await observeSqlEngineSideEffects(
-          target,
-          sql,
-          config,
-          recorder,
-          explicitOperations,
-          counts,
-        );
-        return result;
-      });
-    });
   };
+}
+
+export function observeSqlExecution(
+  target: object,
+  statement: unknown,
+  execute: () => unknown,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+): unknown {
+  const explicitOperations = observeSqlStatementArgument(statement, config, recorder);
+  const sql = sqlStatementText(statement);
+
+  // SPEC.md §11.2 meta-soundness (E1): the row/fingerprint backstop is
+  // unconditional. Gating it behind a parsed write lets parser-rejected or
+  // unrecognized destructive statements slip past `assertCovered()` green.
+  const syncBefore = tableObservationSnapshotsSync(
+    target,
+    Object.keys(config.domainByTable),
+    config.sqlDialect,
+  );
+  if (syncBefore !== null) {
+    if (syncBefore.size === 0) return execute();
+    const result = execute();
+    observeSqlEngineSideEffectsSync(target, sql, config, recorder, explicitOperations, syncBefore);
+    return result;
+  }
+
+  if (!hasTableCountHandle(target, config.sqlDialect)) return execute();
+
+  // Snapshot before-counts fully (so the count queries are dispatched and
+  // executed before the mutating call), then run the statement and compare.
+  const before = tableObservationSnapshots(
+    target,
+    Object.keys(config.domainByTable),
+    config.sqlDialect,
+  );
+  return Promise.resolve(before).then((counts) => {
+    if (counts.size === 0) return execute();
+
+    return Promise.resolve(execute()).then(async (result) => {
+      await observeSqlEngineSideEffects(target, sql, config, recorder, explicitOperations, counts);
+      return result;
+    });
+  });
 }
 
 // Drizzle stores a table's SQL name on a well-known symbol; resolving it here

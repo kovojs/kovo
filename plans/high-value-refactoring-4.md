@@ -78,7 +78,7 @@ that removes the broader source of drift.
     stale shadow fields after the producer model evolves.
   - Verification: add a missing-provenance regression that fails closed; run `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/cli/src/index.kovo-check.test.ts`.
 
-- [ ] **P0.6 - Apply SQL side-effect observation to prepared statement execution.**
+- [x] **P0.6 - Apply SQL side-effect observation to prepared statement execution.**
   - Current signals: `packages/test/src/verifier-observation.ts` gives direct SQL execution unconditional
     side-effect snapshots, while prepared handle execution in `packages/test/src/verifier.ts` observes the
     statement argument but calls `.run()`/`.all()`/`.get()`/`.iterate()` through a separate path.
@@ -87,6 +87,7 @@ that removes the broader source of drift.
   - Risk reduced: parser-rejected prepared destructive writes, triggers, and fingerprint-changing effects
     cannot bypass the verifier row-count/fingerprint backstop that direct SQL gets.
   - Verification: add prepared unparseable write and trigger tests; run `pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts` passed with 4 files/37 tests after building the local `better-sqlite3` native binding; `pnpm run check:vp` and `git diff --check` passed.
 
 - [ ] **P0.7 - Centralize trusted request scheme provenance.**
   - Current signals: `packages/server/src/app-document.ts` treats `x-forwarded-proto: https` as enough to

@@ -91,6 +91,38 @@ export async function observeSqlEngineSideEffects(
     Object.keys(config.domainByTable),
     config.sqlDialect,
   );
+  recordSqlEngineSideEffects(statement, config, recorder, explicitOperations, before, after);
+}
+
+/** @internal Synchronous variant for better-sqlite3-style prepared execution. */
+export function observeSqlEngineSideEffectsSync(
+  target: object,
+  statement: string | undefined,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+  explicitOperations: readonly ObservedDbOperation[],
+  before: ReadonlyMap<string, TableObservationSnapshot>,
+): void {
+  if (!statement || before.size === 0) return;
+
+  const after = tableObservationSnapshotsSync(
+    target,
+    Object.keys(config.domainByTable),
+    config.sqlDialect,
+  );
+  if (after === null) return;
+
+  recordSqlEngineSideEffects(statement, config, recorder, explicitOperations, before, after);
+}
+
+function recordSqlEngineSideEffects(
+  statement: string,
+  config: DbVerificationConfig,
+  recorder: ObservationRecorder,
+  explicitOperations: readonly ObservedDbOperation[],
+  before: ReadonlyMap<string, TableObservationSnapshot>,
+  after: ReadonlyMap<string, TableObservationSnapshot>,
+): void {
   const explicitWriteTables = new Set(
     explicitOperations
       .filter((operation) => operation.kind === 'write')
@@ -136,6 +168,32 @@ export async function tableObservationSnapshots(
       const rows = resultRows(
         await query(`select * from ${quoteSqlIdentifier(table, sqlDialect)}`),
       );
+      snapshots.set(table, {
+        count: rows.length,
+        fingerprint: stableRowsFingerprint(rows),
+      });
+    } catch {
+      // Missing tables or adapter-specific snapshot failures should not block the user's query.
+    }
+  }
+  return snapshots;
+}
+
+/** @internal Synchronously snapshot configured table contents when supported by the adapter. */
+export function tableObservationSnapshotsSync(
+  target: object,
+  tables: readonly string[],
+  sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
+): ReadonlyMap<string, TableObservationSnapshot> | null {
+  const query = tableCountQuerySync(target, sqlDialect);
+  if (!query) return null;
+  const existing = existingTablesSync(query, sqlDialect);
+  if (!existing) return new Map();
+
+  const snapshots = new Map<string, TableObservationSnapshot>();
+  for (const table of tables.filter((name) => existing.has(unqualifiedTableName(name)))) {
+    try {
+      const rows = resultRows(query(`select * from ${quoteSqlIdentifier(table, sqlDialect)}`));
       snapshots.set(table, {
         count: rows.length,
         fingerprint: stableRowsFingerprint(rows),
@@ -241,8 +299,54 @@ function tableCountQuery(
   return null;
 }
 
+function tableCountQuerySync(
+  target: object,
+  sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
+): ((statement: string) => unknown) | null {
+  const record = target as Record<PropertyKey, unknown>;
+
+  if (typeof record.prepare === 'function') {
+    return (statement) => {
+      const prepared = (record.prepare as Function).call(target, statement);
+      if (typeof prepared !== 'object' || prepared === null) return [];
+      const all = (prepared as Record<PropertyKey, unknown>).all;
+      if (typeof all !== 'function') return [];
+      return all.call(prepared);
+    };
+  }
+
+  if (
+    sqlDialect === 'sqlite' &&
+    typeof record.query === 'function' &&
+    !isAsyncFunction(record.query)
+  ) {
+    return (statement) => (record.query as Function).call(target, statement);
+  }
+
+  return null;
+}
+
 function isAsyncFunction(value: unknown): value is Function {
   return typeof value === 'function' && value.constructor.name === 'AsyncFunction';
+}
+
+function existingTablesSync(
+  query: (statement: string) => unknown,
+  sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres',
+): ReadonlySet<string> | null {
+  try {
+    const rows = query(tableDiscoverySql(sqlDialect));
+    const column = sqlDialect === 'sqlite' ? 'name' : 'table_name';
+    return new Set(
+      resultRows(rows).flatMap((row): string[] => {
+        if (typeof row !== 'object' || row === null) return [];
+        const tableName = (row as Record<string, unknown>)[column];
+        return typeof tableName === 'string' ? [tableName] : [];
+      }),
+    );
+  } catch {
+    return null;
+  }
 }
 
 function tableDiscoverySql(sqlDialect: DbVerificationConfig['sqlDialect'] = 'postgres'): string {
