@@ -799,10 +799,10 @@ export interface QueryShapeReveal {
 
 /** @internal A metadata wrapper around a {@link QueryShape}. In-repo use only. */
 export type QueryShapeWrapper =
-  | {
-      kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
-      shape: QueryShape;
-    }
+  | QueryShapeUnaryWrapper<'nullable'>
+  | QueryShapeUnaryWrapper<'optional'>
+  | QueryShapeUnaryWrapper<'secret'>
+  | QueryShapeUnaryWrapper<'volatile-time'>
   | {
       kind: 'table-row';
       shape: QueryShape;
@@ -813,6 +813,11 @@ export type QueryShapeWrapper =
       reveal: QueryShapeReveal;
       shape: QueryShape;
     };
+
+type QueryShapeUnaryWrapper<Kind extends string> = {
+  kind: Kind;
+  shape: QueryShape;
+};
 
 /**
  * @internal A query-shape fact (query name, inferred {@link QueryShape}, source) threaded
@@ -913,25 +918,19 @@ function primitiveQueryShapeTypeExpr(shape: string): TypeExpr {
 
 function wrapperQueryShapeTypeExpr(shape: QueryShapeWrapper): TypeExpr {
   const inner = typeExprFromQueryShape(shape.shape);
-  switch (shape.kind) {
-    case 'nullable':
-      return unionTypeExpr([inner, { kind: 'reference', name: 'null' }]);
-    case 'optional':
-      return unionTypeExpr([inner, { kind: 'reference', name: 'undefined' }]);
-    case 'revealed':
-      return typeExprFromRevealedQueryShape(shape.shape);
-    case 'secret':
-      return {
-        args: [inner],
-        importPath: '@kovojs/core',
-        kind: 'import-generic',
-        name: 'Secret',
-      };
-    case 'table-row':
-      return inner;
-    case 'volatile-time':
-      return inner;
-  }
+  return foldQueryShapeWrapper(shape, {
+    nullable: () => unionTypeExpr([inner, { kind: 'reference', name: 'null' }]),
+    optional: () => unionTypeExpr([inner, { kind: 'reference', name: 'undefined' }]),
+    revealed: (wrapper) => typeExprFromRevealedQueryShape(wrapper.shape),
+    secret: () => ({
+      args: [inner],
+      importPath: '@kovojs/core',
+      kind: 'import-generic',
+      name: 'Secret',
+    }),
+    'table-row': () => inner,
+    'volatile-time': () => inner,
+  });
 }
 
 function typeExprFromRevealedQueryShape(shape: QueryShape): TypeExpr {
@@ -939,23 +938,22 @@ function typeExprFromRevealedQueryShape(shape: QueryShape): TypeExpr {
     return { item: typeExprFromRevealedQueryShape(shape[0] ?? 'object'), kind: 'array' };
   }
   if (isQueryShapeWrapper(shape)) {
-    switch (shape.kind) {
-      case 'nullable':
-        return unionTypeExpr([
-          typeExprFromRevealedQueryShape(shape.shape),
+    return foldQueryShapeWrapper(shape, {
+      nullable: (wrapper) =>
+        unionTypeExpr([
+          typeExprFromRevealedQueryShape(wrapper.shape),
           { kind: 'reference', name: 'null' },
-        ]);
-      case 'optional':
-        return unionTypeExpr([
-          typeExprFromRevealedQueryShape(shape.shape),
+        ]),
+      optional: (wrapper) =>
+        unionTypeExpr([
+          typeExprFromRevealedQueryShape(wrapper.shape),
           { kind: 'reference', name: 'undefined' },
-        ]);
-      case 'revealed':
-      case 'secret':
-      case 'table-row':
-      case 'volatile-time':
-        return typeExprFromRevealedQueryShape(shape.shape);
-    }
+        ]),
+      revealed: (wrapper) => typeExprFromRevealedQueryShape(wrapper.shape),
+      secret: (wrapper) => typeExprFromRevealedQueryShape(wrapper.shape),
+      'table-row': (wrapper) => typeExprFromRevealedQueryShape(wrapper.shape),
+      'volatile-time': (wrapper) => typeExprFromRevealedQueryShape(wrapper.shape),
+    });
   }
   if (typeof shape === 'object' && shape !== null) {
     const fields = Object.entries(shape)
@@ -972,6 +970,38 @@ function typeExprFromRevealedQueryShape(shape: QueryShape): TypeExpr {
     return { fields, kind: 'object' };
   }
   return typeExprFromQueryShape(shape);
+}
+
+type QueryShapeWrapperHandlers<Result> = {
+  readonly [Kind in QueryShapeWrapper['kind']]: (
+    shape: Extract<QueryShapeWrapper, { kind: Kind }>,
+  ) => Result;
+};
+
+function foldQueryShapeWrapper<Result>(
+  shape: QueryShapeWrapper,
+  handlers: QueryShapeWrapperHandlers<Result>,
+): Result {
+  switch (shape.kind) {
+    case 'nullable':
+      return handlers.nullable(shape);
+    case 'optional':
+      return handlers.optional(shape);
+    case 'revealed':
+      return handlers.revealed(shape);
+    case 'secret':
+      return handlers.secret(shape);
+    case 'table-row':
+      return handlers['table-row'](shape);
+    case 'volatile-time':
+      return handlers['volatile-time'](shape);
+    default:
+      return assertNever(shape, 'Unhandled QueryShapeWrapper kind');
+  }
+}
+
+function assertNever(value: never, context: string): never {
+  throw new Error(`${context}: ${JSON.stringify(value)}`);
 }
 
 function queryShapeTypeExprField(key: string, shape: QueryShape): TypeExprField {

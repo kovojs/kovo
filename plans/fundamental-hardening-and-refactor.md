@@ -227,11 +227,11 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
   - Extract `graph-input.ts` (`readGraphInput:73`, `discoverGraphInputPath:112`), `graph-args.ts` (after T3), and the
     ~35 pure `Fact→string` formatters (≈1300-3046) → `graph-explain-format.ts`; keep orchestration in graph-output.ts.
   - Evidence: `pnpm exec vitest --run packages/cli/src/graph-output.args.test.ts packages/cli/src/graph-input.test.ts packages/cli/src/graph-explain-format.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after moving graph input, argv parsing, and explain/check formatters out of `graph-output.ts`.
-- [ ] **C3 — Exhaustive fold for the two `QueryShapeWrapper` codegen switches.** (M · med)
-  - `types.ts:918` (`wrapperQueryShapeTypeExpr`) + `941-963` (`typeExprFromRevealedQueryShape`) enumerate the same
-    union with divergent arms; exhaustiveness is enforced in only one → a new kind ships a silent `.d.ts` gap. Extract
-    one `foldQueryShapeWrapper` with a `Record<kind,…>` handler; guard with `.d.ts` goldens.
-  - Gap: `packages/drizzle/src/types.ts`, `wrapperQueryShapeTypeExpr`, and `typeExprFromRevealedQueryShape` are absent on the current `2eef549be` base and integration branch, so this checkbox remains open pending plan correction or a later typegen surface.
+- [x] **C3 — Exhaustive fold for the two `QueryShapeWrapper` codegen switches.** (M · med)
+  - `packages/compiler/src/types.ts` (`wrapperQueryShapeTypeExpr` + `typeExprFromRevealedQueryShape`) enumerated the
+    same union with divergent arms; exhaustiveness was enforced in only one → a new kind could ship a silent `.d.ts`
+    gap. Extract one `foldQueryShapeWrapper` with a `Record<kind,…>` handler; guard with `.d.ts` goldens.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/query-bindings.test.ts`, `vp check packages/compiler/src/types.ts packages/compiler/src/query-bindings.test.ts`, and `git diff --check` passed after splitting `QueryShapeWrapper` into per-kind union members and routing both type expression paths through `foldQueryShapeWrapper`.
 - [x] **D4 — Add `assertNever` exhaustiveness to the Drizzle analyzer.** (M · low-med)
   - Zero exhaustiveness across ~20k lines. `PredicatePnf` (summaries.ts:3352, 6 kinds) is dispatched by ~9 partial
     if-chains (summaries.ts:537-552 silently returns `[]` for three kinds; :3772 handles only `eq`/`and`) → a new kind
