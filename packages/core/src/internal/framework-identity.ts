@@ -93,6 +93,10 @@ const declarationIndexCache = new WeakMap<
   TypeScript.SourceFile,
   WeakMap<TypeScript.Node, Map<string, readonly DeclarationIndexEntry[]>>
 >();
+const canonicalExpressionCache = new WeakMap<
+  TypeScript.SourceFile,
+  WeakMap<TypeScript.Expression, FrameworkExportIdentity | null>
+>();
 
 /** @internal */
 export function frameworkExport(
@@ -170,7 +174,17 @@ export function canonicalFrameworkExportForExpression(
   expression: TypeScript.Expression,
   options: FrameworkIdentityOptions = {},
 ): FrameworkExportIdentity | undefined {
-  return canonicalExpression(ts, sourceFile, expression, options, new Set(), 0);
+  if (options.legacyGlobals?.length) {
+    return canonicalExpression(ts, sourceFile, expression, options, new Set(), 0);
+  }
+
+  const cacheKey = unwrapExpression(ts, expression);
+  const cached = canonicalExpressionCache.get(sourceFile)?.get(cacheKey);
+  if (cached !== undefined) return cached ?? undefined;
+
+  const resolved = canonicalExpression(ts, sourceFile, cacheKey, options, new Set(), 0);
+  canonicalExpressionCacheForSource(sourceFile).set(cacheKey, resolved ?? null);
+  return resolved;
 }
 
 /** @internal Normalize an import/export module specifier plus imported name to a canonical export. */
@@ -452,11 +466,6 @@ function declarationIndexForContainer(
   };
 
   const visit = (node: TypeScript.Node): void => {
-    if (node !== container) {
-      const start = node.getStart(sourceFile);
-      if (start >= container.getEnd()) return;
-    }
-
     for (const declaration of namedDeclarations(ts, node)) add(declaration.name, declaration.node);
     if (
       node !== container &&
@@ -473,6 +482,17 @@ function declarationIndexForContainer(
   }
   sourceCache.set(container, index);
   return index;
+}
+
+function canonicalExpressionCacheForSource(
+  sourceFile: TypeScript.SourceFile,
+): WeakMap<TypeScript.Expression, FrameworkExportIdentity | null> {
+  let sourceCache = canonicalExpressionCache.get(sourceFile);
+  if (!sourceCache) {
+    sourceCache = new WeakMap();
+    canonicalExpressionCache.set(sourceFile, sourceCache);
+  }
+  return sourceCache;
 }
 
 function namedDeclarations(

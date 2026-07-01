@@ -125,14 +125,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: scaffold-install
+          - shard: scaffold-install-db
             files: >-
               packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
               packages/create-kovo/src/index.build.scaffold.sqlite.test.ts
+          - shard: scaffold-install-packed
+            files: >-
               packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts
               packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts
-          - shard: scaffold-production
-            files: packages/create-kovo/src/index.build.scaffold.production.test.ts
+          - shard: scaffold-production-assets
+            files: >-
+              packages/create-kovo/src/index.build.scaffold.production.test.ts
+              packages/create-kovo/src/index.build.prod-artifact.assets.test.ts
           - shard: prod-artifact-contacts
             files: packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts
           - shard: prod-artifact-durable-transactions
@@ -144,10 +148,9 @@ jobs:
             files: packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
           - shard: prod-artifact-security
             files: packages/create-kovo/src/index.build.prod-artifact.security.test.ts
-          - shard: runtime-supporting-contracts
+          - shard: packed-runtime-contracts
             files: >-
               packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts
-              packages/create-kovo/src/index.build.prod-artifact.assets.test.ts
               packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts
           - shard: runtime
             files: packages/create-kovo/src/index.build.runtime.test.ts
