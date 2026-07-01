@@ -34,6 +34,7 @@ import {
 
 import {
   COMPUTED_DRIZZLE_RECEIVER_METHOD,
+  RAW_SQL_WRITE_RECEIVER_SINK_METHODS,
   UNRESOLVED_READ_SOURCE_EXPRESSION,
   computedPropertyNameExpression,
   createProjectExtraction,
@@ -1123,7 +1124,7 @@ interface RawWriteDeclaration {
 }
 
 interface RawWriteSqlTrust {
-  hasExecute: boolean;
+  hasRawSqlSink: boolean;
   site?: string;
   trusted: boolean;
 }
@@ -1207,8 +1208,8 @@ function rawDomainWriteDeclarations(
       if (tables.length === 0) continue;
       const callback = writeActionCallbackFunction(property.initializer);
       if (!callback) continue;
-      const trust = rawExecuteTrustForCallback(callback, file);
-      if (!trust.hasExecute) continue;
+      const trust = rawWriteSqlTrustForCallback(callback, file);
+      if (!trust.hasRawSqlSink) continue;
       declarations.push({
         name: `${domainName.getText()}.${property.memberName}`,
         tables,
@@ -1231,8 +1232,8 @@ function rawMutationWriteDeclarations(
     if (tables.length === 0) return;
     const callback = mutationHandlerCallback(config);
     if (!callback) return;
-    const trust = rawExecuteTrustForCallback(callback, file);
-    if (!trust.hasExecute) return;
+    const trust = rawWriteSqlTrustForCallback(callback, file);
+    if (!trust.hasRawSqlSink) return;
     declarations.push({ name: key, tables, trust });
   });
 
@@ -1323,20 +1324,30 @@ function mutationHandlerCallback(config: ObjectLiteralExpression): Node | undefi
   return undefined;
 }
 
-function rawExecuteTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {
-  const executeCalls = callback
+function rawWriteSqlTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {
+  const rawSqlSinkCalls = callback
     .getDescendantsOfKind(SyntaxKind.CallExpression)
-    .filter((call) => directDrizzleReceiverCallSurface(call)?.name === 'execute');
-  const firstUntrusted = executeCalls.find((call) => !isTrustedSqlArgument(call));
-  const siteCall = firstUntrusted ?? executeCalls[0];
+    .filter((call) => {
+      const surface = directDrizzleReceiverCallSurface(call);
+      if (!surface || !RAW_SQL_WRITE_RECEIVER_SINK_METHODS.has(surface.name)) return false;
+      return rawSqlSinkReceiverCanCarrySql(call.getExpression());
+    });
+  const firstUntrusted = rawSqlSinkCalls.find((call) => !isTrustedSqlArgument(call));
+  const siteCall = firstUntrusted ?? rawSqlSinkCalls[0];
 
   return {
-    hasExecute: executeCalls.length > 0,
+    hasRawSqlSink: rawSqlSinkCalls.length > 0,
     ...(siteCall
       ? { site: `${file.fileName}:${lineForIndex(file.source, siteCall.getStart())}` }
       : {}),
-    trusted: executeCalls.length > 0 && !firstUntrusted,
+    trusted: rawSqlSinkCalls.length > 0 && !firstUntrusted,
   };
+}
+
+function rawSqlSinkReceiverCanCarrySql(expression: Node): boolean {
+  const receiver = staticAccessExpression(expression);
+  if (!receiver) return false;
+  return !Node.isCallExpression(unwrappedStaticExpressionNode(receiver));
 }
 
 function isTrustedSqlArgument(call: CallExpression): boolean {
