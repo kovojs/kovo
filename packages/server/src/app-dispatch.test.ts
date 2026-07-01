@@ -1,4 +1,5 @@
 import { createHmac } from 'node:crypto';
+import { trustedHtml } from '@kovojs/browser';
 import { hmacSignature } from '@kovojs/core';
 import { describe, expect, it } from 'vitest';
 
@@ -529,7 +530,7 @@ describe('server app matched dispatch boundary', () => {
       errorShells: {
         notFound() {
           return {
-            body: '<h1>Missing</h1>',
+            body: trustedHtml('<h1>Missing</h1>'),
             headers: { 'Content-Type': 'text/html; charset=utf-8' },
             status: 404,
           };

@@ -39,6 +39,7 @@ export type RouteResponseBody = ArrayBuffer | ReadableStream<Uint8Array> | Uint8
 
 export type WebResponseBody = RouteResponseBody | null;
 
+/** HTTP statuses Kovo route page responses may emit after route lifecycle resolution. */
 export type RouteResponseStatus = 200 | 303 | 304 | 403 | 404 | 422 | 429 | 500;
 
 export type DocumentRouteResponseBody = Exclude<RouteResponseBody, ArrayBuffer>;

@@ -39,7 +39,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.update().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses db.update().',
             severity: 'error',
             site: 'product.queries.ts:6',
           },

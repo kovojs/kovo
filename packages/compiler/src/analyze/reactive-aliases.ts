@@ -32,9 +32,19 @@ export function reactiveExpressionForJsxExpression(
   const referencedAliases = aliases.filter((alias) => expression.references.includes(alias.name));
   if (referencedAliases.some((alias) => alias.expression === undefined)) return null;
   if (aliases.length === 0) {
-    return expressionReferencesOnlyDeriveInputs(expression.expression, ['state'])
+    return referencesAreDeriveInputs(expression.references, ['state'])
       ? expression.expression
       : null;
+  }
+  const referencedAliasNames = new Set(referencedAliases.map((alias) => alias.name));
+  const remainingReferences = expression.references.filter(
+    (name) => !referencedAliasNames.has(name),
+  );
+  if (!referencesAreDeriveInputs(remainingReferences, ['state'])) return null;
+  if (
+    referencedAliases.some((alias) => !referencesAreDeriveInputs(alias.references ?? [], ['state']))
+  ) {
+    return null;
   }
 
   let expanded = expression.expression;
@@ -46,13 +56,14 @@ export function reactiveExpressionForJsxExpression(
       `(${alias.expression})`,
     );
   }
-  return expressionReferencesOnlyDeriveInputs(expanded, ['state']) ? expanded : null;
+  return expanded;
 }
 
 interface ReactiveAliasModel {
   accesses: readonly PropertyAccessPathModel[];
   expression?: string;
   name: string;
+  references?: readonly string[];
   start: number;
 }
 
@@ -97,6 +108,7 @@ function identifierConstReadAliasesForExpression(
       accesses,
       ...(aliasExpression ? { expression: aliasExpression } : {}),
       name,
+      ...(aliasExpression ? { references: referenceRootsForAccesses(accesses) } : {}),
       start: declaration.getStart(model.sourceFile),
     });
   }
@@ -266,6 +278,7 @@ function bindingPatternAliases(
         ],
         expression: resolvedExpression,
         name,
+        references: referenceRootsForAccessPath(initializerExpression.accessPath),
         start: element.getStart(sourceFile),
       });
       continue;
@@ -368,19 +381,23 @@ function canonicalExpressionForAccesses(
   return path ?? undefined;
 }
 
-function expressionReferencesOnlyDeriveInputs(
-  expression: string,
+function referencesAreDeriveInputs(
+  references: readonly string[],
   inputs: readonly string[],
 ): boolean {
-  const sourceFile = ts.createSourceFile(
-    'derive-expression.tsx',
-    `const __kovo_derive_value = (${expression});`,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
   const allowed = new Set([...inputs, ...safeGlobalIdentifiers]);
-  return identifierReferences(sourceFile).every((name) => allowed.has(name));
+  return references.every((name) => allowed.has(name));
+}
+
+function referenceRootsForAccesses(
+  accesses: readonly PropertyAccessPathModel[],
+): readonly string[] {
+  return [...new Set(accesses.flatMap((access) => referenceRootsForAccessPath(access.path)))];
+}
+
+function referenceRootsForAccessPath(path: string): readonly string[] {
+  const [root] = path.split(/[.[\]]/, 1);
+  return root ? [root] : [];
 }
 
 const safeGlobalIdentifiers = [

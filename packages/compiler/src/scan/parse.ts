@@ -2589,6 +2589,7 @@ function localConstAliasModels(
             accesses,
             expression: source.slice(start, end).trim(),
             name,
+            references: referenceIdentifiers(node.initializer),
             start: node.getStart(sourceFile),
           });
         }

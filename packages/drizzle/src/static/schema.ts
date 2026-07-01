@@ -342,7 +342,7 @@ function isUnresolvedDrizzleDatabaseTypeAlias(type: MorphType): boolean {
 }
 
 function isNullishType(type: MorphType): boolean {
-  const flags = type.compilerType.flags;
+  const flags = type.compilerType?.flags ?? 0;
   return (
     (flags & ts.TypeFlags.Null) !== 0 ||
     (flags & ts.TypeFlags.Undefined) !== 0 ||
@@ -1448,7 +1448,7 @@ function projectLocalPgEnumFactoryName(identifier: Node): string | undefined {
   const namespaceTableNames = projectNamespaceTableNamesByLocal(sourceFile, tableNamesBySymbol);
 
   for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
-    const symbolKey = resolvedSymbolKey(identifier.getSymbol());
+    const symbolKey = resolvedSymbolKey(symbolAtLocation(identifier));
     const tableName = tableNamesBySymbol.get(symbolKey ?? '');
     const tableShapes = tableName ? columnShapesByTable.get(tableName) : undefined;
     if (!tableName || !tableShapes) continue;
@@ -1486,6 +1486,14 @@ function projectLocalPgEnumFactoryName(identifier: Node): string | undefined {
   appendRelationColumnShapesForFile(shapes, sourceFile, tableNamesBySymbol, columnShapesByTable);
 
   return shapes;
+}
+
+function symbolAtLocation(node: Node): MorphSymbol | undefined {
+  try {
+    return node.getSymbol();
+  } catch {
+    return undefined;
+  }
 }
 
 function appendRelationColumnShapesForFile(

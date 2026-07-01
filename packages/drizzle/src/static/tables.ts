@@ -6,6 +6,7 @@ import {
   type ArrowFunction,
   type FunctionExpression,
   type SourceFile,
+  type Symbol as MorphSymbol,
 } from 'ts-morph';
 
 import {
@@ -449,7 +450,7 @@ function appendProjectReferencedTables(
 
   for (const identifier of sourceFile.getDescendantsOfKind(SyntaxKind.Identifier)) {
     const syntheticName = extraction.tableNamesBySymbol.get(
-      resolvedSymbolKey(identifier.getSymbol()) ?? '',
+      resolvedSymbolKey(symbolAtLocation(identifier)) ?? '',
     );
     const table = syntheticName ? tablesBySyntheticName.get(syntheticName) : undefined;
     if (syntheticName && table) appendTableEntries(tables, syntheticName, [table]);
@@ -461,6 +462,14 @@ function appendProjectReferencedTables(
 
   for (const access of sourceFile.getDescendantsOfKind(SyntaxKind.ElementAccessExpression)) {
     appendProjectNamespaceTableAccess(tables, access, namespaceTableNames, tablesBySyntheticName);
+  }
+}
+
+function symbolAtLocation(node: Node): MorphSymbol | undefined {
+  try {
+    return node.getSymbol();
+  } catch {
+    return undefined;
   }
 }
 

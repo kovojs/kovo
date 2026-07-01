@@ -1400,7 +1400,7 @@ describe('compiler diagnostic coverage matrix', () => {
         {
           "code": "KV426",
           "fileName": "trusted-html-provenance-bad.tsx",
-          "help": "Blocked reason: trustedHtml() is a pure brand that performs NO sanitization (SPEC §4.8); branding provably request- or query-derived data emits attacker-controlled bytes verbatim into a raw-HTML sink (stored/reflected XSS).
+          "help": "Blocked reason: trustedHtml() is a pure raw HTML escape that performs NO sanitization (SPEC §4.8); sending request/query-derived or unprovable data to it can emit attacker-controlled bytes verbatim.
       Fixes: render user/CMS content through safeRichHtml(value) (the sanitizing rich-HTML floor, exported from @kovojs/browser and @kovojs/server); pass a server-computed safe value; or, for a value you assert is not request/query data, use the audited escape trustedHtml(value, "<justification>") so it is surfaced in kovo explain --trust.
       SPEC §9.1 (sink renderer), §5.2 #10 (output safety), §4.8 (trustedHtml); KV236/KV426 family. Provenance is decided by AST symbol-identity over the request/query source set, modeled on KV438 (SPEC §11.1).
       Would lower to: a trust-audit row naming the escape hatch, source span, justification, and owning safe path or app review boundary.
@@ -1408,7 +1408,7 @@ describe('compiler diagnostic coverage matrix', () => {
       Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.
       SPEC §4.8 and §9.1 allow trust escape hatches only when they are explicit and auditable.",
           "length": 9,
-          "message": "Trust escape hatch lacks auditable provenance. trustedHtml() brands query-derived data without sanitization or an audited justification, so attacker-controlled bytes reach a raw-HTML sink.",
+          "message": "Trust escape hatch lacks auditable provenance. trustedHtml() sends query-derived data to a raw HTML sink without sanitization or an audited justification.",
           "severity": "error",
           "start": {
             "column": 47,
