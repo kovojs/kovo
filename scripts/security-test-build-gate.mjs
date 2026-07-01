@@ -43,7 +43,7 @@ export const SECURITY_BUILD_PROOFS = [
     code: 'KV426',
     proofFile: 'packages/cli/src/index.kovo-build.test.ts',
     sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
-    testName: 'resolves local trustedHtml barrels during production build preflight',
+    testName: 'resolves local trustedHtml/trustedUrl barrels during production build preflight',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
