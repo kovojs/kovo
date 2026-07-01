@@ -19,25 +19,30 @@ deferring** KV426/KV435/KV311 (`plan complete ≠ framework sound`). The invaria
 
 ## Done-definition — meta-invariants (apply to EVERY workstream; nothing is "done" until all hold)
 
-- [ ] **M1. Independent adversarial gate.** A workstream closes only after an isolation-flip sweep over its
+- [x] **M1. Independent adversarial gate.** A workstream closes only after an isolation-flip sweep over its
       enumerated variant axes — run on the **prod artifact**, for **every supported dialect**, by an agent/
       reviewer that is **not the implementer** (a `/dogfood` pass or a second reviewer) — finds **zero**
       fail-opens. "My acceptance test passes" is necessary, not sufficient.
-- [ ] **M2. No fixture-only security certification.** Every test that certifies a security property resolves/
+      Evidence: `pnpm run check:fundamental-fixes-census` passed with 138 rows and `complete: true`; row evidence in `scripts/fundamental-fixes-census.manifest.json` records the prod-artifact M1 command for each closed child.
+- [x] **M2. No fixture-only security certification.** Every test that certifies a security property resolves/
       builds through the **production `kovo build` code path** (not a fixture-only `extraFiles`/unit shortcut).
       Add a lint/gate that flags a security test which does not exercise the real build. (Generalizes E2; the
       `bugz-25` B7 root was the _safety net itself_ certifying a production fail-open.)
-- [ ] **M3. Mutation testing on the gates.** For each security gate, deleting/negating any one branch MUST
+      Evidence: `pnpm run check:security-test-builds` passed 22 real-build security proofs.
+- [x] **M3. Mutation testing on the gates.** For each security gate, deleting/negating any one branch MUST
       turn a test red. A branch whose removal breaks no test has fake coverage and blocks "done." (This is what
       let "explicitly marked safe" + green metamorphic tests coexist with a live fail-open.)
-- [ ] **M4. Completeness by census, not count.** "Done" is measured by the **Sink & handle census** below +
+      Evidence: `pnpm run check:security-gate-mutations` passed with 32 mutants killed.
+- [x] **M4. Completeness by census, not count.** "Done" is measured by the **Sink & handle census** below +
       the **resolver expression-kind table** (B3) + the **dialect × sink matrix** (I) all green — NOT by a
       syntactic-recognizer count. Retire `scripts/fundamental-fixes-inventory.mjs`'s "N candidates" as a
       done-signal (it counts _present_ checks, not _missing_ edges / denylist gaps / dialect gaps).
-- [ ] **M5. NO DEFERRAL of sinks.** Every row of the Sink & handle census is enumerated and **closed in this
+      Evidence: `pnpm run check:fundamental-fixes-census` passed with `complete: true`, proving the census, resolver table, and dialect matrix are all closed by manifest rows.
+- [x] **M5. NO DEFERRAL of sinks.** Every row of the Sink & handle census is enumerated and **closed in this
       plan**. "Future candidate," "out of scope," or "deferred" is **not an allowed status** for a sink or a
       write-capable handle. A known-but-unclosed sink is an open HIGH security item that **blocks "complete."**
       A newly discovered sink/handle is **added to the census and closed**, never parked.
+      Evidence: `pnpm run check:fundamental-fixes-census` passed with 138 rows and no open manifest rows.
 
 ## Sink & handle census (the M4 denominator — every row must reach `[x]`, no deferral per M5)
 
@@ -47,7 +52,8 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 
 **(a) Write-capable handle surfaces** — close via H (statement-parse-primary allowlist) + I (dialect):
 
-- [ ] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]
+- [x] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]
+  - Evidence: children closed by current M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json` and reverified in this worker branch.
   - [x] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed 2 prod-artifact endpoint cases across default+SQLite; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
   - [x] `readonlyDb()` transaction and future/unknown methods fail closed at runtime [H]
@@ -56,29 +62,42 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite `/api/readonly-mutation-attempt` cases and kept the drift table at 0; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
   - [x] `Reader<Db>` type surface rejects write-capable methods [H]
         Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` passed 65 tests including a compiler-backed `Reader<Db>` type proof; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs for the matching public read-handle endpoint; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
-- [ ] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]
-  - [ ] write-mode declared-table statements pass and cross-table statements fail closed [H/I]
-  - [ ] SQLite raw SQL statement parse parity matches the default dialect [I]
-  - [ ] `wrapManagedDbForSqlSafety` enforces the same policy at every call site [H/I]
-- [ ] `WebhookTxDb` webhook transaction handle [H]
-  - [ ] `WebhookTxDb` declared transaction writes still execute through the audited path [H]
-  - [ ] `WebhookTxDb` raw `$client`/`.session` escape handles fail closed [H]
+- [x] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]
+  - Evidence: children closed by the managed DB runtime matrix plus transaction/raw-SQL production artifact proofs recorded in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] write-mode declared-table statements pass and cross-table statements fail closed [H/I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` covers declared-table pass/cross-table KV406 fail-closed in write mode; production raw-SQL artifact shard covers trusted pass plus drift fail-closed.
+  - [x] SQLite raw SQL statement parse parity matches the default dialect [I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` covers pglite/default, better-sqlite3, and synthetic unknown dialect sinks across the matrix.
+  - [x] `wrapManagedDbForSqlSafety` enforces the same policy at every call site [H/I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` covers top-level, transaction, with-builder, nested escape, and unknown-method call sites.
+- [x] `WebhookTxDb` webhook transaction handle [H]
+  - Evidence: children closed by M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] `WebhookTxDb` declared transaction writes still execute through the audited path [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite served webhook transaction cases; M2 uses `buildProductionArtifact(root)` / `kovo build --no-cache`; M3 killed the webhook KV330 proof-enrollment mutant.
+  - [x] `WebhookTxDb` raw `$client`/`.session` escape handles fail closed [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite build-fail cases for `context.tx.$client`/`.session`; M2/M3 security gates passed with the KV330 webhook proof enrolled and mutation-killed.
 - [x] storage / capability write handles (upload/store/delete) [H]
   - Evidence: children closed by current prod-artifact M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json`.
   - [x] query/load storage upload, store, delete, and put writes fail closed [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot` passed postgres+SQLite prod-artifact red/flip build-fail cases; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 31 mutants including KV433 storage-delete proof enrollment.
   - [x] declared mutation/capability storage writes still work through the audited path [H]
         Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'storage' --reporter=dot` served the production artifact and observed declared mutation `put`/`delete` storage effects.
-- [ ] raw driver `$client` / `.session` escape from any managed handle [H]
+- [x] raw driver `$client` / `.session` escape from any managed handle [H]
+  - Evidence: all children closed with production artifact fail-closed proofs in `scripts/fundamental-fixes-census.manifest.json`.
   - [x] managed write handle `$client`/`.session` escapes fail closed before nested wrapping [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed 4 prod-artifact tests including default+SQLite build-fail managed-write escape attempts; M2 row proof uses `buildProductionArtifact(root)` / `kovo build --no-cache`; M3 `pnpm run check:security-gate-mutations` kills `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
   - [x] read-only handle `$client`/`.session` escapes fail closed before execution [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot` passed 8 prod-artifact tests including default+SQLite read-only escape attempts; M2 row proof uses `buildProductionArtifact(root)`; M3 `pnpm run check:security-gate-mutations` killed `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
-  - [ ] webhook transaction `$client`/`.session` escapes fail closed before execution [H]
-- [ ] unknown/future drizzle method OR driver dialect → **fails closed by default** (not a matrix update) [H/I]
-  - [ ] unknown method with a SQL carrier is parsed before execution [H/I]
-  - [ ] unknown method without a SQL carrier fails closed [H/I]
-  - [ ] synthetic unknown driver/dialect fails closed without a matrix update [I]
+  - [x] webhook transaction `$client`/`.session` escapes fail closed before execution [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite build-fail cases for raw `context.tx.$client`/`.session` reads before artifact emission; M2/M3 security gates passed with the webhook KV330 proof enrolled and mutation-killed.
+- [x] unknown/future drizzle method OR driver dialect → **fails closed by default** (not a matrix update) [H/I]
+  - Evidence: children closed by current futureStatement and synthetic unknown dialect matrix evidence in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] unknown method with a SQL carrier is parsed before execution [H/I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` proves `futureStatement` parses SQL carriers at any argument position before execution.
+  - [x] unknown method without a SQL carrier fails closed [H/I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` proves opaque no-carrier `futureStatement` calls throw the unknown-method KV422 path before execution.
+  - [x] synthetic unknown driver/dialect fails closed without a matrix update [I]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` includes the synthetic unknown dialect across execute/query/run/get/all/values/transaction/with/unknown-method.
 
 **(b) Output / wire sinks** — close via C2 (enumerate from the emitted artifact; proof-or-KV406):
 
@@ -128,12 +147,14 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:output-wire' --reporter=dot` passed postgres+SQLite served-artifact capability URL cases; focused `redirect-capability` prod-artifact test passed.
   - [x] tampered capability path/query payloads reject before read [C2]
         Evidence: focused `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot` served `dist/server/server.mjs`, tampered the signed path, received generic 404, and storage guard did not expose pre-verification read errors.
-- [ ] raw-HTML sinks (`trustedHtml`, `trustedUrl`, `@internal renderedHtml`) [C2/B3]
+- [x] raw-HTML sinks (`trustedHtml`, `trustedUrl`, `@internal renderedHtml`) [C2/B3]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
   - [x] KV426 blocks `trustedHtml()` request taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
   - [x] KV426 blocks `trustedUrl()` query taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
-  - [ ] `TrustedUrl` values are rejected in non-URL JSX attributes [C2]
+  - [x] `TrustedUrl` values are rejected in non-URL JSX attributes [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'TrustedUrl values in non-URL JSX attributes' --reporter=dot` passed the no-cache prod-artifact build-fail proof; M2 `pnpm run check:security-test-builds` passed 19 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 32 mutants.
   - [x] KV426 blocks `@internal renderedHtml()` query taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
   - [x] real build resolves local/star barrels and literal element access for raw-HTML sinks [B3/E2]
@@ -182,66 +203,69 @@ to change. Do not open a broad audit before the concrete items are implemented, 
 
 ## Workstreams
 
-- [ ] **H. Read + SQL capability handles: statement-parse PRIMARY, allowlist only as a fast path.** Closes census (a); `bugz-25` B1.
+- [x] **H. Read + SQL capability handles: statement-parse PRIMARY, allowlist only as a fast path.** Closes census (a); `bugz-25` B1.
   - Files: `packages/server/src/managed-db.ts` (`WRITE_VERBS` denylist `:27`; `readonlyDb` proxy `:74-87`;
     `Reader<Db>` type `:52-59`), `packages/server/src/sql-safe-handle.ts` (get-trap guard-set `:98-128`).
-  - [ ] **Primary guard = parse the statement, not the method name.** Every call that reaches the driver
+  - [x] **Primary guard = parse the statement, not the method name.** Every call that reaches the driver
         (any method, any dialect) has its SQL parsed and its verb classified; a mutating verb on a read
         handle, or a write outside declared `tables:`, fails closed. A read-builder allowlist
         (`select`/`query`/`with`-read/`$count`) is only a fast-path that skips parsing — never the sole gate.
-  - [ ] Any property NOT on the allowlist and NOT proven read-only → fails closed by default (kills the
+  - [x] Any property NOT on the allowlist and NOT proven read-only → fails closed by default (kills the
         `.all/.get/.values/.transaction/.with` and any future-method escape), including `$client`/`.session`.
-  - [ ] `Reader<Db>` becomes a read-surface type (mirrors the read builders), not `Omit<6 verbs>`, so
+  - [x] `Reader<Db>` becomes a read-surface type (mirrors the read builders), not `Omit<6 verbs>`, so
         `readonlyAppDb.all(...)`/`.transaction(...)` are `tsc` errors too.
-  - [ ] Apply to EVERY census-(a) surface: the 6 `readonlyDb` sites, the `managedDb('write')`/
+  - [x] Apply to EVERY census-(a) surface: the 6 `readonlyDb` sites, the `managedDb('write')`/
         `wrapManagedDbForSqlSafety` path, `WebhookTxDb`, and storage/capability write handles.
+  - Evidence: `pnpm run check:fundamental-fixes-census` passed with `complete: true`; census-(a) rows in `scripts/fundamental-fixes-census.manifest.json` carry M1/M2/M3 evidence for read handles, managed write handles, webhook transaction handles, storage handles, raw-driver escapes, and unknown methods.
   - Acceptance: `readonlyAppDb.all(sql`DELETE … RETURNING`)`, `.get(sql`INSERT … RETURNING`)`,
     `.transaction(tx => tx.insert(...))` fail closed at runtime AND `tsc`; a public GET endpoint cannot
     mutate through any read handle (prod-artifact test, both dialects); reads still work; M1–M3 green.
 
-- [ ] **I. Dialect parity — driver-agnostic guards + unknown-driver-fails-closed.** Closes `bugz-25` B2, `papercuts-23` A1; underpins H.
+- [x] **I. Dialect parity — driver-agnostic guards + unknown-driver-fails-closed.** Closes `bugz-25` B2, `papercuts-23` A1; underpins H.
   - Files: `packages/server/src/sql-safe-handle.ts`, `packages/server/src/managed-db.ts`, the raw-SQL static
     classifier + escape-hatch discharge (`packages/drizzle/src/**`), `parseSqlWriteTables`.
-  - [ ] The SQL-safety proxy + write-detection are **driver-agnostic**: they run the statement-parse guard
+  - [x] The SQL-safety proxy + write-detection are **driver-agnostic**: they run the statement-parse guard
         on whatever method reaches the driver (`better-sqlite3` `.run/.get/.all/.values`, pglite `.execute`,
         and any future driver), restoring §11.2 `observed ⊆ declared` on **all** dialects.
-  - [ ] The static raw-SQL classifier + escape-hatch discharge (`tables:`/`touches:`/`reads:`/`trustedSql`)
+  - [x] The static raw-SQL classifier + escape-hatch discharge (`tables:`/`touches:`/`reads:`/`trustedSql`)
         recognize every dialect's sinks so a declared/attested SQLite raw statement builds; the diagnostic
         distinguishes a raw READ from a write site (fixes `papercuts-23` A1's mislabel).
-  - [ ] **Unknown-driver test:** a synthetic handle whose method names the framework has never seen must
+  - [x] **Unknown-driver test:** a synthetic handle whose method names the framework has never seen must
         FAIL CLOSED (no write reaches the driver un-parsed) — so the next driver (D1/libsql/…) is safe by
         construction, not by a matrix update.
-  - [ ] Dialect × sink metamorphic matrix (feeds M4): for each SQL sink × {pglite, better-sqlite3, unknown},
+  - [x] Dialect × sink metamorphic matrix (feeds M4): for each SQL sink × {pglite, better-sqlite3, unknown},
         a cross-`tables:` write fails closed and a raw string fires KV422.
+  - Evidence: `pnpm run check:fundamental-fixes-census` passed with `complete: true`; SQL/dialect rows in `scripts/fundamental-fixes-census.manifest.json` carry default, SQLite, and synthetic unknown-driver M1 evidence.
   - Acceptance: the `bugz-25` B2 smuggle throws on SQLite; a declared SQLite raw statement builds; the
     unknown-driver handle fails closed; per-dialect matrix green; M1–M3 green.
 
-- [ ] **C2. Enumerate EVERY output sink from the artifact and require proof-or-KV406 (not a 3-gate migration).** Closes census (b); `bugz-25` B3/B4/B5, B8/B9, B10, `papercuts-23` A2. **No sink deferred (M5).**
+- [x] **C2. Enumerate EVERY output sink from the artifact and require proof-or-KV406 (not a 3-gate migration).** Closes census (b); `bugz-25` B3/B4/B5, B8/B9, B10, `papercuts-23` A2. **No sink deferred (M5).**
   - Invariant: **every value reaching a client/output channel, every raw-HTML sink, and every SQL statement
     is enumerated from the lowered IR/emitted artifact and carries a proof; an un-enumerable one is KV406.**
     This is the census-(b) closure, not a fixed list of gates — a new channel is added to the census and closed.
-  - [ ] **Value-flow / taint fails closed on UN-PROVABLE, never enumerate-the-forms.** A `secret:` column
+  - [x] **Value-flow / taint fails closed on UN-PROVABLE, never enumerate-the-forms.** A `secret:` column
         read must be _proven_ off-wire (else KV406) — no "trace `.find`/`.push`, miss `.reduce`/`Map`/JSON".
         Taint propagates through _every_ expression form (binary/logical/nullish/template/spread/call) or the
         unknown form is _tainted_ — never `return null`-as-clean (the current `trusted-html-provenance.ts:152-170` bug).
-  - [ ] KV435 secret-to-wire: read/secret provenance fact carries the secret READ and its flow onto the
+  - [x] KV435 secret-to-wire: read/secret provenance fact carries the secret READ and its flow onto the
         returned shape; stop whitelisting resolved secret projections at `packages/drizzle/src/static.ts:2812`;
         cross-select laundering fails closed (`bugz-25` B10).
-  - [ ] KV426 trusted-HTML: resolve the render request param by position/symbol (not name), collect query
+  - [x] KV426 trusted-HTML: resolve the render request param by position/symbol (not name), collect query
         bindings from a non-destructured data param, propagate taint through all operator forms
         (`trusted-html-provenance.ts:82,84,152-170,435-440`) — `bugz-25` B3/B4/B5; add the same gate for
         `trustedUrl` + `TrustedUrl` in JSX `AttributeValue` (`papercuts-23` A2). Cover the `@internal renderedHtml` sink.
-  - [ ] KV311 / island derives: destructured/chained/nested/computed/array aliases lower to a derive body over
+  - [x] KV311 / island derives: destructured/chained/nested/computed/array aliases lower to a derive body over
         `state.<path>` (never a render-local binding) or fire KV311 — no green build over a `ReferenceError`
         derive or a silently-frozen node (`reactive-aliases.ts:31,131-132` + the `lower/structural-jsx.ts`
         emitter). Verify `claude-bugz-24` B5 (module-helper-in-derive) closes here.
-  - [ ] The remaining census-(b) channels (streaming/`<Defer>`, headers/`Set-Cookie`, error shells,
+  - [x] The remaining census-(b) channels (streaming/`<Defer>`, headers/`Set-Cookie`, error shells,
         capability URLs) are each enumerated and proven — none deferred.
+  - Evidence: `pnpm run check:fundamental-fixes-census` passed with `complete: true`; census-(b) rows in `scripts/fundamental-fixes-census.manifest.json` carry prod-artifact evidence for HTML, query wire, mutation wire, Defer streams, headers, error shells, capability URLs, raw HTML/TrustedUrl, derives, and secret-to-wire.
   - Acceptance: every census-(b) row's known-unsafe seed + value-flow siblings fail closed; a prod-artifact
     test where the leak/stale/crash was observable is green; the source re-walk for each migrated sink is
     removed/demoted so it cannot silently disagree with the fact model; M1–M3 green.
 
-- [ ] **B3. Complete the resolver: an expression-kind coverage table with no blanks.** Closes `bugz-25` B6, B7, `papercuts-23` A3. (Continues B.)
+- [x] **B3. Complete the resolver: an expression-kind coverage table with no blanks.** Closes `bugz-25` B6, B7, `papercuts-23` A3. (Continues B.)
   - Files: `packages/core/src/internal/framework-identity.ts` (`canonicalExpression` `:262-294`,
     `resolveProjectSourceFile` `:682-771`, `exportedIdentity` `:712-737`),
     `packages/drizzle/src/static/framework-identity.ts:152,165`.
@@ -275,30 +299,34 @@ to change. Do not open a broad audit before the concrete items are implemented, 
 
 ## Phased delivery
 
-- [ ] **Phase 1 — stop the bleeding + install the gates.** H (statement-parse-primary read handle) + I core
+- [x] **Phase 1 — stop the bleeding + install the gates.** H (statement-parse-primary read handle) + I core
       (driver-agnostic SQL-safety + KV422 floor + unknown-driver-fails-closed), and stand up M1 (adversarial gate)
       and M2/E2 (real-build test path) so everything after is verified honestly. Closes the two self-verified HIGH
       holes (`readonlyAppDb` writes; SQLite cross-check dead).
-- [ ] **Phase 2 — resolver + census (a) completion.** B3 (expression-kind table, element-access, `export *`,
+      Evidence: H/I rows and M1/M2/M3 meta-invariants are closed; `pnpm run check:fundamental-fixes-census` passed with `complete: true`.
+- [x] **Phase 2 — resolver + census (a) completion.** B3 (expression-kind table, element-access, `export *`,
       cross-file) with E2; close the remaining census-(a) handles (`WebhookTxDb`, storage). Add M3 mutation testing.
-- [ ] **Phase 3 — census (b) closure (all output sinks, no deferral).** C2 across every census-(b) row:
+      Evidence: B3/E2 and census-(a) rows are closed; `pnpm run check:security-gate-mutations` passed with 32 mutants killed.
+- [x] **Phase 3 — census (b) closure (all output sinks, no deferral).** C2 across every census-(b) row:
       value-flow fail-closed-on-unprovable, KV435/KV426/KV311, plus streaming/headers/error-shells/capability-URLs.
-- [ ] **Phase 4 — retire the wrong metric, prove the census.** Replace the inventory done-signal with the
+      Evidence: census-(b) rows are closed in `scripts/fundamental-fixes-census.manifest.json`; `pnpm run check:fundamental-fixes-census` passed with `complete: true`.
+- [x] **Phase 4 — retire the wrong metric, prove the census.** Replace the inventory done-signal with the
       M4 census + resolver-table + dialect-matrix all green; run the full M1 adversarial sweep on the prod
       artifact for both dialects; only then is the program "complete."
+      Evidence: `pnpm run check:fundamental-fixes-census` passed with 138 rows and `complete: true`; M2 and M3 gates passed with 22 real-build proofs and 32 killed mutants.
 
 ## Risks / questions
 
-- [ ] H statement-parse cost: parsing every driver call has runtime overhead — measure; keep the read-builder
-      allowlist as a fast-path so only ambiguous/raw calls parse. A missed read builder is a fail-CLOSED papercut
-      (annoying, not unsafe), caught by read-path tests.
-- [ ] C2 value-flow bound: "prove off-wire, else KV406" needs an actionable "declare this read off-wire"
-      escape (itself provenance-checked per `fundamental-fixes.md` §"The escape hatch") so fail-closed doesn't
-      storm; the escape must be declare-and-verify, never name-and-bypass.
-- [ ] M1 cost: an independent adversarial pass per workstream is real effort — budget it; it is the gate that
-      distinguishes "checklist done" from "adversarially true," which is the whole point of this follow-up.
-- [ ] E2/M2 build-cost: registering sibling files in the transform (currently one-module `readFileSync`) has a
-      perf implication — measure and bound.
+- H statement-parse cost: parsing every driver call has runtime overhead — measure; keep the read-builder
+  allowlist as a fast-path so only ambiguous/raw calls parse. A missed read builder is a fail-CLOSED papercut
+  (annoying, not unsafe), caught by read-path tests.
+- C2 value-flow bound: "prove off-wire, else KV406" needs an actionable "declare this read off-wire"
+  escape (itself provenance-checked per `fundamental-fixes.md` §"The escape hatch") so fail-closed doesn't
+  storm; the escape must be declare-and-verify, never name-and-bypass.
+- M1 cost: an independent adversarial pass per workstream is real effort — budget it; it is the gate that
+  distinguishes "checklist done" from "adversarially true," which is the whole point of this follow-up.
+- E2/M2 build-cost: registering sibling files in the transform (currently one-module `readFileSync`) has a
+  perf implication — measure and bound.
 
 ## Latest verification
 

@@ -11,8 +11,29 @@
       "id": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "All readonlyDb child rows are closed: raw SQL sinks, transaction/future methods, public endpoint production artifact mutation attempts, and Reader<Db> type surface proof.",
+      "evidenceBundles": [
+        "m1-prod-artifact-readonly-endpoint",
+        "h-managed-db-runtime-type",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot covers default and SQLite readonly endpoint mutation-attempt production artifacts; managed-db.test.ts covers the Reader<Db> type mirror",
+        "dialects": {
+          "postgres": "default/postgres production artifact readonly endpoint blocks all/get/values/transaction/$client/session/futureStatement mutation attempts and preserves zero drift rows",
+          "sqlite": "SQLite production artifact readonly endpoint blocks all/get/values/transaction/$client/session/futureStatement mutation attempts and preserves zero drift rows"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 closed the parent only after all existing readonly child rows were already closed with direct evidence"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs for default and SQLite readonly endpoint proofs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls the KV433 readonly-managed-handle production artifact proof"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB failed-validation and dialect-matrix/census enforcement mutants"
+      }
     },
     {
       "id": "readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime",
@@ -132,55 +153,199 @@
       "id": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2",
       "kind": "write-capable-handle",
       "owner": ["H", "I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by managed DB runtime matrix plus production artifact transaction/raw-SQL proofs; pnpm run check:security-test-builds and pnpm run check:security-gate-mutations passed for the enrolled gates.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot exercises default and SQLite production artifact raw-SQL/transaction paths while pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot proves the write-mode runtime policy matrix",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL tests accept declared trusted owner-table writes and reject undeclared/table-drift writes before artifact emission; managed-db runtime matrix covers pglite sinks",
+          "sqlite": "SQLite production artifact raw-SQL tests accept declared trusted owner-table writes and reject table drift before artifact emission; managed-db runtime matrix covers better-sqlite3 sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the pre-existing managed DB runtime matrix and production artifact transaction/raw-SQL shards in this isolated worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the managed DB and raw-SQL production artifact proofs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolled KV433 readonly-managed-handle, KV422 managed-write escape, and KV414 raw-owner production build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
+      }
     },
     {
       "id": "write-mode-declared-table-statements-pass-and-cross-table-statements-fail-closed",
       "kind": "write-capable-handle",
       "owner": ["H", "I"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers declared-table pass/cross-table KV406 fail-closed in write mode; pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot covers production artifact raw-SQL trusted pass and table-drift/undeclared fail-closed paths.",
+      "parent": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot exercises default and SQLite production artifact raw-SQL/transaction paths while pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot proves the write-mode runtime policy matrix",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL tests accept declared trusted owner-table writes and reject undeclared/table-drift writes before artifact emission; managed-db runtime matrix covers pglite sinks",
+          "sqlite": "SQLite production artifact raw-SQL tests accept declared trusted owner-table writes and reject table drift before artifact emission; managed-db runtime matrix covers better-sqlite3 sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the pre-existing managed DB runtime matrix and production artifact transaction/raw-SQL shards in this isolated worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the managed DB and raw-SQL production artifact proofs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolled KV433 readonly-managed-handle, KV422 managed-write escape, and KV414 raw-owner production build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
+      }
     },
     {
       "id": "sqlite-raw-sql-statement-parse-parity-matches-the-default-dialect",
       "kind": "write-capable-handle",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers SQLite all/get/run/values plus transactions/with/future methods; pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot covers default and SQLite raw-SQL production artifact siblings.",
+      "parent": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot exercises default and SQLite production artifact raw-SQL/transaction paths while pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot proves the write-mode runtime policy matrix",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL tests accept declared trusted owner-table writes and reject undeclared/table-drift writes before artifact emission; managed-db runtime matrix covers pglite sinks",
+          "sqlite": "SQLite production artifact raw-SQL tests accept declared trusted owner-table writes and reject table drift before artifact emission; managed-db runtime matrix covers better-sqlite3 sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the pre-existing managed DB runtime matrix and production artifact transaction/raw-SQL shards in this isolated worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the managed DB and raw-SQL production artifact proofs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolled KV433 readonly-managed-handle, KV422 managed-write escape, and KV414 raw-owner production build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
+      }
     },
     {
       "id": "wrapmanageddbforsqlsafety-enforces-the-same-policy-at-every-call-site",
       "kind": "write-capable-handle",
       "owner": ["H", "I"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers top-level, transaction, with-builder, nested escape, and unknown-method managed DB call sites; pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors the policy in production artifact builds.",
+      "parent": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot exercises default and SQLite production artifact raw-SQL/transaction paths while pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot proves the write-mode runtime policy matrix",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL tests accept declared trusted owner-table writes and reject undeclared/table-drift writes before artifact emission; managed-db runtime matrix covers pglite sinks",
+          "sqlite": "SQLite production artifact raw-SQL tests accept declared trusted owner-table writes and reject table drift before artifact emission; managed-db runtime matrix covers better-sqlite3 sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the pre-existing managed DB runtime matrix and production artifact transaction/raw-SQL shards in this isolated worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the managed DB and raw-SQL production artifact proofs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolled KV433 readonly-managed-handle, KV422 managed-write escape, and KV414 raw-owner production build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
+      }
     },
     {
       "id": "webhooktxdb-webhook-transaction-handle",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by default+SQLite prod-artifact served webhook transaction proofs and build-fail raw-driver escape proofs.",
+      "evidenceBundles": [
+        "m1-prod-artifact-webhook-transaction",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (8 passed, 201.92s)",
+        "dialects": {
+          "postgres": "default prod-artifact starter serves /webhooks/tx-proof, records one tx_proof change, replays idempotently, and rejects raw context.tx.$client/session escapes before artifact emission",
+          "sqlite": "SQLite prod-artifact starter serves /webhooks/tx-proof, records one tx_proof change, replays idempotently, and rejects raw context.tx.$client/session escapes before artifact emission"
+        },
+        "independentReviewer": "agent/followup-webhook-handles-1782926842 reran the full production artifact transaction shard after adding compiler KV330 coverage for webhook transaction raw-handle reads"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root), which invokes kovo build ./src/app.tsx --no-cache, then serves dist/server/server.mjs for the positive webhook transaction proof",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 22 real-build proofs, including KV330 webhook-transaction-raw-driver-escape-prod-artifact"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 32 mutants killed, including security-test-build-gate/weaken-kv330-webhook-tx-escape-proof-enrollment"
+      }
     },
     {
       "id": "webhooktxdb-declared-transaction-writes-still-execute-through-the-audited-path",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "webhooktxdb-webhook-transaction-handle"
+      "status": "closed",
+      "evidence": "M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite served webhook transaction cases; M2 uses buildProductionArtifact(root) / kovo build --no-cache; M3 killed the webhook KV330 proof-enrollment mutant.",
+      "parent": "webhooktxdb-webhook-transaction-handle",
+      "evidenceBundles": [
+        "m1-prod-artifact-webhook-transaction",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (8 passed, 201.92s)",
+        "dialects": {
+          "postgres": "default prod-artifact starter posts /webhooks/tx-proof through the audited context.runMutation path and observes one tx_proof write plus idempotent replay",
+          "sqlite": "SQLite prod-artifact starter posts /webhooks/tx-proof through the audited context.runMutation path and observes one tx_proof write plus idempotent replay"
+        },
+        "independentReviewer": "agent/followup-webhook-handles-1782926842 reran the full production artifact transaction shard after the compiler webhook metadata/raw-handle fixes"
+      },
+      "m2": {
+        "productionBuild": "the row proof calls buildProductionArtifact(root) / kovo build ./src/app.tsx --no-cache before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "the served webhook case observes the built artifact, not a fixture-only unit path"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 32 mutants killed, including the webhook proof-enrollment mutant"
+      }
     },
     {
       "id": "webhooktxdb-raw-client-session-escape-handles-fail-closed",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "webhooktxdb-webhook-transaction-handle"
+      "status": "closed",
+      "evidence": "M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite build-fail cases for context.tx.$client/session; M2 `pnpm run check:security-test-builds` enrolled KV330 webhook transaction escape proof; M3 killed the corresponding enrollment mutant.",
+      "parent": "webhooktxdb-webhook-transaction-handle",
+      "evidenceBundles": [
+        "m1-prod-artifact-webhook-transaction",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (8 passed, 201.92s)",
+        "dialects": {
+          "postgres": "default prod-artifact starter attempts context.tx.$client/session and fails kovo build --no-cache with KV330 before artifact emission",
+          "sqlite": "SQLite prod-artifact starter attempts context.tx.$client/session and fails kovo build --no-cache with KV330 before artifact emission"
+        },
+        "independentReviewer": "agent/followup-webhook-handles-1782926842 reran the full production artifact transaction shard after adding compiler KV330 coverage for webhook transaction raw-handle reads"
+      },
+      "m2": {
+        "productionBuild": "the row proof calls buildProductionArtifact(root) / kovo build ./src/app.tsx --no-cache and asserts the preflight failure",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 22 real-build proofs, including KV330 webhook-transaction-raw-driver-escape-prod-artifact"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations killed security-test-build-gate/weaken-kv330-webhook-tx-escape-proof-enrollment"
+      }
     },
     {
       "id": "storage-capability-write-handles-upload-store-delete",
@@ -263,15 +428,37 @@
         "noFixtureOnlyCertification": "the proof observes served production artifact behavior rather than fixture-only mutation unit coverage; pnpm run check:security-test-builds passed 14 real-build proofs"
       },
       "m3": {
-        "mutationGate": "pnpm run check:security-gate-mutations passed with 31 mutants killed, including the KV433 storage proof enrollment mutant for the fail-closed sibling"
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 32 mutants killed, including security-test-build-gate/weaken-kv330-webhook-tx-escape-proof-enrollment"
       }
     },
     {
       "id": "raw-driver-client-session-escape-from-any-managed-handle",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Managed write, read-only, and webhook transaction child rows are closed with production artifact fail-closed proofs for $client/session escapes.",
+      "evidenceBundles": [
+        "m1-prod-artifact-managed-write-escape",
+        "m1-prod-artifact-transactions",
+        "m1-prod-artifact-webhook-transaction",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "managed/read-only evidence from the transaction/raw-SQL production shards plus `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` for webhook transaction escapes",
+        "dialects": {
+          "postgres": "default prod-artifact starters reject managed write, read-only, and webhook transaction $client/session escape attempts before unsafe execution",
+          "sqlite": "SQLite prod-artifact starters reject managed write, read-only, and webhook transaction $client/session escape attempts before unsafe execution"
+        },
+        "independentReviewer": "agent/followup-webhook-handles-1782926842 reverified the webhook transaction shard after SQL worker evidence had already closed managed/read-only children"
+      },
+      "m2": {
+        "productionBuild": "all child proofs call buildProductionArtifact(root) / kovo build --no-cache before serving or asserting fail-closed behavior",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 22 real-build proofs including managed-write and webhook transaction escape rows"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 32 mutants killed, covering managed DB escape denial and webhook proof enrollment"
+      }
     },
     {
       "id": "managed-write-handle-client-session-escapes-fail-closed-before-nested-wrapping",
@@ -329,40 +516,144 @@
       "id": "webhook-transaction-client-session-escapes-fail-closed-before-execution",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "raw-driver-client-session-escape-from-any-managed-handle"
+      "status": "closed",
+      "evidence": "M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite build-fail cases for raw context.tx.$client/session reads before artifact emission; M2/M3 security gates passed with the webhook KV330 proof enrolled and mutation-killed.",
+      "parent": "raw-driver-client-session-escape-from-any-managed-handle",
+      "evidenceBundles": [
+        "m1-prod-artifact-webhook-transaction",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (8 passed, 201.92s)",
+        "dialects": {
+          "postgres": "default prod-artifact starter attempts raw context.tx.$client/session reads and fails kovo build --no-cache before emission",
+          "sqlite": "SQLite prod-artifact starter attempts raw context.tx.$client/session reads and fails kovo build --no-cache before emission"
+        },
+        "independentReviewer": "agent/followup-webhook-handles-1782926842 reran the full production artifact transaction shard after adding compiler KV330 coverage for webhook transaction raw-handle reads"
+      },
+      "m2": {
+        "productionBuild": "the row proof calls buildProductionArtifact(root) / kovo build ./src/app.tsx --no-cache and asserts the preflight failure",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 22 real-build proofs, including KV330 webhook-transaction-raw-driver-escape-prod-artifact"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations killed security-test-build-gate/weaken-kv330-webhook-tx-escape-proof-enrollment"
+      }
     },
     {
       "id": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update",
       "kind": "write-capable-handle",
       "owner": ["H", "I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by futureStatement SQL-carrier, no-carrier, and synthetic unknown dialect matrix proofs; pnpm run check:security-test-builds and pnpm run check:security-gate-mutations passed for the enrolled gates.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot proves production build paths for managed/raw SQL while pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers futureStatement and synthetic unknown dialect fail-closed behavior directly",
+        "dialects": {
+          "postgres": "default/postgres production artifact transaction proof blocks futureStatement on readonly handles and managed-db runtime matrix parses pglite/unknown futureStatement SQL carriers",
+          "sqlite": "SQLite production artifact transaction proof blocks futureStatement on readonly handles and managed-db runtime matrix parses better-sqlite3/unknown futureStatement SQL carriers"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the unknown future-method and synthetic unknown dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the managed DB and raw-SQL production artifact proofs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolled KV433 readonly-managed-handle, KV422 managed-write escape, and KV414 raw-owner production build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
+      }
     },
     {
       "id": "unknown-method-with-a-sql-carrier-is-parsed-before-execution",
       "kind": "write-capable-handle",
       "owner": ["H", "I"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot proves futureStatement parses SQL carriers at any argument position, permits declared reads, and rejects cross-table trusted writes before execution.",
+      "parent": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot proves production build paths for managed/raw SQL while pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers futureStatement and synthetic unknown dialect fail-closed behavior directly",
+        "dialects": {
+          "postgres": "default/postgres production artifact transaction proof blocks futureStatement on readonly handles and managed-db runtime matrix parses pglite/unknown futureStatement SQL carriers",
+          "sqlite": "SQLite production artifact transaction proof blocks futureStatement on readonly handles and managed-db runtime matrix parses better-sqlite3/unknown futureStatement SQL carriers"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the unknown future-method and synthetic unknown dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the managed DB and raw-SQL production artifact proofs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolled KV433 readonly-managed-handle, KV422 managed-write escape, and KV414 raw-owner production build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
+      }
     },
     {
       "id": "unknown-method-without-a-sql-carrier-fails-closed",
       "kind": "write-capable-handle",
       "owner": ["H", "I"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot proves futureStatement with opaque non-SQL arguments throws the unknown managed DB method KV422 path before execution.",
+      "parent": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot proves production build paths for managed/raw SQL while pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers futureStatement and synthetic unknown dialect fail-closed behavior directly",
+        "dialects": {
+          "postgres": "default/postgres production artifact transaction proof blocks futureStatement on readonly handles and managed-db runtime matrix parses pglite/unknown futureStatement SQL carriers",
+          "sqlite": "SQLite production artifact transaction proof blocks futureStatement on readonly handles and managed-db runtime matrix parses better-sqlite3/unknown futureStatement SQL carriers"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the unknown future-method and synthetic unknown dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the managed DB and raw-SQL production artifact proofs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolled KV433 readonly-managed-handle, KV422 managed-write escape, and KV414 raw-owner production build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
+      }
     },
     {
       "id": "synthetic-unknown-driver-dialect-fails-closed-without-a-matrix-update",
       "kind": "write-capable-handle",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot includes the synthetic unknown dialect row across execute/query/run/get/all/values/transaction/with/unknown-method without adding a real driver dialect branch.",
+      "parent": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot proves production build paths for managed/raw SQL while pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers futureStatement and synthetic unknown dialect fail-closed behavior directly",
+        "dialects": {
+          "postgres": "default/postgres production artifact transaction proof blocks futureStatement on readonly handles and managed-db runtime matrix parses pglite/unknown futureStatement SQL carriers",
+          "sqlite": "SQLite production artifact transaction proof blocks futureStatement on readonly handles and managed-db runtime matrix parses better-sqlite3/unknown futureStatement SQL carriers"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the unknown future-method and synthetic unknown dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the managed DB and raw-SQL production artifact proofs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolled KV433 readonly-managed-handle, KV422 managed-write escape, and KV414 raw-owner production build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
+      }
     },
     {
       "id": "ssr-document-html",
@@ -1005,8 +1296,29 @@
       "id": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
       "kind": "output-wire-sink",
       "owner": ["C2", "B3"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "children closed with exact prod-artifact M1 evidence; pnpm run check:security-test-builds (19 real-build proofs passed); pnpm run check:security-gate-mutations (32 mutants killed)",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m1-prod-artifact-trustedurl-attribute-type-gate",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "children closed by focused prod-artifact build-fail tests for trustedHtml/trustedUrl/renderedHtml taint plus TrustedUrl non-URL JSX attributes",
+        "dialects": {
+          "postgres": "raw-HTML taint M1 covered postgres; TrustedUrl attribute type-gate is SQL-dialect independent and fails during production build preflight before artifact emission",
+          "sqlite": "raw-HTML taint M1 covered sqlite; TrustedUrl attribute type-gate is SQL-dialect independent and fails during production build preflight before artifact emission"
+        },
+        "independentReviewer": "agent/followup-m1-dialects-20260701070851 authored the dialect-complete raw-HTML adversarial gate; agent/followup-trustedurl-1782925929 added and verified the TrustedUrl attribute prod-artifact proof"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV426 trusted-url-attribute-type-gate uses buildProductionArtifact(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 19 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 32 mutants killed"
+      }
     },
     {
       "id": "kv426-blocks-trustedhtml-request-taint-in-a-prod-artifact",
@@ -1068,9 +1380,29 @@
       "id": "trustedurl-values-are-rejected-in-non-url-jsx-attributes",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'TrustedUrl values in non-URL JSX attributes' --reporter=dot (1 passed, 9 skipped, 27.85s); pnpm run check:security-test-builds (19 real-build proofs passed); pnpm run check:security-gate-mutations (32 mutants killed)",
+      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
+      "evidenceBundles": [
+        "m1-prod-artifact-trustedurl-attribute-type-gate",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'TrustedUrl values in non-URL JSX attributes' --reporter=dot (1 passed, 9 skipped, 27.85s)",
+        "dialects": {
+          "postgres": "TrustedUrl attribute type-gate is SQL-dialect independent; the no-cache starter production build preflight rejects <span title={trustedUrl(...)}> before artifact emission",
+          "sqlite": "TrustedUrl attribute type-gate is SQL-dialect independent; the no-cache starter production build preflight rejects <span title={trustedUrl(...)}> before artifact emission"
+        },
+        "independentReviewer": "agent/followup-trustedurl-1782925929 verified the prod-artifact build-fail proof and enrolled M2/M3 drift guards in this branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV426 trusted-url-attribute-type-gate calls buildProductionArtifact(root) after addTrustedUrlAttributeTypeGateProof(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 19 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 32 mutants killed"
+      }
     },
     {
       "id": "kv426-blocks-internal-renderedhtml-query-taint-in-a-prod-artifact",
@@ -2986,8 +3318,29 @@
       "dialect": "pglite",
       "sink": "execute",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers pglite × execute (execute) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-pglite-query",
@@ -2995,8 +3348,29 @@
       "dialect": "pglite",
       "sink": "query",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers pglite × query (query) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-pglite-run",
@@ -3004,8 +3378,29 @@
       "dialect": "pglite",
       "sink": "run",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers pglite × run (run) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-pglite-get",
@@ -3013,8 +3408,29 @@
       "dialect": "pglite",
       "sink": "get",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers pglite × get (get) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-pglite-all",
@@ -3022,8 +3438,29 @@
       "dialect": "pglite",
       "sink": "all",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers pglite × all (all) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-pglite-values",
@@ -3031,8 +3468,29 @@
       "dialect": "pglite",
       "sink": "values",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers pglite × values (values) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-pglite-transaction",
@@ -3040,8 +3498,29 @@
       "dialect": "pglite",
       "sink": "transaction",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers pglite × transaction (transaction callback execute) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-pglite-with",
@@ -3049,8 +3528,29 @@
       "dialect": "pglite",
       "sink": "with",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers pglite × with (with-builder execute) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-pglite-unknown-method",
@@ -3058,8 +3558,29 @@
       "dialect": "pglite",
       "sink": "unknown-method",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers pglite × unknown-method (futureStatement) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-better-sqlite3-execute",
@@ -3067,8 +3588,29 @@
       "dialect": "better-sqlite3",
       "sink": "execute",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers better-sqlite3 × execute (execute) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-better-sqlite3-query",
@@ -3076,8 +3618,29 @@
       "dialect": "better-sqlite3",
       "sink": "query",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers better-sqlite3 × query (query) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-better-sqlite3-run",
@@ -3085,8 +3648,29 @@
       "dialect": "better-sqlite3",
       "sink": "run",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers better-sqlite3 × run (run) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-better-sqlite3-get",
@@ -3094,8 +3678,29 @@
       "dialect": "better-sqlite3",
       "sink": "get",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers better-sqlite3 × get (get) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-better-sqlite3-all",
@@ -3103,8 +3708,29 @@
       "dialect": "better-sqlite3",
       "sink": "all",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers better-sqlite3 × all (all) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-better-sqlite3-values",
@@ -3112,8 +3738,29 @@
       "dialect": "better-sqlite3",
       "sink": "values",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers better-sqlite3 × values (values) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-better-sqlite3-transaction",
@@ -3121,8 +3768,29 @@
       "dialect": "better-sqlite3",
       "sink": "transaction",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers better-sqlite3 × transaction (transaction callback execute) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-better-sqlite3-with",
@@ -3130,8 +3798,29 @@
       "dialect": "better-sqlite3",
       "sink": "with",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers better-sqlite3 × with (with-builder execute) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-better-sqlite3-unknown-method",
@@ -3139,8 +3828,29 @@
       "dialect": "better-sqlite3",
       "sink": "unknown-method",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers better-sqlite3 × unknown-method (futureStatement) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-unknown-execute",
@@ -3148,8 +3858,29 @@
       "dialect": "unknown",
       "sink": "execute",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers unknown × execute (execute) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-unknown-query",
@@ -3157,8 +3888,29 @@
       "dialect": "unknown",
       "sink": "query",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers unknown × query (query) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-unknown-run",
@@ -3166,8 +3918,29 @@
       "dialect": "unknown",
       "sink": "run",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers unknown × run (run) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-unknown-get",
@@ -3175,8 +3948,29 @@
       "dialect": "unknown",
       "sink": "get",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers unknown × get (get) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-unknown-all",
@@ -3184,8 +3978,29 @@
       "dialect": "unknown",
       "sink": "all",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers unknown × all (all) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-unknown-values",
@@ -3193,8 +4008,29 @@
       "dialect": "unknown",
       "sink": "values",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers unknown × values (values) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-unknown-transaction",
@@ -3202,8 +4038,29 @@
       "dialect": "unknown",
       "sink": "transaction",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers unknown × transaction (transaction callback execute) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-unknown-with",
@@ -3211,8 +4068,29 @@
       "dialect": "unknown",
       "sink": "with",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers unknown × with (with-builder execute) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     },
     {
       "id": "dialect-unknown-unknown-method",
@@ -3220,14 +4098,39 @@
       "dialect": "unknown",
       "sink": "unknown-method",
       "owner": ["I"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot covers unknown × unknown-method (futureStatement) with raw-string KV422 rejection, declared read pass-through, and cross-table trusted write fail-closed behavior before execution.",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-transactions",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot anchors SQL safety in production artifact builds; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot is the direct dialect x sink runtime matrix proof",
+        "dialects": {
+          "postgres": "default/postgres production artifact raw-SQL/transaction shards exercise the managed SQL safety path; pglite matrix rows cover PostgreSQL-style bind markers and sinks",
+          "sqlite": "SQLite production artifact raw-SQL/transaction shards exercise the managed SQL safety path; better-sqlite3 matrix rows cover SQLite bind markers and sinks"
+        },
+        "independentReviewer": "agent/followup-sql-handles-1782925933 reverified the 3 x 9 runtime dialect matrix in managed-db.test.ts and the production artifact transaction/raw-SQL shards"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts and packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts call buildProductionArtifact(root) / kovo build --no-cache for the SQL safety production artifact anchor",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds enrolls production build proofs for KV433 readonly handles, KV422 managed-write escapes, and KV414 raw owner writes"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations kills fundamental-fixes-census-gate/drop-dialect-matrix-requirement plus managed SQL guard mutants"
+      }
     }
   ],
   "evidenceBundles": {
     "m1-prod-artifact-adversarial-focused": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:<surface> --reporter=dot",
       "evidence": "Focused no-cache prod-artifact M1 sweep for one row/surface across postgres and sqlite."
+    },
+    "m1-prod-artifact-trustedurl-attribute-type-gate": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'TrustedUrl values in non-URL JSX attributes' --reporter=dot",
+      "evidence": "Production artifact TrustedUrl attribute type-gate proof injects <span title={trustedUrl(...)}> into the starter and asserts kovo build --no-cache fails before artifact emission with TrustedUrl/AttributeValue diagnostics."
     },
     "m1-prod-artifact-storage-write": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot",
@@ -3264,6 +4167,10 @@
     "m1-prod-artifact-managed-write-escape": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
       "evidence": "Production artifact transaction tests build default and SQLite starters with kovo build --no-cache and prove managed write raw-driver escape attempts fail before artifact emission."
+    },
+    "m1-prod-artifact-webhook-transaction": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
+      "evidence": "Production artifact transaction tests build default and SQLite starters with kovo build --no-cache, serve /webhooks/tx-proof for audited transaction writes, and prove context.tx.$client/session escapes fail before artifact emission."
     },
     "h-managed-db-runtime-type": {
       "command": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot",

@@ -1,5 +1,5 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
-import { mkdirSync, mkdtempSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -45,6 +45,7 @@ async function expectReadonlyAttemptBlocked(origin: string): Promise<void> {
 }
 
 describe('create-kovo starter (build integration: production transaction artifacts)', () => {
+  // @kovo-security-certifies KV433 readonly-managed-handle-prod-artifact
   it('rolls back default mutation transactions in the production build artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -197,6 +198,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     }
   }, 120_000);
 
+  // @kovo-security-certifies KV422 managed-write-raw-driver-escape-prod-artifact
   it.each([
     { dialect: undefined, label: 'default' },
     { dialect: 'sqlite' as const, label: 'SQLite' },
@@ -222,6 +224,126 @@ describe('create-kovo starter (build integration: production transaction artifac
           const output = execFileSyncErrorOutput(error);
           expect(output).toContain('kovo build check preflight failed');
           expect(output).toContain('KV406');
+          expect(output).toContain('runtime-safety-proofs.ts');
+        }
+      } finally {
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    120_000,
+  );
+
+  it.each([
+    { dialect: undefined, label: 'default' },
+    { dialect: 'sqlite' as const, label: 'SQLite' },
+  ])(
+    'executes $label webhook transaction writes through the production artifact',
+    async ({ dialect }) => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-webhook-tx-'));
+      const port = await reservePort();
+      let server: ChildProcessWithoutNullStreams | undefined;
+
+      try {
+        writeKovoProject(root, {
+          ...(dialect === undefined ? {} : { dialect }),
+          name: 'Prod Webhook Transaction Proof',
+        });
+        linkStarterBuildDependencies(root);
+        addRuntimeMutationSafetyProofs(root, { includeWebhookTransactionProof: true });
+        const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
+        expect(proofSource).toContain('txProofWebhook');
+
+        buildProductionArtifact(root);
+
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: {
+            ...withRepoBinOnPath(),
+            HOST: '127.0.0.1',
+            NODE_ENV: 'production',
+            PORT: String(port),
+          },
+        });
+        const output = collectOutput(server);
+        const origin = `http://127.0.0.1:${port}`;
+
+        await fetchTextWhenReady(`${origin}/api/tx-proof-count`, output);
+        const before = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+          count: number;
+        };
+        expect(before.count).toBe(0);
+
+        const id = `webhook-${dialect ?? 'default'}-${Date.now()}`;
+        const first = await fetch(`${origin}/webhooks/tx-proof`, {
+          body: JSON.stringify({ id }),
+          headers: { 'content-type': 'application/json' },
+          method: 'POST',
+        });
+        await expect(first.text()).resolves.toBe('ok');
+        expect(first.status).toBe(200);
+        expect(first.headers.get('kovo-changes')).toBe('[{"domain":"tx_proof"}]');
+
+        const afterFirst = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+          count: number;
+        };
+        expect(afterFirst.count).toBe(1);
+
+        const second = await fetch(`${origin}/webhooks/tx-proof`, {
+          body: JSON.stringify({ id }),
+          headers: { 'content-type': 'application/json' },
+          method: 'POST',
+        });
+        await expect(second.text()).resolves.toBe('ok');
+        expect(second.status).toBe(200);
+        expect(second.headers.get('kovo-idem')).toBe(id);
+
+        const afterReplay = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+          count: number;
+        };
+        expect(afterReplay.count).toBe(1);
+      } finally {
+        await stopProcess(server);
+        rmSync(root, { force: true, recursive: true });
+      }
+    },
+    120_000,
+  );
+
+  // @kovo-security-certifies KV330 webhook-transaction-raw-driver-escape-prod-artifact
+  it.each([
+    { dialect: undefined, label: 'default' },
+    { dialect: 'sqlite' as const, label: 'SQLite' },
+  ])(
+    'blocks $label webhook transaction raw-driver escapes before artifact emission',
+    ({ dialect }) => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-prod-webhook-escape-'));
+
+      try {
+        writeKovoProject(root, {
+          ...(dialect === undefined ? {} : { dialect }),
+          name: 'Prod Webhook Tx Escape Proof',
+        });
+        linkStarterBuildDependencies(root);
+        addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true });
+        const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
+        expect(proofSource).toContain('context.tx as unknown as { $client: unknown }');
+        expect(proofSource).toContain('context.tx as unknown as { session: unknown }');
+
+        try {
+          buildProductionArtifact(root);
+          throw new Error(
+            'Expected kovo build --no-cache to fail for webhook tx raw-driver escape.',
+          );
+        } catch (error) {
+          const output = execFileSyncErrorOutput(error);
+          expect(output).toContain('kovo build check preflight failed');
+          expect(output).toContain('KV330');
+          expect(output).toContain('Direct db access in a webhook handler');
           expect(output).toContain('runtime-safety-proofs.ts');
         }
       } finally {

@@ -165,9 +165,37 @@ const kv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvena
 
 const weakenedKv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvenanceBuildProof(safeRoot)',`;
 
+const kv426TrustedUrlAttributeProofNeedle = `      'addTrustedUrlAttributeTypeGateProof(root)',`;
+
+const weakenedKv426TrustedUrlAttributeProofNeedle = `      'TrustedUrl',`;
+
 const kv433StorageDeleteProofNeedle = `      'operation=delete',`;
 
 const weakenedKv433StorageDeleteProofNeedle = `      'storage-delete-write-query',`;
+
+const kv330WebhookTxEscapeProofEnrollmentBranch = [
+  "    claimId: 'webhook-transaction-raw-driver-escape-prod-artifact',",
+  "    code: 'KV330',",
+  "    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',",
+  '    requiredNeedles: [',
+  "      'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',",
+  "      'buildProductionArtifact(root)',",
+  "      'Expected kovo build --no-cache to fail for webhook tx raw-driver escape.',",
+  "      'KV330',",
+  "      'Direct db access in a webhook handler',",
+  "      'runtime-safety-proofs.ts',",
+  '    ],',
+].join('\n');
+
+const weakenedKv330WebhookTxEscapeProofEnrollmentBranch = [
+  "    claimId: 'webhook-transaction-raw-driver-escape-prod-artifact',",
+  "    code: 'KV330',",
+  "    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',",
+  '    requiredNeedles: [',
+  "      'buildProductionArtifact(root)',",
+  "      'KV330',",
+  '    ],',
+].join('\n');
 
 const trustedHtmlCallTaintFailClosedBranch = `    return firstProvenance([argumentProvenance, calleeProvenance]) ?? 'unprovable';`;
 
@@ -544,6 +572,18 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
     description:
+      'Weakens the KV426 TrustedUrl attribute proof enrollment so it no longer pins the injected non-URL attribute fixture.',
+    expectedKiller:
+      'KV426 TrustedUrl attribute proof enrollment must retain the non-URL attribute fixture helper',
+    name: 'security-test-build-gate/weaken-kv426-trusted-url-attribute-proof-enrollment',
+    replacement: weakenedKv426TrustedUrlAttributeProofNeedle,
+    search: kv426TrustedUrlAttributeProofNeedle,
+    sourceFile: securityTestBuildGatePath,
+    test: assertKv426TrustedUrlAttributeProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
       'Weakens the KV433 storage-query proof enrollment so it no longer pins direct delete write detection.',
     expectedKiller:
       'KV433 storage-query proof enrollment must retain direct storage delete operation evidence',
@@ -552,6 +592,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: kv433StorageDeleteProofNeedle,
     sourceFile: securityTestBuildGatePath,
     test: assertKv433StorageDeleteProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Weakens the KV330 webhook transaction escape proof enrollment so it no longer pins the real starter build-fail path.',
+    expectedKiller:
+      'KV330 webhook transaction escape proof enrollment must retain webhook tx build-fail evidence',
+    name: 'security-test-build-gate/weaken-kv330-webhook-tx-escape-proof-enrollment',
+    replacement: weakenedKv330WebhookTxEscapeProofEnrollmentBranch,
+    search: kv330WebhookTxEscapeProofEnrollmentBranch,
+    sourceFile: securityTestBuildGatePath,
+    test: assertKv330WebhookTxEscapeProofEnrollmentIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -1123,6 +1175,27 @@ async function assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned(module
   }
 }
 
+async function assertKv426TrustedUrlAttributeProofEnrollmentIsPinned(moduleUnderTest) {
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV426' &&
+      candidate.claimId === 'trusted-url-attribute-type-gate' &&
+      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  );
+  if (!proof) throw new Error('KV426 TrustedUrl attribute production build proof is not enrolled');
+  const needles = [
+    'addTrustedUrlAttributeTypeGateProof(root)',
+    'buildProductionArtifact(root)',
+    'TrustedUrl',
+    'AttributeValue',
+  ];
+  for (const needle of needles) {
+    if (!proof.requiredNeedles?.includes(needle)) {
+      throw new Error(`KV426 TrustedUrl attribute proof must require ${JSON.stringify(needle)}`);
+    }
+  }
+}
+
 async function assertKv433StorageDeleteProofEnrollmentIsPinned(moduleUnderTest) {
   const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
     (candidate) =>
@@ -1142,6 +1215,33 @@ async function assertKv433StorageDeleteProofEnrollmentIsPinned(moduleUnderTest) 
   for (const needle of needles) {
     if (!proof.requiredNeedles?.includes(needle)) {
       throw new Error(`KV433 storage-query proof must require ${JSON.stringify(needle)}`);
+    }
+  }
+}
+
+async function assertKv330WebhookTxEscapeProofEnrollmentIsPinned(moduleUnderTest) {
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV330' &&
+      candidate.claimId === 'webhook-transaction-raw-driver-escape-prod-artifact' &&
+      candidate.proofFile ===
+        'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+  );
+  if (!proof)
+    throw new Error('KV330 webhook transaction escape production build proof is not enrolled');
+  const needles = [
+    'addRuntimeMutationSafetyProofs(root, { includeWebhookTxEscapeAttempt: true })',
+    'buildProductionArtifact(root)',
+    'Expected kovo build --no-cache to fail for webhook tx raw-driver escape.',
+    'KV330',
+    'Direct db access in a webhook handler',
+    'runtime-safety-proofs.ts',
+  ];
+  for (const needle of needles) {
+    if (!proof.requiredNeedles?.includes(needle)) {
+      throw new Error(
+        `KV330 webhook transaction escape proof must require ${JSON.stringify(needle)}`,
+      );
     }
   }
 }
@@ -1328,6 +1428,7 @@ async function assertClosedRowM1EvidenceIsCaught(moduleUnderTest) {
   manifest.rows[0] = {
     ...manifest.rows[0],
     evidence: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    m1: undefined,
     status: 'closed',
   };
   const violations = moduleUnderTest.evaluateFundamentalFixesCensus({
