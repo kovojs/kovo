@@ -72,6 +72,59 @@ describe('central response posture finalization', () => {
     await expect(notModified.text()).resolves.toBe('');
   });
 
+  it('normalizes raw endpoint Set-Cookie headers through the credential cookie floor', async () => {
+    const headers = new Headers({ 'Content-Type': 'text/plain; charset=utf-8' });
+    headers.append('Set-Cookie', 'sid=abc; Path=/');
+    const raw = new Response('payload', { headers, status: 200 });
+
+    const finalized = finalizeRawWebResponse(raw, { method: 'GET' });
+
+    expect(finalized).not.toBe(raw);
+    await expect(finalized.text()).resolves.toBe('payload');
+    const cookies = finalized.headers.getSetCookie();
+    expect(cookies).toHaveLength(1);
+    expect(cookies[0]).toContain('sid=abc');
+    expect(cookies[0]).toContain('Path=/');
+    expect(cookies[0]).toContain('HttpOnly');
+    expect(cookies[0]).toContain('SameSite=Lax');
+  });
+
+  it('fails closed before malformed raw endpoint Set-Cookie headers reach the adapter', () => {
+    expect(() =>
+      finalizeRawWebResponse(
+        new Response('payload', {
+          headers: { 'Set-Cookie': 'not-a-cookie' },
+          status: 200,
+        }),
+        { method: 'GET' },
+      ),
+    ).toThrow('forwardSetCookie requires a name=value Set-Cookie');
+  });
+
+  it('sanitizes raw endpoint redirect Location headers without dropping safe bodies', async () => {
+    const openRedirect = finalizeRawWebResponse(
+      new Response(null, {
+        headers: { Location: 'https://evil.example/phish' },
+        status: 303,
+      }),
+      { method: 'GET' },
+    );
+
+    expect(openRedirect.status).toBe(303);
+    expect(openRedirect.headers.get('location')).toBe('/');
+
+    const sameOriginRedirect = finalizeRawWebResponse(
+      new Response('redirect body', {
+        headers: { Location: '/account?tab=orders#paid' },
+        status: 307,
+      }),
+      { method: 'GET' },
+    );
+
+    expect(sameOriginRedirect.headers.get('location')).toBe('/account?tab=orders#paid');
+    await expect(sameOriginRedirect.text()).resolves.toBe('redirect body');
+  });
+
   it('keeps redirect location sanitization in the shared framework finalizer', () => {
     const blessed = blessRedirectResponse({
       body: null,
