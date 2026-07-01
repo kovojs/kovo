@@ -264,6 +264,17 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
   - Parametrize the security suites by the DEC8 `preset × dialect` matrix. Add
     `packages/conformance-fixtures/src/gate-adversary-map.ts` encoding DEC9 + a test that every branded gate has an
     adversary and a matching hostile test.
+  - Progress: `packages/conformance-fixtures/src/gate-adversary-map.ts` now exports the DEC8 matrix plus a DEC9 map for
+    the 52 currently branded security-decision gates; focused Vitest
+    (`pnpm exec vitest --run packages/conformance-fixtures/src/gate-adversary-map.test.ts
+    packages/conformance-fixtures/src/package-exports.test.ts`), strict standalone TypeScript
+    (`pnpm exec tsc --ignoreConfig --noEmit --pretty false --module NodeNext --moduleResolution NodeNext --target ES2024
+    --types node,vitest --strict --skipLibCheck --allowImportingTsExtensions --exactOptionalPropertyTypes
+    --noUncheckedIndexedAccess packages/conformance-fixtures/src/gate-adversary-map.ts
+    packages/conformance-fixtures/src/gate-adversary-map.test.ts`), `pnpm run check:api-surface`, and `git diff --check`
+    passed.
+  - Remaining gap: security suites are not yet parametrized by the DEC8 `preset × dialect` matrix, so this checkbox stays
+    open.
 - [ ] **K — Fail-closed KV426 recognizer (closes `bugz-26` B2; after C2).**
   - Problem (verified): direct `trustedHtml(request.headers.get('x-xss')??'')` → KV426 RED, but
     `const trust = { html: trustedHtml }; trust.html(reflected)` → GREEN, and the prod artifact reflects

@@ -227,6 +227,11 @@ import {
   type InlineEnhancedFormLoaderFact,
 } from '@kovojs/conformance-fixtures/generated-module-fixtures';
 import {
+  DEC8_SECURITY_MATRIX,
+  GATE_ADVERSARY_MAP,
+  type GateAdversaryMapEntry,
+} from '@kovojs/conformance-fixtures/gate-adversary-map';
+import {
   commerceGraphBehaviorFact,
   generatedGraphArtifactAcceptanceChecklistFact,
   generatedGraphArtifactAcceptanceEvidenceFact,
@@ -524,6 +529,9 @@ describe('@kovojs/test package subpath exports', () => {
     expect(serverCommerceStylesheetBehaviorFact).toBeTypeOf('function');
     expect(serverCommerceAdoptDontInventBehaviorFact).toBeTypeOf('function');
     expect(crossPackageOracleFixture).toBeTypeOf('function');
+    expect(DEC8_SECURITY_MATRIX).toHaveLength(6);
+    expect(GATE_ADVERSARY_MAP).toBeTypeOf('object');
+    expectTypeOf<GateAdversaryMapEntry>().toHaveProperty('hostileTest').toEqualTypeOf<string>();
     expect(oracleSchemaTableFixture).toBeTypeOf('function');
     expect(serverPageHintsBehaviorFact).toBeTypeOf('function');
     expect(headerValues({ 'Set-Cookie': 'sid=1; Path=/' }, 'set-cookie')).toEqual([

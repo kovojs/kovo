@@ -10,6 +10,7 @@
     "./derivation-fixtures": "./src/derivation-fixtures.ts",
     "./diagnostic-output-fixtures": "./src/diagnostic-output-fixtures.ts",
     "./generated-module-fixtures": "./src/generated-module-fixtures.ts",
+    "./gate-adversary-map": "./src/gate-adversary-map.ts",
     "./graph-fixtures": "./src/graph-fixtures.ts",
     "./kovo-check-fixtures": "./src/kovo-check-fixtures.ts",
     "./kovo-explain-fixtures": "./src/kovo-explain-fixtures.ts",
