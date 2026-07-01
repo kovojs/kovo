@@ -334,9 +334,9 @@ function defaultOrigin(request: IncomingMessage, options: NodeHandlerOptions): s
   // works for HTTP/2 requests, not just HTTP/1.1.
   const pseudoHeaders = request.headers as Record<string, string | string[] | undefined>;
   const host = request.headers.host ?? firstHeaderValue(pseudoHeaders[':authority']) ?? '127.0.0.1';
-  const proto = trustedNodeRequestScheme(request, {
-    ...(options.trustedProxy === undefined ? {} : { trustedProxy: options.trustedProxy }),
-  });
+  const schemeOptions: { trustedProxy?: boolean } = {};
+  if (options.trustedProxy !== undefined) schemeOptions.trustedProxy = options.trustedProxy;
+  const proto = trustedNodeRequestScheme(request, schemeOptions);
 
   return `${proto}://${host}`;
 }
