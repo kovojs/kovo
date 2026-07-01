@@ -10,17 +10,26 @@ F1 narrowed the starter so ordinary app code no longer imports raw runtime DB pr
 not settle every write-capable public surface. The remaining seams are capability design questions:
 which API should expose write authority, how that authority is audited, and which static gate owns
 the proof. Keeping them here avoids turning starter cleanup into a compatibility layer for unrelated
-public API decisions.
+public API decisions. Technical-preview bias applies: remove unclear public escapes instead of
+preserving compatibility for a model that is hard to explain.
 
 ## Checklist
 
-- [ ] **Decide the `query.elevated()` posture.**
-  - Keep the current audited GET-write escape only if `kovo explain`/capability output makes the
-    write capability explicit and the data-plane gate keeps ordinary `query()` read-only.
-  - If GET-write cannot be made explainable enough, replace it with a mutation/domain or endpoint
-    capability that is honest about side effects.
-  - Evidence to close: SPEC/API decision plus focused Drizzle/static tests for ordinary `query()`
-    denial and the chosen escape path.
+- [ ] **Remove `query.elevated()` as a public GET-write escape.**
+  - Decision: do not keep a read-path API that grants write authority. GET-backed query loads can be
+    retried, prefetched, focus-refetched, cached, or replayed; making writes safe there depends on an
+    idempotency story authors cannot reliably prove at the call site.
+  - Replace side-effecting `query.elevated()` use cases with surfaces that are honest about writes:
+    `mutation()`/domain writes for user-triggered state changes, `endpoint()` for explicitly
+    side-effecting machine/API paths, or a dedicated future background/outbox capability for
+    maintenance work.
+  - Remove the public `query.elevated` factory, the elevated marker/fact drain, and any
+    `kovo explain --capabilities` vocabulary that treats query writes as an accepted capability.
+  - Tighten diagnostics/docs so KV433 says ordinary `query()` loaders are read-only and the fix is to
+    move the write to a mutation/domain/endpoint, not to an elevated query escape.
+  - Evidence to close: SPEC/API update, public API-surface check, server/runtime tests proving query
+    loaders receive only read handles, Drizzle/static tests proving query write reachability always
+    fails closed, and migration of existing tests/docs/examples away from `query.elevated()`.
 
 - [ ] **Redesign webhook transaction/write authority.**
   - Decide whether webhook handlers receive only a branded transaction/request writer, a declared
