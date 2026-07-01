@@ -141,7 +141,9 @@ jobs:
               packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts
               packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts
           - shard: prod-artifact-raw-sql
-            files: packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
+              packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts
           - shard: prod-artifact-security
             files: >-
               packages/create-kovo/src/index.build.prod-artifact.security.test.ts
