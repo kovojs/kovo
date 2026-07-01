@@ -175,6 +175,7 @@ export function runStarterTypecheck(root: string): void {
       'node',
       'src/schema.ts',
       'src/db.ts',
+      'src/_kovo/app-runtime-db.ts',
       'src/auth.ts',
       'src/queries.ts',
       'src/mutations.ts',

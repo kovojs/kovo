@@ -201,6 +201,7 @@ const templateFiles: readonly TemplateFile[] = [
   'scripts/check-parallel.mjs',
   { path: 'src/schema.ts', sqlitePath: 'src/schema.sqlite.ts' },
   { path: 'src/db.ts', sqlitePath: 'src/db.sqlite.ts' },
+  'src/_kovo/app-runtime-db.ts',
   { path: 'src/auth.ts', sqlitePath: 'src/auth.sqlite.ts' },
   'src/model.ts',
   'src/queries.ts',

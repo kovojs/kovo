@@ -179,10 +179,10 @@ function quoteLiteral(value: string): string {
 
 /** The running app database. Endpoint/user-authored reads should import readonlyAppDb. */
 const appDatabase = createAppDb();
+globalThis.__kovoStarterAppDatabase = appDatabase;
 export const readonlyAppDb = appDatabase.readonlyDb;
 export const appDbReady = appDatabase.ready;
 
-/** Framework construction/auth adapter hook; do not import this into endpoint/webhook/task code. */
-export function appRuntimeDbProvider(): AppDb {
-  return appDatabase.db;
+declare global {
+  var __kovoStarterAppDatabase: CreatedAppDb | undefined;
 }
