@@ -2,6 +2,7 @@ import { createHmac, randomBytes } from 'node:crypto';
 
 import { acceptsEnhancedNavigationDocument } from '@kovojs/core/internal/document-protocol';
 
+import { principalPostureFromRequest } from './auth-principal.js';
 import { reportServerError } from './diagnostics.js';
 import {
   mergeVaryHeader,
@@ -164,10 +165,13 @@ export async function renderAppRouteDocumentResponse({
   // the request (not the whole cookie header), so non-session cookie churn (CSRF rotation, theme)
   // does not produce different fingerprints for the same user across tabs. We do NOT re-resolve via
   // sessionProvider here (it already ran once for the guarded route).
-  const sessionFingerprint = sessionFingerprintFromRequest(
-    routeResponse.lifecycleRequest instanceof Request ? routeResponse.lifecycleRequest : request,
-    app.csrf?.secret,
-  );
+  const sessionRequest =
+    routeResponse.lifecycleRequest instanceof Request ? routeResponse.lifecycleRequest : request;
+  const principalPosture = principalPostureFromRequest(sessionRequest);
+  const sessionFingerprint =
+    principalPosture.kind === 'proven'
+      ? hmacSessionFingerprint(principalPosture.principal, app.csrf?.secret)
+      : undefined;
 
   // part-4 G1 + bugz-3 L2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a document
   // that varies by identity MUST never be stored by a shared CDN/proxy cache nor restored from
@@ -185,7 +189,10 @@ export async function renderAppRouteDocumentResponse({
   //      on the RESOLVED session identity, not on whether a refresh cookie happened to be emitted.
   // (We do NOT change the cookie forwarding itself.)
   const noStore =
-    route.guard !== undefined || refreshSetCookies.length > 0 || sessionFingerprint !== undefined;
+    route.guard !== undefined ||
+    refreshSetCookies.length > 0 ||
+    sessionFingerprint !== undefined ||
+    principalPosture.kind === 'unresolved';
   const enhancedNavigationDocument = acceptsEnhancedNavigationDocument(
     request.headers.get('accept'),
   );
@@ -294,41 +301,10 @@ function createUnavailableSignUrl(message: string): ReturnType<typeof createSign
 }
 
 /**
- * bugs-1 F13 / K3 / SPEC §9.3: an opaque per-principal fingerprint derived from the
- * resolved session identity so that non-session cookie churn (CSRF rotation, theme,
- * analytics) does not produce different fingerprints for the same user across tabs.
- *
- * Resolution order (most to least session-anchored):
- *   1. `request.session?.id` / `request.sessionId` / `request.session?.user?.id` —
- *      the session the route lifecycle already resolved for this request. We deliberately do NOT
- *      call `app.sessionProvider` again here: the guarded route resolves the session exactly once,
- *      and re-resolving it solely for the broadcast fingerprint would double-run the provider.
- * Returns `undefined` when the request is anonymous or when no resolved session identity
- * is available. Cookie fallback is deliberately absent: ambient cookie order/value is not a
- * server-authenticated principal and must not become the BroadcastChannel identity.
- *
- * The id is HMACed with a server-owned secret to keep raw session/user identifiers out of the
- * BroadcastChannel envelope (SPEC §9.3 "opaque").
+ * bugs-1 F13 / K3 / SPEC §9.3: HMAC the already-proven principal so raw session/user identifiers
+ * stay out of the BroadcastChannel envelope. Principal resolution happens through
+ * `principalPostureFromRequest`; unresolved session carriers intentionally do not reach this helper.
  */
-function sessionFingerprintFromRequest(
-  request: Request,
-  secret: CsrfSecret | undefined,
-): string | undefined {
-  // 1. Pre-resolved session id fields set by the route lifecycle / adapters.
-  const req = request as unknown as {
-    session?: { id?: string; user?: { id?: string } };
-    sessionId?: string;
-  };
-  const resolvedId =
-    (typeof req.session?.id === 'string' && req.session.id !== '' ? req.session.id : undefined) ??
-    (typeof req.sessionId === 'string' && req.sessionId !== '' ? req.sessionId : undefined) ??
-    (typeof req.session?.user?.id === 'string' && req.session.user.id !== ''
-      ? req.session.user.id
-      : undefined);
-
-  return resolvedId === undefined ? undefined : hmacSessionFingerprint(resolvedId, secret);
-}
-
 function hmacSessionFingerprint(input: string, secret: CsrfSecret | undefined): string {
   const hmacSecret =
     secret === undefined ? fallbackBroadcastFingerprintSecret : currentCsrfSecret(secret);

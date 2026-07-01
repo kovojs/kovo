@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
 import type { Redirect } from '@kovojs/core';
+import { isProvenPrincipal } from './auth-principal.js';
 import { signingKeyRingFromCsrfSecret, type CsrfValidationOptions } from './csrf.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
@@ -546,10 +547,15 @@ function verifyLiveTargetDescriptor<Request>(
   if (descriptor.attestation === undefined) {
     return false;
   }
-  const expected = createLiveTargetAttestation(descriptor, {
-    ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
-    request: options.request,
-  });
+  let expected: string;
+  try {
+    expected = createLiveTargetAttestation(descriptor, {
+      ...(options.csrf === undefined ? {} : { csrf: options.csrf }),
+      request: options.request,
+    });
+  } catch {
+    return false;
+  }
   return secureEqual(descriptor.attestation, expected);
 }
 
@@ -572,13 +578,13 @@ function liveTargetAttestationPayload<Request>(
     request: Request;
   },
 ): string {
-  const principal =
-    options.csrf === false
-      ? 'anonymous'
-      : (options.csrf?.sessionId(options.request) ?? 'anonymous');
+  const principal = options.csrf === false ? undefined : options.csrf?.sessionId(options.request);
+  if (principal !== undefined && !isProvenPrincipal(principal)) {
+    throw new Error('live-target attestation cannot use an unresolved session principal.');
+  }
   return canonicalJson({
     component: descriptor.component,
-    principal,
+    principal: principal ?? 'anonymous',
     props: descriptor.props,
     target: descriptor.target,
   });

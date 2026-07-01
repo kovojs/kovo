@@ -176,6 +176,36 @@ describe('mutation wire headers', () => {
     ).toEqual([]);
   });
 
+  it('fails closed when live-target attestation is asked to use an unresolved principal', () => {
+    const request = { sessionId: 'unknown' };
+    const csrf = {
+      secret: 'live-target-secret-0123456789abcdef',
+      sessionId: (value: typeof request) => value.sessionId,
+    };
+    const descriptor = {
+      component: 'components/product-form/product-form',
+      props: { productId: 'p1' },
+      target: 'product-form:p1',
+    };
+
+    expect(() =>
+      createLiveTargetAttestation(descriptor, { buildToken: 'build-a', csrf, request }),
+    ).toThrow(/unresolved session principal/);
+
+    expect(
+      mutationWireRequestFromHeaders({
+        buildToken: 'build-a',
+        csrf,
+        headers: {
+          'Kovo-Live-Targets':
+            'product-form:p1#components/product-form/product-form@attested:{"productId":"p1"}',
+        },
+        rawInput: {},
+        request,
+      }).liveTargetDescriptors,
+    ).toEqual([]);
+  });
+
   it('attests no-CSRF live-target descriptors with a deployment-stable secret (M8)', () => {
     const previousSecret = process.env.KOVO_LIVE_TARGET_SECRET;
     const request = {};
