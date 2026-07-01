@@ -52,6 +52,15 @@ describe('create-kovo starter (build integration: production durable task lifecy
         expect([200, 303]).toContain(replaced.status);
         await expectEventuallyCount(origin, `${replacedId}-new`, 1);
         await expectCountForDuration(origin, `${replacedId}-old`, 0, 900);
+
+        const selfRescheduleId = uniqueProofId('self-reschedule');
+        const selfReschedule = await postScheduleMode(origin, selfRescheduleId, 'self-reschedule');
+        await selfReschedule.text();
+        expect([200, 303]).toContain(selfReschedule.status);
+        await expectEventuallyCount(origin, selfRescheduleId, 1);
+        await expectCountForDuration(origin, selfRescheduleId, 1, 650);
+        await expectEventuallyCount(origin, selfRescheduleId, 2);
+        await expectCountForDuration(origin, selfRescheduleId, 2, 1400);
       },
     );
   }, 180_000);

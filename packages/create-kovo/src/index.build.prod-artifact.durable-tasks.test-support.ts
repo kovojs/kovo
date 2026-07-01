@@ -157,6 +157,15 @@ export function addDurableTaskProofs(root: string): void {
       '  },',
       '});',
       '',
+      "export const selfRescheduleTask = task('durable-task-proofs/self-reschedule', {",
+      '  input: s.object({ proofId: s.string() }),',
+      '  maxGenerations: 1,',
+      '  async run(input: { proofId: string }, context) {',
+      '    await context.runMutation(recordTaskEffect, { proofId: input.proofId });',
+      '    await context.schedule(selfRescheduleTask, { proofId: input.proofId }, { afterMs: 1 });',
+      '  },',
+      '});',
+      '',
       'export const scheduleTaskProof = mutation({',
       '  access: publicProof,',
       '  csrf: false,',
@@ -191,6 +200,10 @@ export function addDurableTaskProofs(root: string): void {
       "    if (input.mode === 'flaky') {",
       '      await request.schedule(flakyDurableTask, { failTimes: 2, proofId: input.proofId });',
       "      return { status: 'scheduled-flaky' };",
+      '    }',
+      "    if (input.mode === 'self-reschedule') {",
+      '      await request.schedule(selfRescheduleTask, { proofId: input.proofId });',
+      "      return { status: 'scheduled-self-reschedule' };",
       '    }',
       '    await request.schedule(recordDurableTask, { proofId: input.proofId });',
       "    return { status: 'scheduled' };",
@@ -230,6 +243,7 @@ export function addDurableTaskProofs(root: string): void {
         '  recordDurableTask,',
         '  recordTaskEffect,',
         '  scheduleTaskProof,',
+        '  selfRescheduleTask,',
         '  taskProofCountEndpoint,',
         "} from './durable-task-proofs.js';",
       ].join('\n'),
@@ -240,7 +254,10 @@ export function addDurableTaskProofs(root: string): void {
       'mutations: [addContact, recordTaskEffect, scheduleTaskProof, appSignIn, appSignOut],',
     )
     .replace('stylesheets: options.stylesheets ?? [],', 'stylesheets: options.stylesheets ?? [],')
-    .replace('routes: [', 'tasks: [recordDurableTask, flakyDurableTask],\n  routes: [');
+    .replace(
+      'routes: [',
+      'tasks: [recordDurableTask, flakyDurableTask, selfRescheduleTask],\n  routes: [',
+    );
   writeFileSync(appPath, app, 'utf8');
 }
 

@@ -422,6 +422,90 @@ export function addEscapedAttackerTextProof(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
+export function addRuntimeContractProofs(root: string): void {
+  writeFileSync(
+    join(root, 'src/runtime-contract-proofs.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { component } from '@kovojs/core';",
+      "import { mutation, publicAccess, query, s } from '@kovojs/server';",
+      '',
+      "const publicProof = publicAccess('public runtime contract regression proof');",
+      '',
+      'export const warningItemsQuery = query({',
+      '  access: publicProof,',
+      '  load: () => ({',
+      '    rows: Array.from({ length: 4 }, (_, id) => ({ id, label: `item-${id}` })),',
+      '  }),',
+      '  reads: [],',
+      '});',
+      '',
+      'export const acceptPngUpload = mutation({',
+      '  access: publicProof,',
+      '  csrf: false,',
+      "  input: s.object({ avatar: s.file().accept(['image/png']) }),",
+      '  handler(input: { avatar: { name: string; type: string } }) {',
+      '    return { name: input.avatar.name, type: input.avatar.type };',
+      '  },',
+      '});',
+      '',
+      'export const RuntimeContractsProof = component({',
+      '  queries: { warningItems: warningItemsQuery },',
+      '  render: ({ warningItems }) => {',
+      '    const rows = warningItems.rows as { id: number; label: string }[];',
+      '    return (',
+      '      <main data-proof="runtime-contracts">',
+      '        <p data-warning-count={String(rows.length)}>{rows.map((row) => row.label).join(",")}</p>',
+      '      </main>',
+      '    );',
+      '  },',
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8')
+    .replace(
+      "import { addContact } from './mutations.js';",
+      [
+        "import { addContact } from './mutations.js';",
+        'import {',
+        '  acceptPngUpload,',
+        '  RuntimeContractsProof,',
+        '  warningItemsQuery,',
+        "} from './runtime-contract-proofs.js';",
+      ].join('\n'),
+    )
+    .replace(
+      '  mutationReplayStore,',
+      '  mutationReplayStore,\n  requestLimits: { maxQueryListItems: 2 },',
+    )
+    .replace(
+      '  mutations: [addContact, appSignIn, appSignOut],',
+      '  mutations: [addContact, acceptPngUpload, appSignIn, appSignOut],',
+    )
+    .replace('  queries: [contactsQuery],', '  queries: [contactsQuery, warningItemsQuery],')
+    .replace(
+      "  routes: [\n    route('/', {",
+      [
+        '  routes: [',
+        "    route('/runtime-contracts-proof', {",
+        "      access: publicAccess('public runtime contract regression proof'),",
+        "      meta: { title: 'Runtime contract proof' },",
+        '      layout: AppLayout,',
+        '      stylesheets,',
+        '      page() {',
+        '        return <RuntimeContractsProof />;',
+        '      },',
+        '    }),',
+        "    route('/', {",
+      ].join('\n'),
+    );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export function addAuthSecretLeakProof(root: string): void {
   const queriesPath = join(root, 'src/queries.ts');
   const queries = readFileSync(queriesPath, 'utf8')

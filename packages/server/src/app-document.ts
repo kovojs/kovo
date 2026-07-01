@@ -33,6 +33,7 @@ import {
   type RouteDeclaration,
   type RouteRequestInput,
 } from './route.js';
+import { queryRuntimeWarningHeaderValue, type QueryRuntimeWarning } from './query.js';
 import type { KovoApp } from './app-types.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
@@ -236,7 +237,7 @@ export async function renderAppRouteDocumentResponse({
   if (enhancedNavigationDocument && documentResponse.status === 200) {
     documentResponse.headers = mergeVaryHeader(documentResponse.headers, 'Accept');
   }
-  const queryWarningHeader = queryRuntimeWarningHeader(
+  const queryWarningHeader = queryRuntimeWarningHeaderValue(
     queryRuntimeWarningsFromRequest(routeResponse.lifecycleRequest),
   );
   if (queryWarningHeader !== undefined) {
@@ -336,27 +337,10 @@ function hmacSessionFingerprint(input: string, secret: CsrfSecret | undefined): 
   return createHmac('sha256', hmacSecret).update(input).digest('base64url');
 }
 
-function queryRuntimeWarningHeader(
-  warnings: readonly QueryRuntimeWarningSignal[] | undefined,
-): string | undefined {
-  if (warnings === undefined || warnings.length === 0) return undefined;
-  const listLimits = warnings
-    .filter((warning) => warning.code === 'QUERY_LIST_LIMIT')
-    .map((warning) => `${warning.path};limit=${warning.limit}`)
-    .join(',');
-  return listLimits ? `QUERY_LIST_LIMIT ${listLimits}` : undefined;
-}
-
-interface QueryRuntimeWarningSignal {
-  code: 'QUERY_LIST_LIMIT';
-  limit: number;
-  path: string;
-}
-
-function queryRuntimeWarningsFromRequest(request: unknown): readonly QueryRuntimeWarningSignal[] {
+function queryRuntimeWarningsFromRequest(request: unknown): readonly QueryRuntimeWarning[] {
   if (typeof request !== 'object' || request === null) return [];
   const warnings = (request as { [queryRuntimeWarningsKey]?: unknown })[queryRuntimeWarningsKey];
-  return Array.isArray(warnings) ? (warnings as QueryRuntimeWarningSignal[]) : [];
+  return Array.isArray(warnings) ? (warnings as QueryRuntimeWarning[]) : [];
 }
 
 export async function renderAppErrorDocumentResponse(

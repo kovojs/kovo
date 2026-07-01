@@ -10,7 +10,6 @@ export interface DurableTaskRunnerHooks {
   onError?: (error: unknown, context: DurableTaskRunnerErrorContext) => Promise<void> | void;
   runMutation?: TaskRunContext['runMutation'];
   runQuery?: TaskRunContext['runQuery'];
-  schedule?: TaskRunContext['schedule'];
 }
 
 export interface DurableTaskRunnerErrorContext {
@@ -265,20 +264,21 @@ export class DurableTaskRunner {
         (async () => {
           throw new Error('Task runner runQuery hook is not configured.');
         }),
-      schedule:
-        this.hooks.schedule ??
-        (async (definition, args, options?: TaskScheduleOptions): Promise<TaskHandle> => {
-          return this.options.store.enqueue(
-            durableTaskScheduleInput({
-              args,
-              definition,
-              options,
-              parent: job,
-              registeredTasks: this.tasks,
-              selfRescheduleDelayFloorMs: this.selfRescheduleDelayFloorMs,
-            }),
-          );
-        }),
+      schedule: async (definition, args, options?: TaskScheduleOptions): Promise<TaskHandle> => {
+        // SPEC §9.6: task-body scheduling has one chokepoint. Registry checks, lineage,
+        // maxGenerations, and the self-reschedule delay floor are computed here before any queue
+        // write, so runtime hooks cannot replace the backstopped ctx.schedule contract.
+        return this.options.store.enqueue(
+          durableTaskScheduleInput({
+            args,
+            definition,
+            options,
+            parent: job,
+            registeredTasks: this.tasks,
+            selfRescheduleDelayFloorMs: this.selfRescheduleDelayFloorMs,
+          }),
+        );
+      },
     };
   }
 }
