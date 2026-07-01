@@ -25,7 +25,12 @@ import type {
 } from '../types.js';
 import { propertyAccessPath, propertyNameText, unwrapExpression } from './ast.js';
 import type { StaticLiteralValue } from './object.js';
-import { applySourceReplacements, replaceExtension, type SourceReplacement } from '../shared.js';
+import {
+  applySourceReplacements,
+  replaceExtension,
+  uniqueSorted,
+  type SourceReplacement,
+} from '../shared.js';
 import { ensureTypescriptRuntime } from '../ts-api.js';
 import { compileArtifactFileNames } from '../types.js';
 
@@ -376,10 +381,6 @@ function sourceSpecifierToTsx(fileName: string): string {
 
 function normalizeRouteFileName(fileName: string): string {
   return relative('', fileName).replaceAll('\\', '/');
-}
-
-function uniqueSorted(values: readonly string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function routeLayoutModels(

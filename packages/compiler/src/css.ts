@@ -8,7 +8,7 @@ import {
   type ComponentModuleModel,
 } from './scan/parse.js';
 import { cssIrHeader } from './ir.js';
-import { escapeCssString, indent } from './shared.js';
+import { escapeCssString, indent, uniqueSorted } from './shared.js';
 import type { RoutePageFact } from './types.js';
 
 /**
@@ -549,10 +549,6 @@ function dedupeComponentCssAssets(assets: readonly ComponentCssAsset[]): Compone
     seen.add(asset.sourceFileName);
     return true;
   });
-}
-
-function uniqueSorted(values: readonly string[]): string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function dedupeStyleRuleUsages(usages: readonly StyleRuleUsage[]): StyleRuleUsage[] {

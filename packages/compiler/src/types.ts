@@ -5,7 +5,7 @@ import type { ComponentCssAsset } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { PlatformSubstitution } from './lower/platform.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
-import { normalizeComponentFileName, replaceExtension } from './shared.js';
+import { attributeKebabCase, normalizeComponentFileName, replaceExtension } from './shared.js';
 import type { CompilerEmittedSourceProvenance } from './source-provenance.js';
 
 /**
@@ -546,11 +546,7 @@ export function emitElementParamTypes(params: readonly ElementParam[]): string {
 }
 
 export function elementParamAttributeNameFromPropertyName(name: string): string {
-  return `data-p-${name
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/[^A-Za-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .toLowerCase()}`;
+  return `data-p-${attributeKebabCase(name)}`;
 }
 
 // SPEC §4.3 / §4.6 (KV231): when two element-params in one handler share a terminal property name

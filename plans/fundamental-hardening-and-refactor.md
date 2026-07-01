@@ -184,11 +184,12 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
   - Fix: make the ad-hoc builders return `ResponseHeaders`, route every merge through the cookie-safe combinator;
     consider a branded `HeaderBag` whose only combinator is the safe merge (per CLAUDE.md type-level ergonomics).
   - Evidence: `pnpm exec vitest --run packages/server/src/response.test.ts packages/server/src/mutation-response.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/webhook.test.ts`, `vp check packages/server/src/response.ts packages/server/src/mutation.ts packages/server/src/query.ts packages/server/src/webhook.ts packages/server/src/response.test.ts packages/server/src/mutation-response.test.ts packages/server/src/query-endpoint.test.ts`, and `git diff --check HEAD~1..HEAD` passed after routing response header merges through the cookie-safe `mergeResponseHeaders` combinator and preserving repeated `Set-Cookie` in retry-after, mutation, and query response paths.
-- [ ] **S5 — Share the fail-closed replay reservation; one webhook response builder.** (M · med)
+- [x] **S5 — Share the fail-closed replay reservation; one webhook response builder.** (M · med)
   - Problem: `webhook.ts:741` (`reserveWebhookReplayBeforeRun`) hand-mirrors the mutation reserve→get→re-reserve→
     fail-closed machine (`replay.ts` / `mutation.ts:1143-1250`); the `Cache-Control: private, no-store` + `Content-Type`
     webhook floor is inlined 5× (`webhook.ts:962,997,1013,1024,1034`).
   - Fix: lift the reservation into `replay.ts` (parameterized by store shape); add one `webhookResponse(...)` builder owning the floor.
+  - Evidence: `pnpm exec vitest --run packages/server/src/replay.test.ts packages/server/src/webhook.test.ts packages/server/src/mutation.test.ts packages/server/src/mutation-endpoint.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/mutation-wire.test.ts packages/server/src/mutation-response.test.ts packages/server/src/app-mutation-request.test.ts`, `pnpm run test:integration`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after sharing `reserveReplayBeforeRun` across mutation/no-JS/webhook replay paths and centralizing webhook response headers.
 - [x] **S2 — De-duplicate the Node⇄Web HTTP adapter (Set-Cookie parity).** (M · med)
   - Problem: live `node.ts:344` (with `getSetCookie()` splitting + HTTP/2 pseudo-header rationale) vs the string-emitted
     copy in `nodeAdapterRuntimeSource()` `build.ts:606` (already diverged: `build.ts:713` guards `typeof
@@ -201,10 +202,11 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     `sql-write-allowlist.oracle.test.ts` cross-checking `writeTablesForStatement` vs the oracle over the DDL corpus,
     on the DEC8 matrix (uses T1 `runGate`). A static/oracle mismatch fails CI.
   - Evidence: `pnpm exec vitest --run packages/server/src/sql-write-allowlist.oracle.test.ts packages/server/src/sql-write-allowlist.test.ts`, `vp check packages/server/src/sql-write-oracle.ts packages/server/src/sql-write-allowlist.oracle.test.ts`, and `git diff --check` passed with transaction-rollback oracle coverage for PGlite/Postgres and better-sqlite3/SQLite over DML, DDL, view/index, and SQLite pragma cases.
-- [ ] **P.1 — DB-write choke (DEC4, M8).**
+- [x] **P.1 — DB-write choke (DEC4, M8).**
   - Route every handle family (`readonlyDb`×6, `managedDb`, `wrapManagedDbForSqlSafety`, webhook Tx, storage,
     `createDurableTaskSqlExecutor`) through `enforceManagedSql()`; add `scripts/check-single-choke.mjs` (via `runGate`)
     asserting the driver methods appear only inside the choke.
+  - Evidence: `pnpm exec vitest --run scripts/check-single-choke.test.mjs packages/server/src/managed-db.test.ts packages/server/src/task-queue.test.ts packages/server/src/task-cron.test.ts`, `pnpm exec vitest --run packages/server/src/sql-write-allowlist.test.ts packages/server/src/sql-write-allowlist.oracle.test.ts`, `pnpm run check:single-choke`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after routing managed SQL execution through `enforceManagedSql()` and enrolling the single-choke gate.
 
 ## Phase 3 — Structural splits (so later edits land in the right module)
 
@@ -214,25 +216,28 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     query-shapes.ts:2790). Move query-shape traversal → `query-shapes.ts` (shared `foldQueryShape` visitor);
     raw-write/mutation cluster → `domain-writes.ts`; leave static.ts a thin barrel.
   - Evidence: `pnpm exec vitest run packages/drizzle/src`, `vp check packages/drizzle/src/static.ts packages/drizzle/src/static/query-shapes.ts packages/drizzle/src/static/domain-writes.ts`, and `git diff --check HEAD~1..HEAD` passed after moving query-shape traversal helpers and `foldQueryShape` into `static/query-shapes.ts` and raw-write/mutation handler map helpers into `static/domain-writes.ts`.
-- [ ] **S6 — Split `mutation.ts` along the `mutation/` seam.** (L · low-med; after S3)
+- [x] **S6 — Split `mutation.ts` along the `mutation/` seam.** (L · low-med; after S3)
   - The 1973-line file mixes the lifecycle SM (242-382), `runMutation` (398-550), enhanced wire (744-1034), no-JS PRG
     (1071-1524), replay adapters (1143-1250), failure HTML (1686-1803). The enhanced/no-JS reauth + stale-session-CSRF
     branches are hand-forked pairs differing only in the terminal builder (1825-1842 vs 1936-1951; 1844-1867 vs
     1869-1892) despite `MutationResponseDeliveryMode` (211-223) existing to dispatch them. Extract
     `mutation/{wire-response,no-js,replay-policy,failure-html}.ts`; compute the outcome once, map to mode-specific responses.
-- [ ] **T6 — Split `graph-output.ts` (3046 lines) along input/args/formatters.** (L · low; after T3)
+  - Evidence: Same server mutation/webhook/replay Vitest, touched-file `vp check`, and `git diff --check origin/main..HEAD` listed for S5 passed after moving enhanced wire, no-JS PRG, replay policy, and failure HTML response mapping into `mutation/` modules while keeping `mutation.ts` as lifecycle orchestration.
+- [x] **T6 — Split `graph-output.ts` (3046 lines) along input/args/formatters.** (L · low; after T3)
   - Extract `graph-input.ts` (`readGraphInput:73`, `discoverGraphInputPath:112`), `graph-args.ts` (after T3), and the
     ~35 pure `Fact→string` formatters (≈1300-3046) → `graph-explain-format.ts`; keep orchestration in graph-output.ts.
+  - Evidence: `pnpm exec vitest --run packages/cli/src/graph-output.args.test.ts packages/cli/src/graph-input.test.ts packages/cli/src/graph-explain-format.test.ts packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after moving graph input, argv parsing, and explain/check formatters out of `graph-output.ts`.
 - [ ] **C3 — Exhaustive fold for the two `QueryShapeWrapper` codegen switches.** (M · med)
   - `types.ts:918` (`wrapperQueryShapeTypeExpr`) + `941-963` (`typeExprFromRevealedQueryShape`) enumerate the same
     union with divergent arms; exhaustiveness is enforced in only one → a new kind ships a silent `.d.ts` gap. Extract
     one `foldQueryShapeWrapper` with a `Record<kind,…>` handler; guard with `.d.ts` goldens.
   - Gap: `packages/drizzle/src/types.ts`, `wrapperQueryShapeTypeExpr`, and `typeExprFromRevealedQueryShape` are absent on the current `2eef549be` base and integration branch, so this checkbox remains open pending plan correction or a later typegen surface.
-- [ ] **D4 — Add `assertNever` exhaustiveness to the Drizzle analyzer.** (M · low-med)
+- [x] **D4 — Add `assertNever` exhaustiveness to the Drizzle analyzer.** (M · low-med)
   - Zero exhaustiveness across ~20k lines. `PredicatePnf` (summaries.ts:3352, 6 kinds) is dispatched by ~9 partial
     if-chains (summaries.ts:537-552 silently returns `[]` for three kinds; :3772 handles only `eq`/`and`) → a new kind
     silently degrades to "no scope proven". Add a shared `assertNever`, terminate total chains with it, convert central
     dispatchers to `switch`.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src`, focused predicate/scope Vitest, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after adding shared Drizzle `assertNever` coverage to central predicate PNF dispatchers and forged future-variant tests.
 
 ## Phase 4 — The fail-closed program on the clean substrate
 
@@ -329,7 +334,8 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
 - Independent hvr fan-out (no dependency on the above):
   - [x] **C4** generic `mergeFactsByKey` for 7 byte-identical app-graph merge triplets (`app-graph.ts:164/194/215/236/316/351/361`, each with an unenforced key-fn/comparator, e.g. `mergeAccessExplainFacts` dedups on `kind\0name` but sorts on `kind,name,decision`). S · low.
     - Evidence: `pnpm exec vitest --run packages/compiler/src/registry.test.ts`, `vp check packages/compiler/src/app-graph.ts packages/compiler/src/registry.test.ts`, and `git diff --check` passed after extracting the four current key+sort fact merge triplets into `mergeFactsByKey`; task/handler/endpoint merges remain separate because they aggregate fields rather than doing simple caller/derived dedupe.
-  - [ ] **C5** move byte-identical compiler micro-helpers to `shared.ts` — `uniqueSorted` (app-graph.ts:984, css.ts:554, package-styles.ts:283, route-pages.ts:380), `sanitizeIdentifier`/no-op `outputWriteFact` (style.ts + lower/structural-jsx.ts), three kebab variants. S · low.
+  - [x] **C5** move byte-identical compiler micro-helpers to `shared.ts` — `uniqueSorted` (app-graph.ts:984, css.ts:554, package-styles.ts:283, route-pages.ts:380), `sanitizeIdentifier`/no-op `outputWriteFact` (style.ts + lower/structural-jsx.ts), three kebab variants. S · low.
+    - Evidence: `pnpm exec vitest run packages/compiler/src/shared.test.ts packages/compiler/src/css.test.ts packages/compiler/src/package-styles.test.ts packages/compiler/src/route-pages.test.ts packages/compiler/src/style.test.ts packages/compiler/src/structural-jsx-ir.test.ts packages/compiler/src/compile-component.test.ts`, touched-file `vp check`, and `git diff --check` passed after moving `uniqueSorted`, generated identifier/write-fact helpers, and the compiler kebab variants into `shared.ts`.
   - [x] **C6** promote the rich `propertyAccessPath` (`parse.ts:708-745`: element access, zero-arg call receivers, optional chaining) as shared; retire the simplified `route-pages.ts:1034` / `query-binding.ts:146` copies (route/query-key facts diverge for accessor/call/optional forms). M · med.
     - Evidence: `pnpm exec vitest --run packages/compiler/src/scan/query-binding.test.ts packages/compiler/src/registry.test.ts packages/compiler/src/scan/parse.test.ts`, `vp check packages/compiler/src/scan/ast.ts packages/compiler/src/scan/parse.ts packages/compiler/src/scan/route-pages.ts packages/compiler/src/scan/query-binding.ts packages/compiler/src/scan/query-binding.test.ts packages/compiler/src/registry.test.ts`, and `git diff --check` passed after moving the richer property/call receiver path helper to `scan/ast.ts` and covering element access, zero-arg call receivers, and optional-chain route prop paths.
   - [x] **T3** one CLI arg-parsing framework: express check/audit/explain as `CommandArgvSpec`s (`graph-output.ts:1261` `parseFlaggedArgs` diverges from `commands-manifest.ts:708` `parseCommandArgv` on `--flag=value`/missing-value/unknown-option); delete `parseFlaggedArgs`. M · med. _(precedes T6)_
@@ -338,16 +344,20 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     - Evidence: Same focused CLI Vitest/VP/diff checks listed for T3 passed after moving repeated command argument error/single-positional handling into shared CLI tooling helpers.
   - [x] **T5** shared `findNearestFile` + `readJsonRecord` (three drifted walk-ups: `build-export.ts:918` stops at `stopDir`, `compile.ts:416` to root, `build-export.ts:1556` to cwd; ~6 JSON idiom copies). S · low.
     - Evidence: Same focused CLI Vitest/VP/diff checks listed for T3 passed after moving nearest-file and JSON record reads into shared tooling helpers.
-  - [ ] **T7** tightly-scoped `inline-loader-build.ts` cleanup: extract the ~80-entry line-array emission (`:1215`) into a named-parts builder; merge the readable/minified trusted-types assertions (`:1560,:1590`). Do NOT touch the `String.raw` installer (`:113-1042`) — byte-exact artifact parity. M · high (gate on `check:inline-loader` before/after).
-  - [ ] **U1** `filterCollection({items,query,match,fields,excludeDisabled})` reconciling combobox (substring over label+textValue+value, keeps disabled: `combobox.ts:487,1054`) vs autocomplete (prefix over one field, excludes disabled: `autocomplete.ts:543,1183`). M · med.
+  - [x] **T7** tightly-scoped `inline-loader-build.ts` cleanup: extract the ~80-entry line-array emission (`:1215`) into a named-parts builder; merge the readable/minified trusted-types assertions (`:1560,:1590`). Do NOT touch the `String.raw` installer (`:113-1042`) — byte-exact artifact parity. M · high (gate on `check:inline-loader` before/after).
+    - Evidence: `pnpm run check:inline-loader`, focused browser inline-loader Vitest, `pnpm run check:inline-loader:trusted-types`, browser bootstrap Vitest, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after extracting the generated module line builder and unifying trusted-types routing assertions without changing the generated artifact.
+  - [x] **U1** `filterCollection({items,query,match,fields,excludeDisabled})` reconciling combobox (substring over label+textValue+value, keeps disabled: `combobox.ts:487,1054`) vs autocomplete (prefix over one field, excludes disabled: `autocomplete.ts:543,1183`). M · med.
+    - Evidence: `pnpm exec vitest --run` on the focused headless-ui helper/primitive tests, touched-file `vp check`, `pnpm --filter @kovojs/headless-ui run lint:primitives`, `pnpm run check:api-surface`, `pnpm run test:gallery-browser`, and `git diff --check origin/main..HEAD` passed after moving combobox/autocomplete filtering into `filterCollection`.
   - [x] **U2** shared `isActivationKey` in `lib/keyboard-navigation.ts` (add legacy `'Spacebar'` to `select.ts:945`; siblings dropdown/context/menubar have it). S · low.
     - Evidence: `pnpm exec vitest run packages/headless-ui/src/lib/keyboard-navigation.test.ts packages/headless-ui/src/lib/active-descendant.test.ts packages/headless-ui/src/primitives/select.test.ts packages/headless-ui/src/primitives/combobox.test.ts packages/headless-ui/src/primitives/autocomplete.test.ts packages/headless-ui/src/primitives/dropdown-menu.test.ts packages/headless-ui/src/primitives/context-menu.test.ts packages/headless-ui/src/primitives/menubar.test.ts`, touched-file `vp check`, and `git diff --check HEAD~1..HEAD` passed after sharing `isActivationKey` across select/dropdown/context/menubar and covering legacy `Spacebar`.
   - [x] **U3** shared active-descendant/`describedBy` helpers in `lib/active-descendant.ts` (byte-identical at `combobox.ts:1007-1052` / `autocomplete.ts:1147-1191`). M · low.
     - Evidence: Same focused headless-ui Vitest/VP/diff checks listed for U2 passed after moving combobox/autocomplete active-descendant and described-by assembly into `lib/active-descendant.ts`.
   - [x] **U4** thread `now` through `selectKeyDown` (`select.ts:980` hard-codes `Date.now()`; siblings inject `now`; `selectTypeahead` already accepts it). S · low.
     - Evidence: Same focused headless-ui Vitest/VP/diff checks listed for U2 passed after adding deterministic `now` injection to `selectKeyDown`.
-  - [ ] **U5** shared `triggerAttributes({open,disabled,controlsId,haspopup,labelledBy})` (`aria-controls` stripped when disabled by dropdown/context/menubar but emitted by select/combobox; `disabled` vs `aria-disabled` inconsistent). Diff ARIA snapshots. M · med.
-  - [ ] **U6** `createCollectionAdapter({getItems,projector})` factory retiring the six-fold typeahead/move + option/result scaffolding (e.g. `dropdown-menu.ts:774-795` vs `select.ts:802-818`); home for U1/U2/U4. L · med.
+  - [x] **U5** shared `triggerAttributes({open,disabled,controlsId,haspopup,labelledBy})` (`aria-controls` stripped when disabled by dropdown/context/menubar but emitted by select/combobox; `disabled` vs `aria-disabled` inconsistent). Diff ARIA snapshots. M · med.
+    - Evidence: Same focused headless-ui Vitest/VP/API/gallery-browser/diff checks listed for U1 passed after routing combobox/autocomplete/select/dropdown/context/menubar trigger ARIA and disabled attributes through `triggerAttributes`.
+  - [x] **U6** `createCollectionAdapter({getItems,projector})` factory retiring the six-fold typeahead/move + option/result scaffolding (e.g. `dropdown-menu.ts:774-795` vs `select.ts:802-818`); home for U1/U2/U4. L · med.
+    - Evidence: Same focused headless-ui Vitest/VP/API/gallery-browser/diff checks listed for U1 passed after moving combobox/autocomplete/select/dropdown/context/menubar movement/typeahead projection through `createCollectionAdapter`.
   - [ ] **U7** delete or document the dead `lib/positioning-fallback.ts` (exported via `internal.ts:9,43`, consumed by nothing but its own test; primitives use CSS anchor positioning). Run `audit-public-api` first. S · low.
 
 ## Verification map

@@ -48,12 +48,94 @@ export interface CollectionTypeaheadResult<Value extends string = string> {
   value: Value | undefined;
 }
 
+/** Strategy inputs for collection filtering helpers shared by listbox-like primitives. */
+export interface CollectionFilterOptions<Item extends { disabled?: boolean }> {
+  excludeDisabled?: boolean | undefined;
+  fields: readonly ((item: Item) => string | undefined)[];
+  items: readonly Item[] | undefined;
+  match: (values: readonly string[], query: string, item: Item) => boolean;
+  query: string;
+}
+
+/** Shared projected collection adapter surface used by primitive wrappers. */
+export interface CollectionAdapter<
+  State,
+  Value extends string = string,
+  Args extends readonly unknown[] = [],
+> {
+  items(state: State, ...args: Args): readonly CollectionControllerItem<Value>[];
+  move(
+    state: State,
+    options: Omit<CollectionMoveOptions<Value>, 'items'>,
+    ...args: Args
+  ): CollectionMoveResult<Value> | undefined;
+  typeahead(
+    key: string,
+    state: State,
+    options: Omit<CollectionTypeaheadOptions<Value>, 'items'>,
+    ...args: Args
+  ): CollectionTypeaheadResult<Value>;
+}
+
 /** Project arbitrary primitive items into the shared collection controller shape. */
 export function projectCollectionItems<Item, Value extends string = string>(
   items: readonly Item[] | undefined,
   projector: (item: Item) => CollectionControllerItem<Value>,
 ): readonly CollectionControllerItem<Value>[] {
   return Object.freeze((items ?? []).map((item) => Object.freeze(projector(item))));
+}
+
+/** Filter collection items with primitive-specific match logic and disabled-item policy. */
+export function filterCollection<Item extends { disabled?: boolean }>(
+  options: CollectionFilterOptions<Item>,
+): readonly Item[] {
+  const { excludeDisabled = false, fields, items = [], match, query } = options;
+  if (query === '' && !excludeDisabled) return items;
+  if (query === '') {
+    return Object.freeze(items.filter((item) => item.disabled !== true));
+  }
+  return Object.freeze(
+    items.filter((item) => {
+      if (excludeDisabled && item.disabled === true) return false;
+      return match(
+        fields
+          .map((field) => field(item)?.trim().toLocaleLowerCase())
+          .filter((value): value is string => value !== undefined && value !== ''),
+        query,
+        item,
+      );
+    }),
+  );
+}
+
+/** Build a projected collection adapter so primitive wrappers only provide state-specific knobs. */
+export function createCollectionAdapter<
+  State,
+  Item,
+  Value extends string = string,
+  Args extends readonly unknown[] = [],
+>(options: {
+  getItems: (state: State, ...args: Args) => readonly Item[] | undefined;
+  projector: (item: Item) => CollectionControllerItem<Value>;
+}): CollectionAdapter<State, Value, Args> {
+  const items = (state: State, ...args: Args) =>
+    projectCollectionItems(options.getItems(state, ...args), options.projector);
+
+  return {
+    items,
+    move(state, moveOptions, ...args) {
+      return moveCollection({
+        ...moveOptions,
+        items: items(state, ...args),
+      });
+    },
+    typeahead(key, state, typeaheadOptions, ...args) {
+      return typeaheadCollection(key, {
+        ...typeaheadOptions,
+        items: items(state, ...args),
+      });
+    },
+  };
 }
 
 /** Compute Home/End/arrow movement across projected items. */

@@ -1,13 +1,42 @@
 import { describe, expect, it } from 'vitest';
 
+import type { GeneratedOutputWriteFact } from './output-context-facts.js';
 import {
   applySourceReplacements,
   applySourceReplacementsWithOffsetMap,
+  attributeKebabCase,
   composeSourceOffsetMaps,
   generatedOffsetToOriginal,
+  looseKebabCase,
+  outputWriteFact,
+  sanitizeIdentifier,
   sourceReplacementOffsetMap,
   SourceReplacementAccumulator,
+  uniqueSorted,
 } from './shared.js';
+
+describe('compiler shared micro helpers', () => {
+  it('deduplicates and sorts strings in locale order', () => {
+    expect(uniqueSorted(['beta', 'alpha', 'beta', 'gamma'])).toEqual(['alpha', 'beta', 'gamma']);
+  });
+
+  it('preserves the compiler kebab-case variants', () => {
+    expect(looseKebabCase('Primary Button_styles')).toBe('primary-button-styles');
+    expect(attributeKebabCase('item.parentID')).toBe('item-parent-id');
+  });
+
+  it('sanitizes generated identifiers and preserves write-fact object identity', () => {
+    const fact: GeneratedOutputWriteFact = {
+      context: 'attribute',
+      sink: 'class',
+      source: 'style-extraction',
+      writer: 'derive',
+    };
+
+    expect(sanitizeIdentifier('1:bad-name')).toBe('_1_bad_name');
+    expect(outputWriteFact(fact)).toBe(fact);
+  });
+});
 
 describe('compiler shared source replacements', () => {
   it('applies replacements by original source spans', () => {

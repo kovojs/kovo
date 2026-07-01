@@ -219,7 +219,7 @@ function guardedSqlMethod(
   writePolicy: ManagedSqlWritePolicy | undefined,
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
-    assertManagedSqlStatement(statement, mode, writePolicy);
+    enforceManagedSql(statement, mode, writePolicy);
     return value.call(target, statement, ...args);
   };
 }
@@ -311,7 +311,7 @@ function assertAmbiguousSqlMethodArguments(
 ): void {
   const statements = args.filter(isSqlStatementCandidate);
   for (const statement of statements) {
-    assertManagedSqlStatement(statement, mode, writePolicy);
+    enforceManagedSql(statement, mode, writePolicy);
   }
   if (statements.length > 0) return;
   if (writePolicy === undefined || !strictSqlTarget) return;
@@ -483,7 +483,7 @@ function guardedPrepareMethod(
   writePolicy: ManagedSqlWritePolicy | undefined,
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
-    assertManagedSqlStatement(statement, mode, writePolicy);
+    enforceManagedSql(statement, mode, writePolicy);
     const prepared = value.call(target, statement, ...args);
     return typeof prepared === 'object' && prepared !== null
       ? wrapPreparedSqlStatement(prepared, mode, proxyCache, methodCache)
@@ -517,7 +517,14 @@ function wrapPreparedSqlStatement(
   return proxy;
 }
 
-function assertManagedSqlStatement(
+/**
+ * The single managed SQL runtime choke (SPEC §10.3/§11.2). Every framework-owned DB handle path
+ * that can execute caller-provided SQL text must route through this function before reaching the
+ * underlying driver.
+ *
+ * @internal
+ */
+export function enforceManagedSql(
   statement: unknown,
   mode: SqlSafetyMode,
   writePolicy: ManagedSqlWritePolicy | undefined,

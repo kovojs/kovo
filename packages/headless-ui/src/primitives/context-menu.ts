@@ -1,15 +1,14 @@
 import {
+  createCollectionAdapter,
   dataDisabled,
   dataState,
   dispatchCancelableChange,
   mergeDataAttributes,
   isActivationKey,
-  moveCollection,
-  projectCollectionItems,
   setOpenState,
-  typeaheadCollection,
   openState,
   scheduleDeferred,
+  triggerAttributes,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
   type TypeaheadState,
@@ -500,22 +499,24 @@ export function contextMenuRootAttributes(
 export function contextMenuTriggerAttributes(
   options: ContextMenuTriggerAttributeOptions = {},
 ): ContextMenuPrimitiveAttributes {
-  const enabledContentId = options.disabled === true ? undefined : options.contentId;
+  const trigger = triggerAttributes({
+    controlsId: options.contentId,
+    disabled: options.disabled === true,
+    disabledBehavior: 'aria',
+    haspopup: 'menu',
+    labelledBy: options.labelledBy,
+    open: options.open === true,
+    stripControlsWhenDisabled: true,
+  });
+  const controlsId =
+    typeof trigger['aria-controls'] === 'string' ? trigger['aria-controls'] : undefined;
 
   return Object.freeze({
     ...contextMenuDataAttributes(options),
-    'aria-expanded': String(options.open === true),
-    'aria-haspopup': 'menu',
     role: 'button',
-    ...(options.disabled === true ? { 'aria-disabled': 'true' } : {}),
-    ...(enabledContentId === undefined
-      ? {}
-      : {
-          'aria-controls': enabledContentId,
-          'kovo-context-menu': enabledContentId,
-        }),
+    ...trigger,
+    ...(controlsId === undefined ? {} : { 'kovo-context-menu': controlsId }),
     ...(options.id === undefined ? {} : { id: options.id }),
-    ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
   });
 }
 
@@ -808,10 +809,9 @@ export function contextMenuMove(
   key: string,
   options: { loop?: boolean } = {},
 ): ContextMenuMoveResult | undefined {
-  return moveCollection({
+  return contextMenuCollection.move(state, {
     currentValue: state.highlightedValue,
     disabled: state.disabled,
-    items: projectCollectionItems(state.items, contextMenuCollectionItem),
     key,
     loop: options.loop,
   });
@@ -839,10 +839,9 @@ export function contextMenuTypeahead(
   key: string,
   options: ContextMenuTypeaheadOptions,
 ): ContextMenuTypeaheadResult {
-  const result = typeaheadCollection(key, {
+  const result = contextMenuCollection.typeahead(key, state, {
     currentValue: options.currentValue ?? state.highlightedValue,
     disabled: state.disabled,
-    items: projectCollectionItems(state.items, contextMenuCollectionItem),
     loop: options.loop,
     now: options.now,
     state: options.state,
@@ -1117,6 +1116,11 @@ function contextMenuItemDisabled(
     state.items?.find((item) => item.value === value)?.disabled === true
   );
 }
+
+const contextMenuCollection = createCollectionAdapter({
+  getItems: (state: ContextMenuState) => state.items,
+  projector: contextMenuCollectionItem,
+});
 
 function contextMenuCollectionItem(item: ContextMenuItem) {
   return {

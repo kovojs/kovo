@@ -1,3 +1,5 @@
+import type { GeneratedOutputWriteFact } from './output-context-facts.js';
+
 export function escapeAttribute(value: string): string {
   return value.replaceAll('&', '&amp;').replaceAll('"', '&quot;');
 }
@@ -76,11 +78,39 @@ export function dedupeBy<Value>(
   });
 }
 
+export function uniqueSorted(values: readonly string[]): string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
 export function kebabCase(value: string): string {
   return value
     .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
     .replace(/_/g, '-')
     .toLowerCase();
+}
+
+export function looseKebabCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[_\s]+/g, '-')
+    .toLowerCase();
+}
+
+export function attributeKebabCase(value: string): string {
+  return value
+    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
+    .replace(/[^A-Za-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '')
+    .toLowerCase();
+}
+
+export function sanitizeIdentifier(value: string): string {
+  const sanitized = value.replace(/[^A-Za-z0-9_$]/g, '_');
+  return /^[A-Za-z_$]/.test(sanitized) ? sanitized : `_${sanitized}`;
+}
+
+export function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFact {
+  return fact;
 }
 
 export function replaceExtension(fileName: string, extension: string): string {

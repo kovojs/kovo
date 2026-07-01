@@ -18,7 +18,13 @@ import {
 } from '@kovojs/style/internal';
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 
-import { escapeAttribute, type SourceReplacement } from './shared.js';
+import {
+  escapeAttribute,
+  looseKebabCase,
+  outputWriteFact,
+  sanitizeIdentifier,
+  type SourceReplacement,
+} from './shared.js';
 import type { StyleRuleUsage } from './css.js';
 import { diagnosticFor, type CompilerDiagnostic } from './diagnostics.js';
 import type { GeneratedOutputWriteFact } from './output-context-facts.js';
@@ -485,7 +491,7 @@ function collectImportedStaticValues(
 }
 
 function derivedStyleNamespace(fileName: string, bindingName: string): string {
-  const binding = toKebabCase(bindingName);
+  const binding = looseKebabCase(bindingName);
   const stripped = binding.replace(/-(styles|vars|theme)$/, '');
   if (stripped !== binding && stripped.length > 0) return stripped;
 
@@ -503,13 +509,6 @@ function derivedStyleNamespace(fileName: string, bindingName: string): string {
   if (binding === 'variants') return `${fileNamespace}-variant`;
 
   return binding;
-}
-
-function toKebabCase(value: string): string {
-  return value
-    .replace(/([a-z0-9])([A-Z])/g, '$1-$2')
-    .replace(/[_\s]+/g, '-')
-    .toLowerCase();
 }
 
 function importedStaticValueRequests(sourceFile: ts.SourceFile): ImportedStaticValue[] {
@@ -1366,15 +1365,6 @@ function nextExportName(baseName: string, nameCounts: Map<string, number>): stri
   const count = nameCounts.get(baseName) ?? 0;
   nameCounts.set(baseName, count + 1);
   return count === 0 ? baseName : `${baseName}_${count + 1}`;
-}
-
-function sanitizeIdentifier(value: string): string {
-  const sanitized = value.replace(/[^A-Za-z0-9_$]/g, '_');
-  return /^[A-Za-z_$]/.test(sanitized) ? sanitized : `_${sanitized}`;
-}
-
-function outputWriteFact(fact: GeneratedOutputWriteFact): GeneratedOutputWriteFact {
-  return fact;
 }
 
 function pushRuleUsages(

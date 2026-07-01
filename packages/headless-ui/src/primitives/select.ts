@@ -1,14 +1,13 @@
 import {
   checkedState,
+  createCollectionAdapter,
   dataDisabled,
   dataState,
   dispatchCancelableChange,
   isActivationKey,
   mergeDataAttributes,
-  moveCollection,
-  projectCollectionItems,
   setOpenState,
-  typeaheadCollection,
+  triggerAttributes,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
   type TypeaheadState,
@@ -529,15 +528,18 @@ export function selectTriggerAttributes(
 
   return Object.freeze({
     ...selectDataAttributes(options),
-    'aria-expanded': String(options.open === true),
-    'aria-haspopup': 'listbox',
     role: 'combobox',
     type: 'button',
     ...(activeDescendant === undefined ? {} : { 'aria-activedescendant': activeDescendant }),
-    ...(options.listboxId === undefined ? {} : { 'aria-controls': options.listboxId }),
-    ...(options.disabled === true ? { disabled: true } : {}),
+    ...triggerAttributes({
+      controlsId: options.listboxId,
+      disabled: options.disabled === true,
+      haspopup: 'listbox',
+      labelledBy: options.labelledBy,
+      nativeDisabledPresence: 'when-disabled',
+      open: options.open === true,
+    }),
     ...(options.id === undefined ? {} : { id: options.id }),
-    ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
   });
@@ -789,11 +791,9 @@ export function selectMove(
   key: string,
   options: { loop?: boolean } = {},
 ): SelectMoveResult | undefined {
-  const sourceItems = state.items ?? [];
-  return moveCollection({
+  return selectCollection.move(state, {
     currentValue: state.highlightedValue ?? state.value,
     disabled: state.disabled,
-    items: projectCollectionItems(sourceItems, selectCollectionItem),
     key,
     loop: options.loop,
   });
@@ -821,10 +821,9 @@ export function selectTypeahead(
   key: string,
   options: SelectTypeaheadOptions,
 ): SelectTypeaheadResult {
-  const result = typeaheadCollection(key, {
+  const result = selectCollection.typeahead(key, state, {
     currentValue: options.currentValue ?? state.highlightedValue ?? state.value,
     disabled: state.disabled,
-    items: projectCollectionItems(state.items, selectCollectionItem),
     loop: options.loop,
     now: options.now,
     state: options.state,
@@ -1029,6 +1028,11 @@ function selectItemDataAttributes(options: SelectItemAttributeOptions): Primitiv
     options.highlightedValue === options.itemValue ? { 'data-highlighted': '' } : undefined,
   );
 }
+
+const selectCollection = createCollectionAdapter({
+  getItems: (state: SelectState) => state.items,
+  projector: selectCollectionItem,
+});
 
 function selectCollectionItem(item: SelectItem) {
   return {
