@@ -31,19 +31,28 @@ export {
   mergeDataAttributes,
   openState,
   pressedState,
+  triggerAttributes,
 } from './state-attributes.js';
-export type { PrimitiveDataAttributes, PrimitiveStateToken } from './state-attributes.js';
+export type {
+  PrimitiveDataAttributes,
+  PrimitiveStateToken,
+  TriggerAttributesOptions,
+} from './state-attributes.js';
 
 export { createChangeDetail, dispatchCancelableChange } from './change-details.js';
 export type { PrimitiveChangeDetail, PrimitiveChangeDetailInput } from './change-details.js';
 
 export {
+  createCollectionAdapter,
+  filterCollection,
   moveCollection,
   projectCollectionItems,
   typeaheadCollection,
 } from './collection-controller.js';
 export type {
+  CollectionAdapter,
   CollectionControllerItem,
+  CollectionFilterOptions,
   CollectionMoveOptions,
   CollectionMoveResult,
   CollectionTypeaheadOptions,

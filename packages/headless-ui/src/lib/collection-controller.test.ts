@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  createCollectionAdapter,
+  filterCollection,
   moveCollection,
   projectCollectionItems,
   typeaheadCollection,
@@ -87,6 +89,62 @@ describe('headless-ui collection controller', () => {
       matchIndex: -1,
       state: { buffer: 'b', updatedAt: 1000 },
       value: 'alpha',
+    });
+  });
+
+  it('filters projected collections with shared field and disabled policies', () => {
+    const source = [
+      { disabled: false, label: 'Austin', textValue: undefined, value: 'austin' },
+      { disabled: true, label: 'Boston', textValue: undefined, value: 'boston' },
+      { label: undefined, textValue: 'Chicago city', value: 'chicago' },
+    ] as const;
+
+    expect(
+      filterCollection({
+        fields: [(item) => item.label, (item) => item.textValue, (item) => item.value],
+        items: source,
+        match: (values, query) => values.join(' ').includes(query),
+        query: 'city',
+      }).map((item) => item.value),
+    ).toEqual(['chicago']);
+
+    expect(
+      filterCollection({
+        excludeDisabled: true,
+        fields: [(item) => item.label],
+        items: source,
+        match: (values, query) => values[0]?.startsWith(query) ?? false,
+        query: '',
+      }).map((item) => item.value),
+    ).toEqual(['austin', 'chicago']);
+  });
+
+  it('creates collection adapters that share projection, move, and typeahead plumbing', () => {
+    const adapter = createCollectionAdapter({
+      getItems: (state: { items?: typeof items }) => state.items,
+      projector: (item: (typeof items)[number]) => item,
+    });
+    const state = { items };
+
+    expect(adapter.items(state)).toEqual(items);
+    expect(
+      adapter.move(state, {
+        currentValue: 'alpha',
+        key: 'ArrowDown',
+      }),
+    ).toEqual({
+      highlightedIndex: 2,
+      highlightedValue: 'gamma',
+    });
+    expect(
+      adapter.typeahead('d', state, {
+        currentValue: 'alpha',
+        now: 1000,
+      }),
+    ).toEqual({
+      matchIndex: 3,
+      state: { buffer: 'd', updatedAt: 1000 },
+      value: 'delta',
     });
   });
 });

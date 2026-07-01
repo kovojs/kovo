@@ -1,15 +1,14 @@
 import {
+  createCollectionAdapter,
   dataDisabled,
   dataState,
   dispatchCancelableChange,
   mergeDataAttributes,
-  moveCollection,
   isActivationKey,
-  projectCollectionItems,
-  typeaheadCollection,
   openState,
   scheduleDeferred,
   setOpenState,
+  triggerAttributes,
   toggleOpenState,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
@@ -469,17 +468,19 @@ export function dropdownMenuRootAttributes(
 export function dropdownMenuTriggerAttributes(
   options: DropdownMenuTriggerAttributeOptions = {},
 ): DropdownMenuPrimitiveAttributes {
-  const enabledContentId = options.disabled === true ? undefined : options.contentId;
-
   return Object.freeze({
     ...dropdownMenuDataAttributes(options),
-    'aria-expanded': String(options.open === true),
-    'aria-haspopup': 'menu',
-    disabled: options.disabled === true,
     type: 'button',
-    ...(enabledContentId === undefined ? {} : { 'aria-controls': enabledContentId }),
+    ...triggerAttributes({
+      controlsId: options.contentId,
+      disabled: options.disabled === true,
+      haspopup: 'menu',
+      labelledBy: options.labelledBy,
+      nativeDisabledPresence: 'always',
+      open: options.open === true,
+      stripControlsWhenDisabled: true,
+    }),
     ...(options.id === undefined ? {} : { id: options.id }),
-    ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
   });
 }
 
@@ -746,10 +747,9 @@ export function dropdownMenuMove(
   key: string,
   options: { loop?: boolean } = {},
 ): DropdownMenuMoveResult | undefined {
-  return moveCollection({
+  return dropdownMenuCollection.move(state, {
     currentValue: state.highlightedValue,
     disabled: state.disabled,
-    items: projectCollectionItems(state.items, dropdownMenuCollectionItem),
     key,
     loop: options.loop,
   });
@@ -777,10 +777,9 @@ export function dropdownMenuTypeahead(
   key: string,
   options: DropdownMenuTypeaheadOptions,
 ): DropdownMenuTypeaheadResult {
-  const result = typeaheadCollection(key, {
+  const result = dropdownMenuCollection.typeahead(key, state, {
     currentValue: options.currentValue ?? state.highlightedValue,
     disabled: state.disabled,
-    items: projectCollectionItems(state.items, dropdownMenuCollectionItem),
     loop: options.loop,
     now: options.now,
     state: options.state,
@@ -1032,6 +1031,11 @@ function dropdownMenuItemDisabled(
     state.items?.find((item) => item.value === value)?.disabled === true
   );
 }
+
+const dropdownMenuCollection = createCollectionAdapter({
+  getItems: (state: DropdownMenuState) => state.items,
+  projector: dropdownMenuCollectionItem,
+});
 
 function dropdownMenuCollectionItem(item: DropdownMenuItem) {
   return {
