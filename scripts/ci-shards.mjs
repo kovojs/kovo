@@ -164,7 +164,7 @@ const STARTER_ENTRIES = [
   {
     id: 'raw-sql-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
-    seconds: 434,
+    seconds: 80,
   },
   {
     id: 'starter-typecheck',
