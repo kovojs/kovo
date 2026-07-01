@@ -420,7 +420,7 @@ export const C = component({
     ).toHaveLength(0);
   });
 
-  it('resolves literal element access to trustedHtml without trusting computed keys', () => {
+  it('resolves literal element access and fails closed for computed Kovo namespace keys', () => {
     expect(
       kv426(`
 import * as browser from '@kovojs/browser';
@@ -431,16 +431,17 @@ export const C = component({
 `),
     ).toHaveLength(1);
 
-    expect(
-      kv426(`
+    const messages = kv426(`
 import * as browser from '@kovojs/browser';
 const key = 'trustedHtml';
 export const C = component({
   queries: { post: postQuery },
   render: ({ post }) => <article>{browser[key](post.body)}</article>,
 });
-`),
-    ).toHaveLength(0);
+`);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('trustedHtml() sends query-derived data');
   });
 
   it('resolves a local const alias of the real trustedHtml binding', () => {
@@ -608,6 +609,20 @@ export const C = component({
     ).toHaveLength(0);
   });
 
+  it('fails closed for computed trustedUrl namespace calls in JSX attributes', () => {
+    const messages = kv426(`
+import * as browser from '@kovojs/browser';
+const key = 'trustedUrl';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <a href={browser[key](post.href)}>read</a>,
+});
+`);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('trustedUrl() sends query-derived data');
+  });
+
   it('resolves trustedUrl through @kovojs/server and keeps local lookalikes clean', () => {
     expect(
       kv426(`
@@ -661,5 +676,19 @@ export const C = component({
 
     expect(messages).toHaveLength(1);
     expect(messages[0]).toContain('renderedHtml() sends data whose provenance cannot be proven');
+  });
+
+  it('fails closed for computed @internal renderedHtml namespace calls', () => {
+    const messages = kv426(`
+import * as html from '@kovojs/server/internal/html';
+const key = 'renderedHtml';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => html[key](post.body),
+});
+`);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('renderedHtml() sends query-derived data');
   });
 });

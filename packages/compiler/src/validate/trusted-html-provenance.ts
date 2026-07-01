@@ -25,15 +25,16 @@ import type { ComponentModuleModel } from '../scan/parse.js';
  *
  * Bounded blast radius (technical-preview bias: the gate is unconditional, the escape is explicit
  * + audited). The gate flags:
- *   - a request root: the conventional mutation/form `input` identifier, or a `req`/`request`
- *     accessor chain only when that root is not shadowed by a local binding
- *     (`req.search`/`req.params`/`req.body`/`req.headers`/`req.cookies`/…);
+ *   - a request root: the `request` slot on the third render parameter, resolved by parameter
+ *     position and binding shape rather than a fragile local name;
  *   - a query root: a render binding destructured from the component's `queries` result;
  *   - those reached directly, via a field access (`question.body`), via taint-preserving local
  *     composition (`question.body ?? ''`, `` `${question.body}` ``), or via a same-scope
  *     alias/destructure/derive (`const { body } = question; trustedHtml(body)`).
  * Function calls, spreads, unbound identifiers, and unhandled expression forms are unprovable, not
  * clean. They fail closed unless the public trustedHtml/trustedUrl call carries an audited reason.
+ * Non-literal namespace calls through Kovo trust modules (`browser[key](value)`) are also treated
+ * as unproven trust sinks when the member cannot be resolved to a safe non-sink export.
  *
  * Author escapes (audit-visible in `kovo explain --trust`, consistent with KV438's
  * serverValue/adminAssign):
@@ -102,13 +103,14 @@ interface RenderProvenanceBindings {
 
 const MAX_ALIAS_DEPTH = 6;
 
-/** Conventional request-derived root identifier (the mutation/form input object; KV438 source set). */
-const REQUEST_INPUT_IDENTIFIER = 'input';
 const AUDITED_REASON_PROPERTY = 'reason';
 const COMPONENT_FACTORY_NAME = 'component';
 const CORE_MODULE_SPECIFIER = '@kovojs/core';
 const QUERIES_PROPERTY = 'queries';
 const RENDER_PROPERTY = 'render';
+const BROWSER_MODULE_SPECIFIER = '@kovojs/browser';
+const SERVER_MODULE_SPECIFIER = '@kovojs/server';
+const SERVER_INTERNAL_HTML_MODULE_SPECIFIER = '@kovojs/server/internal/html';
 
 function rawTrustSinkForCall(
   sourceFile: ts.SourceFile,
@@ -132,7 +134,126 @@ function rawTrustSinkForExpression(
   if (expressionResolvesToRenderedHtmlRawSink(sourceFile, expression)) {
     return { auditedReasonAllowed: false, label: 'renderedHtml', rawSink: 'raw HTML' };
   }
+  return dynamicNamespaceRawTrustSink(sourceFile, expression);
+}
+
+type TrustNamespaceModule =
+  | typeof BROWSER_MODULE_SPECIFIER
+  | typeof SERVER_MODULE_SPECIFIER
+  | typeof SERVER_INTERNAL_HTML_MODULE_SPECIFIER;
+
+function dynamicNamespaceRawTrustSink(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): RawTrustSink | null {
+  const expr = unwrap(expression);
+  if (!ts.isElementAccessExpression(expr)) return null;
+  if (elementAccessName(expr.argumentExpression) !== null) return null;
+
+  const namespace = unwrap(expr.expression);
+  if (!ts.isIdentifier(namespace)) return null;
+  const moduleSpecifier = trustNamespaceImportModule(sourceFile, namespace);
+  if (moduleSpecifier === null) return null;
+
+  const member = staticStringValue(expr.argumentExpression);
+  if (member !== null) return trustNamespaceMemberSink(moduleSpecifier, member);
+  return unknownTrustNamespaceMemberSink(moduleSpecifier);
+}
+
+function trustNamespaceMemberSink(
+  moduleSpecifier: TrustNamespaceModule,
+  member: string,
+): RawTrustSink | null {
+  if (
+    (moduleSpecifier === BROWSER_MODULE_SPECIFIER || moduleSpecifier === SERVER_MODULE_SPECIFIER) &&
+    member === 'trustedHtml'
+  ) {
+    return { auditedReasonAllowed: true, label: 'trustedHtml', rawSink: 'raw HTML' };
+  }
+  if (
+    (moduleSpecifier === BROWSER_MODULE_SPECIFIER || moduleSpecifier === SERVER_MODULE_SPECIFIER) &&
+    member === 'trustedUrl'
+  ) {
+    return { auditedReasonAllowed: true, label: 'trustedUrl', rawSink: 'trusted URL' };
+  }
+  if (
+    (moduleSpecifier === SERVER_MODULE_SPECIFIER ||
+      moduleSpecifier === SERVER_INTERNAL_HTML_MODULE_SPECIFIER) &&
+    member === 'renderedHtml'
+  ) {
+    return { auditedReasonAllowed: false, label: 'renderedHtml', rawSink: 'raw HTML' };
+  }
   return null;
+}
+
+function unknownTrustNamespaceMemberSink(moduleSpecifier: TrustNamespaceModule): RawTrustSink {
+  if (moduleSpecifier === SERVER_INTERNAL_HTML_MODULE_SPECIFIER) {
+    return { auditedReasonAllowed: false, label: 'renderedHtml', rawSink: 'raw HTML' };
+  }
+  return { auditedReasonAllowed: true, label: 'trustedHtml', rawSink: 'raw HTML' };
+}
+
+function trustNamespaceImportModule(
+  sourceFile: ts.SourceFile,
+  namespace: ts.Identifier,
+): TrustNamespaceModule | null {
+  const name = identifierName(namespace);
+  let moduleSpecifier: TrustNamespaceModule | null = null;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+    const candidate = trustNamespaceModule(literalText(statement.moduleSpecifier));
+    if (candidate === null) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (bindings !== undefined && ts.isNamespaceImport(bindings) && bindings.name.text === name) {
+      moduleSpecifier = candidate;
+    }
+  }
+  if (moduleSpecifier === null) return null;
+  return namespaceImportIsShadowed(namespace, name) ? null : moduleSpecifier;
+}
+
+function trustNamespaceModule(specifier: string): TrustNamespaceModule | null {
+  if (
+    specifier === BROWSER_MODULE_SPECIFIER ||
+    specifier === SERVER_MODULE_SPECIFIER ||
+    specifier === SERVER_INTERNAL_HTML_MODULE_SPECIFIER
+  ) {
+    return specifier;
+  }
+  return null;
+}
+
+function namespaceImportIsShadowed(node: ts.Node, name: string): boolean {
+  const sourceFile = node.getSourceFile();
+  const position = node.getStart(sourceFile);
+  let cursor: ts.Node | undefined = node.parent;
+  while (cursor) {
+    if (isFunctionLikeWithParameters(cursor) && cursor.getStart(sourceFile) < position) {
+      if (cursor.parameters.some((parameter) => bindingNameBinds(parameter.name, name))) {
+        return true;
+      }
+    }
+    if (ts.isBlock(cursor) || ts.isModuleBlock(cursor) || ts.isSourceFile(cursor)) {
+      for (const statement of cursor.statements) {
+        if (statement.getStart(sourceFile) >= position) continue;
+        if (ts.isImportDeclaration(statement)) continue;
+        if (statementBindsName(statement, name)) return true;
+        if (ts.isVariableStatement(statement)) {
+          for (const declaration of statement.declarationList.declarations) {
+            if (
+              declaration.getStart(sourceFile) < position &&
+              bindingNameBinds(declaration.name, name)
+            ) {
+              return true;
+            }
+          }
+        }
+      }
+    }
+    cursor = cursor.parent;
+  }
+  return false;
 }
 
 /**
@@ -341,8 +462,7 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
   if (ctx.queryBindings.has(id.text)) return 'query';
   if (ctx.queryDataRoots.has(id.text)) return 'query';
   if (ctx.requestBindings.has(id.text)) return 'request';
-  if (id.text === REQUEST_INPUT_IDENTIFIER) return 'request';
-  return hasLocalBinding(id, id.text) ? 'unprovable' : 'unprovable';
+  return 'unprovable';
 }
 
 /**
@@ -351,10 +471,6 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
  */
 function localConstInitializer(node: ts.Node, name: string): ts.Expression | undefined {
   return localBinding(node, name)?.initializer;
-}
-
-function hasLocalBinding(node: ts.Node, name: string): boolean {
-  return localBinding(node, name) !== undefined;
 }
 
 function localBinding(
@@ -529,6 +645,20 @@ function elementAccessName(argument: ts.Expression | undefined): string | null {
   const expr = unwrap(argument);
   if (ts.isStringLiteralLike(expr)) return literalText(expr);
   return null;
+}
+
+function staticStringValue(
+  argument: ts.Expression | undefined,
+  visited = new Set<ts.Node>(),
+): string | null {
+  if (argument === undefined) return null;
+  const expr = unwrap(argument);
+  if (ts.isStringLiteralLike(expr)) return literalText(expr);
+  if (!ts.isIdentifier(expr)) return null;
+  const initializer = localConstInitializer(expr, identifierName(expr));
+  if (initializer === undefined || visited.has(initializer)) return null;
+  visited.add(initializer);
+  return staticStringValue(initializer, visited);
 }
 
 /** Discharge: a non-empty STATIC reason as the second argument (`"…"` or `{ reason: "…" }`). */
