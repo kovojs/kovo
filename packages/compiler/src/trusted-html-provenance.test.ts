@@ -84,6 +84,46 @@ export const C = component({
     expect(messages[0]).toContain('provenance cannot be proven locally');
   });
 
+  it('does not classify shadowed render data or slot names by text', () => {
+    expect(
+      kv426(`
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+export const C = component({
+  queries: { contacts: contactsQuery },
+  render: (data, _state, slots) => {
+    const renderLocal = () => {
+      const data = { contacts: { items: [{ email: '/reviewed' }] } };
+      const slots = { request: { body: '<b>static helper</b>' } };
+      return (
+        <main>
+          <a href={trustedUrl(data.contacts.items[0].email)}>safe</a>
+          {trustedHtml(slots.request.body)}
+        </main>
+      );
+    };
+    return renderLocal();
+  },
+});
+`),
+    ).toHaveLength(0);
+  });
+
+  it('fails closed when a nested callback parameter shadows a query binding', () => {
+    const messages = kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => {
+    const format = (post: { body: string }) => trustedHtml(post.body);
+    return <article>{format({ body: '<p>local</p>' })}</article>;
+  },
+});
+`);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('provenance cannot be proven locally');
+  });
+
   it('does not treat a local object named request as request provenance', () => {
     expect(
       kv426(`

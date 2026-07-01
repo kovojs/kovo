@@ -661,7 +661,11 @@ export function addInternalHtmlImportProof(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
-export function addTrustedOutputProvenanceBuildProof(root: string): void {
+export function addTrustedOutputProvenanceBuildProof(
+  root: string,
+  options: { unsafe?: boolean } = {},
+): void {
+  const unsafe = options.unsafe ?? true;
   const appPath = join(root, 'src/app.tsx');
   let app = readFileSync(appPath, 'utf8');
   app = replaceRequired(
@@ -672,7 +676,7 @@ export function addTrustedOutputProvenanceBuildProof(root: string): void {
       "import * as browserTrust from '@kovojs/browser';",
       "import { trustedHtml, trustedUrl } from '@kovojs/browser';",
       "import { component } from '@kovojs/core';",
-      "import { renderedHtml } from '@kovojs/server/internal/html';",
+      ...(unsafe ? ["import { renderedHtml } from '@kovojs/server/internal/html';"] : []),
       'import {',
     ].join('\n'),
     'trusted output proof imports',
@@ -698,15 +702,25 @@ export function addTrustedOutputProvenanceBuildProof(root: string): void {
       '    slots: { request?: AppRequest },',
       '  ) => (',
       '    <main data-proof="trusted-output-provenance">',
-      '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""))}>',
+      unsafe
+        ? '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""))}>'
+        : '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""), "server-reviewed contact mailto route")}>',
       '        Unsafe URL',
       '      </a>',
-      '      <a href={browserTrust[dynamicTrustedUrlKey](data.contacts.items[0]?.email ?? "")}>',
+      unsafe
+        ? '      <a href={browserTrust[dynamicTrustedUrlKey](data.contacts.items[0]?.email ?? "")}>'
+        : '      <a href={trustedUrl(data.contacts.items[0]?.email ?? "", "server-reviewed dynamic contact mailto route")}>',
       '        Dynamic unsafe URL',
       '      </a>',
-      '      {renderedHtml(data.contacts.items.map((contact) => contact.name).join(""))}',
-      '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "")}',
-      '      {browserTrust[dynamicTrustedHtmlKey](slots.request?.headers.get("x-dynamic-proof") ?? "")}',
+      unsafe
+        ? '      {renderedHtml(data.contacts.items.map((contact) => contact.name).join(""))}'
+        : '      <section>static trusted output proof</section>',
+      unsafe
+        ? '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "")}'
+        : '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "", "reviewed trusted output request header")}',
+      unsafe
+        ? '      {browserTrust[dynamicTrustedHtmlKey](slots.request?.headers.get("x-dynamic-proof") ?? "")}'
+        : '      {trustedHtml(slots.request?.headers.get("x-dynamic-proof") ?? "", "reviewed dynamic trusted output request header")}',
       '    </main>',
       '  ),',
       '});',

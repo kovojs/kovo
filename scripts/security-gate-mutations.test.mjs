@@ -29,6 +29,10 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'trusted-html-provenance/weaken-call-result-taint-fail-closed',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'security-test-build-gate/drop-required-proof-file-evidence',
           status: 'killed',
         }),
@@ -42,6 +46,10 @@ describe('security-gate-mutations', () => {
         }),
         expect.objectContaining({
           name: 'security-test-build-gate/weaken-kv435-safe-sibling-proof-enrollment',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'security-test-build-gate/weaken-kv426-trusted-output-safe-sibling-proof-enrollment',
           status: 'killed',
         }),
         expect.objectContaining({

@@ -138,8 +138,10 @@ export const SECURITY_BUILD_PROOFS = [
     code: 'KV426',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     requiredNeedles: [
-      'addTrustedOutputProvenanceBuildProof(root)',
-      'buildProductionArtifact(root)',
+      'addTrustedOutputProvenanceBuildProof(unsafeRoot)',
+      'buildProductionArtifact(unsafeRoot)',
+      'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',
+      'buildProductionArtifact(safeRoot)',
       'KV426',
       'trustedUrl() sends query-derived data',
       'renderedHtml() sends query-derived data',
