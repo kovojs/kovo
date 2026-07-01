@@ -22,6 +22,7 @@
           "./internal/module-ref",
           "./internal/package-prefix",
           "./internal/query-delta",
+          "./internal/query-shape-source",
           "./internal/render-plan-token",
           "./internal/route-pattern",
           "./internal/security-url",

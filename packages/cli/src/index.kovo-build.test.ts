@@ -763,16 +763,12 @@ export default createApp({
     }
   });
 
-  it('skips project-mode Drizzle analysis for apps without Drizzle imports', async () => {
+  it('fails project-mode data-plane analysis for JS source without Drizzle import spellings', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-no-drizzle-fast-path-'));
     const appPath = join(root, 'app.mjs');
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
-
-    vi.doMock('@kovojs/drizzle/internal/static', () => {
-      throw new Error('Drizzle analyzer should not load for non-Drizzle apps');
-    });
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
@@ -798,14 +794,23 @@ export default createApp({
 `,
         'utf8',
       );
+      mkdirSync(join(root, 'src'), { recursive: true });
+      writeFileSync(
+        join(root, 'src/search.js'),
+        `
+export async function search(input, db) {
+  return db.execute("select * from products where id = '" + input.id + "'");
+}
+`,
+        'utf8',
+      );
 
       const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(exitCode, errorOutput).toBe(0);
-      expect(stderr).not.toHaveBeenCalled();
-      expect(existsSync(join(outDir, '.kovo/graph.json'))).toBe(true);
+      expect(exitCode, errorOutput).toBe(1);
+      expect(errorOutput).toMatch(/ERROR KV422[\s\S]*src\/search\.js/);
+      expect(existsSync(join(outDir, '.kovo/graph.json'))).toBe(false);
     } finally {
-      vi.doUnmock('@kovojs/drizzle/internal/static');
       stdout.mockRestore();
       stderr.mockRestore();
       rmSync(root, { force: true, recursive: true });
