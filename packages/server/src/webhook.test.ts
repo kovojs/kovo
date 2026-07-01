@@ -49,9 +49,9 @@ describe('server webhook primitive', () => {
 
       // @ts-expect-error webhook handler tx is already transaction-scoped.
       tx.transaction((nested) => nested);
-      // @ts-expect-error WebhookTxDb hides raw driver escape handles; runtime wraps remain the floor.
+      // @ts-expect-error WebhookTxDb hides raw driver escape handles; runtime denial remains the floor.
       tx.$client.execute('select 1');
-      // @ts-expect-error WebhookTxDb hides raw driver escape handles; runtime wraps remain the floor.
+      // @ts-expect-error WebhookTxDb hides raw driver escape handles; runtime denial remains the floor.
       tx.session.run('select 1');
 
       return rows;
@@ -229,12 +229,12 @@ describe('server webhook primitive', () => {
           (context.tx as unknown as { session: { run(statement: unknown): unknown } }).session.run(
             'select * from products',
           ),
-        ).toThrow(/KV422/);
+        ).toThrow(/raw driver escape db\.session|KV422/);
         expect(() =>
           (
             context.tx as unknown as { $client: { execute(statement: unknown): unknown } }
           ).$client.execute('select * from products'),
-        ).toThrow(/KV422/);
+        ).toThrow(/raw driver escape db\.\$client|KV422/);
         expect(() =>
           (context.tx as unknown as { futureStatement(options: unknown): unknown }).futureStatement(
             { mode: 'opaque' },
@@ -246,22 +246,22 @@ describe('server webhook primitive', () => {
             values: ['p1'],
           }),
         ).toMatchObject({ text: 'select id from products where id = $1' });
-        expect(
+        expect(() =>
           (
             context.tx as unknown as { $client: { execute(statement: unknown): unknown } }
           ).$client.execute({
             text: 'select id from products where id = $1',
             values: ['p1'],
           }),
-        ).toMatchObject({ text: 'select id from products where id = $1' });
-        expect(
+        ).toThrow(/raw driver escape db\.\$client|KV422/);
+        expect(() =>
           (context.tx as unknown as { session: { run(statement: unknown): unknown } }).session.run(
             stampTrustedSql(
               { text: 'update products set name = $1 where id = $2', values: ['Ada', 'p1'] },
               'audited webhook tx update',
             ),
           ),
-        ).toMatchObject({ text: 'update products set name = $1 where id = $2' });
+        ).toThrow(/raw driver escape db\.session|KV422/);
         expect(
           (
             context.tx as unknown as { futureStatement(statement: unknown): unknown }
@@ -315,12 +315,7 @@ describe('server webhook primitive', () => {
 
     expect(result.replayed).toBe(false);
     expect(result.response.status).toBe(200);
-    expect(calls).toEqual([
-      'tx.execute',
-      'tx.$client.execute',
-      'tx.session.run',
-      'tx.futureStatement',
-    ]);
+    expect(calls).toEqual(['tx.execute', 'tx.futureStatement']);
   });
 
   it('dispatches webhook writes through an audited mutation and replays provider duplicates', async () => {

@@ -86,6 +86,7 @@ import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from 
 import { mutationWithRuntimeRegistryFacts, type RuntimeRegistryFacts } from './registry-facts.js';
 import {
   canRunSqliteAsyncTransaction,
+  frameworkManagedDbRawTarget,
   kovoAsyncMutationTransaction,
   runSqliteAsyncTransaction,
   type AsyncMutationTransactionCapableDb,
@@ -585,9 +586,10 @@ function asyncMutationTransaction(
   const managed = (db as AsyncMutationTransactionCapableDb)[kovoAsyncMutationTransaction];
   if (typeof managed === 'function') return managed.bind(db);
 
-  if (!canRunSqliteAsyncTransaction(db)) return undefined;
+  const sqliteProbeTarget = frameworkManagedDbRawTarget(db) ?? db;
+  if (!canRunSqliteAsyncTransaction(sqliteProbeTarget)) return undefined;
   return <Result>(callback: (transactionDb: unknown) => Promise<Result>) => {
-    const result = runSqliteAsyncTransaction(db, db, callback);
+    const result = runSqliteAsyncTransaction(sqliteProbeTarget, db, callback);
     if (result === undefined) {
       throw new Error('Kovo SQLite mutation transaction adapter disappeared during execution.');
     }

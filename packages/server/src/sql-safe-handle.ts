@@ -129,6 +129,12 @@ function wrapDbAdapter(
           );
       }
 
+      if (writePolicy !== undefined && isManagedRawDriverEscapeProperty(prop)) {
+        throw new Error(
+          `KV422: managed DB raw driver escape ${describeSqlMethod(prop)} is not exposed from framework-owned handles (SPEC §10.2/§10.3). Use the managed SQL methods so statement provenance and declared-table enforcement remain attached.`,
+        );
+      }
+
       const value = Reflect.get(target, prop, receiver);
 
       if (isNestedSqlHandleProperty(prop) && typeof value === 'object' && value !== null) {
@@ -668,6 +674,10 @@ function isManagedDbAdapterLike(value: unknown): value is Record<PropertyKey, un
 
 function isNestedSqlHandleProperty(prop: PropertyKey): boolean {
   return isSqlHandleProperty(prop) || prop === 'session';
+}
+
+function isManagedRawDriverEscapeProperty(prop: PropertyKey): boolean {
+  return prop === '$client' || prop === 'session';
 }
 
 function isSqlStatementCandidate(value: unknown): boolean {

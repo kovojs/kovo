@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { KovoReadonlyHandleError, managedDb, readonlyDb } from './managed-db.js';
@@ -881,7 +882,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['get', 'run']);
   });
 
-  it('write mode wraps raw driver escape properties instead of exposing them', async () => {
+  it('write mode denies raw driver escape properties before exposing child handles', () => {
     const log: string[] = [];
     const handle = managedDb(
       {
@@ -908,13 +909,11 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       },
     );
 
-    expect(() => handle.$client.execute('select * from products')).toThrow(/KV422/);
-    expect(() => handle.session.run('select * from products')).toThrow(/KV422/);
-    expect(log).toEqual([]);
-
-    expect(
-      handle.$client.execute({ sql: 'select id from products where id = ?', values: ['p1'] }),
-    ).toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(() => void handle.$client).toThrow(/raw driver escape db\.\$client|KV422/);
+    expect(() => void handle.session).toThrow(/raw driver escape db\.session|KV422/);
+    expect(() => handle.$client.execute({ sql: 'select id from products', values: [] })).toThrow(
+      /raw driver escape db\.\$client|KV422/,
+    );
     expect(() =>
       handle.session.run(
         stampTrustedSql(
@@ -922,11 +921,11 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
           'drifted session delete',
         ),
       ),
-    ).toThrow(/KV406/);
-    expect(log).toEqual(['$client.execute']);
+    ).toThrow(/raw driver escape db\.session|KV422/);
+    expect(log).toEqual([]);
   });
 
-  it('write mode parses unknown nested driver methods before execution', () => {
+  it('write mode denies unknown methods behind raw driver escape properties before execution', () => {
     const log: string[] = [];
     const handle = managedDb(
       {
@@ -953,24 +952,16 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       },
     );
 
-    expect(() => handle.$client.futureStatement('select id from products')).toThrow(/KV422/);
-    expect(log).toEqual([]);
-
-    expect(
-      handle.$client.futureStatement({
+    expect(() => handle.$client.futureStatement('select id from products')).toThrow(
+      /raw driver escape db\.\$client|KV422/,
+    );
+    expect(() =>
+      handle.session.futureStatement({
         sql: 'select id from products where id = ?',
         values: ['p1'],
       }),
-    ).toMatchObject({ sql: 'select id from products where id = ?' });
-    expect(() =>
-      handle.session.futureStatement(
-        stampTrustedSql(
-          { sql: 'update users set name = ? where id = ?', values: ['Ada', 'u1'] },
-          'drifted nested future update',
-        ),
-      ),
-    ).toThrow(/KV406/);
-    expect(log).toEqual(['$client.futureStatement']);
+    ).toThrow(/raw driver escape db\.session|KV422/);
+    expect(log).toEqual([]);
   });
 
   it('write mode parses unknown driver method SQL carriers at any argument position', () => {
@@ -1082,7 +1073,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual([]);
   });
 
-  it('write mode fails closed for unknown nested driver methods without a SQL carrier', () => {
+  it('write mode fails closed for raw escape properties before unknown nested methods', () => {
     const log: string[] = [];
     const handle = managedDb(
       {
@@ -1110,12 +1101,23 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     );
 
     expect(() => handle.$client.futureStatement({ mode: 'opaque' })).toThrow(
-      /unknown managed DB method db\.futureStatement/,
+      /raw driver escape db\.\$client|KV422/,
     );
     expect(() => handle.session.futureStatement({ mode: 'opaque' })).toThrow(
-      /unknown managed DB method db\.futureStatement/,
+      /raw driver escape db\.session|KV422/,
     );
     expect(log).toEqual([]);
+  });
+
+  it('keeps the managed raw-driver escape denial before nested handle wrapping (source gate)', () => {
+    const source = readFileSync(new URL('./sql-safe-handle.ts', import.meta.url), 'utf8');
+    const denial = source.indexOf('isManagedRawDriverEscapeProperty(prop)');
+    const firstReflectGet = source.indexOf('Reflect.get(target, prop, receiver)');
+    const nestedWrap = source.indexOf('isNestedSqlHandleProperty(prop)');
+
+    expect(denial).toBeGreaterThanOrEqual(0);
+    expect(denial).toBeLessThan(firstReflectGet);
+    expect(denial).toBeLessThan(nestedWrap);
   });
 
   it.each(

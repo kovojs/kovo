@@ -171,7 +171,9 @@ describe('server guard and session primitives', () => {
     expect(() => request.db.pglite.query('select * from products')).toThrow(/KV422/);
     expect(() => request.db.sqlite.exec('select * from products')).toThrow(/KV422/);
     expect(() => request.db.client.execute('select * from products')).toThrow(/KV422/);
-    expect(() => request.db.$client.prepare('select * from products')).toThrow(/KV422/);
+    expect(() => request.db.$client.prepare('select * from products')).toThrow(
+      /raw driver escape db\.\$client|KV422/,
+    );
     expect(calls).toEqual([]);
 
     expect(
@@ -181,12 +183,12 @@ describe('server guard and session primitives', () => {
     expect(
       request.db.client.execute({ sql: 'select * from products where id = ?', args: ['p1'] }),
     ).toBe('client-ok');
-    expect(
+    expect(() =>
       request.db.$client
         .prepare(stampStaticSql({ sql: 'select * from products where id = ?' }))
         .get(),
-    ).toBe('prepared-ok');
-    expect(calls).toHaveLength(4);
+    ).toThrow(/raw driver escape db\.\$client|KV422/);
+    expect(calls).toHaveLength(3);
   });
 
   it('rejects attacker-shaped SQL text and still allows static prepared statement values', async () => {
