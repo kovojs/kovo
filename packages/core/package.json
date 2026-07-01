@@ -20,6 +20,7 @@
     "./internal/document-protocol": "./src/internal/document-protocol.ts",
     "./internal/event": "./src/internal/event.ts",
     "./internal/fragment-target": "./src/internal/fragment-target.ts",
+    "./internal/filesystem": "./src/internal/filesystem.ts",
     "./internal/framework-identity": "./src/internal/framework-identity.ts",
     "./internal/graph": "./src/internal/graph.ts",
     "./internal/json": "./src/internal/json.ts",
@@ -79,6 +80,10 @@
       "./internal/fragment-target": {
         "types": "./dist/internal/fragment-target.d.mts",
         "default": "./dist/internal/fragment-target.mjs"
+      },
+      "./internal/filesystem": {
+        "types": "./dist/internal/filesystem.d.mts",
+        "default": "./dist/internal/filesystem.mjs"
       },
       "./internal/framework-identity": {
         "types": "./dist/internal/framework-identity.d.mts",
@@ -151,7 +156,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/event.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-url.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/wire-json.ts --dts",
+    "build:dist": "vp pack src/generated.ts src/index.ts src/internal/agent-docs.ts src/internal/client-module-url.ts src/internal/component-render.ts src/internal/derivation.ts src/internal/diagnostics.ts src/internal/document-protocol.ts src/internal/event.ts src/internal/filesystem.ts src/internal/fragment-target.ts src/internal/framework-identity.ts src/internal/graph.ts src/internal/json.ts src/internal/module-ref.ts src/internal/package-prefix.ts src/internal/query-delta.ts src/internal/query-shape-source.ts src/internal/render-plan-token.ts src/internal/route-pattern.ts src/internal/security-markers.ts src/internal/security-url.ts src/internal/semantic-attributes.ts src/internal/sink-policy.ts src/internal/source-sink-registry.ts src/internal/sql-safety.ts src/internal/storage.ts src/internal/wire-json.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "devDependencies": {

@@ -1,3 +1,5 @@
+import { createFrameworkOutputFileSystemBoundary } from './internal/filesystem.js';
+
 /** The accepted body shapes when writing an object: a string, raw bytes, or a byte stream. */
 export type StorageBody = string | ArrayBuffer | ArrayBufferView | ReadableStream<Uint8Array>;
 
@@ -220,31 +222,25 @@ export function createMemoryStorage(options: MemoryStorageOptions = {}): Storage
  * @returns A `StorageCapability` backed by the filesystem.
  */
 export function createFileSystemStorage(options: FileSystemStorageOptions): StorageCapability {
-  const root = options.root;
+  const fileSystem = createFrameworkOutputFileSystemBoundary(options.root);
   const writeLocks = new Map<string, Promise<void>>();
 
   return {
     async delete(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const { rm } = await import('node:fs/promises');
-      const filePath = await storageFilePath(root, normalizedKey);
+      const filePath = storageFilePath(fileSystem.root, normalizedKey);
       await withFileSystemWriteLock(writeLocks, filePath, async () => {
         await Promise.all([
-          rm(filePath, { force: true }),
-          rm(metadataFilePath(filePath), { force: true }),
+          fileSystem.deleteFile(normalizedKey),
+          fileSystem.deleteFile(metadataStorageKey(normalizedKey)),
         ]);
       });
     },
     async get(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const { readFile } = await import('node:fs/promises');
-      const filePath = await storageFilePath(root, normalizedKey);
       const [bytes, info] = await Promise.all([
-        readFile(filePath).catch((error: unknown) => {
-          if (isNotFoundError(error)) return undefined;
-          throw error;
-        }),
-        fileSystemStat(root, normalizedKey),
+        fileSystem.fileBytes(normalizedKey),
+        fileSystemStat(fileSystem.root, normalizedKey),
       ]);
       if (bytes === undefined || info === undefined) return undefined;
 
@@ -255,7 +251,7 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
     },
     async put(key, body, putOptions = {}) {
       const normalizedKey = normalizeStorageKey(key);
-      const filePath = await storageFilePath(root, normalizedKey);
+      const filePath = storageFilePath(fileSystem.root, normalizedKey);
       const bytes = await storageBodyToBytes(body);
       const lastModified = new Date();
       const info = objectInfo(normalizedKey, bytes.byteLength, putOptions, lastModified);
@@ -263,9 +259,9 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       await withFileSystemWriteLock(writeLocks, filePath, async () => {
         // SPEC §12/§13 storage parity: filesystem writes must not expose half-written blobs or
         // mismatched blob/sidecar metadata under concurrent puts to the same object.
-        await atomicWriteFileSystemObject(filePath, bytes);
-        await atomicWriteFileSystemObject(
-          metadataFilePath(filePath),
+        await fileSystem.writeFile(normalizedKey, bytes);
+        await fileSystem.writeFile(
+          metadataStorageKey(normalizedKey),
           JSON.stringify(metadataRecord(info)),
         );
       });
@@ -273,19 +269,17 @@ export function createFileSystemStorage(options: FileSystemStorageOptions): Stor
       return info;
     },
     async stat(key) {
-      return fileSystemStat(root, normalizeStorageKey(key));
+      return fileSystemStat(fileSystem.root, normalizeStorageKey(key));
     },
     async stream(key) {
       const normalizedKey = normalizeStorageKey(key);
-      const { createReadStream } = await import('node:fs');
-      const { Readable } = await import('node:stream');
-      const filePath = await storageFilePath(root, normalizedKey);
-      const info = await fileSystemStat(root, normalizedKey);
-      if (info === undefined) return undefined;
+      const bytes = await fileSystem.fileBytes(normalizedKey);
+      const info = await fileSystemStat(fileSystem.root, normalizedKey);
+      if (bytes === undefined || info === undefined) return undefined;
 
       return {
         ...info,
-        body: Readable.toWeb(createReadStream(filePath)) as ReadableStream<Uint8Array>,
+        body: bytesToReadableStream(bytes),
       };
     },
   };
@@ -501,18 +495,18 @@ function metadataRecord(info: StorageObjectInfo): FileSystemMetadataRecord {
 }
 
 async function fileSystemStat(root: string, key: string): Promise<StorageObjectInfo | undefined> {
-  const { readFile, stat: fsStat } = await import('node:fs/promises');
-  const filePath = await storageFilePath(root, key);
-  const fileStats = await fsStat(filePath).catch((error: unknown) => {
-    if (isNotFoundError(error)) return undefined;
-    throw error;
-  });
+  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+  const fileStats = await fileSystem.statFile(key);
   if (fileStats === undefined) return undefined;
 
-  const record = await readFile(metadataFilePath(filePath), 'utf8')
-    .then((value) => JSON.parse(value) as Partial<FileSystemMetadataRecord>)
+  const record = await fileSystem
+    .fileBytes(metadataStorageKey(key))
+    .then((value) =>
+      value === undefined
+        ? undefined
+        : (JSON.parse(new TextDecoder().decode(value)) as Partial<FileSystemMetadataRecord>),
+    )
     .catch((error: unknown) => {
-      if (isNotFoundError(error)) return undefined;
       if (error instanceof SyntaxError) return undefined;
       throw error;
     });
@@ -528,37 +522,15 @@ async function fileSystemStat(root: string, key: string): Promise<StorageObjectI
   };
 }
 
-async function storageFilePath(root: string, key: string): Promise<string> {
-  const path = await import('node:path');
-  const resolvedRoot = path.resolve(root);
-  const filePath = path.resolve(resolvedRoot, key);
-  const relativePath = path.relative(resolvedRoot, filePath);
-  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
-    throw new Error('Storage key resolves outside the storage root.');
-  }
+function storageFilePath(root: string, key: string): string {
+  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+  const filePath = fileSystem.confinedPath(key);
+  if (filePath === undefined) throw new Error('Storage key resolves outside the storage root.');
   return filePath;
 }
 
-function metadataFilePath(filePath: string): string {
-  return `${filePath}${sidecarSuffix}`;
-}
-
-async function atomicWriteFileSystemObject(filePath: string, source: string | Uint8Array) {
-  const { randomUUID } = await import('node:crypto');
-  const { mkdir, rename, rm, writeFile } = await import('node:fs/promises');
-  const path = await import('node:path');
-  await mkdir(path.dirname(filePath), { recursive: true });
-  const tempPath = path.join(
-    path.dirname(filePath),
-    `.${path.basename(filePath)}.${process.pid}.${randomUUID()}.tmp`,
-  );
-  try {
-    await writeFile(tempPath, source);
-    await rename(tempPath, filePath);
-  } catch (error) {
-    await rm(tempPath, { force: true }).catch(() => undefined);
-    throw error;
-  }
+function metadataStorageKey(key: string): string {
+  return `${key}${sidecarSuffix}`;
 }
 
 async function withFileSystemWriteLock<T>(
@@ -583,15 +555,6 @@ async function withFileSystemWriteLock<T>(
     releaseCurrent();
     if (locks.get(filePath) === lock) locks.delete(filePath);
   }
-}
-
-function isNotFoundError(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'code' in error &&
-    (error as { code?: unknown }).code === 'ENOENT'
-  );
 }
 
 function storageEtag(key: string, size: number, lastModified: Date): string {

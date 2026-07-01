@@ -313,7 +313,8 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
 ## Phase 5 — Widen the net (M9 threat categories; one commit each + an M1 dogfood pass)
 
 - [ ] **Q.1 egress / SSRF** — choke DEC6; destination allowlist; census section.
-- [ ] **Q.2 filesystem** — single fs-access boundary; path-confinement gate.
+- [x] **Q.2 filesystem** — single fs-access boundary; path-confinement gate.
+  - Evidence: `pnpm exec vitest --run scripts/check-filesystem-boundary.test.mjs packages/core/src/internal/filesystem.test.ts packages/server/src/file.test.ts packages/core/src/storage.test.ts packages/server/src/output-staging.test.ts packages/server/src/static-export-output.test.ts packages/server/src/static-export.test.ts`, `pnpm run check:filesystem-boundary`, `pnpm run check:security-brands`, `pnpm run check:api-surface`, `pnpm run check:publish`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after filesystem reads/writes were routed through `@kovojs/core/internal/filesystem` and raw filesystem access was constrained by the new gate.
 - [x] **Q.3 subprocess / command execution** — single exec boundary; default-deny.
   - Evidence: `pnpm exec vitest --run packages/server/src/command.test.ts scripts/check-sink-policy-gate.test.mjs`, `pnpm run check:sink-policy`, `pnpm run check:api-surface`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after `cmd()` required a `commandAllowlist(...)` witness and the sink-policy gate rejected direct `child_process` usage outside audited tooling.
 - [x] **Q.4 deserialization** — the request-body parser is the choke; schema-bounded shapes only.
