@@ -170,6 +170,46 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     });
   });
 
+  it('recognizes Kovo SQL projections through catalog-backed root aliases and barrels', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'kovo-sql-barrel.ts',
+          source: 'export { sql as brandedSql } from "@kovojs/drizzle";',
+        },
+        {
+          fileName: 'cart.queries.ts',
+          source: [
+            'import { sql as kovoSql } from "@kovojs/drizzle";',
+            'import * as kovoDrizzle from "@kovojs/drizzle";',
+            'import { brandedSql } from "./kovo-sql-barrel";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", { id: text("id").primaryKey() }, kovo({ domain: "cart", key: "id" }));',
+            'export const cartQuery = query("cart/kovo-counts", {',
+            '  output: s.object({ aliasCount: s.number(), namespaceCount: s.number(), barrelCount: s.number() }),',
+            '  reads: [cartItems],',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({',
+            '      aliasCount: kovoSql<number>`count(*)`,',
+            '      namespaceCount: kovoDrizzle.sql<number>`count(*)`,',
+            '      barrelCount: brandedSql<number>`count(*)`,',
+            '    }).from(cartItems);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+    expect(facts[0]?.shape).toEqual({
+      aliasCount: 'number',
+      barrelCount: 'number',
+      namespaceCount: 'number',
+    });
+  });
+
   it('keeps a local sql shadow fail-closed even when the real import is present', () => {
     const facts = extractQueryFactsFromProject({
       files: [

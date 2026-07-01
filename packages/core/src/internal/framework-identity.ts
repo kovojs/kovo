@@ -1,18 +1,20 @@
 import type * as TypeScript from 'typescript';
+import {
+  frameworkCatalogExportForModuleSpecifier,
+  type FrameworkExportIdentity,
+  type FrameworkIdentityModule,
+} from './framework-identity-catalog.ts';
 
-/** @internal Canonical package identity used by compiler/static gates. */
-export type FrameworkIdentityModule =
-  | '@kovojs/browser'
-  | '@kovojs/core'
-  | '@kovojs/drizzle'
-  | '@kovojs/server'
-  | 'drizzle-orm';
-
-/** @internal Canonical framework export identity after import/subpath/re-export normalization. */
-export interface FrameworkExportIdentity {
-  readonly exportName: string;
-  readonly module: FrameworkIdentityModule;
-}
+export {
+  frameworkCatalogExportForModuleSpecifier,
+  frameworkCatalogExportForSourcePath,
+  frameworkCatalogExportsForModule,
+  frameworkIdentityCatalog,
+  type FrameworkExportIdentity,
+  type FrameworkIdentityCatalogEntry,
+  type FrameworkIdentityModule,
+  type FrameworkIdentityScope,
+} from './framework-identity-catalog.ts';
 
 /** @internal Options for source-only framework identity resolution. */
 export interface FrameworkIdentityOptions {
@@ -59,47 +61,6 @@ export type FrameworkIdentityTypeScript = Pick<
   | 'isVariableStatement'
   | 'SyntaxKind'
 >;
-
-const SERVER_DATA_EXPORTS = new Set([
-  'domain',
-  'mutation',
-  'query',
-  'Reader',
-  's',
-  'tag',
-  'task',
-  'write',
-]);
-const SERVER_ROUTING_EXPORTS = new Set([
-  'endpoint',
-  'href',
-  'layout',
-  'Link',
-  'notFound',
-  'publicAccess',
-  'redirect',
-  'respond',
-  'rootedFiles',
-  'route',
-  'verifiedAccess',
-  'webhook',
-]);
-const SERVER_RENDERING_EXPORTS = new Set(['safeRichHtml', 'trustedHtml', 'trustedUrl']);
-const SERVER_ROOT_ONLY_EXPORTS = new Set(['rootedFiles']);
-const BROWSER_EXPORTS = new Set(['safeRichHtml', 'trustedHtml', 'trustedUrl']);
-const CORE_EXPORTS = new Set(['component', 'publishToClient', 'trustedReveal']);
-const DRIZZLE_EXPORTS = new Set(['sql']);
-const DRIZZLE_ORM_EXPORTS = new Set([
-  'avg',
-  'avgDistinct',
-  'count',
-  'countDistinct',
-  'max',
-  'min',
-  'sql',
-  'sum',
-  'sumDistinct',
-]);
 
 const MAX_RESOLUTION_DEPTH = 12;
 
@@ -645,38 +606,7 @@ function specifierExportIdentity(
   specifier: string,
   exportName: string,
 ): FrameworkExportIdentity | undefined {
-  if (specifier === '@kovojs/browser' && BROWSER_EXPORTS.has(exportName)) {
-    return frameworkExport('@kovojs/browser', exportName);
-  }
-  if (specifier === '@kovojs/core' && CORE_EXPORTS.has(exportName)) {
-    return frameworkExport('@kovojs/core', exportName);
-  }
-  if (specifier === '@kovojs/drizzle' && DRIZZLE_EXPORTS.has(exportName)) {
-    return frameworkExport('@kovojs/drizzle', exportName);
-  }
-  if (specifier === 'drizzle-orm' && DRIZZLE_ORM_EXPORTS.has(exportName)) {
-    return frameworkExport('drizzle-orm', exportName);
-  }
-  if (specifier === '@kovojs/server/api/data' && SERVER_DATA_EXPORTS.has(exportName)) {
-    return frameworkExport('@kovojs/server', exportName);
-  }
-  if (specifier === '@kovojs/server/api/routing' && SERVER_ROUTING_EXPORTS.has(exportName)) {
-    return frameworkExport('@kovojs/server', exportName);
-  }
-  if (specifier === '@kovojs/server/api/rendering' && SERVER_RENDERING_EXPORTS.has(exportName)) {
-    return serverRenderingIdentity(exportName);
-  }
-  if (specifier === '@kovojs/server') {
-    if (
-      SERVER_DATA_EXPORTS.has(exportName) ||
-      SERVER_ROUTING_EXPORTS.has(exportName) ||
-      SERVER_ROOT_ONLY_EXPORTS.has(exportName)
-    ) {
-      return frameworkExport('@kovojs/server', exportName);
-    }
-    if (SERVER_RENDERING_EXPORTS.has(exportName)) return serverRenderingIdentity(exportName);
-  }
-  return undefined;
+  return frameworkCatalogExportForModuleSpecifier(specifier, exportName);
 }
 
 function localModuleExportIdentity(
@@ -799,12 +729,6 @@ function normalizePath(path: string): string {
     else parts.push(part);
   }
   return parts.join('/');
-}
-
-function serverRenderingIdentity(exportName: string): FrameworkExportIdentity {
-  return exportName === 'trustedHtml' || exportName === 'trustedUrl'
-    ? frameworkExport('@kovojs/browser', exportName)
-    : frameworkExport('@kovojs/server', exportName);
 }
 
 function legacyGlobalIdentity(
