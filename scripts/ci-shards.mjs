@@ -1,8 +1,10 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { collectFilesAsync } from './lib/source-files.mjs';
 
 const DEFAULT_ROOTS = {
   integration: ['tests/integration/specs'],
@@ -523,35 +525,21 @@ function estimateSeconds(history, file, fallback) {
 }
 
 async function discoverFromRoot(root, kind) {
-  const files = [];
-  async function walk(dir) {
-    let entries;
-    try {
-      entries = await readdir(dir, { withFileTypes: true });
-    } catch (error) {
-      if (error?.code === 'ENOENT') return;
-      throw error;
-    }
-    for (const entry of entries) {
-      const full = path.join(dir, entry.name);
-      const relative = normalizeRelativeFile(full);
-      if (entry.isDirectory()) {
-        if (shouldSkipDirectory(relative)) continue;
-        await walk(full);
-        continue;
-      }
-      if (kind === 'integration' && /(?:^|\/)[^/]+\.spec\.ts$/.test(relative)) files.push(relative);
-      if (
-        kind === 'vitest' &&
-        /(?:^|\/)[^/]+\.test\.(?:mjs|ts|tsx|js)$/.test(relative) &&
-        includeVitest(relative)
-      ) {
-        files.push(relative);
-      }
-    }
-  }
-  await walk(root);
-  return files;
+  return (
+    await collectFilesAsync(path.resolve(root), ['.'], {
+      absolute: true,
+      includeFile: ({ absolutePath }) => {
+        const relativePath = normalizeRelativeFile(absolutePath);
+        if (kind === 'integration') return /(?:^|\/)[^/]+\.spec\.ts$/.test(relativePath);
+        return (
+          kind === 'vitest' &&
+          /(?:^|\/)[^/]+\.test\.(?:mjs|ts|tsx|js)$/.test(relativePath) &&
+          includeVitest(relativePath)
+        );
+      },
+      skipDirectory: ({ relativePath }) => shouldSkipDirectory(normalizeRelativeFile(relativePath)),
+    })
+  ).map((file) => normalizeRelativeFile(file));
 }
 
 export function includeVitest(file) {

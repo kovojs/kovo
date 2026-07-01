@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import { collectSourceFiles, isProductionSourceFile } from './lib/source-files.mjs';
 
 export const repoRoot = findRepoRoot();
 export const defaultSinkPolicyPath = 'packages/core/src/internal/sink-policy.ts';
@@ -2341,39 +2342,6 @@ function parseObjectBindingSpecifiers(text) {
       };
     })
     .filter((specifier) => specifier !== undefined);
-}
-
-function collectSourceFiles(root, roots) {
-  const files = [];
-  for (const relativeRoot of roots) {
-    const absoluteRoot = path.join(root, relativeRoot);
-    if (!existsSync(absoluteRoot)) continue;
-    collectSourceFilesInto(root, absoluteRoot, files);
-  }
-  return files.sort((left, right) => left.localeCompare(right));
-}
-
-function collectSourceFilesInto(root, absolutePath, files) {
-  for (const entry of readdirSync(absolutePath, { withFileTypes: true })) {
-    const absoluteEntryPath = path.join(absolutePath, entry.name);
-    if (entry.isDirectory()) {
-      collectSourceFilesInto(root, absoluteEntryPath, files);
-      continue;
-    }
-    if (!entry.isFile()) continue;
-    const relativePath = path.relative(root, absoluteEntryPath).split(path.sep).join('/');
-    if (!/\.[cm]?tsx?$/.test(relativePath)) continue;
-    if (relativePath.endsWith('.d.ts')) continue;
-    if (/\.(?:test|spec)\.[cm]?tsx?$/.test(relativePath)) continue;
-    files.push(relativePath);
-  }
-}
-
-function isProductionSourceFile(filePath) {
-  if (!/\.[cm]?tsx?$/.test(filePath)) return false;
-  if (filePath.endsWith('.d.ts')) return false;
-  if (/\.(?:test|spec)\.[cm]?tsx?$/.test(filePath)) return false;
-  return /^(?:packages\/(?:core|drizzle|server|cli)\/src)\//.test(filePath);
 }
 
 function dedupe(values) {

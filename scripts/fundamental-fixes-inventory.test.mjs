@@ -1,6 +1,11 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
+  collectInventory,
   formatInventoryReport,
   inventorySource,
   summarizeInventory,
@@ -46,4 +51,49 @@ describe('fundamental-fixes-inventory', () => {
       'completionGate: node scripts/fundamental-fixes-census-gate.mjs --require-complete',
     );
   });
+
+  it('preserves source collection filters for tests and data fixtures', async () => {
+    const root = await fixtureRoot();
+    await writeFixture(root, 'packages/compiler/src/compile.ts', 'ts.isIdentifier(node);\n');
+    await writeFixture(
+      root,
+      'packages/compiler/src/compile.test.ts',
+      'ts.isCallExpression(node);\n',
+    );
+    await writeFixture(
+      root,
+      'packages/compiler/src/compile.data.ts',
+      'ts.isStringLiteral(node);\n',
+    );
+    await writeFixture(
+      root,
+      'packages/compiler/src/dist/generated.ts',
+      'ts.isNumericLiteral(node);\n',
+    );
+
+    await expect(
+      collectInventory({ root, roots: ['packages/compiler/src'] }),
+    ).resolves.toMatchObject({
+      filesScanned: 1,
+      includeTests: false,
+    });
+    await expect(
+      collectInventory({ includeTests: true, root, roots: ['packages/compiler/src'] }),
+    ).resolves.toMatchObject({
+      filesScanned: 3,
+      includeTests: true,
+    });
+  });
 });
+
+async function fixtureRoot() {
+  return mkdir(path.join(tmpdir(), `kovo-inventory-${process.pid}-${Date.now()}`), {
+    recursive: true,
+  });
+}
+
+async function writeFixture(rootDir, relativePath, source) {
+  const filePath = path.join(rootDir, relativePath);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, source);
+}
