@@ -100,7 +100,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
 
 ## Phase 1 — Fix the gate infrastructure (so every later gate is trustworthy)
 
-- [ ] **T1 — One `isMainEntry` + one exit convention (silent gate-bypass hazard).** (M · low)
+- [x] **T1 — One `isMainEntry` + one exit convention (silent gate-bypass hazard).** (M · low)
   - Problem: ≥8 run-as-main spellings; the `` `file://${process.argv[1]}` `` form
     (`scripts/check-spec-index.mjs:238`, `no-committed-generated.mjs:44`) and `.pathname` comparisons
     (`build-publish.mjs:253`, `check-pack-security.mjs:537`, `egress-floor.mjs:115`, `supply-chain-gates.mjs:96`) do
@@ -109,6 +109,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
   - Fix: add `scripts/lib/cli-entry.mjs` — `isMainEntry(importMetaUrl)` via `pathToFileURL`, `runGate(main)` setting
     `exitCode`; adopt everywhere. **Every new gate below uses `runGate`.**
   - Verify: each gate's `.test.mjs`; a path-with-space test that the gate still runs.
+  - Evidence: `pnpm exec vitest --run scripts/check-spec-index.test.mjs scripts/no-committed-generated.test.mjs scripts/check-sink-policy-gate.test.mjs scripts/fundamental-fixes-census-gate.test.mjs scripts/check-pack-security.test.mjs scripts/egress-floor.test.mjs scripts/supply-chain-gates.test.mjs scripts/public-packages.test.mjs scripts/security-gate-mutations.test.mjs` passed after merging `agent/fundamental-t1-cli`.
 - [ ] **T2 — One source-file walker + `isProductionSourceFile` policy.** (M · med)
   - Problem: six independent recursive walkers with differing exclusion sets feed gates that decide which files get
     scanned for dangerous sinks (`check-sink-policy-gate.mjs:2344/2354/2374`, `check-pack-security.mjs:432`,
@@ -116,10 +117,11 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     an omission in one means files silently escape a gate.
   - Fix: `scripts/lib/source-files.mjs` with one canonical collect + `isProductionSourceFile` predicate; adopt in all
     six; preserve each caller's current filter (their `.test.mjs` siblings cover it).
-- [ ] **T8 — Fold repo-root bootstrapping into `scripts/lib`.** (S · low)
+- [x] **T8 — Fold repo-root bootstrapping into `scripts/lib`.** (S · low)
   - Problem: four `repoRoot` computations (`check-sink-policy-gate.mjs:6`, `public-packages.mjs:14`,
     `security-gate-mutations.mjs:13`, `fundamental-fixes-census-gate.mjs:9`).
   - Fix: one `repoRoot()` in `scripts/lib`; adopt (rides T1/T2's shared module).
+  - Evidence: `pnpm exec vitest --run scripts/check-spec-index.test.mjs scripts/no-committed-generated.test.mjs scripts/check-sink-policy-gate.test.mjs scripts/fundamental-fixes-census-gate.test.mjs scripts/check-pack-security.test.mjs scripts/egress-floor.test.mjs scripts/supply-chain-gates.test.mjs scripts/public-packages.test.mjs scripts/security-gate-mutations.test.mjs` passed after merging `agent/fundamental-t1-cli`.
 
 ## Phase 2 — Collapse divergent security copies to one authority
 
