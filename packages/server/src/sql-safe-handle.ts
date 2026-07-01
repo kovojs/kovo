@@ -78,7 +78,14 @@ export function wrapManagedDbForSqlSafety<DbValue>(
 
   const proxyCache = new WeakMap<object, object>();
   const methodCache = new WeakMap<object, Map<PropertyKey, Function>>();
-  return wrapDbAdapter(db, mode, proxyCache, methodCache, writePolicy) as DbValue;
+  return wrapDbAdapter(
+    db,
+    mode,
+    proxyCache,
+    methodCache,
+    writePolicy,
+    isManagedDbAdapterLike(db),
+  ) as DbValue;
 }
 
 /**
@@ -101,6 +108,7 @@ function wrapDbAdapter(
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
   writePolicy: ManagedSqlWritePolicy | undefined,
+  strictSqlTarget: boolean,
 ): object {
   const cached = proxyCache.get(db);
   if (cached) return cached;
@@ -120,7 +128,7 @@ function wrapDbAdapter(
       const value = Reflect.get(target, prop, receiver);
 
       if (isNestedSqlHandleProperty(prop) && typeof value === 'object' && value !== null) {
-        return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy);
+        return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy, true);
       }
 
       if (prop === 'sql' && typeof value === 'function' && isManagedDbAdapterLike(target)) {
@@ -155,7 +163,7 @@ function wrapDbAdapter(
       return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
         SQL_BUILDER_FAST_PATH_METHODS.has(prop)
           ? value.bind(target)
-          : guardedUnknownSqlMethod(target, value, mode, writePolicy),
+          : guardedUnknownSqlMethod(target, prop, value, mode, writePolicy, strictSqlTarget),
       );
     },
   });
@@ -179,17 +187,39 @@ function guardedSqlMethod(
 
 function guardedUnknownSqlMethod(
   target: object,
+  prop: PropertyKey,
   value: Function,
   mode: SqlSafetyMode,
   writePolicy: ManagedSqlWritePolicy | undefined,
+  strictSqlTarget: boolean,
 ): Function {
   return (...args: unknown[]) => {
-    const [statement] = args;
-    if (isSqlStatementCandidate(statement)) {
-      assertManagedSqlStatement(statement, mode, writePolicy);
-    }
+    assertAmbiguousSqlMethodArguments(prop, args, mode, writePolicy, strictSqlTarget);
     return value.apply(target, args);
   };
+}
+
+function assertAmbiguousSqlMethodArguments(
+  prop: PropertyKey,
+  args: readonly unknown[],
+  mode: SqlSafetyMode,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+  strictSqlTarget: boolean,
+): void {
+  const statements = args.filter(isSqlStatementCandidate);
+  for (const statement of statements) {
+    assertManagedSqlStatement(statement, mode, writePolicy);
+  }
+  if (statements.length > 0) return;
+  if (writePolicy === undefined || !strictSqlTarget) return;
+
+  throw new Error(
+    `KV422: unknown managed DB method ${describeSqlMethod(prop)} is not a proven SQL builder/read capability and did not receive a recognizable SQL carrier (SPEC §10.2/§10.3).`,
+  );
+}
+
+function describeSqlMethod(prop: PropertyKey): string {
+  return typeof prop === 'string' ? `db.${prop}` : `db[${String(prop)}]`;
 }
 
 function guardedTransactionMethod(
@@ -325,7 +355,7 @@ function wrapTransactionDb(
 ): unknown {
   if (!isRecord(tx)) return tx;
   if (writePolicy === undefined && !isManagedDbAdapterLike(tx)) return tx;
-  return wrapDbAdapter(tx, mode, proxyCache, methodCache, writePolicy);
+  return wrapDbAdapter(tx, mode, proxyCache, methodCache, writePolicy, isManagedDbAdapterLike(tx));
 }
 
 function guardedPrepareMethod(

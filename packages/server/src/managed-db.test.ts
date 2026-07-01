@@ -63,6 +63,10 @@ function fakeDb(log: string[]) {
       log.push('values');
       return Promise.resolve(statement);
     },
+    futureStatement(...args: unknown[]) {
+      log.push('futureStatement');
+      return Promise.resolve(args.at(-1));
+    },
     batch() {
       log.push('batch');
       return Promise.resolve();
@@ -104,6 +108,10 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
       reader.insert('products');
       // @ts-expect-error Reader<Db> hides future/dialect SQL sinks by default.
       reader.all({ text: 'select 1', values: [] });
+      // @ts-expect-error Reader<Db> hides SQLite .get sinks by default.
+      reader.get({ text: 'select 1', values: [] });
+      // @ts-expect-error Reader<Db> hides SQLite .values sinks by default.
+      reader.values({ text: 'select 1', values: [] });
       const readHandle = managedDb(raw, 'read');
       acceptsReader(readHandle);
       // @ts-expect-error managedDb(..., 'read') returns the branded read-only surface.
@@ -125,13 +133,16 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
       'batch',
       'delete',
       'execute',
+      'futureStatement',
       'get',
       'insert',
       'run',
+      'session',
       'transaction',
       'update',
       'values',
       'with',
+      '$client',
     ] as const) {
       const method = (reader as Record<string, unknown>)[verb];
       expect(typeof method).toBe('function');
@@ -234,13 +245,24 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       sqlWritePolicy: { dialect: 'sqlite' },
     });
 
-    for (const verb of ['all', 'get', 'values'] as const) {
+    const attempts = [
+      {
+        method: 'all',
+        statement: { sql: 'delete from products where id = ? returning id', values: ['p1'] },
+      },
+      {
+        method: 'get',
+        statement: { sql: 'insert into products (id) values (?) returning id', values: ['p1'] },
+      },
+      {
+        method: 'values',
+        statement: { sql: 'update products set id = ? where id = ?', values: ['p2', 'p1'] },
+      },
+    ] as const;
+    for (const { method, statement } of attempts) {
       expect(() =>
-        (handle as unknown as Record<typeof verb, (statement: unknown) => unknown>)[verb](
-          stampTrustedSql(
-            { sql: 'insert into products (id) values (?) returning id', values: ['p1'] },
-            `${verb} write attempt`,
-          ),
+        (handle as unknown as Record<typeof method, (statement: unknown) => unknown>)[method](
+          stampTrustedSql(statement, `${method} write attempt`),
         ),
       ).toThrow(KovoReadonlyHandleError);
     }
@@ -271,13 +293,24 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     const log: string[] = [];
     const handle = create(log);
 
-    for (const verb of ['all', 'get', 'values'] as const) {
+    const attempts = [
+      {
+        method: 'all',
+        statement: { sql: 'delete from products where id = ? returning id', values: ['p1'] },
+      },
+      {
+        method: 'get',
+        statement: { sql: 'insert into products (id) values (?) returning id', values: ['p1'] },
+      },
+      {
+        method: 'values',
+        statement: { sql: 'replace into products (id) values (?)', values: ['p1'] },
+      },
+    ] as const;
+    for (const { method, statement } of attempts) {
       expect(() =>
-        (handle as unknown as Record<typeof verb, (statement: unknown) => unknown>)[verb](
-          stampTrustedSql(
-            { sql: 'insert into products (id) values (?) returning id', values: ['p1'] },
-            `${verb} read-handle write attempt`,
-          ),
+        (handle as unknown as Record<typeof method, (statement: unknown) => unknown>)[method](
+          stampTrustedSql(statement, `${method} read-handle write attempt`),
         ),
       ).toThrow(KovoReadonlyHandleError);
     }
@@ -294,32 +327,44 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['select:products']);
   });
 
-  it('read mode denies raw driver escape properties instead of exposing them', () => {
+  it.each([
+    {
+      create(db: object) {
+        return readonlyDb(db);
+      },
+      name: 'readonlyDb',
+    },
+    {
+      create(db: object) {
+        return managedDb(db, 'read', { sqlWritePolicy: { dialect: 'sqlite' } });
+      },
+      name: "managedDb('read')",
+    },
+  ])('$name denies raw driver escape properties and unknown future methods', ({ create }) => {
     const log: string[] = [];
-    const handle = managedDb(
-      {
-        $client: {
-          execute(statement: unknown) {
-            log.push(`$client:${String(statement)}`);
-          },
-        },
-        session: {
-          run(statement: unknown) {
-            log.push(`session:${String(statement)}`);
-          },
-        },
-        select(): { from(table: string): Promise<FakeRow[]> } {
-          return {
-            from(table: string) {
-              log.push(`select:${table}`);
-              return Promise.resolve([{ id: 'p1' }]);
-            },
-          };
+    const handle = create({
+      $client: {
+        execute(statement: unknown) {
+          log.push(`$client:${String(statement)}`);
         },
       },
-      'read',
-      { sqlWritePolicy: { dialect: 'sqlite' } },
-    );
+      session: {
+        run(statement: unknown) {
+          log.push(`session:${String(statement)}`);
+        },
+      },
+      futureStatement(statement: unknown) {
+        log.push(`futureStatement:${String(statement)}`);
+      },
+      select(): { from(table: string): Promise<FakeRow[]> } {
+        return {
+          from(table: string) {
+            log.push(`select:${table}`);
+            return Promise.resolve([{ id: 'p1' }]);
+          },
+        };
+      },
+    });
 
     expect(() => (handle as unknown as { $client(): unknown }).$client()).toThrow(
       KovoReadonlyHandleError,
@@ -327,6 +372,14 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(() => (handle as unknown as { session(): unknown }).session()).toThrow(
       KovoReadonlyHandleError,
     );
+    expect(() =>
+      (handle as unknown as { futureStatement(statement: unknown): unknown }).futureStatement(
+        stampTrustedSql(
+          { sql: 'delete from products where id = ? returning id', values: ['p1'] },
+          'future read-handle write attempt',
+        ),
+      ),
+    ).toThrow(KovoReadonlyHandleError);
     expect(log).toEqual([]);
   });
 
@@ -553,6 +606,124 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/KV406/);
     expect(log).toEqual(['$client.futureStatement']);
+  });
+
+  it('write mode parses unknown driver method SQL carriers at any argument position', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        execute(statement: unknown) {
+          log.push('execute');
+          return statement;
+        },
+        futureStatement(options: unknown, statement: unknown) {
+          log.push(`futureStatement:${JSON.stringify(options)}`);
+          return statement;
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    );
+    const futureStatement = (
+      handle as unknown as {
+        futureStatement(options: unknown, statement: unknown): unknown;
+      }
+    ).futureStatement;
+
+    expect(() => futureStatement({ mode: 'read' }, 'select id from products')).toThrow(/KV422/);
+    expect(log).toEqual([]);
+
+    expect(
+      futureStatement(
+        { mode: 'read' },
+        { sql: 'select id from products where id = ?', values: ['p1'] },
+      ),
+    ).toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(log).toEqual(['futureStatement:{"mode":"read"}']);
+
+    expect(() =>
+      futureStatement(
+        { mode: 'write' },
+        stampTrustedSql(
+          { sql: 'delete from users where id = ?', values: ['u1'] },
+          'future method drifted outside declared tables',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['futureStatement:{"mode":"read"}']);
+  });
+
+  it('write mode fails closed for unknown methods on SQL-capable handles without a SQL carrier', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        execute(statement: unknown) {
+          log.push('execute');
+          return statement;
+        },
+        futureStatement(options: unknown) {
+          log.push(`futureStatement:${JSON.stringify(options)}`);
+          return options;
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    );
+
+    expect(() =>
+      (handle as unknown as { futureStatement(options: unknown): unknown }).futureStatement({
+        mode: 'opaque',
+      }),
+    ).toThrow(/unknown managed DB method db\.futureStatement/);
+    expect(log).toEqual([]);
+  });
+
+  it('write mode fails closed for unknown nested driver methods without a SQL carrier', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        $client: {
+          futureStatement(options: unknown) {
+            log.push(`$client.futureStatement:${JSON.stringify(options)}`);
+            return options;
+          },
+        },
+        session: {
+          futureStatement(options: unknown) {
+            log.push(`session.futureStatement:${JSON.stringify(options)}`);
+            return options;
+          },
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    );
+
+    expect(() => handle.$client.futureStatement({ mode: 'opaque' })).toThrow(
+      /unknown managed DB method db\.futureStatement/,
+    );
+    expect(() => handle.session.futureStatement({ mode: 'opaque' })).toThrow(
+      /unknown managed DB method db\.futureStatement/,
+    );
+    expect(log).toEqual([]);
   });
 
   it.each([
