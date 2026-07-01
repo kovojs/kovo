@@ -84,6 +84,12 @@ preserving compatibility for a model that is hard to explain.
         `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts -t "direct DB writes"`;
         `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts -t "fails task and webhook direct-write diagnostics carried by the build graph"`;
         `pnpm run check:api-surface`; `git diff --check`; `pnpm run check:vp`.
+  - [x] Move mutation handler direct DB writes onto `HandlerWriteSinkFact` extraction and remove the
+        mutation-only source re-walk in component validation.
+        Evidence: `pnpm exec vitest run packages/compiler/src/scan/parse.test.ts packages/compiler/src/direct-db.test.ts packages/compiler/src/diagnostic-coverage-matrix.test.ts`;
+        `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts -t "direct DB writes"`;
+        `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts -t "fails task and webhook direct-write diagnostics carried by the build graph"`;
+        `pnpm run check:api-surface`; `git diff --check`; `pnpm run check:vp`.
   - Evidence to close: metamorphic coverage for every migrated direct-DB gate; focused compiler/CLI
     tests proving unsafe spellings either emit the same canonical fact or fail closed; graph/explain
     tests proving facts are visible in audit output; and removal/demotion of any now-duplicated
