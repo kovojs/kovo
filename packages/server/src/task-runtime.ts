@@ -17,6 +17,7 @@ import {
 } from './task-queue.js';
 import type { KovoApp } from './app-types.js';
 import type { DurableTaskRunnerErrorContext } from './task-runner.js';
+import { scrubConsoleArgs } from './logging.js';
 
 const TASK_CRON_POLL_INTERVAL_MS = 30_000;
 
@@ -177,12 +178,17 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
       });
       return;
     }
-    console.error('[kovo] durable task failed', {
-      error,
-      jobId: context.job.id,
-      phase: context.phase,
-      task: context.task?.key ?? context.job.task,
-    });
+    console.error(
+      ...scrubConsoleArgs([
+        '[kovo] durable task failed',
+        {
+          error,
+          jobId: context.job.id,
+          phase: context.phase,
+          task: context.task?.key ?? context.job.task,
+        },
+      ]),
+    );
   }
 
   private async resolveRootDb(request: Request): Promise<unknown> {

@@ -21,6 +21,7 @@ import { matchShellDispatch } from './shell.js';
 import { generatedFragmentHtml } from './html.js';
 import { renderFragmentWireHtml } from './wire-html.js';
 import type { ServerErrorDiagnosticContext } from './diagnostics.js';
+import { scrubConsoleArgs } from './logging.js';
 
 const kovoHmrClientPath = '/@kovo/hmr-client';
 const kovoHmrRouteRefreshPath = '/@kovo/hmr/refresh/route';
@@ -1212,7 +1213,7 @@ function reportDevServerError(error: unknown, context: ServerErrorDiagnosticCont
     context.url ? `url=${context.url}` : undefined,
     context.status ? `status=${context.status}` : undefined,
   ].filter((detail): detail is string => detail !== undefined);
-  console.error(details.join(' '), error);
+  console.error(...scrubConsoleArgs([details.join(' '), error]));
 }
 
 function endpointPostureRequestDiagnostic(

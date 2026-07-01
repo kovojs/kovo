@@ -1,3 +1,5 @@
+import { scrubConsoleArgs, scrubSecretLifecycleValue } from './logging.js';
+
 /**
  * Diagnostic context passed to a `createApp({ onError })` {@link ServerErrorHandler}
  * when a request-shell phase throws. `operation` names the failing phase and the
@@ -50,7 +52,10 @@ export function reportServerError(
   }
 
   try {
-    const result = onError(error, context);
+    const result = onError(
+      scrubSecretLifecycleValue(error),
+      scrubSecretLifecycleValue(context) as ServerErrorDiagnosticContext,
+    );
     if (result && typeof result === 'object' && 'then' in result) {
       void result.catch((_diagnosticError) => undefined);
     }
@@ -70,7 +75,7 @@ function reportServerErrorToStderr(error: unknown, context: ServerErrorDiagnosti
       context.mutationKey === undefined ? undefined : `mutation=${context.mutationKey}`,
       context.status === undefined ? undefined : `status=${context.status}`,
     ].filter((part): part is string => part !== undefined);
-    console.error(details.join(' '), error);
+    console.error(...scrubConsoleArgs([details.join(' '), error]));
   } catch (_diagnosticError) {
     void _diagnosticError;
     // Diagnostics must not change SPEC §9.2's stable server-error responses.

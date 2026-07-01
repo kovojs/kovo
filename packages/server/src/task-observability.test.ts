@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { secret } from '@kovojs/core';
 
 import {
   createDurableTaskStatus,
@@ -46,6 +47,32 @@ describe('durable task observability (SPEC §9.6)', () => {
       lastError: 'provider token abc123 failed',
       status: 'dead',
     });
+  });
+
+  it('scrubs secret-tagged values even on explicit task-status diagnostics reads', async () => {
+    const status = createDurableTaskStatus({
+      snapshot: () => [
+        {
+          args: { orderId: 'ord_1', token: secret('sk_live_q5_status_args') },
+          attempts: 1,
+          createdAt: new Date('2026-06-30T10:00:00.000Z'),
+          id: 'job_secret',
+          lastError: secret('sk_live_q5_status_error') as unknown as string,
+          runAt: new Date('2026-06-30T10:00:00.000Z'),
+          status: 'dead',
+          task: 'email.send',
+          updatedAt: new Date('2026-06-30T10:01:00.000Z'),
+        },
+      ],
+    });
+
+    const record = await status.get('job_secret', { includeArgs: true });
+
+    expect(record).toMatchObject({
+      args: { orderId: 'ord_1', token: '[secret]' },
+      lastError: '[secret]',
+    });
+    expect(JSON.stringify(record)).not.toContain('sk_live_q5_status');
   });
 
   it('filters failed and dead-lettered jobs for operator triage', async () => {

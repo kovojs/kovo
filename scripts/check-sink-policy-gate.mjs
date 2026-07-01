@@ -1669,7 +1669,9 @@ export function logChannelNeutralizerInvariantFindings(filePath, text) {
       `${filePath}: log-channel neutralizer must cover ASCII and C1 control characters`,
     );
   }
-  if (!/\.replace\s*\(\s*CONTROL_CHARACTER_PATTERN\s*,\s*visibleControlEscape\s*\)/.test(source)) {
+  if (
+    !/\.replace\s*\(\s*CONTROL_CHARACTER_PATTERN\s*,\s*visibleControlEscape\s*,?\s*\)/.test(source)
+  ) {
     findings.push(
       `${filePath}: neutralizeLogValue() must replace control characters with visible escapes`,
     );
