@@ -151,9 +151,15 @@ packages/cli/src/index.kovo-check.test.ts`.
 - [ ] **B2. Convert remaining security-relevant syntactic recognizers after B1.**
   - Starting inventory: `node scripts/fundamental-fixes-inventory.mjs` currently reports 57 literal/import
     candidates, 1,798 AST-kind gates, and 95 KV406/fail-closed sites.
-  - [ ] Re-run inventory after B1 and identify only residual recognizers that decide security or proof facts.
-  - [ ] Convert each residual security recognizer to the framework identity resolver or mark it non-security
-        with an inline comment and focused test.
+  - [x] Re-run inventory after B1 and identify only residual recognizers that decide security or proof facts.
+        Evidence: `node scripts/fundamental-fixes-inventory.mjs` reports 47 syntactic candidates after the
+        schema-receiver identity slice.
+  - [x] Convert the `@kovojs/server` `s` schema-receiver recognizer family to framework identity.
+        Evidence: `vp exec vitest --run packages/compiler/src/scan/mutation-inputs.test.ts packages/compiler/src/scan/query-shape-source.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.identity-resolver.test.ts`.
+  - [ ] Review and convert or explicitly mark the remaining Drizzle alias/table recognizers.
+  - [ ] Review and convert or explicitly mark trust-escape DOM/`Function` recognizers.
+  - [ ] Review and convert or explicitly mark compiler parser/emit comparisons such as `recordChange`,
+        `query.elevated`, and internal helper import checks.
   - Acceptance: inventory count drops for security-relevant literal/import recognizers; new/changed tests
     prove alias, re-export, namespace, and local-shadow behavior.
 
