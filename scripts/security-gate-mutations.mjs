@@ -5,11 +5,19 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
 import * as sinkPolicyGate from './check-sink-policy-gate.mjs';
+import * as fundamentalFixesCensusGate from './fundamental-fixes-census-gate.mjs';
 import * as securityTestBuildGate from './security-test-build-gate.mjs';
 
 const thisFile = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(thisFile);
+const repoRoot = path.resolve(scriptsDir, '..');
 const sinkPolicyGatePath = path.join(scriptsDir, 'check-sink-policy-gate.mjs');
+const fundamentalFixesCensusGatePath = path.join(scriptsDir, 'fundamental-fixes-census-gate.mjs');
+const fundamentalFixesCensusManifestPath = path.join(
+  scriptsDir,
+  'fundamental-fixes-census.manifest.json',
+);
+const fundamentalFixesFollowupPlanPath = path.join(repoRoot, 'plans/fundamental-fixes-followup.md');
 const securityTestBuildGatePath = path.join(scriptsDir, 'security-test-build-gate.mjs');
 
 const missingRealBuildProofBranch = [
@@ -55,6 +63,26 @@ const removedRequiredProofEvidenceBranch = [
   '      );',
   '    }',
 ].join('\n');
+
+const requiredProofFileEvidenceBranch = [
+  '    if (!proofText.includes(needle)) {',
+  '      violations.push(',
+  '        `${label}: proof file is missing required evidence ${JSON.stringify(needle)}`,',
+  '      );',
+  '    }',
+].join('\n');
+
+const removedRequiredProofFileEvidenceBranch = [
+  '    if (false && !proofText.includes(needle)) {',
+  '      violations.push(',
+  '        `${label}: proof file is missing required evidence ${JSON.stringify(needle)}`,',
+  '      );',
+  '    }',
+].join('\n');
+
+const jsToTsSiblingProofNeedle = `    requiredProofFileNeedles: ["import * as safeHtml from './safe-html.js';"],`;
+
+const weakenedJsToTsSiblingProofNeedle = `    requiredProofFileNeedles: ["import * as safeHtml from './safe-html';"],`;
 
 const productionBuildInvocationBranch = [
   '  if (!testBlockHasBuildInvocation(testBlock, proof.buildInvocation)) {',
@@ -132,6 +160,27 @@ const removedResponseFragmentTrustedHtmlRouteBranch = [
   '  }',
 ].join('\n');
 
+const m5ForbiddenStatusBranch = [
+  '  } else if (FORBIDDEN_STATUS_PATTERN.test(row.status)) {',
+  '    violations.push(`${label}: M5 forbids status ${JSON.stringify(row.status)}`);',
+].join('\n');
+
+const removedM5ForbiddenStatusBranch = [
+  '  } else if (false && FORBIDDEN_STATUS_PATTERN.test(row.status)) {',
+  '    violations.push(`${label}: M5 forbids status ${JSON.stringify(row.status)}`);',
+].join('\n');
+
+const closedRowM1EvidenceBranch =
+  "    if (row.status === 'closed') validateClosedRow(row, manifest?.adversarialGate, violations);";
+
+const removedClosedRowM1EvidenceBranch =
+  "    if (false && row.status === 'closed') validateClosedRow(row, manifest?.adversarialGate, violations);";
+
+const dialectMatrixRequirementBranch = '  validateDialectMatrixRows(rows, violations);';
+
+const removedDialectMatrixRequirementBranch =
+  '  if (false) validateDialectMatrixRows(rows, violations);';
+
 export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
@@ -164,6 +213,30 @@ export const SECURITY_GATE_MUTANTS = [
     search: requiredProofEvidenceBranch,
     sourceFile: securityTestBuildGatePath,
     test: assertRequiredProofEvidenceIsCaught,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Deletes the branch that requires proof-file-wide evidence outside the named test block.',
+    expectedKiller:
+      'B3 resolver .js-to-TS sibling fallback proof must pin the explicit .js import source',
+    name: 'security-test-build-gate/drop-required-proof-file-evidence',
+    replacement: removedRequiredProofFileEvidenceBranch,
+    search: requiredProofFileEvidenceBranch,
+    sourceFile: securityTestBuildGatePath,
+    test: assertRequiredProofFileEvidenceIsCaught,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Weakens the KV426 star-barrel proof enrollment so it no longer pins the .js import to a TS sibling.',
+    expectedKiller:
+      'KV426 star-barrel proof enrollment must retain the explicit ./safe-html.js import needle',
+    name: 'security-test-build-gate/weaken-js-to-ts-sibling-proof-enrollment',
+    replacement: weakenedJsToTsSiblingProofNeedle,
+    search: jsToTsSiblingProofNeedle,
+    sourceFile: securityTestBuildGatePath,
+    test: assertJsToTsSiblingProofEnrollmentIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -216,6 +289,36 @@ export const SECURITY_GATE_MUTANTS = [
     search: responseFragmentTrustedHtmlRouteBranch,
     sourceFile: sinkPolicyGatePath,
     test: assertResponseFragmentTrustedHtmlRouteCountIsCaught,
+  },
+  {
+    baseModule: fundamentalFixesCensusGate,
+    description: 'Deletes the M5 forbidden-status census enforcement branch.',
+    expectedKiller: 'M5 census statuses such as future must stay forbidden, not merely unsupported',
+    name: 'fundamental-fixes-census-gate/drop-m5-forbidden-status-enforcement',
+    replacement: removedM5ForbiddenStatusBranch,
+    search: m5ForbiddenStatusBranch,
+    sourceFile: fundamentalFixesCensusGatePath,
+    test: assertM5ForbiddenStatusIsCaught,
+  },
+  {
+    baseModule: fundamentalFixesCensusGate,
+    description: 'Deletes closed-row M1 evidence validation from the census gate.',
+    expectedKiller: 'Closed census rows must carry M1 adversarial evidence',
+    name: 'fundamental-fixes-census-gate/drop-closed-row-m1-evidence-enforcement',
+    replacement: removedClosedRowM1EvidenceBranch,
+    search: closedRowM1EvidenceBranch,
+    sourceFile: fundamentalFixesCensusGatePath,
+    test: assertClosedRowM1EvidenceIsCaught,
+  },
+  {
+    baseModule: fundamentalFixesCensusGate,
+    description: 'Deletes the M4 dialect x sink denominator matrix requirement.',
+    expectedKiller: 'M4 dialect x sink matrix rows must be complete',
+    name: 'fundamental-fixes-census-gate/drop-dialect-matrix-requirement',
+    replacement: removedDialectMatrixRequirementBranch,
+    search: dialectMatrixRequirementBranch,
+    sourceFile: fundamentalFixesCensusGatePath,
+    test: assertDialectMatrixRequirementIsCaught,
   },
 ];
 
@@ -369,6 +472,59 @@ async function assertRequiredProofEvidenceIsCaught(moduleUnderTest) {
   });
 }
 
+async function assertRequiredProofFileEvidenceIsCaught(moduleUnderTest) {
+  withTempRepo((repoRoot) => {
+    writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV426' }];");
+    writeCliBuildProofFile(
+      repoRoot,
+      [
+        "it('build trustedHtml sibling proof', async () => {",
+        "  const exitCode = await mainAsync(['build', './app.ts', '--out', './dist']);",
+        "  expect(errorOutput).toContain('KV426');",
+        '});',
+      ].join('\n'),
+    );
+
+    const violations = moduleUnderTest.securityTestBuildGateViolations({
+      certificationSources: moduleUnderTest.SECURITY_BUILD_CERTIFICATION_SOURCES,
+      proofs: [
+        {
+          buildInvocation: 'cli-main-build',
+          code: 'KV426',
+          proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+          requiredProofFileNeedles: ["import * as safeHtml from './safe-html.js';"],
+          sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
+          testName: 'build trustedHtml sibling proof',
+        },
+      ],
+      repoRoot,
+    });
+    assertIncludes(
+      violations,
+      'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426 -> packages/cli/src/index.kovo-build.test.ts: proof file is missing required evidence "import * as safeHtml from \'./safe-html.js\';"',
+    );
+  });
+}
+
+async function assertJsToTsSiblingProofEnrollmentIsPinned(moduleUnderTest) {
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV426' &&
+      candidate.proofFile === 'packages/cli/src/index.kovo-build.test.ts' &&
+      candidate.testName ===
+        'resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight',
+  );
+  if (!proof) throw new Error('KV426 star-barrel production build proof is not enrolled');
+  const needle = "import * as safeHtml from './safe-html.js';";
+  if (!proof.requiredProofFileNeedles?.includes(needle)) {
+    throw new Error(
+      `KV426 star-barrel proof must require the .js-to-TS sibling resolver needle ${JSON.stringify(
+        needle,
+      )}`,
+    );
+  }
+}
+
 async function assertFixtureOnlyProofIsCaught(moduleUnderTest) {
   withTempRepo((repoRoot) => {
     writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV426' }];");
@@ -497,6 +653,53 @@ async function assertResponseFragmentTrustedHtmlRouteCountIsCaught(moduleUnderTe
     findings,
     'response-fragment-apply.ts: response-fragment HTML sink must route exactly two template.innerHTML writes through trustedHtml(); found 1',
   );
+}
+
+async function assertM5ForbiddenStatusIsCaught(moduleUnderTest) {
+  const { manifest, planText } = loadDefaultCensusFixture();
+  manifest.rows[0].status = 'future';
+  const violations = moduleUnderTest.evaluateFundamentalFixesCensus({
+    manifest,
+    planText,
+  }).violations;
+  assertIncludes(violations, `${manifest.rows[0].id}: M5 forbids status "future"`);
+}
+
+async function assertClosedRowM1EvidenceIsCaught(moduleUnderTest) {
+  const { manifest, planText } = loadDefaultCensusFixture();
+  manifest.rows[0] = {
+    ...manifest.rows[0],
+    evidence: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    status: 'closed',
+  };
+  const violations = moduleUnderTest.evaluateFundamentalFixesCensus({
+    manifest,
+    planText,
+  }).violations;
+  assertIncludes(
+    violations,
+    `${manifest.rows[0].id}: closed row is missing M1 adversarial evidence`,
+  );
+}
+
+async function assertDialectMatrixRequirementIsCaught(moduleUnderTest) {
+  const { manifest, planText } = loadDefaultCensusFixture();
+  manifest.rows = manifest.rows.filter((row) => row.id !== 'dialect-pglite-execute');
+  const violations = moduleUnderTest.evaluateFundamentalFixesCensus({
+    manifest,
+    planText,
+  }).violations;
+  assertIncludes(
+    violations,
+    'scripts/fundamental-fixes-census.manifest.json: missing dialect x sink matrix row pglite/execute',
+  );
+}
+
+function loadDefaultCensusFixture() {
+  return {
+    manifest: JSON.parse(readFileSync(fundamentalFixesCensusManifestPath, 'utf8')),
+    planText: readFileSync(fundamentalFixesFollowupPlanPath, 'utf8'),
+  };
 }
 
 function assertIncludes(values, expected) {

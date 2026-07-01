@@ -21,6 +21,14 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'security-test-build-gate/drop-required-proof-file-evidence',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'security-test-build-gate/weaken-js-to-ts-sibling-proof-enrollment',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'check-sink-policy-gate/drop-sql-guard-env-detector',
           status: 'killed',
         }),
@@ -30,6 +38,18 @@ describe('security-gate-mutations', () => {
         }),
         expect.objectContaining({
           name: 'check-sink-policy-gate/drop-response-fragment-trustedhtml-route-count',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'fundamental-fixes-census-gate/drop-m5-forbidden-status-enforcement',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'fundamental-fixes-census-gate/drop-closed-row-m1-evidence-enforcement',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'fundamental-fixes-census-gate/drop-dialect-matrix-requirement',
           status: 'killed',
         }),
       ]),

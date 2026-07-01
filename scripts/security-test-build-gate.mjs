@@ -49,6 +49,7 @@ export const SECURITY_BUILD_PROOFS = [
     buildInvocation: 'cli-main-build',
     code: 'KV426',
     proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+    requiredProofFileNeedles: ["import * as safeHtml from './safe-html.js';"],
     requiredNeedles: [
       'KV426',
       "export * from './safe-html-root'",
@@ -202,6 +203,13 @@ function validateProof(
     if (!testBlock.includes(needle)) {
       violations.push(
         `${label}: proof test is missing required evidence ${JSON.stringify(needle)}`,
+      );
+    }
+  }
+  for (const needle of proof.requiredProofFileNeedles ?? []) {
+    if (!proofText.includes(needle)) {
+      violations.push(
+        `${label}: proof file is missing required evidence ${JSON.stringify(needle)}`,
       );
     }
   }

@@ -184,6 +184,77 @@ describe('security-test-build-gate', () => {
     });
   });
 
+  it('allows proof manifests to require evidence from helper sources outside the test block', () => {
+    withTempRepo((repoRoot) => {
+      writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV426' }];");
+      writeProofFile(
+        repoRoot,
+        [
+          "it('build trustedHtml sibling proof', async () => {",
+          "  const exitCode = await mainAsync(['build', './app.ts', '--out', './dist']);",
+          "  expect(errorOutput).toContain('KV426');",
+          '});',
+          "it('unrelated proof', () => {});",
+          '',
+          'function trustedHtmlSiblingSource() {',
+          '  return "import * as safeHtml from \'./safe-html.js\';";',
+          '}',
+        ].join('\n'),
+      );
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          proofs: [
+            {
+              buildInvocation: 'cli-main-build',
+              code: 'KV426',
+              proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+              requiredProofFileNeedles: ["import * as safeHtml from './safe-html.js';"],
+              sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
+              testName: 'build trustedHtml sibling proof',
+            },
+          ],
+          repoRoot,
+        }),
+      ).toEqual([]);
+    });
+  });
+
+  it('rejects proof files missing proof-file-wide required evidence', () => {
+    withTempRepo((repoRoot) => {
+      writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV426' }];");
+      writeProofFile(
+        repoRoot,
+        [
+          "it('build trustedHtml sibling proof', async () => {",
+          "  const exitCode = await mainAsync(['build', './app.ts', '--out', './dist']);",
+          "  expect(errorOutput).toContain('KV426');",
+          '});',
+        ].join('\n'),
+      );
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          proofs: [
+            {
+              buildInvocation: 'cli-main-build',
+              code: 'KV426',
+              proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+              requiredProofFileNeedles: ["import * as safeHtml from './safe-html.js';"],
+              sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
+              testName: 'build trustedHtml sibling proof',
+            },
+          ],
+          repoRoot,
+        }),
+      ).toContain(
+        'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426 -> packages/cli/src/index.kovo-build.test.ts: proof file is missing required evidence "import * as safeHtml from \'./safe-html.js\';"',
+      );
+    });
+  });
+
   it('rejects stale manifest rows that no longer match an enrolled source seed', () => {
     withTempRepo((repoRoot) => {
       writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV426' }];");
@@ -238,6 +309,9 @@ describe('security-test-build-gate', () => {
       ),
     ).toMatchObject({
       buildInvocation: 'cli-main-build',
+      requiredProofFileNeedles: expect.arrayContaining([
+        "import * as safeHtml from './safe-html.js';",
+      ]),
       requiredNeedles: expect.arrayContaining([
         'KV426',
         "export * from './safe-html-root'",
