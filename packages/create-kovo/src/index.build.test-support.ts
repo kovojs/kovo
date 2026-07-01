@@ -209,18 +209,21 @@ export function addRuntimeMutationSafetyProofs(
   const includeRawTableDrift = options.includeRawTableDrift === true;
   const includeReadonlyMutationAttempt = options.includeReadonlyMutationAttempt === true;
   const schemaPath = join(root, 'src/schema.ts');
+  const schemaSource = readFileSync(schemaPath, 'utf8');
+  const isSqlite = schemaSource.includes('sqliteTable(');
+  const tableFactory = isSqlite ? 'sqliteTable' : 'pgTable';
   writeFileSync(
     schemaPath,
-    readFileSync(schemaPath, 'utf8').replace(
+    schemaSource.replace(
       ');\n\n// --- Auth infrastructure',
       [
         ');',
         '',
-        "export const txProofs = pgTable('tx_proofs', {",
+        `export const txProofs = ${tableFactory}('tx_proofs', {`,
         "  id: text('id').primaryKey(),",
         '});',
         '',
-        "export const rawRuntimeDrift = pgTable('raw_runtime_drift', {",
+        `export const rawRuntimeDrift = ${tableFactory}('raw_runtime_drift', {`,
         "  id: text('id').primaryKey(),",
         "  label: text('label').notNull().default(''),",
         '});',
@@ -232,31 +235,42 @@ export function addRuntimeMutationSafetyProofs(
   );
 
   const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
-  const runtimeDb = readFileSync(runtimeDbPath, 'utf8')
-    .replace(
-      "import { account, contacts, session, user, verification } from '../schema.js';",
-      [
-        'import {',
-        '  account,',
-        '  contacts,',
-        '  rawRuntimeDrift,',
-        '  session,',
-        '  txProofs,',
-        '  user,',
-        '  verification,',
-        "} from '../schema.js';",
-      ].join('\n'),
-    )
-    .replace(
-      'const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([\n  contacts,\n  user,',
-      [
-        'const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([',
-        '  contacts,',
-        '  txProofs,',
-        '  rawRuntimeDrift,',
-        '  user,',
-      ].join('\n'),
-    );
+  const runtimeDbSource = readFileSync(runtimeDbPath, 'utf8');
+  const runtimeDb = isSqlite
+    ? runtimeDbSource.replace(
+        '  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT \'\');",\n  // Better Auth tables',
+        [
+          '  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT \'\');",',
+          '  "CREATE TABLE tx_proofs (id text PRIMARY KEY);",',
+          '  "CREATE TABLE raw_runtime_drift (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
+          '  // Better Auth tables',
+        ].join('\n'),
+      )
+    : runtimeDbSource
+        .replace(
+          "import { account, contacts, session, user, verification } from '../schema.js';",
+          [
+            'import {',
+            '  account,',
+            '  contacts,',
+            '  rawRuntimeDrift,',
+            '  session,',
+            '  txProofs,',
+            '  user,',
+            '  verification,',
+            "} from '../schema.js';",
+          ].join('\n'),
+        )
+        .replace(
+          'const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([\n  contacts,\n  user,',
+          [
+            'const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([',
+            '  contacts,',
+            '  txProofs,',
+            '  rawRuntimeDrift,',
+            '  user,',
+          ].join('\n'),
+        );
   writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
 
   writeFileSync(
