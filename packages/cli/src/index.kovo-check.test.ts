@@ -653,6 +653,55 @@ describe('kovo check', () => {
     );
   });
 
+  it('fails closed when owner scope audits receive legacy-only read scope fields', async () => {
+    const { scopeAuditsFromQueryFacts } = await import('@kovojs/drizzle/internal/static');
+    const { deriveAppGraph } = await import('@kovojs/compiler/graph');
+
+    const scopeAudits = scopeAuditsFromQueryFacts(
+      [
+        {
+          argScopedReads: ['order'],
+          hasClientArgPredicate: true,
+          instanceKey: { domain: 'order', key: 'arg:id' },
+          query: 'orderById',
+          reads: ['order'],
+          sessionAnchoredReads: ['order'],
+          shape: {},
+          site: 'order.queries.ts:12',
+        },
+      ],
+      [{ domain: 'order', owner: 'userId' }],
+    );
+
+    expect(scopeAudits).toEqual([
+      {
+        detail:
+          'narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        domain: 'order',
+        kind: 'query',
+        name: 'orderById',
+        scope: 'unknown',
+        site: 'order.queries.ts:12',
+      },
+    ]);
+
+    const merged = deriveAppGraph({
+      graph: { ownerDomains: [{ domain: 'order', owner: 'userId' }], scopeAudits },
+    } as Parameters<typeof deriveAppGraph>[0]);
+    const result = kovoCheck(
+      JSON.parse(JSON.stringify(merged.graph)) as Parameters<typeof kovoCheck>[0],
+    );
+
+    expect(result).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR KV414 QUERY orderById domain=order scope=unknown site=order.queries.ts:12 Owner-table access is not scoped to the session principal (IDOR). narrow Authorization-gates-DATA subset: owner=userId; no owner-column session/principal predicate was proven',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('discharges an owner-domain arg access guarded by owns() (SPEC §10.3)', () => {
     const base = {
       ownerDomains: [{ domain: 'order', owner: 'userId' }],

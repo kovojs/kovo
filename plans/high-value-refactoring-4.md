@@ -66,7 +66,7 @@ that removes the broader source of drift.
     false positives outside the compiler/server graph producers.
   - Verification: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/core/src/graph.test.ts packages/compiler/src/registry.test.ts packages/server/src/access-graph.test.ts`.
 
-- [ ] **P0.5 - Make scope audits consume canonical read provenance only.**
+- [x] **P0.5 - Make scope audits consume canonical read provenance only.**
   - Current signals: `packages/drizzle/src/static.ts` still lets `QueryFact` carry parallel legacy scope
     fields such as `argScopedReads`, `hasClientArgPredicate`, `sessionAnchoredReads`, and
     `ownerScopedPrivateReadKeys`; `scopeAuditReadProvenance()` falls back to synthesizing provenance
@@ -77,8 +77,9 @@ that removes the broader source of drift.
   - Risk reduced: KV414 owner-scope audits become a simple fact-store consumer and cannot be influenced by
     stale shadow fields after the producer model evolves.
   - Verification: add a missing-provenance regression that fails closed; run `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/cli/src/index.kovo-check.test.ts`.
+  - Evidence: `pnpm exec vitest --run --no-file-parallelism packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/cli/src/index.kovo-check.test.ts` passed with 4 files/279 tests after merging `agent/hvr4-drizzle-provenance-20260630-235607`; `git diff --check HEAD^..HEAD` passed.
 
-- [ ] **P0.6 - Apply SQL side-effect observation to prepared statement execution.**
+- [x] **P0.6 - Apply SQL side-effect observation to prepared statement execution.**
   - Current signals: `packages/test/src/verifier-observation.ts` gives direct SQL execution unconditional
     side-effect snapshots, while prepared handle execution in `packages/test/src/verifier.ts` observes the
     statement argument but calls `.run()`/`.all()`/`.get()`/`.iterate()` through a separate path.
@@ -87,8 +88,9 @@ that removes the broader source of drift.
   - Risk reduced: parser-rejected prepared destructive writes, triggers, and fingerprint-changing effects
     cannot bypass the verifier row-count/fingerprint backstop that direct SQL gets.
   - Verification: add prepared unparseable write and trigger tests; run `pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts` passed with 4 files/37 tests after building the local `better-sqlite3` native binding; `pnpm run check:vp` and `git diff --check` passed.
 
-- [ ] **P0.7 - Centralize trusted request scheme provenance.**
+- [x] **P0.7 - Centralize trusted request scheme provenance.**
   - Current signals: `packages/server/src/app-document.ts` treats `x-forwarded-proto: https` as enough to
     attach HSTS, while `packages/server/src/node.ts` only trusts forwarded proto when `trustedProxy` is
     configured.
@@ -98,8 +100,9 @@ that removes the broader source of drift.
   - Risk reduced: spoofed proxy headers cannot affect security posture on direct Node deployments, and
     trusted proxy behavior is reviewed in one place.
   - Verification: `pnpm exec vitest --run packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/server/src/node.test.ts packages/server/src/csrf.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/server/src/node.test.ts packages/server/src/csrf.test.ts` passed with 4 files/132 tests after merging `agent/hvr4-server-security-20260630-235550`; `git diff --check HEAD^..HEAD` passed.
 
-- [ ] **P0.8 - Make stylesheet source provenance unforgeable and root-confined.**
+- [x] **P0.8 - Make stylesheet source provenance unforgeable and root-confined.**
   - Current signals: `packages/server/src/hints.ts` stores stylesheet source metadata with
     `Symbol.for('kovo.stylesheet.source')` and `Symbol.for('kovo.stylesheet.sourcePath')`; neutral build
     materialization consumes that metadata to read local stylesheet files.
@@ -109,8 +112,9 @@ that removes the broader source of drift.
   - Risk reduced: app-authored objects cannot forge framework stylesheet metadata to influence neutral
     build file reads or static export asset materialization.
   - Verification: add forged-symbol negative tests; run `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/build.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/neutral-build.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/build.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/neutral-build.test.ts` passed with the 3 existing files/54 tests after merging `agent/hvr4-server-security-20260630-235550`; `packages/server/src/neutral-build.test.ts` does not exist in this checkout, and `git diff --check HEAD^..HEAD` passed.
 
-- [ ] **P0.9 - Preserve production render-plan gates in every compile-cache projection.**
+- [x] **P0.9 - Preserve production render-plan gates in every compile-cache projection.**
   - Current signals: exact compiler cache keys include `productionRenderPlanGate`, but
     `narrowCompileCacheKeyInput()` drops that option when replaying learned dependency footprints;
     persistent cache reuse follows the narrowed path.
@@ -119,6 +123,7 @@ that removes the broader source of drift.
   - Risk reduced: a no-gate compile cannot be reused when KV416/KV435 production render-plan gates are
     enabled, including across persistent cache restarts.
   - Verification: add learned-footprint and persistent-cache regressions; run `pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/persistent-compile-cache.test.ts packages/compiler/src/render-plan-token-contract.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/persistent-compile-cache.test.ts packages/compiler/src/render-plan-token-contract.test.ts` passed with 3 files/22 tests after merging `agent/hvr4-compiler-20260630-235527`; `git diff --check HEAD^..HEAD` passed.
 
 ## P1 - Cross-Package Drift and Runtime Chokepoints
 
@@ -187,7 +192,7 @@ that removes the broader source of drift.
     runtime paths.
   - Verification: `pnpm exec vitest --run packages/browser/src/query-refetch.test.ts packages/browser/src/query-visible-return-refetch.test.ts packages/browser/src/inline-loader-navigation.browser.test.ts packages/browser/src/inline-loader-parser-parity.test.ts packages/browser/src/inline-loader-build.test.ts`.
 
-- [ ] **P1.7 - Scope clock tick scheduling per loader or owner document.**
+- [x] **P1.7 - Scope clock tick scheduling per loader or owner document.**
   - Current signals: `packages/browser/src/clock-tick-bus.ts` stores subscriptions, interval state,
     animation-frame state, and visibility/page listeners as package-level singletons consumed by
     `loader-query.ts`.
@@ -196,8 +201,9 @@ that removes the broader source of drift.
   - Risk reduced: multiple Kovo apps in one JS realm, embedded documents, and test environments cannot
     leak timers/listeners or visibility behavior into each other.
   - Verification: `pnpm exec vitest --run packages/browser/src/clock-tick-bus.test.ts packages/browser/src/loader-query.test.ts packages/compiler/src/query-coverage.test.ts examples/gallery/src/interactive-gallery.compile.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/browser/src/clock-tick-bus.test.ts packages/browser/src/loader-query.test.ts packages/compiler/src/query-coverage.test.ts examples/gallery/src/interactive-gallery.compile.test.ts` passed with 4 files/52 tests after merging `agent/hvr4-browser-runtime-20260630-235736`; `git diff --check HEAD^..HEAD` passed.
 
-- [ ] **P1.8 - Share core, UI, and headless safe-URL policy.**
+- [x] **P1.8 - Share core, UI, and headless safe-URL policy.**
   - Current signals: `packages/ui/src/safe-url.ts` and `packages/headless-ui/src/lib/safe-url.ts` maintain
     local scheme allowlists that already differ from core security URL expectations.
   - Refactor shape: route UI and headless safe URL handling through one core/internal URL sink helper, with
@@ -205,6 +211,7 @@ that removes the broader source of drift.
   - Risk reduced: anchor-like primitives cannot drift from framework URL sink policy when allowed schemes
     or sanitization rules change.
   - Verification: `pnpm exec vitest --run packages/core/src/security-url.test.ts packages/headless-ui/src/lib/safe-url.test.ts packages/ui/src/breadcrumb.test.tsx packages/ui/src/navigation-menu.test.tsx` plus `pnpm run check:api-surface`.
+  - Evidence: `pnpm exec vitest --run packages/core/src/security-url.test.ts packages/headless-ui/src/lib/safe-url.test.ts packages/ui/src/breadcrumb.test.tsx packages/ui/src/navigation-menu.test.tsx` passed with 4 files/19 tests; `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check` passed in `/Users/mini/kovo-high-value-refactoring-4-20260630-235424`.
 
 ## P2 - Gate Quality and Artifact Ownership
 
@@ -236,7 +243,7 @@ that removes the broader source of drift.
     stream capture cannot cross-contaminate concurrent script work.
   - Verification: `pnpm exec vitest --run site/scripts/export-static.test.mjs packages/cli/src/index.kovo-export.test.ts packages/cli/src/index.kovo-build.test.ts`; `pnpm --filter @kovojs/site run build`.
 
-- [ ] **P2.4 - Make release published-state checks fail closed on registry errors.**
+- [x] **P2.4 - Make release published-state checks fail closed on registry errors.**
   - Current signals: `scripts/verify-release-input.mjs` and `scripts/publish-packed-packages.mjs` both
     collapse `npm view` failures into "not published", making 404, auth, network, and registry failures
     indistinguishable.
@@ -244,6 +251,7 @@ that removes the broader source of drift.
     "missing"; other errors block publish unless an explicit dry-run or emergency override is used.
   - Risk reduced: partial-release and retry behavior cannot proceed on ambiguous registry state.
   - Verification: add helper tests plus focused verify/publish tests; run `pnpm run check:publish`, `pnpm run check:supply-chain`, and release dry-run commands.
+  - Evidence: `pnpm exec vitest --run scripts/npm-registry-state.test.mjs scripts/verify-release-input.test.mjs scripts/publish-packed-packages.test.mjs` passed with 3 files/10 tests after merging `agent/hvr4-release-registry-20260630-235800`; `pnpm run check:publish`, `pnpm run check:supply-chain`, and `git diff --check HEAD^..HEAD` passed.
 
 - [ ] **P2.5 - Retire or generate devtool example data snapshots.**
   - Current signals: `examples/devtool/src/app-shell.ts` and `examples/devtool/scripts/conformance.mjs`

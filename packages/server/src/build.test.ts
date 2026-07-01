@@ -16,7 +16,7 @@ import { computeRenderPlanFingerprint } from './client-modules.js';
 import { renderedHtml } from './html.js';
 import { route } from './route.js';
 import { cloudflare, node, vercel } from './build.js';
-import { stylesheet } from './hints.js';
+import { stylesheet, type StylesheetAsset } from './hints.js';
 import { writeKovoNeutralBuild } from './neutral-build.js';
 import { query } from './query.js';
 import { s } from './schema.js';
@@ -317,6 +317,68 @@ describe('server build-time deployment API', () => {
       await expect(readFile(join(outDir, 'static/index.html'), 'utf8')).resolves.toContain(
         'href="/assets/local.css"',
       );
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('does not materialize local stylesheet sources from forged symbols', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-forged-css-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      const outDir = join(root, 'dist', '.kovo');
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(join(srcDir, 'secret.css'), '.secret { color: red; }\n', 'utf8');
+      const forgedStylesheet = {
+        href: '/assets/forged.css',
+        [Symbol.for('kovo.stylesheet.source')]: join(srcDir, 'secret.css'),
+        [Symbol.for('kovo.stylesheet.sourcePath')]: './secret.css',
+      } as StylesheetAsset;
+
+      await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/', {
+              page: () => renderedHtml('<main>Home</main>'),
+              stylesheets: [forgedStylesheet],
+            }),
+          ],
+        }),
+        outDir,
+        stylesheetSourceRoot: srcDir,
+      });
+
+      await expect(readFile(join(outDir, 'client/assets/forged.css'), 'utf8')).rejects.toThrow();
+      await expect(readFile(join(outDir, 'static/assets/forged.css'), 'utf8')).rejects.toThrow();
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects stylesheetSourceRoot fallback paths outside the configured root', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-neutral-build-css-root-'));
+
+    try {
+      const srcDir = join(root, 'src');
+      await mkdir(srcDir, { recursive: true });
+      await writeFile(join(root, 'outside.css'), '.outside { color: red; }\n', 'utf8');
+      const escapedStylesheet = withNoStylesheetCallerFile(() => stylesheet('../outside.css'));
+
+      await expect(
+        writeKovoNeutralBuild({
+          app: createApp({
+            routes: [
+              route('/', {
+                page: () => renderedHtml('<main>Home</main>'),
+                stylesheets: [escapedStylesheet],
+              }),
+            ],
+          }),
+          outDir: join(root, 'dist', '.kovo'),
+          stylesheetSourceRoot: srcDir,
+        }),
+      ).rejects.toThrow('outside stylesheetSourceRoot');
     } finally {
       await rm(root, { force: true, recursive: true });
     }
@@ -1814,6 +1876,16 @@ export default async function handler() {
     }
   });
 });
+
+function withNoStylesheetCallerFile<T>(callback: () => T): T {
+  const previous = Error.prepareStackTrace;
+  Error.prepareStackTrace = () => 'Error\n    at stylesheet (file:///workspace/hints.ts:1:1)';
+  try {
+    return callback();
+  } finally {
+    Error.prepareStackTrace = previous;
+  }
+}
 
 async function readJson(filePath: string): Promise<unknown> {
   return JSON.parse(await readFile(filePath, 'utf8'));

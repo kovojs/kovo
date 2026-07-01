@@ -40,6 +40,7 @@ describe('safeUrl', () => {
     expect(safeUrl('mailto:a@b.com')).toBe('mailto:a@b.com');
     expect(safeUrl('mailto:a@b.com?subject=hi&body=yo')).toBe('mailto:a@b.com?subject=hi&body=yo');
     expect(safeUrl('tel:+1')).toBe('tel:+1');
+    expect(safeUrl('ftp://x.com/file.txt')).toBe('ftp://x.com/file.txt');
   });
 
   // bugz-3 L9: a bare `&` in a relative path segment is NOT scheme obfuscation

@@ -211,6 +211,7 @@
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
+    "@kovojs/core": "workspace:*",
     "typescript": "^6.0.3"
   },
   "devDependencies": {

@@ -20,6 +20,10 @@ export const SAFE_URL_SCHEMES = ['http', 'https', 'mailto', 'tel', 'ftp'] as con
 
 const urlAttributeNames = new Set<string>(URL_ATTRIBUTE_NAMES);
 const safeUrlSchemes = new Set<string>(SAFE_URL_SCHEMES);
+const urlSchemePattern = /^([a-zA-Z][a-zA-Z0-9+.-]*):/;
+const htmlColonReferencePattern = /&(?:#0*58(?![0-9])|#[xX]0*3[aA](?![0-9a-fA-F])|colon);?/;
+// eslint-disable-next-line no-control-regex
+const urlSchemeStripPattern = /[\u0000-\u0020\u007f-\u009f]+/g;
 
 /** @internal True when an HTML attribute is URL-bearing and needs scheme checks. */
 export function isUrlAttributeName(name: string): boolean {
@@ -28,20 +32,30 @@ export function isUrlAttributeName(name: string): boolean {
 
 /**
  * Returns true when the URL string carries an unsafe scheme. Strips control
- * characters <= U+0020 before extracting the scheme so `java\nscript:` is caught.
+ * characters before extracting the scheme so `java\nscript:` is caught.
  */
 export function hasUnsafeUrlScheme(value: string): boolean {
-  const normalized = Array.from(value)
-    .filter((character) => {
-      const codePoint = character.codePointAt(0) ?? 0;
-      return codePoint > 0x20;
-    })
-    .join('')
-    .toLowerCase();
-  const match = /^([a-z][a-z0-9+.-]*):/.exec(normalized);
+  const normalized = normalizedUrlForSchemeCheck(value);
+  if (hasHtmlColonReferenceInSchemePosition(normalized)) return true;
+
+  const match = urlSchemePattern.exec(normalized);
   if (!match) return false;
 
-  return !safeUrlSchemes.has(match[1] ?? '');
+  return !safeUrlSchemes.has((match[1] ?? '').toLowerCase());
+}
+
+/**
+ * @internal Render-safe URL sink adapter shared by framework UI packages.
+ *
+ * SPEC.md §4.8 keeps URL-sink scheme policy centralized with runtime sink facts.
+ */
+export function safeUrl(value: string | null | undefined, fallback = '#'): string {
+  if (value === undefined || value === null) return fallback;
+
+  const normalized = normalizedUrlForSchemeCheck(value);
+  if (normalized === '') return fallback;
+
+  return hasUnsafeUrlScheme(value) ? fallback : value;
 }
 
 /**
@@ -418,6 +432,16 @@ function unquoteCssUrlToken(value: string): string {
     return value.slice(1, -1);
   }
   return value;
+}
+
+function normalizedUrlForSchemeCheck(value: string): string {
+  return value.replace(urlSchemeStripPattern, '');
+}
+
+function hasHtmlColonReferenceInSchemePosition(value: string): boolean {
+  const pathBoundary = value.search(/[/?]/);
+  const schemePosition = pathBoundary < 0 ? value : value.slice(0, pathBoundary);
+  return htmlColonReferencePattern.test(schemePosition);
 }
 
 function blockedDecision(
