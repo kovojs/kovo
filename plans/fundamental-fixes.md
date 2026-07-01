@@ -45,6 +45,7 @@ the IR/fact-store migration in C1.
   - Integrated F1 worker: `019f1be8-5499-76c2-9d40-1ac56bd6d269` as `37237bffe`.
   - Integrated C1 worker: `019f1bec-9c84-7a02-9094-ff29e559e1b9` as `a26704542`,
     plus main-thread build-preflight coverage for the same sink family.
+  - Integrated D2 worker: `019f1c04-239a-7273-9175-fc31d38a0faa` as `3bd002c1a`.
   - No active `fundamental-fixes` workers remain.
 
 ## Active Worker Slices
@@ -216,11 +217,16 @@ packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`
     `vp exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts -t "task and webhook direct-write diagnostics|blocks task and webhook direct DB writes"`;
     `git diff --check`; `pnpm run check:api-surface`; `pnpm run check:vp`.
 
-- [ ] **D2. Close D after D1 lands.**
-  - [ ] Confirm SSR, `/_q`, and enhanced mutation paths all use the same query warning/list-limit contract.
-  - [ ] Keep file MIME parsing as intentionally fail-closed sync + sniffed async; no more work unless a test
+- [x] **D2. Close D after D1 lands.**
+  - [x] Confirm SSR, `/_q`, and enhanced mutation paths all use the same query warning/list-limit contract. - Evidence:
+        `vp exec vitest --run packages/server/src/app.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/live-target-renderer.test.tsx packages/server/src/mutation-response.test.ts packages/server/src/mutation-delta.test.ts`;
+        `vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`.
+  - [x] Keep file MIME parsing as intentionally fail-closed sync + sniffed async; no more work unless a test
         contradicts this.
-  - [ ] Keep durable task scheduling as closed unless CI/prod-artifact lifecycle tests regress.
+        Evidence: `vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`.
+  - [x] Keep durable task scheduling as closed unless CI/prod-artifact lifecycle tests regress. - Evidence:
+        `vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts`;
+        `vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts`.
   - Acceptance: D1 tests plus existing `packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`
     and durable task prod-artifact lifecycle tests.
 
