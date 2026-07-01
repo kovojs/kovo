@@ -5,6 +5,7 @@ import type {
   DurableTaskStatusSqlResult,
   DurableTaskStatusSqlStatement,
 } from './task-observability.js';
+import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
 
 export type DurableTaskJobStatus =
   | 'ready'
@@ -110,7 +111,7 @@ export interface DurableTaskSqlExecutor {
  * SQL executor shape used by durable-task queue/status helpers (SPEC §9.6).
  */
 export function createDurableTaskSqlExecutor(handle: unknown): DurableTaskStatusSqlExecutor {
-  const client = resolveRawSqlClient(handle);
+  const client = resolveRawSqlClient(frameworkManagedDbRawTarget(handle) ?? handle);
   if (client === undefined) {
     throw new TypeError(
       'Durable tasks require a Postgres-compatible db client with query(text, values) or execute({ text, values }) so _kovo_jobs can be persisted (SPEC §9.6).',

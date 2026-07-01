@@ -9,6 +9,7 @@ import {
   type DurableTaskSqlExecutor,
   type DurableTaskSqlStatement,
 } from './task-queue.js';
+import { managedDb } from './managed-db.js';
 
 describe('durable task queue store (SPEC §9.6)', () => {
   it('exposes a persistent Postgres-compatible _kovo_jobs schema through statement carriers', async () => {
@@ -353,6 +354,47 @@ describe('durable task queue store (SPEC §9.6)', () => {
       executor.execute({ text: 'insert into _kovo_jobs values ($1)', values: ['id'] }),
     ).resolves.toEqual({ rows: [{ ok: true }] });
     expect(sessionCalls).toEqual([['insert into _kovo_jobs values ($1)', ['id']]]);
+    expect(topLevelCalls).toEqual([]);
+  });
+
+  it('unwraps framework-managed mutation handles for internal durable queue SQL only', async () => {
+    const sessionCalls: unknown[][] = [];
+    const topLevelCalls: unknown[][] = [];
+    const raw = {
+      query: async (text: string, values: readonly unknown[]) => {
+        topLevelCalls.push([text, values]);
+        return { rows: [] };
+      },
+      session: {
+        client: {
+          async query(text: string, values: readonly unknown[]) {
+            sessionCalls.push([text, values]);
+            return { affectedRows: 1, rows: [{ id: values[0] }] };
+          },
+        },
+      },
+    };
+    const managed = managedDb(raw, 'write', {
+      sqlWritePolicy: {
+        tables: ['contacts'],
+        touches: ['contact'],
+      },
+    });
+
+    expect(() =>
+      (managed as { query(statement: unknown): unknown }).query('insert into users values (1)'),
+    ).toThrow(/KV422/);
+
+    const executor = createDurableTaskSqlExecutor(managed);
+    const result = await executor.execute({
+      text: 'insert into _kovo_jobs (id) values ($1) returning id',
+      values: ['job_1'],
+    });
+
+    expect(result).toEqual({ rowCount: 1, rows: [{ id: 'job_1' }] });
+    expect(sessionCalls).toEqual([
+      ['insert into _kovo_jobs (id) values ($1) returning id', ['job_1']],
+    ]);
     expect(topLevelCalls).toEqual([]);
   });
 });

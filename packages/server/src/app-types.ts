@@ -12,9 +12,10 @@ import type { StylesheetAsset } from './hints.js';
 import type { MutationFactory, MutationFail, MutationSuccess } from './mutation.js';
 import type { FragmentRenderer, LiveTargetRenderer } from './mutation-wire.js';
 import type { QueryFactory } from './query.js';
+import type { ServerRenderable } from './deferred-region.js';
 import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import type { MutationReplayStore } from './replay.js';
-import type { RoutePageResponse } from './response.js';
+import type { ResponseHeaders } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
 import type { TaskDefinition, TaskFactory, TaskSchedulingRequest } from './task.js';
 import type { Reader } from './managed-db.js';
@@ -99,10 +100,21 @@ export interface AppErrorShellOptions {
  * Render an app-provided 403, 404, or 500 shell response for request-shell errors
  * (SPEC §9.5).
  */
-export type ErrorShellRenderer = (context: {
-  request: Request;
-  status: 403 | 404 | 500;
-}) => RoutePageResponse | string | Promise<RoutePageResponse | string>;
+export type ErrorShellRenderer = (context: { request: Request; status: 403 | 404 | 500 }) =>
+  | Exclude<ServerRenderable, Promise<unknown>>
+  | {
+      body: Exclude<ServerRenderable, Promise<unknown>>;
+      headers?: ResponseHeaders;
+      status?: 403 | 404 | 500;
+    }
+  | Promise<
+      | Exclude<ServerRenderable, Promise<unknown>>
+      | {
+          body: Exclude<ServerRenderable, Promise<unknown>>;
+          headers?: ResponseHeaders;
+          status?: 403 | 404 | 500;
+        }
+    >;
 
 /** Document-level options applied by `createApp()` when rendering route documents. */
 export interface AppDocumentOptions {

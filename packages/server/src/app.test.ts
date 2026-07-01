@@ -809,12 +809,12 @@ describe('server createApp request shell', () => {
       createApp({
         errorShells: {
           forbidden({ status }) {
-            return `<main>${status}:forbidden</main>`;
+            return trustedHtml(`<main>${status}:forbidden</main>`);
           },
           notFound({ request, status }) {
             const url = new URL(request.url);
             return {
-              body: `<main>${status}:${url.pathname}</main>`,
+              body: trustedHtml(`<main>${status}:${url.pathname}</main>`),
               headers: { 'Content-Type': 'text/html; charset=utf-8' },
               status,
             };

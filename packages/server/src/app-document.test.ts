@@ -1001,7 +1001,7 @@ describe('server app document boundary', () => {
       errorShells: {
         notFound({ status }) {
           return {
-            body: `<main data-shell="404">configured:${status}</main>`,
+            body: trustedHtml(`<main data-shell="404">configured:${status}</main>`),
             headers: {
               'Content-Type': 'text/plain;charset=UTF-8',
               'X-Shell': 'kept',
@@ -1041,7 +1041,7 @@ describe('server app document boundary', () => {
       errorShells: {
         serverError({ status }) {
           return {
-            body: `<main data-shell="500">configured:${status}</main>`,
+            body: trustedHtml(`<main data-shell="500">configured:${status}</main>`),
             headers: { 'Content-Type': 'text/html; charset=utf-8' },
             status,
           };
@@ -1075,6 +1075,48 @@ describe('server app document boundary', () => {
     expect('session' in context.request).toBe(false);
   });
 
+  it('escapes raw configured 500 shell content that reflects request data', async () => {
+    const routeError = new Error('private route detail');
+    const payload = '<img src=x onerror=alert(1)> Set-Cookie: session=evil';
+    const brokenRoute = route('/broken', {
+      page() {
+        throw routeError;
+      },
+    });
+    const request = new Request('https://shop.example.test/broken', {
+      headers: { 'x-shell-payload': payload },
+    });
+    const app = createApp({
+      errorShells: {
+        serverError({ request, status }) {
+          return {
+            body: `<main data-shell="${status}">${request.headers.get('x-shell-payload')}</main>`,
+            headers: { 'Content-Type': 'text/html; charset=utf-8' },
+            status,
+          };
+        },
+      },
+      routes: [brokenRoute],
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request,
+      route: brokenRoute,
+      url: new URL(request.url),
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.body).toContain(
+      '&lt;main data-shell="500"&gt;&lt;img src=x onerror=alert(1)&gt; Set-Cookie: session=evil&lt;/main&gt;',
+    );
+    expect(response.body).not.toContain('<img src=x onerror=alert(1)>');
+    expect(response.body).not.toContain('<main data-shell="500">');
+    expect(response.body).not.toContain('private route detail');
+    expectDocumentSecurityFloor(response.headers);
+  });
+
   it('renders route guard forbidden failures through the configured 403 shell', async () => {
     const adminRoute = route('/admin', {
       guard: guards.role<Request & { session?: { user: { roles: readonly string[] } } }>('admin'),
@@ -1085,7 +1127,7 @@ describe('server app document boundary', () => {
       errorShells: {
         forbidden({ status }) {
           return {
-            body: `<main data-shell="403">configured:${status}</main>`,
+            body: trustedHtml(`<main data-shell="403">configured:${status}</main>`),
             headers: { 'Content-Type': 'text/html; charset=utf-8' },
             status,
           };
@@ -1118,8 +1160,6 @@ describe('server app document boundary', () => {
     const request = new Request('https://shop.example.test/admin');
     const app = createApp({
       errorShells: {
-        // @ts-expect-error Runtime accepts ordinary shell render values; papercuts-14 B tracks the
-        // public type widening separately from this document-path regression.
         forbidden({ status }) {
           return `<main data-shell="403">configured:${status}</main>`;
         },
@@ -1137,7 +1177,8 @@ describe('server app document boundary', () => {
     });
 
     expect(response.status).toBe(403);
-    expect(response.body).toContain('<main data-shell="403">configured:403</main>');
+    expect(response.body).toContain('&lt;main data-shell="403"&gt;configured:403&lt;/main&gt;');
+    expect(response.body).not.toContain('<main data-shell="403">configured:403</main>');
     expect(response.body).toContain('<!doctype html>');
     expectDocumentSecurityFloor(response.headers);
     expect(response.body).not.toContain('data-secret');
