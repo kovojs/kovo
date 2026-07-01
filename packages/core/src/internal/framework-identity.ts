@@ -35,6 +35,7 @@ export type FrameworkIdentityTypeScript = Pick<
   | 'isExportDeclaration'
   | 'isExportSpecifier'
   | 'isExpressionStatement'
+  | 'isElementAccessExpression'
   | 'isFunctionDeclaration'
   | 'isFunctionExpression'
   | 'isIdentifier'
@@ -290,6 +291,13 @@ function canonicalExpression(
     );
   }
 
+  if (ts.isElementAccessExpression(node)) {
+    const member = elementAccessMemberName(ts, node);
+    return member
+      ? namespaceMemberIdentity(ts, sourceFile, node.expression, member, options, seen, depth + 1)
+      : undefined;
+  }
+
   return undefined;
 }
 
@@ -401,6 +409,18 @@ function namespaceMemberIdentity(
   }
 
   if (ts.isPropertyAccessExpression(expression)) {
+    const receiverIdentity = canonicalExpression(
+      ts,
+      sourceFile,
+      expression,
+      options,
+      seen,
+      depth + 1,
+    );
+    return receiverIdentity?.exportName === member ? receiverIdentity : undefined;
+  }
+
+  if (ts.isElementAccessExpression(expression)) {
     const receiverIdentity = canonicalExpression(
       ts,
       sourceFile,
@@ -733,6 +753,21 @@ function exportedIdentity(
           );
         }
       }
+      if (!exportClause) {
+        const specifier = moduleSpecifier.text;
+        const starIdentity =
+          specifierExportIdentity(specifier, exportName) ??
+          localModuleExportIdentity(
+            ts,
+            sourceFile,
+            specifier,
+            exportName,
+            options,
+            seen,
+            depth + 1,
+          );
+        if (starIdentity) return starIdentity;
+      }
       continue;
     }
 
@@ -823,6 +858,13 @@ function propertyNameText(
   return undefined;
 }
 
+function elementAccessMemberName(
+  ts: FrameworkIdentityTypeScript,
+  node: TypeScript.ElementAccessExpression,
+): string | undefined {
+  return ts.isStringLiteralLike(node.argumentExpression) ? node.argumentExpression.text : undefined;
+}
+
 function unwrapExpression(
   ts: FrameworkIdentityTypeScript,
   expression: TypeScript.Expression,
@@ -862,6 +904,7 @@ function isExpressionNode(
     ts.isIdentifier(node) ||
     ts.isCallExpression(node) ||
     ts.isPropertyAccessExpression(node) ||
+    ts.isElementAccessExpression(node) ||
     ts.isParenthesizedExpression(node) ||
     ts.isAsExpression(node) ||
     ts.isSatisfiesExpression(node) ||

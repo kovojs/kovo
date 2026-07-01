@@ -204,6 +204,10 @@ export interface KovoHmrEventPayload {
 }
 
 interface ViteCompileOptions {
+  extraFiles?: readonly {
+    readonly fileName: string;
+    readonly source: string;
+  }[];
   fileName: string;
   packageComponentPrefixes?: readonly PackageComponentPrefixFact[];
   packagePrefixDiscoveryRoot?: string;
@@ -685,7 +689,9 @@ async function compileCachedViteComponentModule(
     resolveViteQueryShapeFacts(options, fileName),
   );
   const registryFacts = resolveViteRegistryFacts(options, fileName);
+  const extraFiles = viteFrameworkIdentityFiles(root, fileName, source);
   const compileOptions = {
+    ...(extraFiles.length === 0 ? {} : { extraFiles }),
     fileName,
     ...(options.packageComponentPrefixes === undefined
       ? {}
@@ -750,7 +756,9 @@ function compileViteComponentModule(
   ),
   registryFacts = resolveViteRegistryFacts(options, fileName),
 ): MaybePromise<ViteCompileResult> {
+  const extraFiles = viteFrameworkIdentityFiles(root, fileName, source);
   return compileComponentModule({
+    ...(extraFiles.length === 0 ? {} : { extraFiles }),
     fileName,
     ...(options.packageComponentPrefixes === undefined
       ? {}
@@ -760,6 +768,81 @@ function compileViteComponentModule(
     ...(registryFacts === undefined ? {} : { registryFacts }),
     source,
   });
+}
+
+function viteFrameworkIdentityFiles(
+  root: string,
+  fileName: string,
+  source: string,
+): readonly { readonly fileName: string; readonly source: string }[] {
+  const collected = new Map<string, { fileName: string; source: string }>();
+  const visited = new Set<string>();
+  collectViteFrameworkIdentityFiles(root, fileName, source, collected, visited);
+  return [...collected.values()];
+}
+
+function collectViteFrameworkIdentityFiles(
+  root: string,
+  fileName: string,
+  source: string,
+  collected: Map<string, { fileName: string; source: string }>,
+  visited: Set<string>,
+): void {
+  const key = slashPath(fileName);
+  if (visited.has(key)) return;
+  visited.add(key);
+
+  const model = parseComponentModule(fileName, source);
+  for (const specifier of model.moduleSpecifiers) {
+    if (!isRelativeModuleSpecifier(specifier.specifier)) continue;
+    const resolved = readViteRelativeSourceFile(root, fileName, specifier.specifier);
+    if (!resolved) continue;
+    if (!collected.has(resolved.fileName)) collected.set(resolved.fileName, resolved);
+    collectViteFrameworkIdentityFiles(root, resolved.fileName, resolved.source, collected, visited);
+  }
+}
+
+function readViteRelativeSourceFile(
+  root: string,
+  importerFileName: string,
+  moduleSpecifier: string,
+): { fileName: string; source: string } | null {
+  const importerPath = isAbsolute(importerFileName)
+    ? importerFileName
+    : resolve(root, importerFileName);
+  const basePath = resolve(dirname(importerPath), moduleSpecifier);
+  for (const candidate of viteSourceFileCandidates(basePath)) {
+    if (!existsSync(candidate)) continue;
+    const source = readFileSync(candidate, 'utf8');
+    return { fileName: viteComponentFileName(candidate, root), source };
+  }
+  return null;
+}
+
+function viteSourceFileCandidates(basePath: string): readonly string[] {
+  if (/\.[cm]?[tj]sx?$/.test(basePath)) return [basePath];
+  return [
+    `${basePath}.ts`,
+    `${basePath}.tsx`,
+    `${basePath}.mts`,
+    `${basePath}.mtsx`,
+    `${basePath}.cts`,
+    `${basePath}.ctsx`,
+    `${basePath}.js`,
+    `${basePath}.jsx`,
+    `${basePath}/index.ts`,
+    `${basePath}/index.tsx`,
+    `${basePath}/index.mts`,
+    `${basePath}/index.mtsx`,
+    `${basePath}/index.cts`,
+    `${basePath}/index.ctsx`,
+    `${basePath}/index.js`,
+    `${basePath}/index.jsx`,
+  ];
+}
+
+function isRelativeModuleSpecifier(specifier: string): boolean {
+  return specifier.startsWith('./') || specifier.startsWith('../');
 }
 
 function resolveViteClientModuleId(

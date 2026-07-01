@@ -304,6 +304,29 @@ export const C = component({
     ).toHaveLength(0);
   });
 
+  it('resolves literal element access to trustedHtml without trusting computed keys', () => {
+    expect(
+      kv426(`
+import * as browser from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{browser['trustedHtml'](post.body)}</article>,
+});
+`),
+    ).toHaveLength(1);
+
+    expect(
+      kv426(`
+import * as browser from '@kovojs/browser';
+const key = 'trustedHtml';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{browser[key](post.body)}</article>,
+});
+`),
+    ).toHaveLength(0);
+  });
+
   it('resolves a local const alias of the real trustedHtml binding', () => {
     expect(
       kv426(`

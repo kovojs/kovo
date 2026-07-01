@@ -228,4 +228,37 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
       expressionResolvesToFrameworkExport(localShadowCall!.getExpression(), taskIdentity),
     ).toBe(false);
   });
+
+  it('resolves literal element namespace members and star barrels without trusting computed keys', () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    project.createSourceFile(
+      '/app/server-root.ts',
+      'export { task as runTask } from "@kovojs/server";',
+    );
+    project.createSourceFile('/app/server-barrel.ts', 'export * from "./server-root";');
+    const sourceFile = project.createSourceFile(
+      '/app/tasks.ts',
+      [
+        'import * as framework from "./server-barrel";',
+        'const method = "runTask";',
+        'export const cleanup = framework["runTask"]("cleanup", { run() {} });',
+        'export const opaque = framework[method]("opaque", { run() {} });',
+      ].join('\n'),
+    );
+
+    const taskIdentity = frameworkExport('@kovojs/server', 'task');
+    const taskCall = sourceFile
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .find((call) => call.getExpression().getText() === 'framework["runTask"]');
+    const computedCall = sourceFile
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .find((call) => call.getExpression().getText() === 'framework[method]');
+
+    expect(taskCall).toBeDefined();
+    expect(computedCall).toBeDefined();
+    expect(expressionResolvesToFrameworkExport(taskCall!.getExpression(), taskIdentity)).toBe(true);
+    expect(expressionResolvesToFrameworkExport(computedCall!.getExpression(), taskIdentity)).toBe(
+      false,
+    );
+  });
 });

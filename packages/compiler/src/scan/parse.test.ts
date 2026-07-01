@@ -471,6 +471,31 @@ export const save = mutation({
     ]);
   });
 
+  it('records literal element request db write sink facts as direct db access', () => {
+    const source = `
+export const save = mutation('cart/save', {
+  handler(input, request) {
+    request['db'].insert(input);
+  },
+});
+`;
+    const facts = handlerWriteSinks(parseComponentModule('src/mutations/cart.ts', source));
+
+    expect(facts).toEqual([
+      {
+        canonicalTarget: { identity: 'request.db', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'key', value: 'cart/save' },
+        path: 'request.db.insert',
+        span: {
+          end: source.indexOf("request['db'].insert") + "request['db'].insert".length,
+          start: source.indexOf("request['db'].insert"),
+        },
+        surface: 'mutation',
+      },
+    ]);
+  });
+
   it('records destructured and helper-wrapper mutation write sink facts', () => {
     const source = `
 export const save = mutation('cart/save', {

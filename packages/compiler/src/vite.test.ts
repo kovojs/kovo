@@ -73,6 +73,35 @@ describe('kovoVitePlugin', () => {
     });
   });
 
+  it('registers local source files for framework identity during real Vite compilation', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-vite-identity-'));
+    const src = join(root, 'src');
+    mkdirSync(src, { recursive: true });
+    writeFileSync(
+      join(src, 'browser-root.ts'),
+      "export { trustedHtml as th } from '@kovojs/browser';\n",
+    );
+    writeFileSync(join(src, 'browser-barrel.ts'), "export * from './browser-root';\n");
+    const appSource = `
+import { th } from './browser-barrel';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{th(post.body)}</article>,
+});
+`;
+
+    const plugin = kovoVitePlugin({ cache: false, include: ['src'] });
+    plugin.configResolved?.({ root });
+
+    try {
+      await expect(plugin.transform(appSource, join(src, 'probe.tsx'))).rejects.toThrow(
+        /KV426 src\/probe\.tsx:/,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('unwraps compiler source-generator server artifacts for Vite execution', async () => {
     const plugin = createKovoVitePlugin(() => ({
       files: [
