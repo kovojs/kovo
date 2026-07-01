@@ -27,6 +27,7 @@ export type MetamorphicVariantKind =
   | 're-export-barrel'
   | 'local-alias'
   | 'wrapper-helper'
+  | 'function-helper'
   | 'destructured-binding';
 
 export type MetamorphicExpectation = 'enforced' | 'todo';
@@ -557,6 +558,24 @@ export const CartBadge = component({
   disableServerRefresh: true,
   render: () => {
     const label = (() => cart.count + 1)();
+    return <cart-badge>{label}</cart-badge>;
+  },
+});
+`,
+    },
+    {
+      expectation: 'enforced',
+      kind: 'function-helper',
+      label: 'function declaration returning query value',
+      source: `
+export const CartBadge = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: () => {
+    function readCount() {
+      return cart.count + 1;
+    }
+    const label = readCount();
     return <cart-badge>{label}</cart-badge>;
   },
 });

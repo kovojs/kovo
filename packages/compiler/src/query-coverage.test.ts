@@ -931,6 +931,43 @@ export const QueryWrapperChain = component({
     );
   });
 
+  it('reports KV311 for query reads hidden behind same-render function declarations', () => {
+    const result = compileComponentModule({
+      fileName: 'query-function-helper.tsx',
+      source: `
+export const QueryFunctionHelper = component({
+  queries: { cart: {} },
+  disableServerRefresh: true,
+  render: () => {
+    function readCount() {
+      return cart.count + 1;
+    }
+    const label = readCount();
+    return <query-function-helper><p>{label}</p></query-function-helper>;
+  },
+});
+`,
+    });
+
+    expect(result.updateCoverage).toContainEqual(
+      expect.objectContaining({
+        componentName: 'QueryFunctionHelper',
+        detail: 'query expression has no data-bind, renderOnce, fragment, or isomorphic status',
+        position: 'expression',
+        query: 'cart.count',
+        status: 'UNHANDLED',
+      }),
+    );
+    expect(result.diagnostics).toContainEqual(
+      expect.objectContaining({
+        code: 'KV311',
+        fileName: 'query-function-helper.tsx',
+        message:
+          'Query/state-dependent DOM position has no update status. QueryFunctionHelper cart.count expression',
+      }),
+    );
+  });
+
   it('classifies fragment-target query expressions as fragment-covered without KV311', () => {
     const result = compileComponentModule({
       fileName: 'cart-row.tsx',
