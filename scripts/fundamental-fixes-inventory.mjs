@@ -1,7 +1,9 @@
 #!/usr/bin/env node
-import { readFile, readdir } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+
+import { collectSourceFilesAsync } from './lib/source-files.mjs';
 
 const DEFAULT_ROOTS = ['packages/compiler/src', 'packages/drizzle/src'];
 const DEFAULT_EXTENSIONS = new Set(['.ts', '.tsx']);
@@ -54,10 +56,13 @@ export async function collectInventory(options = {}) {
   const root = options.root ?? process.cwd();
   const includeTests = options.includeTests === true;
   const roots = options.roots ?? DEFAULT_ROOTS;
-  const files = [];
-  for (const sourceRoot of roots) {
-    files.push(...(await sourceFiles(path.resolve(root, sourceRoot), { includeTests })));
-  }
+  const files = await collectSourceFilesAsync(root, roots, {
+    absolute: true,
+    includeFile: ({ absolutePath }) =>
+      DEFAULT_EXTENSIONS.has(path.extname(absolutePath)) &&
+      (includeTests || !isTestFile(absolutePath)),
+    skipDirectory: ({ name }) => shouldSkipDirectory(name),
+  });
 
   const entries = [];
   for (const file of files.sort((a, b) => a.localeCompare(b))) {
@@ -110,32 +115,6 @@ export function formatInventoryReport(report) {
     lines.push(`${key}: ${value.count} (${value.label})`);
   }
   return `${lines.join('\n')}\n`;
-}
-
-async function sourceFiles(root, options) {
-  const files = [];
-  async function walk(directory) {
-    let entries;
-    try {
-      entries = await readdir(directory, { withFileTypes: true });
-    } catch (error) {
-      if (error?.code === 'ENOENT') return;
-      throw error;
-    }
-    for (const entry of entries) {
-      const full = path.join(directory, entry.name);
-      if (entry.isDirectory()) {
-        if (shouldSkipDirectory(entry.name)) continue;
-        await walk(full);
-        continue;
-      }
-      if (!DEFAULT_EXTENSIONS.has(path.extname(entry.name))) continue;
-      if (!options.includeTests && isTestFile(full)) continue;
-      files.push(full);
-    }
-  }
-  await walk(root);
-  return files;
 }
 
 function shouldSkipDirectory(name) {
