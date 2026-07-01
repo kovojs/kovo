@@ -717,9 +717,11 @@ function sqlTemplateArith(
   if (!Node.isTaggedTemplateExpression(node)) return undefined;
   const tag = node.getTag();
   if (
-    !expressionResolvesToFrameworkExport(tag, frameworkExport('@kovojs/drizzle', 'sql'), {
-      legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
-    })
+    !(
+      expressionResolvesToFrameworkExport(tag, frameworkExport('@kovojs/drizzle', 'sql'), {
+        legacyGlobals: [frameworkExport('@kovojs/drizzle', 'sql')],
+      }) || expressionResolvesToFrameworkExport(tag, frameworkExport('drizzle-orm', 'sql'))
+    )
   ) {
     return undefined;
   }

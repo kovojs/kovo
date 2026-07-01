@@ -94,6 +94,39 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('recognizes typed sql projections imported from drizzle-orm as declared output shape', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'cart.queries.ts',
+          source: [
+            'import { sql } from "drizzle-orm";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            '',
+            'export const cartItems = pgTable("cart_items", { id: text("id").primaryKey() }, kovo({ domain: "cart", key: "id" }));',
+            'export const cartQuery = query("cart/count", {',
+            '  output: s.object({ count: s.number() }),',
+            '  reads: [cartItems],',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({ count: sql<number>`count(*)` }).from(cartItems);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'cart/count',
+        reads: ['cart'],
+        shape: { count: 'number' },
+        site: 'cart.queries.ts:5',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('extracts project query facts from Drizzle distinct selects', () => {
     const facts = extractQueryFactsFromProject({
       files: [

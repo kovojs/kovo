@@ -187,12 +187,20 @@ function trustedCallNameForCallee(callee: Node): keyof typeof TRUSTED_CALL_KINDS
     ['trustedUrl', '@kovojs/browser'],
   ] as const;
   return candidates.find(([exportName, module]) =>
-    expressionResolvesToFrameworkExport(callee, frameworkExport(module, exportName)),
+    expressionResolvesToFrameworkExport(callee, frameworkExport(module, exportName), {
+      legacyGlobals: [frameworkExport(module, exportName)],
+    }),
   )?.[0];
 }
 
 function isKovoServerTrustCallee(callee: Node, exportName: 'endpoint' | 'webhook'): boolean {
-  return expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/server', exportName));
+  return expressionResolvesToFrameworkExport(
+    callee,
+    frameworkExport('@kovojs/server', exportName),
+    {
+      legacyGlobals: [frameworkExport('@kovojs/server', exportName)],
+    },
+  );
 }
 
 function buildTrustedCallEscape(

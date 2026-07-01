@@ -2486,7 +2486,10 @@ function kovoSqlBindings(sourceFile: ts.SourceFile): {
   for (const statement of sourceFile.statements) {
     if (!ts.isImportDeclaration(statement)) continue;
     const moduleSpecifier = statement.moduleSpecifier;
-    if (!ts.isStringLiteral(moduleSpecifier) || moduleSpecifier.text !== '@kovojs/drizzle') {
+    if (
+      !ts.isStringLiteral(moduleSpecifier) ||
+      (moduleSpecifier.text !== '@kovojs/drizzle' && moduleSpecifier.text !== 'drizzle-orm')
+    ) {
       continue;
     }
     const bindings = statement.importClause?.namedBindings;

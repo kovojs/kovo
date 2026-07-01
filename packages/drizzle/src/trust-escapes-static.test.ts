@@ -38,6 +38,19 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
     expect(escapes[0]?.justification).toBeUndefined();
   });
 
+  it('keeps legacy bare trustedHtml visible without accepting local shadows', () => {
+    const escapes = trustEscapesFor('export const body = trustedHtml(cms.promo);');
+
+    expect(escapes).toEqual([
+      expect.objectContaining({
+        kind: 'trustedHtml',
+        safePath: 'trustedHtml',
+        site: 'app.tsx:1',
+        source: 'cms.promo',
+      }),
+    ]);
+  });
+
   it('captures a justification from an options object, trailing string, or leading comment', () => {
     const escapes = trustEscapesFor(`
       import { trustedHtml, trustedUrl } from '@kovojs/browser';
