@@ -53,7 +53,7 @@ import {
   type SignedCapability,
 } from './capability-url.js';
 import type { SigningSecret } from './keyring.js';
-import { respond, type RouteStoredFileOptions } from './response.js';
+import { respond, serverResponseToWebResponse, type RouteStoredFileOptions } from './response.js';
 
 /** The query-parameter name the token rides in on a capability download URL. */
 export const CAPABILITY_TOKEN_PARAM = 'kovo-cap';
@@ -240,16 +240,20 @@ export interface StorageDownloadEndpointOptions {
  * — every rejection is an indistinguishable 404 so the route is not an oracle. The 404 (not 403)
  * also hides whether the object exists at all.
  */
-function downloadRejected(): Response {
-  return new Response('Not Found', {
-    headers: {
-      'Cache-Control': 'private, no-store',
-      'Content-Type': 'text/plain; charset=utf-8',
-      Vary: 'Cookie',
-      'X-Content-Type-Options': 'nosniff',
+function downloadRejected(method = 'GET'): Response {
+  return serverResponseToWebResponse(
+    {
+      body: 'Not Found',
+      headers: {
+        'Cache-Control': 'private, no-store',
+        'Content-Type': 'text/plain; charset=utf-8',
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+      },
+      status: 404,
     },
-    status: 404,
-  });
+    { method },
+  );
 }
 
 /**
@@ -302,17 +306,17 @@ export function createStorageDownloadEndpoint(
 
   const handler = async (request: Request): Promise<Response> => {
     const method = request.method.toUpperCase();
-    if (method !== 'GET' && method !== 'HEAD') return downloadRejected();
+    if (method !== 'GET' && method !== 'HEAD') return downloadRejected(method);
     const expectedMethod: CapabilityMethod = method;
 
     const url = new URL(request.url);
     const token = url.searchParams.get(CAPABILITY_TOKEN_PARAM);
-    if (token === null || token.length === 0) return downloadRejected();
+    if (token === null || token.length === 0) return downloadRejected(method);
 
     // Derive the EXPECTED claims FROM THE REQUEST — never from the token. This is the load-bearing
     // step: the route, not the token, says which object/method/scope is being authorized.
     const key = deriveDownloadKey(url.pathname, basePath);
-    if (key === undefined) return downloadRejected();
+    if (key === undefined) return downloadRejected(method);
     const scope = options.scope?.(request);
 
     // VERIFY BEFORE READ. The storage read below is unreachable unless this passes.
@@ -331,7 +335,7 @@ export function createStorageDownloadEndpoint(
       },
     );
     // Fail closed on ANY rejection. The reason stays server-side (never leaked to the client).
-    if (!verification.ok) return downloadRejected();
+    if (!verification.ok) return downloadRejected(method);
 
     // Only NOW — after a verifying token — do we touch storage. A HEAD verifies identically but
     // returns no body.
@@ -343,7 +347,7 @@ export function createStorageDownloadEndpoint(
         ? {}
         : { filename: options.storedFile.filename }),
     });
-    if (outcome === undefined) return downloadRejected();
+    if (outcome === undefined) return downloadRejected(method);
 
     const headers: Record<string, string> = {
       'Cache-Control': 'private, no-store',
@@ -353,10 +357,14 @@ export function createStorageDownloadEndpoint(
       'X-Content-Type-Options': 'nosniff',
       ...(outcome.etag === undefined ? {} : { ETag: outcome.etag }),
     };
-    return new Response(expectedMethod === 'HEAD' ? null : (outcome.body as BodyInit), {
-      headers,
-      status: 200,
-    });
+    return serverResponseToWebResponse(
+      {
+        body: outcome.body,
+        headers,
+        status: 200,
+      },
+      { method: expectedMethod },
+    );
   };
 
   const declaration = endpoint(basePath, {

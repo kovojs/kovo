@@ -2,7 +2,11 @@ import { blockingAppDiagnostics } from './app-diagnostics.js';
 import { reportServerError } from './diagnostics.js';
 import { renderDiagnosticDocument } from './document-diagnostics.js';
 import { matchShellDispatch, type ShellDispatchMatch } from './shell.js';
-import { redirectLocationHeader, routeResponseToWebResponse } from './response.js';
+import {
+  redirectLocationHeader,
+  routeResponseToWebResponse,
+  serverResponseToWebResponse,
+} from './response.js';
 import { KOVO_CSP_REPORT_ENDPOINT } from './csp.js';
 import { kovoSecurityReportResponse } from './reporting.js';
 import type { KovoApp } from './app-types.js';
@@ -158,12 +162,23 @@ function endpointServerErrorResponse(posture: EndpointResponsePosture): Response
   const headers = endpointErrorHeaders(posture.cache);
   const body = posture.body;
   if (endpointBodyIncludes(body, 'json')) {
-    return Response.json({ code: 'SERVER_ERROR', payload: {} }, { headers, status: 500 });
+    return serverResponseToWebResponse(
+      {
+        body: JSON.stringify({ code: 'SERVER_ERROR', payload: {} }),
+        headers: { ...headers, 'Content-Type': 'application/json' },
+        status: 500,
+      },
+      { method: 'GET' },
+    );
   }
-  return new Response('Server Error', {
-    headers: { ...headers, 'Content-Type': 'text/plain; charset=utf-8' },
-    status: 500,
-  });
+  return serverResponseToWebResponse(
+    {
+      body: 'Server Error',
+      headers: { ...headers, 'Content-Type': 'text/plain; charset=utf-8' },
+      status: 500,
+    },
+    { method: 'GET' },
+  );
 }
 
 function endpointErrorHeaders(cache: EndpointCachePosture): Record<string, string> {

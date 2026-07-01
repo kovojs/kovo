@@ -75,9 +75,9 @@ export async function handleAppMutationRequest(
       return renderPreBodyCsrfFailure(app, mutation, mutationRequest, url, sourceUrl);
     }
 
-    return new Response(
-      JSON.stringify({ code: 'VALIDATION', payload: { reason: bodyResult.reason } }),
+    return serverResponseToWebResponse(
       {
+        body: JSON.stringify({ code: 'VALIDATION', payload: { reason: bodyResult.reason } }),
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'application/json; charset=utf-8',
@@ -85,6 +85,7 @@ export async function handleAppMutationRequest(
         },
         status: 422,
       },
+      mutationRequest,
     );
   }
   const rawInput = bodyResult.value;
