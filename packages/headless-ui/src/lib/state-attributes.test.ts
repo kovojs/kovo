@@ -7,6 +7,7 @@ import {
   mergeDataAttributes,
   openState,
   pressedState,
+  triggerAttributes,
 } from './state-attributes.js';
 
 describe('headless-ui state attributes', () => {
@@ -38,6 +39,37 @@ describe('headless-ui state attributes', () => {
       'data-disabled': '',
       'data-kovo-test': 'author',
       'data-state': 'closed',
+    });
+  });
+
+  it('builds shared trigger aria and disabled attributes with per-primitive knobs', () => {
+    expect(
+      triggerAttributes({
+        controlsId: 'menu',
+        haspopup: 'menu',
+        labelledBy: 'label',
+        open: true,
+      }),
+    ).toEqual({
+      'aria-controls': 'menu',
+      'aria-expanded': 'true',
+      'aria-haspopup': 'menu',
+      'aria-labelledby': 'label',
+      disabled: false,
+    });
+
+    expect(
+      triggerAttributes({
+        controlsId: 'menu',
+        disabled: true,
+        disabledBehavior: 'aria',
+        haspopup: 'menu',
+        stripControlsWhenDisabled: true,
+      }),
+    ).toEqual({
+      'aria-disabled': 'true',
+      'aria-expanded': 'false',
+      'aria-haspopup': 'menu',
     });
   });
 });

@@ -1,13 +1,13 @@
 import {
   checkedState,
+  createCollectionAdapter,
   dataDisabled,
   dataState,
   dispatchCancelableChange,
+  filterCollection,
   mergeDataAttributes,
-  moveCollection,
-  projectCollectionItems,
   setOpenState,
-  typeaheadCollection,
+  triggerAttributes,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
   type TypeaheadState,
@@ -485,10 +485,12 @@ export function comboboxValueText(state: ComboboxState): string {
  */
 export function comboboxFilteredItems(state: ComboboxState): readonly ComboboxItem[] {
   const query = normalizeComboboxQuery(state.value);
-  const items = state.items ?? [];
-  if (query === '') return items;
-
-  return Object.freeze(items.filter((item) => comboboxItemMatches(item, query)));
+  return filterCollection({
+    fields: comboboxFilterFields,
+    items: state.items,
+    match: (values, normalizedQuery) => values.join(' ').includes(normalizedQuery),
+    query,
+  });
 }
 
 /**
@@ -539,17 +541,20 @@ export function comboboxInputAttributes(
   return Object.freeze({
     ...comboboxDataAttributes(options),
     'aria-autocomplete': 'list',
-    'aria-expanded': String(options.open === true),
     role: 'combobox',
     type: 'text',
     value: options.value ?? '',
     ...(activeDescendant === undefined ? {} : { 'aria-activedescendant': activeDescendant }),
-    ...(options.listboxId === undefined ? {} : { 'aria-controls': options.listboxId }),
+    ...triggerAttributes({
+      controlsId: options.listboxId,
+      disabled: options.disabled === true,
+      labelledBy: options.labelledBy,
+      nativeDisabledPresence: 'always',
+      open: options.open === true,
+    }),
     ...(options.id === undefined ? {} : { id: options.id }),
-    ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
-    disabled: options.disabled === true,
     ...(options.form === undefined ? {} : { form: options.form }),
     ...(options.name === undefined ? {} : { name: options.name }),
     ...(options.placeholder === undefined ? {} : { placeholder: options.placeholder }),
@@ -774,10 +779,9 @@ export function comboboxTypeahead(
   key: string,
   options: ComboboxTypeaheadOptions,
 ): ComboboxTypeaheadResult {
-  const result = typeaheadCollection(key, {
+  const result = comboboxCollection.typeahead(key, state, {
     currentValue: options.currentValue ?? state.highlightedValue ?? state.value,
     disabled: state.disabled,
-    items: projectCollectionItems(state.items, comboboxCollectionItem),
     loop: options.loop,
     now: options.now,
     state: options.state,
@@ -808,10 +812,9 @@ export function comboboxMove(
   key: string,
   options: { loop?: boolean } = {},
 ): ComboboxMoveResult | undefined {
-  return moveCollection({
+  return comboboxCollection.move(state, {
     currentValue: state.highlightedValue ?? state.value,
     disabled: state.disabled,
-    items: projectCollectionItems(state.items, comboboxCollectionItem),
     key,
     loop: options.loop,
   });
@@ -1052,9 +1055,16 @@ function comboboxDescribedBy(options: {
   );
 }
 
-function comboboxItemMatches(item: ComboboxItem, query: string): boolean {
-  return comboboxSearchText(item).includes(query);
-}
+const comboboxFilterFields = [
+  (item: ComboboxItem) => item.label,
+  (item: ComboboxItem) => item.textValue,
+  (item: ComboboxItem) => item.value,
+] as const;
+
+const comboboxCollection = createCollectionAdapter({
+  getItems: (state: ComboboxState) => state.items,
+  projector: comboboxCollectionItem,
+});
 
 function comboboxCollectionItem(item: ComboboxItem) {
   return {
@@ -1062,13 +1072,6 @@ function comboboxCollectionItem(item: ComboboxItem) {
     textValue: item.textValue ?? item.label ?? item.value,
     value: item.value,
   };
-}
-
-function comboboxSearchText(item: ComboboxItem): string {
-  return [item.label, item.textValue, item.value]
-    .filter((value): value is string => value !== undefined)
-    .join(' ')
-    .toLocaleLowerCase();
 }
 
 function normalizeComboboxQuery(inputValue: string | undefined): string {

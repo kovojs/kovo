@@ -1,13 +1,13 @@
 import {
   checkedState,
+  createCollectionAdapter,
   dataDisabled,
   dataState,
   dispatchCancelableChange,
+  filterCollection,
   mergeDataAttributes,
-  moveCollection,
-  projectCollectionItems,
   setOpenState,
-  typeaheadCollection,
+  triggerAttributes,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
   type TypeaheadState,
@@ -543,12 +543,12 @@ export function autocompleteValueText(state: AutocompleteState): string {
  */
 export function autocompleteSuggestions(state: AutocompleteState): readonly AutocompleteItem[] {
   const query = (state.inputValue ?? state.value ?? '').trim().toLocaleLowerCase();
-  const items = state.items ?? [];
-  if (query === '') return items.filter((item) => item.disabled !== true);
-
-  return items.filter((item) => {
-    if (item.disabled) return false;
-    return autocompleteItemText(item).trim().toLocaleLowerCase().startsWith(query);
+  return filterCollection({
+    excludeDisabled: true,
+    fields: autocompleteFilterFields,
+    items: state.items,
+    match: (values, normalizedQuery) => values[0]?.startsWith(normalizedQuery) ?? false,
+    query,
   });
 }
 
@@ -601,16 +601,19 @@ export function autocompleteInputAttributes(
   return Object.freeze({
     ...autocompleteDataAttributes(options),
     'aria-autocomplete': 'list',
-    'aria-expanded': String(options.open === true),
     autocomplete: options.autocomplete ?? 'off',
-    disabled: options.disabled === true,
     role: 'combobox',
     type: 'text',
     value: options.inputValue ?? options.value ?? '',
     ...(activeDescendant === undefined ? {} : { 'aria-activedescendant': activeDescendant }),
-    ...(listId === undefined ? {} : { 'aria-controls': listId }),
+    ...triggerAttributes({
+      controlsId: listId,
+      disabled: options.disabled === true,
+      labelledBy: options.labelledBy,
+      nativeDisabledPresence: 'always',
+      open: options.open === true,
+    }),
     ...(options.id === undefined ? {} : { id: options.id }),
-    ...(options.labelledBy === undefined ? {} : { 'aria-labelledby': options.labelledBy }),
     ...(describedBy === '' ? {} : { 'aria-describedby': describedBy }),
     ...(options.invalid === true ? { 'aria-invalid': 'true' } : {}),
     ...(options.form === undefined ? {} : { form: options.form }),
@@ -902,10 +905,9 @@ export function autocompleteTypeahead(
   key: string,
   options: AutocompleteTypeaheadOptions,
 ): AutocompleteTypeaheadResult {
-  const result = typeaheadCollection(key, {
+  const result = autocompleteCollection.typeahead(key, state, {
     currentValue: options.currentValue ?? state.highlightedValue ?? state.value,
     disabled: state.disabled,
-    items: projectCollectionItems(state.items, autocompleteCollectionItem),
     loop: options.loop,
     now: options.now,
     state: options.state,
@@ -936,10 +938,9 @@ export function autocompleteMove(
   key: string,
   options: { loop?: boolean } = {},
 ): AutocompleteMoveResult | undefined {
-  return moveCollection({
+  return autocompleteSuggestionCollection.move(state, {
     currentValue: state.highlightedValue ?? state.value,
     disabled: state.disabled,
-    items: projectCollectionItems(autocompleteSuggestions(state), autocompleteCollectionItem),
     key,
     loop: options.loop,
   });
@@ -1179,6 +1180,18 @@ function autocompleteFallbackPrefix(state: {
 function autocompleteItemText(item: AutocompleteItem): string {
   return item.textValue ?? item.label ?? item.value;
 }
+
+const autocompleteFilterFields = [(item: AutocompleteItem) => autocompleteItemText(item)] as const;
+
+const autocompleteCollection = createCollectionAdapter({
+  getItems: (state: AutocompleteState) => state.items,
+  projector: autocompleteCollectionItem,
+});
+
+const autocompleteSuggestionCollection = createCollectionAdapter({
+  getItems: autocompleteSuggestions,
+  projector: autocompleteCollectionItem,
+});
 
 function autocompleteCollectionItem(item: AutocompleteItem) {
   return {

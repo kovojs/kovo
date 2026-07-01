@@ -1,15 +1,14 @@
 import {
+  createCollectionAdapter,
   dataDisabled,
   dataOrientation,
   dataState,
   dispatchCancelableChange,
   isActivationKey,
   mergeDataAttributes,
-  moveCollection,
-  projectCollectionItems,
-  typeaheadCollection,
   openState,
   scheduleDeferred,
+  triggerAttributes,
   type CollectionOrientation,
   type PrimitiveChangeDetail,
   type PrimitiveDataAttributes,
@@ -480,7 +479,6 @@ export function menubarItemAttributes(
   const disabled = menubarItemDisabled(options, options.itemValue, options.itemParentValue);
   const highlighted = menubarItemHighlighted(options);
   const popup = menubarItemHasPopup(options);
-  const enabledContentId = disabled ? undefined : options.contentId;
 
   return Object.freeze({
     ...menubarItemDataAttributes(options),
@@ -488,10 +486,16 @@ export function menubarItemAttributes(
     tabIndex: highlighted && !disabled ? 0 : -1,
     value: options.itemValue,
     ...(popup
-      ? { 'aria-haspopup': 'menu', 'aria-expanded': String(menubarItemOpen(options)) }
+      ? triggerAttributes({
+          controlsId: options.contentId,
+          disabled,
+          disabledBehavior: 'aria',
+          haspopup: 'menu',
+          open: menubarItemOpen(options),
+          stripControlsWhenDisabled: true,
+        })
       : {}),
-    ...(enabledContentId === undefined ? {} : { 'aria-controls': enabledContentId }),
-    ...(disabled ? { 'aria-disabled': 'true' } : {}),
+    ...(!popup && disabled ? { 'aria-disabled': 'true' } : {}),
     ...(options.id === undefined ? {} : { id: options.id }),
     ...(options.itemLabel === undefined ? {} : { label: options.itemLabel }),
   });
@@ -755,15 +759,18 @@ export function menubarMove(
   options: MenubarMoveOptions = {},
 ): MenubarMoveResult | undefined {
   const parentValue = options.parentValue;
-  const result = moveCollection({
-    currentValue: state.activeValue,
-    dir: state.dir,
-    disabled: state.disabled,
-    items: projectCollectionItems(menubarItemsForParent(state, parentValue), menubarCollectionItem),
-    key,
-    loop: options.loop ?? state.loop,
-    orientation: parentValue === undefined ? (state.orientation ?? 'horizontal') : 'vertical',
-  });
+  const result = menubarCollection.move(
+    state,
+    {
+      currentValue: state.activeValue,
+      dir: state.dir,
+      disabled: state.disabled,
+      key,
+      loop: options.loop ?? state.loop,
+      orientation: parentValue === undefined ? (state.orientation ?? 'horizontal') : 'vertical',
+    },
+    parentValue,
+  );
   if (result === undefined) return undefined;
 
   return {
@@ -796,15 +803,19 @@ export function menubarTypeahead(
   options: MenubarTypeaheadOptions,
 ): MenubarTypeaheadResult {
   const parentValue = options.parentValue;
-  const result = typeaheadCollection(key, {
-    currentValue: options.currentValue ?? state.activeValue,
-    disabled: state.disabled,
-    items: projectCollectionItems(menubarItemsForParent(state, parentValue), menubarCollectionItem),
-    loop: options.loop ?? state.loop,
-    now: options.now,
-    state: options.state,
-    timeoutMs: options.timeoutMs,
-  });
+  const result = menubarCollection.typeahead(
+    key,
+    state,
+    {
+      currentValue: options.currentValue ?? state.activeValue,
+      disabled: state.disabled,
+      loop: options.loop ?? state.loop,
+      now: options.now,
+      state: options.state,
+      timeoutMs: options.timeoutMs,
+    },
+    parentValue,
+  );
 
   return {
     activeIndex: result.matchIndex,
@@ -1076,6 +1087,16 @@ function menubarItemsForParent(
 ): readonly MenubarItem[] {
   return (state.items ?? []).filter((item) => item.parentValue === parentValue);
 }
+
+const menubarCollection = createCollectionAdapter<
+  MenubarState,
+  MenubarItem,
+  string,
+  [string | undefined]
+>({
+  getItems: menubarItemsForParent,
+  projector: menubarCollectionItem,
+});
 
 function menubarCollectionItem(item: MenubarItem) {
   return {
