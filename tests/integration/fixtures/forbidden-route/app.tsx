@@ -1,5 +1,6 @@
 // SPEC §6.5: authenticated-but-unauthorized route access receives a 403 instead
 // of redirecting or leaking protected page content.
+import { trustedHtml } from '@kovojs/browser';
 import { createApp, guards, route } from '@kovojs/server';
 import { defineFixture } from '@kovojs/test/internal/integration/define';
 
@@ -32,7 +33,9 @@ export default defineFixture({
   app: createApp<AuthSession>({
     errorShells: {
       forbidden: ({ status }) => ({
-        body: `<main data-forbidden-shell><h1>Access denied</h1><p>status:${status}</p></main>`,
+        body: trustedHtml(
+          `<main data-forbidden-shell><h1>Access denied</h1><p>status:${status}</p></main>`,
+        ),
         headers: { 'Content-Type': 'text/html; charset=utf-8' },
         status,
       }),
