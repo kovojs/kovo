@@ -237,8 +237,9 @@ that removes the broader source of drift.
   - Risk reduced: static export gates cannot disagree with the server that serves the same `dist`, and
     path traversal/MIME/cache behavior is tested once.
   - Verification: `pnpm --filter @kovojs/site exec vitest --run scripts/serve-static.test.mjs scripts/export-static.test.mjs`; then `pnpm --filter @kovojs/site run build`, `pnpm --filter @kovojs/site run check:links`, and `pnpm --filter @kovojs/site run smoke:navigation`.
+  - Current gap: resolver/build/link coverage passed after merging `agent/hvr4-site-tooling-20260701-002559`, but `pnpm --filter @kovojs/site run smoke:navigation` still fails on enhanced-navigation route layout identity and API rail/hash restoration assertions, so this checkbox remains open.
 
-- [ ] **P2.3 - Let site export consume structured export results instead of CLI text.**
+- [x] **P2.3 - Let site export consume structured export results instead of CLI text.**
   - Current signals: `site/scripts/export-static.mjs` calls `runKovoCommand()`, monkey-patches stdout/stderr,
     and reconstructs counts from printed line prefixes, while CLI build/export has structured result data
     before formatting it for the terminal.
@@ -247,6 +248,7 @@ that removes the broader source of drift.
   - Risk reduced: site export diagnostics and counts do not break when CLI output text changes, and async
     stream capture cannot cross-contaminate concurrent script work.
   - Verification: `pnpm exec vitest --run site/scripts/export-static.test.mjs packages/cli/src/index.kovo-export.test.ts packages/cli/src/index.kovo-build.test.ts`; `pnpm --filter @kovojs/site run build`.
+  - Evidence: `pnpm --filter @kovojs/site exec vitest --run scripts/serve-static.test.mjs scripts/export-static.test.mjs` passed with 2 files/12 tests, `pnpm exec vitest --run packages/cli/src/index.kovo-export.test.ts packages/cli/src/index.kovo-build.test.ts` passed with 2 files/52 passed and 1 skipped, and `pnpm --filter @kovojs/site run build` passed after merging `agent/hvr4-site-tooling-20260701-002559`; `pnpm run check:vp` and `git diff --check` passed.
 
 - [x] **P2.4 - Make release published-state checks fail closed on registry errors.**
   - Current signals: `scripts/verify-release-input.mjs` and `scripts/publish-packed-packages.mjs` both
