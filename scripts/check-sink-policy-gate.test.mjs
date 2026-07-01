@@ -306,6 +306,32 @@ describe('sink-policy gate', () => {
       rootedFileServeInvariantFindings(
         'packages/server/src/file.ts',
         `
+          const ROOTED_FILE_SERVE_SINK = 'rooted-file-serve';
+          export async function rootedFiles(root) {
+            const fileSystem = await createFrameworkFileSystemBoundary(root);
+            const capability = {
+              root: fileSystem.root,
+              serve: (path, options) => serveRootedFile(fileSystem, path, options),
+            };
+            return blessSink(ROOTED_FILE_SERVE_SINK, Object.freeze(capability));
+          }
+          export function isRootedFileServeCapability(value) {
+            return isBlessedSink(ROOTED_FILE_SERVE_SINK, value);
+          }
+          async function serveRootedFile(fileSystem, requestedPath, options) {
+            if (!isFrameworkFileSystemBoundary(fileSystem)) return undefined;
+            const file = await fileSystem.readFile(requestedPath);
+            if (file === undefined) return undefined;
+            return respond.stream(file.body, options);
+          }
+        `,
+      ),
+    ).toEqual([]);
+
+    expect(
+      rootedFileServeInvariantFindings(
+        'packages/server/src/file.ts',
+        `
           export async function rootedFiles(root) {
             const capability = {
               root,
@@ -467,6 +493,19 @@ describe('sink-policy gate', () => {
         { allowedFileServeSink: true },
       ),
     ).toEqual([]);
+
+    expect(
+      rootedFileServeRawSinkFindings(
+        'packages/core/src/internal/filesystem.ts',
+        `
+          import { createReadStream } from "node:fs";
+          import { open } from "node:fs/promises";
+          const stream = createReadStream(postOpenResolved);
+          const handle = await open(resolved);
+        `,
+        { allowedFileServeSink: true },
+      ),
+    ).toEqual([]);
   });
 
   it('runs the raw filesystem file-serve sink gate over configured server source files', () => {
@@ -485,6 +524,7 @@ describe('sink-policy gate', () => {
             : 'import { createWriteStream } from "node:fs"; createWriteStream(path);',
         queryWireHtmlPath: undefined,
         responseFragmentApplyPath: undefined,
+        rootedFileServeRawSinkFiles: ['packages/core/src/internal/filesystem.ts'],
         rootedFileServeSinkFiles: [],
         sinkPolicyPath: 'sink-policy.ts',
         sqlBlessedBrandFiles: [],
