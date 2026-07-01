@@ -14,6 +14,7 @@ import {
 } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production raw-SQL artifacts)', () => {
+  // @kovo-security-certifies KV414 raw-sql-owner-write-prod-artifact
   it('blocks raw owner-table db.execute writes from the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });

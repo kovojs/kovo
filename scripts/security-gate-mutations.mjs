@@ -1328,6 +1328,7 @@ async function assertClosedRowM1EvidenceIsCaught(moduleUnderTest) {
   manifest.rows[0] = {
     ...manifest.rows[0],
     evidence: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    m1: undefined,
     status: 'closed',
   };
   const violations = moduleUnderTest.evaluateFundamentalFixesCensus({
