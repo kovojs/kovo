@@ -208,3 +208,7 @@ to change. Do not open a broad audit before the concrete items are implemented, 
 
 - Findings + first-hand evidence in `plans/claude-bugz-25.md` (B1/B6 self-verified) and
   `plans/claude-papercuts-23.md`. No code, `SPEC.md`, or other plans changed by this document.
+- Partial implementation batch verified 2026-07-01: `pnpm run check`, `pnpm run check:api-surface`,
+  `pnpm exec vitest run packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot`,
+  plus focused H/I, B3/E2, C2 header, KV435 prod-artifact, and M2 gate tests. M1/M3 and full census
+  closure remain open.
