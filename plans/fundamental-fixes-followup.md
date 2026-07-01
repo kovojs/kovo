@@ -48,10 +48,14 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 **(a) Write-capable handle surfaces** — close via H (statement-parse-primary allowlist) + I (dialect):
 
 - [ ] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]
-  - [ ] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]
-  - [ ] `readonlyDb()` transaction and future/unknown methods fail closed at runtime [H]
-  - [ ] `readonlyDb()` public endpoint cannot mutate in a prod artifact for every supported dialect [H]
-  - [ ] `Reader<Db>` type surface rejects write-capable methods [H]
+  - [x] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed 2 prod-artifact endpoint cases across default+SQLite; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
+  - [x] `readonlyDb()` transaction and future/unknown methods fail closed at runtime [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite endpoint cases covering `transaction` and `futureStatement`; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
+  - [x] `readonlyDb()` public endpoint cannot mutate in a prod artifact for every supported dialect [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite `/api/readonly-mutation-attempt` cases and kept the drift table at 0; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
+  - [x] `Reader<Db>` type surface rejects write-capable methods [H]
+        Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` passed 65 tests including a compiler-backed `Reader<Db>` type proof; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs for the matching public read-handle endpoint; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
 - [ ] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]
   - [ ] write-mode declared-table statements pass and cross-table statements fail closed [H/I]
   - [ ] SQLite raw SQL statement parse parity matches the default dialect [I]

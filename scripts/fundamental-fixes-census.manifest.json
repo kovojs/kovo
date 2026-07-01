@@ -18,33 +18,115 @@
       "id": "readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot (65 passed, 2.34s); pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s); pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-readonly-endpoint",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s)",
+        "dialects": {
+          "postgres": "default prod-artifact /api/readonly-mutation-attempt blocks readonlyAppDb all/get/values mutation attempts and preserves the drift count at 0",
+          "sqlite": "SQLite prod-artifact /api/readonly-mutation-attempt blocks readonlyAppDb all/get/values mutation attempts and preserves the drift count at 0"
+        },
+        "independentReviewer": "agent/followup-hi-sql-20260701-080440 authored the H/I proof path; agent/readonly-census-1782922347 independently reverified the prod-artifact and runtime shards in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 13 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
+      }
     },
     {
       "id": "readonlydb-transaction-and-future-unknown-methods-fail-closed-at-runtime",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot (65 passed, 2.34s); pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s); pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m1-prod-artifact-readonly-endpoint",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s)",
+        "dialects": {
+          "postgres": "default prod-artifact /api/readonly-mutation-attempt blocks readonlyAppDb transaction and futureStatement mutation attempts",
+          "sqlite": "SQLite prod-artifact /api/readonly-mutation-attempt blocks readonlyAppDb transaction and futureStatement mutation attempts"
+        },
+        "independentReviewer": "agent/followup-hi-sql-20260701-080440 authored the H/I proof path; agent/readonly-census-1782922347 independently reverified the prod-artifact and runtime shards in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 13 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
+      }
     },
     {
       "id": "readonlydb-public-endpoint-cannot-mutate-in-a-prod-artifact-for-every-supported-dialect",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s); pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
+      "evidenceBundles": [
+        "m1-prod-artifact-readonly-endpoint",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s)",
+        "dialects": {
+          "postgres": "default prod-artifact GET /api/readonly-mutation-attempt returns blocked=true for all attempts and /api/raw-runtime-drift-count remains 0",
+          "sqlite": "SQLite prod-artifact GET /api/readonly-mutation-attempt returns blocked=true for all attempts and /api/raw-runtime-drift-count remains 0"
+        },
+        "independentReviewer": "agent/followup-hi-sql-20260701-080440 authored the H/I proof path; agent/readonly-census-1782922347 independently reverified the prod-artifact endpoint shard in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 13 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
+      }
     },
     {
       "id": "reader-db-type-surface-rejects-write-capable-methods",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot (65 passed, 2.34s) including a compiler-backed Reader<Db> type proof; pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1",
+      "evidenceBundles": [
+        "h-managed-db-runtime-type",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot (2 passed, 65.97s) for the matching public readonly endpoint surface",
+        "dialects": {
+          "postgres": "default prod-artifact public readonly endpoint uses readonlyAppDb and blocks write-capable attempts; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot also passed the Reader<Db> type proof",
+          "sqlite": "SQLite prod-artifact public readonly endpoint uses readonlyAppDb and blocks write-capable attempts; pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot also passed the Reader<Db> type proof"
+        },
+        "independentReviewer": "agent/readonly-census-1782922347 added and verified the compiler-backed Reader<Db> type proof against the pre-existing public readonly endpoint proof"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs for the public readonly endpoint surface",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 13 real-build proofs; the type row additionally uses a compiler-backed tsc invocation inside packages/server/src/managed-db.test.ts"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 29 mutants killed"
+      }
     },
     {
       "id": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2",
@@ -1310,9 +1392,17 @@
       "command": "pnpm run check:security-gate-mutations",
       "evidence": "Mutation harness kills branch removals in enrolled security and census gates."
     },
+    "m1-prod-artifact-readonly-endpoint": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot",
+      "evidence": "Production artifact readonly endpoint tests build with kovo build --no-cache and exercise default plus SQLite readonlyDb mutation-attempt paths."
+    },
     "m1-prod-artifact-transactions": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot",
       "evidence": "Production artifact transaction/raw-SQL starter tests build with kovo build --no-cache and exercise default plus SQLite runtime SQL handle paths."
+    },
+    "h-managed-db-runtime-type": {
+      "command": "pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot",
+      "evidence": "Managed DB tests exercise readonlyDb raw SQL, transaction, future-method runtime fail-closed behavior and a compiler-backed Reader<Db> type-surface proof."
     }
   }
 }
