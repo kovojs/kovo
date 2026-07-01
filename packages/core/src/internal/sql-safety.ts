@@ -177,6 +177,10 @@ export function isSqlHandleLike(value: unknown): value is object {
     typeof record.transaction === 'function',
     typeof record.exec === 'function',
     typeof record.query === 'function',
+    typeof record.all === 'function',
+    typeof record.get === 'function',
+    typeof record.run === 'function',
+    typeof record.values === 'function',
   ].some(Boolean);
 }
 

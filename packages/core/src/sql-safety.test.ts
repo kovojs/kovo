@@ -31,9 +31,15 @@ describe('SQL safety shared seam predicates', () => {
     expect(isSqlHandleLike({ query() {} })).toBe(true);
     expect(isSqlHandleLike({ exec() {} })).toBe(true);
     expect(isSqlHandleLike({ prepare() {} })).toBe(true);
+    expect(isSqlHandleLike({ all() {} })).toBe(true);
+    expect(isSqlHandleLike({ get() {} })).toBe(true);
+    expect(isSqlHandleLike({ run() {} })).toBe(true);
+    expect(isSqlHandleLike({ values() {} })).toBe(true);
     expect(isSqlHandleLike({ exec() {}, query() {}, transaction() {} })).toBe(true);
     expect(isDbAdapterLike({ client: { execute() {} } })).toBe(true);
     expect(isDbAdapterLike({ pglite: { query() {} } })).toBe(true);
+    expect(isDbAdapterLike({ sqlite: { all() {} } })).toBe(true);
+    expect(isDbAdapterLike({ $client: { values() {} } })).toBe(true);
     expect(isDbAdapterLike({ read() {}, write() {} })).toBe(true);
   });
 });

@@ -25,6 +25,29 @@ const READ_CAPABILITY_PROPERTIES = new Set<string>([
   'query',
   'select',
   'selectDistinct',
+  'with',
+]);
+const PARSED_READ_SQL_METHODS = new Set<string>([
+  'all',
+  'exec',
+  'execute',
+  'get',
+  'prepare',
+  'run',
+  'sql',
+  'values',
+]);
+const DENIED_READ_CAPABILITY_PROPERTIES = new Set<string>([
+  '$client',
+  'batch',
+  'client',
+  'delete',
+  'insert',
+  'pglite',
+  'session',
+  'sqlite',
+  'transaction',
+  'update',
 ]);
 
 /**
@@ -51,7 +74,19 @@ export class KovoReadonlyHandleError extends Error {
  * defeat this type and must never be accepted as security evidence.
  */
 export type Reader<Db> = (Db extends object
-  ? Pick<Db, Extract<keyof Db, '$count' | '$with' | 'query' | 'select' | 'selectDistinct'>>
+  ? Pick<Db, Extract<keyof Db, '$count' | '$with' | 'query' | 'select' | 'selectDistinct'>> &
+      (Db extends { with: (...args: infer Args) => infer Result }
+        ? {
+            with(
+              ...args: Args
+            ): Result extends object
+              ? Pick<
+                  Result,
+                  Extract<keyof Result, '$count' | '$with' | 'query' | 'select' | 'selectDistinct'>
+                >
+              : Result;
+          }
+        : {})
   : Db) & {
   readonly [readerDbBrand]: {
     readonly db: Db;
@@ -81,17 +116,31 @@ function readonlyCapabilityDb<Db extends object>(db: Db): Reader<Db> {
   return new Proxy(db, {
     get(target, prop, receiver) {
       if (prop === 'then') return undefined;
-      if (typeof prop === 'string' && !READ_CAPABILITY_PROPERTIES.has(prop)) {
-        return () => {
-          throw new KovoReadonlyHandleError(
-            `A query() loader cannot access db.${prop} — loaders receive a read-only DB capability (KV433). Move writes to a mutation(), domain write, or endpoint().`,
-          );
-        };
+      if (typeof prop === 'string') {
+        if (DENIED_READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
+        if (!READ_CAPABILITY_PROPERTIES.has(prop)) {
+          const value = Reflect.get(target, prop, receiver);
+          if (
+            typeof value === 'function' &&
+            (PARSED_READ_SQL_METHODS.has(prop) || prop in target)
+          ) {
+            return value.bind(target);
+          }
+          return readonlyCapabilityError(prop);
+        }
       }
       const value = Reflect.get(target, prop, receiver);
       return typeof value === 'function' ? value.bind(target) : value;
     },
   }) as Reader<Db>;
+}
+
+function readonlyCapabilityError(prop: string): () => never {
+  return () => {
+    throw new KovoReadonlyHandleError(
+      `A query() loader cannot access db.${prop} — loaders receive a read-only DB capability (KV433). Move writes to a mutation(), domain write, or endpoint().`,
+    );
+  };
 }
 
 /** @internal Options for the framework-owned managed DB handle composition point. */

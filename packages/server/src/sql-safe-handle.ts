@@ -37,13 +37,16 @@ export type AsyncMutationTransactionCapableDb = {
 const managedTransactionQueue = new WeakMap<object, Promise<void>>();
 let sqliteSavepointId = 0;
 
-const SQL_BUILDER_FAST_PATH_METHODS = new Set<PropertyKey>([
+const READ_SQL_BUILDER_FAST_PATH_METHODS = new Set<PropertyKey>([
   '$count',
   '$with',
-  'delete',
-  'insert',
   'select',
   'selectDistinct',
+]);
+const WRITE_SQL_BUILDER_FAST_PATH_METHODS = new Set<PropertyKey>([
+  ...READ_SQL_BUILDER_FAST_PATH_METHODS,
+  'delete',
+  'insert',
   'update',
   'with',
 ]);
@@ -116,6 +119,7 @@ function wrapDbAdapter(
   const proxy = new Proxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       if (prop === kovoAsyncMutationTransaction) {
+        if (writePolicy?.capability === 'read') return undefined;
         if (!sqliteTransactionClient(target)) return undefined;
         return <Result>(callback: (transactionDb: unknown) => Promise<Result>) =>
           runSqliteAsyncTransaction(
@@ -153,6 +157,12 @@ function wrapDbAdapter(
         );
       }
 
+      if (prop === 'with' && typeof value === 'function' && writePolicy?.capability === 'read') {
+        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+          guardedReadWithMethod(target, value, proxyCache, methodCache),
+        );
+      }
+
       if (prop === 'transaction' && typeof value === 'function') {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
           guardedTransactionMethod(target, value, mode, proxyCache, methodCache, writePolicy),
@@ -161,7 +171,7 @@ function wrapDbAdapter(
 
       if (typeof value !== 'function') return value;
       return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-        SQL_BUILDER_FAST_PATH_METHODS.has(prop)
+        isSqlBuilderFastPath(prop, writePolicy)
           ? value.bind(target)
           : guardedUnknownSqlMethod(target, prop, value, mode, writePolicy, strictSqlTarget),
       );
@@ -171,6 +181,17 @@ function wrapDbAdapter(
   proxyCache.set(db, proxy);
   frameworkManagedDbRawTargets.set(proxy, db);
   return proxy;
+}
+
+function isSqlBuilderFastPath(
+  prop: PropertyKey,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): boolean {
+  return (
+    writePolicy?.capability === 'read'
+      ? READ_SQL_BUILDER_FAST_PATH_METHODS
+      : WRITE_SQL_BUILDER_FAST_PATH_METHODS
+  ).has(prop);
 }
 
 function guardedSqlMethod(
@@ -183,6 +204,47 @@ function guardedSqlMethod(
     assertManagedSqlStatement(statement, mode, writePolicy);
     return value.call(target, statement, ...args);
   };
+}
+
+function guardedReadWithMethod(
+  target: object,
+  value: Function,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+): Function {
+  return (...args: unknown[]) => {
+    const builder = value.apply(target, args);
+    return isRecord(builder) ? wrapReadWithBuilder(builder, proxyCache, methodCache) : builder;
+  };
+}
+
+function wrapReadWithBuilder(
+  builder: object,
+  proxyCache: WeakMap<object, object>,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+): object {
+  const cached = proxyCache.get(builder);
+  if (cached) return cached;
+
+  const proxy = new Proxy(builder as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      if (prop === 'then') return undefined;
+      if (typeof prop === 'string' && !READ_SQL_BUILDER_FAST_PATH_METHODS.has(prop)) {
+        return () => {
+          throw new Error(
+            `KV433: read-only SQL capability cannot access db.with(...).${prop} from a query loader (SPEC §10.3/§11.2).`,
+          );
+        };
+      }
+      const property = Reflect.get(target, prop, receiver);
+      return typeof property === 'function'
+        ? cachedSqlSafetyMethod(target, prop, property, methodCache, () => property.bind(target))
+        : property;
+    },
+  });
+
+  proxyCache.set(builder, proxy);
+  return proxy;
 }
 
 function guardedUnknownSqlMethod(
@@ -231,6 +293,11 @@ function guardedTransactionMethod(
   writePolicy: ManagedSqlWritePolicy | undefined,
 ): Function {
   return (callback: unknown, ...args: unknown[]) => {
+    if (writePolicy?.capability === 'read') {
+      throw new Error(
+        'KV433: read-only SQL capability cannot open db.transaction from a query loader (SPEC §10.3/§11.2).',
+      );
+    }
     if (typeof callback !== 'function') return value.call(target, callback, ...args);
     if (args.length === 0) {
       const sqlite = runSqliteAsyncTransaction(
