@@ -230,18 +230,25 @@ packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`
   - Acceptance: D1 tests plus existing `packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`
     and durable task prod-artifact lifecycle tests.
 
-- [ ] **E1. Require metamorphic coverage for every newly migrated security gate.**
-  - [ ] B1 adds or updates metamorphic cases for identity-sensitive gates it touches.
-  - [ ] C1 adds a metamorphic seed for the selected IR/fact-store sink.
-  - [ ] No unapproved `it.todo` or skipped metamorphic variant remains for a closed gate.
+- [x] **E1. Require metamorphic coverage for every newly migrated security gate.**
+  - [x] B1 adds or updates metamorphic cases for identity-sensitive gates it touches.
+  - [x] C1 adds a metamorphic seed for the selected IR/fact-store sink.
+  - [x] No unapproved `it.todo` or skipped metamorphic variant remains for a closed gate.
   - Acceptance: `vp exec vitest --run packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`
     and the focused gate tests from B1/C1.
+  - Evidence: `vp exec vitest --run packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`;
+    `vp exec vitest --run packages/compiler/src/client-secret-capture.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/server/src/vite-data-plane-gate.test.ts`;
+    `vp exec vitest --run packages/compiler/src/direct-db.test.ts packages/compiler/src/scan/parse.test.ts packages/compiler/src/registry.test.ts`;
+    `vp exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts -t "task and webhook direct-write diagnostics|blocks task and webhook direct DB writes"`.
 
-- [ ] **F2. Track broader capability-surface redesign separately from starter cleanup.**
-  - [ ] Leave `query.elevated()` open as a public API design decision, not part of F1.
-  - [ ] Leave webhook transaction API redesign open unless a dedicated worker owns that public API change.
-  - [ ] Leave direct-DB detector alias/destructure gaps to A/B/C workstreams, not starter cleanup.
+- [x] **F2. Track broader capability-surface redesign separately from starter cleanup.**
+  - [x] Leave `query.elevated()` open as a public API design decision, not part of F1.
+  - [x] Leave webhook transaction API redesign open unless a dedicated worker owns that public API change.
+  - [x] Leave direct-DB detector alias/destructure gaps to A/B/C workstreams, not starter cleanup.
   - Acceptance: after F1, plan has explicit open items for any remaining write-capable public API seam.
+  - Evidence: `plans/capability-surface-redesign.md` tracks the remaining `query.elevated()`,
+    webhook write-authority, and direct-DB detector hardening decisions as separate open
+    checkboxes.
 
 - [x] **G. Branded provenance types are complete for the current defense-in-depth scope.**
   - Evidence: `Reader<Db>`, `WebhookTxDb`, `TrustedHtml`, and `TrustedUrl` use module-private
