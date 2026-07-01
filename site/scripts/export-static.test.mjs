@@ -55,6 +55,20 @@ describe('site export CSS guards', () => {
     );
   });
 
+  it('throws when the served stylesheet references undefined custom properties', () => {
+    const css = `
+      :root{--site-token:1}
+      .kv-landing-a{}
+      .kv-chrome-b{}
+      .kv-docs-layout-c{}
+      .kv-gallery-d{}
+      .kv-search-e{color:var(--missing-token)}
+    `.padEnd(12_000, ' ');
+    expect(() => assertServedStylesheetContent(css, '/dist-css/assets/site.css')).toThrow(
+      /undefined CSS custom properties \(--missing-token\)/,
+    );
+  });
+
   it('validates extracted site app CSS atoms', () => {
     expect(() => assertExtractedSiteAppCss(goodSiteCss)).not.toThrow();
     expect(() => assertExtractedSiteAppCss('.kv-landing-a{}')).toThrow(

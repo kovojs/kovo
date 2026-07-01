@@ -60,6 +60,10 @@
   --teal: var(--accent);
   --green: #1c7d44;
   --red: #c0392b;
+  --synced: var(--green);
+  --stale: var(--red);
+  --synced-bg: #e9f4ec;
+  --stale-bg: #fbeceb;
   --sky: #0369a1;
   --amber: #b45309;
   --purple: #7e22ce;
@@ -82,6 +86,10 @@
   --teal: var(--accent);
   --green: #54c98a;
   --red: #ff6b61;
+  --synced: var(--green);
+  --stale: var(--red);
+  --synced-bg: color-mix(in srgb, var(--green) 14%, var(--card));
+  --stale-bg: color-mix(in srgb, var(--red) 14%, var(--card));
   --sky: #7cc5ff;
   --amber: #fbbf24;
   --purple: #c792ea;

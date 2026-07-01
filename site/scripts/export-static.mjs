@@ -58,6 +58,14 @@ const STAGED_STATIC_EXPORT_PUBLIC_ASSETS = [
   },
 ];
 
+function findUndefinedCustomProperties(css) {
+  const defined = new Set([...css.matchAll(/(?<![\w-])(--[\w-]+)\s*:/g)].map((match) => match[1]));
+  const referenced = new Set(
+    [...css.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]),
+  );
+  return [...referenced].filter((property) => !defined.has(property)).sort();
+}
+
 // Pure content guard for the served stylesheet: throw a clear, actionable error
 // if it is short or missing site app atoms. Exported for resilience tests.
 export function assertServedStylesheetContent(css, stylesheetPath) {
@@ -68,6 +76,12 @@ export function assertServedStylesheetContent(css, stylesheetPath) {
   const missingAtoms = SITE_APP_CSS_REQUIRED_ATOMS.filter((atom) => !css.includes(atom));
   if (missingAtoms.length > 0) {
     problems.push(`is missing site app atoms (${missingAtoms.join(', ')})`);
+  }
+  const undefinedCustomProperties = findUndefinedCustomProperties(css);
+  if (undefinedCustomProperties.length > 0) {
+    problems.push(
+      `references undefined CSS custom properties (${undefinedCustomProperties.join(', ')})`,
+    );
   }
   if (problems.length > 0) {
     throw new Error(
