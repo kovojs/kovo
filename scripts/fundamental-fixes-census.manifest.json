@@ -643,9 +643,31 @@
       "id": "real-build-resolves-local-star-barrels-and-literal-element-access-for-raw-html-sinks",
       "kind": "output-wire-sink",
       "owner": ["B3", "E2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
+      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
+      "evidenceBundles": [
+        "b3-cli-star-barrel-build-preflight",
+        "b3-vite-identity-registration",
+        "b3-trusted-html-resolver-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "client-derive-bodies-leak-referenceerror-boundary",
@@ -814,490 +836,1568 @@
       "kind": "resolver-expression-kind",
       "expressionKind": "PropertyAccessExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "resolved",
-      "coverageExpectation": "resolves static namespace members; unsupported receiver provenance fails closed"
+      "coverageExpectation": "resolves static namespace members; unsupported receiver provenance fails closed",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-element-access-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "ElementAccessExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "resolved",
-      "coverageExpectation": "resolves string/numeric literal namespace members; non-literal computed keys fail closed"
+      "coverageExpectation": "resolves string/numeric literal namespace members; non-literal computed keys fail closed",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-new-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "NewExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-call-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "CallExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-jsx-element",
       "kind": "resolver-expression-kind",
       "expressionKind": "JsxElement",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-jsx-self-closing-element",
       "kind": "resolver-expression-kind",
       "expressionKind": "JsxSelfClosingElement",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-jsx-fragment",
       "kind": "resolver-expression-kind",
       "expressionKind": "JsxFragment",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-tagged-template-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "TaggedTemplateExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-array-literal-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "ArrayLiteralExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-parenthesized-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "ParenthesizedExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "resolved",
-      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-object-literal-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "ObjectLiteralExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-class-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "ClassExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-function-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "FunctionExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-identifier",
       "kind": "resolver-expression-kind",
       "expressionKind": "Identifier",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "resolved",
-      "coverageExpectation": "resolves imported/local framework identifiers; local shadows fail closed"
+      "coverageExpectation": "resolves imported/local framework identifiers; local shadows fail closed",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-private-identifier",
       "kind": "resolver-expression-kind",
       "expressionKind": "PrivateIdentifier",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-regular-expression-literal",
       "kind": "resolver-expression-kind",
       "expressionKind": "RegularExpressionLiteral",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-numeric-literal",
       "kind": "resolver-expression-kind",
       "expressionKind": "NumericLiteral",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-big-int-literal",
       "kind": "resolver-expression-kind",
       "expressionKind": "BigIntLiteral",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-string-literal",
       "kind": "resolver-expression-kind",
       "expressionKind": "StringLiteral",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-no-substitution-template-literal",
       "kind": "resolver-expression-kind",
       "expressionKind": "NoSubstitutionTemplateLiteral",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-template-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "TemplateExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-false-keyword",
       "kind": "resolver-expression-kind",
       "expressionKind": "FalseKeyword",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-null-keyword",
       "kind": "resolver-expression-kind",
       "expressionKind": "NullKeyword",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-this-keyword",
       "kind": "resolver-expression-kind",
       "expressionKind": "ThisKeyword",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-true-keyword",
       "kind": "resolver-expression-kind",
       "expressionKind": "TrueKeyword",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-super-keyword",
       "kind": "resolver-expression-kind",
       "expressionKind": "SuperKeyword",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-non-null-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "NonNullExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "resolved",
-      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-expression-with-type-arguments",
       "kind": "resolver-expression-kind",
       "expressionKind": "ExpressionWithTypeArguments",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-meta-property",
       "kind": "resolver-expression-kind",
       "expressionKind": "MetaProperty",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-import-keyword",
       "kind": "resolver-expression-kind",
       "expressionKind": "ImportKeyword",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-missing-declaration",
       "kind": "resolver-expression-kind",
       "expressionKind": "MissingDeclaration",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-prefix-unary-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "PrefixUnaryExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-postfix-unary-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "PostfixUnaryExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-delete-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "DeleteExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-type-of-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "TypeOfExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-void-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "VoidExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-await-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "AwaitExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-type-assertion-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "TypeAssertionExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "resolved",
-      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-conditional-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "ConditionalExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-yield-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "YieldExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-arrow-function",
       "kind": "resolver-expression-kind",
       "expressionKind": "ArrowFunction",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-binary-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "BinaryExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-spread-element",
       "kind": "resolver-expression-kind",
       "expressionKind": "SpreadElement",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-as-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "AsExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "resolved",
-      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-omitted-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "OmittedExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-comma-list-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "CommaListExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-partially-emitted-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "PartiallyEmittedExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-satisfies-expression",
       "kind": "resolver-expression-kind",
       "expressionKind": "SatisfiesExpression",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "resolved",
-      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "resolver-default",
       "kind": "resolver-expression-kind",
       "expressionKind": "default",
       "owner": ["B3"],
-      "status": "open",
-      "evidence": "placeholder",
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot (6 passed, 38 skipped); pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot (4 passed, 41 skipped); pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
       "resolverStatus": "fails-closed",
-      "coverageExpectation": "unknown future expression kinds fail closed by the default resolver row"
+      "coverageExpectation": "unknown future expression kinds fail closed by the default resolver row",
+      "evidenceBundles": [
+        "b3-resolver-expression-kind-table",
+        "b3-trusted-html-resolver-focused",
+        "b3-cli-star-barrel-build-preflight",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot (1 passed, 40 skipped); the test runs kovo build --no-cache, observes four KV426 diagnostics, and asserts dist was not emitted",
+        "dialects": {
+          "postgres": "Resolver identity is SQL-dialect independent; the real kovo build preflight blocks trustedHtml/trustedUrl star-barrel and literal element-access raw-HTML sinks before artifact emission in the default build path",
+          "sqlite": "Resolver identity is SQL-dialect independent; the same B3 resolver proof has no SQL dialect branch, and M2/M3 gates enroll it as a production build proof rather than a fixture-only check"
+        },
+        "independentReviewer": "packages/core/src/internal/framework-identity.test.ts and packages/drizzle/src/index.identity-resolver.test.ts independently lock the resolver expression-kind table shape; this worker reverified the core table, Vite registration, trusted-html resolver shard, and real kovo build preflight on agent/followup-resolver-1782923953"
+      },
+      "m2": {
+        "productionBuild": "packages/cli/src/index.kovo-build.test.ts real-build proof calls mainAsync([\"build\", \"./app.ts\", \"--out\", \"./dist\", \"--no-cache\"]) and asserts no dist artifact is emitted after KV426",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed), including the KV426 export-star/literal-element-access resolver proof enrolled with buildInvocation=cli-main-build"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed), including core-framework-identity/drop-element-access-kind-resolution, drop-element-access-canonicalization, drop-export-star-resolution, compiler-compile/drop-framework-identity-project-registration, and compiler-vite/drop-js-to-ts-sibling-candidates"
+      }
     },
     {
       "id": "dialect-pglite-execute",
@@ -1579,6 +2679,26 @@
     "m1-prod-artifact-island-derive": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot",
       "evidence": "Production artifact island-derive browser test builds with kovo build --no-cache, fetches the served client module, clicks hydrated state, and checks helper-derived client artifacts."
+    },
+    "b3-resolver-expression-kind-table": {
+      "command": "pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t \"framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot",
+      "evidence": "Core framework-identity resolver publishes every TypeScript expression kind plus the default fail-closed row, resolves literal element access, traverses export-star barrels, and the Vite transform registers sibling files for production identity resolution."
+    },
+    "b3-vite-identity-registration": {
+      "command": "pnpm exec vitest --run packages/compiler/src/vite.test.ts -t \"registers local source files for framework identity|invalidates the Vite transform cache\" --reporter=dot",
+      "evidence": "Vite production transform recursively reads relative sibling source files, maps .js specifiers to TS/TSX siblings, and invalidates the transform cache when those identity files change."
+    },
+    "b3-trusted-html-resolver-focused": {
+      "command": "pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t \"literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases\" --reporter=dot",
+      "evidence": "KV426 trustedHtml/trustedUrl/renderedHtml provenance tests cover literal namespace element access, local re-export barrels, export-star barrels, and computed-key fail-closed behavior."
+    },
+    "b3-cli-star-barrel-build-preflight": {
+      "command": "pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t \"resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight\" --reporter=dot",
+      "evidence": "Real kovo build --no-cache proof imports ./safe-html.js, resolves TS sibling export-star barrels and literal element access, emits four KV426 diagnostics, and asserts dist is absent."
+    },
+    "b3-request-db-literal-element-write-fact": {
+      "command": "pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts -t \"records literal element request db write sink facts\" --reporter=dot",
+      "evidence": "Compiler scan records request['db'] literal element access as a direct db write-sink fact while preserving the literal source span."
     }
   }
 }

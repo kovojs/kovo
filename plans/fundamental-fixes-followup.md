@@ -113,7 +113,8 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
   - [ ] `TrustedUrl` values are rejected in non-URL JSX attributes [C2]
   - [x] KV426 blocks `@internal renderedHtml()` query taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
-  - [ ] real build resolves local/star barrels and literal element access for raw-HTML sinks [B3/E2]
+  - [x] real build resolves local/star barrels and literal element access for raw-HTML sinks [B3/E2]
+        Evidence: M1 `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight" --reporter=dot` passed and asserted `kovo build --no-cache` failed with four KV426 diagnostics and no `dist`; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 30 mutants.
 - [x] client-derive bodies (leak / `ReferenceError` boundary) [C2]
   - Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot` passed 2 prod-artifact tests; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
   - [x] emitted client derives use state paths instead of render-local aliases [C2]
@@ -215,26 +216,33 @@ to change. Do not open a broad audit before the concrete items are implemented, 
   - Files: `packages/core/src/internal/framework-identity.ts` (`canonicalExpression` `:262-294`,
     `resolveProjectSourceFile` `:682-771`, `exportedIdentity` `:712-737`),
     `packages/drizzle/src/static/framework-identity.ts:152,165`.
-  - [ ] Build a **resolver expression-kind table** (feeds M4): every `ts.SyntaxKind` an expression can be ×
+  - [x] Build a **resolver expression-kind table** (feeds M4): every `ts.SyntaxKind` an expression can be ×
         {resolved | fails-closed}. No blank cell — an unhandled kind falls to **fail-closed**, not silent
         `undefined`/clean.
-  - [ ] Add `ElementAccessExpression` (literal key resolves like property access; non-literal computed key
+        Evidence: M1 `pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t "framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache" --reporter=dot` passed 6 focused tests, including the resolver expression-kind table plus default fail-closed row; M3 killed the resolver denominator/status/coverage mutants.
+  - [x] Add `ElementAccessExpression` (literal key resolves like property access; non-literal computed key
         fails closed) — `bugz-25` B6; also fixes computed `request['db']` in the write-sink/explain
         extraction (`papercuts-23` A3). Add `export *` to `exportedIdentity`.
-  - [ ] Populate the resolver's cross-file edge in the REAL build (see E2/M2), so cross-file re-export gates
+        Evidence: M1 `pnpm exec vitest --run packages/compiler/src/trusted-html-provenance.test.ts -t "literal element access|local re-export barrel|export-star barrels|renderedHtml through local aliases" --reporter=dot` passed 4 focused KV426 resolver tests; `pnpm exec vitest --run packages/compiler/src/scan/parse.test.ts -t "records literal element request db write sink facts" --reporter=dot` passed the literal `request['db']` write-fact proof; M3 killed the element-access and export-star resolver mutants.
+  - [x] Populate the resolver's cross-file edge in the REAL build (see E2/M2), so cross-file re-export gates
         in production, not only fixtures — `bugz-25` B7.
+        Evidence: M1 `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight" --reporter=dot` passed, using `./safe-html.js` -> TS sibling `export *` barrels in a real `kovo build --no-cache`; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs.
   - Acceptance: `ns['trustedHtml'](taint)`, a local `export { trustedHtml } from '@kovojs/browser'` barrel,
     and `export *` barrels all fire KV426 in a real `kovo build`; computed `request['db']` appears in
     `kovo explain`; the expression-kind table has no blank/silent-clean cell; M1–M3 green.
 
-- [ ] **E2. Harness fidelity (the concrete implementation of M2).** Closes the divergence behind `bugz-25` B7.
-  - [ ] Register project sibling files with the resolver in the real Vite/compile transform + build driver so
+- [x] **E2. Harness fidelity (the concrete implementation of M2).** Closes the divergence behind `bugz-25` B7.
+  - [x] Register project sibling files with the resolver in the real Vite/compile transform + build driver so
         `resolveProjectSourceFile` runs in production (today it is fed only by conformance `extraFiles`).
-  - [ ] Route the metamorphic harness through the SAME production build/resolve path — a green metamorphic
+        Evidence: `pnpm exec vitest --run packages/core/src/internal/framework-identity.test.ts packages/compiler/src/vite.test.ts -t "framework identity resolver|registers local source files for framework identity|invalidates the Vite transform cache" --reporter=dot` passed 6 focused tests covering `viteFrameworkIdentityFiles`, compile registration, cache invalidation, and resolver lookup.
+  - [x] Route the metamorphic harness through the SAME production build/resolve path — a green metamorphic
         result MUST imply a green production result.
-  - [ ] Add the M2 lint/gate: any security test not exercising the real build path fails CI.
+        Evidence: `pnpm exec vitest --run packages/cli/src/index.kovo-build.test.ts -t "resolves star trustedHtml/trustedUrl barrels and literal element access during production build preflight" --reporter=dot` passed the KV426 export-star/literal element-access case through `mainAsync(["build", "./app.ts", "--out", "./dist", "--no-cache"])`.
+  - [x] Add the M2 lint/gate: any security test not exercising the real build path fails CI.
+        Evidence: `pnpm run check:security-test-builds` passed 14 real-build proofs and keeps the KV426 export-star resolver proof enrolled with `buildInvocation=cli-main-build`; `pnpm run check:security-gate-mutations` killed `security-test-build-gate/drop-production-build-invocation-check`.
   - Acceptance: a cross-file re-export barrel the metamorphic suite marks caught is ALSO caught by a real
     `kovo build`; no security gate has fixture-only or `it.todo` coverage.
+  - Evidence: M1 CLI real-build proof above failed before artifact emission with KV426; M2 real-build gate passed 14 proofs; M3 mutation gate killed 30 mutants, including the E2 production compile and Vite sibling-candidate mutants.
 
 ## Phased delivery
 
