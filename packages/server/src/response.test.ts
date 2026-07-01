@@ -69,6 +69,54 @@ describe('server response adapters', () => {
     await expect(response.text()).resolves.toBe('created');
   });
 
+  it('emits safe custom response headers at the web response boundary', () => {
+    const response = serverResponseToWebResponse(
+      {
+        body: 'ok',
+        headers: {
+          'Content-Type': 'text/plain; charset=utf-8',
+          'X-Kovo-Header-Proof': 'safe-header-value',
+        },
+        status: 200,
+      },
+      { method: 'GET' },
+    );
+
+    expect(response.headers.get('x-kovo-header-proof')).toBe('safe-header-value');
+  });
+
+  it('fails closed with KV415 before unsafe response header values reach the platform adapter', () => {
+    expect(() =>
+      serverResponseToWebResponse(
+        {
+          body: 'unsafe',
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'X-Kovo-Header-Proof': 'unsafe\r\nSet-Cookie: c2=owned',
+          },
+          status: 200,
+        },
+        { method: 'GET' },
+      ),
+    ).toThrow(/KV415/);
+  });
+
+  it('fails closed with KV415 before unsafe response header names reach the platform adapter', () => {
+    expect(() =>
+      serverResponseToWebResponse(
+        {
+          body: 'unsafe',
+          headers: {
+            'Content-Type': 'text/plain; charset=utf-8',
+            'X Kovo Header Proof': 'unsafe',
+          },
+          status: 200,
+        },
+        { method: 'GET' },
+      ),
+    ).toThrow(/KV415/);
+  });
+
   it('suppresses shared server response bodies for HEAD requests', async () => {
     const response = serverResponseToWebResponse(
       {
