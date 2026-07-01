@@ -110,7 +110,7 @@ that removes the broader source of drift.
     build file reads or static export asset materialization.
   - Verification: add forged-symbol negative tests; run `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/build.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/neutral-build.test.ts`.
 
-- [ ] **P0.9 - Preserve production render-plan gates in every compile-cache projection.**
+- [x] **P0.9 - Preserve production render-plan gates in every compile-cache projection.**
   - Current signals: exact compiler cache keys include `productionRenderPlanGate`, but
     `narrowCompileCacheKeyInput()` drops that option when replaying learned dependency footprints;
     persistent cache reuse follows the narrowed path.
@@ -119,6 +119,7 @@ that removes the broader source of drift.
   - Risk reduced: a no-gate compile cannot be reused when KV416/KV435 production render-plan gates are
     enabled, including across persistent cache restarts.
   - Verification: add learned-footprint and persistent-cache regressions; run `pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/persistent-compile-cache.test.ts packages/compiler/src/render-plan-token-contract.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/compiler/src/compile-cache.test.ts packages/compiler/src/persistent-compile-cache.test.ts packages/compiler/src/render-plan-token-contract.test.ts` passed with 3 files/22 tests after merging `agent/hvr4-compiler-20260630-235527`; `git diff --check HEAD^..HEAD` passed.
 
 ## P1 - Cross-Package Drift and Runtime Chokepoints
 
