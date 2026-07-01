@@ -230,11 +230,12 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     union with divergent arms; exhaustiveness is enforced in only one → a new kind ships a silent `.d.ts` gap. Extract
     one `foldQueryShapeWrapper` with a `Record<kind,…>` handler; guard with `.d.ts` goldens.
   - Gap: `packages/drizzle/src/types.ts`, `wrapperQueryShapeTypeExpr`, and `typeExprFromRevealedQueryShape` are absent on the current `2eef549be` base and integration branch, so this checkbox remains open pending plan correction or a later typegen surface.
-- [ ] **D4 — Add `assertNever` exhaustiveness to the Drizzle analyzer.** (M · low-med)
+- [x] **D4 — Add `assertNever` exhaustiveness to the Drizzle analyzer.** (M · low-med)
   - Zero exhaustiveness across ~20k lines. `PredicatePnf` (summaries.ts:3352, 6 kinds) is dispatched by ~9 partial
     if-chains (summaries.ts:537-552 silently returns `[]` for three kinds; :3772 handles only `eq`/`and`) → a new kind
     silently degrades to "no scope proven". Add a shared `assertNever`, terminate total chains with it, convert central
     dispatchers to `switch`.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src`, focused predicate/scope Vitest, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after adding shared Drizzle `assertNever` coverage to central predicate PNF dispatchers and forged future-variant tests.
 
 ## Phase 4 — The fail-closed program on the clean substrate
 
