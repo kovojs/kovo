@@ -34,7 +34,6 @@ import {
 
 import {
   COMPUTED_DRIZZLE_RECEIVER_METHOD,
-  RAW_SQL_WRITE_RECEIVER_SINK_METHODS,
   UNRESOLVED_READ_SOURCE_EXPRESSION,
   computedPropertyNameExpression,
   createProjectExtraction,
@@ -46,7 +45,6 @@ import {
   isDrizzleWriteCall,
   isFunctionLikeNode,
   isKovoServerCalleeExpression,
-  isKovoDrizzleTrustedSqlCall,
   isOpaqueProjection,
   isProjectDrizzleReceiverIdentifier,
   isSelectQueryCallName,
@@ -95,13 +93,16 @@ import {
   type TouchGraphProjectOptions,
   directDrizzleReceiverCallSurface,
   objectPropertyInitializer,
-  staticMutationDeclarationFromCall,
-  stringArrayPropertyFromObject,
 } from '../static.js';
 import {
   domainWriteObject,
   domainWriteProperties,
+  forEachMutationConfig,
+  mutationHandlerCallback,
+  rawTablesFromMutationRegistry,
   rawTablesFromWriteInitializer,
+  rawWriteSqlTrustForCallback,
+  type RawWriteSqlTrust,
   writeActionCallbackFunction,
 } from './domain-writes.js';
 import { expressionResolvesToFrameworkExport, frameworkExport } from './framework-identity.js';
@@ -1123,12 +1124,6 @@ interface RawWriteDeclaration {
   trust: RawWriteSqlTrust;
 }
 
-interface RawWriteSqlTrust {
-  hasRawSqlSink: boolean;
-  site?: string;
-  trusted: boolean;
-}
-
 function massAssignmentFactsForWriteCall(
   call: CallExpression,
   context: MassAssignmentCallContext,
@@ -1261,101 +1256,6 @@ function rawMassAssignmentFactsForDeclaration(
       },
     ];
   });
-}
-
-function forEachMutationConfig(
-  sourceFile: SourceFile,
-  visit: (key: string, config: ObjectLiteralExpression) => void,
-): void {
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    const initializer = declaration.getInitializer();
-    if (!initializer) continue;
-    const call = unwrappedStaticExpressionNode(initializer);
-    if (!Node.isCallExpression(call)) continue;
-    const mutation = staticMutationDeclarationFromCall(declaration, call);
-    if (!mutation || !Node.isObjectLiteralExpression(mutation.bodyArgument)) continue;
-    visit(mutation.key, mutation.bodyArgument);
-  }
-
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)) continue;
-    if (!isKovoServerCalleeExpression(call.getExpression(), 'mutation')) continue;
-
-    const [keyArgument, configArgument] = call.getArguments();
-    if (
-      !(
-        (Node.isStringLiteral(keyArgument) || Node.isNoSubstitutionTemplateLiteral(keyArgument)) &&
-        Node.isObjectLiteralExpression(configArgument)
-      )
-    ) {
-      continue;
-    }
-
-    visit(keyArgument.getLiteralText(), configArgument);
-  }
-}
-
-function rawTablesFromMutationRegistry(config: ObjectLiteralExpression): string[] {
-  const registry = objectPropertyInitializer(config, 'registry');
-  if (!registry) return [];
-  const registryObject = unwrappedStaticExpressionNode(registry);
-  if (!Node.isObjectLiteralExpression(registryObject)) return [];
-  return stringArrayPropertyFromObject(registryObject, 'tables');
-}
-
-function mutationHandlerCallback(config: ObjectLiteralExpression): Node | undefined {
-  for (const property of config.getProperties()) {
-    if (Node.isMethodDeclaration(property)) {
-      if (propertyNameText(property.getNameNode()) === 'handler') return property;
-      continue;
-    }
-
-    if (!Node.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.getNameNode()) !== 'handler') continue;
-
-    const initializer = property.getInitializer();
-    if (!initializer) continue;
-    const expression = unwrappedStaticExpressionNode(initializer);
-    if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
-      return expression;
-    }
-  }
-
-  return undefined;
-}
-
-function rawWriteSqlTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {
-  const rawSqlSinkCalls = callback
-    .getDescendantsOfKind(SyntaxKind.CallExpression)
-    .filter((call) => {
-      const surface = directDrizzleReceiverCallSurface(call);
-      if (!surface || !RAW_SQL_WRITE_RECEIVER_SINK_METHODS.has(surface.name)) return false;
-      return rawSqlSinkReceiverCanCarrySql(call.getExpression());
-    });
-  const firstUntrusted = rawSqlSinkCalls.find((call) => !isTrustedSqlArgument(call));
-  const siteCall = firstUntrusted ?? rawSqlSinkCalls[0];
-
-  return {
-    hasRawSqlSink: rawSqlSinkCalls.length > 0,
-    ...(siteCall
-      ? { site: `${file.fileName}:${lineForIndex(file.source, siteCall.getStart())}` }
-      : {}),
-    trusted: rawSqlSinkCalls.length > 0 && !firstUntrusted,
-  };
-}
-
-function rawSqlSinkReceiverCanCarrySql(expression: Node): boolean {
-  const receiver = staticAccessExpression(expression);
-  if (!receiver) return false;
-  return !Node.isCallExpression(unwrappedStaticExpressionNode(receiver));
-}
-
-function isTrustedSqlArgument(call: CallExpression): boolean {
-  const argument = call.getArguments()[0];
-  if (!argument) return false;
-  const expression = unwrappedStaticExpressionNode(argument);
-  if (!Node.isCallExpression(expression)) return false;
-  return isKovoDrizzleTrustedSqlCall(expression);
 }
 
 function massAssignmentFactsForPayload(

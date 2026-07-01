@@ -631,6 +631,47 @@ describe('@kovojs/drizzle raw SQL static extraction', () => {
     ]);
   });
 
+  it('fails closed for helper-mediated mutation registry raw writes to governed tables', () => {
+    const facts = extractMassAssignmentFromProject(
+      withPgDatabaseTypes({
+        files: [
+          RAW_EXECUTE_DB,
+          {
+            fileName: 'mutations.ts',
+            source: [
+              'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+              '',
+              'export const rawOrders = pgTable("raw_orders", { id: text("id").primaryKey(), status: text("status").notNull() }, kovo({ domain: "raw-order", key: "id", governed: ["status"] }));',
+              '',
+              'async function updateOrderStatus(input: { id: string; status: string }, db: PgAsyncDatabase<any, any>) {',
+              '  await db.execute(sql`update raw_orders set status = ${input.status} where id = ${input.id}`);',
+              '}',
+              '',
+              'export const updateOrder = mutation({',
+              '  registry: { tables: ["raw_orders"] },',
+              '  async handler(input: { id: string; status: string }, request: { db: PgAsyncDatabase<any, any> }) {',
+              '    return updateOrderStatus(input, request.db);',
+              '  },',
+              '});',
+            ].join('\n'),
+          },
+        ],
+      }),
+    );
+
+    expect(facts).toEqual([
+      {
+        column: 'id+status',
+        detail: 'raw SQL statement cannot prove governed value provenance',
+        domain: 'raw-order',
+        name: 'mutations/update-order',
+        provenance: 'unknown',
+        site: 'mutations.ts:6',
+        via: 'raw-sql',
+      },
+    ]);
+  });
+
   it('fails closed for mutation registry raw writes against owner tables', () => {
     const audit = extractOwnerAuditFromProject(
       withPgDatabaseTypes({

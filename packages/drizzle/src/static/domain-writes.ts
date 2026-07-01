@@ -1,12 +1,15 @@
 import {
   Node,
+  SyntaxKind,
   type BindingElement,
   type CallExpression,
   type ObjectLiteralExpression,
+  type SourceFile,
   type Type as MorphType,
 } from 'ts-morph';
 import { withParsedSourceFile } from './tables.js';
 import {
+  RAW_SQL_WRITE_RECEIVER_SINK_METHODS,
   type DomainWriteProperty,
   type ExtractedFunction,
   type ReceiverParameterRequirement,
@@ -15,11 +18,13 @@ import {
   UNRESOLVED_DOMAIN_WRITE_SPREAD_MEMBER,
   callbackFunctionFromReference,
   computedPropertyNameExpression,
+  isKovoDrizzleTrustedSqlCall,
   isKovoServerCalleeExpression,
   lineForIndex,
   objectPropertyInitializer,
   propertyNameText,
   resolvedSymbolKey,
+  staticMutationDeclarationFromCall,
   singleReturnExpression,
   staticBindingElementReference,
   staticLiteralReferenceFromExpression,
@@ -29,6 +34,12 @@ import {
   symbolForStaticTypePath,
   unwrappedStaticExpressionNode,
 } from '../static.js';
+import {
+  directDrizzleReceiverCallSurface,
+  isLikelyDrizzleReceiver,
+  isProjectDrizzleReceiverContainerExpression,
+} from './receiver-surface.js';
+import { staticAccessExpression, staticAccessName } from './summaries.js';
 
 /** @internal */ export function functionReceiverParametersByKey(
   functions: Iterable<Pick<ExtractedFunction, 'key' | 'receiverParameters'>>,
@@ -617,6 +628,247 @@ import {
 
   return [];
 }
+
+/** @internal */ export interface RawWriteSqlTrust {
+  hasRawSqlSink: boolean;
+  site?: string;
+  trusted: boolean;
+}
+
+/** @internal */ export function forEachMutationConfig(
+  sourceFile: SourceFile,
+  visit: (key: string, config: ObjectLiteralExpression) => void,
+): void {
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const call = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(call)) continue;
+    const mutation = staticMutationDeclarationFromCall(declaration, call);
+    if (!mutation || !Node.isObjectLiteralExpression(mutation.bodyArgument)) continue;
+    visit(mutation.key, mutation.bodyArgument);
+  }
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)) continue;
+    if (!isKovoServerCalleeExpression(call.getExpression(), 'mutation')) continue;
+
+    const [keyArgument, configArgument] = call.getArguments();
+    if (
+      !(
+        (Node.isStringLiteral(keyArgument) || Node.isNoSubstitutionTemplateLiteral(keyArgument)) &&
+        Node.isObjectLiteralExpression(configArgument)
+      )
+    ) {
+      continue;
+    }
+
+    visit(keyArgument.getLiteralText(), configArgument);
+  }
+}
+
+/** @internal */ export function rawTablesFromMutationRegistry(
+  config: ObjectLiteralExpression,
+): string[] {
+  const registry = objectPropertyInitializer(config, 'registry');
+  if (!registry) return [];
+  const registryObject = unwrappedStaticExpressionNode(registry);
+  if (!Node.isObjectLiteralExpression(registryObject)) return [];
+  return stringArrayPropertyFromObject(registryObject, 'tables');
+}
+
+/** @internal */ export function mutationHandlerCallback(
+  config: ObjectLiteralExpression,
+): Node | undefined {
+  for (const property of config.getProperties()) {
+    if (Node.isMethodDeclaration(property)) {
+      if (propertyNameText(property.getNameNode()) === 'handler') return property;
+      continue;
+    }
+
+    if (!Node.isPropertyAssignment(property)) continue;
+    if (propertyNameText(property.getNameNode()) !== 'handler') continue;
+
+    const initializer = property.getInitializer();
+    if (!initializer) continue;
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
+      return expression;
+    }
+  }
+
+  return undefined;
+}
+
+/** @internal */ export function rawWriteSqlTrustForCallback(
+  callback: Node,
+  file: SourceFileInput,
+): RawWriteSqlTrust {
+  return rawWriteSqlTrustForNode(
+    callback,
+    file,
+    rawSqlLocalFunctionsByName(callback.getSourceFile()),
+    new Set(),
+  );
+}
+
+function rawWriteSqlTrustForNode(
+  node: Node,
+  file: SourceFileInput,
+  localFunctions: ReadonlyMap<string, Node>,
+  visited: Set<string>,
+): RawWriteSqlTrust {
+  const rawSqlSinkCalls = node.getDescendantsOfKind(SyntaxKind.CallExpression).filter((call) => {
+    const surface = directDrizzleReceiverCallSurface(call);
+    if (!surface || !RAW_SQL_WRITE_RECEIVER_SINK_METHODS.has(surface.name)) return false;
+    return sqlSinkReceiverCanCarrySql(call.getExpression(), surface.name);
+  });
+  const firstUntrusted = rawSqlSinkCalls.find((call) => !isTrustedSqlArgument(call));
+  const siteCall = firstUntrusted ?? rawSqlSinkCalls[0];
+
+  let trust: RawWriteSqlTrust = {
+    hasRawSqlSink: rawSqlSinkCalls.length > 0,
+    ...(siteCall
+      ? { site: `${file.fileName}:${lineForIndex(file.source, siteCall.getStart())}` }
+      : {}),
+    trusted: rawSqlSinkCalls.length > 0 && !firstUntrusted,
+  };
+
+  for (const call of node.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!rawSqlHelperCallReceivesDriver(call)) continue;
+    const helper = rawSqlLocalHelperCallTarget(call, localFunctions);
+    if (!helper) continue;
+    const helperName = rawSqlLocalHelperCallName(call);
+    if (!helperName || visited.has(helperName)) continue;
+    visited.add(helperName);
+    trust =
+      mergedRawWriteSqlTrust(
+        trust,
+        rawWriteSqlTrustForNode(helper, file, localFunctions, visited),
+      ) ?? trust;
+  }
+
+  return trust;
+}
+
+/** @internal */ export function rawSqlLocalFunctionsByName(
+  sourceFile: SourceFile,
+): ReadonlyMap<string, Node> {
+  const functions = new Map<string, Node>();
+  for (const declaration of sourceFile.getFunctions()) {
+    const name = declaration.getName();
+    const body = declaration.getBody();
+    if (name && body) functions.set(name, body);
+  }
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const name = declaration.getNameNode();
+    if (!Node.isIdentifier(name)) continue;
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const expression = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isArrowFunction(expression) && !Node.isFunctionExpression(expression)) continue;
+    functions.set(name.getText(), expression.getBody());
+  }
+  return functions;
+}
+
+function rawSqlLocalHelperCallTarget(
+  call: CallExpression,
+  localFunctions: ReadonlyMap<string, Node>,
+): Node | undefined {
+  const name = rawSqlLocalHelperCallName(call);
+  return name ? localFunctions.get(name) : undefined;
+}
+
+function rawSqlLocalHelperCallName(call: CallExpression): string | undefined {
+  const expression = unwrappedStaticExpressionNode(call.getExpression());
+  return Node.isIdentifier(expression) ? expression.getText() : undefined;
+}
+
+function rawSqlHelperCallReceivesDriver(call: CallExpression): boolean {
+  return call.getArguments().some(rawSqlReceiverArgument);
+}
+
+/** @internal */ export function rawSqlLocalHelperCallNamesReceivingDriver(
+  node: Node,
+  localFunctions: ReadonlyMap<string, Node>,
+  visited: Set<string>,
+): Set<string> {
+  const names = new Set<string>();
+  for (const call of node.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!rawSqlHelperCallReceivesDriver(call)) continue;
+    const helperName = rawSqlLocalHelperCallName(call);
+    if (!helperName || visited.has(helperName)) continue;
+    const helper = localFunctions.get(helperName);
+    if (!helper) continue;
+
+    visited.add(helperName);
+    names.add(helperName);
+    for (const nestedName of rawSqlLocalHelperCallNamesReceivingDriver(
+      helper,
+      localFunctions,
+      visited,
+    )) {
+      names.add(nestedName);
+    }
+  }
+  return names;
+}
+
+function rawSqlReceiverArgument(argument: Node): boolean {
+  const expression = unwrappedStaticExpressionNode(argument);
+  if (Node.isIdentifier(expression)) return isLikelyDrizzleReceiver(expression.getText());
+  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
+    const name = staticAccessName(expression);
+    if (name && isLikelyDrizzleReceiver(name)) return true;
+  }
+  return isProjectDrizzleReceiverContainerExpression(expression);
+}
+
+function isTrustedSqlArgument(call: CallExpression): boolean {
+  const argument = call.getArguments()[0];
+  if (!argument) return false;
+  const expression = unwrappedStaticExpressionNode(argument);
+  if (!Node.isCallExpression(expression)) return false;
+  return isKovoDrizzleTrustedSqlCall(expression);
+}
+
+function sqlSinkReceiverCanCarrySql(expression: Node, methodName: string): boolean {
+  const receiver = staticAccessExpression(expression);
+  if (!receiver) return false;
+  const receiverExpression = unwrappedStaticExpressionNode(receiver);
+  // SQLite drivers expose `db.values(sql)` as an execution sink, while Drizzle insert builders
+  // expose `db.insert(table).values(row)`. The builder receiver is a call expression; do not turn
+  // ordinary row payloads into KV422 SQL text diagnostics.
+  if (Node.isCallExpression(receiverExpression)) return false;
+  if (!AMBIGUOUS_RAW_SQL_RECEIVER_SINK_METHODS.has(methodName)) return true;
+  return sqlSinkReceiverLooksLikeDriver(receiverExpression);
+}
+
+function sqlSinkReceiverLooksLikeDriver(receiver: Node): boolean {
+  if (Node.isIdentifier(receiver) && isLikelyDrizzleReceiver(receiver.getText())) return true;
+  if (Node.isPropertyAccessExpression(receiver) || Node.isElementAccessExpression(receiver)) {
+    const name = staticAccessName(receiver);
+    if (name && isLikelyDrizzleReceiver(name)) return true;
+  }
+  return isProjectDrizzleReceiverContainerExpression(receiver);
+}
+
+/** @internal */ export function mergedRawWriteSqlTrust(
+  left: RawWriteSqlTrust | undefined,
+  right: RawWriteSqlTrust | undefined,
+): RawWriteSqlTrust | undefined {
+  if (!left) return right;
+  if (!right) return left;
+
+  return {
+    hasRawSqlSink: left.hasRawSqlSink || right.hasRawSqlSink,
+    ...(left.site || right.site ? { site: left.site ?? right.site } : {}),
+    trusted: (!left.hasRawSqlSink || left.trusted) && (!right.hasRawSqlSink || right.trusted),
+  };
+}
+
+const AMBIGUOUS_RAW_SQL_RECEIVER_SINK_METHODS = new Set(['values']);
 
 /** @internal */ export function writeActionCallbackFunction(
   initializer: Node | undefined,
