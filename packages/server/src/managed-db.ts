@@ -4,9 +4,9 @@
 // (the SQL-safe managed handle). Where Kovo owns and threads the handle, loaders receive one
 // managed read handle and mutations receive one managed write handle:
 //
-//   - `managedDb(raw, 'read')`  → SQL-safe (KV422) + read-only proxy (KV433). A `query()` loader's
-//     write verb (insert/update/delete/execute/run/batch) throws `KovoReadonlyHandleError` and is a
-//     `tsc` error through the `Reader<Db>` type mirror.
+//   - `managedDb(raw, 'read')`  → SQL-safe (KV422) + read capability proxy (KV433). A `query()`
+//     loader receives only the framework-approved read surface; every other property fails closed
+//     at runtime and is absent from the `Reader<Db>` type mirror.
 //   - `managedDb(raw, 'write')` → SQL-safe (KV422) only. A `mutation()` or other explicit write
 //     surface gets the full read-write handle.
 //
@@ -19,12 +19,13 @@ import { wrapManagedDbForSqlSafety, type ManagedSqlWritePolicy } from './sql-saf
 
 declare const readerDbBrand: unique symbol;
 
-/**
- * The write verbs forbidden on a `query()` loader's read-only handle (SPEC §9.4 KV433). A loader is
- * a read surface: reaching a write from it is a state change on an idempotent GET (the confused-
- * deputy case). These are the Drizzle/db write entry points the read-only proxy fails closed.
- */
-const WRITE_VERBS = new Set<string>(['insert', 'update', 'delete', 'execute', 'run', 'batch']);
+const READ_CAPABILITY_PROPERTIES = new Set<string>([
+  '$count',
+  '$with',
+  'query',
+  'select',
+  'selectDistinct',
+]);
 
 /**
  * Thrown when a `query()` loader calls a write verb on its read-only managed handle (SPEC §9.4
@@ -49,9 +50,12 @@ export class KovoReadonlyHandleError extends Error {
  * floor, and the static KV433 provenance gate remains the by-construction proof. Casts/`any` can
  * defeat this type and must never be accepted as security evidence.
  */
-export type Reader<Db> = (Db extends object
-  ? Omit<Db, 'batch' | 'delete' | 'execute' | 'insert' | 'run' | 'update'>
-  : Db) & {
+type ReadCapabilityKeys<Db> = Extract<
+  keyof Db,
+  '$count' | '$with' | 'query' | 'select' | 'selectDistinct'
+>;
+
+export type Reader<Db> = (Db extends object ? Pick<Db, ReadCapabilityKeys<Db>> : Db) & {
   readonly [readerDbBrand]: {
     readonly db: Db;
     readonly scope: 'framework-read-handle';
@@ -62,10 +66,10 @@ export type Reader<Db> = (Db extends object
 export type ManagedDbMode = 'read' | 'write';
 
 /**
- * Wrap a db handle so every write verb throws (SPEC §9.4 KV433 Stage 1). The proxy intercepts
- * `WRITE_VERBS` and returns a thrower; every other property/method passes through unchanged so reads
- * keep working. Framework-owned query/document surfaces receive this pre-applied as `context.db` /
- * `request.db`.
+ * Wrap a db handle so only known read capabilities are exposed (SPEC §9.4 KV433 Stage 1). The proxy
+ * allowlists read builders and returns a thrower for every other string property, so future/dialect
+ * sinks fail closed instead of depending on an incomplete write-verb denylist. Framework-owned
+ * query/document surfaces receive this pre-applied as `context.db` / `request.db`.
  *
  * This helper is the blessed read-only escape for raw endpoint reads: wrap an app DB with
  * `readonlyDb(appDb)` instead of importing a broad write handle into a read-only endpoint. It is a
@@ -74,10 +78,10 @@ export type ManagedDbMode = 'read' | 'write';
 export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
   return new Proxy(db, {
     get(target, prop, receiver) {
-      if (typeof prop === 'string' && WRITE_VERBS.has(prop)) {
+      if (typeof prop === 'string' && !READ_CAPABILITY_PROPERTIES.has(prop)) {
         return () => {
           throw new KovoReadonlyHandleError(
-            `A query() loader cannot ${prop}() — loaders are read-only (KV433). Move the write to a mutation(), domain write, or endpoint().`,
+            `A query() loader cannot access db.${prop} — loaders receive a read-only DB capability (KV433). Move writes to a mutation(), domain write, or endpoint().`,
           );
         };
       }
@@ -113,7 +117,10 @@ export function managedDb<Db>(
   mode: ManagedDbMode,
   options: ManagedDbOptions = {},
 ): Db | Reader<Db> {
-  const safe = wrapManagedDbForSqlSafety(raw, undefined, options.sqlWritePolicy);
+  const safe = wrapManagedDbForSqlSafety(raw, undefined, {
+    ...options.sqlWritePolicy,
+    capability: mode,
+  });
   if (mode === 'write') return safe;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
   return readonlyDb(safe as unknown as object) as Reader<Db>;

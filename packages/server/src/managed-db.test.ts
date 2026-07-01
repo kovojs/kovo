@@ -47,6 +47,26 @@ function fakeDb(log: string[]) {
       log.push('query');
       return Promise.resolve(statement);
     },
+    all(statement: unknown) {
+      log.push('all');
+      return Promise.resolve(statement);
+    },
+    get(statement: unknown) {
+      log.push('get');
+      return Promise.resolve(statement);
+    },
+    run(statement: unknown) {
+      log.push('run');
+      return Promise.resolve(statement);
+    },
+    values(statement: unknown) {
+      log.push('values');
+      return Promise.resolve(statement);
+    },
+    batch() {
+      log.push('batch');
+      return Promise.resolve();
+    },
     // Make the value look like a db adapter so the SQL-safe wrap engages.
     execute(statement: unknown) {
       log.push('execute');
@@ -82,19 +102,35 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
       acceptsReader(raw);
       // @ts-expect-error Reader<Db> hides write verbs on framework-owned read surfaces.
       reader.insert('products');
+      // @ts-expect-error Reader<Db> hides future/dialect SQL sinks by default.
+      reader.all({ text: 'select 1', values: [] });
       const readHandle = managedDb(raw, 'read');
       acceptsReader(readHandle);
       // @ts-expect-error managedDb(..., 'read') returns the branded read-only surface.
       readHandle.update('products');
+      // @ts-expect-error managedDb(..., 'read') exposes only the read capability allowlist.
+      readHandle.transaction(() => undefined);
       const writeHandle = managedDb(raw, 'write');
       writeHandle.insert('products');
     };
     void compileOnly;
   });
 
-  it('throws KovoReadonlyHandleError on every write verb', () => {
+  it('throws KovoReadonlyHandleError on every non-read capability', () => {
     const reader = readonlyDb(fakeDb([]));
-    for (const verb of ['insert', 'update', 'delete', 'execute', 'run', 'batch'] as const) {
+    for (const verb of [
+      'all',
+      'batch',
+      'delete',
+      'execute',
+      'get',
+      'insert',
+      'run',
+      'transaction',
+      'update',
+      'values',
+      'with',
+    ] as const) {
       const method = (reader as Record<string, unknown>)[verb];
       expect(typeof method).toBe('function');
       expect(() => (method as () => unknown)()).toThrow(KovoReadonlyHandleError);
@@ -119,6 +155,54 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     );
     // KV422: a raw string statement is rejected by the same handle.
     expect(() => (handle as { query(s: unknown): unknown }).query('SELECT 1')).toThrow(/KV422/);
+  });
+
+  it('read mode rejects SQL writes even through allowed read-shaped SQL methods', () => {
+    const handle = managedDb(fakeDb([]), 'read', {
+      sqlWritePolicy: { dialect: 'sqlite' },
+    });
+
+    expect(() =>
+      (handle as { query(s: unknown): unknown }).query(
+        stampTrustedSql(
+          { sql: 'delete from products where id = ? returning id', values: ['p1'] },
+          'attempted read-surface write',
+        ),
+      ),
+    ).toThrow(/KV433/);
+
+    expect(() =>
+      (handle as { query(s: unknown): unknown }).query({
+        sql: 'select id from products where id = ?',
+        values: ['p1'],
+      }),
+    ).not.toThrow();
+  });
+
+  it('read mode denies SQLite sink and transaction properties before they can write', () => {
+    const log: string[] = [];
+    const handle = managedDb(fakeDb(log), 'read', {
+      sqlWritePolicy: { dialect: 'sqlite' },
+    });
+
+    for (const verb of ['all', 'get', 'values'] as const) {
+      expect(() =>
+        (handle as unknown as Record<typeof verb, (statement: unknown) => unknown>)[verb](
+          stampTrustedSql(
+            { sql: 'insert into products (id) values (?) returning id', values: ['p1'] },
+            `${verb} write attempt`,
+          ),
+        ),
+      ).toThrow(KovoReadonlyHandleError);
+    }
+    expect(() =>
+      (
+        handle as unknown as { transaction(callback: (tx: unknown) => unknown): unknown }
+      ).transaction(() => {
+        log.push('callback-entered');
+      }),
+    ).toThrow(KovoReadonlyHandleError);
+    expect(log).toEqual([]);
   });
 
   it('write mode allows writes but still rejects raw-string SQL (KV422 holds)', async () => {
@@ -199,6 +283,59 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).rejects.toThrow(/KV406/);
     expect(log).toEqual(['transaction', 'tx.execute', 'transaction']);
+  });
+
+  it('write mode enforces SQLite top-level raw SQL sinks', async () => {
+    const log: string[] = [];
+    const sqlite = {
+      all(statement: unknown) {
+        log.push('all');
+        return Promise.resolve(statement);
+      },
+      get(statement: unknown) {
+        log.push('get');
+        return Promise.resolve(statement);
+      },
+      run(statement: unknown) {
+        log.push('run');
+        return Promise.resolve(statement);
+      },
+      values(statement: unknown) {
+        log.push('values');
+        return Promise.resolve(statement);
+      },
+    };
+    const handle = managedDb(sqlite, 'write', {
+      sqlWritePolicy: {
+        dialect: 'sqlite',
+        tables: ['products'],
+        touches: ['product'],
+      },
+    });
+
+    expect(() => handle.all('select * from products')).toThrow(/KV422/);
+    expect(log).toEqual([]);
+
+    await expect(
+      handle.get({ sql: 'select id from products where id = ?', values: ['p1'] }),
+    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    await expect(
+      handle.run(
+        stampTrustedSql(
+          { sql: 'update products set name = ? where id = ?', values: ['Ada', 'p1'] },
+          'audited SQLite product update',
+        ),
+      ),
+    ).resolves.toMatchObject({ sql: 'update products set name = ? where id = ?' });
+    expect(() =>
+      handle.values(
+        stampTrustedSql(
+          { sql: 'delete from users where id = ?', values: ['u1'] },
+          'drifted SQLite user delete',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['get', 'run']);
   });
 });
 
