@@ -59,9 +59,9 @@ describe('Phase 0 metamorphic recognition-fuzzing harness', () => {
       },
       {
         code: 'KV426',
-        enforced: 3,
+        enforced: 6,
         label: 'trusted HTML provenance',
-        todo: 4,
+        todo: 1,
         variants: [
           'control',
           'import-alias',
