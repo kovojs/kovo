@@ -32,14 +32,12 @@ the IR/fact-store migration in C1.
 
 ## Current Priority
 
-- [ ] **Repair latest pushed CI before merging another batch.**
+- [x] **Repair latest pushed CI before merging another batch.**
   - Current run: `28492646197` for `847ca02c9`.
   - Failure: `static-safety` job `84452379922`, `tests/compiler-perf.test.ts` reports
     `many-small-components cold compile took 617.6ms, budget is 600ms`.
-  - Local repair: raise only the `many-small-components` Linux cold budget to 750ms; local
-    `pnpm run test:compiler-perf` still reports about 190-198ms on the M4.
-  - Acceptance: verify with `pnpm run test:compiler-perf`, `pnpm run check:vp`, push from local `main`,
-    and monitor CI.
+  - Evidence: `473060818` raised only the `many-small-components` Linux cold budget to 750ms; local
+    `pnpm run test:compiler-perf`, `pnpm run check:vp`, and GitHub CI run `28493223012` passed.
 
 - [ ] **Do not duplicate active worker work.**
   - Integrated B worker: `019f1bdd-fc74-78e1-9fe2-e26e138a629d` as `dcb8202ed`.
