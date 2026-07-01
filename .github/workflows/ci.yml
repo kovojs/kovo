@@ -125,34 +125,35 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - shard: scaffold-typecheck-postgres-assets
+          # Grouped from the 2026-07-01 starter timings to keep each shard near
+          # 3-6 minutes while avoiding one runner setup per small file.
+          - shard: raw-sql-typecheck
             files: >-
+              packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
               packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
-              packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts
+          - shard: security-assets
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.security.test.ts
               packages/create-kovo/src/index.build.prod-artifact.assets.test.ts
-          - shard: scaffold-sqlite-packed
+          - shard: runtime-sqlite-check
             files: >-
+              packages/create-kovo/src/index.build.runtime.test.ts
               packages/create-kovo/src/index.build.scaffold.sqlite.test.ts
-              packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts
-          - shard: scaffold-production
-            files: packages/create-kovo/src/index.build.scaffold.production.test.ts
-          - shard: prod-artifact-contacts
-            files: packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts
-          - shard: prod-artifact-durable-transactions
+          - shard: production-postgres-retry
             files: >-
-              packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts
+              packages/create-kovo/src/index.build.scaffold.production.test.ts
+              packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts
               packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts
+          - shard: contacts-sqlite-transactions
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts
+              packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts
               packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts
-          - shard: prod-artifact-raw-sql
-            files: packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
-          - shard: prod-artifact-security
-            files: packages/create-kovo/src/index.build.prod-artifact.security.test.ts
-          - shard: packed-runtime-contracts
+          - shard: durable-packed-runtime-contracts
             files: >-
               packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts
               packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts
-          - shard: runtime
-            files: packages/create-kovo/src/index.build.runtime.test.ts
+              packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
