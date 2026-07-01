@@ -740,10 +740,10 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     );
   });
 
-  it('reports KV302 from a non-Drizzle query imported through a local re-export barrel', async () => {
+  it('reports KV302 from a non-Drizzle query imported through a data-subpath re-export barrel', async () => {
     const root = await fixture({
       'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_INVALID_COMPONENT,
-      'src/query-barrel.ts': 'export { query } from "@kovojs/server";',
+      'src/query-barrel.ts': 'export { query } from "@kovojs/server/api/data";',
       'src/status.ts': NON_DRIZZLE_OUTPUT_BARREL_QUERY_SOURCE,
     });
     const captured: CapturedReport[] = [];

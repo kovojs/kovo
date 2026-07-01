@@ -1,4 +1,14 @@
 import {
+  frameworkCatalogExportForModuleSpecifier,
+  frameworkCatalogExportForSourcePath,
+  type FrameworkExportIdentity as CanonicalFrameworkExportIdentity,
+  type FrameworkIdentityModule as CanonicalFrameworkModule,
+} from '@kovojs/core/internal/framework-identity';
+export type {
+  FrameworkExportIdentity as CanonicalFrameworkExportIdentity,
+  FrameworkIdentityModule as CanonicalFrameworkModule,
+} from '@kovojs/core/internal/framework-identity';
+import {
   Node,
   SyntaxKind,
   type BindingElement,
@@ -6,20 +16,6 @@ import {
   type Symbol as MorphSymbol,
   type Type as MorphType,
 } from 'ts-morph';
-
-/** @internal */
-export type CanonicalFrameworkModule =
-  | '@kovojs/browser'
-  | '@kovojs/core'
-  | '@kovojs/drizzle'
-  | '@kovojs/server'
-  | 'drizzle-orm';
-
-/** @internal */
-export interface CanonicalFrameworkExportIdentity {
-  exportName: string;
-  module: CanonicalFrameworkModule;
-}
 
 /** @internal */
 export interface FrameworkIdentityOptions {
@@ -30,56 +26,6 @@ export interface FrameworkIdentityOptions {
    */
   legacyGlobals?: readonly CanonicalFrameworkExportIdentity[];
 }
-
-const SERVER_EXPORTS = new Set([
-  'adminAssign',
-  'domain',
-  'encryptAtRest',
-  'endpoint',
-  'hashPassword',
-  'mutation',
-  'query',
-  'Reader',
-  'route',
-  's',
-  'serverValue',
-  'stream',
-  'tag',
-  'task',
-  'webhook',
-  'write',
-]);
-
-const DRIZZLE_EXPORTS = new Set(['kovo', 'kovoAnalyzerSummary', 'sql', 'staticSql', 'trustedSql']);
-const BROWSER_EXPORTS = new Set(['trustedHtml', 'trustedUrl']);
-const CORE_EXPORTS = new Set(['trustedReveal']);
-const DRIZZLE_ORM_EXPORTS = new Set([
-  'avg',
-  'avgDistinct',
-  'count',
-  'countDistinct',
-  'max',
-  'min',
-  'sql',
-  'sum',
-  'sumDistinct',
-]);
-
-const MODULE_EXPORTS: Readonly<Record<CanonicalFrameworkModule, ReadonlySet<string>>> = {
-  '@kovojs/browser': BROWSER_EXPORTS,
-  '@kovojs/core': CORE_EXPORTS,
-  '@kovojs/drizzle': DRIZZLE_EXPORTS,
-  '@kovojs/server': SERVER_EXPORTS,
-  'drizzle-orm': DRIZZLE_ORM_EXPORTS,
-};
-
-const SERVER_MODULE_SPECIFIERS = new Set([
-  '@kovojs/server',
-  '@kovojs/server/api/data',
-  '@kovojs/server/api/rendering',
-  '@kovojs/server/api/routing',
-  '@kovojs/server/write-governance',
-]);
 
 /** @internal */
 export function frameworkExport(
@@ -497,35 +443,7 @@ function sourcePathIdentity(
   filePath: string,
   exportName: string,
 ): CanonicalFrameworkExportIdentity | undefined {
-  const normalized = filePath.replaceAll('\\', '/');
-  if (
-    (knownPackageSourceFile(normalized, 'server') || normalized.includes('/@kovojs/server/')) &&
-    SERVER_EXPORTS.has(exportName)
-  ) {
-    return frameworkExport('@kovojs/server', exportName);
-  }
-  if (
-    (knownPackageSourceFile(normalized, 'drizzle') || normalized.includes('/@kovojs/drizzle/')) &&
-    DRIZZLE_EXPORTS.has(exportName)
-  ) {
-    return frameworkExport('@kovojs/drizzle', exportName);
-  }
-  if (
-    (knownPackageSourceFile(normalized, 'browser') || normalized.includes('/@kovojs/browser/')) &&
-    BROWSER_EXPORTS.has(exportName)
-  ) {
-    return frameworkExport('@kovojs/browser', exportName);
-  }
-  if (
-    (knownPackageSourceFile(normalized, 'core') || normalized.includes('/@kovojs/core/')) &&
-    CORE_EXPORTS.has(exportName)
-  ) {
-    return frameworkExport('@kovojs/core', exportName);
-  }
-  if (normalized.includes('drizzle-orm') && DRIZZLE_ORM_EXPORTS.has(exportName)) {
-    return frameworkExport('drizzle-orm', exportName);
-  }
-  return undefined;
+  return frameworkCatalogExportForSourcePath(filePath, exportName);
 }
 
 function ambientModuleDeclarationIdentity(
@@ -539,58 +457,11 @@ function ambientModuleDeclarationIdentity(
     : undefined;
 }
 
-function knownPackageSourceFile(
-  normalizedPath: string,
-  packageName: 'browser' | 'core' | 'drizzle' | 'server',
-): boolean {
-  const relative = normalizedPath.split(`/packages/${packageName}/src/`)[1];
-  if (!relative) return false;
-  const withoutExtension = relative.replace(/\.[cm]?[jt]sx?$/, '');
-  switch (packageName) {
-    case 'browser':
-      return withoutExtension === 'index' || withoutExtension === 'security-output';
-    case 'core':
-      return withoutExtension === 'index' || withoutExtension === 'secret';
-    case 'drizzle':
-      return withoutExtension === 'runtime' || withoutExtension === 'drizzle-surface';
-    case 'server':
-      return new Set([
-        'api/data',
-        'api/rendering',
-        'api/routing',
-        'confidential-at-rest',
-        'domain',
-        'index',
-        'managed-db',
-        'mutation',
-        'password',
-        'query',
-        'route',
-        'task',
-        'write-governance',
-      ]).has(withoutExtension);
-  }
-}
-
 function moduleSpecifierIdentity(
   specifier: string | undefined,
   exportName: string,
 ): CanonicalFrameworkExportIdentity | undefined {
-  const module = canonicalModuleSpecifier(specifier);
-  if (!module) return undefined;
-  return MODULE_EXPORTS[module].has(exportName) ? frameworkExport(module, exportName) : undefined;
-}
-
-function canonicalModuleSpecifier(
-  specifier: string | undefined,
-): CanonicalFrameworkModule | undefined {
-  if (!specifier) return undefined;
-  if (SERVER_MODULE_SPECIFIERS.has(specifier)) return '@kovojs/server';
-  if (specifier === '@kovojs/drizzle') return '@kovojs/drizzle';
-  if (specifier === '@kovojs/browser') return '@kovojs/browser';
-  if (specifier === '@kovojs/core') return '@kovojs/core';
-  if (specifier === 'drizzle-orm') return 'drizzle-orm';
-  return undefined;
+  return frameworkCatalogExportForModuleSpecifier(specifier, exportName);
 }
 
 function legacyGlobalIdentity(

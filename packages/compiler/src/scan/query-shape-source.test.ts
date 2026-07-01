@@ -35,6 +35,39 @@ export const audit = data.query({
     );
   });
 
+  it('extracts output schemas through root and data-subpath aliases from the shared catalog', () => {
+    const facts = outputSchemaQueryShapeFactsFromSource(
+      'queries.ts',
+      `
+import { query as rootQuery, s as rootSchema } from '@kovojs/server';
+import { query as dataQuery, s as dataSchema } from '@kovojs/server/api/data';
+
+const defineRoot = rootQuery;
+const defineData = dataQuery;
+const sr = rootSchema;
+const sd = dataSchema;
+
+export const fromRoot = defineRoot({
+  output: sr.object({ name: sr.string() }),
+  load: () => ({ name: 'Desk' }),
+});
+
+export const fromData = defineData({
+  output: sd.object({ total: sd.number() }),
+  load: () => ({ total: 1 }),
+});
+`,
+    );
+
+    expect(facts).toHaveLength(2);
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ query: 'fromData', shape: { total: 'number' } }),
+        expect.objectContaining({ query: 'fromRoot', shape: { name: 'string' } }),
+      ]),
+    );
+  });
+
   it('does not extract schemas from local query lookalikes', () => {
     expect(
       outputSchemaQueryShapeFactsFromSource(

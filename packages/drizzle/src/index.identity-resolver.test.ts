@@ -228,4 +228,65 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
       expressionResolvesToFrameworkExport(localShadowCall!.getExpression(), taskIdentity),
     ).toBe(false);
   });
+
+  it('recognizes catalog-backed root, subpath, and local re-export identities', () => {
+    const project = new Project({ useInMemoryFileSystem: true });
+    project.createSourceFile(
+      '/app/framework.ts',
+      [
+        'export { query as dataQuery, s as dataSchema } from "@kovojs/server/api/data";',
+        'export { adminAssign as grantInput } from "@kovojs/server/write-governance";',
+        'export { sql as kovoSql, trustedSql as reviewedSql } from "@kovojs/drizzle";',
+      ].join('\n'),
+    );
+    const sourceFile = project.createSourceFile(
+      '/app/catalog.ts',
+      [
+        'import { query as rootQuery, s as rootSchema } from "@kovojs/server";',
+        'import * as framework from "./framework";',
+        'const { dataQuery, dataSchema, grantInput, kovoSql, reviewedSql } = framework;',
+        '',
+        'export const fromRoot = rootQuery({ output: rootSchema.object({ id: rootSchema.string() }), load: () => ({ id: "1" }) });',
+        'export const fromSubpath = dataQuery({ output: dataSchema.object({ id: dataSchema.string() }), load: () => ({ id: "1" }) });',
+        'export const role = grantInput("admin", "catalog identity test");',
+        'export const statement = reviewedSql(kovoSql`select 1`, { justification: "catalog identity test" });',
+        'function query(value: unknown): unknown { return value; }',
+        'export const fake = query({ load: () => ({}) });',
+      ].join('\n'),
+    );
+
+    const calls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression);
+    const expressionByText = new Map(calls.map((call) => [call.getExpression().getText(), call]));
+
+    expect(
+      expressionResolvesToFrameworkExport(
+        expressionByText.get('rootQuery')!.getExpression(),
+        frameworkExport('@kovojs/server', 'query'),
+      ),
+    ).toBe(true);
+    expect(
+      expressionResolvesToFrameworkExport(
+        expressionByText.get('dataQuery')!.getExpression(),
+        frameworkExport('@kovojs/server', 'query'),
+      ),
+    ).toBe(true);
+    expect(
+      expressionResolvesToFrameworkExport(
+        expressionByText.get('grantInput')!.getExpression(),
+        frameworkExport('@kovojs/server', 'adminAssign'),
+      ),
+    ).toBe(true);
+    expect(
+      expressionResolvesToFrameworkExport(
+        expressionByText.get('reviewedSql')!.getExpression(),
+        frameworkExport('@kovojs/drizzle', 'trustedSql'),
+      ),
+    ).toBe(true);
+    expect(
+      expressionResolvesToFrameworkExport(
+        expressionByText.get('query')!.getExpression(),
+        frameworkExport('@kovojs/server', 'query'),
+      ),
+    ).toBe(false);
+  });
 });
