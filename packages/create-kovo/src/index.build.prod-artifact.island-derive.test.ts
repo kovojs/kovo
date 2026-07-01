@@ -28,6 +28,7 @@ import {
 } from './index.test-support.js';
 
 describe('create-kovo starter (build integration: production island derives)', () => {
+  // @kovo-security-certifies KV311 island-derive-prod-artifact
   it('hydrates destructured state aliases from the production artifact without stale or throwing derives', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });

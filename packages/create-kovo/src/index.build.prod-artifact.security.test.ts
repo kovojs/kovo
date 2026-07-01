@@ -32,6 +32,7 @@ import {
 } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production security artifacts)', () => {
+  // @kovo-security-certifies KV435 local-helper-credential-laundering
   it('blocks local-helper Better Auth credential laundering from the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -79,6 +80,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 120_000);
 
+  // @kovo-security-certifies KV433 storage-query-write-prod-artifact
   it('blocks storage writes from query loaders in the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
@@ -108,6 +110,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 120_000);
 
+  // @kovo-security-certifies KV426 trusted-output-prod-artifact
   it('blocks trusted output provenance leaks through the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });

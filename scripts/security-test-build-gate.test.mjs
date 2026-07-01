@@ -12,8 +12,12 @@ import {
   securityTestBuildGateViolations,
 } from './security-test-build-gate.mjs';
 
+const METAMORPHIC_CERTIFICATION_SOURCES = SECURITY_BUILD_CERTIFICATION_SOURCES.filter(
+  (source) => source.claimExtractor === 'metamorphic-seed-codes',
+);
+
 describe('security-test-build-gate', () => {
-  it('keeps the enrolled fixture-only security corpus tied to real kovo build tests', () => {
+  it('keeps the enrolled security certification corpus tied to real kovo build tests', () => {
     expect(securityTestBuildGateViolations()).toEqual([]);
   });
 
@@ -152,7 +156,7 @@ describe('security-test-build-gate', () => {
 
       expect(
         securityTestBuildGateViolations({
-          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          certificationSources: METAMORPHIC_CERTIFICATION_SOURCES,
           proofs: [],
           repoRoot,
         }),
@@ -178,7 +182,7 @@ describe('security-test-build-gate', () => {
 
       expect(
         securityTestBuildGateViolations({
-          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          certificationSources: METAMORPHIC_CERTIFICATION_SOURCES,
           proofs: [
             {
               buildInvocation: 'cli-main-build',
@@ -211,7 +215,7 @@ describe('security-test-build-gate', () => {
 
       expect(
         securityTestBuildGateViolations({
-          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          certificationSources: METAMORPHIC_CERTIFICATION_SOURCES,
           proofs: [
             {
               buildInvocation: 'cli-main-build',
@@ -245,7 +249,7 @@ describe('security-test-build-gate', () => {
 
       expect(
         securityTestBuildGateViolations({
-          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          certificationSources: METAMORPHIC_CERTIFICATION_SOURCES,
           proofs: [
             {
               buildInvocation: 'starter-build-production-artifact',
@@ -280,7 +284,7 @@ describe('security-test-build-gate', () => {
 
       expect(
         securityTestBuildGateViolations({
-          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          certificationSources: METAMORPHIC_CERTIFICATION_SOURCES,
           proofs: [
             {
               buildInvocation: 'starter-build-production-artifact',
@@ -321,7 +325,7 @@ describe('security-test-build-gate', () => {
 
       expect(
         securityTestBuildGateViolations({
-          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          certificationSources: METAMORPHIC_CERTIFICATION_SOURCES,
           proofs: [
             {
               buildInvocation: 'cli-main-build',
@@ -353,7 +357,7 @@ describe('security-test-build-gate', () => {
 
       expect(
         securityTestBuildGateViolations({
-          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          certificationSources: METAMORPHIC_CERTIFICATION_SOURCES,
           proofs: [
             {
               buildInvocation: 'cli-main-build',
@@ -387,7 +391,7 @@ describe('security-test-build-gate', () => {
 
       expect(
         securityTestBuildGateViolations({
-          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          certificationSources: METAMORPHIC_CERTIFICATION_SOURCES,
           proofs: [
             {
               buildInvocation: 'cli-main-build',

@@ -10,6 +10,7 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
   'KV414',
   'KV422',
   'KV426',
+  'KV433',
   'KV435',
   'KV311',
   'KV330',
@@ -20,6 +21,21 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
     claimExtractor: 'metamorphic-seed-codes',
     description: 'Phase 0 metamorphic fixture-only security seeds',
     file: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
+  },
+  {
+    claimExtractor: 'security-certification-markers',
+    description: 'Production artifact security certification tests',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  },
+  {
+    claimExtractor: 'security-certification-markers',
+    description: 'Production artifact island derive certification tests',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+  },
+  {
+    claimExtractor: 'security-certification-markers',
+    description: 'CLI build preflight security certification tests',
+    file: 'packages/cli/src/index.kovo-build.test.ts',
   },
 ];
 
@@ -70,6 +86,53 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
+    claimId: 'local-helper-credential-laundering',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addAuthSecretLeakProof(root)',
+      'buildProductionArtifact(root)',
+      'KV435',
+      'Secret query value reaches the client wire',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'blocks local-helper Better Auth credential laundering from the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'storage-query-write-prod-artifact',
+    code: 'KV433',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addStorageQueryWriteProof(root)',
+      'buildProductionArtifact(root)',
+      'KV433',
+      'operation=put',
+      'operation=store',
+      'operation=upload',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'blocks storage writes from query loaders in the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'trusted-output-prod-artifact',
+    code: 'KV426',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addTrustedOutputProvenanceBuildProof(root)',
+      'buildProductionArtifact(root)',
+      'KV426',
+      'trustedUrl() sends query-derived data',
+      'renderedHtml() sends query-derived data',
+      'trustedHtml() sends request-derived data',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'blocks trusted output provenance leaks through the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
     code: 'KV311',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
     requiredNeedles: [
@@ -82,10 +145,40 @@ export const SECURITY_BUILD_PROOFS = [
       'hydrates destructured state aliases from the production artifact without stale or throwing derives',
   },
   {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'island-derive-prod-artifact',
+    code: 'KV311',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+    requiredNeedles: [
+      'buildProductionArtifact(root)',
+      'assertProdArtifactSinkCensus(root',
+      'expect(pageErrors).toEqual([])',
+      'expect(consoleErrors).toEqual([])',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+    testName:
+      'hydrates destructured state aliases from the production artifact without stale or throwing derives',
+  },
+  {
     buildInvocation: 'cli-main-build',
     code: 'KV330',
     proofFile: 'packages/cli/src/index.kovo-build.test.ts',
     sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
+    testName: 'blocks task and webhook direct DB writes during build check preflight',
+  },
+  {
+    buildInvocation: 'cli-main-build',
+    claimId: 'handler-direct-db-build-preflight',
+    code: 'KV330',
+    proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+    requiredNeedles: [
+      'handlerWriteSinkPreflightAppModuleSource()',
+      "mainAsync(['build', './app.ts', '--out', './dist', '--no-cache'])",
+      'Direct db access in a mutation handler',
+      'Direct db access in a task run body',
+      'Direct db access in a webhook handler',
+    ],
+    sourceFile: 'packages/cli/src/index.kovo-build.test.ts',
     testName: 'blocks task and webhook direct DB writes during build check preflight',
   },
 ];

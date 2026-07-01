@@ -1247,6 +1247,7 @@ export default createApp({
     }
   }, 90_000);
 
+  // @kovo-security-certifies KV330 handler-direct-db-build-preflight
   it('blocks task and webhook direct DB writes during build check preflight', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-handler-write-sinks-'));
     const appPath = join(root, 'app.ts');
