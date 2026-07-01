@@ -34,6 +34,26 @@ function sign(body: string): string {
 }
 
 describe('server webhook primitive', () => {
+  it('types webhook transaction db as transaction-scoped without a public transaction opener', () => {
+    type TxDb = {
+      insert(id: string): void;
+      rows: string[];
+      transaction<Result>(run: (tx: unknown) => Result): Result;
+    };
+
+    const compileOnly = (tx: WebhookTxDb<TxDb>) => {
+      tx.insert('evt_1');
+      const rows: string[] = tx.rows;
+
+      // @ts-expect-error webhook handler tx is already transaction-scoped.
+      tx.transaction((nested) => nested);
+
+      return rows;
+    };
+
+    void compileOnly;
+  });
+
   it('exports a memory replay store that reserves, commits, and replays webhook responses', async () => {
     const store = createPublicMemoryWebhookReplayStore();
     const reservation = store.reserve('webhook:public-store', 'evt_1');

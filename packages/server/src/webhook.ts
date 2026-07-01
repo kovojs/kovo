@@ -120,15 +120,16 @@ export type WebhookDeclaredWriteDomain<Writes extends WebhookDeclaredWrites | un
 >;
 
 /**
- * Transaction-scoped DB handle threaded by the webhook lifecycle (SPEC §10.3). The private-symbol
- * brand makes a raw app DB or long-lived module handle awkward to pass where the handler expects the
+ * Transaction-scoped DB handle threaded by the webhook lifecycle (SPEC §10.3). It preserves the app
+ * DB provider's write surface but hides the raw `.transaction()` opener; the private-symbol brand
+ * makes a raw app DB or long-lived module handle awkward to pass where the handler expects the
  * framework-owned transaction capability.
  *
  * This is an author-time guardrail only (SPEC §6.6): webhook idempotency posture, transaction
  * ordering, SQL provenance, and fail-closed sinks remain the enforcement. Casts/`any` can forge the
  * type and must not be treated as proof.
  */
-export type WebhookTxDb<Db> = Db & {
+export type WebhookTxDb<Db> = (Db extends object ? Omit<Db, 'transaction'> : Db) & {
   readonly [webhookTxDbBrand]: {
     readonly db: Db;
     readonly scope: 'webhook-transaction';
