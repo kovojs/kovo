@@ -74,8 +74,8 @@ packages/server/src/vite-data-plane-gate.test.ts
 packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `git diff --check`;
     `pnpm run check:vp`.
 
-- [ ] **D1. Give enhanced mutation refreshes the same query warning/list-limit chokepoint as SSR and `/_q`.**
-  - Owner: worker `019f1bde-43ab-7080-86a9-042631d99076`.
+- [x] **D1. Give enhanced mutation refreshes the same query warning/list-limit chokepoint as SSR and `/_q`.**
+  - Owner: worker `019f1bde-43ab-7080-86a9-042631d99076`, integrated as `552865d74`.
   - Files:
     `packages/server/src/app-mutation-request.ts`,
     `packages/server/src/mutation-wire.ts`,
@@ -84,15 +84,15 @@ packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `gi
     `packages/server/src/live-target-renderer.ts`,
     `packages/create-kovo/src/index.build.test-support.ts`,
     `packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`.
-  - [ ] Thread `requestLimits.maxQueryListItems` into `MutationWireRequest`.
-  - [ ] Pass the limit into mutation query reruns and live-target query reloads.
-  - [ ] Emit `Kovo-Warn` on successful mutation wire responses using
+  - [x] Thread `requestLimits.maxQueryListItems` into `MutationWireRequest`.
+  - [x] Pass the limit into mutation query reruns and live-target query reloads.
+  - [x] Emit `Kovo-Warn` on successful mutation wire responses using
         `queryRuntimeWarningsFromRequest(...)` and `queryRuntimeWarningHeaderValue(...)`.
-  - [ ] Add server unit coverage for capped mutation query chunks, capped live-target refreshes, and warning
+  - [x] Add server unit coverage for capped mutation query chunks, capped live-target refreshes, and warning
         response headers.
-  - [ ] Add prod-artifact starter coverage served from `dist/server/server.mjs`: enhanced mutation response
+  - [x] Add prod-artifact starter coverage served from `dist/server/server.mjs`: enhanced mutation response
         returns `Kovo-Warn: QUERY_LIST_LIMIT ...;limit=2` and capped output.
-  - Acceptance: `vp exec vitest --run packages/server/src/mutation-response.test.ts
+  - Evidence: `vp exec vitest --run packages/server/src/mutation-response.test.ts
 packages/server/src/app-mutation-request.test.ts packages/server/src/live-target-renderer.test.tsx
 packages/server/src/mutation-delta.test.ts`; `vp exec vitest --run
 packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`; `git diff --check`;
