@@ -154,6 +154,12 @@ jobs:
               packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts
               packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts
               packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts
+          - shard: defer-headers-redirect-islands
+            files: >-
+              packages/create-kovo/src/index.build.prod-artifact.defer.test.ts
+              packages/create-kovo/src/index.build.prod-artifact.headers.test.ts
+              packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts
+              packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1

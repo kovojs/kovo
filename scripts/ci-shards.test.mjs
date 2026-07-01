@@ -114,6 +114,9 @@ describe('ci-shards', () => {
     expect(
       includeVitest('packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts'),
     ).toBe(false);
+    expect(
+      includeVitest('packages/create-kovo/src/index.build.prod-artifact.defer.test.ts'),
+    ).toBe(false);
     expect(includeVitest('packages/create-kovo/src/index.build.prod-artifact.assets.test.ts')).toBe(
       false,
     );
@@ -129,6 +132,15 @@ describe('ci-shards', () => {
     ).toBe(false);
     expect(
       includeVitest('packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts'),
+    ).toBe(false);
+    expect(
+      includeVitest('packages/create-kovo/src/index.build.prod-artifact.headers.test.ts'),
+    ).toBe(false);
+    expect(
+      includeVitest('packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts'),
+    ).toBe(false);
+    expect(
+      includeVitest('packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts'),
     ).toBe(false);
     expect(
       includeVitest('packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts'),
