@@ -1,9 +1,12 @@
 import type { WebhookVerifier } from '@kovojs/core';
 import type { AccessDecision } from './access.js';
+import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
   assertEndpointResponsePosture,
   endpointRequestWithoutSession,
 } from './response-posture.js';
+
+export type { RedirectLocationAllowlistEntry } from './response.js';
 
 /** HTTP method for an endpoint; arbitrary strings are allowed for custom verbs. */
 export type EndpointMethod = 'DELETE' | 'GET' | 'PATCH' | 'POST' | 'PUT' | (string & {});
@@ -34,6 +37,11 @@ export interface EndpointResponsePosture {
   appOwnedSafety: boolean;
   body: EndpointResponseBodyPosture;
   cache: EndpointCachePosture;
+  /**
+   * Exact cross-origin redirect origins this raw endpoint may emit in a `Location` header.
+   * Same-origin paths need no entry; external origins require an audit-readable reason.
+   */
+  redirectAllowlist?: readonly RedirectLocationAllowlistEntry[];
   /**
    * Reserved response headers this raw endpoint intentionally writes. Framework protocol,
    * credential, redirect, and security-policy headers are rejected by the dev/CI posture verifier

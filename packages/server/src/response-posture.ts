@@ -9,6 +9,8 @@ import {
   readHeader,
   redirectLocationHeader,
   redirectLocationHeaderValue,
+  type RedirectLocationAllowlistEntry,
+  type RedirectLocationOptions,
   type ResponseHeaders,
   type ServerResponseBase,
   type WebResponseBody,
@@ -200,8 +202,9 @@ export function finalizeServerResponse(
 export function finalizeRawWebResponse(
   response: Response,
   request: Pick<Request, 'method'>,
+  options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[] } = {},
 ): Response {
-  const finalizedHeaders = finalizeRawResponseHeaders(response);
+  const finalizedHeaders = finalizeRawResponseHeaders(response, options);
   const suppressBody = request.method === 'HEAD' || response.status === 304;
   if (!suppressBody && finalizedHeaders === response.headers) return response;
 
@@ -255,6 +258,18 @@ export function assertEndpointResponsePosture(
   }
   const bodyPosture = endpointResponseBodyPostures(definition.response.body);
   if (bodyPosture.includes('redirect') && response.status >= 300 && response.status < 400) {
+    const location = response.headers.get('location');
+    if (
+      location !== null &&
+      redirectLocationHeader(
+        location,
+        redirectLocationOptions(definition.response.redirectAllowlist),
+      ) !== location
+    ) {
+      failures.push(
+        'redirect Location must be same-origin or match response.redirectAllowlist with a rationale',
+      );
+    }
     assertEndpointReservedHeaders(definition, response, failures);
     if (failures.length === 0) return;
     throw endpointPostureError(definition, failures);
@@ -308,7 +323,10 @@ function finalizeResponseHeaders(
   return webHeaders;
 }
 
-function finalizeRawResponseHeaders(response: Response): Headers {
+function finalizeRawResponseHeaders(
+  response: Response,
+  options: { redirectAllowlist?: readonly RedirectLocationAllowlistEntry[] },
+): Headers {
   const hasRedirectLocation = isRedirectStatus(response.status) && response.headers.has('location');
   const setCookies = rawSetCookieHeaders(response.headers);
   if (!hasRedirectLocation && setCookies.length === 0) return response.headers;
@@ -317,7 +335,10 @@ function finalizeRawResponseHeaders(response: Response): Headers {
   response.headers.forEach((value, name) => {
     if (name.toLowerCase() === 'set-cookie') return;
     if (hasRedirectLocation && name.toLowerCase() === 'location') {
-      webHeaders.set(name, redirectLocationHeader(value));
+      webHeaders.set(
+        name,
+        redirectLocationHeader(value, redirectLocationOptions(options.redirectAllowlist)),
+      );
       return;
     }
     webHeaders.set(name, value);
@@ -331,6 +352,12 @@ function finalizeRawResponseHeaders(response: Response): Headers {
   }
 
   return webHeaders;
+}
+
+function redirectLocationOptions(
+  allowlist: readonly RedirectLocationAllowlistEntry[] | undefined,
+): RedirectLocationOptions {
+  return allowlist === undefined ? {} : { allowlist };
 }
 
 function rawSetCookieHeaders(headers: Headers): string[] {
