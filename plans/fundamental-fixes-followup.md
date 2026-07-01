@@ -79,29 +79,42 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 
 **(b) Output / wire sinks** — close via C2 (enumerate from the emitted artifact; proof-or-KV406):
 
-- [ ] SSR document HTML [C2]
-  - [ ] SSR route render text is escaped in the production document [C2]
-  - [ ] SSR raw/trusted HTML boundaries require proof-or-KV406 [C2]
+- [x] SSR document HTML [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] SSR route render text is escaped in the production document [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot` served the no-cache production artifact and observed escaped attacker text; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
+  - [x] SSR raw/trusted HTML boundaries require proof-or-KV406 [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot` enrolled production sink-census witnesses for framework-owned `trustedHtml`/escaped SSR boundaries; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
 - [x] `/_q` query response [C2]
       Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
   - [x] `/_q` query response body escapes client-visible HTML [C2]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot` passed the default+SQLite prod-artifact `/_q` attacker body proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` killed `server-wire-html/drop-query-wire-body-escaping`.
   - [x] `/_q` query response headers do not expose session data to shared caches [C2]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot` passed the default+SQLite prod-artifact `/_q` private-cache proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` killed `server-wire-html/drop-query-wire-body-escaping`.
-- [ ] mutation delta / enhanced-mutation response [C2]
-  - [ ] enhanced mutation fragment bodies escape client-visible HTML [C2]
-  - [ ] mutation-triggered query refreshes preserve query wire bounds [C2]
+- [x] mutation delta / enhanced-mutation response [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] enhanced mutation fragment bodies escape client-visible HTML [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot` passed default+SQLite prod-artifact enhanced mutation proofs and observed escaped fragment HTML; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
+  - [x] mutation-triggered query refreshes preserve query wire bounds [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot` passed default+SQLite prod-artifact enhanced mutation proofs and observed escaped `<kovo-query>` refresh wire; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
 - [ ] streaming / `<Defer>` chunks [C2]
   - [ ] `<Defer>` shell streams before slow regions complete [C2]
   - [ ] `<Defer>` region failures isolate to their own fallback [C2]
   - [ ] streamed `<Defer>` chunks escape attacker markup and private details [C2]
-- [ ] response headers (incl. `Set-Cookie`, redirects) [C2]
-  - [ ] route outcome headers reject CRLF injection [C2]
-  - [ ] typed and raw `Set-Cookie` paths normalize safe cookies and reject unsafe cookies [C2]
-  - [ ] redirect `Location` headers are sanitized before send [C2]
-- [ ] error shells / 500 bodies [C2]
-  - [ ] 500 shells escape request-controlled payloads [C2]
-  - [ ] 500 shells exclude private exception details [C2]
+- [x] response headers (incl. `Set-Cookie`, redirects) [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] route outcome headers reject CRLF injection [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot` passed the no-cache prod-artifact route-header CRLF rejection proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled header/security gates.
+  - [x] typed and raw `Set-Cookie` paths normalize safe cookies and reject unsafe cookies [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot` passed typed mutation cookie, raw endpoint cookie normalization, and unsafe cookie rejection in the production artifact; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled header/security gates.
+  - [x] redirect `Location` headers are sanitized before send [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot` passed the no-cache prod-artifact raw redirect sanitization proof; M2 proof calls `buildProductionArtifact(root)` and `assertProdArtifactSinkCensus(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled header/security gates.
+- [x] error shells / 500 bodies [C2]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
+  - [x] 500 shells escape request-controlled payloads [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot` passed the no-cache prod-artifact no-JS 500 body proof and excluded submitted `<script>` payload; M2 proof calls `buildProductionArtifact(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
+  - [x] 500 shells exclude private exception details [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot` passed the no-cache prod-artifact no-JS 500 body proof and excluded private exception detail; M2 proof calls `buildProductionArtifact(root)`; M3 `pnpm run check:security-gate-mutations` covers the enrolled server-wire/security gates.
 - [ ] capability URLs / signed payloads [C2]
   - [ ] capability URLs mint and verify against the production artifact [C2]
   - [ ] tampered capability path/query payloads reject before read [C2]
