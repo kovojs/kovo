@@ -2360,14 +2360,14 @@ function trustedRevealValueExpression(expression: ts.Expression): ts.Expression 
   const revealValue = trustedRevealValueExpression(expression);
   if (revealValue) return isOpaqueProjection(revealValue);
   const node = unwrappedTsExpression(expression);
-  if (ts.isTaggedTemplateExpression(node)) return staticTsExpressionPath(node.tag) === 'sql';
+  if (ts.isTaggedTemplateExpression(node)) return isTsKovoSqlExpression(node.tag);
   if (!ts.isCallExpression(node)) return false;
 
-  const callee = staticTsExpressionPath(node.expression);
+  const callee = unwrappedTsExpression(node.expression);
   return (
-    callee === 'sql' ||
-    callee === 'raw' ||
-    callee?.startsWith('sql.') === true ||
+    isTsKovoSqlExpression(callee) ||
+    (ts.isPropertyAccessExpression(callee) && isTsKovoSqlExpression(callee.expression)) ||
+    staticTsExpressionPath(callee) === 'raw' ||
     isDrizzleAggregateHelperProjection(node)
   );
 }
@@ -2436,11 +2436,11 @@ function isAggregateHelperName(name: string): boolean {
       ? node.typeArguments
       : undefined;
   const callee = ts.isTaggedTemplateExpression(node)
-    ? staticTsExpressionPath(node.tag)
+    ? node.tag
     : ts.isCallExpression(node)
-      ? staticTsExpressionPath(node.expression)
+      ? node.expression
       : undefined;
-  if (callee !== 'sql' || typeArguments?.length !== 1) return null;
+  if (!callee || !isTsKovoSqlExpression(callee) || typeArguments?.length !== 1) return null;
 
   const typeText = typeArguments[0]?.getText(node.getSourceFile()).trim();
   const shape =
@@ -2454,6 +2454,106 @@ function isAggregateHelperName(name: string): boolean {
   if (!shape) return null;
   if (isTimeVolatileSqlProjection(expression)) return { kind: 'volatile-time', shape };
   return shape;
+}
+
+function isTsKovoSqlExpression(expression: ts.Expression): boolean {
+  const node = unwrappedTsExpression(expression);
+  const bindings = kovoSqlBindings(node.getSourceFile());
+
+  if (ts.isIdentifier(node)) {
+    if (bindings.named.has(node.text)) return true;
+    if (bindings.aliases.has(node.text)) return true;
+    return node.text === 'sql' && !hasTsLocalBinding(node.getSourceFile(), node.text);
+  }
+
+  if (ts.isPropertyAccessExpression(node) && node.name.text === 'sql') {
+    const receiver = unwrappedTsExpression(node.expression);
+    return ts.isIdentifier(receiver) && bindings.namespaces.has(receiver.text);
+  }
+
+  return false;
+}
+
+function kovoSqlBindings(sourceFile: ts.SourceFile): {
+  aliases: ReadonlySet<string>;
+  named: ReadonlySet<string>;
+  namespaces: ReadonlySet<string>;
+} {
+  const aliases = new Set<string>();
+  const named = new Set<string>();
+  const namespaces = new Set<string>();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const moduleSpecifier = statement.moduleSpecifier;
+    if (!ts.isStringLiteral(moduleSpecifier) || moduleSpecifier.text !== '@kovojs/drizzle') {
+      continue;
+    }
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings) continue;
+    if (ts.isNamespaceImport(bindings)) {
+      namespaces.add(bindings.name.text);
+      continue;
+    }
+    for (const specifier of bindings.elements) {
+      const imported = specifier.propertyName?.text ?? specifier.name.text;
+      if (imported === 'sql') named.add(specifier.name.text);
+    }
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const statement of sourceFile.statements) {
+      if (!ts.isVariableStatement(statement)) continue;
+      if ((ts.getCombinedNodeFlags(statement.declarationList) & ts.NodeFlags.Const) === 0) {
+        continue;
+      }
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+        if (!isTsKovoSqlReference(declaration.initializer, named, namespaces, aliases)) continue;
+        const before = aliases.size;
+        aliases.add(declaration.name.text);
+        changed ||= aliases.size !== before;
+      }
+    }
+  }
+
+  return { aliases, named, namespaces };
+}
+
+function isTsKovoSqlReference(
+  expression: ts.Expression,
+  named: ReadonlySet<string>,
+  namespaces: ReadonlySet<string>,
+  aliases: ReadonlySet<string>,
+): boolean {
+  const node = unwrappedTsExpression(expression);
+  if (ts.isIdentifier(node)) return named.has(node.text) || aliases.has(node.text);
+  if (!ts.isPropertyAccessExpression(node) || node.name.text !== 'sql') return false;
+  const receiver = unwrappedTsExpression(node.expression);
+  return ts.isIdentifier(receiver) && namespaces.has(receiver.text);
+}
+
+function hasTsLocalBinding(sourceFile: ts.SourceFile, name: string): boolean {
+  for (const statement of sourceFile.statements) {
+    if (ts.isImportDeclaration(statement)) {
+      const bindings = statement.importClause?.namedBindings;
+      if (bindings && ts.isNamedImports(bindings)) {
+        if (bindings.elements.some((element) => element.name.text === name)) return true;
+      }
+      if (bindings && ts.isNamespaceImport(bindings) && bindings.name.text === name) return true;
+      if (statement.importClause?.name?.text === name) return true;
+    }
+    if (ts.isFunctionDeclaration(statement) && statement.name?.text === name) return true;
+    if (ts.isClassDeclaration(statement) && statement.name?.text === name) return true;
+    if (ts.isVariableStatement(statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (ts.isIdentifier(declaration.name) && declaration.name.text === name) return true;
+      }
+    }
+  }
+  return false;
 }
 
 function sourcePosition(node: ts.Node): string {
