@@ -7,8 +7,12 @@ declare const secretBrand: unique symbol;
  * (SPEC §6.2/§9.2/§10.2).
  */
 export interface Secret<T> {
-  readonly __kovoSecretBrand: typeof secretBrand;
-  readonly __kovoSecretValue?: T;
+  readonly [secretBrand]: {
+    readonly kind: 'secret';
+    readonly value: T;
+  };
+  /** Keeps `Secret<T>` outside JsonValue; not a trust proof (SPEC §6.6). */
+  readonly __kovoSecretJsonBoundary?: undefined;
 }
 
 /**
@@ -195,8 +199,12 @@ declare const redactedBrand: unique symbol;
  * safe display form) explicitly.
  */
 export interface Redacted<T> {
-  readonly __kovoRedactedBrand: typeof redactedBrand;
-  readonly __kovoRedactedValue?: T;
+  readonly [redactedBrand]: {
+    readonly kind: 'redacted';
+    readonly value: T;
+  };
+  /** Keeps `Redacted<T>` outside JsonValue; not a trust proof (SPEC §6.6). */
+  readonly __kovoRedactedJsonBoundary?: undefined;
 }
 
 /**

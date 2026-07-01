@@ -36,14 +36,20 @@ describe('createApp provider-typed authoring context', () => {
   it('infers db and session in app-scoped query, mutation, layout, and route callbacks', () => {
     const cart = domain('cart');
     const app = createApp({
-      db: () => ({ cart: [] as string[], stock: 3 }),
+      db: () => ({
+        cart: [] as string[],
+        insert(productId: string) {
+          this.cart.push(productId);
+        },
+        stock: 3,
+      }),
       mutations: ({ mutation }) => [
         mutation('cart/add', {
           csrf: false,
           input: s.object({ productId: s.string() }),
           registry: { touches: [cart] },
           handler(input, request) {
-            request.db.cart.push(input.productId);
+            request.db.insert(input.productId);
             const userId: string | undefined = request.session?.user.id;
 
             // @ts-expect-error provider shape exposes `cart`, not a renamed `basket`.
@@ -60,12 +66,14 @@ describe('createApp provider-typed authoring context', () => {
             return userId || request.db.stock > 0 ? true : { kind: 'unauthenticated' };
           },
           load(_input, context) {
-            context?.request.db.cart.push(context.request.session?.user.id ?? 'anonymous');
+            const stock: number | undefined = context?.request.db.stock;
+            // @ts-expect-error app-scoped query loaders see Reader<Db>, not the write handle.
+            context?.request.db.insert(context.request.session?.user.id ?? 'anonymous');
 
             // @ts-expect-error provider shape exposes `stock`, not a renamed `inventory`.
             void context?.request.db.inventory;
 
-            return { count: context?.request.db.cart.length ?? 0 };
+            return { stock: stock ?? 0 };
           },
           reads: [cart],
         }),
@@ -74,6 +82,8 @@ describe('createApp provider-typed authoring context', () => {
         const CartLayout = layout({
           guard(request) {
             const stock: number = request.db.stock;
+            // @ts-expect-error app-scoped layout guards see Reader<Db>, not the write handle.
+            request.db.insert('p1');
             return request.session?.user.id || stock > 0 ? true : { kind: 'unauthenticated' };
           },
           render(_queries, _state, { children, request }) {
@@ -81,6 +91,8 @@ describe('createApp provider-typed authoring context', () => {
 
             // @ts-expect-error provider shape exposes `stock`, not a renamed `inventory`.
             void request.db.inventory;
+            // @ts-expect-error app-scoped layout render sees Reader<Db>, not the write handle.
+            request.db.insert('p1');
 
             return renderedHtml(`${String(children)}:${userId}:${request.db.stock}`);
           },
@@ -97,6 +109,8 @@ describe('createApp provider-typed authoring context', () => {
 
               // @ts-expect-error provider shape exposes `user.id`, not a renamed `user.uuid`.
               void request.session?.user.uuid;
+              // @ts-expect-error app-scoped route pages see Reader<Db>, not the write handle.
+              request.db.insert('p1');
 
               return renderedHtml(`${count}:${request.session?.user.id}`);
             },

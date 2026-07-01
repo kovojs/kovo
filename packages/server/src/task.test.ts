@@ -70,4 +70,39 @@ describe('durable task definitions (SPEC §9.6)', () => {
     });
     expect(retrying.retry).toEqual({ backoff: 'linear', maxAttempts: 2 });
   });
+
+  it('types task bodies as composition-only capabilities with no raw db', () => {
+    const recordEffect = {
+      input: s.object({ proofId: s.string() }),
+      key: 'proof/record',
+    };
+    const readEffect = {
+      args: s.object({ proofId: s.string() }),
+      key: 'proof/read',
+    };
+    const compact = {
+      key: 'proof/compact',
+    };
+
+    const definition = task('proof/task-capabilities', {
+      input: s.object({ proofId: s.string() }),
+      async run(args, context) {
+        await context.runMutation(recordEffect, { proofId: args.proofId });
+        await context.runQuery(readEffect, { proofId: args.proofId });
+        await context.runQuery(compact, undefined);
+
+        const compileOnly = () => {
+          // @ts-expect-error SPEC §9.6: durable tasks do not receive raw DB handles.
+          void context.db;
+          // @ts-expect-error mutation input stays schema-derived on the composition path.
+          void context.runMutation(recordEffect, { proofId: 42 });
+          // @ts-expect-error query args stay schema-derived on the composition path.
+          void context.runQuery(readEffect, undefined);
+        };
+        void compileOnly;
+      },
+    });
+
+    expect(definition.key).toBe('proof/task-capabilities');
+  });
 });

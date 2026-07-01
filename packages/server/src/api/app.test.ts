@@ -511,6 +511,7 @@ describe('server app-shell public API barrels', () => {
       routingApi.createMemoryWebhookReplayStore,
     );
     expect(publicApi.webhook).toBe(routingApi.webhook);
+    expect(publicApi.readonlyDb).toBe(dataApi.readonlyDb);
     expect(publicApi.customVerifier).toBe(coreCustomVerifier);
     expect(publicApi.hmacSignature).toBe(coreHmacSignature);
     expect(publicApi.standardWebhooks).toBe(coreStandardWebhooks);
@@ -708,8 +709,8 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalEscapeApi).toEqual(internalEscapeApi);
     expect(moduleValueKeys(packageInternalExecutionApi)).toEqual([
       // SPEC §6.6/§9.4/§10.3 (MARQUEE): the framework-owned managed DB handle error +
-      // composition primitives (`managedDb`/`readonlyDb` are @internal-only here; the typed
-      // `KovoReadonlyHandleError` is also re-exported at the root barrel) plus the
+      // composition primitives (`managedDb` stays internal; `readonlyDb` is also public as the
+      // blessed raw-endpoint read helper) plus the
       // `query.elevated(...)` capability-fact drain are reachable on the internal execution subpath
       // so adapters/tests can resolve a read-only/read-write handle the same way the shell does.
       'KovoReadonlyHandleError',

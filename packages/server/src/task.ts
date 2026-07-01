@@ -55,7 +55,13 @@ export type TaskRunnableQueryInput<Query> = Query extends { args: Schema<infer I
   ? Input
   : undefined;
 
-/** Context available to durable task bodies (SPEC §9.6: composition only, no raw db). */
+/**
+ * Context available to durable task bodies (SPEC §9.6: composition only, no raw db).
+ *
+ * Tasks do not receive `db` or a transaction handle. Writes compose through
+ * `ctx.runMutation(...)`, and reads compose through `ctx.runQuery(...)`, so durable background
+ * work reuses the audited mutation/query channels instead of importing a broad app DB handle.
+ */
 export interface TaskRunContext {
   readonly jobId: string;
   /** Stable idempotency key for external APIs; equal to the durable job id (SPEC §9.6). */

@@ -123,5 +123,6 @@ export type {
   WebhookResponseStatus,
   WebhookSuccessStatus,
   WebhookTransactionContext,
+  WebhookTxDb,
   WebhookWireResponse,
 } from '../webhook.js';

@@ -17,8 +17,19 @@ import type { MutationReplayStore } from './replay.js';
 import type { RoutePageResponse } from './response.js';
 import type { LayoutFactory, RouteDeclaration, RouteFactory } from './route.js';
 import type { TaskDefinition, TaskFactory, TaskSchedulingRequest } from './task.js';
+import type { Reader } from './managed-db.js';
 
 type AnyRouteDeclaration = RouteDeclaration<any, any, any, any, any, any>;
+
+/**
+ * Read-surface variant of an app lifecycle request. Query, layout, and route callbacks receive this
+ * shape from app-scoped `createApp()` authoring helpers: if a DB provider exists, `request.db` is a
+ * branded {@link Reader} whose write verbs are absent at author time and rejected by the runtime
+ * proxy (SPEC §6.6 / §10.2 / §10.3).
+ */
+export type AppReadRequest<Request> = Request extends { db: infer DbValue }
+  ? Omit<Request, 'db'> & { db: Reader<DbValue> }
+  : Request;
 
 export type AppLifecycleRequest<
   RawRequest extends globalThis.Request = globalThis.Request,
@@ -46,14 +57,26 @@ export type AppRouteDeclaration<_AppRequest = unknown> = RouteDeclaration<
  * request shape (SPEC §9.5/§10.2/§10.3).
  */
 export interface AppAuthoringContext<AppRequest> {
-  /** Define a layout whose guards, queries, and render slots see the app lifecycle request. */
-  layout: LayoutFactory<AppRequest>;
-  /** Define a query whose `load`/`guard` callbacks see the app lifecycle request. */
-  query: QueryFactory<AppRequest>;
+  /**
+   * Define a layout whose guards, queries, and render slots see the read-surface lifecycle request.
+   * When the app has a DB provider, `request.db` is a branded `Reader<Db>`: write verbs are absent
+   * at author time and throw at runtime (SPEC §6.6 / §10.2 / §10.3).
+   */
+  layout: LayoutFactory<AppReadRequest<AppRequest>>;
+  /**
+   * Define a query whose `load`/`guard` callbacks see the read-surface lifecycle request. Prefer
+   * `context.db`/`context.request.db` over importing a module-level write handle; both are branded
+   * `Reader<Db>` capabilities on the normal path (SPEC §10.2 / KV433).
+   */
+  query: QueryFactory<AppReadRequest<AppRequest>>;
   /** Define a mutation whose `handler`/`guard`/`transaction` callbacks see the app lifecycle request. */
   mutation: MutationFactory<AppRequest & TaskSchedulingRequest>;
-  /** Define a route whose `guard`/`page` callbacks see the app lifecycle request. */
-  route: RouteFactory<AppRequest>;
+  /**
+   * Define a route whose `guard`/`page` callbacks see the read-surface lifecycle request. Document
+   * rendering runs with a read-only managed DB handle; writes belong in `mutation()` or an audited
+   * webhook/endpoint channel (SPEC §6.6 / §10.3).
+   */
+  route: RouteFactory<AppReadRequest<AppRequest>>;
   /** Define a durable task registry entry (SPEC §9.6). */
   task: TaskFactory;
 }

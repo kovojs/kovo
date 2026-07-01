@@ -1,6 +1,6 @@
 import { enhancedMutationHeaders, headerValues, setCookieValues } from '@kovojs/test/headers';
 import { type StructuralMorphNode } from '@kovojs/browser/client';
-import { csrfToken } from '@kovojs/server';
+import { csrfToken, readonlyDb } from '@kovojs/server';
 import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
 import { eq } from 'drizzle-orm';
 
@@ -97,22 +97,22 @@ export function queryContext(db = createCommerceDb()) {
   // SPEC §9.4 (MARQUEE): the loader reads the framework-threaded `context.db`. The request no longer
   // carries the db (the framework owns the handle); it carries only the session for per-user scope.
   return {
-    db,
+    db: readonlyDb(db),
     request: { session: { id: 's-query', user: { id: 'u-query' } } },
   };
 }
 
 // Test entrypoints pass a raw `CommerceDb`. Production loaders receive the framework-owned
-// read-only handle through `context.db`; these helpers stay out of the app module graph.
+// read-only handle through `context.db`; these helpers mirror that by wrapping with `readonlyDb`.
 export async function loadCartQuery(db: CommerceDb): Promise<CartQueryResult> {
-  return cartQuery.load(undefined, { db, request: {} });
+  return cartQuery.load(undefined, { db: readonlyDb(db), request: {} });
 }
 
 export async function loadProductGrid(
   db: CommerceDb,
   input: ProductGridInput = {},
 ): Promise<ProductGridResult> {
-  return productGridQuery.load(input, { db, request: {} });
+  return productGridQuery.load(input, { db: readonlyDb(db), request: {} });
 }
 
 export async function loadOrderHistory(
@@ -120,7 +120,7 @@ export async function loadOrderHistory(
   userId: string,
 ): Promise<OrderHistoryResult> {
   const session = { id: userId, user: { id: userId } };
-  return orderHistoryQuery.load(undefined, { db, request: { session }, session });
+  return orderHistoryQuery.load(undefined, { db: readonlyDb(db), request: { session }, session });
 }
 
 export function commerceAuthRequest(cookie?: string, db = createCommerceDb()) {
