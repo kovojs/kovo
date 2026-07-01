@@ -146,6 +146,7 @@ function compilerQueryShapeFromSchemaExpression(
   if (ts.isPropertyAccessExpression(current)) {
     const receiverShape = compilerQueryShapeFromSchemaExpression(sourceFile, current.expression);
     if (!receiverShape) return null;
+    // Schema modifiers are structural methods after the receiver has resolved to a Kovo schema.
     if (current.name.text === 'optional') return { kind: 'optional', shape: receiverShape };
     if (current.name.text === 'nullable' || current.name.text === 'nullish') {
       return { kind: 'nullable', shape: receiverShape };
@@ -167,6 +168,7 @@ function compilerQueryShapeFromSchemaCall(
   const receiverShape = compilerQueryShapeFromSchemaExpression(sourceFile, receiver);
 
   if (receiverShape) {
+    // Chained schema modifiers remain structural once the receiver's schema shape is proven.
     if (method === 'optional') return { kind: 'optional', shape: receiverShape };
     if (method === 'nullable' || method === 'nullish') {
       return { kind: 'nullable', shape: receiverShape };

@@ -66,6 +66,8 @@ function queryBindingFromParsedExpression(
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
 ): Omit<LiveTargetQueryBindingFact, 'name'> | null {
+  // Query binding strings are compiler-authored structural grammar. `.refresh()` and `.args()`
+  // are chain modifiers on the serialized binding expression, not framework API authority checks.
   const unwrappedExpression = unwrapQueryRefreshExpression(expression);
   const hasRefresh = expressionHasQueryRefresh(expression);
 

@@ -838,7 +838,14 @@ function documentGetElementByIdTarget(
   }
 
   const receiver = unwrapExpression(callee.expression);
-  if (!ts.isIdentifier(receiver) || receiver.text !== 'document') return null;
+  // Platform DOM lowering is structural, but the `document` receiver must still be the unshadowed
+  // browser global; a local lookalike is ordinary user code, not a declarative behavior proof.
+  if (
+    !ts.isIdentifier(receiver) ||
+    !identifierResolvesToUnshadowedGlobal(sourceFile, receiver, 'document')
+  ) {
+    return null;
+  }
 
   const target = call.arguments[0];
   if (!target) return null;
@@ -880,6 +887,95 @@ function isReferenceIdentifier(node: ts.Identifier): boolean {
   if (ts.isPropertyDeclaration(parent) && parent.name === node) return false;
   if (ts.isShorthandPropertyAssignment(parent)) return true;
   return true;
+}
+
+function identifierResolvesToUnshadowedGlobal(
+  sourceFile: ts.SourceFile,
+  identifier: ts.Identifier,
+  globalName: string,
+): boolean {
+  return (
+    identifier.text === globalName &&
+    !identifierIsShadowedBeforeScope(identifier, undefined, sourceFile) &&
+    !scopeDeclaresIdentifierNamed(sourceFile, globalName, undefined)
+  );
+}
+
+function identifierIsShadowedBeforeScope(
+  identifier: ts.Identifier,
+  binding: ts.Identifier | undefined,
+  boundary: ts.Node,
+): boolean {
+  let current: ts.Node | undefined = identifier.parent;
+  while (current && current !== boundary) {
+    if (
+      isLexicalScopeNode(current) &&
+      scopeDeclaresIdentifierNamed(current, identifier.text, binding)
+    ) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
+function scopeDeclaresIdentifierNamed(
+  scope: ts.Node,
+  name: string,
+  excluded: ts.Identifier | undefined,
+): boolean {
+  let found = false;
+
+  const visitBindingName = (bindingName: ts.BindingName): void => {
+    if (ts.isIdentifier(bindingName)) {
+      if (bindingName !== excluded && bindingName.text === name) found = true;
+      return;
+    }
+    for (const element of bindingName.elements) {
+      if (ts.isBindingElement(element)) visitBindingName(element.name);
+    }
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (node !== scope && isFunctionScopeNode(node)) {
+      if (ts.isFunctionDeclaration(node) && node.name) visitBindingName(node.name);
+      return;
+    }
+    if (node !== scope && ts.isClassDeclaration(node)) {
+      if (node.name) visitBindingName(node.name);
+      return;
+    }
+    if (ts.isImportClause(node) && node.name) visitBindingName(node.name);
+    if (ts.isNamespaceImport(node)) visitBindingName(node.name);
+    if (ts.isImportSpecifier(node)) visitBindingName(node.name);
+    if (ts.isParameter(node)) visitBindingName(node.name);
+    if (ts.isVariableDeclaration(node)) visitBindingName(node.name);
+    if (ts.isFunctionDeclaration(node) && node.name) visitBindingName(node.name);
+    if (ts.isClassDeclaration(node) && node.name) visitBindingName(node.name);
+    ts.forEachChild(node, visit);
+  };
+
+  visit(scope);
+  return found;
+}
+
+function isLexicalScopeNode(node: ts.Node): boolean {
+  return (
+    ts.isSourceFile(node) || ts.isBlock(node) || ts.isModuleBlock(node) || isFunctionScopeNode(node)
+  );
+}
+
+function isFunctionScopeNode(node: ts.Node): boolean {
+  return (
+    ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isConstructorDeclaration(node) ||
+    ts.isGetAccessor(node) ||
+    ts.isSetAccessor(node)
+  );
 }
 
 function componentModelFromInitializer(
@@ -1813,12 +1909,21 @@ function isNumericLiteral(sourceFile: ts.SourceFile, node: ts.Node): boolean {
 }
 
 function staticConstructorTypeEntry(
+  sourceFile: ts.SourceFile,
   expression: ts.Expression,
 ): { staticConstructorType: ObjectLiteralEntry['staticConstructorType'] } | {} {
   if (!ts.isIdentifier(expression)) return {};
-  if (expression.text === 'String') return { staticConstructorType: 'string' };
-  if (expression.text === 'Number') return { staticConstructorType: 'number' };
-  if (expression.text === 'Boolean') return { staticConstructorType: 'boolean' };
+  // Component prop constructor shorthand uses platform globals. Local aliases named String/Number/
+  // Boolean are app values and must not become static prop schema facts.
+  if (identifierResolvesToUnshadowedGlobal(sourceFile, expression, 'String')) {
+    return { staticConstructorType: 'string' };
+  }
+  if (identifierResolvesToUnshadowedGlobal(sourceFile, expression, 'Number')) {
+    return { staticConstructorType: 'number' };
+  }
+  if (identifierResolvesToUnshadowedGlobal(sourceFile, expression, 'Boolean')) {
+    return { staticConstructorType: 'boolean' };
+  }
   return {};
 }
 
@@ -1868,7 +1973,7 @@ function objectLiteralEntries(
                 ),
               }
             : {}),
-          ...staticConstructorTypeEntry(property.initializer),
+          ...staticConstructorTypeEntry(sourceFile, property.initializer),
           ...objectLiteralEntryPropertyAccesses(sourceFile, property.initializer),
           value: source.slice(
             property.initializer.getStart(sourceFile),
@@ -2141,6 +2246,7 @@ function isInsideStaticRepeatCallback(node: ts.Node): boolean {
 
 function isStaticRepeatCallback(call: ts.CallExpression, callback: ts.Expression): boolean {
   if (call.arguments[0] === callback && ts.isPropertyAccessExpression(call.expression)) {
+    // `.map` / `.flatMap` are structural array-iteration recognizers for JSX repeatability.
     return call.expression.name.text === 'map' || call.expression.name.text === 'flatMap';
   }
 
@@ -2151,7 +2257,7 @@ function isStaticRepeatCallback(call: ts.CallExpression, callback: ts.Expression
   return (
     call.expression.name.text === 'from' &&
     ts.isIdentifier(call.expression.expression) &&
-    call.expression.expression.text === 'Array'
+    identifierResolvesToUnshadowedGlobal(call.getSourceFile(), call.expression.expression, 'Array')
   );
 }
 
@@ -2477,13 +2583,13 @@ function temporalReadModels(sourceFile: ts.SourceFile, node: ts.Node): TemporalR
   const reads: TemporalReadModel[] = [];
 
   const visit = (current: ts.Node): void => {
-    if (isDateNowCall(current)) {
+    if (isDateNowCall(sourceFile, current)) {
       reads.push({
         end: current.getEnd(),
         kind: 'Date.now',
         start: current.getStart(sourceFile),
       });
-    } else if (isZeroArgNewDate(current)) {
+    } else if (isZeroArgNewDate(sourceFile, current)) {
       reads.push({
         end: current.getEnd(),
         kind: 'new Date',
@@ -2498,24 +2604,24 @@ function temporalReadModels(sourceFile: ts.SourceFile, node: ts.Node): TemporalR
   return reads;
 }
 
-function isDateNowCall(node: ts.Node): node is ts.CallExpression {
+function isDateNowCall(sourceFile: ts.SourceFile, node: ts.Node): node is ts.CallExpression {
   return (
     ts.isCallExpression(node) &&
     node.arguments.length === 0 &&
     ts.isPropertyAccessExpression(node.expression) &&
     ts.isIdentifier(node.expression.expression) &&
-    node.expression.expression.text === 'Date' &&
+    identifierResolvesToUnshadowedGlobal(sourceFile, node.expression.expression, 'Date') &&
     node.expression.name.text === 'now'
   );
 }
 
-function isZeroArgNewDate(node: ts.Node): node is ts.NewExpression {
+function isZeroArgNewDate(sourceFile: ts.SourceFile, node: ts.Node): node is ts.NewExpression {
   return (
     ts.isNewExpression(node) &&
     node.arguments !== undefined &&
     node.arguments.length === 0 &&
     ts.isIdentifier(node.expression) &&
-    node.expression.text === 'Date'
+    identifierResolvesToUnshadowedGlobal(sourceFile, node.expression, 'Date')
   );
 }
 

@@ -344,6 +344,8 @@ function collectLocalQueueNames(sourceFile: ts.SourceFile): ReadonlyMap<string, 
       const [firstArg] = initializer.arguments;
       if (
         ts.isIdentifier(initializer.expression) &&
+        // Queue names are non-security plan metadata. This recognizes the public `queue('name')`
+        // value shape structurally so legacy no-import fixtures keep lowering to the same IR.
         initializer.expression.text === 'queue' &&
         firstArg &&
         ts.isStringLiteralLike(firstArg)
@@ -492,6 +494,7 @@ function queryNameFromComputedExpression(
   if (
     unwrapped &&
     ts.isPropertyAccessExpression(unwrapped) &&
+    // `.key` is a structural query-value field; the receiver must resolve through localQueryKeys.
     unwrapped.name.text === 'key' &&
     ts.isIdentifier(unwrapped.expression)
   ) {
@@ -509,6 +512,7 @@ function propertyNameText(name: ts.PropertyName | undefined): string | null {
 }
 
 function isAwaitFragmentLiteral(expression: ts.Expression): boolean {
+  // `await-fragment` is declarative optimistic-plan metadata, not a trusted-code marker.
   return ts.isStringLiteralLike(expression) && expression.text === 'await-fragment';
 }
 

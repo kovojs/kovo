@@ -294,6 +294,8 @@ function mutationInputFieldsForLocalName(
 }
 
 export function importsMutationCsrfField(model: ComponentModuleModel): boolean {
+  // Compiler-emitted helper import de-dupe: this checks for the exact internal CSRF helper import
+  // already present in lowered output, not a security decision about app-authored source.
   return model.namedImports.some(
     (entry) =>
       entry.moduleSpecifier === '@kovojs/server/internal/csrf' &&

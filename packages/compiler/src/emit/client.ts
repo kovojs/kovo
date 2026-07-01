@@ -423,6 +423,8 @@ function runtimeGeneratedImportNames(
 
 function generatedHandlerModuleSpecifier(item: ClientImportDependency): string {
   if (
+    // Compiler-owned Headless UI helper imports are normalized to the generated helper module.
+    // This is emitted dependency hygiene, not app-authored API recognition.
     item.moduleSpecifier.startsWith('@kovojs/headless-ui/') &&
     item.moduleSpecifier !== '@kovojs/headless-ui/generated' &&
     headlessUiGeneratedHandlerNames.has(item.importedName)

@@ -492,6 +492,7 @@ function routeOutcomeKindFromCall(
   const expression = call.expression;
   if (!ts.isPropertyAccessExpression(expression)) return undefined;
 
+  // `.file` / `.stream` are structural members on the framework-proven `respond` export.
   if (
     (expression.name.text === 'file' || expression.name.text === 'stream') &&
     isFrameworkRespondReference(unwrapExpression(expression.expression), frameworkBindings)
@@ -499,6 +500,7 @@ function routeOutcomeKindFromCall(
     return expression.name.text;
   }
 
+  // `.serve` is structural route outcome metadata once the receiver is a rootedFiles handle.
   if (
     expression.name.text === 'serve' &&
     isRootedFilesServeReceiver(expression.expression, frameworkBindings)
@@ -1155,6 +1157,8 @@ function isDeferCallJsxChild(node: ts.Node): node is ts.JsxExpression & {
   if (!ts.isJsxExpression(node) || !node.expression) return false;
   if (!ts.isJsxElement(node.parent) && !ts.isJsxFragment(node.parent)) return false;
   const expression = unwrapExpression(node.expression);
+  // Structural lint for the raw deferred-region helper in JSX child position; this is not an
+  // authority check, and the public replacement remains `<Defer>`.
   return (
     ts.isCallExpression(expression) &&
     ts.isIdentifier(expression.expression) &&

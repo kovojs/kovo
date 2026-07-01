@@ -318,6 +318,26 @@ export const CartBadge = component({
     });
   });
 
+  it('does not treat local prop constructor lookalikes as static constructor facts', () => {
+    const source = `
+const String = { parse: (value) => value };
+const Number = { parse: (value) => value };
+const Boolean = { parse: (value) => value };
+
+export const CartBadge = component({
+  props: { label: String, count: Number, open: Boolean },
+  render: () => <cart-badge>Ready</cart-badge>,
+});
+`;
+    const model = parseComponentModule('cart-badge.tsx', source);
+
+    expect(componentOptionObjectEntries(model, 'props')).toEqual([
+      { key: 'label', value: 'String' },
+      { key: 'count', value: 'Number' },
+      { key: 'open', value: 'Boolean' },
+    ]);
+  });
+
   it('does not parse legacy positional component names as component declarations', () => {
     const source = `
 export const CartBadge = component('cart-badge', {
@@ -717,6 +737,20 @@ export const CartActions = component({
     });
   });
 
+  it('does not record document element actions when document is shadowed', () => {
+    const source = `
+export const CartActions = component({
+  render: (document) => (
+    <button onClick={() => document.getElementById('cart-drawer')!.showModal()}>Open</button>
+  ),
+});
+`;
+    const [button] = jsxElements(parseComponentModule('cart-actions.tsx', source));
+    const click = button?.attributes.find((attribute) => attribute.name === 'onClick');
+
+    expect(click?.zeroArgArrow?.documentElementAction).toBeUndefined();
+  });
+
   it('attaches JSX comments to the following attribute when no JSX content intervenes', () => {
     const source = `
 export const ExecutionTriggers = component({
@@ -885,6 +919,28 @@ export const ProductList = component({
     expect(input?.repeatable).toBe(true);
   });
 
+  it('does not mark Array.from callbacks as repeatable when Array is shadowed', () => {
+    const source = `
+const Array = { from: (items, render) => items.map(render) };
+
+export const ProductList = component({
+  render: ({ products }) => (
+    <section>
+      {Array.from(products.items, function itemCard(item) {
+        return <form enhance mutation={save}><input name="id" value={item.id} /></form>;
+      })}
+    </section>
+  ),
+});
+`;
+    const elements = jsxElements(parseComponentModule('product-list.tsx', source));
+    const form = elements.find((element) => element.tag === 'form');
+    const input = elements.find((element) => element.tag === 'input');
+
+    expect(form?.repeatable).toBe(false);
+    expect(input?.repeatable).toBe(false);
+  });
+
   it('records JSX spread call facts for model-driven diagnostics', () => {
     const source = `
 export const ProductList = component({
@@ -999,6 +1055,23 @@ export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count ===
     expect(derive?.argumentTemporalReads.map((reads) => reads.map((read) => read.kind))).toEqual([
       [],
       ['Date.now', 'new Date'],
+    ]);
+  });
+
+  it('does not record temporal reads from local Date lookalikes', () => {
+    const source = `
+const Date = {
+  now: () => 0,
+};
+export const CartBadge$isEmpty = derive(["cart"], (cart: Cart) => cart.count === 0 && Date.now() > new Date().getTime());
+`;
+    const derive = callExpressions(parseComponentModule('cart-badge.tsx', source)).find(
+      (call) => call.name === 'derive',
+    );
+
+    expect(derive?.argumentTemporalReads.map((reads) => reads.map((read) => read.kind))).toEqual([
+      [],
+      [],
     ]);
   });
 

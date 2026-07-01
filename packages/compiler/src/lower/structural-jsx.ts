@@ -202,6 +202,8 @@ export function lowerStructuralJsx(
   const escapeApplied = inlineTextEscapeApplied || staticTextEscapeApplied;
 
   const alreadyImportsEscapeText = model.namedImports.some(
+    // Compiler-emitted helper import de-dupe for lowered output; trusted HTML recognition is
+    // handled separately via framework identity in output-context facts.
     (entry) =>
       entry.importedName === 'escapeText' &&
       entry.moduleSpecifier === '@kovojs/server/internal/escape',
