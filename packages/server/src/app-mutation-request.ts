@@ -78,7 +78,11 @@ export async function handleAppMutationRequest(
     return new Response(
       JSON.stringify({ code: 'VALIDATION', payload: { reason: bodyResult.reason } }),
       {
-        headers: { 'Content-Type': 'application/json; charset=utf-8' },
+        headers: {
+          'Cache-Control': 'private, no-store',
+          'Content-Type': 'application/json; charset=utf-8',
+          Vary: 'Cookie',
+        },
         status: 422,
       },
     );

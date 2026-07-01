@@ -1471,7 +1471,7 @@ function mutationRedirectLocation<Value>(
 function noJsMutationServerErrorResponse(): NoJsMutationResponse {
   return {
     body: 'Internal Server Error',
-    headers: { 'Content-Type': 'text/html; charset=utf-8' },
+    headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
     status: 500,
   };
 }
@@ -1497,10 +1497,10 @@ async function renderNoJsReplayUnavailablePage<Request, Value>(
     body: noJsRequest.renderFailurePage
       ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
       : renderDefaultFailurePage(failure),
-    headers: {
+    headers: stampNoJsMutationFailureHeaders({
       'Content-Type': 'text/html; charset=utf-8',
       'Retry-After': '1',
-    },
+    }),
     status: 429,
   };
 }

@@ -86,6 +86,34 @@ describe('server app mutation request boundary', () => {
     expect(({} as { polluted?: boolean }).polluted).toBe(undefined);
   });
 
+  it('fails closed with no-store JSON when a csrf:false mutation body is malformed', async () => {
+    let handlerCalls = 0;
+    const addToCart = mutation('cart/add', {
+      csrf: false,
+      input: s.object({ productId: s.string() }),
+      handler(input) {
+        handlerCalls += 1;
+        return input;
+      },
+    });
+    const app = createApp({ mutations: [addToCart] });
+    const request = new Request('https://shop.example.test/_m/cart/add', {
+      body: '{ not valid json',
+      headers: { 'Content-Type': 'application/json' },
+      method: 'POST',
+    });
+
+    const response = await handleAppMutationRequest(app, request, new URL(request.url), 'cart/add');
+    const body = await response.json();
+
+    expect(response.status).toBe(422);
+    expect(response.headers.get('cache-control')).toBe('private, no-store');
+    expect(response.headers.get('content-type')).toBe('application/json; charset=utf-8');
+    expect(response.headers.get('vary')).toBe('Cookie');
+    expect(body).toEqual({ code: 'VALIDATION', payload: { reason: 'invalid-json' } });
+    expect(handlerCalls).toBe(0);
+  });
+
   it('uses mutation-level defaultRedirectTo without an app-authored response switch', async () => {
     const addToCart = mutation('cart/add', {
       csrf: false,
