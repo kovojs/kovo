@@ -17,10 +17,13 @@ describe('fundamental-fixes-census-gate', () => {
   it('extracts the M4 sink and handle denominator from the active plan', () => {
     const rows = extractPlanCensusRows(planText);
 
-    expect(rows.filter((row) => row.kind === 'write-capable-handle')).toHaveLength(6);
-    expect(rows.filter((row) => row.kind === 'output-wire-sink')).toHaveLength(10);
+    expect(rows.filter((row) => row.kind === 'write-capable-handle')).toHaveLength(23);
+    expect(rows.filter((row) => row.kind === 'output-wire-sink')).toHaveLength(39);
     expect(rows.map((row) => row.id)).toContain(
       'unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update',
+    );
+    expect(rows.map((row) => row.id)).toContain(
+      'direct-secret-projection-to-query-wire-fails-kv435-in-every-supported-dialect',
     );
     expect(
       rows.find((row) => row.id === 'raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml')
@@ -39,11 +42,18 @@ describe('fundamental-fixes-census-gate', () => {
     expect(report.denominator).toEqual({
       dialectMatrixRows:
         REQUIRED_DIALECT_MATRIX_DIALECTS.length * REQUIRED_DIALECT_MATRIX_SINKS.length,
-      outputWireSinkRows: 10,
+      outputWireSinkRows: 39,
       resolverExpressionKindRows: REQUIRED_RESOLVER_EXPRESSION_KINDS.length,
-      writeCapableHandleRows: 6,
+      writeCapableHandleRows: 23,
     });
-    expect(report.openRows).toHaveLength(report.rowCount);
+    expect(report.openRows).toHaveLength(report.rowCount - 3);
+    expect(report.openRows).not.toContain(
+      'kv426-blocks-trustedhtml-request-taint-in-a-prod-artifact',
+    );
+    expect(report.openRows).not.toContain('kv426-blocks-trustedurl-query-taint-in-a-prod-artifact');
+    expect(report.openRows).not.toContain(
+      'kv426-blocks-internal-renderedhtml-query-taint-in-a-prod-artifact',
+    );
   });
 
   it('rejects missing owner/status/evidence placeholders and M5-deferring statuses', () => {
@@ -65,6 +75,15 @@ describe('fundamental-fixes-census-gate', () => {
 
     expect(evaluateFundamentalFixesCensus({ manifest: deferred, planText }).violations).toContain(
       'readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1: M5 forbids status "future"',
+    );
+
+    const missingBundle = cloneDefaultManifest();
+    missingBundle.rows[1].evidenceBundles = ['missing-bundle'];
+
+    expect(
+      evaluateFundamentalFixesCensus({ manifest: missingBundle, planText }).violations,
+    ).toContain(
+      'readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime: references missing evidence bundle missing-bundle',
     );
   });
 
@@ -108,23 +127,28 @@ describe('fundamental-fixes-census-gate', () => {
     );
   });
 
-  it('requires M1 prod artifact, supported dialects, and independent reviewer for closed rows', () => {
+  it('requires M1, M2, and M3 evidence for closed rows', () => {
+    const rowId = 'readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime';
+    const closedPlanText = planText.replace(
+      '  - [ ] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]',
+      '  - [x] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]',
+    );
     const closedWithoutM1 = cloneDefaultManifest();
-    closedWithoutM1.rows[0] = {
-      ...closedWithoutM1.rows[0],
+    const rowIndex = closedWithoutM1.rows.findIndex((row) => row.id === rowId);
+    closedWithoutM1.rows[rowIndex] = {
+      ...closedWithoutM1.rows[rowIndex],
       evidence: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
       status: 'closed',
     };
 
     expect(
-      evaluateFundamentalFixesCensus({ manifest: closedWithoutM1, planText }).violations,
-    ).toContain(
-      'readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1: closed row is missing M1 adversarial evidence',
-    );
+      evaluateFundamentalFixesCensus({ manifest: closedWithoutM1, planText: closedPlanText })
+        .violations,
+    ).toContain(`${rowId}: closed row is missing M1 adversarial evidence`);
 
-    const closedWithM1 = cloneDefaultManifest();
-    closedWithM1.rows[0] = {
-      ...closedWithM1.rows[0],
+    const closedWithOnlyM1 = cloneDefaultManifest();
+    closedWithOnlyM1.rows[rowIndex] = {
+      ...closedWithOnlyM1.rows[rowIndex],
       evidence: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
       m1: {
         dialects: {
@@ -138,13 +162,70 @@ describe('fundamental-fixes-census-gate', () => {
     };
 
     expect(
-      evaluateFundamentalFixesCensus({ manifest: closedWithM1, planText }).violations.filter(
-        (violation) =>
-          violation.startsWith(
-            'readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1:',
-          ),
-      ),
+      evaluateFundamentalFixesCensus({ manifest: closedWithOnlyM1, planText: closedPlanText })
+        .violations,
+    ).toEqual(
+      expect.arrayContaining([
+        `${rowId}: closed row is missing M2 real-build evidence`,
+        `${rowId}: closed row is missing M3 mutation evidence`,
+      ]),
+    );
+
+    const closedWithAllEvidence = cloneDefaultManifest();
+    closedWithAllEvidence.rows[rowIndex] = {
+      ...closedWithOnlyM1.rows[rowIndex],
+      m2: {
+        noFixtureOnlyCertification: 'pnpm run check:security-test-builds',
+        productionBuild: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+      },
+      m3: {
+        mutationGate: 'pnpm run check:security-gate-mutations',
+      },
+    };
+
+    expect(
+      evaluateFundamentalFixesCensus({
+        manifest: closedWithAllEvidence,
+        planText: closedPlanText,
+      }).violations.filter((violation) => violation.startsWith(`${rowId}:`)),
     ).toEqual([]);
+  });
+
+  it('keeps parent rollup rows open until every child row closes', () => {
+    const parentId = 'readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1';
+    const manifest = cloneDefaultManifest();
+    const parentIndex = manifest.rows.findIndex((row) => row.id === parentId);
+    manifest.rows[parentIndex] = {
+      ...manifest.rows[parentIndex],
+      evidence: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+      m1: {
+        dialects: {
+          postgres: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+          sqlite: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+        },
+        independentReviewer: 'agent/followup-reviewer@abc123',
+        prodArtifact: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+      },
+      m2: {
+        noFixtureOnlyCertification: 'pnpm run check:security-test-builds',
+        productionBuild: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+      },
+      m3: {
+        mutationGate: 'pnpm run check:security-gate-mutations',
+      },
+      status: 'closed',
+    };
+
+    const closedPlanText = planText.replace(
+      '- [ ] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]',
+      '- [x] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]',
+    );
+
+    expect(
+      evaluateFundamentalFixesCensus({ manifest, planText: closedPlanText }).violations,
+    ).toContain(
+      `${parentId}: parent row cannot close while child row readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime is open`,
+    );
   });
 
   it('has a separate completion mode that fails while denominator rows remain open', () => {

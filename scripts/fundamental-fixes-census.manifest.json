@@ -15,11 +15,67 @@
       "evidence": "placeholder"
     },
     {
+      "id": "readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+    },
+    {
+      "id": "readonlydb-transaction-and-future-unknown-methods-fail-closed-at-runtime",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+    },
+    {
+      "id": "readonlydb-public-endpoint-cannot-mutate-in-a-prod-artifact-for-every-supported-dialect",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+    },
+    {
+      "id": "reader-db-type-surface-rejects-write-capable-methods",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1"
+    },
+    {
       "id": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2",
       "kind": "write-capable-handle",
       "owner": ["H", "I"],
       "status": "open",
       "evidence": "placeholder"
+    },
+    {
+      "id": "write-mode-declared-table-statements-pass-and-cross-table-statements-fail-closed",
+      "kind": "write-capable-handle",
+      "owner": ["H", "I"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2"
+    },
+    {
+      "id": "sqlite-raw-sql-statement-parse-parity-matches-the-default-dialect",
+      "kind": "write-capable-handle",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2"
+    },
+    {
+      "id": "wrapmanageddbforsqlsafety-enforces-the-same-policy-at-every-call-site",
+      "kind": "write-capable-handle",
+      "owner": ["H", "I"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2"
     },
     {
       "id": "webhooktxdb-webhook-transaction-handle",
@@ -29,11 +85,43 @@
       "evidence": "placeholder"
     },
     {
+      "id": "webhooktxdb-declared-transaction-writes-still-execute-through-the-audited-path",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "webhooktxdb-webhook-transaction-handle"
+    },
+    {
+      "id": "webhooktxdb-raw-client-session-escape-handles-fail-closed",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "webhooktxdb-webhook-transaction-handle"
+    },
+    {
       "id": "storage-capability-write-handles-upload-store-delete",
       "kind": "write-capable-handle",
       "owner": ["H"],
       "status": "open",
       "evidence": "placeholder"
+    },
+    {
+      "id": "query-load-storage-upload-store-delete-and-put-writes-fail-closed",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "storage-capability-write-handles-upload-store-delete"
+    },
+    {
+      "id": "declared-mutation-capability-storage-writes-still-work-through-the-audited-path",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "storage-capability-write-handles-upload-store-delete"
     },
     {
       "id": "raw-driver-client-session-escape-from-any-managed-handle",
@@ -43,11 +131,59 @@
       "evidence": "placeholder"
     },
     {
+      "id": "managed-write-handle-client-session-escapes-fail-closed-before-nested-wrapping",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "raw-driver-client-session-escape-from-any-managed-handle"
+    },
+    {
+      "id": "read-only-handle-client-session-escapes-fail-closed-before-execution",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "raw-driver-client-session-escape-from-any-managed-handle"
+    },
+    {
+      "id": "webhook-transaction-client-session-escapes-fail-closed-before-execution",
+      "kind": "write-capable-handle",
+      "owner": ["H"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "raw-driver-client-session-escape-from-any-managed-handle"
+    },
+    {
       "id": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update",
       "kind": "write-capable-handle",
       "owner": ["H", "I"],
       "status": "open",
       "evidence": "placeholder"
+    },
+    {
+      "id": "unknown-method-with-a-sql-carrier-is-parsed-before-execution",
+      "kind": "write-capable-handle",
+      "owner": ["H", "I"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update"
+    },
+    {
+      "id": "unknown-method-without-a-sql-carrier-fails-closed",
+      "kind": "write-capable-handle",
+      "owner": ["H", "I"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update"
+    },
+    {
+      "id": "synthetic-unknown-driver-dialect-fails-closed-without-a-matrix-update",
+      "kind": "write-capable-handle",
+      "owner": ["I"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "unknown-future-drizzle-method-or-driver-dialect-fails-closed-by-default-not-a-matrix-update"
     },
     {
       "id": "ssr-document-html",
@@ -57,11 +193,43 @@
       "evidence": "placeholder"
     },
     {
+      "id": "ssr-route-render-text-is-escaped-in-the-production-document",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "ssr-document-html"
+    },
+    {
+      "id": "ssr-raw-trusted-html-boundaries-require-proof-or-kv406",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "ssr-document-html"
+    },
+    {
       "id": "q-query-response",
       "kind": "output-wire-sink",
       "owner": ["C2"],
       "status": "open",
       "evidence": "placeholder"
+    },
+    {
+      "id": "q-query-response-body-escapes-client-visible-html",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "q-query-response"
+    },
+    {
+      "id": "q-query-response-headers-do-not-expose-session-data-to-shared-caches",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "q-query-response"
     },
     {
       "id": "mutation-delta-enhanced-mutation-response",
@@ -71,11 +239,51 @@
       "evidence": "placeholder"
     },
     {
+      "id": "enhanced-mutation-fragment-bodies-escape-client-visible-html",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "mutation-delta-enhanced-mutation-response"
+    },
+    {
+      "id": "mutation-triggered-query-refreshes-preserve-query-wire-bounds",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "mutation-delta-enhanced-mutation-response"
+    },
+    {
       "id": "streaming-defer-chunks",
       "kind": "output-wire-sink",
       "owner": ["C2"],
       "status": "open",
       "evidence": "placeholder"
+    },
+    {
+      "id": "defer-shell-streams-before-slow-regions-complete",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "streaming-defer-chunks"
+    },
+    {
+      "id": "defer-region-failures-isolate-to-their-own-fallback",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "streaming-defer-chunks"
+    },
+    {
+      "id": "streamed-defer-chunks-escape-attacker-markup-and-private-details",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "streaming-defer-chunks"
     },
     {
       "id": "response-headers-incl-set-cookie-redirects",
@@ -85,11 +293,51 @@
       "evidence": "placeholder"
     },
     {
+      "id": "route-outcome-headers-reject-crlf-injection",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "response-headers-incl-set-cookie-redirects"
+    },
+    {
+      "id": "typed-and-raw-set-cookie-paths-normalize-safe-cookies-and-reject-unsafe-cookies",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "response-headers-incl-set-cookie-redirects"
+    },
+    {
+      "id": "redirect-location-headers-are-sanitized-before-send",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "response-headers-incl-set-cookie-redirects"
+    },
+    {
       "id": "error-shells-500-bodies",
       "kind": "output-wire-sink",
       "owner": ["C2"],
       "status": "open",
       "evidence": "placeholder"
+    },
+    {
+      "id": "500-shells-escape-request-controlled-payloads",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "error-shells-500-bodies"
+    },
+    {
+      "id": "500-shells-exclude-private-exception-details",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "error-shells-500-bodies"
     },
     {
       "id": "capability-urls-signed-payloads",
@@ -99,11 +347,127 @@
       "evidence": "placeholder"
     },
     {
+      "id": "capability-urls-mint-and-verify-against-the-production-artifact",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "capability-urls-signed-payloads"
+    },
+    {
+      "id": "tampered-capability-path-query-payloads-reject-before-read",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "capability-urls-signed-payloads"
+    },
+    {
       "id": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
       "kind": "output-wire-sink",
       "owner": ["C2", "B3"],
       "status": "open",
       "evidence": "placeholder"
+    },
+    {
+      "id": "kv426-blocks-trustedhtml-request-taint-in-a-prod-artifact",
+      "kind": "output-wire-sink",
+      "owner": ["C2", "B3"],
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot (2 passed, 8 skipped, 88.65s); pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (28 mutants killed)",
+      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot (2 passed, 8 skipped, 88.65s)",
+        "dialects": {
+          "postgres": "M1:raw-html postgres no-cache red/green/flip production artifact case passed",
+          "sqlite": "M1:raw-html sqlite no-cache red/green/flip production artifact case passed"
+        },
+        "independentReviewer": "agent/followup-m1-dialects-20260701070851 authored the dialect-complete adversarial gate; main reverified the focused shard in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV426 trusted-output-prod-artifact uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (13 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (28 mutants killed)"
+      }
+    },
+    {
+      "id": "kv426-blocks-trustedurl-query-taint-in-a-prod-artifact",
+      "kind": "output-wire-sink",
+      "owner": ["C2", "B3"],
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot (2 passed, 8 skipped, 88.65s); pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (28 mutants killed)",
+      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot (2 passed, 8 skipped, 88.65s)",
+        "dialects": {
+          "postgres": "M1:raw-html postgres no-cache red/green/flip production artifact case passed",
+          "sqlite": "M1:raw-html sqlite no-cache red/green/flip production artifact case passed"
+        },
+        "independentReviewer": "agent/followup-m1-dialects-20260701070851 authored the dialect-complete adversarial gate; main reverified the focused shard in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV426 trusted-output-prod-artifact uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (13 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (28 mutants killed)"
+      }
+    },
+    {
+      "id": "trustedurl-values-are-rejected-in-non-url-jsx-attributes",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml"
+    },
+    {
+      "id": "kv426-blocks-internal-renderedhtml-query-taint-in-a-prod-artifact",
+      "kind": "output-wire-sink",
+      "owner": ["C2", "B3"],
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot (2 passed, 8 skipped, 88.65s); pnpm run check:security-test-builds (13 real-build proofs passed); pnpm run check:security-gate-mutations (28 mutants killed)",
+      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot (2 passed, 8 skipped, 88.65s)",
+        "dialects": {
+          "postgres": "M1:raw-html postgres no-cache red/green/flip production artifact case passed",
+          "sqlite": "M1:raw-html sqlite no-cache red/green/flip production artifact case passed"
+        },
+        "independentReviewer": "agent/followup-m1-dialects-20260701070851 authored the dialect-complete adversarial gate; main reverified the focused shard in this session"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV426 trusted-output-prod-artifact uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (13 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (28 mutants killed)"
+      }
+    },
+    {
+      "id": "real-build-resolves-local-star-barrels-and-literal-element-access-for-raw-html-sinks",
+      "kind": "output-wire-sink",
+      "owner": ["B3", "E2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml"
     },
     {
       "id": "client-derive-bodies-leak-referenceerror-boundary",
@@ -113,11 +477,75 @@
       "evidence": "placeholder"
     },
     {
+      "id": "emitted-client-derives-use-state-paths-instead-of-render-local-aliases",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "client-derive-bodies-leak-referenceerror-boundary"
+    },
+    {
+      "id": "hydrated-derives-update-on-interaction-without-referenceerror-or-framework-requests",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "client-derive-bodies-leak-referenceerror-boundary"
+    },
+    {
+      "id": "module-helper-in-derive-stays-either-lowered-safely-or-fails-kv311",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "client-derive-bodies-leak-referenceerror-boundary"
+    },
+    {
       "id": "secret-column-to-wire-across-all-value-flow-paths",
       "kind": "output-wire-sink",
       "owner": ["C2"],
       "status": "open",
       "evidence": "placeholder"
+    },
+    {
+      "id": "direct-secret-projection-to-query-wire-fails-kv435-in-every-supported-dialect",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths"
+    },
+    {
+      "id": "transformed-query-loader-return-laundering-fails-kv435-kv406",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths"
+    },
+    {
+      "id": "render-value-flow-laundering-of-secret-selected-rows-fails-kv435-kv406",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths"
+    },
+    {
+      "id": "cross-select-laundering-of-secret-columns-fails-kv435",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths"
+    },
+    {
+      "id": "explicit-non-secret-projection-sibling-builds-in-every-supported-dialect",
+      "kind": "output-wire-sink",
+      "owner": ["C2"],
+      "status": "open",
+      "evidence": "placeholder",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths"
     },
     {
       "id": "resolver-property-access-expression",
@@ -852,5 +1280,19 @@
       "status": "open",
       "evidence": "placeholder"
     }
-  ]
+  ],
+  "evidenceBundles": {
+    "m1-prod-artifact-adversarial-focused": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:<surface> --reporter=dot",
+      "evidence": "Focused no-cache prod-artifact M1 sweep for one row/surface across postgres and sqlite."
+    },
+    "m2-security-real-build-gate": {
+      "command": "pnpm run check:security-test-builds",
+      "evidence": "Security certification proofs must exercise the production kovo build path, not fixture-only shortcuts."
+    },
+    "m3-security-gate-mutations": {
+      "command": "pnpm run check:security-gate-mutations",
+      "evidence": "Mutation harness kills branch removals in enrolled security and census gates."
+    }
+  }
 }

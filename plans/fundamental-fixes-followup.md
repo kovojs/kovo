@@ -41,30 +41,80 @@ deferring** KV426/KV435/KV311 (`plan complete ≠ framework sound`). The invaria
 
 ## Sink & handle census (the M4 denominator — every row must reach `[x]`, no deferral per M5)
 
-Master list of everything that can (a) write, or (b) reach a client/output channel. Each row is closed by
-the named workstream and must pass M1–M3.
+Master list of everything that can (a) write, or (b) reach a client/output channel. Parent rows are rollups
+and stay open until every nested child row closes. Child rows are the closure unit: each one is closed by the
+named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-fixes-census.manifest.json`.
 
 **(a) Write-capable handle surfaces** — close via H (statement-parse-primary allowlist) + I (dialect):
 
 - [ ] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]
+  - [ ] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]
+  - [ ] `readonlyDb()` transaction and future/unknown methods fail closed at runtime [H]
+  - [ ] `readonlyDb()` public endpoint cannot mutate in a prod artifact for every supported dialect [H]
+  - [ ] `Reader<Db>` type surface rejects write-capable methods [H]
 - [ ] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]
+  - [ ] write-mode declared-table statements pass and cross-table statements fail closed [H/I]
+  - [ ] SQLite raw SQL statement parse parity matches the default dialect [I]
+  - [ ] `wrapManagedDbForSqlSafety` enforces the same policy at every call site [H/I]
 - [ ] `WebhookTxDb` webhook transaction handle [H]
+  - [ ] `WebhookTxDb` declared transaction writes still execute through the audited path [H]
+  - [ ] `WebhookTxDb` raw `$client`/`.session` escape handles fail closed [H]
 - [ ] storage / capability write handles (upload/store/delete) [H]
+  - [ ] query/load storage upload, store, delete, and put writes fail closed [H]
+  - [ ] declared mutation/capability storage writes still work through the audited path [H]
 - [ ] raw driver `$client` / `.session` escape from any managed handle [H]
+  - [ ] managed write handle `$client`/`.session` escapes fail closed before nested wrapping [H]
+  - [ ] read-only handle `$client`/`.session` escapes fail closed before execution [H]
+  - [ ] webhook transaction `$client`/`.session` escapes fail closed before execution [H]
 - [ ] unknown/future drizzle method OR driver dialect → **fails closed by default** (not a matrix update) [H/I]
+  - [ ] unknown method with a SQL carrier is parsed before execution [H/I]
+  - [ ] unknown method without a SQL carrier fails closed [H/I]
+  - [ ] synthetic unknown driver/dialect fails closed without a matrix update [I]
 
 **(b) Output / wire sinks** — close via C2 (enumerate from the emitted artifact; proof-or-KV406):
 
 - [ ] SSR document HTML [C2]
+  - [ ] SSR route render text is escaped in the production document [C2]
+  - [ ] SSR raw/trusted HTML boundaries require proof-or-KV406 [C2]
 - [ ] `/_q` query response [C2]
+  - [ ] `/_q` query response body escapes client-visible HTML [C2]
+  - [ ] `/_q` query response headers do not expose session data to shared caches [C2]
 - [ ] mutation delta / enhanced-mutation response [C2]
+  - [ ] enhanced mutation fragment bodies escape client-visible HTML [C2]
+  - [ ] mutation-triggered query refreshes preserve query wire bounds [C2]
 - [ ] streaming / `<Defer>` chunks [C2]
+  - [ ] `<Defer>` shell streams before slow regions complete [C2]
+  - [ ] `<Defer>` region failures isolate to their own fallback [C2]
+  - [ ] streamed `<Defer>` chunks escape attacker markup and private details [C2]
 - [ ] response headers (incl. `Set-Cookie`, redirects) [C2]
+  - [ ] route outcome headers reject CRLF injection [C2]
+  - [ ] typed and raw `Set-Cookie` paths normalize safe cookies and reject unsafe cookies [C2]
+  - [ ] redirect `Location` headers are sanitized before send [C2]
 - [ ] error shells / 500 bodies [C2]
+  - [ ] 500 shells escape request-controlled payloads [C2]
+  - [ ] 500 shells exclude private exception details [C2]
 - [ ] capability URLs / signed payloads [C2]
+  - [ ] capability URLs mint and verify against the production artifact [C2]
+  - [ ] tampered capability path/query payloads reject before read [C2]
 - [ ] raw-HTML sinks (`trustedHtml`, `trustedUrl`, `@internal renderedHtml`) [C2/B3]
+  - [x] KV426 blocks `trustedHtml()` request taint in a prod artifact [C2/B3]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
+  - [x] KV426 blocks `trustedUrl()` query taint in a prod artifact [C2/B3]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
+  - [ ] `TrustedUrl` values are rejected in non-URL JSX attributes [C2]
+  - [x] KV426 blocks `@internal renderedHtml()` query taint in a prod artifact [C2/B3]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
+  - [ ] real build resolves local/star barrels and literal element access for raw-HTML sinks [B3/E2]
 - [ ] client-derive bodies (leak / `ReferenceError` boundary) [C2]
+  - [ ] emitted client derives use state paths instead of render-local aliases [C2]
+  - [ ] hydrated derives update on interaction without `ReferenceError` or framework requests [C2]
+  - [ ] module-helper-in-derive stays either lowered safely or fails KV311 [C2]
 - [ ] secret-column-to-wire across ALL value-flow paths [C2]
+  - [ ] direct secret projection to query wire fails KV435 in every supported dialect [C2]
+  - [ ] transformed query-loader return laundering fails KV435/KV406 [C2]
+  - [ ] render value-flow laundering of secret-selected rows fails KV435/KV406 [C2]
+  - [ ] cross-select laundering of secret columns fails KV435 [C2]
+  - [ ] explicit non-secret projection sibling builds in every supported dialect [C2]
 
 ## Traceability (finding → workstream); the census above is the master closure list
 

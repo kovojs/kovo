@@ -50,7 +50,7 @@ export const DEFAULT_M1_AXES = {
 export const CENSUS_AUTHORITY = [
   'SPEC.md 1.3 machine-auditable generation',
   'spec/11-verification.md 11.2 runtime verification',
-  'plans/fundamental-fixes-followup.md M1/M4/M5',
+  'plans/fundamental-fixes-followup.md M1/M2/M3/M4/M5',
 ];
 
 const PLAN_CENSUS_SECTIONS = [
@@ -118,6 +118,7 @@ export function evaluateFundamentalFixesCensus({
 } = {}) {
   const violations = [];
   const rows = Array.isArray(manifest?.rows) ? manifest.rows : [];
+  const evidenceBundleIds = validateEvidenceBundles(manifest?.evidenceBundles, violations);
   const planRows = extractPlanCensusRows(planText);
   const rowsById = new Map();
 
@@ -139,7 +140,7 @@ export function evaluateFundamentalFixesCensus({
   }
 
   for (const row of rows) {
-    validateRowShape(row, violations);
+    validateRowShape(row, evidenceBundleIds, violations);
     if (typeof row?.id === 'string') {
       if (rowsById.has(row.id)) violations.push(`${row.id}: duplicate census row id`);
       rowsById.set(row.id, row);
@@ -147,6 +148,7 @@ export function evaluateFundamentalFixesCensus({
   }
 
   validatePlanLinkedRows(planRows, rows, violations);
+  validateParentRows(rows, rowsById, violations);
   validateResolverRows(rows, violations);
   validateDialectMatrixRows(rows, violations);
 
@@ -219,7 +221,32 @@ function validateAdversarialGate(adversarialGate, violations) {
   }
 }
 
-function validateRowShape(row, violations) {
+function validateEvidenceBundles(evidenceBundles, violations) {
+  if (evidenceBundles === undefined) return new Set();
+  if (!evidenceBundles || typeof evidenceBundles !== 'object' || Array.isArray(evidenceBundles)) {
+    violations.push(`${defaultManifestPath}: evidenceBundles must be an object when present`);
+    return new Set();
+  }
+
+  const ids = new Set();
+  for (const [id, bundle] of Object.entries(evidenceBundles)) {
+    ids.add(id);
+    if (!bundle || typeof bundle !== 'object' || Array.isArray(bundle)) {
+      violations.push(`${defaultManifestPath}: evidence bundle ${id} must be an object`);
+      continue;
+    }
+    if (!isConcreteEvidence(bundle.command)) {
+      violations.push(`${defaultManifestPath}: evidence bundle ${id} is missing command evidence`);
+    }
+    if (!isConcreteEvidence(bundle.evidence)) {
+      violations.push(`${defaultManifestPath}: evidence bundle ${id} is missing evidence summary`);
+    }
+  }
+
+  return ids;
+}
+
+function validateRowShape(row, evidenceBundleIds, violations) {
   if (!row || typeof row !== 'object') {
     violations.push('census manifest row must be an object');
     return;
@@ -244,6 +271,24 @@ function validateRowShape(row, violations) {
   }
   if (typeof row.evidence !== 'string' || row.evidence.trim().length === 0) {
     violations.push(`${label}: census row is missing evidence placeholder`);
+  }
+  if (row.parent !== undefined && (typeof row.parent !== 'string' || row.parent.length === 0)) {
+    violations.push(`${label}: parent must be a non-empty row id when present`);
+  }
+  if (row.evidenceBundles !== undefined) {
+    if (!Array.isArray(row.evidenceBundles)) {
+      violations.push(`${label}: evidenceBundles must be an array of bundle ids`);
+    } else {
+      for (const bundleId of row.evidenceBundles) {
+        if (typeof bundleId !== 'string' || bundleId.length === 0) {
+          violations.push(`${label}: evidenceBundles entries must be non-empty strings`);
+          continue;
+        }
+        if (!evidenceBundleIds.has(bundleId)) {
+          violations.push(`${label}: references missing evidence bundle ${bundleId}`);
+        }
+      }
+    }
   }
 }
 
@@ -270,11 +315,50 @@ function validatePlanLinkedRows(planRows, rows, violations) {
         )}`,
       );
     }
+    if (planRow.checkbox === 'closed' && row.status !== 'closed') {
+      violations.push(`${row.id}: plan checkbox is closed but manifest row is ${row.status}`);
+    }
+    if (planRow.checkbox !== 'closed' && row.status === 'closed') {
+      violations.push(`${row.id}: manifest row is closed but plan checkbox is open`);
+    }
   }
 
   for (const row of manifestRowsByKindAndId.values()) {
     if (!planRowsByKindAndId.has(`${row.kind}:${row.id}`)) {
       violations.push(`${row.id}: ${row.kind} row is not present in ${defaultPlanPath}`);
+    }
+  }
+}
+
+function validateParentRows(rows, rowsById, violations) {
+  const childrenByParent = new Map();
+  for (const row of rows) {
+    if (!row || typeof row !== 'object' || row.parent === undefined) continue;
+    const parent = rowsById.get(row.parent);
+    if (!parent) {
+      violations.push(`${row.id ?? '<missing-id>'}: parent row ${row.parent} is missing`);
+      continue;
+    }
+    if (parent.kind !== row.kind) {
+      violations.push(
+        `${row.id}: parent row ${row.parent} has kind ${parent.kind}, not ${row.kind}`,
+      );
+    }
+    const children = childrenByParent.get(row.parent) ?? [];
+    children.push(row);
+    childrenByParent.set(row.parent, children);
+  }
+
+  for (const [parentId, children] of childrenByParent.entries()) {
+    const parent = rowsById.get(parentId);
+    if (parent?.status === 'closed') {
+      for (const child of children) {
+        if (child.status !== 'closed') {
+          violations.push(
+            `${parentId}: parent row cannot close while child row ${child.id} is ${child.status}`,
+          );
+        }
+      }
     }
   }
 }
@@ -376,6 +460,25 @@ function validateClosedRow(row, adversarialGate, violations) {
 
   if (!isConcreteEvidence(m1.independentReviewer)) {
     violations.push(`${row.id}: closed row is missing M1 independent reviewer evidence`);
+  }
+
+  const m2 = row.m2;
+  if (!m2 || typeof m2 !== 'object') {
+    violations.push(`${row.id}: closed row is missing M2 real-build evidence`);
+  } else {
+    if (!isConcreteEvidence(m2.productionBuild)) {
+      violations.push(`${row.id}: closed row is missing M2 production build evidence`);
+    }
+    if (!isConcreteEvidence(m2.noFixtureOnlyCertification)) {
+      violations.push(`${row.id}: closed row is missing M2 no-fixture-only gate evidence`);
+    }
+  }
+
+  const m3 = row.m3;
+  if (!m3 || typeof m3 !== 'object') {
+    violations.push(`${row.id}: closed row is missing M3 mutation evidence`);
+  } else if (!isConcreteEvidence(m3.mutationGate)) {
+    violations.push(`${row.id}: closed row is missing M3 mutation gate evidence`);
   }
 }
 

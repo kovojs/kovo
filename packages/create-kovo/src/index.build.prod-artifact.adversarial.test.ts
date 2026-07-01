@@ -41,7 +41,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
     ['postgres', undefined],
     ['sqlite', 'sqlite'],
   ] as const)(
-    'tracks storage write gates from current %s production source, not stale cache',
+    'M1:storage-write tracks storage write gates from current %s production source, not stale cache',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-m1-storage-${_label}-red-`, dialect, (root) => {
         addStorageQueryWriteProof(root);
@@ -61,7 +61,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
     ['postgres', undefined],
     ['sqlite', 'sqlite'],
   ] as const)(
-    'tracks trusted output provenance gates from current %s production source, not stale cache',
+    'M1:raw-html tracks trusted output provenance gates from current %s production source, not stale cache',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-m1-trusted-output-${_label}-red-`, dialect, (root) => {
         addTrustedOutputProvenanceBuildProof(root);
@@ -96,7 +96,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
     ['postgres', undefined],
     ['sqlite', 'sqlite'],
   ] as const)(
-    'blocks secret-column-to-wire value-flow in the %s production artifact',
+    'M1:secret-wire blocks secret-column-to-wire value-flow in the %s production artifact',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-m1-secret-value-flow-${_label}-red-`, dialect, (root) => {
         addAuthSecretLeakProof(root);
@@ -120,7 +120,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
     ['postgres', undefined],
     ['sqlite', 'sqlite'],
   ] as const)(
-    'covers raw SQL owner-write unsafe and trusted %s production siblings',
+    'M1:raw-sql covers raw SQL owner-write unsafe and trusted %s production siblings',
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-m1-raw-sql-${_label}-red-`, dialect, (root) => {
         addRawSqlOwnerWriteProof(root);
@@ -139,7 +139,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
     ['postgres', undefined],
     ['sqlite', 'sqlite'],
   ] as const)(
-    'tracks output-wire sinks after a warmed %s prod build',
+    'M1:output-wire tracks output-wire sinks after a warmed %s prod build',
     async (_label: string, dialect: CreateKovoDialect | undefined) => {
       await withRunningProject(
         `create-kovo-m1-output-wire-${_label}-flip-`,
