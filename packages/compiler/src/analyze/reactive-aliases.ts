@@ -610,7 +610,6 @@ function hasSingleOuterParentheses(expression: string): boolean {
     true,
     ts.LanguageVariant.Standard,
     expression,
-    ts.ScriptKind.TS,
   );
   let depth = 0;
   let sawFirstToken = false;
