@@ -241,11 +241,12 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
 
 ## Phase 4 — The fail-closed program on the clean substrate
 
-- [ ] **G1 — Fail-closed-classifier lint (DEC1/DEC2, M6/M11).**
+- [x] **G1 — Fail-closed-classifier lint (DEC1/DEC2, M6/M11).**
   - `scripts/check-fail-closed-classifiers.mjs` (via `runGate`, T2 walker) implements DEC2 over DEC1-branded functions;
     exit 1 on any permissive default arm. Wire `check:fail-closed-classifiers` into `check`. Add
     `packages/conformance-fixtures/src/fail-closed-canary.fixture.ts` (a branded classifier with a permissive
     `default:`) + a test asserting the lint flags it (M11 canary).
+  - Evidence: `pnpm exec vitest --run scripts/check-fail-closed-classifiers.test.mjs`, `pnpm run check:fail-closed-classifiers`, `pnpm run check:security-brands`, `pnpm run check:api-surface`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after the DEC1-branded classifier lint rejected the planted fail-open canary and scanned 233 production source files.
 - [x] **G3 — Security-decision brand (DEC1, M11).**
   - Add `packages/core/src/internal/security-markers.ts`: `securityClassifier(name, fn)` + `wireEmitter(name, fn)`
     (module-private `unique symbol`). Wrap: (a) the DB-write choke + SQL classifiers (`sql-safe-handle.ts`,
