@@ -288,6 +288,7 @@ export interface ModuleScopeBindingModel {
 export interface ComponentModuleModel {
   calls: readonly CallExpressionModel[];
   components: readonly ComponentModel[];
+  endpointHandlers: readonly MutationHandlerModel[];
   jsxComments: readonly JsxCommentModel[];
   jsxExpressions: readonly JsxExpressionModel[];
   jsxElements: readonly JsxElementModel[];
@@ -297,6 +298,7 @@ export interface ComponentModuleModel {
   namedImports: readonly NamedImportModel[];
   renderSourceReturns: readonly StringRenderModel[];
   taskRunHandlers: readonly TaskRunHandlerModel[];
+  webhookHandlers: readonly MutationHandlerModel[];
   /**
    * @internal FN7: the scanner's own parsed `ts.SourceFile`, retained so phases like StyleX
    * extraction reuse it instead of re-parsing the component. Non-enumerable so the model stays a

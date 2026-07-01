@@ -15,10 +15,12 @@ import {
   componentRenderInputModels,
   componentRenderSlots,
   componentStateReturnObjectModel,
+  endpointHandlers,
   jsxExpressions,
   jsxElementChildBody,
   mutationHandlers,
   taskRunHandlers,
+  webhookHandlers,
   type ComponentModel,
   type ComponentModuleModel,
   type JsxElementChildBody,
@@ -467,14 +469,7 @@ export function validateDirectDbAccess(
   }
 
   for (const handler of taskRunHandlers(model)) {
-    const ctxParam = handler.paramNames[1];
-    const directWrite = handler.bodyPropertyAccesses.find(
-      (access) =>
-        isDbWriteVerb(access.terminalName) &&
-        (ctxParam === undefined ||
-          (access.path !== `${ctxParam}.${access.terminalName}` &&
-            !access.path.startsWith(`${ctxParam}.${access.terminalName}.`))),
-    );
+    const directWrite = handlerDirectDbWrite(handler, handler.paramNames[1]);
 
     if (directWrite) {
       found.push({
@@ -493,11 +488,69 @@ export function validateDirectDbAccess(
     }
   }
 
+  for (const handler of webhookHandlers(model)) {
+    const directWrite = handlerDirectDbWrite(handler);
+    if (!directWrite) continue;
+    found.push({
+      ...diagnostics.at('KV330', {
+        start: directWrite.start,
+        length: directWrite.path.length,
+      }),
+      help: [
+        'Would lower to: a machine-authenticated webhook whose database effects compose through an audited mutation/domain write.',
+        'Blocked reason: direct DB writes in a webhook handler bypass the mutation/domain write-surface audit.',
+        'Fixes: move the write into a mutation/domain write with declared touch metadata, or keep the webhook handler to verification plus mutation dispatch.',
+        'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
+      ].join('\n'),
+      message:
+        'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+    });
+  }
+
+  for (const handler of endpointHandlers(model)) {
+    const directWrite = handlerDirectDbWrite(handler);
+    if (!directWrite) continue;
+    found.push({
+      ...diagnostics.at('KV330', {
+        start: directWrite.start,
+        length: directWrite.path.length,
+      }),
+      help: [
+        'Would lower to: an endpoint whose database reads use a read-only app handle.',
+        'Blocked reason: direct DB writes in endpoint handlers bypass the mutation/domain write-surface audit and can turn an ordinary endpoint into an untracked state change.',
+        'Fixes: use readonlyAppDb for endpoint reads, or move writes into a mutation/domain write with declared touch metadata.',
+        'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
+      ].join('\n'),
+      message:
+        'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
+    });
+  }
+
   return found;
 }
 
+function handlerDirectDbWrite(
+  handler: { bodyPropertyAccesses: readonly PropertyAccessPathModel[] },
+  allowedContextParam?: string,
+): PropertyAccessPathModel | undefined {
+  return handler.bodyPropertyAccesses.find(
+    (access) =>
+      isDbWriteVerb(access.terminalName) &&
+      (allowedContextParam === undefined ||
+        (access.path !== `${allowedContextParam}.${access.terminalName}` &&
+          !access.path.startsWith(`${allowedContextParam}.${access.terminalName}.`))),
+  );
+}
+
 function isDbWriteVerb(name: string): boolean {
-  return name === 'delete' || name === 'execute' || name === 'insert' || name === 'update';
+  return (
+    name === 'batch' ||
+    name === 'delete' ||
+    name === 'execute' ||
+    name === 'insert' ||
+    name === 'run' ||
+    name === 'update'
+  );
 }
 
 // SPEC §5.2 (KV330): explicit typed predicate over the parsed handler parameter NAME (a

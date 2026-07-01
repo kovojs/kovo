@@ -52,8 +52,10 @@ interface ComponentFactoryBindings {
 }
 
 const COMPONENT_FACTORY_IDENTITY = frameworkExport('@kovojs/core', 'component');
+const ENDPOINT_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'endpoint');
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const TASK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'task');
+const WEBHOOK_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'webhook');
 
 /**
  * @internal FN7 (plans/compiler-refactoring.md): the canonical source parse. The scanner uses it,
@@ -111,6 +113,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const componentFactories = componentFactoryBindings(sourceFile);
   const calls: CallExpressionModel[] = [];
   const components: ComponentModel[] = [];
+  const endpointHandlers: MutationHandlerModel[] = [];
   const jsxComments: JsxCommentModel[] = [];
   const jsxExpressions: JsxExpressionModel[] = [];
   const jsxElements: JsxElementModel[] = [];
@@ -120,6 +123,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const namedImports: NamedImportModel[] = [];
   const renderSourceReturns: StringRenderModel[] = [];
   const taskRunHandlers: TaskRunHandlerModel[] = [];
+  const webhookHandlers: MutationHandlerModel[] = [];
   const moduleScopeObjectEntries = moduleScopeObjectEntryModels(sourceFile, source);
 
   const visit = (node: ts.Node): void => {
@@ -153,11 +157,17 @@ export function parseComponentModule(fileName: string, source: string): Componen
       (ts.isIdentifier(node.expression) || ts.isPropertyAccessExpression(node.expression))
     ) {
       calls.push(callExpressionModel(sourceFile, source, node));
+      if (isFrameworkExpression(sourceFile, node.expression, ENDPOINT_FACTORY_IDENTITY)) {
+        endpointHandlers.push(...handlerPropertyModels(sourceFile, source, node));
+      }
       if (isFrameworkExpression(sourceFile, node.expression, MUTATION_FACTORY_IDENTITY)) {
-        mutationHandlers.push(...mutationHandlerModels(sourceFile, source, node));
+        mutationHandlers.push(...handlerPropertyModels(sourceFile, source, node));
       }
       if (isFrameworkExpression(sourceFile, node.expression, TASK_FACTORY_IDENTITY)) {
         taskRunHandlers.push(...taskRunHandlerModels(sourceFile, source, node));
+      }
+      if (isFrameworkExpression(sourceFile, node.expression, WEBHOOK_FACTORY_IDENTITY)) {
+        webhookHandlers.push(...handlerPropertyModels(sourceFile, source, node));
       }
     }
     if (isExportedRenderSourceFunction(node)) {
@@ -174,6 +184,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
   const model: ComponentModuleModel = {
     calls,
     components,
+    endpointHandlers,
     jsxComments,
     jsxExpressions,
     jsxElements,
@@ -184,6 +195,7 @@ export function parseComponentModule(fileName: string, source: string): Componen
     renderSourceReturns,
     sourceFile,
     taskRunHandlers,
+    webhookHandlers,
   };
   // FN7: keep the scanner's SourceFile non-enumerable so post-parse phases (StyleX extraction)
   // reuse it rather than re-parsing the component, while the model stays a serializable fact bag.
@@ -569,6 +581,14 @@ export function taskRunHandlers(model: ComponentModuleModel): TaskRunHandlerMode
   return [...model.taskRunHandlers];
 }
 
+export function endpointHandlers(model: ComponentModuleModel): MutationHandlerModel[] {
+  return [...model.endpointHandlers];
+}
+
+export function webhookHandlers(model: ComponentModuleModel): MutationHandlerModel[] {
+  return [...model.webhookHandlers];
+}
+
 function stringLiteralArrayValuesFromExpression(expression: ts.Expression): string[] | null {
   if (!ts.isArrayLiteralExpression(expression)) return null;
 
@@ -620,10 +640,23 @@ function propertyAccessPath(expression: ts.PropertyAccessExpression): string | n
 
 function propertyAccessReceiverSegments(expression: ts.Expression): string[] | null {
   if (ts.isIdentifier(expression)) return [expression.text];
+  const callReceiver = callExpressionReceiverSegments(expression);
+  if (callReceiver) return callReceiver;
 
   if (!ts.isPropertyAccessExpression(expression)) return null;
 
   return propertyAccessPath(expression)?.split('.') ?? null;
+}
+
+function callExpressionReceiverSegments(expression: ts.Expression): string[] | null {
+  const unwrapped = unwrapExpression(expression);
+  if (!ts.isCallExpression(unwrapped) || unwrapped.arguments.length !== 0) return null;
+  if (ts.isIdentifier(unwrapped.expression)) return [`${unwrapped.expression.text}()`];
+  if (ts.isPropertyAccessExpression(unwrapped.expression)) {
+    const receiver = propertyAccessPath(unwrapped.expression);
+    return receiver ? [`${receiver}()`] : null;
+  }
+  return null;
 }
 
 /**
@@ -1041,7 +1074,7 @@ function unwrapParentheses(expression: ts.Expression): ts.Expression {
   return current;
 }
 
-function mutationHandlerModels(
+function handlerPropertyModels(
   sourceFile: ts.SourceFile,
   source: string,
   call: ts.CallExpression,

@@ -176,6 +176,32 @@ export const sendReceipt = task({
     ]);
   });
 
+  it('reports KV330 when task run bodies write through the app db provider', () => {
+    const result = compileComponentModule({
+      fileName: 'tasks.ts',
+      source: `
+import { appRuntimeDbProvider } from './db.js';
+
+export const sendReceipt = task({
+  input: receiptInput,
+  async run(args, ctx) {
+    await appRuntimeDbProvider().insert(ownerTable).values({ ownerId: args.userId });
+    await ctx.runMutation(recordReceipt, args);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV330',
+        fileName: 'tasks.ts',
+        message: 'Direct db access in a task run body; route through ctx.runMutation.',
+        severity: kv330.severity,
+      },
+    ]);
+  });
+
   it('does not report KV330 for task bodies that compose through ctx', () => {
     const result = compileComponentModule({
       fileName: 'tasks.ts',
@@ -186,6 +212,123 @@ export const sendReceipt = task({
     await ctx.runQuery(orderQuery, { id: args.orderId });
     await ctx.runMutation(recordReceipt, args);
     await ctx.schedule(sendReceipt, args);
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+  });
+
+  it('reports KV330 when webhook handlers write through the app db provider', () => {
+    const result = compileComponentModule({
+      fileName: 'webhooks.ts',
+      source: `
+import { webhook } from '@kovojs/server';
+import { appRuntimeDbProvider } from './db.js';
+
+export const paymentWebhook = webhook('/webhooks/payment', {
+  access: verifiedMachineAccess('payment signature'),
+  auth: paymentSignatureAuth,
+  async handler(request) {
+    await appRuntimeDbProvider().insert(payments).values({ id: request.headers.get('x-id') });
+    return Response.json({ ok: true });
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV330',
+        fileName: 'webhooks.ts',
+        message:
+          'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+        severity: kv330.severity,
+      },
+    ]);
+  });
+
+  it('reports KV330 when endpoint handlers write through the app db provider', () => {
+    const result = compileComponentModule({
+      fileName: 'endpoints.ts',
+      source: `
+import { endpoint, publicAccess } from '@kovojs/server';
+import { appRuntimeDbProvider } from './db.js';
+
+export const unsafeEndpoint = endpoint('/api/unsafe', {
+  access: publicAccess('test'),
+  auth: { kind: 'none', justification: 'test' },
+  csrf: false,
+  csrfJustification: 'test',
+  method: 'POST',
+  async handler(request) {
+    await appRuntimeDbProvider().insert(payments).values({ id: await request.text() });
+    return Response.json({ ok: true });
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV330',
+        fileName: 'endpoints.ts',
+        message:
+          'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
+        severity: kv330.severity,
+      },
+    ]);
+  });
+
+  it('reports KV330 when endpoint handlers write through the read-only app db handle', () => {
+    const result = compileComponentModule({
+      fileName: 'endpoints.ts',
+      source: `
+import { endpoint, publicAccess } from '@kovojs/server';
+import { readonlyAppDb } from './db.js';
+
+export const unsafeEndpoint = endpoint('/api/unsafe', {
+  access: publicAccess('test'),
+  auth: { kind: 'none', justification: 'test' },
+  csrf: false,
+  csrfJustification: 'test',
+  method: 'POST',
+  async handler() {
+    await readonlyAppDb.insert(payments).values({ id: 'p1' });
+    return Response.json({ ok: true });
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV330',
+        fileName: 'endpoints.ts',
+        message:
+          'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
+        severity: kv330.severity,
+      },
+    ]);
+  });
+
+  it('does not report KV330 for endpoint reads through the read-only app db handle', () => {
+    const result = compileComponentModule({
+      fileName: 'endpoints.ts',
+      source: `
+import { endpoint, publicAccess } from '@kovojs/server';
+import { readonlyAppDb } from './db.js';
+
+export const countEndpoint = endpoint('/api/count', {
+  access: publicAccess('test'),
+  auth: { kind: 'none', justification: 'test' },
+  csrf: false,
+  csrfJustification: 'test',
+  method: 'GET',
+  async handler() {
+    const rows = await readonlyAppDb.select().from(payments);
+    return Response.json({ count: rows.length });
   },
 });
 `,
