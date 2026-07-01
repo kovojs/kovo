@@ -52,9 +52,22 @@ preserving compatibility for a model that is hard to explain.
     called mutation and touched domains, and a prod-artifact or integration proof that a mutation
     dispatching webhook deduplicates provider replay while refreshing the touched domain.
 
-- [ ] **Continue direct-DB detector hardening outside starter cleanup.**
-  - Keep alias/destructure/helper gaps assigned to the A/B/C verifier workstreams instead of
-    weakening starter templates or exporting raw providers.
-  - Evidence to close: metamorphic coverage for any migrated direct-DB gate and focused compiler/CLI
-    tests proving unsafe spellings either emit the same canonical fact or fail closed with KV406
-    or a stricter diagnostic.
+- [ ] **Move direct-DB gates onto canonical facts/IR instead of source-pattern expansion.**
+  - Decision: do not keep broadening ad hoc source recognizers as the long-term detector strategy.
+    Alias, destructure, helper-wrapper, callback, namespace, and re-export spellings should be
+    normalized once into canonical write-sink facts, then consumed by policy checks.
+  - Keep starter templates narrow: do not weaken templates, export raw providers, or introduce
+    compatibility shims to route around detector gaps.
+  - Extraction target: every write-capable task/webhook/endpoint/query surface should emit canonical
+    facts with surface, owner, operation kind, canonical target identity, provenance, span, and an
+    explicit `UNRESOLVED` state when proof is incomplete.
+  - Policy target: gates should read facts, not re-walk source. Proven direct writes fail with the
+    surface-specific diagnostic such as KV330/KV433; unresolved write-shaped facts fail closed with
+    KV406 or a stricter diagnostic. No fact must never mean "safe" when extraction saw an
+    unprovable write-shaped site.
+  - Audit target: `kovo explain` and build/check diagnostics should consume the same facts so the
+    shipped audit output cannot diverge from the gate that allowed the build.
+  - Evidence to close: metamorphic coverage for every migrated direct-DB gate; focused compiler/CLI
+    tests proving unsafe spellings either emit the same canonical fact or fail closed; graph/explain
+    tests proving facts are visible in audit output; and removal/demotion of any now-duplicated
+    source re-walk policy path.
