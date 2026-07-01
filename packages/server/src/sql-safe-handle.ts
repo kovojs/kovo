@@ -559,8 +559,9 @@ function assertSqlWriteTablesAllowed(
     );
   }
 
+  const writeTableNames = writeTables.filter(isParsedSqlTableName);
   const allowed = new Set(declaredTables);
-  const unexpected = writeTables.filter((table) => !allowed.has(table));
+  const unexpected = writeTableNames.filter((table) => !allowed.has(table));
   if (unexpected.length === 0) return;
 
   throw new Error(
@@ -615,6 +616,10 @@ function formatSqlWriteTargets(targets: readonly ParsedSqlWriteTarget[]): string
   return targets
     .map((target) => (target === UNTABLED_SQL_WRITE ? '<untabled write>' : target))
     .join(', ');
+}
+
+function isParsedSqlTableName(target: ParsedSqlWriteTarget): target is string {
+  return target !== UNTABLED_SQL_WRITE;
 }
 
 function sqlStatementText(statement: unknown): string | undefined {

@@ -24,7 +24,7 @@ export interface ParseSqlWriteTablesOptions {
   dialect?: 'postgres' | 'sqlite' | undefined;
 }
 
-export const UNTABLED_SQL_WRITE = '\0kovo:untabled-sql-write';
+export const UNTABLED_SQL_WRITE: unique symbol = Symbol('kovo:untabled-sql-write');
 export type ParsedSqlWriteTarget = string | typeof UNTABLED_SQL_WRITE;
 
 /** Parse a SQL statement into the physical tables it mutates (SPEC §10.3/§11.2). */
@@ -42,7 +42,7 @@ export function parseSqlWriteTables(
         .parse(sql)
         .flatMap((parsed) => writeTablesForStatement(parsed, new Set())),
     ),
-  ].sort();
+  ].sort(compareSqlWriteTargets);
 }
 
 function normalizeSqlitePlaceholders(statement: string): string {
@@ -323,13 +323,19 @@ const SQL_STATEMENT_TYPES = new Set<string>([
 ]);
 
 function isStatement(value: object): value is Statement {
-  return (
-    'type' in value && typeof value.type === 'string' && SQL_STATEMENT_TYPES.has(value.type)
-  );
+  return 'type' in value && typeof value.type === 'string' && SQL_STATEMENT_TYPES.has(value.type);
 }
 
 function tableName(identifier: QName): string {
   return identifier.name;
+}
+
+function compareSqlWriteTargets(left: ParsedSqlWriteTarget, right: ParsedSqlWriteTarget): number {
+  return sqlWriteTargetSortKey(left).localeCompare(sqlWriteTargetSortKey(right));
+}
+
+function sqlWriteTargetSortKey(target: ParsedSqlWriteTarget): string {
+  return target === UNTABLED_SQL_WRITE ? '\0' : target;
 }
 
 function unparsedSqliteWriteStatement(statement: string): boolean {
