@@ -517,6 +517,202 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     ]);
   });
 
+  it('summarizes local helper writes reached by query() loaders', () => {
+    const result = reach(
+      [
+        QHEAD,
+        'declare const db: PgAsyncDatabase<any, any>;',
+        'function purgeLogs() {',
+        '  return db.delete(logs).where(eq(logs.id, "x"));',
+        '}',
+        'export const dashboard = query("dashboard", {',
+        '  load: async () => {',
+        '    await purgeLogs();',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+        operation: 'delete',
+        operationKind: 'delete',
+        operationProvenance: 'property-access',
+        query: 'dashboard',
+        site: 'q.ts:7',
+        table: 'logs',
+      },
+    ]);
+  });
+
+  it('summarizes imported sibling helper writes reached by query() loaders', () => {
+    const result = extractQueryWriteReachabilityFromProject({
+      files: [
+        writeDbTypes,
+        pgDatabaseTypes([
+          'delete(table: unknown): { where(value: unknown): Promise<void> }; execute(sql: unknown): Promise<void>;',
+        ]),
+        {
+          fileName: 'schema.ts',
+          source:
+            'export const logs = pgTable("logs", { id: text("id").primaryKey() }, kovo({ domain: "log" }));',
+        },
+        {
+          fileName: 'helpers.ts',
+          source: [
+            'import { eq } from "drizzle-orm";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { logs } from "./schema";',
+            'declare const db: PgAsyncDatabase<any, any>;',
+            'export function purgeLogs() {',
+            '  return db.delete(logs).where(eq(logs.id, "x"));',
+            '}',
+            'export function readLogs() {',
+            '  return db.select().from(logs);',
+            '}',
+          ].join('\n'),
+        },
+        {
+          fileName: 'q.ts',
+          source: [
+            'import { purgeLogs, readLogs } from "./helpers";',
+            'export const dashboard = query("dashboard", {',
+            '  load: async () => {',
+            '    await readLogs();',
+            '    await purgeLogs();',
+            '    return { ok: true };',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'logs', provenance: 'table-argument' },
+        operation: 'delete',
+        operationKind: 'delete',
+        operationProvenance: 'property-access',
+        query: 'dashboard',
+        site: 'helpers.ts:6',
+        table: 'logs',
+      },
+    ]);
+  });
+
+  it('summarizes helper raw DB writes and storage writes through captured handles', () => {
+    const result = reach(
+      [
+        'import type { StorageCapability } from "@kovojs/core";',
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        'declare const db: PgAsyncDatabase<any, any>;',
+        'declare const storage: StorageCapability;',
+        'function rebuild() {',
+        '  db.execute("vacuum");',
+        '  return storage.put("receipts/a.txt", "A");',
+        '}',
+        'export const dashboard = query("dashboard", {',
+        '  load: async () => {',
+        '    await rebuild();',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'raw-receiver-method' },
+        operation: 'execute',
+        operationKind: 'execute',
+        operationProvenance: 'property-access',
+        query: 'dashboard',
+        site: 'q.ts:6',
+        table: '__kovoUnresolvedReadSource',
+      },
+      {
+        canonicalTarget: { identity: 'storage', provenance: 'storage-receiver' },
+        operation: 'put',
+        operationKind: 'put',
+        operationProvenance: 'property-access',
+        query: 'dashboard',
+        site: 'q.ts:7',
+        table: 'storage',
+      },
+    ]);
+  });
+
+  it('does not flag safe read-only sibling helpers', () => {
+    const result = reach(
+      [
+        QHEAD,
+        'declare const db: PgAsyncDatabase<any, any>;',
+        'function readLogs() {',
+        '  return db.select().from(logs);',
+        '}',
+        'export const dashboard = query("dashboard", {',
+        '  load: async () => readLogs(),',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toEqual([]);
+  });
+
+  it('fails closed on unprovable write-shaped helper calls in query() loaders', () => {
+    const result = reach(
+      [
+        'declare function deleteFromAuditLog(): Promise<void>;',
+        'export const dashboard = query("dashboard", {',
+        '  load: async () => {',
+        '    await deleteFromAuditLog();',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-table' },
+        operation: 'UNRESOLVED',
+        operationKind: 'UNRESOLVED',
+        operationProvenance: 'property-access',
+        query: 'dashboard',
+        site: 'q.ts:4',
+        table: '__kovoUnresolvedReadSource',
+        unresolved: { code: 'KV406', reason: 'computed-member' },
+      },
+    ]);
+  });
+
+  it('fails closed when a summarized helper reaches an unprovable write-shaped helper', () => {
+    const result = reach(
+      [
+        'declare function deleteFromAuditLog(): Promise<void>;',
+        'function helper() {',
+        '  return deleteFromAuditLog();',
+        '}',
+        'export const dashboard = query("dashboard", {',
+        '  load: async () => {',
+        '    await helper();',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-table' },
+        operation: 'UNRESOLVED',
+        operationKind: 'UNRESOLVED',
+        operationProvenance: 'property-access',
+        query: 'dashboard',
+        site: 'q.ts:3',
+        table: '__kovoUnresolvedReadSource',
+        unresolved: { code: 'KV406', reason: 'computed-member' },
+      },
+    ]);
+  });
+
   it('does not flag a read-only loader', () => {
     const result = reach(
       `${QHEAD}export const dashboard = query("dashboard", { load: async () => ({ ok: true }) });`,

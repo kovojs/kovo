@@ -2224,17 +2224,13 @@ function dedupeToctouFacts(facts: readonly ToctouFact[]): ToctouFact[] {
 
 // ── KV433 read-only query handle (Stage-2 static no-write-reachable) ──────────
 //
-// SPEC §6.6/§9.4, secure-framework Phase 5. A `query('name', { load })` loader is a
-// read surface; reaching a Drizzle write (insert/update/delete/execute/run/batch) from it is the
-// confused-deputy case (a state change on an idempotent GET). Stage 2 is the
-// by-construction half: a static proof that a loader body contains no DIRECTLY-reachable
-// Drizzle write. There is no GET-write query escape; legacy/demoted `.elevated` query-like
-// declarations are treated as read surfaces for this gate. Honest scope: this detects writes DIRECTLY in the loader
-// body. The fully interprocedural case (a loader calling an imported `domain()` function
-// that writes through a captured handle) needs the bottom-up write-summaries that are NOT
-// built; that residue is a documented gap, not covered here. Stage 1 is the shipped managed
-// read-only proxy handle where Kovo owns `context.db`; it is a runtime floor, while this
-// direct static check is the by-construction gate.
+// SPEC §6.6/§9.4 and §11.1: a `query('name', { load })` loader is a read surface; reaching a
+// Drizzle/storage write (insert/update/delete/execute/run/batch/put/upload/store) from it is the
+// confused-deputy case (a state change on an idempotent GET). Stage 2 is the by-construction
+// half: a static proof that a loader body and its project-reachable helper calls contain no write.
+// There is no GET-write query escape; legacy/demoted `.elevated` query-like declarations are
+// treated as read surfaces for this gate. Stage 1 is the shipped managed read-only proxy handle
+// where Kovo owns `context.db`; it is a runtime floor, while this static check is the proof gate.
 
 type ResolvedQueryWriteReachabilityOperationKind = Exclude<
   QueryWriteReachabilityOperationKind,
@@ -2267,7 +2263,25 @@ interface QueryLoaderWriteContext {
   query: string;
   receivers: ProjectDrizzleReceivers;
   resolveTable: (node: Node) => string | undefined;
+  summaries: QueryWriteSummaryIndex;
   storageReceivers: ReadonlySet<string>;
+}
+
+interface QueryWriteReachabilityFactTemplate extends Omit<QueryWriteReachabilityFact, 'query'> {}
+
+interface QueryWriteSummaryFunction {
+  body: Node;
+  file: SourceFileInput;
+  fn: Node;
+  receivers: ProjectDrizzleReceivers;
+  resolveTable: (node: Node) => string | undefined;
+  storageReceivers: ReadonlySet<string>;
+}
+
+interface QueryWriteSummaryIndex {
+  functions: ReadonlyMap<string, QueryWriteSummaryFunction>;
+  summaries: Map<string, QueryWriteReachabilityFactTemplate[]>;
+  visiting: Set<string>;
 }
 
 /**
@@ -2300,6 +2314,7 @@ function extractQueryWriteReachabilityFromDeriveExtraction(
   extraction: DeriveExtraction,
 ): QueryWriteReachabilityFact[] {
   const facts: QueryWriteReachabilityFact[] = [];
+  const summaries = queryWriteSummaryIndex(extraction);
   extraction.sourceFiles.forEach((sourceFile, index) => {
     const file = extraction.files[index];
     if (!file) return;
@@ -2331,6 +2346,7 @@ function extractQueryWriteReachabilityFromDeriveExtraction(
           query: loader.name,
           receivers,
           resolveTable,
+          summaries,
           storageReceivers,
         }),
       );
@@ -2384,9 +2400,395 @@ function queryWriteReachabilityFactsForLoader(
       );
       if (storageAlias) facts.push(storageAlias);
     }
+
+    const knownReceiverWriteCall =
+      direct !== undefined ||
+      storage !== undefined ||
+      aliasOperation !== undefined ||
+      storageAliasOperation !== undefined;
+    if (!knownReceiverWriteCall) {
+      facts.push(...queryWriteReachabilityFactsForReachableHelperCall(call, context));
+    }
   }
 
   return dedupeQueryWriteReachabilityFacts(facts);
+}
+
+function queryWriteReachabilityFactsForReachableHelperCall(
+  call: CallExpression,
+  context: QueryLoaderWriteContext,
+): QueryWriteReachabilityFact[] {
+  const calleeKey = resolvedFunctionCallSymbolKey(call);
+  if (calleeKey) {
+    const summarized = queryWriteSummaryFactsForFunction(calleeKey, context.summaries);
+    if (summarized) return summarized.map((fact) => ({ ...fact, query: context.query }));
+  }
+
+  if (!isUnprovableWriteShapedHelperCall(call)) return [];
+  return [queryLoaderUnresolvedHelperWriteFact(call, context)];
+}
+
+function queryWriteSummaryIndex(extraction: DeriveExtraction): QueryWriteSummaryIndex {
+  const functions = new Map<string, QueryWriteSummaryFunction>();
+  extraction.sourceFiles.forEach((sourceFile, index) => {
+    const file = extraction.files[index];
+    if (!file) return;
+
+    const namespaceTableNames = projectNamespaceTableNamesByLocal(
+      sourceFile,
+      extraction.tableNamesBySymbol,
+    );
+    const resolveTable = (node: Node): string | undefined => {
+      const synthetic = projectTableNameForNode(
+        node,
+        extraction.tableNamesBySymbol,
+        namespaceTableNames,
+      );
+      if (!synthetic) return undefined;
+      const tableSynthetic = tableSyntheticNameForDerivation(synthetic);
+      return extraction.realTableNameBySynthetic.get(tableSynthetic) ?? synthetic;
+    };
+
+    for (const fn of queryWriteSummaryFunctions(sourceFile)) {
+      const key = functionSymbolKey(fn);
+      if (!key) continue;
+      let body: Node;
+      try {
+        body = functionBody(fn);
+      } catch {
+        continue;
+      }
+      functions.set(key, {
+        body,
+        file,
+        fn,
+        receivers: mergeProjectDrizzleReceivers(
+          projectDrizzleReceivers(fn),
+          moduleScopeDrizzleReceivers(sourceFile),
+        ),
+        resolveTable,
+        storageReceivers: projectStorageReceivers(sourceFile, fn),
+      });
+    }
+  });
+  return { functions, summaries: new Map(), visiting: new Set() };
+}
+
+function queryWriteSummaryFunctions(sourceFile: SourceFile): Node[] {
+  const functions: Node[] = [];
+  for (const fn of sourceFile.getDescendantsOfKind(SyntaxKind.FunctionDeclaration)) {
+    functions.push(fn);
+  }
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    const fn = initializer ? unwrappedFunctionExpression(initializer) : undefined;
+    if (fn) functions.push(fn);
+  }
+  for (const method of sourceFile.getDescendantsOfKind(SyntaxKind.MethodDeclaration)) {
+    functions.push(method);
+  }
+  for (const property of sourceFile.getDescendantsOfKind(SyntaxKind.PropertyAssignment)) {
+    const initializer = property.getInitializer();
+    const fn = initializer ? unwrappedFunctionExpression(initializer) : undefined;
+    if (fn) functions.push(fn);
+  }
+  return functions;
+}
+
+function functionSymbolKey(fn: Node): string | undefined {
+  if (Node.isFunctionDeclaration(fn)) return resolvedSymbolKey(fn.getNameNode()?.getSymbol());
+  if (Node.isMethodDeclaration(fn)) return resolvedSymbolKey(fn.getNameNode().getSymbol());
+  if (Node.isFunctionExpression(fn) || Node.isArrowFunction(fn)) {
+    const parent = fn.getParent();
+    if (Node.isVariableDeclaration(parent))
+      return resolvedSymbolKey(parent.getNameNode().getSymbol());
+    if (Node.isPropertyAssignment(parent))
+      return resolvedSymbolKey(parent.getNameNode().getSymbol());
+  }
+  return resolvedSymbolKey(fn.getSymbol());
+}
+
+function queryWriteSummaryFactsForFunction(
+  key: string,
+  index: QueryWriteSummaryIndex,
+): QueryWriteReachabilityFactTemplate[] | undefined {
+  const cached = index.summaries.get(key);
+  if (cached) return cached;
+  const fn = index.functions.get(key);
+  if (!fn) return undefined;
+  if (index.visiting.has(key)) return [];
+
+  index.visiting.add(key);
+  const facts: QueryWriteReachabilityFactTemplate[] = [];
+  const methodAliases = receiverMethodAliasesForBody(fn.body, (node) =>
+    isProjectDrizzleReceiverIdentifier(node, fn.receivers),
+  );
+  const storageMethodAliases = receiverMethodAliasesForBody(fn.body, (node) =>
+    isStorageReceiverExpression(node, fn.storageReceivers),
+  );
+
+  for (const call of touchBodyCallExpressions(fn.body)) {
+    const direct = directQueryLoaderWriteFactTemplate(call, fn);
+    if (direct) facts.push(direct);
+
+    const storage = directQueryLoaderStorageWriteFactTemplate(call, fn);
+    if (storage) facts.push(storage);
+
+    const aliasOperation = receiverMethodAliasCallName(call, methodAliases);
+    if (aliasOperation) {
+      const alias = queryLoaderWriteFactTemplateForOperation(
+        call,
+        aliasOperation,
+        'receiver-method-alias',
+        fn,
+      );
+      if (alias) facts.push(alias);
+    }
+
+    const storageAliasOperation = receiverMethodAliasCallName(call, storageMethodAliases);
+    if (storageAliasOperation) {
+      const storageAlias = queryLoaderStorageWriteFactTemplateForOperation(
+        call,
+        storageAliasOperation,
+        'receiver-method-alias',
+        fn,
+      );
+      if (storageAlias) facts.push(storageAlias);
+    }
+
+    const knownReceiverWriteCall =
+      direct !== undefined ||
+      storage !== undefined ||
+      aliasOperation !== undefined ||
+      storageAliasOperation !== undefined;
+    if (!knownReceiverWriteCall) {
+      const calleeKey = resolvedFunctionCallSymbolKey(call);
+      let summarized = false;
+      if (calleeKey && calleeKey !== key) {
+        const helperFacts = queryWriteSummaryFactsForFunction(calleeKey, index);
+        if (helperFacts) {
+          facts.push(...helperFacts);
+          summarized = true;
+        }
+      }
+      if (!summarized && isUnprovableWriteShapedHelperCall(call)) {
+        facts.push(queryLoaderUnresolvedHelperWriteFactTemplate(call, fn));
+      }
+    }
+  }
+
+  const deduped = dedupeQueryWriteReachabilityFactTemplates(facts);
+  index.summaries.set(key, deduped);
+  index.visiting.delete(key);
+  return deduped;
+}
+
+function directQueryLoaderWriteFactTemplate(
+  call: CallExpression,
+  context: QueryWriteSummaryFunction,
+): QueryWriteReachabilityFactTemplate | undefined {
+  const surface = directDrizzleReceiverCallSurface(call);
+  if (!surface || !isProjectDrizzleReceiverIdentifier(surface.receiver, context.receivers)) {
+    return undefined;
+  }
+  return queryLoaderWriteFactTemplateForOperation(call, surface.name, 'property-access', context);
+}
+
+function directQueryLoaderStorageWriteFactTemplate(
+  call: CallExpression,
+  context: QueryWriteSummaryFunction,
+): QueryWriteReachabilityFactTemplate | undefined {
+  const surface = directDrizzleReceiverCallSurface(call);
+  if (!surface) return undefined;
+
+  if (surface.name === 'store' && isFileSchemaStoreReceiver(surface.receiver)) {
+    return queryLoaderStorageStoreFactTemplate(call, context);
+  }
+
+  if (!isStorageReceiverExpression(surface.receiver, context.storageReceivers)) return undefined;
+  return queryLoaderStorageWriteFactTemplateForOperation(
+    call,
+    surface.name,
+    'property-access',
+    context,
+    surface.receiver,
+  );
+}
+
+function queryLoaderWriteFactTemplateForOperation(
+  call: CallExpression,
+  operation: string,
+  operationProvenance: QueryWriteReachabilityOperationProvenance,
+  context: QueryWriteSummaryFunction,
+): QueryWriteReachabilityFactTemplate | undefined {
+  if (operation === COMPUTED_DRIZZLE_RECEIVER_METHOD) {
+    return queryLoaderUnresolvedWriteFactTemplate(call, operationProvenance, context);
+  }
+
+  if (!isQueryWriteOperationKind(operation)) return undefined;
+  const target = queryWriteTargetForCall(call, operation, context.resolveTable);
+
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation,
+    operationKind: operation,
+    operationProvenance,
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+  };
+}
+
+function queryLoaderStorageWriteFactTemplateForOperation(
+  call: CallExpression,
+  operation: string,
+  operationProvenance: QueryWriteReachabilityOperationProvenance,
+  context: QueryWriteSummaryFunction,
+  receiver?: Node,
+): QueryWriteReachabilityFactTemplate | undefined {
+  if (operation === COMPUTED_DRIZZLE_RECEIVER_METHOD) {
+    return queryLoaderStorageUnresolvedWriteFactTemplate(
+      call,
+      operationProvenance,
+      context,
+      receiver,
+    );
+  }
+  if (!isStorageWriteOperationKind(operation)) return undefined;
+  const target = queryStorageTarget(receiver);
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation,
+    operationKind: operation,
+    operationProvenance,
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+  };
+}
+
+function queryLoaderStorageStoreFactTemplate(
+  call: CallExpression,
+  context: QueryWriteSummaryFunction,
+): QueryWriteReachabilityFactTemplate {
+  const target = queryStorageTarget(storageObjectPropertyInitializer(call));
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation: 'store',
+    operationKind: 'store',
+    operationProvenance: 'property-access',
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+  };
+}
+
+function queryLoaderUnresolvedWriteFactTemplate(
+  call: CallExpression,
+  operationProvenance: QueryWriteReachabilityOperationProvenance,
+  context: QueryWriteSummaryFunction,
+): QueryWriteReachabilityFactTemplate {
+  const target = queryWriteTargetForCall(call, 'UNRESOLVED', context.resolveTable);
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation: 'UNRESOLVED',
+    operationKind: 'UNRESOLVED',
+    operationProvenance:
+      operationProvenance === 'receiver-method-alias' ? operationProvenance : 'computed-member',
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+    unresolved: { code: 'KV406', reason: 'computed-member' },
+  };
+}
+
+function queryLoaderStorageUnresolvedWriteFactTemplate(
+  call: CallExpression,
+  operationProvenance: QueryWriteReachabilityOperationProvenance,
+  context: QueryWriteSummaryFunction,
+  receiver?: Node,
+): QueryWriteReachabilityFactTemplate {
+  const target = queryStorageTarget(receiver);
+  return {
+    canonicalTarget: target.canonicalTarget,
+    operation: 'UNRESOLVED',
+    operationKind: 'UNRESOLVED',
+    operationProvenance:
+      operationProvenance === 'receiver-method-alias' ? operationProvenance : 'computed-member',
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: target.table,
+    unresolved: { code: 'KV406', reason: 'computed-member' },
+  };
+}
+
+function queryLoaderUnresolvedHelperWriteFact(
+  call: CallExpression,
+  context: QueryLoaderWriteContext,
+): QueryWriteReachabilityFact {
+  return {
+    canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-table' },
+    operation: 'UNRESOLVED',
+    operationKind: 'UNRESOLVED',
+    operationProvenance: 'property-access',
+    query: context.query,
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: UNRESOLVED_READ_SOURCE_EXPRESSION,
+    unresolved: { code: 'KV406', reason: 'computed-member' },
+  };
+}
+
+function queryLoaderUnresolvedHelperWriteFactTemplate(
+  call: CallExpression,
+  context: QueryWriteSummaryFunction,
+): QueryWriteReachabilityFactTemplate {
+  return {
+    canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-table' },
+    operation: 'UNRESOLVED',
+    operationKind: 'UNRESOLVED',
+    operationProvenance: 'property-access',
+    site: `${context.file.fileName}:${lineForIndex(context.file.source, call.getStart())}`,
+    span: { end: call.getEnd(), start: call.getStart() },
+    table: UNRESOLVED_READ_SOURCE_EXPRESSION,
+    unresolved: { code: 'KV406', reason: 'computed-member' },
+  };
+}
+
+function resolvedFunctionCallSymbolKey(call: CallExpression): string | undefined {
+  const symbol = call.getExpression().getSymbol();
+  return resolvedSymbolKey(symbol?.getAliasedSymbol() ?? symbol);
+}
+
+function isUnprovableWriteShapedHelperCall(call: CallExpression): boolean {
+  const expression = call.getExpression();
+  if (Node.isPropertyAccessExpression(expression)) {
+    const owner = expression.getExpression();
+    if (
+      isKovoServerCalleeExpression(owner, 'query') ||
+      isKovoServerCalleeExpression(owner, 'write')
+    ) {
+      return false;
+    }
+  }
+  const name = helperCallName(call);
+  return (
+    name !== undefined &&
+    /^(?:write|mutate|mutation|insert|update|delete|remove|put|upload|store|save|create|set)[A-Z0-9_]?/u.test(
+      name,
+    )
+  );
+}
+
+function helperCallName(call: CallExpression): string | undefined {
+  const expression = call.getExpression();
+  if (Node.isIdentifier(expression)) return expression.getText();
+  if (Node.isPropertyAccessExpression(expression)) return expression.getName();
+  if (Node.isElementAccessExpression(expression)) {
+    const name = staticAccessName(expression);
+    if (name) return name;
+  }
+  return undefined;
 }
 
 function directQueryLoaderWriteFact(
@@ -2678,6 +3080,28 @@ function dedupeQueryWriteReachabilityFacts(
   for (const fact of facts) {
     const key = [
       fact.query,
+      fact.site,
+      fact.operationKind ?? fact.operation,
+      fact.operationProvenance ?? '',
+      fact.table,
+      fact.canonicalTarget?.identity ?? '',
+      fact.canonicalTarget?.provenance ?? '',
+      fact.unresolved?.code ?? '',
+    ].join('\0');
+    if (seen.has(key)) continue;
+    seen.add(key);
+    deduped.push(fact);
+  }
+  return deduped;
+}
+
+function dedupeQueryWriteReachabilityFactTemplates(
+  facts: readonly QueryWriteReachabilityFactTemplate[],
+): QueryWriteReachabilityFactTemplate[] {
+  const seen = new Set<string>();
+  const deduped: QueryWriteReachabilityFactTemplate[] = [];
+  for (const fact of facts) {
+    const key = [
       fact.site,
       fact.operationKind ?? fact.operation,
       fact.operationProvenance ?? '',
