@@ -43,6 +43,7 @@ import {
   commandSequence,
   commandSequenceWithoutLast,
   conformanceGateFacts,
+  kovoCheckSecurityMatrixRows,
   loadVitePlusConfig,
   nodeTaskCommand,
   pnpmFilterTestCommands,
@@ -66,6 +67,7 @@ import {
   type CliMainCommand,
   type ConformanceGateFacts,
   type CommandInvocation,
+  type KovoCheckSecurityMatrixRow,
   type NodeTaskCommand,
   type P10PerfAcceptanceGateFact,
   type P10PerfAcceptanceProjectFactOptions,
@@ -1082,6 +1084,18 @@ describe('@kovojs/test package subpath exports', () => {
     expectTypeOf<CompilerStampFact>().toHaveProperty('derive').toEqualTypeOf<CompilerDeriveFact>();
     expectTypeOf<CompilerUpdateCoverageFact>().toHaveProperty('component').toEqualTypeOf<string>();
     expect(commandOutputLines('one\r\ntwo\n')).toEqual(['one', 'two']);
+    expect(
+      kovoCheckSecurityMatrixRows(
+        'jobs:\n  kovo-check:\n    strategy:\n      matrix:\n        include:\n          - shard: node-pglite\n            suites: compiler-runtime server-browser project\n            preset: node\n            dialect: pglite\n  check:\n',
+      ),
+    ).toEqual([
+      {
+        dialect: 'pglite',
+        preset: 'node',
+        shard: 'node-pglite',
+        suites: 'compiler-runtime server-browser project',
+      },
+    ]);
     expect(commandSequenceWithoutLast('vp run build && vp run kovo-check')).toBe('vp run build');
     expect(pnpmRunScriptNames('pnpm run build && pnpm run test:browser')).toEqual([
       'build',
@@ -1747,6 +1761,7 @@ type _PublicSubpathTypes = [
   CapturedCliCommandResult,
   CliMainCommand,
   CommandInvocation,
+  KovoCheckSecurityMatrixRow,
   NodeTaskCommand,
   P10PerfAcceptanceGateFact,
   P10PerfAcceptanceProjectFactOptions,

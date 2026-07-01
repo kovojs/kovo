@@ -39,6 +39,13 @@ export interface WorkflowStepCommand {
   uses?: string;
 }
 
+export interface KovoCheckSecurityMatrixRow {
+  dialect: string;
+  preset: string;
+  shard: string;
+  suites: string;
+}
+
 export interface VitePlusTask {
   command?: unknown;
   input?: unknown;
@@ -164,6 +171,15 @@ function firstString(value: unknown, message: string): string {
 
 const jsonClone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 
+function assertCompleteKovoCheckSecurityMatrixRow(
+  row: Partial<KovoCheckSecurityMatrixRow>,
+): asserts row is KovoCheckSecurityMatrixRow {
+  assert.ok(row.shard, 'kovo-check matrix row has shard');
+  assert.ok(row.suites, `kovo-check matrix row ${row.shard} has suites`);
+  assert.ok(row.preset, `kovo-check matrix row ${row.shard} has preset`);
+  assert.ok(row.dialect, `kovo-check matrix row ${row.shard} has dialect`);
+}
+
 export function workflowStepCommands(source: string): WorkflowStepCommand[] {
   const steps: WorkflowStepCommand[] = [];
   let current: WorkflowStepCommand | undefined;
@@ -223,6 +239,42 @@ export function workflowVpRunTaskNames(source: string): string[] {
   return workflowStepCommands(source)
     .map((step) => workflowTaskName(step.run ?? ''))
     .filter((taskName): taskName is string => Boolean(taskName));
+}
+
+export function kovoCheckSecurityMatrixRows(source: string): KovoCheckSecurityMatrixRow[] {
+  const lines = source.split('\n');
+  const jobStart = lines.findIndex((line) => /^  kovo-check:\s*$/.test(line));
+  assert.notEqual(jobStart, -1, 'kovo-check job is present');
+  const nextJob = lines.findIndex((line, index) => index > jobStart && /^  [\w-]+:\s*$/.test(line));
+  const jobLines = lines.slice(jobStart, nextJob === -1 ? undefined : nextJob);
+  const includeStart = jobLines.findIndex((line) => /^\s+include:\s*$/.test(line));
+  assert.notEqual(includeStart, -1, 'kovo-check matrix include list is present');
+
+  const rows: KovoCheckSecurityMatrixRow[] = [];
+  let current: Partial<KovoCheckSecurityMatrixRow> | undefined;
+  const pushCurrent = () => {
+    if (current === undefined) return;
+    assertCompleteKovoCheckSecurityMatrixRow(current);
+    rows.push(current);
+  };
+
+  for (const line of jobLines.slice(includeStart + 1)) {
+    const rowStart = /^\s+-\s+shard:\s*(.+?)\s*$/.exec(line);
+    if (rowStart) {
+      pushCurrent();
+      current = { shard: rowStart[1] ?? '' };
+      continue;
+    }
+
+    const property = /^\s+(suites|preset|dialect):\s*(.+?)\s*$/.exec(line);
+    if (current && property) {
+      const key = property[1] as 'dialect' | 'preset' | 'suites';
+      current[key] = property[2] ?? '';
+    }
+  }
+  pushCurrent();
+
+  return rows;
 }
 
 export function pnpmRunScriptName(command: string): string | undefined {

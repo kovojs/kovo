@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { mkdtemp, mkdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 
@@ -17,6 +17,7 @@ import {
   pnpmFilterTestCommands,
   pnpmRunScriptName,
   pnpmRunScriptNames,
+  kovoCheckSecurityMatrixRows,
   p10PerfAcceptanceGateFact,
   p10PerfAcceptanceModulePath,
   p10PerfAcceptanceProjectFact,
@@ -29,7 +30,9 @@ import {
   vpRunTaskName,
   workflowVpRunTaskNames,
   workflowStepCommands,
+  type KovoCheckSecurityMatrixRow,
 } from './command-fixtures.js';
+import { DEC8_SECURITY_MATRIX } from './gate-adversary-map.js';
 
 describe('@kovojs/test command fixtures', () => {
   it('turns shell-free command sequences into argv facts', () => {
@@ -187,6 +190,20 @@ describe('@kovojs/test command fixtures', () => {
     expect(workflowVpRunTaskNames('steps:\n  - run: vp exec pnpm run check:build')).toEqual([
       'build',
     ]);
+  });
+
+  it('projects the DEC8 kovo-check security matrix from CI wiring', async () => {
+    const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
+    const rows = kovoCheckSecurityMatrixRows(workflow);
+
+    expect(rowMatrixKeys(rows)).toEqual(
+      DEC8_SECURITY_MATRIX.map((row) => `${row.preset}/${row.dialect}`),
+    );
+    expect(rows.map((row) => row.suites)).toEqual(
+      DEC8_SECURITY_MATRIX.map(() => 'compiler-runtime server-browser project'),
+    );
+    expect(workflow).toContain('KOVO_SECURITY_PRESET: ${{ matrix.preset }}');
+    expect(workflow).toContain('KOVO_SECURITY_DIALECT: ${{ matrix.dialect }}');
   });
 
   it('loads Vite+ task configs through the fixture seam', async () => {
@@ -661,3 +678,7 @@ describe('@kovojs/test command fixtures', () => {
     ]);
   });
 });
+
+function rowMatrixKeys(rows: readonly KovoCheckSecurityMatrixRow[]): string[] {
+  return rows.map((row) => `${row.preset}/${row.dialect}`);
+}

@@ -260,21 +260,20 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
   - `packages/conformance-fixtures/src/adversarial-corpus.ts` + property generators (SQL, taint expressions,
     import/alias shapes). `scripts/check-green-corpus.mjs` builds the DEC10 corpus on both dialects and asserts zero new
     KV errors; wire into `check`.
-- [ ] **G5 — Matrix + adversary map (DEC8/DEC9, M13).**
+- [x] **G5 — Matrix + adversary map (DEC8/DEC9, M13).**
   - Parametrize the security suites by the DEC8 `preset × dialect` matrix. Add
     `packages/conformance-fixtures/src/gate-adversary-map.ts` encoding DEC9 + a test that every branded gate has an
     adversary and a matching hostile test.
-  - Progress: `packages/conformance-fixtures/src/gate-adversary-map.ts` now exports the DEC8 matrix plus a DEC9 map for
-    the 52 currently branded security-decision gates; focused Vitest
-    (`pnpm exec vitest --run packages/conformance-fixtures/src/gate-adversary-map.test.ts
-    packages/conformance-fixtures/src/package-exports.test.ts`), strict standalone TypeScript
-    (`pnpm exec tsc --ignoreConfig --noEmit --pretty false --module NodeNext --moduleResolution NodeNext --target ES2024
-    --types node,vitest --strict --skipLibCheck --allowImportingTsExtensions --exactOptionalPropertyTypes
+  - Evidence: `pnpm exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts
+    packages/conformance-fixtures/src/gate-adversary-map.test.ts
+    packages/conformance-fixtures/src/package-exports.test.ts` proves the CI kovo-check matrix equals the six DEC8
+    rows and every branded gate has a DEC9 adversary plus an existing hostile test; strict standalone `pnpm exec tsc
+    --ignoreConfig --noEmit --pretty false --module NodeNext --moduleResolution NodeNext --target ES2024 --types
+    node,vitest --strict --skipLibCheck --allowImportingTsExtensions --exactOptionalPropertyTypes
     --noUncheckedIndexedAccess packages/conformance-fixtures/src/gate-adversary-map.ts
-    packages/conformance-fixtures/src/gate-adversary-map.test.ts`), `pnpm run check:api-surface`, and `git diff --check`
-    passed.
-  - Remaining gap: security suites are not yet parametrized by the DEC8 `preset × dialect` matrix, so this checkbox stays
-    open.
+    packages/conformance-fixtures/src/gate-adversary-map.test.ts packages/conformance-fixtures/src/command-fixtures.ts
+    packages/conformance-fixtures/src/command-fixtures.test.ts`, `pnpm run check:api-surface`, Ruby YAML parse of
+    `.github/workflows/ci.yml`, and `git diff --check` passed.
 - [ ] **K — Fail-closed KV426 recognizer (closes `bugz-26` B2; after C2).**
   - Problem (verified): direct `trustedHtml(request.headers.get('x-xss')??'')` → KV426 RED, but
     `const trust = { html: trustedHtml }; trust.html(reflected)` → GREEN, and the prod artifact reflects
