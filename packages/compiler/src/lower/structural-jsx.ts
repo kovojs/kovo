@@ -1504,7 +1504,6 @@ function inlineTextDerive(
   componentName: string,
 ): InlineStateTextDerive | null {
   if (element.selfClosing || hasTextBindingAttribute(element) || !expression) return null;
-  if (expression.expression.solePropertyAccessPath) return null;
   if (
     !isStateOnlyExpression(reactivePropertyAccessesForJsxExpression(expression.expression, model))
   ) {

@@ -632,6 +632,30 @@ export const StateChainedAlias = component({
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
   });
 
+  it('lowers chained destructured state aliases to canonical state-path derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-chained-destructure-alias.tsx',
+      source: `
+export const StateChainedDestructureAlias = component({
+  state: () => ({ count: 1 }),
+  render: (_queries, state) => {
+    const { count } = state;
+    const direct = count;
+    const chained = direct;
+    return <state-chained-destructure-alias><p>{chained + 1}</p></state-chained-destructure-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      'export const StateChainedDestructureAlias$p_text_derive = derive(["state"], (state) => (state.count) + 1);',
+    );
+    expect(clientSource).not.toContain('chained');
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
   it('lowers nested and computed state destructuring aliases to canonical state-path derives', () => {
     const result = compileComponentModule({
       fileName: 'state-nested-computed-alias.tsx',
@@ -678,6 +702,80 @@ export const StateArrayAlias = component({
       evaluateStateDerive(clientSource, 'StateArrayAlias$p_text_derive', { items: ['ok'] }),
     ).toBe('OK');
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
+  it('lowers nested array state destructuring aliases to canonical state-path derives', () => {
+    const result = compileComponentModule({
+      fileName: 'state-nested-array-alias.tsx',
+      source: `
+export const StateNestedArrayAlias = component({
+  state: () => ({ groups: [[{ label: 'first' }]] }),
+  render: (_queries, state) => {
+    const { groups: [[firstItem]] } = state;
+    return <state-nested-array-alias><p>{firstItem.label}</p></state-nested-array-alias>;
+  },
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      'export const StateNestedArrayAlias$p_text_derive = derive(["state"], (state) => (state.groups[0][0]).label);',
+    );
+    expect(clientSource).not.toContain('firstItem');
+    expect(
+      evaluateStateDerive(clientSource, 'StateNestedArrayAlias$p_text_derive', {
+        groups: [[{ label: 'updated' }]],
+      }),
+    ).toBe('updated');
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
+  it('fails closed with KV311 for unprovable state destructuring aliases', () => {
+    const dynamic = compileComponentModule({
+      fileName: 'state-dynamic-destructure-alias.tsx',
+      source: `
+export const StateDynamicDestructureAlias = component({
+  state: () => ({ profile: { name: 'Ada' } }),
+  render: (_queries, state) => {
+    const field = 'name';
+    const { [field]: value } = state.profile;
+    return <state-dynamic-destructure-alias><p>{value}</p></state-dynamic-destructure-alias>;
+  },
+});
+`,
+    });
+    const rest = compileComponentModule({
+      fileName: 'state-rest-destructure-alias.tsx',
+      source: `
+export const StateRestDestructureAlias = component({
+  state: () => ({ items: ['first', 'second'] }),
+  render: (_queries, state) => {
+    const [first, ...rest] = state.items;
+    return <state-rest-destructure-alias><p>{rest.length}</p></state-rest-destructure-alias>;
+  },
+});
+`,
+    });
+
+    expect(dynamic.files[1]?.source ?? '').not.toContain('value');
+    expect(dynamic.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV311',
+          message: expect.stringContaining('StateDynamicDestructureAlias state.profile expression'),
+        }),
+      ]),
+    );
+    expect(rest.files[1]?.source ?? '').not.toContain('rest.length');
+    expect(rest.diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV311',
+          message: expect.stringContaining('StateRestDestructureAlias state.items expression'),
+        }),
+      ]),
+    );
   });
 
   it('fails closed with KV311 instead of emitting unbound helper-dependent state derives', () => {

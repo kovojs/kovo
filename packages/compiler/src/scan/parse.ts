@@ -3244,5 +3244,16 @@ function staticLiteralValue(expression: ts.Expression): StaticLiteralValue | und
   if (unwrapped.kind === ts.SyntaxKind.FalseKeyword) return false;
   if (unwrapped.kind === ts.SyntaxKind.NullKeyword) return null;
 
+  if (ts.isArrayLiteralExpression(unwrapped)) {
+    const values: StaticLiteralValue[] = [];
+    for (const element of unwrapped.elements) {
+      if (ts.isSpreadElement(element) || ts.isOmittedExpression(element)) return undefined;
+      const value = staticLiteralValue(element);
+      if (value === undefined) return undefined;
+      values.push(value);
+    }
+    return values;
+  }
+
   return ts.isObjectLiteralExpression(unwrapped) ? staticObjectLiteralValue(unwrapped) : undefined;
 }
