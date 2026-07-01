@@ -439,8 +439,9 @@ describe('server app mutation request boundary', () => {
 
     expect(response.status).toBe(422);
     expect(onError).not.toHaveBeenCalled();
-    const body = (await response.json()) as { code: string };
+    const body = (await response.json()) as { code: string; payload: { reason: string } };
     expect(body.code).toBe('VALIDATION');
+    expect(body.payload.reason).toBe('invalid-json');
   });
 
   it('validates CSRF before surfacing malformed body diagnostics for protected mutations', async () => {
@@ -502,7 +503,8 @@ describe('server app mutation request boundary', () => {
 
     expect(response.status).toBe(422);
     expect(onError).not.toHaveBeenCalled();
-    const body = (await response.json()) as { code: string };
+    const body = (await response.json()) as { code: string; payload: { reason: string } };
     expect(body.code).toBe('VALIDATION');
+    expect(body.payload.reason).toBe('unsupported-content-type');
   });
 });

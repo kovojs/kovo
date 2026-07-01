@@ -23,6 +23,7 @@ import { matchShellDispatch } from './shell.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
 import { resolveKovoLifecycleRequest } from './response-posture.js';
 import { appTaskScheduler } from './task-runtime.js';
+import { readUntrustedRequestBody } from './untrusted-request-body.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -65,7 +66,7 @@ export async function handleAppMutationRequest(
   const currentUrl = appRequestUrl(url);
   const sourceUrl = mutationSourceUrl(request, url);
 
-  const bodyResult = await readMutationRequestBody(mutationRequest);
+  const bodyResult = await readUntrustedRequestBody(mutationRequest);
   if (!bodyResult.ok) {
     // SPEC §6.6/§10.3: CSRF is the first mutation lifecycle gate. If the body cannot
     // be safely decoded to read the submitted token, a CSRF-protected mutation fails
@@ -297,47 +298,6 @@ async function resolveMutationResponsePolicy(
 ): Promise<AppMutationResponseOptions | undefined> {
   if (policy === undefined) return undefined;
   return typeof policy === 'function' ? policy(context) : policy;
-}
-
-type MutationRequestBodyResult = { ok: true; value: unknown } | { ok: false; reason: string };
-
-/**
- * Parse the mutation request body from JSON or form data.
- *
- * SPEC §9.2: a body that is neither `application/json` nor a multipart/url-encoded
- * form, or that fails to parse as the declared content type, is a client-side
- * validation error (422) — not an unexpected server exception. We therefore return
- * a discriminated result instead of throwing so the caller can short-circuit with
- * a typed 422 BEFORE the CSRF check runs (attacker-controllable bad bodies must
- * not drive `onError`).
- */
-async function readMutationRequestBody(request: Request): Promise<MutationRequestBodyResult> {
-  const contentType = request.headers.get('content-type')?.toLowerCase() ?? '';
-
-  if (contentType.includes('application/json')) {
-    try {
-      const value = await request.json();
-      return { ok: true, value };
-    } catch {
-      return { ok: false, reason: 'invalid-json' };
-    }
-  }
-
-  if (
-    contentType.includes('multipart/form-data') ||
-    contentType.includes('application/x-www-form-urlencoded') ||
-    contentType === ''
-  ) {
-    try {
-      const value = await request.formData();
-      return { ok: true, value };
-    } catch {
-      return { ok: false, reason: 'invalid-form' };
-    }
-  }
-
-  // Unsupported Content-Type (e.g. text/plain, application/xml …).
-  return { ok: false, reason: 'unsupported-content-type' };
 }
 
 function defaultMutationRedirectTo(request: Request, currentUrl: string): string {

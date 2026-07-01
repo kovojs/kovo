@@ -306,6 +306,32 @@ describe('server app matched dispatch boundary', () => {
     expect(handlerCalls).toBe(0);
   });
 
+  it('fails closed for a malformed JSON endpoint POST without running the handler', async () => {
+    let handlerCalls = 0;
+    const updateEmail = endpoint('/account/email', {
+      handler() {
+        handlerCalls += 1;
+        return new Response('updated');
+      },
+      method: 'POST',
+      reason: 'account email update endpoint',
+      response: rawTextResponse,
+    });
+    const csrf = { secret: ENDPOINT_CSRF_SECRET, sessionId: () => 's1' };
+    const app = createApp({ csrf, endpoints: [updateEmail] });
+    const request = new Request('https://shop.example.test/account/email', {
+      body: '{ this is not valid json !!',
+      headers: { 'Content-Type': 'application/json', Origin: 'https://shop.example.test' },
+      method: 'POST',
+    });
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(422);
+    await expect(response.text()).resolves.toBe('CSRF');
+    expect(handlerCalls).toBe(0);
+  });
+
   it('L16: neutralizes the inbound Cookie header for a csrf:false endpoint handler (SPEC §9.1)', async () => {
     // bugz-3 L16: a csrf:false endpoint skips the synchronizer token AND the Origin floor;
     // the exemption is sound only because "cookies are not interpreted" (SPEC.md §9.1).

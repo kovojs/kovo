@@ -148,7 +148,7 @@ that removes the broader source of drift.
     facts from the same source project.
   - Verification: `pnpm exec vitest --run packages/server/src/registry-facts.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/cli/src/index.kovo-build.test.ts packages/cli/src/index.kovo-export.test.ts`.
 
-- [ ] **P1.3 - Share untrusted request-body parsing for endpoint CSRF and mutations.**
+- [x] **P1.3 - Share untrusted request-body parsing for endpoint CSRF and mutations.**
   - Current signals: `packages/server/src/app-dispatch.ts` says endpoint CSRF parsing mirrors mutation
     parsing, but implements a local JSON/form/urlencoded carrier reader separate from the typed parser in
     `packages/server/src/app-mutation-request.ts`.
@@ -158,6 +158,7 @@ that removes the broader source of drift.
   - Risk reduced: JSON/form/urlencoded/invalid-body handling cannot drift between CSRF-protected endpoint
     and mutation surfaces.
   - Verification: `pnpm exec vitest --run packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/csrf.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/app-dispatch.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/csrf.test.ts` passed with 4 files/86 tests after extracting `packages/server/src/untrusted-request-body.ts`; `pnpm run check:vp` and `git diff --check` passed.
 
 - [ ] **P1.4 - Promote query cache posture to a compiler-owned graph fact.**
   - Current signals: `packages/server/src/query.ts` intentionally keeps declared public query cache posture
