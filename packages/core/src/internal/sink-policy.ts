@@ -45,20 +45,6 @@ export function hasUnsafeUrlScheme(value: string): boolean {
 }
 
 /**
- * @internal Render-safe URL sink adapter shared by framework UI packages.
- *
- * SPEC.md §4.8 keeps URL-sink scheme policy centralized with runtime sink facts.
- */
-export function safeUrl(value: string | null | undefined, fallback = '#'): string {
-  if (value === undefined || value === null) return fallback;
-
-  const normalized = normalizedUrlForSchemeCheck(value);
-  if (normalized === '') return fallback;
-
-  return hasUnsafeUrlScheme(value) ? fallback : value;
-}
-
-/**
  * @internal Framework-owned sink witness kinds that may use the shared Blessed<Sink> substrate.
  *
  * SPEC §4.8 / §5.2 #10 and §6.6: unsafe output and execution-adjacent sinks need an explicit,
