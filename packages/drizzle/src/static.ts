@@ -153,6 +153,25 @@ import { drizzleDiagnostic } from './static/diagnostics.js';
   '$count',
   'execute',
 ]);
+/** @internal */ export const RAW_SQL_RECEIVER_SINK_METHODS = new Set([
+  'all',
+  'exec',
+  'execute',
+  'get',
+  'prepare',
+  'query',
+  'run',
+  'values',
+]);
+/** @internal */ export const RAW_SQL_WRITE_RECEIVER_SINK_METHODS = new Set([
+  'all',
+  'exec',
+  'execute',
+  'get',
+  'query',
+  'run',
+  'values',
+]);
 /** @internal */ export const DRIZZLE_SELECT_QUERY_METHODS = new Set([
   'select',
   'selectDistinct',
@@ -1281,7 +1300,7 @@ function sqlSinkName(call: CallExpression): string | null {
   if (Node.isPropertyAccessExpression(expression)) {
     const name = expression.getName();
     if (name === 'exec' && isRegExpExecReceiver(expression.getExpression())) return null;
-    return name === 'execute' || name === 'query' || name === 'exec' || name === 'prepare'
+    return RAW_SQL_RECEIVER_SINK_METHODS.has(name) && sqlSinkReceiverCanCarrySql(expression)
       ? name
       : null;
   }
@@ -1291,7 +1310,7 @@ function sqlSinkName(call: CallExpression): string | null {
     if (Node.isStringLiteral(argument) || Node.isNoSubstitutionTemplateLiteral(argument)) {
       const name = argument.getLiteralText();
       if (name === 'exec' && isRegExpExecReceiver(expression.getExpression())) return null;
-      return name === 'execute' || name === 'query' || name === 'exec' || name === 'prepare'
+      return RAW_SQL_RECEIVER_SINK_METHODS.has(name) && sqlSinkReceiverCanCarrySql(expression)
         ? name
         : null;
     }
@@ -1299,6 +1318,16 @@ function sqlSinkName(call: CallExpression): string | null {
   }
 
   return null;
+}
+
+function sqlSinkReceiverCanCarrySql(expression: Node): boolean {
+  const receiver = staticAccessExpression(expression);
+  if (!receiver) return false;
+  const receiverExpression = unwrappedStaticExpressionNode(receiver);
+  // SQLite drivers expose `db.values(sql)` as an execution sink, while Drizzle insert builders
+  // expose `db.insert(table).values(row)`. The builder receiver is a call expression; do not turn
+  // ordinary row payloads into KV422 SQL text diagnostics.
+  return !Node.isCallExpression(receiverExpression);
 }
 
 function isRegExpExecReceiver(receiver: Node): boolean {
@@ -1920,7 +1949,7 @@ function rawWriteScopeFactsForFunction(
   rawTables: readonly string[],
   trust: RawWriteSqlTrust | undefined,
 ): WriteScopeFact[] {
-  if (rawTables.length === 0 || !trust?.hasExecute || trust.trusted) return [];
+  if (rawTables.length === 0 || !trust?.hasRawSqlSink || trust.trusted) return [];
 
   const domains = new Set<string>();
   for (const table of extractedTablesForRawNames(tables, rawTables)) {
@@ -1942,7 +1971,7 @@ function rawWriteScopeFactsForFunction(
 }
 
 interface RawWriteSqlTrust {
-  hasExecute: boolean;
+  hasRawSqlSink: boolean;
   site?: string;
   trusted: boolean;
 }
@@ -1969,8 +1998,8 @@ function rawWriteSqlTrustByDomainWriteCallback(
         if (rawTablesFromWriteInitializer(property.initializer).length === 0) continue;
         const callback = writeActionCallbackFunction(property.initializer);
         if (!callback) continue;
-        const trust = rawExecuteTrustForCallback(callback, file);
-        if (trust.hasExecute) {
+        const trust = rawWriteSqlTrustForCallback(callback, file);
+        if (trust.hasRawSqlSink) {
           trustByWrite.set(`${domainName.getText()}.${property.memberName}`, trust);
         }
       }
@@ -2003,8 +2032,8 @@ function rawWriteSqlTrustByMutationHandler(
       if (rawTablesFromMutationRegistry(config).length === 0) return;
       const callback = mutationHandlerCallback(config);
       if (!callback) return;
-      const trust = rawExecuteTrustForCallback(callback, file);
-      if (trust.hasExecute) trustByMutation.set(key, trust);
+      const trust = rawWriteSqlTrustForCallback(callback, file);
+      if (trust.hasRawSqlSink) trustByMutation.set(key, trust);
     });
 
     return trustByMutation;
@@ -2091,7 +2120,7 @@ function declaredRawTableCoversUnresolved(
   operation: string,
   rawTables: readonly string[],
 ): boolean {
-  if (operation === 'execute') return true;
+  if (RAW_SQL_WRITE_RECEIVER_SINK_METHODS.has(operation)) return true;
   // SPEC §9.6: request.schedule()/cancel() persist durable queue rows in the
   // framework-owned _kovo_jobs store; a registry table declaration keeps that
   // write auditable without treating the request container as opaque Drizzle.
@@ -2109,25 +2138,29 @@ function mergedRawWriteSqlTrust(
   if (!right) return left;
 
   return {
-    hasExecute: left.hasExecute || right.hasExecute,
+    hasRawSqlSink: left.hasRawSqlSink || right.hasRawSqlSink,
     ...(left.site || right.site ? { site: left.site ?? right.site } : {}),
-    trusted: (!left.hasExecute || left.trusted) && (!right.hasExecute || right.trusted),
+    trusted: (!left.hasRawSqlSink || left.trusted) && (!right.hasRawSqlSink || right.trusted),
   };
 }
 
-function rawExecuteTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {
-  const executeCalls = callback
+function rawWriteSqlTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {
+  const rawSqlSinkCalls = callback
     .getDescendantsOfKind(SyntaxKind.CallExpression)
-    .filter((call) => directDrizzleReceiverCallSurface(call)?.name === 'execute');
-  const firstUntrusted = executeCalls.find((call) => !isTrustedSqlArgument(call));
-  const siteCall = firstUntrusted ?? executeCalls[0];
+    .filter((call) => {
+      const surface = directDrizzleReceiverCallSurface(call);
+      if (!surface || !RAW_SQL_WRITE_RECEIVER_SINK_METHODS.has(surface.name)) return false;
+      return sqlSinkReceiverCanCarrySql(call.getExpression());
+    });
+  const firstUntrusted = rawSqlSinkCalls.find((call) => !isTrustedSqlArgument(call));
+  const siteCall = firstUntrusted ?? rawSqlSinkCalls[0];
 
   return {
-    hasExecute: executeCalls.length > 0,
+    hasRawSqlSink: rawSqlSinkCalls.length > 0,
     ...(siteCall
       ? { site: `${file.fileName}:${lineForIndex(file.source, siteCall.getStart())}` }
       : {}),
-    trusted: executeCalls.length > 0 && !firstUntrusted,
+    trusted: rawSqlSinkCalls.length > 0 && !firstUntrusted,
   };
 }
 

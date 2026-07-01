@@ -2453,7 +2453,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db.execute().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses db.execute().',
             severity: 'error',
             site: 'product.queries.ts:4',
           },
@@ -2496,6 +2496,42 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           stock: 'number',
         },
         site: 'product.queries.ts:4',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('honors explicit reads and output for SQLite raw query receiver calls', () => {
+    const facts = extractQueryFactsFromProjectBase({
+      files: [
+        sqliteDatabaseTypes(['all(query: unknown): Promise<unknown[]>;']),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          export const products = sqliteTable("products", { id: text("id").primaryKey() }, kovo({ domain: "product", key: "id" }));
+
+          export const productQuery = query("product/raw", {
+            output: s.object({ id: s.string(), stock: s.number().int() }),
+            reads: [products],
+            load(_input, db: BaseSQLiteDatabase<any, any, any, any>) {
+              return db.all(sql\`select id, stock from products\`);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'product/raw',
+        reads: ['product'],
+        shape: {
+          id: 'string',
+          stock: 'number',
+        },
+        site: 'product.queries.ts:5',
       },
     ]);
     expect(diagnosticsForQueryFacts(facts)).toEqual([]);
@@ -2560,7 +2596,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           {
             code: 'KV406',
             message:
-              'Statically un-analyzable write site; manual touches required. Query uses unclassified Drizzle receiver call db[method]().',
+              'Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses db[method]().',
             severity: 'error',
             site: 'product.queries.ts:4',
           },

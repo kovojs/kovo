@@ -18,7 +18,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import type { QueryProjectedColumn } from '@kovojs/core/internal/graph';
-import { drizzleDiagnostic } from './diagnostics.js';
+import { drizzleDiagnostic, sourceSiteForNode } from './diagnostics.js';
 import {
   appendSourceDestructuredReceiverBinding,
   boundReceiverMethodAccessName,
@@ -645,11 +645,12 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
     if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
 
     return [
-      drizzleDiagnostic({
+      {
         code: 'KV406' as const,
-        detail: `Query uses unclassified Drizzle receiver call ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
-        node: call,
-      }),
+        message: `Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
+        severity: 'error' as const,
+        site: sourceSiteForNode(call),
+      },
     ];
   });
 }

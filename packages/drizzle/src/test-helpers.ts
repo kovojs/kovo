@@ -43,6 +43,23 @@ export function sqliteDatabaseTypes(methods: readonly string[]): SourceFileInput
   };
 }
 
+export function pgliteDatabaseTypes(methods: readonly string[]): SourceFileInput {
+  return {
+    fileName: 'pglite-drizzle-types.d.ts',
+    source: [
+      'import "drizzle-orm/pglite";',
+      'declare module "drizzle-orm/pglite" {',
+      '  export interface PgliteDatabase<TFullSchema = unknown> {',
+      ...methods.map((method) => `    ${method}`),
+      '  }',
+      '}',
+      'declare global {',
+      '  type PgliteDatabase<TFullSchema = unknown> = import("drizzle-orm/pglite").PgliteDatabase<TFullSchema>;',
+      '}',
+    ].join('\n'),
+  };
+}
+
 export function withPgDatabaseTypes(
   options: TouchGraphProjectOptions,
   methods: readonly string[] = [],
