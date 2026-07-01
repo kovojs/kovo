@@ -25,112 +25,189 @@ interface ClockSubscription {
   root: QueryBindingRoot;
 }
 
-const subscriptions = new Set<ClockSubscription>();
-let timer: ReturnType<typeof setInterval> | undefined;
-let framePending = false;
+/** Runtime API used by generated runtime integration. */
+export interface ClockScheduler {
+  dispose(): void;
+  install(
+    root: QueryBindingRoot,
+    plans: readonly ClockUpdatePlan[],
+    context?: ClockUpdateContext,
+  ): () => void;
+}
+
+/** Runtime API used by generated runtime integration. */
+export interface ClockSchedulerEventTarget {
+  addEventListener(type: string, listener: (event: Event) => void): void;
+  removeEventListener?: (type: string, listener: (event: Event) => void) => void;
+  visibilityState?: 'hidden' | 'visible';
+}
+
+/** Runtime API used by generated runtime integration. */
+export interface ClockSchedulerOptions {
+  ownerDocument?: ClockSchedulerEventTarget | undefined;
+}
+
+/** Runtime API used by generated runtime integration. */
+export interface InstallClockUpdatePlansOptions extends ClockSchedulerOptions {
+  scheduler?: ClockScheduler;
+}
 
 /** Runtime API used by generated runtime integration. */
 export function installClockUpdatePlans(
   root: QueryBindingRoot,
   plans: readonly ClockUpdatePlan[],
   context: ClockUpdateContext = {},
+  options: InstallClockUpdatePlansOptions = {},
 ): () => void {
-  const activePlans = plans.filter((plan) => tickingClockEntries(plan).length > 0);
-  if (activePlans.length === 0) return () => {};
+  const scheduler =
+    options.scheduler ??
+    createClockScheduler({ ownerDocument: options.ownerDocument ?? clockOwnerDocument(root) });
+  const dispose = scheduler.install(root, plans, context);
 
-  const now = Date.now();
-  const installed = activePlans.map((plan) => ({
-    nextDue: initialDueTimes(plan, now),
-    plan,
-    ...(context.queryStore ? { queryStore: context.queryStore } : {}),
-    root,
-  }));
-
-  for (const subscription of installed) subscriptions.add(subscription);
-  scheduleClockFrame();
-  restartTimer();
-
-  // K7 / SPEC freshness: when the page returns from the background the interval
-  // and rAF may not have fired since the last visible state, so relative-time
-  // labels stay stale. Drive an immediate catch-up frame on visibility restore.
-  const onVisibilityChange = (): void => {
-    if (typeof document !== 'undefined' && document.visibilityState === 'visible') {
-      scheduleClockFrame();
-    }
-  };
-  if (typeof document !== 'undefined') {
-    document.addEventListener('visibilitychange', onVisibilityChange);
-    document.addEventListener('pageshow', onVisibilityChange);
-  }
+  if (options.scheduler) return dispose;
 
   return () => {
-    for (const subscription of installed) subscriptions.delete(subscription);
-    restartTimer();
-    if (typeof document !== 'undefined') {
-      document.removeEventListener('visibilitychange', onVisibilityChange);
-      document.removeEventListener('pageshow', onVisibilityChange);
+    dispose();
+    scheduler.dispose();
+  };
+}
+
+/** Runtime API used by generated runtime integration. */
+export function createClockScheduler(options: ClockSchedulerOptions = {}): ClockScheduler {
+  return new DefaultClockScheduler(options.ownerDocument);
+}
+
+class DefaultClockScheduler implements ClockScheduler {
+  private framePending = false;
+  private readonly subscriptions = new Set<ClockSubscription>();
+  private timer: ReturnType<typeof setInterval> | undefined;
+  private visibilityListenerAttached = false;
+  private readonly visibilityTarget: ClockSchedulerEventTarget | undefined;
+
+  constructor(visibilityTarget?: ClockSchedulerEventTarget) {
+    this.visibilityTarget = visibilityTarget;
+  }
+
+  dispose(): void {
+    this.subscriptions.clear();
+    this.restartTimer();
+    this.framePending = false;
+    this.detachVisibilityListeners();
+  }
+
+  install(
+    root: QueryBindingRoot,
+    plans: readonly ClockUpdatePlan[],
+    context: ClockUpdateContext = {},
+  ): () => void {
+    const activePlans = plans.filter((plan) => tickingClockEntries(plan).length > 0);
+    if (activePlans.length === 0) return () => {};
+
+    const now = Date.now();
+    const installed = activePlans.map((plan) => ({
+      nextDue: initialDueTimes(plan, now),
+      plan,
+      ...(context.queryStore ? { queryStore: context.queryStore } : {}),
+      root,
+    }));
+
+    for (const subscription of installed) this.subscriptions.add(subscription);
+    this.attachVisibilityListeners();
+    this.scheduleClockFrame();
+    this.restartTimer();
+
+    return () => {
+      for (const subscription of installed) this.subscriptions.delete(subscription);
+      this.restartTimer();
+      if (this.subscriptions.size === 0) this.detachVisibilityListeners();
+    };
+  }
+
+  private readonly onVisibilityChange = (): void => {
+    const target = this.visibilityTarget;
+    if (!target || target.visibilityState === undefined || target.visibilityState === 'visible') {
+      this.scheduleClockFrame();
     }
   };
+
+  private attachVisibilityListeners(): void {
+    if (!this.visibilityTarget || this.visibilityListenerAttached) return;
+
+    // K7 / SPEC freshness: when the page returns from the background the interval
+    // and rAF may not have fired since the last visible state, so relative-time
+    // labels stay stale. Drive an immediate catch-up frame on visibility restore.
+    this.visibilityTarget.addEventListener('visibilitychange', this.onVisibilityChange);
+    this.visibilityTarget.addEventListener('pageshow', this.onVisibilityChange);
+    this.visibilityListenerAttached = true;
+  }
+
+  private detachVisibilityListeners(): void {
+    if (!this.visibilityTarget || !this.visibilityListenerAttached) return;
+
+    this.visibilityTarget.removeEventListener?.('visibilitychange', this.onVisibilityChange);
+    this.visibilityTarget.removeEventListener?.('pageshow', this.onVisibilityChange);
+    this.visibilityListenerAttached = false;
+  }
+
+  private restartTimer(): void {
+    if (this.timer !== undefined) {
+      clearInterval(this.timer);
+      this.timer = undefined;
+    }
+
+    const interval = this.shortestIntervalMs();
+    if (interval === null) return;
+
+    this.timer = setInterval(() => this.scheduleClockFrame(), interval);
+  }
+
+  private shortestIntervalMs(): number | null {
+    let interval: number | null = null;
+
+    for (const subscription of this.subscriptions) {
+      for (const [, spec] of tickingClockEntries(subscription.plan)) {
+        const every = intervalMs(spec.every);
+        if (every === null) continue;
+        interval = interval === null ? every : Math.min(interval, every);
+      }
+    }
+
+    return interval;
+  }
+
+  private scheduleClockFrame(): void {
+    if (this.framePending) return;
+    this.framePending = true;
+
+    const requestFrame = globalThis.requestAnimationFrame;
+    if (typeof requestFrame === 'function') {
+      requestFrame(() => this.runClockFrame());
+    } else {
+      setTimeout(() => this.runClockFrame(), 0);
+    }
+  }
+
+  private runClockFrame(): void {
+    this.framePending = false;
+    const current = Date.now();
+
+    for (const subscription of this.subscriptions) {
+      const now = dueClockValues(subscription, current);
+      if (Object.keys(now).length === 0) continue;
+      subscription.queryStore?.set('now', now);
+      subscription.plan.update(
+        subscription.root,
+        now,
+        subscription.queryStore ? { queryStore: subscription.queryStore } : {},
+      );
+    }
+  }
 }
 
 function initialDueTimes(plan: ClockUpdatePlan, now: number): Map<string, number> {
   const dueTimes = new Map<string, number>();
   for (const [name] of tickingClockEntries(plan)) dueTimes.set(name, now);
   return dueTimes;
-}
-
-function restartTimer(): void {
-  if (timer !== undefined) {
-    clearInterval(timer);
-    timer = undefined;
-  }
-
-  const interval = shortestIntervalMs();
-  if (interval === null) return;
-
-  timer = setInterval(scheduleClockFrame, interval);
-}
-
-function shortestIntervalMs(): number | null {
-  let interval: number | null = null;
-
-  for (const subscription of subscriptions) {
-    for (const [, spec] of tickingClockEntries(subscription.plan)) {
-      const every = intervalMs(spec.every);
-      if (every === null) continue;
-      interval = interval === null ? every : Math.min(interval, every);
-    }
-  }
-
-  return interval;
-}
-
-function scheduleClockFrame(): void {
-  if (framePending) return;
-  framePending = true;
-
-  const requestFrame = globalThis.requestAnimationFrame;
-  if (typeof requestFrame === 'function') {
-    requestFrame(() => runClockFrame());
-  } else {
-    setTimeout(runClockFrame, 0);
-  }
-}
-
-function runClockFrame(): void {
-  framePending = false;
-  const current = Date.now();
-
-  for (const subscription of subscriptions) {
-    const now = dueClockValues(subscription, current);
-    if (Object.keys(now).length === 0) continue;
-    subscription.queryStore?.set('now', now);
-    subscription.plan.update(
-      subscription.root,
-      now,
-      subscription.queryStore ? { queryStore: subscription.queryStore } : {},
-    );
-  }
 }
 
 function dueClockValues(subscription: ClockSubscription, current: number): Record<string, Date> {
@@ -169,4 +246,18 @@ function intervalMs(value: ClockUpdateSpec['every']): number | null {
   if (!Number.isFinite(amount) || amount <= 0) return null;
 
   return amount * ({ h: 3_600_000, m: 60_000, ms: 1, s: 1_000 }[unit] ?? 1);
+}
+
+function clockOwnerDocument(root: QueryBindingRoot): ClockSchedulerEventTarget | undefined {
+  const maybeRoot = root as QueryBindingRoot & {
+    addEventListener?: ClockSchedulerEventTarget['addEventListener'];
+    ownerDocument?: ClockSchedulerEventTarget;
+    visibilityState?: ClockSchedulerEventTarget['visibilityState'];
+  };
+
+  if (maybeRoot.ownerDocument) return maybeRoot.ownerDocument;
+  if (typeof maybeRoot.addEventListener === 'function') {
+    return maybeRoot as ClockSchedulerEventTarget;
+  }
+  return undefined;
 }

@@ -2,7 +2,12 @@ import { definedProps } from './defined-props.js';
 import { reportRuntimeContextError } from './error-policy.js';
 import type { RuntimeErrorContext } from './events.js';
 import type { LoaderRoot } from './loader-lifecycle.js';
-import { installClockUpdatePlans, type ClockUpdatePlan } from './clock-tick-bus.js';
+import {
+  createClockScheduler,
+  installClockUpdatePlans,
+  type ClockSchedulerEventTarget,
+  type ClockUpdatePlan,
+} from './clock-tick-bus.js';
 import { installInlineQueryEventHydration } from './query-events.js';
 import type { QueryEventHydrationTarget } from './query-events.js';
 import type { QueryApplyInterposition } from './query-apply.js';
@@ -74,12 +79,19 @@ export function installLoaderQueryRuntime(
     options.clockUpdatePlans.length > 0 &&
     typeof options.root.querySelectorAll === 'function'
   ) {
+    const clockScheduler = createClockScheduler({
+      ownerDocument: clockSchedulerOwnerDocument(options.root),
+    });
     disposers.push(
       installClockUpdatePlans(
         options.root as QueryBindingRoot,
         options.clockUpdatePlans,
         options.queryStore ? { queryStore: options.queryStore } : {},
+        { scheduler: clockScheduler },
       ),
+      () => {
+        clockScheduler.dispose();
+      },
     );
   }
 
@@ -116,4 +128,9 @@ export function installLoaderQueryRuntime(
 
 function globalQueryEventTarget(): QueryEventHydrationTarget | undefined {
   return typeof globalThis.addEventListener === 'function' ? globalThis : undefined;
+}
+
+function clockSchedulerOwnerDocument(root: LoaderRoot): ClockSchedulerEventTarget {
+  const candidate = root as LoaderRoot & { ownerDocument?: ClockSchedulerEventTarget };
+  return candidate.ownerDocument ?? (root as ClockSchedulerEventTarget);
 }
