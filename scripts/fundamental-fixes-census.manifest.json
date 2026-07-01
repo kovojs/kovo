@@ -125,7 +125,9 @@
       "expressionKind": "PropertyAccessExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "resolved",
+      "coverageExpectation": "resolves static namespace members; unsupported receiver provenance fails closed"
     },
     {
       "id": "resolver-element-access-expression",
@@ -133,7 +135,9 @@
       "expressionKind": "ElementAccessExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "resolved",
+      "coverageExpectation": "resolves string/numeric literal namespace members; non-literal computed keys fail closed"
     },
     {
       "id": "resolver-new-expression",
@@ -141,7 +145,9 @@
       "expressionKind": "NewExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-call-expression",
@@ -149,7 +155,9 @@
       "expressionKind": "CallExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-jsx-element",
@@ -157,7 +165,9 @@
       "expressionKind": "JsxElement",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-jsx-self-closing-element",
@@ -165,7 +175,9 @@
       "expressionKind": "JsxSelfClosingElement",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-jsx-fragment",
@@ -173,7 +185,9 @@
       "expressionKind": "JsxFragment",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-tagged-template-expression",
@@ -181,7 +195,9 @@
       "expressionKind": "TaggedTemplateExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-array-literal-expression",
@@ -189,7 +205,9 @@
       "expressionKind": "ArrayLiteralExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-parenthesized-expression",
@@ -197,7 +215,9 @@
       "expressionKind": "ParenthesizedExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "resolved",
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
     },
     {
       "id": "resolver-object-literal-expression",
@@ -205,7 +225,9 @@
       "expressionKind": "ObjectLiteralExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-class-expression",
@@ -213,7 +235,9 @@
       "expressionKind": "ClassExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-function-expression",
@@ -221,7 +245,9 @@
       "expressionKind": "FunctionExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-identifier",
@@ -229,7 +255,9 @@
       "expressionKind": "Identifier",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "resolved",
+      "coverageExpectation": "resolves imported/local framework identifiers; local shadows fail closed"
     },
     {
       "id": "resolver-private-identifier",
@@ -237,7 +265,9 @@
       "expressionKind": "PrivateIdentifier",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-regular-expression-literal",
@@ -245,7 +275,9 @@
       "expressionKind": "RegularExpressionLiteral",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-numeric-literal",
@@ -253,7 +285,9 @@
       "expressionKind": "NumericLiteral",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-big-int-literal",
@@ -261,7 +295,9 @@
       "expressionKind": "BigIntLiteral",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-string-literal",
@@ -269,7 +305,9 @@
       "expressionKind": "StringLiteral",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-no-substitution-template-literal",
@@ -277,7 +315,9 @@
       "expressionKind": "NoSubstitutionTemplateLiteral",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-template-expression",
@@ -285,7 +325,9 @@
       "expressionKind": "TemplateExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-false-keyword",
@@ -293,7 +335,9 @@
       "expressionKind": "FalseKeyword",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-null-keyword",
@@ -301,7 +345,9 @@
       "expressionKind": "NullKeyword",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-this-keyword",
@@ -309,7 +355,9 @@
       "expressionKind": "ThisKeyword",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-true-keyword",
@@ -317,7 +365,9 @@
       "expressionKind": "TrueKeyword",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-super-keyword",
@@ -325,7 +375,9 @@
       "expressionKind": "SuperKeyword",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-non-null-expression",
@@ -333,7 +385,9 @@
       "expressionKind": "NonNullExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "resolved",
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
     },
     {
       "id": "resolver-expression-with-type-arguments",
@@ -341,7 +395,9 @@
       "expressionKind": "ExpressionWithTypeArguments",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-meta-property",
@@ -349,7 +405,9 @@
       "expressionKind": "MetaProperty",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-import-keyword",
@@ -357,7 +415,9 @@
       "expressionKind": "ImportKeyword",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-missing-declaration",
@@ -365,7 +425,9 @@
       "expressionKind": "MissingDeclaration",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-prefix-unary-expression",
@@ -373,7 +435,9 @@
       "expressionKind": "PrefixUnaryExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-postfix-unary-expression",
@@ -381,7 +445,9 @@
       "expressionKind": "PostfixUnaryExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-delete-expression",
@@ -389,7 +455,9 @@
       "expressionKind": "DeleteExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-type-of-expression",
@@ -397,7 +465,9 @@
       "expressionKind": "TypeOfExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-void-expression",
@@ -405,7 +475,9 @@
       "expressionKind": "VoidExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-await-expression",
@@ -413,7 +485,9 @@
       "expressionKind": "AwaitExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-type-assertion-expression",
@@ -421,7 +495,9 @@
       "expressionKind": "TypeAssertionExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "resolved",
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
     },
     {
       "id": "resolver-conditional-expression",
@@ -429,7 +505,9 @@
       "expressionKind": "ConditionalExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-yield-expression",
@@ -437,7 +515,9 @@
       "expressionKind": "YieldExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-arrow-function",
@@ -445,7 +525,9 @@
       "expressionKind": "ArrowFunction",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-binary-expression",
@@ -453,7 +535,9 @@
       "expressionKind": "BinaryExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-spread-element",
@@ -461,7 +545,9 @@
       "expressionKind": "SpreadElement",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-as-expression",
@@ -469,7 +555,9 @@
       "expressionKind": "AsExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "resolved",
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
     },
     {
       "id": "resolver-omitted-expression",
@@ -477,7 +565,9 @@
       "expressionKind": "OmittedExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-comma-list-expression",
@@ -485,7 +575,9 @@
       "expressionKind": "CommaListExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-partially-emitted-expression",
@@ -493,7 +585,9 @@
       "expressionKind": "PartiallyEmittedExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "representative unsupported expression kind fails closed without framework identity"
     },
     {
       "id": "resolver-satisfies-expression",
@@ -501,7 +595,9 @@
       "expressionKind": "SatisfiesExpression",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "resolved",
+      "coverageExpectation": "unwraps to the inner expression before provenance resolution"
     },
     {
       "id": "resolver-default",
@@ -509,7 +605,9 @@
       "expressionKind": "default",
       "owner": ["B3"],
       "status": "open",
-      "evidence": "placeholder"
+      "evidence": "placeholder",
+      "resolverStatus": "fails-closed",
+      "coverageExpectation": "unknown future expression kinds fail closed by the default resolver row"
     },
     {
       "id": "dialect-pglite-execute",

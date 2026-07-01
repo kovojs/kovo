@@ -71,10 +71,14 @@ export type FrameworkIdentityExpressionKindResolution =
   | 'resolve-property-access'
   | 'unwrap-expression';
 
+/** @internal Completeness status for an expression-kind resolver row. */
+export type FrameworkIdentityExpressionKindStatus = 'fails-closed' | 'resolved';
+
 /** @internal One row in the resolver expression-kind table. */
 export interface FrameworkIdentityExpressionKindRow {
   readonly kind: TypeScript.SyntaxKind | 'default';
   readonly resolution: FrameworkIdentityExpressionKindResolution;
+  readonly status: FrameworkIdentityExpressionKindStatus;
 }
 
 const MAX_RESOLUTION_DEPTH = 12;
@@ -214,9 +218,9 @@ export function frameworkIdentityExpressionKindRows(
   return [
     ...frameworkIdentityExpressionSyntaxKinds(ts).map((kind) => ({
       kind,
-      resolution: frameworkIdentityExpressionKindResolution(ts, kind),
+      ...frameworkIdentityExpressionKindDisposition(ts, kind),
     })),
-    { kind: 'default', resolution: 'fail-closed' },
+    { kind: 'default', resolution: 'fail-closed', status: 'fails-closed' },
   ];
 }
 
@@ -875,6 +879,20 @@ function frameworkIdentityExpressionKindResolution(
     default:
       return 'fail-closed';
   }
+}
+
+function frameworkIdentityExpressionKindDisposition(
+  ts: FrameworkIdentityTypeScript,
+  kind: TypeScript.SyntaxKind,
+): {
+  readonly resolution: FrameworkIdentityExpressionKindResolution;
+  readonly status: FrameworkIdentityExpressionKindStatus;
+} {
+  const resolution = frameworkIdentityExpressionKindResolution(ts, kind);
+  return {
+    resolution,
+    status: resolution === 'fail-closed' ? 'fails-closed' : 'resolved',
+  };
 }
 
 function resolveProjectSourceFile(

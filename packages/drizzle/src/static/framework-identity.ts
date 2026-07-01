@@ -35,6 +35,9 @@ export type FrameworkIdentityExpressionKindResolution =
   | 'resolve-property-access'
   | 'unwrap-expression';
 
+/** @internal Completeness status for an expression-kind resolver row. */
+export type FrameworkIdentityExpressionKindStatus = 'fails-closed' | 'resolved';
+
 const frameworkIdentityExpressionSyntaxKinds = uniqueSyntaxKinds([
   SyntaxKind.PropertyAccessExpression,
   SyntaxKind.ElementAccessExpression,
@@ -90,12 +93,17 @@ const frameworkIdentityExpressionSyntaxKinds = uniqueSyntaxKinds([
 export const frameworkIdentityExpressionKindRows = [
   ...frameworkIdentityExpressionSyntaxKinds.map((kind) => ({
     kind,
-    resolution: frameworkIdentityExpressionKindResolution(kind),
+    ...frameworkIdentityExpressionKindDisposition(kind),
   })),
-  { kind: 'default' as const, resolution: 'fail-closed' as const },
+  {
+    kind: 'default' as const,
+    resolution: 'fail-closed' as const,
+    status: 'fails-closed' as const,
+  },
 ] satisfies readonly {
   readonly kind: SyntaxKind | 'default';
   readonly resolution: FrameworkIdentityExpressionKindResolution;
+  readonly status: FrameworkIdentityExpressionKindStatus;
 }[];
 
 function uniqueSyntaxKinds(kinds: readonly SyntaxKind[]): readonly SyntaxKind[] {
@@ -757,4 +765,15 @@ function frameworkIdentityExpressionKindResolution(
     default:
       return 'fail-closed';
   }
+}
+
+function frameworkIdentityExpressionKindDisposition(kind: SyntaxKind): {
+  readonly resolution: FrameworkIdentityExpressionKindResolution;
+  readonly status: FrameworkIdentityExpressionKindStatus;
+} {
+  const resolution = frameworkIdentityExpressionKindResolution(kind);
+  return {
+    resolution,
+    status: resolution === 'fail-closed' ? 'fails-closed' : 'resolved',
+  };
 }

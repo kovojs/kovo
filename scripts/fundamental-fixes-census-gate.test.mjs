@@ -90,6 +90,24 @@ describe('fundamental-fixes-census-gate', () => {
     );
   });
 
+  it('requires every resolver expression-kind row to have a B3 status and coverage expectation', () => {
+    const blankResolverCell = cloneDefaultManifest();
+    const resolverRow = blankResolverCell.rows.find(
+      (row) => row.kind === 'resolver-expression-kind',
+    );
+    delete resolverRow.resolverStatus;
+    resolverRow.coverageExpectation = 'todo';
+
+    expect(
+      evaluateFundamentalFixesCensus({ manifest: blankResolverCell, planText }).violations,
+    ).toEqual(
+      expect.arrayContaining([
+        `${resolverRow.id}: resolverStatus must be one of resolved, fails-closed`,
+        `${resolverRow.id}: resolver row is missing coverageExpectation`,
+      ]),
+    );
+  });
+
   it('requires M1 prod artifact, supported dialects, and independent reviewer for closed rows', () => {
     const closedWithoutM1 = cloneDefaultManifest();
     closedWithoutM1.rows[0] = {

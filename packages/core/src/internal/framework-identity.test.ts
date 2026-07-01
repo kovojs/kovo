@@ -102,26 +102,38 @@ describe('framework identity resolver', () => {
     const rows = frameworkIdentityExpressionKindRows(ts);
     const expressionRows = rows.filter((row) => row.kind !== 'default');
     const resolutionByKind = new Map(expressionRows.map((row) => [row.kind, row.resolution]));
+    const statusByKind = new Map(expressionRows.map((row) => [row.kind, row.status]));
 
-    expect(rows.at(-1)).toEqual({ kind: 'default', resolution: 'fail-closed' });
+    expect(rows.at(-1)).toEqual({
+      kind: 'default',
+      resolution: 'fail-closed',
+      status: 'fails-closed',
+    });
     expect(new Set(expressionRows.map((row) => row.kind))).toEqual(
       new Set(expectedExpressionSyntaxKinds()),
     );
     expect(rows).toHaveLength(expectedExpressionSyntaxKinds().length + 1);
+    expect(new Set(rows.map((row) => row.status))).toEqual(new Set(['resolved', 'fails-closed']));
     expect(resolutionByKind.get(ts.SyntaxKind.Identifier)).toBe('resolve-identifier');
+    expect(statusByKind.get(ts.SyntaxKind.Identifier)).toBe('resolved');
     expect(resolutionByKind.get(ts.SyntaxKind.PropertyAccessExpression)).toBe(
       'resolve-property-access',
     );
+    expect(statusByKind.get(ts.SyntaxKind.PropertyAccessExpression)).toBe('resolved');
     expect(resolutionByKind.get(ts.SyntaxKind.ElementAccessExpression)).toBe(
       'resolve-element-access',
     );
+    expect(statusByKind.get(ts.SyntaxKind.ElementAccessExpression)).toBe('resolved');
     expect(resolutionByKind.get(ts.SyntaxKind.ParenthesizedExpression)).toBe('unwrap-expression');
+    expect(statusByKind.get(ts.SyntaxKind.ParenthesizedExpression)).toBe('resolved');
     expect(resolutionByKind.get(ts.SyntaxKind.AsExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(ts.SyntaxKind.SatisfiesExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(ts.SyntaxKind.TypeAssertionExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(ts.SyntaxKind.NonNullExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(ts.SyntaxKind.CallExpression)).toBe('fail-closed');
+    expect(statusByKind.get(ts.SyntaxKind.CallExpression)).toBe('fails-closed');
     expect(resolutionByKind.get(ts.SyntaxKind.BinaryExpression)).toBe('fail-closed');
+    expect(statusByKind.get(ts.SyntaxKind.BinaryExpression)).toBe('fails-closed');
   });
 
   it('resolves star-barrel literal element access and rejects non-literal computed keys', () => {

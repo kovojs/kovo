@@ -155,10 +155,12 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
       (row) => row.kind !== 'default',
     );
     const resolutionByKind = new Map(expressionRows.map((row) => [row.kind, row.resolution]));
+    const statusByKind = new Map(expressionRows.map((row) => [row.kind, row.status]));
 
     expect(frameworkIdentityExpressionKindRows.at(-1)).toEqual({
       kind: 'default',
       resolution: 'fail-closed',
+      status: 'fails-closed',
     });
     expect(new Set(expressionRows.map((row) => row.kind))).toEqual(
       new Set(expectedExpressionSyntaxKinds()),
@@ -166,18 +168,27 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     expect(frameworkIdentityExpressionKindRows).toHaveLength(
       expectedExpressionSyntaxKinds().length + 1,
     );
+    expect(new Set(frameworkIdentityExpressionKindRows.map((row) => row.status))).toEqual(
+      new Set(['resolved', 'fails-closed']),
+    );
     expect(resolutionByKind.get(SyntaxKind.Identifier)).toBe('resolve-identifier');
+    expect(statusByKind.get(SyntaxKind.Identifier)).toBe('resolved');
     expect(resolutionByKind.get(SyntaxKind.PropertyAccessExpression)).toBe(
       'resolve-property-access',
     );
+    expect(statusByKind.get(SyntaxKind.PropertyAccessExpression)).toBe('resolved');
     expect(resolutionByKind.get(SyntaxKind.ElementAccessExpression)).toBe('resolve-element-access');
+    expect(statusByKind.get(SyntaxKind.ElementAccessExpression)).toBe('resolved');
     expect(resolutionByKind.get(SyntaxKind.ParenthesizedExpression)).toBe('unwrap-expression');
+    expect(statusByKind.get(SyntaxKind.ParenthesizedExpression)).toBe('resolved');
     expect(resolutionByKind.get(SyntaxKind.AsExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(SyntaxKind.SatisfiesExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(SyntaxKind.TypeAssertionExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(SyntaxKind.NonNullExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(SyntaxKind.CallExpression)).toBe('fail-closed');
+    expect(statusByKind.get(SyntaxKind.CallExpression)).toBe('fails-closed');
     expect(resolutionByKind.get(SyntaxKind.BinaryExpression)).toBe('fail-closed');
+    expect(statusByKind.get(SyntaxKind.BinaryExpression)).toBe('fails-closed');
   });
 
   it('recognizes re-exported, destructured, and aliased framework constructs', () => {

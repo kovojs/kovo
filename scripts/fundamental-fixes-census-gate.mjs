@@ -1,11 +1,13 @@
 #!/usr/bin/env node
 import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const thisFile = fileURLToPath(import.meta.url);
 const scriptsDir = path.dirname(thisFile);
 const repoRoot = path.resolve(scriptsDir, '..');
+const require = createRequire(import.meta.url);
 
 export const defaultPlanPath = 'plans/fundamental-fixes-followup.md';
 export const defaultManifestPath = 'scripts/fundamental-fixes-census.manifest.json';
@@ -18,61 +20,12 @@ export const CENSUS_KINDS = [
 ];
 
 export const ALLOWED_STATUSES = ['open', 'in-progress', 'closed'];
+export const ALLOWED_RESOLVER_STATUSES = ['resolved', 'fails-closed'];
 export const FORBIDDEN_STATUS_PATTERN =
   /\b(?:deferred|out[-_\s]*of[-_\s]*scope|future|later|parked)\b/iu;
 export const PLACEHOLDER_EVIDENCE_PATTERN = /^(?:placeholder|pending|todo|tbd|none|open)$/iu;
 
-export const REQUIRED_RESOLVER_EXPRESSION_KINDS = [
-  'PropertyAccessExpression',
-  'ElementAccessExpression',
-  'NewExpression',
-  'CallExpression',
-  'JsxElement',
-  'JsxSelfClosingElement',
-  'JsxFragment',
-  'TaggedTemplateExpression',
-  'ArrayLiteralExpression',
-  'ParenthesizedExpression',
-  'ObjectLiteralExpression',
-  'ClassExpression',
-  'FunctionExpression',
-  'Identifier',
-  'PrivateIdentifier',
-  'RegularExpressionLiteral',
-  'NumericLiteral',
-  'BigIntLiteral',
-  'StringLiteral',
-  'NoSubstitutionTemplateLiteral',
-  'TemplateExpression',
-  'FalseKeyword',
-  'NullKeyword',
-  'ThisKeyword',
-  'TrueKeyword',
-  'SuperKeyword',
-  'NonNullExpression',
-  'ExpressionWithTypeArguments',
-  'MetaProperty',
-  'ImportKeyword',
-  'MissingDeclaration',
-  'PrefixUnaryExpression',
-  'PostfixUnaryExpression',
-  'DeleteExpression',
-  'TypeOfExpression',
-  'VoidExpression',
-  'AwaitExpression',
-  'TypeAssertionExpression',
-  'ConditionalExpression',
-  'YieldExpression',
-  'ArrowFunction',
-  'BinaryExpression',
-  'SpreadElement',
-  'AsExpression',
-  'OmittedExpression',
-  'CommaListExpression',
-  'PartiallyEmittedExpression',
-  'SatisfiesExpression',
-  'default',
-];
+export const REQUIRED_RESOLVER_EXPRESSION_KINDS = [...typescriptExpressionKindNames(), 'default'];
 
 export const REQUIRED_DIALECT_MATRIX_DIALECTS = ['pglite', 'better-sqlite3', 'unknown'];
 export const REQUIRED_DIALECT_MATRIX_SINKS = [
@@ -332,6 +285,20 @@ function validateResolverRows(rows, violations) {
       violations.push(`${row.id ?? '<missing-id>'}: resolver row is missing expressionKind`);
       continue;
     }
+    if (!ALLOWED_RESOLVER_STATUSES.includes(row.resolverStatus)) {
+      violations.push(
+        `${row.id ?? '<missing-id>'}: resolverStatus must be one of ${ALLOWED_RESOLVER_STATUSES.join(
+          ', ',
+        )}`,
+      );
+    }
+    if (
+      typeof row.coverageExpectation !== 'string' ||
+      row.coverageExpectation.trim().length === 0 ||
+      PLACEHOLDER_EVIDENCE_PATTERN.test(row.coverageExpectation.trim())
+    ) {
+      violations.push(`${row.id ?? '<missing-id>'}: resolver row is missing coverageExpectation`);
+    }
     if (kinds.has(row.expressionKind)) {
       violations.push(`${row.id}: duplicate resolver expressionKind ${row.expressionKind}`);
     }
@@ -342,6 +309,14 @@ function validateResolverRows(rows, violations) {
       violations.push(
         `${defaultManifestPath}: missing resolver expression-kind row ${requiredKind}`,
       );
+    }
+  }
+  for (const row of resolverRows) {
+    if (
+      typeof row.expressionKind === 'string' &&
+      !REQUIRED_RESOLVER_EXPRESSION_KINDS.includes(row.expressionKind)
+    ) {
+      violations.push(`${row.id}: unknown resolver expressionKind ${row.expressionKind}`);
     }
   }
 }
@@ -437,6 +412,52 @@ function extractBetween(text, startMarker, endMarker) {
 function lineNumberAtOffset(text, offset) {
   if (offset < 0) return 1;
   return text.slice(0, offset).split(/\r?\n/u).length;
+}
+
+function typescriptExpressionKindNames() {
+  const typescriptMain = require.resolve('typescript');
+  const compilerSource = readFileSync(typescriptMain, 'utf8');
+  const leftHandSideKinds = syntaxKindNamesFromFunction(
+    compilerSource,
+    'isLeftHandSideExpressionKind',
+  );
+  const unaryKinds = syntaxKindNamesFromFunction(compilerSource, 'isUnaryExpressionKind').filter(
+    (kind) => !leftHandSideKinds.includes(kind),
+  );
+  const expressionKinds = syntaxKindNamesFromFunction(compilerSource, 'isExpressionKind').filter(
+    (kind) => !leftHandSideKinds.includes(kind) && !unaryKinds.includes(kind),
+  );
+  return [...leftHandSideKinds, ...unaryKinds, ...expressionKinds];
+}
+
+function syntaxKindNamesFromFunction(source, functionName) {
+  const body = functionBody(source, functionName);
+  return [...body.matchAll(/case\s+\d+\s+\/\*\s+([A-Za-z0-9_]+)\s+\*\//gu)].map(
+    (match) => match[1],
+  );
+}
+
+function functionBody(source, functionName) {
+  const signature = `function ${functionName}(`;
+  const signatureIndex = source.indexOf(signature);
+  if (signatureIndex === -1) {
+    throw new Error(`TypeScript compiler source is missing ${functionName}`);
+  }
+  const bodyStart = source.indexOf('{', signatureIndex);
+  if (bodyStart === -1) {
+    throw new Error(`TypeScript compiler source has no body for ${functionName}`);
+  }
+
+  let depth = 0;
+  for (let index = bodyStart; index < source.length; index += 1) {
+    const char = source[index];
+    if (char === '{') depth += 1;
+    if (char === '}') {
+      depth -= 1;
+      if (depth === 0) return source.slice(bodyStart + 1, index);
+    }
+  }
+  throw new Error(`TypeScript compiler source has unterminated body for ${functionName}`);
 }
 
 function parseArgs(argv) {
