@@ -2,6 +2,7 @@ import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
+import { expressionResolvesToTrustedHtmlPureBrand } from '../output-context-facts.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
 
 /**
@@ -43,9 +44,6 @@ export function validateTrustedHtmlProvenance(
   diagnostics: DiagnosticFactory,
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
-  const trustedHtmlNames = trustedHtmlPureBrandLocalNames(model);
-  if (trustedHtmlNames.size === 0) return [];
-
   const sourceFile = model.sourceFile;
   const queryBindingsByRender = renderQueryBindings(sourceFile);
 
@@ -53,8 +51,7 @@ export function validateTrustedHtmlProvenance(
   const visit = (node: ts.Node): void => {
     if (
       ts.isCallExpression(node) &&
-      ts.isIdentifier(node.expression) &&
-      trustedHtmlNames.has(node.expression.text) &&
+      expressionResolvesToTrustedHtmlPureBrand(sourceFile, node.expression) &&
       node.arguments.length > 0
     ) {
       const value = node.arguments[0];
@@ -73,23 +70,6 @@ export function validateTrustedHtmlProvenance(
   };
   visit(sourceFile);
   return found;
-}
-
-/**
- * Local names bound to the REAL `trustedHtml` export of `@kovojs/browser` — resolved by import
- * symbol identity, NOT by source-text name (SPEC §6.6(1) / §5.2 rule 9). `safeRichHtml` is the
- * sanitizing primitive and is intentionally excluded: it is safe on tainted input, so it must stay
- * clean. A shadowing local `const trustedHtml = …` or a same-named import from another module is
- * therefore not a brand here (fail-closed); an aliased import (`import { trustedHtml as th }`) is.
- */
-function trustedHtmlPureBrandLocalNames(model: ComponentModuleModel): ReadonlySet<string> {
-  const names = new Set<string>();
-  for (const imported of model.namedImports) {
-    if (imported.moduleSpecifier === '@kovojs/browser' && imported.importedName === 'trustedHtml') {
-      names.add(imported.localName);
-    }
-  }
-  return names;
 }
 
 type Provenance = 'request' | 'query';

@@ -86,4 +86,47 @@ export const addToCart = mutation({
       fields: [{ name: 'productId', provenance: 'local-mutation' }],
     });
   });
+
+  it('extracts mutation inputs through subpath aliases and namespace imports', () => {
+    const source = `
+import { mutation as defineMutation } from '@kovojs/server/api/data';
+import * as data from '@kovojs/server/api/data';
+
+const mutationAlias = defineMutation;
+
+export const save = mutationAlias({
+  input: s.object({ productId: s.string() }),
+  handler() {},
+});
+
+export const remove = data.mutation('cart/remove', {
+  input: s.object({ productId: s.string() }),
+  handler() {},
+});
+`;
+
+    const facts = mutationInputFactsFromSource('src/cart/mutations.ts', source);
+
+    expect(facts.get('save')).toMatchObject({
+      key: 'cart/mutations/save',
+      fields: [{ name: 'productId', provenance: 'local-mutation' }],
+    });
+    expect(facts.get('remove')).toMatchObject({
+      key: 'cart/remove',
+      fields: [{ name: 'productId', provenance: 'local-mutation' }],
+    });
+  });
+
+  it('does not extract mutation inputs from local lookalike functions', () => {
+    const source = `
+function mutation(value) { return value; }
+
+export const save = mutation({
+  input: s.object({ productId: s.string() }),
+  handler() {},
+});
+`;
+
+    expect([...mutationInputFactsFromSource('src/cart/mutations.ts', source)]).toEqual([]);
+  });
 });

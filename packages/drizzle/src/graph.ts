@@ -203,7 +203,9 @@ export function serializeTouchGraph(graph: TouchGraph): string {
 
 function serializeScope(scope: QueryReadScopeProvenance | undefined): string {
   if (!scope || scope.kind === 'unscoped') return "{ kind: 'unscoped' }";
-  return `{ kind: ${JSON.stringify(scope.kind)}, key: ${JSON.stringify(scope.key)} }`;
+  const key = scope.key === undefined ? '' : `, key: ${JSON.stringify(scope.key)}`;
+  const ownerProof = 'ownerProof' in scope && scope.ownerProof ? ', ownerProof: true' : '';
+  return `{ kind: ${JSON.stringify(scope.kind)}${key}${ownerProof} }`;
 }
 
 function serializeProjectedColumn(column: QueryProjectedColumn): string {

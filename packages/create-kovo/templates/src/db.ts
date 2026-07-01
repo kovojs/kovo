@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
+import { readonlyDb, type Reader } from '@kovojs/server';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle, type PgliteDatabase } from 'drizzle-orm/pglite';
 
@@ -14,9 +15,11 @@ import { account, contacts, session, user, verification } from './schema.js';
 
 /** The app runtime database. */
 export type AppDb = PgliteDatabase;
+export type AppReadonlyDb = Reader<AppDb>;
 
 export interface CreatedAppDb {
   db: AppDb;
+  readonlyDb: AppReadonlyDb;
   ready: Promise<void>;
 }
 
@@ -42,7 +45,8 @@ const DEFAULT_DATA_DIR = '.kovo/pglite';
 export function createAppDb(): CreatedAppDb {
   const client = new PGlite(process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR);
   const ready = initializeAppDb(client);
-  return { db: drizzle({ client }), ready };
+  const db = drizzle({ client });
+  return { db, readonlyDb: readonlyDb(db), ready };
 }
 
 async function initializeAppDb(client: PGlite): Promise<void> {
@@ -173,7 +177,11 @@ function quoteLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-/** The running app database. The server reads/writes this singleton per request. */
+/** The running app database. The framework provider and auth adapter own the write-capable handle. */
 const appDatabase = createAppDb();
-export const appDb = appDatabase.db;
+export const readonlyAppDb = appDatabase.readonlyDb;
 export const appDbReady = appDatabase.ready;
+
+export function appDbProvider(): AppDb {
+  return appDatabase.db;
+}

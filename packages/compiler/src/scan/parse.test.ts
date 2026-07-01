@@ -70,6 +70,33 @@ export const CartBadge = defineRegion({
     ]);
   });
 
+  it('recognizes namespace and local aliases for component factory calls', () => {
+    const source = `
+import * as core from '@kovojs/core';
+
+const defineComponent = core.component;
+
+export const CartBadge = defineComponent({
+  render: () => <cart-badge>Cart</cart-badge>,
+});
+`;
+
+    expect(parseComponentModule('cart-badge.tsx', source).components).toEqual([
+      expect.objectContaining({ localName: 'CartBadge' }),
+    ]);
+  });
+
+  it('does not treat a local component lookalike as the framework factory', () => {
+    const source = `
+function component(value) { return value; }
+export const CartBadge = component({
+  render: () => <cart-badge>Cart</cart-badge>,
+});
+`;
+
+    expect(parseComponentModule('cart-badge.tsx', source).components).toEqual([]);
+  });
+
   it('records trimmed JSX child bodies with original source offsets', () => {
     const source = `
 export const ChildSlot = component({
@@ -362,6 +389,27 @@ export const save = mutation('cart/save', {
     expect(handler?.paramNames).toEqual(['input', 'request']);
   });
 
+  it('records mutation handlers through subpath, namespace, and local aliases', () => {
+    const source = `
+import { mutation as defineMutation } from '@kovojs/server/api/data';
+import * as data from '@kovojs/server/api/data';
+const makeMutation = defineMutation;
+export const save = makeMutation({ handler(input, request) { return request.db.insert(input); } });
+export const remove = data.mutation({ handler(input, request) { return request.db.delete(input); } });
+`;
+
+    expect(mutationHandlers(parseComponentModule('cart.mutation.ts', source))).toHaveLength(2);
+  });
+
+  it('does not record local mutation lookalikes as framework handlers', () => {
+    const source = `
+function mutation(value) { return value; }
+export const save = mutation({ handler(input, request) { return request.db.insert(input); } });
+`;
+
+    expect(mutationHandlers(parseComponentModule('cart.mutation.ts', source))).toEqual([]);
+  });
+
   it('records simple destructured mutation handler parameter names', () => {
     const source = `
 export const save = mutation({
@@ -397,6 +445,20 @@ export const sendReceipt = task('email/send-receipt', {
       runQueryEdges: ['orderQuery'],
       scheduleEdges: ['sendReceipt'],
     });
+  });
+
+  it('records durable task handlers through namespace and local aliases', () => {
+    const source = `
+import * as data from '@kovojs/server/api/data';
+const defineTask = data.task;
+export const sendReceipt = defineTask('email/send-receipt', {
+  async run(args, ctx) { await ctx.runMutation(markSent, { id: args.id }); },
+});
+`;
+
+    expect(taskRunHandlers(parseComponentModule('tasks.ts', source))).toEqual([
+      expect.objectContaining({ key: 'email/send-receipt', runMutationEdges: ['markSent'] }),
+    ]);
   });
 
   it('records zero-argument JSX arrow attribute body facts', () => {

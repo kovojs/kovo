@@ -253,6 +253,83 @@ export const ExportedRegion = component({ queries: { cart: cartQuery }, render()
     );
   });
 
+  it('lowers standalone source-derived declarations through aliases and API subpaths', () => {
+    const transformed = lowerStandaloneSourceDerivedRegistryDeclarations({
+      fileName: 'src/app-shell.tsx',
+      source: `
+import { component as defineComponent } from '@kovojs/core';
+import { domain as defineDomain, mutation as defineMutation } from '@kovojs/server/api/data';
+import * as data from '@kovojs/server/api/data';
+import * as routing from '@kovojs/server/api/routing';
+
+const ComponentAlias = defineComponent;
+const DataQuery = data.query;
+
+const LocalRegion = ComponentAlias({ render() { return '<section />'; } });
+export const contact = defineDomain();
+export const contactTag = data.tag();
+export const addToCart = defineMutation({ handler() {}, input: {} });
+export const cartQuery = DataQuery({ load: () => ({ count: 1 }), reads: [] });
+export const auditQuery = DataQuery.elevated({ load: () => ({ ok: true }), reads: [] });
+export const orderPaid = routing.webhook('/webhooks/order-paid', {
+  handler() {},
+  input: {},
+  verify: 'none',
+  verifyJustification: 'fixture',
+});
+`,
+    });
+
+    expect(transformed).toContain(
+      'const LocalRegion = __kovoAssignDerivedComponentName(ComponentAlias({ render() { return \'<section />\'; } }), "app-shell/local-region")',
+    );
+    expect(transformed).toContain(
+      'export const contact = __kovoAssignDerivedDomainKey(defineDomain(), "app-shell/contact")',
+    );
+    expect(transformed).toContain(
+      'export const contactTag = __kovoAssignDerivedDomainKey(data.tag(), "app-shell/contact-tag")',
+    );
+    expect(transformed).toContain(
+      'export const addToCart = __kovoAssignDerivedMutationKey(defineMutation({ handler() {}, input: {} }), "app-shell/add-to-cart")',
+    );
+    expect(transformed).toContain(
+      'export const cartQuery = __kovoAssignDerivedQueryKey(DataQuery({ load: () => ({ count: 1 }), reads: [] }), "app-shell/cart-query")',
+    );
+    expect(transformed).toContain(
+      'export const auditQuery = __kovoAssignDerivedQueryKey(DataQuery.elevated({ load: () => ({ ok: true }), reads: [] }), "app-shell/audit-query")',
+    );
+    expect(transformed).toContain(
+      `export const orderPaid = __kovoAssignDerivedWebhookName(routing.webhook('/webhooks/order-paid', {
+  handler() {},
+  input: {},
+  verify: 'none',
+  verifyJustification: 'fixture',
+}), "app-shell/order-paid")`,
+    );
+  });
+
+  it('does not lower local source-derived lookalikes', () => {
+    const transformed = lowerStandaloneSourceDerivedRegistryDeclarations({
+      fileName: 'src/app-shell.tsx',
+      source: `
+function component(value) { return value; }
+function domain() { return {}; }
+function mutation(value) { return value; }
+const query = Object.assign((value) => value, { elevated(value) { return value; } });
+const routing = { webhook(_path, value) { return value; } };
+
+const LocalRegion = component({ render() { return '<section />'; } });
+export const contact = domain();
+export const addToCart = mutation({ handler() {}, input: {} });
+export const cartQuery = query({ load: () => ({ count: 1 }), reads: [] });
+export const auditQuery = query.elevated({ load: () => ({ ok: true }), reads: [] });
+export const orderPaid = routing.webhook('/webhooks/order-paid', { handler() {} });
+`,
+    });
+
+    expect(transformed).toBeNull();
+  });
+
   it('throws registry-error diagnostics from the Vite transform with teaching text', async () => {
     const onModuleDiagnostics = vi.fn();
     const plugin = createKovoVitePlugin(

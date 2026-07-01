@@ -260,6 +260,64 @@ export const namespace = kovo.route('/namespace', {
     ]);
   });
 
+  it('extracts route declarations and access helpers through public subpaths and local aliases', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+import { route as defineRoute, layout as defineLayout, publicAccess as allowPublic } from '@kovojs/server/api/routing';
+import * as routing from '@kovojs/server/api/routing';
+import { AliasPage } from './components/alias-page.js';
+
+const makeRoute = defineRoute;
+const makeLayout = defineLayout;
+
+const AppLayout = makeLayout({
+  render: (_queries, _state, { children }) => <main>{children}</main>,
+});
+
+export const docs = makeRoute('/docs', {
+  access: allowPublic('public docs'),
+  layout: AppLayout,
+  page: () => <AliasPage />,
+});
+
+export const signed = routing.route('/signed', {
+  access: routing.verifiedAccess,
+  page: () => <AliasPage />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(
+      result.routePageFacts.map((fact) => ({ access: fact.access, route: fact.route })),
+    ).toEqual([
+      { access: { kind: 'public', reason: 'public docs' }, route: '/docs' },
+      { access: { kind: 'verified-machine-auth' }, route: '/signed' },
+    ]);
+    expect(result.routePageFacts[0]?.layouts).toEqual([{ localName: 'AppLayout', queries: [] }]);
+  });
+
+  it('does not treat local route/layout/publicAccess lookalikes as framework constructs', () => {
+    const result = compileRouteModule({
+      fileName: 'src/routes.tsx',
+      source: `
+function route(_path, definition) { return definition; }
+function layout(definition) { return definition; }
+function publicAccess(reason) { return { kind: 'public', reason }; }
+const AppLayout = layout({ render: (_queries, _state, { children }) => <main>{children}</main> });
+export const docs = route('/docs', {
+  access: publicAccess('public docs'),
+  layout: AppLayout,
+  page: () => <AliasPage />,
+});
+`,
+    });
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.routePageFacts).toEqual([]);
+  });
+
   it('threads route and layout access posture through JSX-authored route page facts', () => {
     const result = compileRouteModule({
       fileName: 'src/routes.tsx',

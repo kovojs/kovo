@@ -309,3 +309,21 @@ packages/drizzle/src/index.query-loader-receivers.test.ts packages/cli/src/index
 packages/cli/src/index.kovo-check.test.ts`; and
   `pnpm exec vitest --run packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts
 scripts/ci-shards.test.mjs`.
+- Integrated starter F slice: scaffolded read surfaces now use `readonlyAppDb`/`readonlyDb`, while
+  write-capable provider access is narrowed to app construction, auth, and DDL/proof paths. Verified with
+  `pnpm exec vitest --run packages/create-kovo/src/index.test.ts
+packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
+packages/create-kovo/src/index.build.runtime.test.ts`; the focused prod-artifact starter suite; and
+  `pnpm run check:vp`.
+- Integrated C slice: KV414 query/read audits now consume canonical read provenance, including owner
+  domain proof and keyless arg reachability, and fail closed when scope provenance is unknown. Verified
+  with `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts
+packages/drizzle/src/index.query-loader-receivers.test.ts
+packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.query-shapes.test.ts
+packages/drizzle/src/index.serialization.test.ts`; `pnpm exec vitest --run
+packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts`; and
+  `pnpm run check:vp`.
+- Integrated B slice: compiler/server framework construct recognition now routes through a shared
+  framework identity resolver for aliases, namespace imports, destructuring, package subpaths, and
+  local lookalikes across the migrated compiler/static gates. Verified with Curie's focused
+  compiler/server suite; `pnpm run check:api-surface`; `pnpm run check:vp`; and `git diff --check`.

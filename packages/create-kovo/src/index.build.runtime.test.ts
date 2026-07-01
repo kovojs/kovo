@@ -78,14 +78,14 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
         [
           "import { describe, expect, it } from 'vitest';",
           "import { sql } from 'drizzle-orm';",
-          "import { appDb, appDbReady } from './db.js';",
+          "import { appDbProvider, appDbReady } from './db.js';",
           '',
           "describe('starter DDL proof', () => {",
           "  it('boots and exposes the expected schema', async () => {",
           '    await appDbReady;',
           query === ''
             ? '    expect(true).toBe(true);'
-            : `    await appDb.execute(sql\`${query}\`);`,
+            : `    await appDbProvider().execute(sql\`${query}\`);`,
           '  });',
           '});',
           '',

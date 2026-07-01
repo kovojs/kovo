@@ -579,8 +579,8 @@ export type QueryColumnProjectionKind = 'column' | 'opaque' | 'table-row' | 'unr
 
 /** @internal */
 export type QueryReadScopeProvenance =
-  | { key: string; kind: 'arg' }
-  | { key: string; kind: 'guard' | 'session' | 'tenant' }
+  | { key?: string; kind: 'arg' }
+  | { key: string; kind: 'guard' | 'session' | 'tenant'; ownerProof?: true }
   | { kind: 'unscoped' };
 
 /** @internal */

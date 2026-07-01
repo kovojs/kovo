@@ -322,6 +322,45 @@ describe('inline optimistic mutation lowering', () => {
     expect(plan.transforms[0]?.query).toBe('questions/queries/question-detail');
     expect(plan.transforms[0]?.keys).toBe('(input) => ({ id: input.targetId })');
   });
+
+  it('lowers inline optimistic plans through mutation aliases and subpath namespaces', () => {
+    const source = `
+      import { mutation as defineMutation } from '@kovojs/server/api/data';
+      import * as data from '@kovojs/server/api/data';
+
+      const mutationAlias = data.mutation;
+
+      export const save = defineMutation({
+        optimistic: { cart(draft) { draft.count += 1; } },
+        handler() {},
+      });
+
+      export const remove = mutationAlias('cart/remove', {
+        optimistic: { cart(draft) { draft.count -= 1; } },
+        handler() {},
+      });
+    `;
+
+    const plans = inlineOptimisticPlansFromSource('src/cart/mutations.ts', source);
+
+    expect(plans.map((plan) => [plan.localName, plan.mutation])).toEqual([
+      ['save', 'cart/mutations/save'],
+      ['remove', 'cart/remove'],
+    ]);
+  });
+
+  it('does not lower inline optimism from local mutation lookalikes', () => {
+    const source = `
+      function mutation(value) { return value; }
+
+      export const save = mutation({
+        optimistic: { cart(draft) { draft.count += 1; } },
+        handler() {},
+      });
+    `;
+
+    expect(inlineOptimisticPlansFromSource('src/cart/mutations.ts', source)).toEqual([]);
+  });
 });
 
 function comparablePlan(plan: InlineOptimisticPlanFact): InlineOptimisticPlanFact {

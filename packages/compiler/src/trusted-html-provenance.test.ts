@@ -204,4 +204,38 @@ export const C = component({
 `),
     ).toHaveLength(1);
   });
+
+  it('resolves trustedHtml through the @kovojs/server rendering re-export', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/server';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{trustedHtml(post.body)}</article>,
+});
+`),
+    ).toHaveLength(1);
+  });
+
+  it('resolves namespace trustedHtml without trusting local lookalikes', () => {
+    expect(
+      kv426(`
+import * as kovo from '@kovojs/server';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{kovo.trustedHtml(post.body)}</article>,
+});
+`),
+    ).toHaveLength(1);
+
+    expect(
+      kv426(`
+const kovo = { trustedHtml: (value) => value };
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{kovo.trustedHtml(post.body)}</article>,
+});
+`),
+    ).toHaveLength(0);
+  });
 });

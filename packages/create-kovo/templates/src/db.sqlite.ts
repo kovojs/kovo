@@ -1,4 +1,5 @@
 import Database from 'better-sqlite3';
+import { readonlyDb, type Reader } from '@kovojs/server';
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 
 import * as schema from './schema.js';
@@ -8,9 +9,11 @@ import * as schema from './schema.js';
 
 /** The app runtime database, typed by the Drizzle schema. */
 export type AppDb = BetterSQLite3Database<typeof schema>;
+export type AppReadonlyDb = Reader<AppDb>;
 
 export interface CreatedAppDb {
   db: AppDb;
+  readonlyDb: AppReadonlyDb;
   ready: Promise<void>;
 }
 
@@ -36,10 +39,15 @@ export function createAppDb(): CreatedAppDb {
   const client = new Database(':memory:');
   client.exec(SCHEMA_DDL);
   client.exec(SEED_CONTACTS);
-  return { db: drizzle({ client, schema }), ready: Promise.resolve() };
+  const db = drizzle({ client, schema });
+  return { db, readonlyDb: readonlyDb(db), ready: Promise.resolve() };
 }
 
-/** The running app database. The stateless server reads/writes this per request. */
+/** The running app database. The framework provider and auth adapter own the write-capable handle. */
 const appDatabase = createAppDb();
-export const appDb = appDatabase.db;
+export const readonlyAppDb = appDatabase.readonlyDb;
 export const appDbReady = appDatabase.ready;
+
+export function appDbProvider(): AppDb {
+  return appDatabase.db;
+}
