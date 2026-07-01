@@ -138,10 +138,11 @@ describe('fundamental-fixes-census-gate', () => {
   });
 
   it('requires M1, M2, and M3 evidence for closed rows', () => {
-    const rowId = 'readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime';
+    const rowId =
+      'write-mode-declared-table-statements-pass-and-cross-table-statements-fail-closed';
     const closedPlanText = planText.replace(
-      '  - [ ] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]',
-      '  - [x] `readonlyDb()` raw SQL methods (`.all/.get/.values`) fail closed at runtime [H]',
+      '  - [ ] write-mode declared-table statements pass and cross-table statements fail closed [H/I]',
+      '  - [x] write-mode declared-table statements pass and cross-table statements fail closed [H/I]',
     );
     const closedWithoutM1 = cloneDefaultManifest();
     const rowIndex = closedWithoutM1.rows.findIndex((row) => row.id === rowId);
@@ -202,7 +203,7 @@ describe('fundamental-fixes-census-gate', () => {
   });
 
   it('keeps parent rollup rows open until every child row closes', () => {
-    const parentId = 'readonlydb-read-only-loader-endpoint-handle-6-call-sites-bugz-25-b1';
+    const parentId = 'manageddb-write-mutation-handle-wrapmanageddbforsqlsafety-3-bugz-25-b2';
     const manifest = cloneDefaultManifest();
     const parentIndex = manifest.rows.findIndex((row) => row.id === parentId);
     manifest.rows[parentIndex] = {
@@ -227,14 +228,14 @@ describe('fundamental-fixes-census-gate', () => {
     };
 
     const closedPlanText = planText.replace(
-      '- [ ] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]',
-      '- [x] `readonlyDb()` read-only loader/endpoint handle (×6 call sites) — `bugz-25` B1 [H]',
+      "- [ ] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]",
+      "- [x] `managedDb(…, 'write')` mutation handle + `wrapManagedDbForSqlSafety` (×3) — `bugz-25` B2 [H/I]",
     );
 
     expect(
       evaluateFundamentalFixesCensus({ manifest, planText: closedPlanText }).violations,
     ).toContain(
-      `${parentId}: parent row cannot close while child row readonlydb-raw-sql-methods-all-get-values-fail-closed-at-runtime is open`,
+      `${parentId}: parent row cannot close while child row write-mode-declared-table-statements-pass-and-cross-table-statements-fail-closed is open`,
     );
   });
 

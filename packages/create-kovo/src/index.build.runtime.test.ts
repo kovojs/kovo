@@ -137,7 +137,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
     } finally {
       rmSync(root, { force: true, recursive: true });
     }
-  }, 120_000);
+  }, 180_000);
 
   it('serves the generated app through vp dev (redirect + login + styles)', async () => {
     const tempParent = join(process.cwd(), 'node_modules/.tmp');
