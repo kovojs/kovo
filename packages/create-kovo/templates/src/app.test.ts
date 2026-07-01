@@ -1,4 +1,4 @@
-import { isKovoApp, readonlyDb } from '@kovojs/server';
+import { isKovoApp } from '@kovojs/server';
 import { describe, expect, it } from 'vitest';
 
 import app, { requestHandler } from './app.js';
@@ -29,9 +29,9 @@ describe('starter app', () => {
   });
 
   it('reads seeded contacts through the typed query', async () => {
-    const { db, ready } = createAppDb();
+    const { ready, readonlyDb } = createAppDb();
     await ready;
-    const result = await contactsQuery.load(undefined, { db: readonlyDb(db), request: {} });
+    const result = await contactsQuery.load(undefined, { db: readonlyDb, request: {} });
     expect(result.items.map((contact) => contact.id)).toContain('c1');
   });
 
