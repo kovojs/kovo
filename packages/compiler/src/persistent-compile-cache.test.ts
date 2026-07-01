@@ -5,12 +5,15 @@ import { join } from 'node:path';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import * as cacheIdentity from './cache-identity.js';
+import { compileCacheKey, compileComponentCacheKeyInput } from './compile-cache.js';
 import {
   persistentCompileCacheDir,
   readPersistentCompileCacheEntry,
+  readPersistentCompileCacheEntryForInput,
   readPersistentCompileCacheManifest,
   writePersistentCompileCacheEntry,
 } from './persistent-compile-cache.js';
+import type { CompileDependencyFootprint } from './types.js';
 
 const tempRoots: string[] = [];
 
@@ -141,6 +144,46 @@ describe('persistent compile cache format', () => {
     await writeFile(join(cacheDir, entry.artifactRefs.result), '{"value":"tampered"}');
 
     await expect(readPersistentCompileCacheEntry(cacheDir, 'cache-key-a')).resolves.toBeNull();
+  });
+
+  it('replays learned footprints without crossing production render-plan gates', async () => {
+    const cacheDir = persistentCompileCacheDir(await tempRoot());
+    const footprint: CompileDependencyFootprint = {
+      queryShapes: { cart: { count: 'number' } },
+      reads: { queryShapeNames: ['cart'] },
+    };
+    const compileInput = {
+      fileName: 'cart.tsx',
+      queryShapes: { cart: { count: 'number' }, ignored: { name: 'string' } },
+      source: 'component({})',
+    };
+    const cacheKey = compileCacheKey(compileComponentCacheKeyInput(compileInput, footprint));
+
+    await writePersistentCompileCacheEntry(cacheDir, {
+      cacheKey,
+      footprint,
+      result: { value: 'no-gate' },
+    });
+
+    await expect(
+      readPersistentCompileCacheEntryForInput(
+        cacheDir,
+        compileComponentCacheKeyInput({
+          ...compileInput,
+          queryShapes: { cart: { count: 'number' }, ignored: { title: 'string' } },
+        }),
+      ),
+    ).resolves.toEqual({ value: 'no-gate' });
+
+    await expect(
+      readPersistentCompileCacheEntryForInput(
+        cacheDir,
+        compileComponentCacheKeyInput({
+          ...compileInput,
+          productionRenderPlanGate: { previous: { cart: 'tok-1' } },
+        }),
+      ),
+    ).resolves.toBeNull();
   });
 });
 
