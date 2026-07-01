@@ -421,7 +421,7 @@ function taintedValueReachesTopLevelReturn(body: Node, selectedKey: string): boo
 
     for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
       if (!topLevelDescendant(body, assignment)) continue;
-      if (assignment.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
+      if (!isAssignmentOperatorKind(assignment.getOperatorToken().getKind())) continue;
       const right = assignment.getRight();
       if (!expressionContainsAnyKey(right, tainted)) continue;
 
@@ -431,6 +431,34 @@ function taintedValueReachesTopLevelReturn(body: Node, selectedKey: string): boo
       if (wireRoots.has(targetRoot) || elementAliases.has(targetRoot)) return true;
       if (!tainted.has(targetRoot)) {
         tainted.add(targetRoot);
+        changed = true;
+      }
+    }
+
+    for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+      if (!topLevelDescendant(body, call)) continue;
+
+      const args = call.getArguments();
+      const receiver = staticAccessExpression(call.getExpression());
+      const receiverRoot = receiver ? expressionRootKey(receiver) : undefined;
+      const receiverTainted = receiverRoot !== undefined && tainted.has(receiverRoot);
+      const taintedArgs = args.some((argument) => expressionContainsAnyKey(argument, tainted));
+
+      if (receiverTainted && appendCallbackIdentifierTaint(call, tainted)) {
+        changed = true;
+      }
+
+      if (!taintedArgs) continue;
+      if (
+        args.some((argument) => expressionContainsWireRoot(argument, wireRoots, elementAliases))
+      ) {
+        return true;
+      }
+      if (receiverRoot && (wireRoots.has(receiverRoot) || elementAliases.has(receiverRoot))) {
+        return true;
+      }
+      if (receiverRoot && !tainted.has(receiverRoot)) {
+        tainted.add(receiverRoot);
         changed = true;
       }
     }
@@ -466,10 +494,42 @@ function taintedValueReachesTopLevelReturn(body: Node, selectedKey: string): boo
     if (receiverRoot && (wireRoots.has(receiverRoot) || elementAliases.has(receiverRoot))) {
       return true;
     }
-    if (args.some((argument) => expressionContainsAnyKey(argument, wireRoots))) return true;
+    if (args.some((argument) => expressionContainsWireRoot(argument, wireRoots, elementAliases))) {
+      return true;
+    }
   }
 
   return false;
+}
+
+function isAssignmentOperatorKind(kind: SyntaxKind): boolean {
+  return kind >= SyntaxKind.FirstAssignment && kind <= SyntaxKind.LastAssignment;
+}
+
+function appendCallbackIdentifierTaint(call: CallExpression, tainted: Set<string>): boolean {
+  let changed = false;
+
+  for (const argument of call.getArguments()) {
+    if (!Node.isArrowFunction(argument) && !Node.isFunctionExpression(argument)) continue;
+    for (const key of expressionIdentifierKeys(argument)) {
+      if (tainted.has(key)) continue;
+      tainted.add(key);
+      changed = true;
+    }
+  }
+
+  return changed;
+}
+
+function expressionContainsWireRoot(
+  expression: Node,
+  wireRoots: ReadonlySet<string>,
+  elementAliases: ReadonlySet<string>,
+): boolean {
+  return (
+    expressionContainsAnyKey(expression, wireRoots) ||
+    expressionContainsAnyKey(expression, elementAliases)
+  );
 }
 
 function topLevelReturnExpressions(body: Node): Node[] {
