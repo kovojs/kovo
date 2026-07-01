@@ -384,14 +384,22 @@ export function createReadOnlyStorageCapability(
         'audited capability surface.',
     );
   };
-  return Object.freeze({
+  const readOnly = Object.freeze({
     get: storage.get.bind(storage),
     stat: storage.stat.bind(storage),
     stream: storage.stream.bind(storage),
-    // Deliberately present only at runtime so `as any` cannot recover write authority from a read
-    // view. The public type omits these methods.
+    // Deliberately present only at runtime so `as any` cannot recover known write authority from a
+    // read view. The public type omits these methods.
     delete: denyWrite,
     put: denyWrite,
+  });
+  return new Proxy(readOnly, {
+    get(target, property, receiver) {
+      if (typeof property === 'string' && (property === 'store' || property === 'upload')) {
+        return denyWrite;
+      }
+      return Reflect.get(target, property, receiver);
+    },
   }) as StorageReadCapability;
 }
 

@@ -95,8 +95,13 @@ describe('create-kovo starter (build integration: production security artifacts)
       } catch (error) {
         const output = execFileSyncErrorOutput(error);
         expect(output).toContain('KV433');
-        expect(output).toContain('storage-write-query');
+        expect(output).toContain('storage-put-write-query');
+        expect(output).toContain('storage-computed-write-query');
+        expect(output).toContain('storage-file-store-write-query');
+        expect(output).toContain('storage-upload-write-query');
         expect(output).toContain('operation=put');
+        expect(output).toContain('operation=store');
+        expect(output).toContain('operation=upload');
       }
     } finally {
       rmSync(root, { force: true, recursive: true });

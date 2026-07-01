@@ -2253,6 +2253,7 @@ const KV433_DIRECT_WRITE_OPERATIONS = new Set<ResolvedQueryWriteReachabilityOper
 const KV433_STORAGE_WRITE_OPERATIONS = new Set<ResolvedQueryWriteReachabilityOperationKind>([
   'delete',
   'put',
+  'upload',
 ]);
 
 const KV433_RAW_RECEIVER_WRITE_OPERATIONS = new Set<QueryWriteReachabilityOperationKind>([

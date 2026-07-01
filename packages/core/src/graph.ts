@@ -121,6 +121,7 @@ export type HandlerWriteSinkOperationKind =
   | 'put'
   | 'run'
   | 'store'
+  | 'upload'
   | 'update'
   | 'UNRESOLVED';
 
@@ -498,6 +499,7 @@ export type QueryWriteReachabilityOperationKind =
   | 'put'
   | 'run'
   | 'store'
+  | 'upload'
   | 'update'
   | 'UNRESOLVED';
 

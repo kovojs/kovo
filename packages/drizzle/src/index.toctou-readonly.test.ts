@@ -410,6 +410,57 @@ describe('KV433 read-only query handle (Stage 2: static no-write-reachable)', ()
     ]);
   });
 
+  it('flags upload-named storage write authority in query() loaders', () => {
+    const result = reach(
+      [
+        'declare const uploadStorage: { upload(key: string, body: string): Promise<void> };',
+        'export const uploads = query("uploads", {',
+        '  load: async () => {',
+        '    await uploadStorage.upload("receipts/a.txt", "A");',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: 'uploadStorage', provenance: 'storage-receiver' },
+        operation: 'upload',
+        operationKind: 'upload',
+        operationProvenance: 'property-access',
+        query: 'uploads',
+        site: 'q.ts:4',
+        table: 'uploadStorage',
+      },
+    ]);
+  });
+
+  it('normalizes destructured storage write method aliases in query loaders', () => {
+    const result = reach(
+      [
+        'declare const uploadStorage: { upload(key: string, body: string): Promise<void> };',
+        'export const uploads = query("uploads", {',
+        '  load: async () => {',
+        '    const { upload } = uploadStorage;',
+        '    await upload("receipts/a.txt", "A");',
+        '    return { ok: true };',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+    expect(result).toMatchObject([
+      {
+        canonicalTarget: { identity: '__kovoUnresolvedReadSource', provenance: 'storage-receiver' },
+        operation: 'upload',
+        operationKind: 'upload',
+        operationProvenance: 'receiver-method-alias',
+        query: 'uploads',
+        site: 'q.ts:5',
+        table: '__kovoUnresolvedReadSource',
+      },
+    ]);
+  });
+
   it('fails closed on computed storage receiver methods in query() loaders', () => {
     const result = reach(
       [

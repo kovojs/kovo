@@ -147,6 +147,16 @@ describe('storage read/write authority split', () => {
     const forged = readOnly as unknown as StorageCapability;
     await expect(forged.put('receipts/evil.txt', 'evil')).rejects.toThrow(/KV433/u);
     await expect(forged.delete('receipts/order-1.txt')).rejects.toThrow(/KV433/u);
+    await expect(
+      (readOnly as unknown as Record<'store', (key: string, body: string) => Promise<unknown>>)[
+        'store'
+      ]('receipts/evil.txt', 'evil'),
+    ).rejects.toThrow(/KV433/u);
+    await expect(
+      (readOnly as unknown as Record<'upload', (key: string, body: string) => Promise<unknown>>)[
+        'upload'
+      ]('receipts/evil.txt', 'evil'),
+    ).rejects.toThrow(/KV433/u);
   });
 });
 
