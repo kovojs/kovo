@@ -21,7 +21,7 @@ random `KOVO_DEMO_PASSWORD` value in your generated, gitignored `.env` file.
 | File                   | Building block                                                                                                                                                                      |
 | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `src/schema.ts`        | Drizzle tables. `contacts` carries a `kovo({ domain, key })` annotation so the compiler can prove invalidation; the four Better Auth tables sit alongside it.                       |
-| `src/db.ts`            | The database: Drizzle over in-process PGlite (real Postgres, no server to run), created and seeded by `createAppDb()`, with `readonlyDb` views for read surfaces.                   |
+| `src/db.ts`            | App-facing database types plus `readonlyAppDb` for read surfaces; raw PGlite creation and seeding live in the framework-owned `_kovo` runtime module.                               |
 | `src/queries.ts`       | `contactsQuery` — a typed read whose Drizzle select the compiler extracts.                                                                                                          |
 | `src/mutations.ts`     | `addContact` — a CSRF-protected, `authed`-guarded write with input validation and an optimistic list update.                                                                        |
 | `src/auth.ts`          | Real [Better Auth](https://better-auth.com) on the same PGlite/Drizzle database, wired into Kovo via `@kovojs/better-auth`.                                                         |

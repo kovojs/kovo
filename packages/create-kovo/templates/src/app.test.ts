@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import app, { requestHandler } from './app.js';
 import { ContactsRegion } from './components/contacts.js';
-import { createAppDb } from './db.js';
+import { readonlyAppDb } from './db.js';
 import { contactsQuery } from './queries.js';
 
 // SPEC.md §9.5: route dispatch, document assembly, and the request shell all run
@@ -29,9 +29,7 @@ describe('starter app', () => {
   });
 
   it('reads seeded contacts through the typed query', async () => {
-    const { ready, readonlyDb } = createAppDb();
-    await ready;
-    const result = await contactsQuery.load(undefined, { db: readonlyDb, request: {} });
+    const result = await contactsQuery.load(undefined, { db: readonlyAppDb, request: {} });
     expect(result.items.map((contact) => contact.id)).toContain('c1');
   });
 

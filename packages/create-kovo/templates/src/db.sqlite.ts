@@ -1,54 +1,16 @@
-import Database from 'better-sqlite3';
-import { readonlyDb, type Reader } from '@kovojs/server';
-import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
+import type { Reader } from '@kovojs/server';
+import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 
-import * as schema from './schema.js';
+import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
+import type * as schema from './schema.js';
 
-// The app database: Drizzle over in-process SQLite through better-sqlite3. This
-// opt-in scaffold uses Kovo's blessed SQLite path; Postgres remains the default.
+// App-facing database surface. SPEC §9.4 and §10.3 make endpoint/query reads the
+// safe public shape; raw creation and the write-capable provider live under
+// src/_kovo/app-runtime-db.ts for framework-owned app construction/auth wiring.
 
 /** The app runtime database, typed by the Drizzle schema. */
 export type AppDb = BetterSQLite3Database<typeof schema>;
 export type AppReadonlyDb = Reader<AppDb>;
 
-export interface CreatedAppDb {
-  db: AppDb;
-  readonlyDb: AppReadonlyDb;
-  ready: Promise<void>;
-}
-
-const SCHEMA_DDL = [
-  // App domain.
-  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT '');",
-  // Better Auth tables (column names match src/schema.ts). SQLite stores
-  // booleans and Drizzle timestamp_ms dates as integer mode columns.
-  'CREATE TABLE "user" (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL UNIQUE, "emailVerified" integer NOT NULL DEFAULT 0, image text, "createdAt" integer NOT NULL DEFAULT (CAST(unixepoch(\'subsec\') * 1000 AS integer)), "updatedAt" integer NOT NULL DEFAULT (CAST(unixepoch(\'subsec\') * 1000 AS integer)));',
-  'CREATE TABLE "session" (id text PRIMARY KEY, "expiresAt" integer NOT NULL, token text NOT NULL UNIQUE, "createdAt" integer NOT NULL DEFAULT (CAST(unixepoch(\'subsec\') * 1000 AS integer)), "updatedAt" integer NOT NULL DEFAULT (CAST(unixepoch(\'subsec\') * 1000 AS integer)), "ipAddress" text, "userAgent" text, "userId" text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE);',
-  'CREATE TABLE "account" (id text PRIMARY KEY, "accountId" text NOT NULL, "providerId" text NOT NULL, "userId" text NOT NULL REFERENCES "user"(id) ON DELETE CASCADE, "accessToken" text, "refreshToken" text, "idToken" text, "accessTokenExpiresAt" integer, "refreshTokenExpiresAt" integer, scope text, password text, "createdAt" integer NOT NULL DEFAULT (CAST(unixepoch(\'subsec\') * 1000 AS integer)), "updatedAt" integer NOT NULL DEFAULT (CAST(unixepoch(\'subsec\') * 1000 AS integer)));',
-  'CREATE TABLE "verification" (id text PRIMARY KEY, identifier text NOT NULL, value text NOT NULL, "expiresAt" integer NOT NULL, "createdAt" integer NOT NULL DEFAULT (CAST(unixepoch(\'subsec\') * 1000 AS integer)), "updatedAt" integer NOT NULL DEFAULT (CAST(unixepoch(\'subsec\') * 1000 AS integer)));',
-].join('\n');
-
-const SEED_CONTACTS =
-  'INSERT INTO contacts (id, name, email, company) VALUES ' +
-  "('c1', 'Ada Lovelace', 'ada@example.com', 'Analytical Engines'), " +
-  "('c2', 'Grace Hopper', 'grace@example.com', 'Naval Systems'), " +
-  "('c3', 'Alan Turing', 'alan@example.com', 'Bletchley Park');";
-
-/** Create a fresh, seeded app database (DDL + a few demo contacts). */
-export function createAppDb(): CreatedAppDb {
-  const client = new Database(':memory:');
-  client.exec(SCHEMA_DDL);
-  client.exec(SEED_CONTACTS);
-  const db = drizzle({ client, schema });
-  return { db, readonlyDb: readonlyDb(db), ready: Promise.resolve() };
-}
-
-/** The running app database. Endpoint/user-authored reads should import readonlyAppDb. */
-const appDatabase = createAppDb();
-globalThis.__kovoStarterAppDatabase = appDatabase;
-export const readonlyAppDb = appDatabase.readonlyDb;
-export const appDbReady = appDatabase.ready;
-
-declare global {
-  var __kovoStarterAppDatabase: CreatedAppDb | undefined;
-}
+/** The running app read surface. Endpoint/user-authored reads should import this value. */
+export const readonlyAppDb: AppReadonlyDb = appRuntimeReadonlyDb;

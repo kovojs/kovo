@@ -25,8 +25,7 @@ import {
   seedDemoUser,
   type AppRequest,
 } from './auth.js';
-import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';
-import { appDbReady } from './db.js';
+import { appRuntimeDbProvider, appRuntimeDbReady } from './_kovo/app-runtime-db.js';
 import { addContact } from './mutations.js';
 import { contactsQuery } from './queries.js';
 import { appTheme } from './theme.js';
@@ -37,7 +36,7 @@ import { appTheme } from './theme.js';
 
 // Fail fast on schema/seed errors, then seed the local demo account when the
 // generated .env contains KOVO_DEMO_PASSWORD.
-await appDbReady;
+await appRuntimeDbReady;
 await seedDemoUser();
 
 const stylesheets = [stylesheet('./styles.css', { theme: appTheme })] as const;

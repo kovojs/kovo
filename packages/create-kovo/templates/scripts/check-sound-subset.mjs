@@ -1,14 +1,24 @@
 #!/usr/bin/env node
 import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { dirname, join, normalize, relative } from 'node:path';
 
 const ts = await loadTypeScript();
 const root = process.cwd();
 const findings = [];
+const RUNTIME_DB_MODULE_PATH = 'src/_kovo/app-runtime-db';
+const RUNTIME_DB_IMPORT_ALLOWLIST = new Set([
+  'src/app.tsx',
+  'src/auth.ts',
+  'src/auth.sqlite.ts',
+  'src/db.ts',
+  'src/db.sqlite.ts',
+]);
+const RUNTIME_DB_IMPORT_MESSAGE =
+  'SPEC.md §6.6 sound subset bans non-type imports of src/_kovo/app-runtime-db outside framework-owned starter files';
 
 for (const file of sourceFiles(join(root, 'src'))) {
   const source = readFileSync(file, 'utf8');
-  const relativeFile = relative(root, file);
+  const relativeFile = toPosixPath(relative(root, file));
   if (ts) {
     analyzeWithTypeScript(ts, source, relativeFile);
   } else {
@@ -55,6 +65,8 @@ function analyzeWithTypeScript(ts, source, relativeFile) {
 }
 
 function visitTypeScriptNode(ts, node, sourceFile, relativeFile) {
+  reportRuntimeDbImportIfNeeded(ts, node, sourceFile, relativeFile);
+
   if (node.kind === ts.SyntaxKind.AnyKeyword) {
     reportTypeScriptFinding(sourceFile, relativeFile, node, 'SPEC.md §6.6 sound subset bans any');
   } else if (
@@ -77,6 +89,86 @@ function visitTypeScriptNode(ts, node, sourceFile, relativeFile) {
     );
   }
   ts.forEachChild(node, (child) => visitTypeScriptNode(ts, child, sourceFile, relativeFile));
+}
+
+function reportRuntimeDbImportIfNeeded(ts, node, sourceFile, relativeFile) {
+  if (runtimeDbImportsAllowed(relativeFile)) return;
+
+  if (ts.isImportDeclaration(node)) {
+    const specifier = stringLiteralText(ts, node.moduleSpecifier);
+    if (
+      specifier &&
+      isRuntimeDbModuleSpecifier(relativeFile, specifier) &&
+      !isTypeOnlyImportDeclaration(ts, node)
+    ) {
+      reportTypeScriptFinding(
+        sourceFile,
+        relativeFile,
+        node.moduleSpecifier,
+        RUNTIME_DB_IMPORT_MESSAGE,
+      );
+    }
+    return;
+  }
+
+  if (ts.isExportDeclaration(node)) {
+    const specifier = node.moduleSpecifier ? stringLiteralText(ts, node.moduleSpecifier) : null;
+    if (
+      specifier &&
+      isRuntimeDbModuleSpecifier(relativeFile, specifier) &&
+      !isTypeOnlyExportDeclaration(ts, node)
+    ) {
+      reportTypeScriptFinding(
+        sourceFile,
+        relativeFile,
+        node.moduleSpecifier,
+        RUNTIME_DB_IMPORT_MESSAGE,
+      );
+    }
+    return;
+  }
+
+  if (
+    ts.isCallExpression(node) &&
+    node.expression.kind === ts.SyntaxKind.ImportKeyword &&
+    node.arguments.length > 0
+  ) {
+    const specifier = stringLiteralText(ts, node.arguments[0]);
+    if (specifier && isRuntimeDbModuleSpecifier(relativeFile, specifier)) {
+      reportTypeScriptFinding(
+        sourceFile,
+        relativeFile,
+        node.arguments[0],
+        RUNTIME_DB_IMPORT_MESSAGE,
+      );
+    }
+  }
+}
+
+function isTypeOnlyImportDeclaration(ts, node) {
+  const clause = node.importClause;
+  if (!clause) return false;
+  if (clause.isTypeOnly) return true;
+  if (clause.name) return false;
+  const bindings = clause.namedBindings;
+  if (!bindings) return false;
+  if (ts.isNamespaceImport(bindings)) return false;
+  return (
+    ts.isNamedImports(bindings) &&
+    bindings.elements.length > 0 &&
+    bindings.elements.every((element) => element.isTypeOnly)
+  );
+}
+
+function isTypeOnlyExportDeclaration(ts, node) {
+  if (node.isTypeOnly) return true;
+  const clause = node.exportClause;
+  if (!clause || !ts.isNamedExports(clause)) return false;
+  return clause.elements.length > 0 && clause.elements.every((element) => element.isTypeOnly);
+}
+
+function stringLiteralText(ts, node) {
+  return ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node) ? node.text : null;
 }
 
 function isConstAssertion(ts, node, sourceFile) {
@@ -135,6 +227,26 @@ function reportTypeScriptFinding(sourceFile, relativeFile, node, message) {
   findings.push(`${relativeFile}:${line + 1}: ${message}`);
 }
 
+function runtimeDbImportsAllowed(relativeFile) {
+  return RUNTIME_DB_IMPORT_ALLOWLIST.has(toPosixPath(relativeFile));
+}
+
+function isRuntimeDbModuleSpecifier(relativeFile, specifier) {
+  if (!specifier.startsWith('.')) return false;
+  const resolved = stripModuleExtension(
+    toPosixPath(normalize(join(dirname(relativeFile), specifier))),
+  );
+  return resolved === RUNTIME_DB_MODULE_PATH;
+}
+
+function stripModuleExtension(value) {
+  return value.replace(/\.(?:[cm]?[jt]sx?)$/u, '');
+}
+
+function toPosixPath(value) {
+  return value.replaceAll('\\', '/');
+}
+
 function scriptKind(ts, file) {
   if (file.endsWith('.tsx')) return ts.ScriptKind.TSX;
   if (file.endsWith('.jsx')) return ts.ScriptKind.JSX;
@@ -145,6 +257,8 @@ function scriptKind(ts, file) {
 }
 
 function analyzeWithScanner(source, relativeFile) {
+  scanRuntimeDbImports(source, relativeFile);
+
   const lines = maskIgnoredText(source).split('\n');
   for (const [index, line] of lines.entries()) {
     if (/\bany\b/.test(line)) {
@@ -159,6 +273,30 @@ function analyzeWithScanner(source, relativeFile) {
       );
     }
   }
+}
+
+function scanRuntimeDbImports(source, relativeFile) {
+  if (runtimeDbImportsAllowed(relativeFile)) return;
+
+  const importPatterns = [
+    /^\s*import\s+(?!type\b)(?:[^'";]*?\s+from\s*)?['"]([^'"]+)['"]/gmsu,
+    /^\s*export\s+(?!type\b)[^'";]*?\s+from\s*['"]([^'"]+)['"]/gmsu,
+    /\bimport\s*\(\s*['"]([^'"]+)['"]\s*\)/gu,
+  ];
+
+  for (const pattern of importPatterns) {
+    for (const match of source.matchAll(pattern)) {
+      const specifier = match[1];
+      if (!specifier || !isRuntimeDbModuleSpecifier(relativeFile, specifier)) continue;
+      findings.push(
+        `${relativeFile}:${lineNumberAt(source, match.index ?? 0)}: ${RUNTIME_DB_IMPORT_MESSAGE}`,
+      );
+    }
+  }
+}
+
+function lineNumberAt(source, offset) {
+  return source.slice(0, offset).split('\n').length;
 }
 
 function maskIgnoredText(source) {

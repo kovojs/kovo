@@ -80,10 +80,10 @@ export function addDurableTaskProofs(root: string): void {
     'utf8',
   );
 
-  const dbPath = join(root, 'src/db.ts');
-  const db = readFileSync(dbPath, 'utf8')
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  const runtimeDb = readFileSync(runtimeDbPath, 'utf8')
     .replace(
-      "import { account, contacts, session, user, verification } from './schema.js';",
+      "import { account, contacts, session, user, verification } from '../schema.js';",
       [
         'import {',
         '  account,',
@@ -92,7 +92,7 @@ export function addDurableTaskProofs(root: string): void {
         '  taskProofs,',
         '  user,',
         '  verification,',
-        "} from './schema.js';",
+        "} from '../schema.js';",
       ].join('\n'),
     )
     .replace(
@@ -104,7 +104,7 @@ export function addDurableTaskProofs(root: string): void {
         '  user,',
       ].join('\n'),
     );
-  writeFileSync(dbPath, db, 'utf8');
+  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
 
   writeFileSync(
     join(root, 'src/durable-task-proofs.ts'),

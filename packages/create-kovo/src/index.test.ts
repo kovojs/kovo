@@ -66,6 +66,7 @@ const SQLITE_TEMPLATE_FILES = [
   'README.sqlite.md',
   'src/schema.sqlite.ts',
   'src/db.sqlite.ts',
+  'src/_kovo/app-runtime-db.sqlite.ts',
   'src/auth.sqlite.ts',
 ];
 const createKovoPackageRoot = dirname(fileURLToPath(new URL('../package.json', import.meta.url)));
@@ -225,51 +226,77 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('package.json')).toContain('"@electric-sql/pglite"');
     expect(files.get('package.json')).not.toContain('"better-sqlite3"');
     expect(packageJson.pnpm).toBeUndefined();
-    expect(files.get('src/db.ts')).toContain("import { PGlite } from '@electric-sql/pglite'");
+    expect(files.get('src/db.ts')).toContain("import type { Reader } from '@kovojs/server'");
     expect(files.get('src/db.ts')).toContain(
-      "import { getTableConfig } from 'drizzle-orm/pg-core'",
+      "import type { PgliteDatabase } from 'drizzle-orm/pglite'",
     );
-    expect(files.get('src/db.ts')).toContain('process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR');
-    expect(files.get('src/db.ts')).toContain('sortTablesByForeignKeyDependencies([');
     expect(files.get('src/db.ts')).toContain(
-      'CREATE TABLE IF NOT EXISTS ${quoteIdent(config.name)}',
+      "import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js'",
     );
-    expect(files.get('src/db.ts')).toContain('ADD COLUMN IF NOT EXISTS');
-    expect(files.get('src/db.ts')).toContain("if (column.columnType === 'PgSerial') return ''");
     expect(files.get('src/db.ts')).toContain('export type AppDb = PgliteDatabase');
     expect(files.get('src/db.ts')).toContain('export type AppReadonlyDb = Reader<AppDb>');
-    expect(files.get('src/db.ts')).toContain('readonlyDb: AppReadonlyDb');
-    expect(files.get('src/db.ts')).toContain('return { db, readonlyDb: readonlyDb(db), ready }');
-    expect(files.get('src/db.ts')).not.toContain('PgliteDatabase<typeof schema>');
-    expect(files.get('src/db.ts')).not.toContain('drizzle({ client, schema })');
-    expect(files.get('src/db.ts')).toContain('await client.exec(SCHEMA_DDL)');
-    expect(files.get('src/db.ts')).not.toContain('void client.exec');
-    expect(files.get('src/db.ts')).toContain('export const readonlyAppDb = appDatabase.readonlyDb');
-    expect(files.get('src/db.ts')).toContain('export const appDbReady = appDatabase.ready');
+    expect(files.get('src/db.ts')).toContain(
+      'export const readonlyAppDb: AppReadonlyDb = appRuntimeReadonlyDb',
+    );
+    expect(files.get('src/db.ts')).not.toContain('createAppDb');
+    expect(files.get('src/db.ts')).not.toContain('CreatedAppDb');
+    expect(files.get('src/db.ts')).not.toContain('appDbReady');
     expect(files.get('src/db.ts')).not.toContain('appRuntimeDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export function appDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export const appDb = appDatabase.db');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'export function appRuntimeDbProvider(): AppDb',
+      "import { PGlite } from '@electric-sql/pglite'",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "import type { AppDb, CreatedAppDb } from '../db.js'",
+      "import { getTableConfig } from 'drizzle-orm/pg-core'",
     );
-    expect(files.get('src/db.ts')).toContain('ON CONFLICT (id) DO NOTHING');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'sortTablesByForeignKeyDependencies([',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'CREATE TABLE IF NOT EXISTS ${quoteIdent(config.name)}',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ADD COLUMN IF NOT EXISTS');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "if (column.columnType === 'PgSerial') return ''",
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'return { db, readonlyDb: readonlyDb(db), ready }',
+    );
+    expect(files.get('src/db.ts')).not.toContain('PgliteDatabase<typeof schema>');
+    expect(files.get('src/db.ts')).not.toContain('drizzle({ client, schema })');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('await client.exec(SCHEMA_DDL)');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('void client.exec');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'export const appRuntimeDbReady: Promise<void> = appDatabase.ready',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'export function appRuntimeDbProvider(): AppDb',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('__kovoStarterAppDatabase');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ON CONFLICT (id) DO NOTHING');
     expect(files.get('src/app.tsx')).toContain('createMemoryMutationReplayStore');
     expect(files.get('src/app.tsx')).toContain(
       'const mutationReplayStore = createMemoryMutationReplayStore();',
     );
     expect(files.get('src/app.tsx')).toContain('mutationReplayStore,');
     expect(files.get('src/app.tsx')).toContain(
-      "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js'",
+      "import { appRuntimeDbProvider, appRuntimeDbReady } from './_kovo/app-runtime-db.js'",
     );
-    expect(files.get('src/app.tsx')).toContain("import { appDbReady } from './db.js'");
-    expect(files.get('src/app.tsx')).toContain('await appDbReady');
+    expect(files.get('src/app.tsx')).not.toContain("import { appDbReady } from './db.js'");
+    expect(files.get('src/app.tsx')).toContain('await appRuntimeDbReady');
     expect(files.get('src/app.tsx')).toContain('db: appRuntimeDbProvider,');
     expect(files.get('src/app.tsx')).not.toContain('db: () => appDb');
-    expect(files.get('src/app.test.ts')).toContain('const { ready, readonlyDb } = createAppDb();');
-    expect(files.get('src/app.test.ts')).toContain('{ db: readonlyDb, request: {} }');
+    expect(files.get('src/app.test.ts')).toContain("import { readonlyAppDb } from './db.js'");
+    expect(files.get('src/app.test.ts')).not.toContain('createAppDb');
+    expect(files.get('src/app.test.ts')).toContain('{ db: readonlyAppDb, request: {} }');
     expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
     expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
     expect(files.get('src/auth.ts')).toContain(
@@ -320,6 +347,9 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('scripts/check-sound-subset.mjs')).toContain(
       '.sort((left, right) => left.localeCompare(right));',
+    );
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
+      'bans non-type imports of src/_kovo/app-runtime-db',
     );
     expect(files.get('src/endpoint-posture.test.ts')).not.toMatch(/\bas\s+(?!const\b)[A-Za-z_{]/u);
     expect(files.get('src/auth.ts')).toContain(
@@ -417,6 +447,53 @@ describe('create-kovo starter (metadata)', () => {
     }
   });
 
+  it('rejects app-authored value imports of the framework runtime DB module', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-runtime-db-subset-'));
+
+    try {
+      writeKovoProject(root, { name: 'Runtime Db Subset Proof' });
+      linkStarterBuildDependencies(root);
+      writeFileSync(
+        join(root, 'src/unsafe-runtime-db.ts'),
+        [
+          "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';",
+          '',
+          'export const leakedRuntimeProvider = appRuntimeDbProvider;',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /unsafe-runtime-db\.ts:1: SPEC\.md §6\.6 sound subset bans non-type imports of src\/_kovo\/app-runtime-db/,
+      );
+
+      writeFileSync(
+        join(root, 'src/unsafe-runtime-db.ts'),
+        [
+          "import type { AppDb } from './db.js';",
+          '',
+          'export type RuntimeDbAlias = AppDb;',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('emits the SQLite scaffold variant when requested', () => {
     const project = createKovoProject({ dialect: 'sqlite', name: 'Sqlite App' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));
@@ -427,26 +504,46 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('package.json')).toContain('"better-sqlite3"');
     expect(files.get('package.json')).not.toContain('"@electric-sql/pglite"');
     expect(packageJson.pnpm?.onlyBuiltDependencies).toEqual(['better-sqlite3']);
-    expect(files.get('src/db.ts')).toContain("import Database from 'better-sqlite3'");
-    expect(files.get('src/db.ts')).toContain("from 'drizzle-orm/better-sqlite3'");
-    expect(files.get('src/db.ts')).toContain('export type AppReadonlyDb = Reader<AppDb>');
-    expect(files.get('src/db.ts')).toContain('readonlyDb: AppReadonlyDb');
     expect(files.get('src/db.ts')).toContain(
-      'return { db, readonlyDb: readonlyDb(db), ready: Promise.resolve() }',
+      "import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3'",
     );
-    expect(files.get('src/db.ts')).toContain('export const readonlyAppDb = appDatabase.readonlyDb');
+    expect(files.get('src/db.ts')).toContain(
+      "import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js'",
+    );
+    expect(files.get('src/db.ts')).toContain('export type AppReadonlyDb = Reader<AppDb>');
+    expect(files.get('src/db.ts')).toContain(
+      'export const readonlyAppDb: AppReadonlyDb = appRuntimeReadonlyDb',
+    );
+    expect(files.get('src/db.ts')).not.toContain('createAppDb');
+    expect(files.get('src/db.ts')).not.toContain('CreatedAppDb');
     expect(files.get('src/db.ts')).not.toContain('appRuntimeDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export function appDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export const appDb = appDatabase.db');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "import Database from 'better-sqlite3'",
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("from 'drizzle-orm/better-sqlite3'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'return { db, readonlyDb: readonlyDb(db), ready: Promise.resolve() }',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export function appRuntimeDbProvider(): AppDb',
     );
-    expect(files.get('src/db.ts')).toContain('"emailVerified" integer NOT NULL DEFAULT 0');
-    expect(files.get('src/db.ts')).toContain('"createdAt" integer NOT NULL DEFAULT');
-    expect(files.get('src/db.ts')).toContain('"expiresAt" integer NOT NULL');
-    expect(files.get('src/db.ts')).toContain('"accessTokenExpiresAt" integer');
-    expect(files.get('src/db.ts')).not.toContain('"createdAt" text');
-    expect(files.get('src/db.ts')).not.toContain('"expiresAt" text');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('__kovoStarterAppDatabase');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      '"emailVerified" integer NOT NULL DEFAULT 0',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      '"createdAt" integer NOT NULL DEFAULT',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('"expiresAt" integer NOT NULL');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('"accessTokenExpiresAt" integer');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('"createdAt" text');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('"expiresAt" text');
     expect(files.get('src/schema.ts')).toContain('import { integer, sqliteTable, text }');
     expect(files.get('src/schema.ts')).toContain("integer('emailVerified', { mode: 'boolean' })");
     expect(files.get('src/schema.ts')).toContain("integer('createdAt', { mode: 'timestamp_ms' })");

@@ -213,10 +213,10 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
     'utf8',
   );
 
-  const dbPath = join(root, 'src/db.ts');
-  const db = readFileSync(dbPath, 'utf8')
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  const runtimeDb = readFileSync(runtimeDbPath, 'utf8')
     .replace(
-      "import { account, contacts, session, user, verification } from './schema.js';",
+      "import { account, contacts, session, user, verification } from '../schema.js';",
       [
         'import {',
         '  account,',
@@ -226,7 +226,7 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
         '  txProofs,',
         '  user,',
         '  verification,',
-        "} from './schema.js';",
+        "} from '../schema.js';",
       ].join('\n'),
     )
     .replace(
@@ -239,7 +239,7 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
         '  user,',
       ].join('\n'),
     );
-  writeFileSync(dbPath, db, 'utf8');
+  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
 
   writeFileSync(
     join(root, 'src/runtime-safety-proofs.ts'),
@@ -610,11 +610,10 @@ export function addAuthSecretLeakProof(root: string): void {
       "import { createApp, createRequestHandler, domain, mutation, publicAccess, route, s, type RequestHandler } from '@kovojs/server';",
       '',
       "import { appSessionProvider } from './auth.js';",
-      "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';",
-      "import { appDbReady } from './db.js';",
+      "import { appRuntimeDbProvider, appRuntimeDbReady } from './_kovo/app-runtime-db.js';",
       "import { authSecretLeakQuery } from './queries.js';",
       '',
-      'await appDbReady;',
+      'await appRuntimeDbReady;',
       "const authDomain = domain('auth');",
       'const touchAuth = mutation({',
       "  access: publicAccess('build-only auth touch graph proof'),",
