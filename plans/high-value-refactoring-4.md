@@ -242,7 +242,7 @@ that removes the broader source of drift.
     stream capture cannot cross-contaminate concurrent script work.
   - Verification: `pnpm exec vitest --run site/scripts/export-static.test.mjs packages/cli/src/index.kovo-export.test.ts packages/cli/src/index.kovo-build.test.ts`; `pnpm --filter @kovojs/site run build`.
 
-- [ ] **P2.4 - Make release published-state checks fail closed on registry errors.**
+- [x] **P2.4 - Make release published-state checks fail closed on registry errors.**
   - Current signals: `scripts/verify-release-input.mjs` and `scripts/publish-packed-packages.mjs` both
     collapse `npm view` failures into "not published", making 404, auth, network, and registry failures
     indistinguishable.
@@ -250,6 +250,7 @@ that removes the broader source of drift.
     "missing"; other errors block publish unless an explicit dry-run or emergency override is used.
   - Risk reduced: partial-release and retry behavior cannot proceed on ambiguous registry state.
   - Verification: add helper tests plus focused verify/publish tests; run `pnpm run check:publish`, `pnpm run check:supply-chain`, and release dry-run commands.
+  - Evidence: `pnpm exec vitest --run scripts/npm-registry-state.test.mjs scripts/verify-release-input.test.mjs scripts/publish-packed-packages.test.mjs` passed with 3 files/10 tests after merging `agent/hvr4-release-registry-20260630-235800`; `pnpm run check:publish`, `pnpm run check:supply-chain`, and `git diff --check HEAD^..HEAD` passed.
 
 - [ ] **P2.5 - Retire or generate devtool example data snapshots.**
   - Current signals: `examples/devtool/src/app-shell.ts` and `examples/devtool/scripts/conformance.mjs`
