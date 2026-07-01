@@ -8,8 +8,18 @@ import { compileComponentModule } from './compile.js';
 // mass-assignment write-provenance gate (SPEC §10.3/§11.1) and decides provenance from AST
 // symbol-identity over the request/query source set, never source-text heuristics (SPEC §5.2 rule 9).
 
-function kv426(source: string, fileName = 'probe.tsx'): readonly string[] {
-  return compileComponentModule({ fileName, source })
+interface CompileComponentExtraFile {
+  readonly fileName: string;
+  readonly source: string;
+}
+
+function kv426(
+  source: string,
+  fileName = 'probe.tsx',
+  extraFiles?: readonly CompileComponentExtraFile[],
+): readonly string[] {
+  const options = { ...(extraFiles ? { extraFiles } : {}), fileName, source };
+  return compileComponentModule(options)
     .diagnostics.filter((diagnostic) => diagnostic.code === 'KV426')
     .map((diagnostic) => diagnostic.message);
 }
@@ -260,6 +270,71 @@ export const C = component({
 });
 `),
     ).toHaveLength(1);
+  });
+
+  it('resolves trustedHtml through a local re-export barrel', () => {
+    expect(
+      kv426(
+        `
+import { th } from './browser-barrel';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{th(post.body)}</article>,
+});
+`,
+        'pages/probe.tsx',
+        [
+          {
+            fileName: 'pages/browser-barrel.ts',
+            source: "export { trustedHtml as th } from '@kovojs/browser';",
+          },
+        ],
+      ),
+    ).toHaveLength(1);
+  });
+
+  it('does not trust local barrel lookalikes or foreign re-exports', () => {
+    expect(
+      kv426(
+        `
+import { th } from './browser-barrel';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{th(post.body)}</article>,
+});
+`,
+        'pages/probe.tsx',
+        [
+          {
+            fileName: 'pages/browser-barrel.ts',
+            source: 'export const th = (value: string) => value;',
+          },
+        ],
+      ),
+    ).toHaveLength(0);
+
+    expect(
+      kv426(
+        `
+import { th } from './browser-barrel';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{th(post.body)}</article>,
+});
+`,
+        'pages/probe.tsx',
+        [
+          {
+            fileName: 'pages/browser-barrel.ts',
+            source: "export { trustedHtml as th } from './lookalike';",
+          },
+          {
+            fileName: 'pages/lookalike.ts',
+            source: 'export const trustedHtml = (value: string) => value;',
+          },
+        ],
+      ),
+    ).toHaveLength(0);
   });
 
   it('flags a same-file wrapper helper that directly brands its argument as trustedHtml', () => {

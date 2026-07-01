@@ -37,6 +37,7 @@ export type FrameworkIdentityTypeScript = Pick<
   | 'isImportSpecifier'
   | 'isInterfaceDeclaration'
   | 'isModuleBlock'
+  | 'isNamedExports'
   | 'isNamedImports'
   | 'isNamespaceImport'
   | 'isNonNullExpression'
@@ -104,6 +105,10 @@ const callExpressionSpanCache = new WeakMap<
 const expressionSpanCache = new WeakMap<
   TypeScript.SourceFile,
   Map<string, TypeScript.Expression>
+>();
+const frameworkIdentityProjectCache = new WeakMap<
+  TypeScript.SourceFile,
+  Map<string, TypeScript.SourceFile>
 >();
 
 /** @internal */
@@ -203,6 +208,21 @@ export function frameworkExportForModuleSpecifier(
   return specifierExportIdentity(specifier, exportName);
 }
 
+/** @internal Register extra local source files that source-only identity resolution may inspect. */
+export function registerFrameworkIdentityProject(
+  sourceFile: TypeScript.SourceFile,
+  files: readonly TypeScript.SourceFile[],
+): void {
+  if (files.length === 0) return;
+  const project = new Map<string, TypeScript.SourceFile>();
+  for (const name of sourceFileLookupNames(sourceFile.fileName)) project.set(name, sourceFile);
+  for (const file of files) {
+    for (const name of sourceFileLookupNames(file.fileName)) project.set(name, file);
+  }
+  frameworkIdentityProjectCache.set(sourceFile, project);
+  for (const file of files) frameworkIdentityProjectCache.set(file, project);
+}
+
 /** @internal Return the call expression whose span exactly matches a parser model span. */
 export function callExpressionAtSpan(
   ts: FrameworkIdentityTypeScript,
@@ -270,7 +290,11 @@ function declarationIdentity(
     if (!ts.isImportDeclaration(importDeclaration)) return undefined;
     if (!ts.isStringLiteralLike(importDeclaration.moduleSpecifier)) return undefined;
     const importedName = declaration.propertyName?.text ?? declaration.name.text;
-    return specifierExportIdentity(importDeclaration.moduleSpecifier.text, importedName);
+    const specifier = importDeclaration.moduleSpecifier.text;
+    return (
+      specifierExportIdentity(specifier, importedName) ??
+      localModuleExportIdentity(ts, sourceFile, specifier, importedName, options, seen, depth + 1)
+    );
   }
 
   if (ts.isVariableDeclaration(declaration)) {
@@ -625,6 +649,128 @@ function specifierExportIdentity(
     if (SERVER_RENDERING_EXPORTS.has(exportName)) return serverRenderingIdentity(exportName);
   }
   return undefined;
+}
+
+function localModuleExportIdentity(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  specifier: string,
+  exportName: string,
+  options: FrameworkIdentityOptions,
+  seen: Set<string>,
+  depth: number,
+): FrameworkExportIdentity | undefined {
+  if (depth > MAX_RESOLUTION_DEPTH || !isRelativeSpecifier(specifier)) return undefined;
+  const target = resolveProjectSourceFile(sourceFile, specifier);
+  if (!target) return undefined;
+
+  const key = `module:${target.fileName}:${exportName}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
+  return exportedIdentity(ts, target, exportName, options, seen, depth + 1);
+}
+
+function exportedIdentity(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  exportName: string,
+  options: FrameworkIdentityOptions,
+  seen: Set<string>,
+  depth: number,
+): FrameworkExportIdentity | undefined {
+  if (depth > MAX_RESOLUTION_DEPTH) return undefined;
+
+  for (const statement of sourceFile.statements) {
+    if (ts.isExportDeclaration(statement)) {
+      const moduleSpecifier = statement.moduleSpecifier;
+      if (moduleSpecifier === undefined || !ts.isStringLiteralLike(moduleSpecifier)) continue;
+      const exportClause = statement.exportClause;
+      if (exportClause && ts.isNamedExports(exportClause)) {
+        for (const element of exportClause.elements) {
+          if (element.name.text !== exportName) continue;
+          const importedName = element.propertyName?.text ?? element.name.text;
+          const specifier = moduleSpecifier.text;
+          return (
+            specifierExportIdentity(specifier, importedName) ??
+            localModuleExportIdentity(
+              ts,
+              sourceFile,
+              specifier,
+              importedName,
+              options,
+              seen,
+              depth + 1,
+            )
+          );
+        }
+      }
+      continue;
+    }
+
+    if (ts.isVariableStatement(statement) && hasExportModifier(ts, statement)) {
+      for (const declaration of statement.declarationList.declarations) {
+        if (!ts.isIdentifier(declaration.name) || declaration.name.text !== exportName) continue;
+        return declarationIdentity(ts, sourceFile, declaration, options, seen, depth + 1);
+      }
+    }
+
+    if (
+      ts.isFunctionDeclaration(statement) &&
+      hasExportModifier(ts, statement) &&
+      statement.name?.text === exportName
+    ) {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+function resolveProjectSourceFile(
+  importingSourceFile: TypeScript.SourceFile,
+  specifier: string,
+): TypeScript.SourceFile | undefined {
+  const project = frameworkIdentityProjectCache.get(importingSourceFile);
+  if (!project) return undefined;
+  const baseDir = directoryName(importingSourceFile.fileName);
+  const base = normalizePath(`${baseDir}${baseDir ? '/' : ''}${specifier}`);
+  for (const candidate of sourceFileLookupNames(base)) {
+    const file = project.get(candidate);
+    if (file) return file;
+  }
+  return undefined;
+}
+
+function hasExportModifier(ts: FrameworkIdentityTypeScript, node: TypeScript.Node): boolean {
+  const modifiers = (node as { readonly modifiers?: readonly TypeScript.Modifier[] }).modifiers;
+  return modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ?? false;
+}
+
+function isRelativeSpecifier(specifier: string): boolean {
+  return specifier.startsWith('./') || specifier.startsWith('../');
+}
+
+function sourceFileLookupNames(fileName: string): readonly string[] {
+  const normalized = normalizePath(fileName);
+  const withoutExtension = normalized.replace(/\.(?:[cm]?[jt]sx?|d\.ts)$/u, '');
+  return normalized === withoutExtension ? [normalized] : [normalized, withoutExtension];
+}
+
+function directoryName(fileName: string): string {
+  const normalized = normalizePath(fileName);
+  const index = normalized.lastIndexOf('/');
+  return index === -1 ? '' : normalized.slice(0, index);
+}
+
+function normalizePath(path: string): string {
+  const parts: string[] = [];
+  for (const part of path.replace(/\\/gu, '/').split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  }
+  return parts.join('/');
 }
 
 function serverRenderingIdentity(exportName: string): FrameworkExportIdentity {

@@ -10,6 +10,7 @@ import {
   expressionResolvesToFrameworkExport,
   expressionResolvesToFrameworkExportMember,
   frameworkExport,
+  registerFrameworkIdentityProject,
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import { formatKovoModuleRef, kovoModuleRef } from '@kovojs/core/internal/module-ref';
@@ -111,6 +112,15 @@ ensureTypescriptRuntime(ts);
 const KOVO_MUTATION_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
 const KOVO_QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 
+interface CompileComponentProjectFile {
+  readonly fileName: string;
+  readonly source: string;
+}
+
+interface CompileComponentProjectOptions extends CompileComponentOptions {
+  readonly extraFiles?: readonly CompileComponentProjectFile[];
+}
+
 /**
  * Compile a single authored component module (TSX/JSX source) into its lowered-IR
  * artifacts — the server render module, the client island module, scoped CSS, and the
@@ -160,7 +170,7 @@ interface ParseErrorPhaseResult extends CompileComponentPhaseBase {
 
 interface ParsedComponentPhaseResult extends CompileComponentPhaseBase {
   readonly authoringSurfaceDiagnostics: readonly CompilerDiagnostic[];
-  readonly compileOptions: CompileComponentOptions;
+  readonly compileOptions: CompileComponentProjectOptions;
   readonly componentName: string;
   readonly componentNames: ComponentNames;
   readonly kind: 'parsed';
@@ -224,8 +234,9 @@ interface VerifyComponentPhaseResult {
 }
 
 function parseComponentPhase(rawOptions: CompileComponentOptions): ParseComponentPhaseResult {
-  const options = {
-    ...rawOptions,
+  const projectOptions = rawOptions as CompileComponentProjectOptions;
+  const options: CompileComponentProjectOptions = {
+    ...projectOptions,
     fileName: normalizeComponentFileName(rawOptions.fileName),
   };
 
@@ -238,6 +249,7 @@ function parseComponentPhase(rawOptions: CompileComponentOptions): ParseComponen
   }
 
   const originalModel = parseComponentModuleModel(options.fileName, options.source);
+  registerFrameworkIdentityProjectForOptions(originalModel.sourceFile, options);
   const parseDiagnostics = parseDiagnosticsForSourceFile(originalModel.sourceFile, options.source);
   if (parseDiagnostics.length > 0) return { kind: 'parse-error', options, parseDiagnostics };
 
@@ -290,11 +302,23 @@ function lowerComponentPhase(parsed: ParsedComponentPhaseResult): LowerComponent
     parsed.componentName,
     parsed.compileOptions,
   );
+  registerFrameworkIdentityProjectForOptions(lowering.model.sourceFile, parsed.compileOptions);
   return {
     lowering,
     model: lowering.model,
     source: lowering.source,
   };
+}
+
+function registerFrameworkIdentityProjectForOptions(
+  sourceFile: ts.SourceFile,
+  options: CompileComponentProjectOptions,
+): void {
+  if (!options.extraFiles?.length) return;
+  registerFrameworkIdentityProject(
+    sourceFile,
+    options.extraFiles.map((file) => parseSourceFile(file.fileName, file.source)),
+  );
 }
 
 function validateComponentPhase(
