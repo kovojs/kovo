@@ -475,6 +475,23 @@ describe('security-test-build-gate', () => {
     });
   });
 
+  it('keeps the KV426 TrustedUrl attribute type gate enrolled in the production artifact gate', () => {
+    expect(
+      SECURITY_BUILD_PROOFS.find(
+        (proof) => proof.code === 'KV426' && proof.claimId === 'trusted-url-attribute-type-gate',
+      ),
+    ).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+      requiredNeedles: expect.arrayContaining([
+        'addTrustedUrlAttributeTypeGateProof(root)',
+        'buildProductionArtifact(root)',
+        'TrustedUrl',
+        'AttributeValue',
+      ]),
+    });
+  });
+
   it('keeps the KV433 storage query write proof enrolled for every storage write verb', () => {
     expect(
       SECURITY_BUILD_PROOFS.find(

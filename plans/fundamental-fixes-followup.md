@@ -137,12 +137,14 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:output-wire' --reporter=dot` passed postgres+SQLite served-artifact capability URL cases; focused `redirect-capability` prod-artifact test passed.
   - [x] tampered capability path/query payloads reject before read [C2]
         Evidence: focused `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot` served `dist/server/server.mjs`, tampered the signed path, received generic 404, and storage guard did not expose pre-verification read errors.
-- [ ] raw-HTML sinks (`trustedHtml`, `trustedUrl`, `@internal renderedHtml`) [C2/B3]
+- [x] raw-HTML sinks (`trustedHtml`, `trustedUrl`, `@internal renderedHtml`) [C2/B3]
+      Evidence: children closed below with exact M1/M2/M3 prod-artifact proof.
   - [x] KV426 blocks `trustedHtml()` request taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
   - [x] KV426 blocks `trustedUrl()` query taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
-  - [ ] `TrustedUrl` values are rejected in non-URL JSX attributes [C2]
+  - [x] `TrustedUrl` values are rejected in non-URL JSX attributes [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'TrustedUrl values in non-URL JSX attributes' --reporter=dot` passed the no-cache prod-artifact build-fail proof; M2 `pnpm run check:security-test-builds` passed 19 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 32 mutants.
   - [x] KV426 blocks `@internal renderedHtml()` query taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
   - [x] real build resolves local/star barrels and literal element access for raw-HTML sinks [B3/E2]

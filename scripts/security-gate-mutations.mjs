@@ -165,6 +165,10 @@ const kv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvena
 
 const weakenedKv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvenanceBuildProof(safeRoot)',`;
 
+const kv426TrustedUrlAttributeProofNeedle = `      'addTrustedUrlAttributeTypeGateProof(root)',`;
+
+const weakenedKv426TrustedUrlAttributeProofNeedle = `      'TrustedUrl',`;
+
 const kv433StorageDeleteProofNeedle = `      'operation=delete',`;
 
 const weakenedKv433StorageDeleteProofNeedle = `      'storage-delete-write-query',`;
@@ -540,6 +544,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: kv426TrustedOutputSafeSiblingProofNeedle,
     sourceFile: securityTestBuildGatePath,
     test: assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Weakens the KV426 TrustedUrl attribute proof enrollment so it no longer pins the injected non-URL attribute fixture.',
+    expectedKiller:
+      'KV426 TrustedUrl attribute proof enrollment must retain the non-URL attribute fixture helper',
+    name: 'security-test-build-gate/weaken-kv426-trusted-url-attribute-proof-enrollment',
+    replacement: weakenedKv426TrustedUrlAttributeProofNeedle,
+    search: kv426TrustedUrlAttributeProofNeedle,
+    sourceFile: securityTestBuildGatePath,
+    test: assertKv426TrustedUrlAttributeProofEnrollmentIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -1120,6 +1136,27 @@ async function assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned(module
         needle,
       )}`,
     );
+  }
+}
+
+async function assertKv426TrustedUrlAttributeProofEnrollmentIsPinned(moduleUnderTest) {
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV426' &&
+      candidate.claimId === 'trusted-url-attribute-type-gate' &&
+      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  );
+  if (!proof) throw new Error('KV426 TrustedUrl attribute production build proof is not enrolled');
+  const needles = [
+    'addTrustedUrlAttributeTypeGateProof(root)',
+    'buildProductionArtifact(root)',
+    'TrustedUrl',
+    'AttributeValue',
+  ];
+  for (const needle of needles) {
+    if (!proof.requiredNeedles?.includes(needle)) {
+      throw new Error(`KV426 TrustedUrl attribute proof must require ${JSON.stringify(needle)}`);
+    }
   }
 }
 
