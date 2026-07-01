@@ -1,369 +1,261 @@
-# Fundamental Fixes — make the verifier fail-closed by construction
+# Fundamental Fixes - Fail-Closed Verifier Checklist
 
-Created 2026-06-30. Strategic plan + committed program. Source of truth remains `SPEC.md` (§5 compiler,
-§11 static analysis & verification, §6.6 soundness boundary, §1.3 "machine-auditable generation"). This
-plan diagnoses the recurring ROOT behind the `claude-bugz-22/23/24` + `bugz-1..21` soundness findings and
-commits the framework-level program that converts the verification layer from _enumerate-and-allow,
-fail-open_ to _prove-or-fail-closed_.
+Compacted 2026-07-01. Source of truth remains `SPEC.md` (§5 compiler, §11 static analysis and
+verification, §6.6 honesty boundary, §1.3 machine-auditable generation). This file is an execution
+ledger with enough rationale to keep the program coherent without restarting broad audits.
 
-**These are not options to choose between. All seven workstreams (A–G) are committed.** The diagnosis
-below is the _why_; the workstreams are the _what_; "Phased delivery" is the _order_, driven by
-dependencies (B before A; E from the start; C as the migration target).
+## Rationale
 
-## TL;DR
+Most recurring soundness findings share two roots. First, the verifier still has places where it recognizes
+framework behavior by authored source spelling: literal callee text, import specifier strings, alias names,
+or AST node shapes. A new spelling can then produce no fact and no diagnostic. That is the failure mode this
+plan calls fail-open recognition. Second, some runtime contracts are implemented in multiple paths
+(`/_q` versus SSR, dev versus prod artifacts, sync versus async parsing, default hook versus override hook),
+so a fix can make one path green while a sibling path still ships broken behavior.
 
-- **~80% of the soundness bugz reduce to ONE meta-defect:** the verifier is an _enumerate-and-allow_
-  pattern-matcher over the **authored source AST** that **fails OPEN** on any spelling it doesn't
-  enumerate. A secondary root: the same contracts are **duplicated across code paths** (dev/prod,
-  SSR/`_q`, sync/async, default-hook/override-hook), so a fix to one path misses its siblings.
-- **Evidence:** 65 analyzer sites recognize framework constructs by literal callee text / import
-  specifier / alias name / AST node kind; 121 `KV406`/fail-closed sites already exist (the idiom is real
-  but applied unevenly). The round-3 _residuals_ prove a point-fix only fills one cell of the
-  `(source spelling × sink × code path)` matrix.
-- **The program:** B makes recognition spelling-invariant → A flips the default to fail-closed → D
-  collapses path duplication → F shrinks the sink surface → C migrates gates onto the lowered IR (where
-  spelling-invariance is free) → E fuzzes every gate so residuals can't ship → G brands the safe values
-  as defense-in-depth. Together they make "we keep finding new spellings" stop being true.
+The program stays ordered around those roots. B makes recognition spelling-invariant. A then turns "no
+provable fact" into KV406 or a stricter diagnostic. D collapses duplicated runtime paths into chokepoints and
+asserts against production artifacts. F shrinks the write-capable surface so fewer sinks need policing. C is
+the migration target: gates should read lowered IR/fact-store facts instead of re-walking source for every
+policy. E keeps every migrated gate honest with metamorphic recognition coverage. G is defense-in-depth type
+ergonomics, not the proof.
 
-## Diagnosis
+Work may include targeted audits, but only to unblock or size a named checkbox below. The default motion is
+to implement the next checklist item, verify it, and record the shortest current evidence.
 
-### Root 1 — fail-open syntactic recognition (enumerate-and-allow over the source AST)
+## Operating Rule
 
-The analyzer recognizes a fixed list of `(construct-shape × location)` pairs and proves _those_ safe;
-anything unrecognized produces **no fact → no diagnostic → green build**. Evidence:
+Do not start another broad audit pass before the concrete checklist below is either implemented, verified,
+or explicitly blocked. If context is needed, inspect only the files named by the relevant checkbox. Targeted
+audits are allowed when they produce a bounded implementation checklist for the current item, especially for
+the IR/fact-store migration in C1.
 
-- `grep` of `packages/compiler/src` + `packages/drizzle/src`: **65 sites** key on literal
-  `node.text === '<name>'` / `getText() === '<name>'` / `importedName === '<name>'` /
-  `moduleSpecifier === '@kovojs/...'` / a specific `ts.isX` AST-kind gate. The exact lines that caused
-  findings are in this set.
-- The codebase is _self-aware_ of the hazard: `packages/drizzle/src/static.ts:1063` warns against "the
-  way a literal `expression.getText() === 'query'`" erasing the security surface — and `kovo()`/`route()`
-  were alias-hardened — but the hardening was applied **per-site**, leaving ~60 others syntactic.
-- The fail-closed idiom **already exists and is heavily used**: **121** `KV406` / `un-analyzable` /
-  `UNCLASSIFIED` / `degrade` sites in `packages/drizzle` alone. The bugs are precisely where it is _not_
-  applied — inconsistency, not absence, of the fail-closed pattern.
+## Current Priority
 
-Findings that are this root, with the recognizer that failed:
+- [ ] **Repair latest pushed CI before merging another batch.**
+  - Current run: `28492646197` for `847ca02c9`.
+  - Failure: `static-safety` job `84452379922`, `tests/compiler-perf.test.ts` reports
+    `many-small-components cold compile took 617.6ms, budget is 600ms`.
+  - Acceptance: either reduce the measured compile cost or adjust the checked budget with evidence; verify
+    with `pnpm run test:compiler-perf`, `pnpm run check:vp`, push from local `main`, and monitor CI.
 
-| Finding                                                                                | Failing syntactic recognizer                                                                                                                                   |
-| -------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `claude-bugz-22` B1 (task write-audit bypass)                                          | `parse.ts:139` collects only `node.text === 'mutation'` → `task()` bodies never modeled                                                                        |
-| `claude-bugz-24` B2 (KV426 XSS gate bypass)                                            | `trusted-html-provenance.ts:88` keys on `moduleSpecifier === '@kovojs/browser'` → the `@kovojs/server` re-export (the guide's recommended import) is invisible |
-| `claude-bugz-23` B1 (read-set IDOR/secret leak)                                        | `Reader<Db>` recognized only when the alias symbol name `=== 'Reader'`                                                                                         |
-| `claude-bugz-24` B1 (closure read-set erasure)                                         | `project-receivers.ts:1233-1245` `isTouchBodyNode` descends only into _enumerated_ callbacks (`.map`/transaction), not ordinary closures                       |
-| `claude-bugz-24` B4 (frozen island UI)                                                 | `parse.ts:1836` alias capture gated on `ts.isIdentifier` (+ `:1840` `accesses.length>0`) → destructuring/chaining invisible                                    |
-| Historical alias class (`bugz.md` H4, `bugz-2` H2/H3, `bugz-3` H1/H4/L11, `bugz-4` L6) | `sql`/`kovo()`/`route()`/`domain()` recognized by literal callee text → aliasing erases the security surface                                                   |
+- [ ] **Do not duplicate active worker work.**
+  - Active B worker: `019f1bdd-fc74-78e1-9fe2-e26e138a629d` owns identity hardening.
+  - Active D worker: `019f1bde-43ab-7080-86a9-042631d99076` owns mutation query warning/limit parity.
+  - No active F worker as of this compaction; F1 below is ready to delegate.
 
-The shared failure mode: **un-analyzable / unrecognized input emits NOTHING (fail open) instead of a
-fail-closed diagnostic.** (22 B1, 23 B1/B4, 24 B1/B3.)
+## Active Worker Slices
 
-### Root 2 — the same contract duplicated across code paths (no chokepoint)
+- [ ] **B1. Finish remaining TS-AST semantic identity hardening.**
+  - Owner: worker `019f1bdd-fc74-78e1-9fe2-e26e138a629d`.
+  - Files:
+    `packages/compiler/src/validate/client-capture.ts`,
+    `packages/compiler/src/client-secret-capture.test.ts`,
+    `packages/drizzle/src/static/query-shapes.ts`,
+    `packages/drizzle/src/static/framework-identity.ts`,
+    `packages/drizzle/src/index.query-shapes.test.ts`,
+    `packages/server/src/internal/data-plane-static-analysis.ts`,
+    `packages/server/src/vite-data-plane-gate.test.ts`.
+  - [ ] Route KV437 `publishToClient` handling through framework identity, not raw callee text.
+  - [ ] Cover `publishToClient` import alias, namespace import, local re-export barrel, and local-shadow
+        with real import.
+  - [ ] Route Drizzle `trustedReveal`, typed `sql<T>` projection, and aggregate helper projection
+        recognition through resolver-backed identity with scope-aware shadow rejection.
+  - [ ] Add missing Drizzle identity exports for `avgDistinct` and `sumDistinct` if still absent.
+  - [ ] Cover Drizzle local shadow with real import, import alias, namespace import, local const alias, and
+        local barrel re-export for the projection helpers above.
+  - [ ] Register sibling source files for non-Drizzle output-schema extraction so a local barrel re-export
+        of `query` still produces output shape facts and KV302.
+  - Acceptance: `node scripts/fundamental-fixes-inventory.mjs`; `vp exec vitest --run
+packages/compiler/src/client-secret-capture.test.ts packages/drizzle/src/index.query-shapes.test.ts
+packages/server/src/vite-data-plane-gate.test.ts
+packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `git diff --check`;
+    `pnpm run check:vp`.
 
-| Finding                                          | Duplicated contract                                                                                                      |
-| ------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ |
-| `claude-bugz-22` B2 (inert runaway backstops)    | two `ctx.schedule` impls; prod overrides `hooks.schedule`, the backstopped default is dead code with a passing unit test |
-| `claude-bugz-23` B2 (silent SSR truncation)      | warnings surfaced on the `/_q` path, **discarded** on the SSR render path (`jsx-runtime.ts:681`)                         |
-| `claude-bugz-23` B3 (file MIME bypass)           | server-sniff runs only on the `.store()/parseAsync` path, not on sync `parse`                                            |
-| `bugz-16` B1 → `bugz-17` B2 (empty success body) | dev path fixed, the production `kovo build` artifact still shipped the broken behavior                                   |
+- [ ] **D1. Give enhanced mutation refreshes the same query warning/list-limit chokepoint as SSR and `/_q`.**
+  - Owner: worker `019f1bde-43ab-7080-86a9-042631d99076`.
+  - Files:
+    `packages/server/src/app-mutation-request.ts`,
+    `packages/server/src/mutation-wire.ts`,
+    `packages/server/src/mutation.ts`,
+    `packages/server/src/mutation/targets.ts`,
+    `packages/server/src/live-target-renderer.ts`,
+    `packages/create-kovo/src/index.build.test-support.ts`,
+    `packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`.
+  - [ ] Thread `requestLimits.maxQueryListItems` into `MutationWireRequest`.
+  - [ ] Pass the limit into mutation query reruns and live-target query reloads.
+  - [ ] Emit `Kovo-Warn` on successful mutation wire responses using
+        `queryRuntimeWarningsFromRequest(...)` and `queryRuntimeWarningHeaderValue(...)`.
+  - [ ] Add server unit coverage for capped mutation query chunks, capped live-target refreshes, and warning
+        response headers.
+  - [ ] Add prod-artifact starter coverage served from `dist/server/server.mjs`: enhanced mutation response
+        returns `Kovo-Warn: QUERY_LIST_LIMIT ...;limit=2` and capped output.
+  - Acceptance: `vp exec vitest --run packages/server/src/mutation-response.test.ts
+packages/server/src/app-mutation-request.test.ts packages/server/src/live-target-renderer.test.tsx
+packages/server/src/mutation-delta.test.ts`; `vp exec vitest --run
+packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`; `git diff --check`;
+    `pnpm run check:vp`.
 
-### Why point-fixes cannot converge
+- [ ] **F1. Encapsulate starter runtime DB so `src/db.ts` exposes only read-safe app DB values.**
+  - Ready to delegate; no active worker at compaction time.
+  - Files:
+    `packages/create-kovo/templates/src/db.ts`,
+    `packages/create-kovo/templates/src/db.sqlite.ts`,
+    `packages/create-kovo/templates/src/_kovo/app-runtime-db.ts`,
+    `packages/create-kovo/templates/src/app.test.ts`,
+    `packages/create-kovo/templates/scripts/check-sound-subset.mjs`,
+    `packages/create-kovo/templates/README.md`,
+    `packages/create-kovo/templates/README.sqlite.md`,
+    `packages/create-kovo/src/index.test.ts`,
+    `packages/create-kovo/src/index.build.runtime.test.ts`,
+    `packages/create-kovo/src/index.build.test-support.ts`,
+    `packages/create-kovo/src/index.build.prod-artifact.durable-tasks.test-support.ts`,
+    `packages/create-kovo/src/index.build.scaffold.typecheck.test.ts`.
+  - [ ] Stop exporting a raw-handle factory from starter-facing `src/db.ts` and `src/db.sqlite.ts`.
+  - [ ] Keep `readonlyAppDb` as the only app-facing DB value exported from `src/db.ts`.
+  - [ ] Move raw DB creation/provider ownership behind `_kovo/app-runtime-db.ts` without a string-named
+        global that exposes `{ db }`.
+  - [ ] Add a starter sound-subset rule rejecting non-type imports of `src/_kovo/app-runtime-db` outside
+        framework-owned files such as `src/app.tsx` and `src/auth.ts`.
+  - [ ] Update starter tests and DDL/proof helpers so they no longer import the raw provider from app source.
+  - Acceptance: `vp exec vitest --run packages/create-kovo/src/index.test.ts
+packages/create-kovo/src/index.build.scaffold.typecheck.test.ts`; `vp exec vitest --run
+packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/index.build.test.ts`;
+    `vp exec vitest --run packages/compiler/src/direct-db.test.ts packages/compiler/src/scan/parse.test.ts`;
+    `pnpm run check:api-surface`; `pnpm run check:vp`.
 
-The search space is `(source spelling × sink × code path)`, combinatorial. Each point-fix fills one cell;
-the _design_ guarantees neighboring cells stay empty. Proof: `claude-bugz-24` B1 is the closure-shaped
-sibling of the fixed `claude-bugz-23` B1; `claude-bugz-24` B4 is the destructure/chain sibling of the
-fixed `bugz-13` B2 / `bugz-19` B1. Same sink, adjacent spelling, still open. As long as the gates
-pattern-match authored source, the next dogfood (or attacker) finds the next spelling — hence the program.
+## Remaining Program Checklist
 
-## Coverage: which workstream closes which class
+- [ ] **A1. Close the fail-closed acceptance cases.**
+  - [ ] Closure-scoped secret/owner read fails the build with KV406 or a stricter security diagnostic.
+  - [ ] `task` and webhook DB writes outside audited channels fail the build.
+  - [ ] `recordChange` to an undeclared domain fails the build.
+  - [ ] Existing green-path apps still build after B1 and F1.
+  - Acceptance: focused compiler/drizzle tests for each case plus a create-kovo prod-artifact build where
+    the bug is observable in the artifact.
 
-| Workstream                            | Root             | Findings it closes as a class                                                                                           |
-| ------------------------------------- | ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| **A** fail-closed-on-unprovable       | 1                | 22 B1, 23 B1/B4, 24 B1/B3 (everything that "vanished instead of diagnosed")                                             |
-| **B** one identity resolver           | 1                | 24 B2, 23 B1, 22 B1, the whole historical alias class                                                                   |
-| **C** verify the lowered IR           | 1+2              | nearly all: closure/task/webhook writes, unbundled-helper derive (24 B5), import-path XSS, _and_ SSR-vs-`_q` divergence |
-| **D** one chokepoint per contract     | 2                | 22 B2, 23 B2/B3, the dev-vs-prod class (bugz-16/17)                                                                     |
-| **E** metamorphic recognition fuzzing | process          | the residual class (24 B1/B4) before it ships                                                                           |
-| **F** capability-narrow the sinks     | 1+2 (source)     | 22 B1, 24 B3 (deletes the `appDb` write sink); shrinks what A/C must police                                             |
-| **G** branded provenance types        | defense-in-depth | hardens the author surface on top of A/C (not a gate itself)                                                            |
+- [ ] **B2. Convert remaining security-relevant syntactic recognizers after B1.**
+  - Starting inventory: `node scripts/fundamental-fixes-inventory.mjs` currently reports 57 literal/import
+    candidates, 1,798 AST-kind gates, and 95 KV406/fail-closed sites.
+  - [ ] Re-run inventory after B1 and identify only residual recognizers that decide security or proof facts.
+  - [ ] Convert each residual security recognizer to the framework identity resolver or mark it non-security
+        with an inline comment and focused test.
+  - Acceptance: inventory count drops for security-relevant literal/import recognizers; new/changed tests
+    prove alias, re-export, namespace, and local-shadow behavior.
 
-## The program (all committed)
+- [ ] **C1. Move the next sink family onto IR/fact-store verification.**
+  - Rationale: source-AST policy gates keep rediscovering adjacent spellings. The IR/fact-store path should
+    extract facts once, fail closed when extraction is incomplete, and let policy checks become set
+    operations over canonical facts. The completed KV435/KV414 column-provenance spike is the precedent; the
+    next C slice should make that pattern repeatable for another sink family.
+  - Preferred next sink family: task/webhook writes or raw SQL executions, because both are security-relevant,
+    artifact-observable, and tied to already-open A/F findings. If a targeted audit shows another listed sink
+    is lower-risk to land first, record the reason under this item before switching.
+  - Candidate sink families:
+    - [ ] Task/webhook writes outside audited mutation channels.
+    - [ ] Raw SQL executions and trusted-escape waivers.
+    - [ ] Owner-table mutations and owner-domain proof.
+    - [ ] Raw HTML writes and trusted HTML provenance.
+    - [ ] Client-derive free identifiers and client/server leak boundaries.
+  - Extraction model:
+    - [ ] Name the selected sink family and enumerate its current source-AST gates and runtime/artifact paths.
+    - [ ] Define the emitted fact shape for the sink: canonical target identity, operation kind, provenance
+          proof, source span, and `UNRESOLVED` state.
+    - [ ] Extend the graph/fact writer so every selected sink emits either a complete fact or a fail-closed
+          diagnostic; never encode "unknown" as an empty safe set.
+    - [ ] Preserve actionable source spans from the authored TSX/TS source to the fact and diagnostic.
+    - [ ] Add fixture output or snapshot coverage for the emitted fact shape.
+  - Policy migration:
+    - [ ] Change the selected gate to read only the fact model for policy decisions.
+    - [ ] Remove or demote the old source re-walk so it cannot silently disagree with the fact model.
+    - [ ] Keep diagnostics stable or deliberately tighten them, citing `SPEC.md` §11 where ambiguity would be
+          easy to reintroduce.
+    - [ ] Verify that an unresolved fact emits KV406 or a stricter diagnostic before the policy check would
+          otherwise pass.
+  - Runtime/artifact cross-check:
+    - [ ] For runtime-observable sinks, add an instrumentation or prod-artifact assertion that observed sinks
+          are a subset of static/declaration facts.
+    - [ ] For build-only sinks, add `kovo check` and `kovo build` coverage so dev/prod behavior cannot diverge.
+    - [ ] If declarations are needed as an escape hatch, verify declaration identity through B's resolver and
+          treat declarations as runtime-checked claims, not waivers.
+  - Metamorphic coverage:
+    - [ ] Add a known-unsafe seed for the selected sink to
+          `packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`.
+    - [ ] Cover at least import alias, namespace import, local re-export barrel, helper wrapper, closure, and
+          local-shadow variants where those spellings apply to the selected sink.
+    - [ ] Prove each variant either produces the same canonical fact or fails closed with KV406/a stricter
+          diagnostic.
+  - Acceptance: focused gate tests for the selected sink; fact-output/snapshot coverage; relevant
+    `packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts` cases; `kovo check` and
+    prod-artifact coverage when artifact observable; `git diff --check`; `pnpm run check:vp`.
 
-- [ ] **A. Invert the default to fail-CLOSED on un-analyzable input ("no fact = error").**
-      Make the invariant normative: _anything an analyzer touches but cannot fully prove emits a KV
-      diagnostic, never silence._ Read-extraction that can't traverse a loader (closure / unrecognized
-      receiver) emits `KV406 "un-analyzable read; declare reads:"` instead of an empty set; an unclassifiable
-      write → `KV406`; an unresolved trust/brand construct → fail closed. Leverages the **existing 121
-      `KV406`/`UNCLASSIFIED` sites** — policy + plumbing, not new analysis. Requires an _audited_
-      declare-or-justify escape hatch (itself provenance-checked, per the `bugz-21` B2 `trustedSql`-shadow
-      lesson). Depends on B (so it doesn't fire on aliased-but-safe constructs).
-  - Done when: a closure-scoped secret/owner read, a `task`/webhook `appDb` write, and a `recordChange`
-    to an undeclared domain each FAIL the build, while the existing green-path apps still build; every
-    analyzer entry point has a proven-or-`KV406` exit (no silent empty-set return).
+- [ ] **D2. Close D after D1 lands.**
+  - [ ] Confirm SSR, `/_q`, and enhanced mutation paths all use the same query warning/list-limit contract.
+  - [ ] Keep file MIME parsing as intentionally fail-closed sync + sniffed async; no more work unless a test
+        contradicts this.
+  - [ ] Keep durable task scheduling as closed unless CI/prod-artifact lifecycle tests regress.
+  - Acceptance: D1 tests plus existing `packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`
+    and durable task prod-artifact lifecycle tests.
 
-- [ ] **B. One semantic identity resolver, not 65 syntactic checks.**
-      Replace every `text === 'sql'` / `moduleSpecifier === '@kovojs/browser'` / alias-name check with a
-      single resolver that follows imports → re-exports → aliases → assignments to the canonical framework
-      export identity (TS symbol resolution + a provenance graph). Every gate keys on resolved identity,
-      immune to aliasing / re-export / shadowing; the resolver fails closed (composes with A) when it cannot
-      resolve.
-  - Done when: the 65 syntactic recognizers route through the resolver; aliased / re-exported `sql`,
-    `trustedHtml`, `Reader`, `mutation`, `task`, `domain`, `route` are all recognized; the import-path and
-    callee-alias bug classes cannot reproduce (verified by E).
+- [ ] **E1. Require metamorphic coverage for every newly migrated security gate.**
+  - [ ] B1 adds or updates metamorphic cases for identity-sensitive gates it touches.
+  - [ ] C1 adds a metamorphic seed for the selected IR/fact-store sink.
+  - [ ] No unapproved `it.todo` or skipped metamorphic variant remains for a closed gate.
+  - Acceptance: `vp exec vitest --run packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`
+    and the focused gate tests from B1/C1.
 
-- [ ] **C. Verify the lowered IR / emitted artifact, not the source AST (the migration target).**
-      A sink is a sink in the IR regardless of source spelling _or_ which path produced it. Enumerate every
-      sink in the generated output — raw-HTML writes, SQL executions, owner-table mutations, secret-column
-      projections, client-derive free identifiers — and require each to carry a provenance proof ("verify the
-      output, not the input"; the §5.2 render-equivalence gate is the precedent). Migrate gates incrementally
-      onto the IR; the IR schema is extended to carry provenance where needed; each flagged IR sink maps back
-      to an actionable source location.
-      Mechanics, the extract-once model, the soundness triangle, and the before/after gate are in
-      _How workstream C works_ below.
-  - Done when: the closure read, task/webhook write, unbundled-helper derive, import-path XSS, and the
-    SSR-vs-`_q` divergence are caught by IR-level passes; a _new authored spelling_ of a known sink cannot
-    bypass the gate (verified by E). Spike first: map secret-to-wire (KV435) onto the IR to size the work.
+- [ ] **F2. Track broader capability-surface redesign separately from starter cleanup.**
+  - [ ] Leave `query.elevated()` open as a public API design decision, not part of F1.
+  - [ ] Leave webhook transaction API redesign open unless a dedicated worker owns that public API change.
+  - [ ] Leave direct-DB detector alias/destructure gaps to A/B/C workstreams, not starter cleanup.
+  - Acceptance: after F1, plan has explicit open items for any remaining write-capable public API seam.
 
-- [ ] **D. One chokepoint per contract + assert against the production artifact.**
-      Collapse the dev/prod/SSR/sync-async duplications: one `runQuery` both paths call that _always_ carries
-      warnings; one file-parse that _always_ sniffs; one `schedule()` whose backstops the runtime cannot
-      override away. Generalize the durable-tasks close-out rule: contract tests run against `dist/server`
-      (the deploy artifact), not a unit proxy. Inventory and explicitly mark any _intentional_ dev/prod
-      divergence.
-  - Done when: each listed contract has exactly one implementation path; the regression tests assert on
-    the prod artifact (so a `bugz-16`→`17`-class dev-only fix is impossible).
-
-- [ ] **E. Metamorphic recognition-fuzzing in CI (institutionalized from the start).**
-      For each security gate, maintain a "known-unsafe seed" and auto-generate semantically-equivalent
-      variants — alias the import, wrap the call in a closure, destructure the binding, re-export the symbol,
-      helper-indirect — and assert the gate fires on ALL of them (or fails closed). Build the harness in
-      Phase 0; thereafter every gate ships with its metamorphic suite. This is the regression net that proves
-      A/B/C/D hold and catches the residual class before it lands.
-  - Done when: the harness exists with a seed corpus covering KV414/KV435/KV422/KV426/KV407/KV311; a new
-    gate cannot merge without its suite; a fix that closes shape X but not X′ fails CI.
-
-- [ ] **F. Capability-narrow the APIs so the unsafe construction is impossible, not merely policed.**
-      Remove the importable write handle that the analyzer must chase: tasks get only `ctx.runMutation`,
-      webhooks only a managed tx handle, and there is a sanctioned _read-only_ alternative for the legitimate
-      endpoint-read case; module-level `appDb` no longer exposes write verbs to non-mutation surfaces. Provide
-      a migration for existing apps.
-  - Done when: no importable handle can write outside the audited channel, so 22 B1 / 24 B3 are
-    _unconstructable_ rather than diagnosed; the legit endpoint-read path has a blessed read-only handle.
-
-- [x] **G. Branded provenance types (defense-in-depth on top of A/C — never the proof).**
-      Make `Reader<Db>`, trusted HTML/URL, and the Tx-db genuine module-private `unique symbol` brands so the
-      _type_ carries provenance and the safe value is awkward to forge casually (CLAUDE.md type-ergonomics).
-      Per §6.6 the honesty boundary, runtime validation / IR-provenance (A/C) remain the enforcer; G only
-      makes the unsafe shape awkward at author time. (`bugz.md` H6 forgeable brands and `bugz-21` B2 name-
-      shadow are the cautionary cases the runtime gate must still cover.)
-  - Done when: the unsafe call shapes are awkward to write, while the runtime/IR gate still owns
-    enforcement and a forged/aliased brand is caught by A/C regardless of the type.
-  - Evidence: `packages/server/src/managed-db.ts`, `packages/server/src/webhook.ts`, and
-    `packages/browser/src/security-output.ts` use module-private `unique symbol` brands for `Reader<Db>`,
-    `WebhookTxDb`, `TrustedHtml`, and `TrustedUrl`; verified by `vp exec vitest --run
-packages/server/src/managed-db.test.ts packages/server/src/webhook.test.ts packages/server/src/html.test.ts
-packages/browser/src/security-output.test.ts packages/compiler/src/trusted-html-provenance.test.ts`,
+- [x] **G. Branded provenance types are complete for the current defense-in-depth scope.**
+  - Evidence: `Reader<Db>`, `WebhookTxDb`, `TrustedHtml`, and `TrustedUrl` use module-private
+    `unique symbol` brands in `packages/server/src/managed-db.ts`, `packages/server/src/webhook.ts`, and
+    `packages/browser/src/security-output.ts`; verified with focused server/browser/compiler tests,
     `pnpm run check:api-surface`, and `pnpm run check:vp`.
 
-## How workstream C works (extract-once, then check the model)
+## Completed Evidence
 
-Kovo already has the IR and a fact-store; the gates just don't use them. The pipeline
-(`spec/05`) is `cart.tsx → parse → analyze → lower → cart.{server,client}.js` plus the emitted
-build graph (`dist/.kovo/graph.json` / `generated/touch-graph.ts`), which the SPEC calls "the runtime
-authority for derived query reads and mutation touches." Its real fact shape:
+- [x] **Phase 0 foundation is complete.**
+  - Evidence: `node scripts/fundamental-fixes-inventory.mjs`; focused inventory/metamorphic/Drizzle/CLI
+    tests; `pnpm run check:vp`.
 
-```jsonc
-// queries[]: the READ set (domains a loader touches)
-{ "query": "queries/contacts-query", "domains": ["model/contact"],
-  "access": { "kind": "guard-chain", "guards": [{ "name": "appAuthed" }] } }
-// mutations[]: the WRITE set + invalidation edges
-{ "key": "mutations/add-contact", "writes": ["model/contact"],
-  "invalidates": ["queries/contacts-query"], "csrf": "checked" }
-```
-
-The architectural shift is **separate fact extraction from policy checking**:
-
-- **Today (fail-open):** each gate re-derives its own facts from the source AST. KV435/KV414 re-walk the
-  loader body (`project-receivers.ts:1233` `isTouchBodyNode`) looking for `.select().from(secretTable)`;
-  an unenumerated shape (closure, helper, destructure) → the walk finds nothing → empty set → gate passes.
-  The `claude-bugz-24` B1 closure read, `22` B1 task write, and `24` B4 destructure are the _same line_.
-
-```ts
-// BEFORE — gate re-extracts from source, fails open on the unenumerated shape
-const reads = touchBodyCallExpressions(loader).filter(isSelect).map(resolveTable);
-for (const t of reads) if (isSecret(t)) error('KV435'); // reads=[] for a closure → silent pass
-```
-
-- **Workstream C (extract-once):** ONE extraction pass owns over-approximation + fail-closed (this is
-  literally §11.1 step 2.E / step 5: an un-traversable read → `UNRESOLVED → KV406`, never an empty set).
-  Every gate then reads the model fact (`query.reads`) — which is _either_ a complete set _or_ a KV406 —
-  and is a trivial set-operation (§11.4 #3: "graph queries over `kovo explain`… as set operations").
-
-```ts
-// AFTER — model carries the canonical fact OR KV406; the gate never sees a misleading empty set
-function checkSecretToWire(q: QueryModel) {
-  if (q.reads === UNRESOLVED) return; // already KV406'd at extraction (fail-closed)
-  for (const d of q.reads)
-    if (d.classification === 'secret' && !q.provenProtected) error('KV435', q.span);
-}
-```
-
-Spelling-invariance is the payoff: inline / closure / destructured / helper reads all lower to the SAME
-`query.reads = {auth/account}` (or `UNRESOLVED`), so the gate is immune to spelling _for free_ — the
-variety the dogfood (and an attacker) exploits only exists in the source, not the IR.
-
-**The soundness triangle** (all three already exist in spec; C extends the first to security gates):
-
-1. **Static over-approximates + KV406-on-doubt** (§11.1) — the extraction pass catches all branches and
-   fails closed on the unprovable.
-2. **Render-equivalence + fixpoint** (§5.2 #3) — `render(src) ≡ render(compile(src))` and
-   `compile(compile(src)) === compile(src)` already verify the lowered IR preserves behavior, so checking
-   the IR is checking the app.
-3. **Runtime cross-check** (§11.2) — the executor asserts `observed ⊆ static ∪ declared`; any residual
-   static gap (a fail-open the extractor still misses) surfaces as a CI failure under instrumentation.
-
-**The cost is the IR schema, not the gates.** `graph.json` today carries domain-level `domains`/`writes`;
-moving KV435/KV414 fully onto it needs **column-level + provenance** facts (e.g. "this read projects
-`account.password`, classified `secret`, key-scoped by `arg:id`") and reliable IR→TSX spans for actionable
-errors. Sizing that extension is the Phase-0 KV435 spike.
-
-## The escape hatch (A's load-bearing sub-requirement): `declare reads:`/`touches:` must be provenance-checked
-
-Fail-closed (A) means genuinely un-analyzable code now errors, so authors need an escape: the
-`reads:`/`touches:` declarations §10.2/§10.3 already define for opaque projections (KV410) and unresolved
-writes (KV406). **The trap is that an escape hatch is an author _assertion_, and an assertion that the
-analyzer trusts by name/shape is a universal bypass** — exactly the `bugz-21` B2 failure, where a local
-`function trustedSql(s){ return s }` shadow matched the waiver's callee _name_ and silently disabled the
-KV414 (IDOR) + KV438 (mass-assignment) gates.
-
-So the hatch must be provenance-checked on **two** axes, or it becomes the next trustedSql-shadow:
-
-- **Identity provenance (via B):** the `reads:`/`touches:` declaration must resolve to the _real_
-  framework construct, not a local shadow / alias with the same name. (Kills the `bugz-21` B2 class.)
-- **Content provenance (via §11.2):** the declaration is a _claim to be cross-checked_, never trusted.
-  The runtime executor enforces `observed ⊆ static ∪ declared` — a loader that declares `reads: []` but
-  executes a read of `account` produces `account ∉ []` → CI failure under instrumentation, and in prod
-  the raw-SQL path fails closed (conservatively invalidates every `touches` domain) rather than dropping
-  the unexpected table.
-
-This is what makes the hatch safe where the old `trustedSql` waiver was not. The key asymmetry:
-**over-declaring is safe (excess = warning), under-declaring is caught (observed ⊄ declared → CI fail),
-so the only sound declaration is a _superset_ of reality.** An author therefore cannot use the hatch to
-re-create the fail-open we are killing: declaring `reads: []` to silence the gate is itself caught the
-moment the loader runs. Contrast the original `trustedSql`, which _disabled_ the gate (granted a blanket
-pass) with neither identity-resolution nor a runtime claim to verify against. The rule for every A escape
-hatch: **declare-and-verify (narrow the unknown to an asserted, runtime-policed set), never
-name-and-bypass (turn the gate off).**
-
-## Phased delivery
-
-- [x] **Phase 0 — Foundation.** Build the E harness + seed corpus; inventory the 65 syntactic-recognition
-      sites and the 121 existing `KV406` sites; **spike C** by extending `graph.json`/`touch-graph.ts` with
-      column-level secret + key-scope provenance and porting secret-to-wire (KV435) to read it (with IR→TSX
-      spans), to size the IR migration and prove the closure-read case fails closed.
-  - Evidence: `node scripts/fundamental-fixes-inventory.mjs`;
-    `pnpm exec vitest --run scripts/fundamental-fixes-inventory.test.mjs
-packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts
-packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/index.query-loader-receivers.test.ts
-packages/drizzle/src/index.serialization.test.ts packages/cli/src/index.kovo-check.test.ts`; and
-    `pnpm run check:vp`.
-- [ ] **Phase 1 — Spelling-invariant recognition (B).** Land the identity resolver; migrate the 65 sites;
-      E proves the alias/re-export classes are closed.
-- [ ] **Phase 2 — Fail-closed default (A).** Flip "no fact = `KV406`"; ship the audited escape hatch;
-      B prevents false positives on aliased-but-safe constructs.
-- [ ] **Phase 3 — Collapse duplication (D).** One chokepoint per contract; move regression tests onto the
-      prod artifact.
-- [ ] **Phase 4 — Shrink the sink surface (F).** Remove the importable write handle; ship the read-only
-      alternative + migration.
-- [ ] **Phase 5 — Migrate to IR verification (C, ongoing).** Move gates onto IR-level provenance, one sink
-      family at a time, starting from the KV435 spike.
-- [ ] **Cross-cutting — G + E.** Brand the safe values as each gate gains runtime/IR enforcement; every
-      new or migrated gate ships with its metamorphic suite.
-
-## Risks / questions to resolve during delivery
-
-- [ ] A's author friction in real apps, and the exact escape-hatch shape (declare-`reads`/`touches` vs a
-      justified attestation). The provenance + runtime-cross-check requirements are settled in _The escape
-      hatch_ section above (declare-and-verify, never name-and-bypass); the open question is ergonomics — how
-      often real apps hit the hatch and whether the declaration burden is acceptable.
-- [ ] B must land before A so "fail closed on unprovable" doesn't fire spuriously on aliased-but-safe
-      constructs — confirm TS symbol resolution gives a reliable "cannot resolve" signal across module
-      boundaries and dynamic imports.
-- [x] C's cost: does the lowered IR already carry enough provenance to attach sink proofs, or must the IR
-      schema be extended? (Answered by the Phase-0 KV435 spike.)
+- [x] **KV435/KV414 read audits consume canonical read provenance for the completed slice.**
   - Evidence: `packages/core/src/graph.ts`, `packages/drizzle/src/graph.ts`, and
-    `packages/drizzle/src/static/query-shapes.ts` now carry/query column-level read provenance; verified by
-    `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts
-packages/drizzle/src/index.query-loader-receivers.test.ts packages/cli/src/index.kovo-check.test.ts`.
-- [ ] D: which dev/prod divergences are _intentional_ (and must stay) vs accidental?
-- [ ] F: the migration path for apps that legitimately import `appDb` for reads.
+    `packages/drizzle/src/static/query-shapes.ts`; verified with focused Drizzle query-shape,
+    query-loader, serialization, scope-audit, and CLI `kovo-check`/`kovo-build` tests.
 
-## Latest verification
+- [x] **KV426/KV311 metamorphic coverage includes the latest integrated variants.**
+  - Evidence: trusted HTML provenance catches namespace, local alias, local re-export barrel, and direct
+    wrapper helper variants; query update coverage follows same-render destructured fields,
+    function-declaration helpers, and wrapper/helper aliases. Verified with focused compiler and
+    conformance-fixture tests plus `pnpm run check:vp`.
 
-- Inventory is now reproducible: `node scripts/fundamental-fixes-inventory.mjs` scans production
-  compiler/drizzle sources and reports 57 literal/import syntactic candidates, 1,797 AST-kind gates, and
-  95 KV406/fail-closed sites. Verified with
-  `vp exec vitest --run scripts/fundamental-fixes-inventory.test.mjs` and `pnpm run check:vp`.
-- Integrated Phase 0 foundation plus first B/D/F/G slices on
-  `agent/implement-fundamental-fixes-20260630-171240`. Latest checks: `pnpm run check:vp`;
-  `pnpm run check:api-surface`; focused Drizzle identity/KV435 suites; focused server runtime/prod-artifact
-  chokepoint suites; and `git diff --check`.
-- Current starter CI routing: `.github/workflows/ci.yml` enrolls the new runtime-contract prod-artifact test
-  in the starter matrix, and `scripts/ci-shards.test.mjs` keeps it out of root Vitest shards.
-- Integrated A/E slices: hidden Drizzle reads inside ordinary closures now fail closed with KV406, and
-  metamorphic recognition has a dedicated CI gate outside generic root Vitest shards. Verified with
-  `pnpm exec vitest --run packages/drizzle/src/index.query-loader-receivers.test.ts
-packages/cli/src/index.kovo-check.test.ts`; and
-  `pnpm exec vitest --run packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts
-scripts/ci-shards.test.mjs`.
-- Integrated starter F slice: scaffolded read surfaces now use `readonlyAppDb`/`readonlyDb`, while
-  write-capable provider access is narrowed to app construction, auth, and DDL/proof paths. Verified with
-  `pnpm exec vitest --run packages/create-kovo/src/index.test.ts
-packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
-packages/create-kovo/src/index.build.runtime.test.ts`; the focused prod-artifact starter suite; and
-  `pnpm run check:vp`.
-- Integrated C slice: KV414 query/read audits now consume canonical read provenance, including owner
-  domain proof and keyless arg reachability, and fail closed when scope provenance is unknown. Verified
-  with `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts
-packages/drizzle/src/index.query-loader-receivers.test.ts
-packages/drizzle/src/index.columns-keys-predicates.test.ts packages/drizzle/src/index.query-shapes.test.ts
-packages/drizzle/src/index.serialization.test.ts`; `pnpm exec vitest --run
-packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts`; and
-  `pnpm run check:vp`.
-- Integrated B slice: compiler/server framework construct recognition now routes through a shared
-  framework identity resolver for aliases, namespace imports, destructuring, package subpaths, and
-  local lookalikes across the migrated compiler/static gates. Verified with Curie's focused
-  compiler/server suite; `pnpm run check:api-surface`; `pnpm run check:vp`; and `git diff --check`.
-- Integrated KV426/KV311 metamorphic slice: trusted HTML provenance now catches namespace, local-alias,
-  local re-export barrel, and same-file direct wrapper-helper variants; query update coverage now follows
-  same-render destructured fields, function-declaration helpers, and wrapper/helper aliases. Verified with
-  `vp exec vitest --run
-packages/compiler/src/trusted-html-provenance.test.ts
-packages/compiler/src/output-context-trusted-brand-identity.test.ts
-packages/compiler/src/query-coverage.test.ts
-packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `pnpm run check:vp`; and
-  `git diff --check`.
-- Integrated Drizzle identity/metamorphic slice: declared `domain`/`tag` reads, trust-escape collection,
-  SQL projection/arithmetic recognition, and simple local `query(...)` wrapper helpers now route through
-  resolver-backed identity or fail closed; KV414/KV435/KV407 wrapper-helper metamorphic variants are
-  enforced. Verified with `vp exec vitest --run packages/drizzle/src/trust-escapes-static.test.ts
-packages/drizzle/src/index.query-shapes.test.ts
-packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `vp exec vitest --run
-packages/drizzle/src/index.recognizer-alias-bugz3.test.ts packages/drizzle/src/raw-sql-static.test.ts`;
-  and `pnpm run check:vp`.
-- Integrated A/F capability slice: starter templates no longer export `appDbProvider` or
-  `appRuntimeDbProvider` from `src/db.ts`, keep `readonlyAppDb` as the blessed endpoint-read handle,
-  and KV330 now covers direct DB writes in task, webhook, and endpoint handlers. Verified with
-  `vp exec vitest --run packages/compiler/src/direct-db.test.ts
-packages/compiler/src/scan/parse.test.ts packages/create-kovo/src/index.test.ts`; `vp exec vitest --run
-packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/index.build.test.ts`;
-  `vp exec vitest --run packages/create-kovo/src/index.build.scaffold.typecheck.test.ts`;
-  `pnpm run check:api-surface`; and `pnpm run check:vp`.
-- Integrated D runtime slice: all current `runQuery` server callers record or forward query warnings,
-  custom task schedulers receive validated `DurableTaskEnqueueInput`, and verified sync file parsing fails
-  closed while async parsing owns byte-sniffed enforcement. Verified with `vp exec vitest --run
-packages/server/src/query-endpoint.test.ts packages/server/src/app.test.ts
-packages/server/src/mutation.test.ts packages/server/src/mutation-delta.test.ts
-packages/server/src/task-runtime.test.ts packages/server/src/live-target-renderer.test.tsx
-packages/server/src/schema.test.ts`; `vp exec vitest --run
-packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`;
-  `pnpm run check:api-surface`; and `pnpm run check:vp`.
+- [x] **Drizzle identity/metamorphic slice is integrated.**
+  - Evidence: declared `domain`/`tag` reads, trust-escape collection, SQL projection/arithmetic recognition,
+    and simple local `query(...)` wrapper helpers route through resolver-backed identity or fail closed.
+    Verified with focused Drizzle and conformance tests plus `pnpm run check:vp`.
+
+- [x] **Initial starter capability narrowing is integrated.**
+  - Evidence: starter templates no longer export `appDbProvider` or `appRuntimeDbProvider` from `src/db.ts`,
+    keep `readonlyAppDb` as the blessed endpoint-read handle, and KV330 covers direct DB writes in task,
+    webhook, and endpoint handlers. Verified with focused compiler/create-kovo tests, `pnpm run
+check:api-surface`, and `pnpm run check:vp`.
+
+- [x] **Initial D runtime slice is integrated.**
+  - Evidence: current `runQuery` server callers record or forward query warnings, custom task schedulers
+    receive validated `DurableTaskEnqueueInput`, and sync file parsing fails closed while async parsing owns
+    byte-sniffed enforcement. Verified with focused server and prod-artifact runtime-contract tests,
+    `pnpm run check:api-surface`, and `pnpm run check:vp`.
+
+## Final Completion Gate
+
+- [ ] **Before marking this plan complete, run and record the final broad gates.**
+  - [ ] `node scripts/fundamental-fixes-inventory.mjs`
+  - [ ] `pnpm run check:vp`
+  - [ ] `pnpm run check:api-surface`
+  - [ ] Focused B/D/F/A/C/E test commands from the completed checklist items.
+  - [ ] Relevant create-kovo prod-artifact tests for every artifact-observable contract.
+  - [ ] Push from local `main` and monitor GitHub CI to completion.
