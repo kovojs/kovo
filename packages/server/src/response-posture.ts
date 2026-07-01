@@ -7,11 +7,13 @@ import {
 import {
   isBlessedRedirectResponse,
   readHeader,
+  redirectLocationHeader,
   redirectLocationHeaderValue,
   type ResponseHeaders,
   type ServerResponseBase,
   type WebResponseBody,
 } from './response.js';
+import { forwardSetCookie } from './cookies.js';
 import type {
   EndpointDeclaration,
   EndpointMethod,
@@ -199,9 +201,12 @@ export function finalizeRawWebResponse(
   response: Response,
   request: Pick<Request, 'method'>,
 ): Response {
-  if (request.method !== 'HEAD' && response.status !== 304) return response;
-  return new Response(null, {
-    headers: response.headers,
+  const finalizedHeaders = finalizeRawResponseHeaders(response);
+  const suppressBody = request.method === 'HEAD' || response.status === 304;
+  if (!suppressBody && finalizedHeaders === response.headers) return response;
+
+  return new Response(suppressBody ? null : response.body, {
+    headers: finalizedHeaders,
     status: response.status,
     statusText: response.statusText,
   });
@@ -301,6 +306,41 @@ function finalizeResponseHeaders(
   }
 
   return webHeaders;
+}
+
+function finalizeRawResponseHeaders(response: Response): Headers {
+  const hasRedirectLocation = isRedirectStatus(response.status) && response.headers.has('location');
+  const setCookies = rawSetCookieHeaders(response.headers);
+  if (!hasRedirectLocation && setCookies.length === 0) return response.headers;
+
+  const webHeaders = new Headers();
+  response.headers.forEach((value, name) => {
+    if (name.toLowerCase() === 'set-cookie') return;
+    if (hasRedirectLocation && name.toLowerCase() === 'location') {
+      webHeaders.set(name, redirectLocationHeader(value));
+      return;
+    }
+    webHeaders.set(name, value);
+  });
+
+  for (const cookie of setCookies) {
+    webHeaders.append(
+      'Set-Cookie',
+      forwardSetCookie(cookie, { class: 'session', source: 'legacy-normalize' }),
+    );
+  }
+
+  return webHeaders;
+}
+
+function rawSetCookieHeaders(headers: Headers): string[] {
+  const withGetSetCookie = headers as Headers & { getSetCookie?: () => string[] };
+  const setCookies =
+    typeof withGetSetCookie.getSetCookie === 'function' ? withGetSetCookie.getSetCookie() : [];
+  if (setCookies.length > 0) return setCookies;
+
+  const value = headers.get('set-cookie');
+  return value === null ? [] : [value];
 }
 
 function assertSafeResponseHeaderName(name: string): void {

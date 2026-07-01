@@ -115,6 +115,62 @@ describe('server app matched dispatch boundary', () => {
     await expect(response.text()).resolves.toBe('db:false');
   });
 
+  it('finalizes raw endpoint Set-Cookie and redirect headers at the app shell boundary', async () => {
+    const cookieEndpoint = endpoint('/raw-cookie', {
+      handler() {
+        return new Response('cookie', {
+          headers: {
+            'Cache-Control': 'no-store',
+            'Set-Cookie': 'sid=abc; Path=/',
+          },
+        });
+      },
+      method: 'GET',
+      reason: 'raw endpoint cookie finalization proof',
+      response: {
+        ...rawTextResponse,
+        reservedHeaders: ['Set-Cookie'],
+      },
+    });
+    const redirectEndpoint = endpoint('/raw-redirect', {
+      handler() {
+        return new Response(null, {
+          headers: {
+            'Cache-Control': 'no-store',
+            Location: 'https://evil.example/phish',
+          },
+          status: 303,
+        });
+      },
+      method: 'GET',
+      reason: 'raw endpoint redirect finalization proof',
+      response: {
+        appOwnedSafety: true,
+        body: 'redirect',
+        cache: 'no-store',
+        reservedHeaders: ['Location'],
+      },
+    });
+    const app = createApp({ endpoints: [cookieEndpoint, redirectEndpoint] });
+
+    const cookie = await dispatchMatchedAppRequest(
+      matchedAppRequest(app, new Request('https://shop.example.test/raw-cookie')),
+    );
+    expect(await cookie.text()).toBe('cookie');
+    const cookies = cookie.headers.getSetCookie();
+    expect(cookies).toHaveLength(1);
+    expect(cookies[0]).toContain('sid=abc');
+    expect(cookies[0]).toContain('HttpOnly');
+    expect(cookies[0]).toContain('SameSite=Lax');
+
+    const redirect = await dispatchMatchedAppRequest(
+      matchedAppRequest(app, new Request('https://shop.example.test/raw-redirect')),
+    );
+    expect(redirect.status).toBe(303);
+    expect(redirect.headers.get('location')).toBe('/');
+    expect(redirect.headers.getSetCookie()).toEqual([]);
+  });
+
   it.each(['POST', 'PUT', 'PATCH', 'DELETE'])(
     'enforces default endpoint CSRF before %s handler dispatch',
     async (method) => {

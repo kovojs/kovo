@@ -56,11 +56,17 @@ describe('create-kovo starter (build integration: production response header art
         {
           proof: {
             evidence:
-              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes typed Set-Cookie serialization and unsafe cookie rejection in the production server artifact',
+              'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts observes typed and raw endpoint Set-Cookie normalization plus unsafe cookie rejection in the production server artifact',
             kind: 'proof',
           },
           sink: 'Set-Cookie typed response header',
-          witnesses: ['serializeCookie', 'Set-Cookie', 'header-cookie-proof', 'c2_cookie'],
+          witnesses: [
+            'serializeCookie',
+            'Set-Cookie',
+            'header-cookie-proof',
+            'raw-header-endpoint',
+            'c2_cookie',
+          ],
         },
       ]);
       expect(census.entries).toHaveLength(2);
@@ -126,6 +132,21 @@ describe('create-kovo starter (build integration: production response header art
       expect(unsafeCookie.status, unsafeCookieBody).toBe(500);
       expect(unsafeCookie.headers.getSetCookie()).toEqual([]);
       expect(unsafeCookieBody).not.toContain('Set-Cookie: c2=owned');
+
+      const rawEndpoint = await fetch(`${origin}/raw-header-endpoint`, { redirect: 'manual' });
+      await expect(rawEndpoint.text()).resolves.toBe('raw endpoint header proof');
+      expect(rawEndpoint.status).toBe(200);
+      const rawCookies = rawEndpoint.headers.getSetCookie();
+      expect(rawCookies).toHaveLength(1);
+      expect(rawCookies[0]).toContain('raw_sid=abc');
+      expect(rawCookies[0]).toContain('HttpOnly');
+      expect(rawCookies[0]).toContain('Secure');
+      expect(rawCookies[0]).toContain('SameSite=Lax');
+
+      const rawRedirect = await fetch(`${origin}/raw-header-redirect`, { redirect: 'manual' });
+      expect(rawRedirect.status).toBe(303);
+      expect(rawRedirect.headers.get('location')).toBe('/');
+      expect(rawRedirect.headers.getSetCookie()).toEqual([]);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -174,10 +195,47 @@ function addHeaderSinkProofRoutes(root: string): void {
     app,
     '  redirect,\n  route,',
     '  redirect,\n  respond,\n  route,',
-    'response-header proof respond import',
+    'response-header proof response imports',
+  );
+  const withRawEndpoint = replaceRequired(
+    withRespondImport,
+    'const mutationReplayStore = createMemoryMutationReplayStore();',
+    [
+      'const mutationReplayStore = createMemoryMutationReplayStore();',
+      "const rawHeaderEndpoint = endpoint('/raw-header-endpoint', {",
+      "  access: publicAccess('public raw endpoint Set-Cookie header sink proof'),",
+      "  auth: { kind: 'none', justification: 'public read-only header sink proof endpoint' },",
+      "  method: 'GET',",
+      "  reason: 'raw endpoint Set-Cookie header sink proof',",
+      '  csrf: false,',
+      "  csrfJustification: 'read-only raw header proof endpoint',",
+      "  response: { appOwnedSafety: true, body: 'text', cache: 'no-store', reservedHeaders: ['Set-Cookie'] },",
+      '  handler() {',
+      "    return new Response('raw endpoint header proof', {",
+      "      headers: { 'Cache-Control': 'no-store', 'Set-Cookie': 'raw_sid=abc; Path=/' },",
+      '    });',
+      '  },',
+      '});',
+      "const rawHeaderRedirectEndpoint = endpoint('/raw-header-redirect', {",
+      "  access: publicAccess('public raw endpoint redirect Location header sink proof'),",
+      "  auth: { kind: 'none', justification: 'public read-only redirect sink proof endpoint' },",
+      "  method: 'GET',",
+      "  reason: 'raw endpoint redirect Location header sink proof',",
+      '  csrf: false,',
+      "  csrfJustification: 'read-only raw redirect proof endpoint',",
+      "  response: { appOwnedSafety: true, body: 'redirect', cache: 'no-store', reservedHeaders: ['Location'] },",
+      '  handler() {',
+      '    return new Response(null, {',
+      "      headers: { 'Cache-Control': 'no-store', Location: 'https://evil.example/phish' },",
+      '      status: 303,',
+      '    });',
+      '  },',
+      '});',
+    ].join('\n'),
+    'response-header proof raw endpoints',
   );
   const withCookieProofImport = replaceRequired(
-    withRespondImport,
+    withRawEndpoint,
     "import { ContactsRegion } from './components/contacts.js';",
     [
       "import { ContactsRegion } from './components/contacts.js';",
@@ -191,8 +249,14 @@ function addHeaderSinkProofRoutes(root: string): void {
     '  mutations: [addContact, headerCookieProof, appSignIn, appSignOut],',
     'response-header proof cookie mutation registration',
   );
-  const withRoutes = replaceRequired(
+  const withEndpointRegistration = replaceRequired(
     withMutationRegistration,
+    '  endpoints: [healthEndpoint],',
+    '  endpoints: [healthEndpoint, rawHeaderEndpoint, rawHeaderRedirectEndpoint],',
+    'response-header proof raw endpoint registration',
+  );
+  const withRoutes = replaceRequired(
+    withEndpointRegistration,
     "  routes: [\n    route('/', {",
     [
       '  routes: [',
