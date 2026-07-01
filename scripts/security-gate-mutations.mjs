@@ -916,7 +916,7 @@ function installMutantScriptLib(tempRoot) {
   if (existsSync(repoNodeModules)) {
     symlinkSync(repoNodeModules, path.join(tempRoot, 'node_modules'), 'dir');
   }
-  for (const file of ['cli-entry.mjs', 'repo-root.mjs']) {
+  for (const file of ['cli-entry.mjs', 'repo-root.mjs', 'source-files.mjs']) {
     writeFileSync(
       path.join(libDir, file),
       readFileSync(path.join(scriptsDir, 'lib', file), 'utf8'),
