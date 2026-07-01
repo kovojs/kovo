@@ -129,7 +129,8 @@ packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/in
 ## Remaining Program Checklist
 
 - [ ] **A1. Close the fail-closed acceptance cases.**
-  - [ ] Closure-scoped secret/owner read fails the build with KV406 or a stricter security diagnostic.
+  - [x] Closure-scoped secret/owner read fails the build with KV406 or a stricter security diagnostic. - Evidence: `vp exec vitest --run packages/drizzle/src/index.query-loader-receivers.test.ts
+packages/cli/src/index.kovo-check.test.ts`.
   - [ ] `task` and webhook DB writes outside audited channels fail the build.
   - [ ] `recordChange` to an undeclared domain fails the build.
   - [ ] Existing green-path apps still build after B1 and F1.
