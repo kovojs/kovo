@@ -31,8 +31,11 @@
  * Every mint records a capability fact drained into `kovo explain --capabilities` (SF-WIRE below).
  */
 
-import type { StorageCapability } from '@kovojs/core';
-import { normalizeStorageKey } from '@kovojs/core/internal/storage';
+import type { StorageReadCapability } from '@kovojs/core';
+import {
+  createReadOnlyStorageCapability,
+  normalizeStorageKey,
+} from '@kovojs/core/internal/storage';
 
 import { verifiedAccess } from './access.js';
 import {
@@ -216,7 +219,7 @@ export function createSignUrl(options: {
 /** Options for the framework-owned storage download route. */
 export interface StorageDownloadEndpointOptions {
   /** The storage capability the verified handler reads from (AFTER the verify sink passes). */
-  storage: StorageCapability;
+  storage: StorageReadCapability;
   /** The framework signing secret the token is verified against (NOT app/per-request controlled). */
   secret: SigningSecret;
   /** Mount path; the route is `prefix`-mounted here. Defaults to `/_kovo/storage`. */
@@ -295,6 +298,7 @@ export function createStorageDownloadEndpoint(
   const basePath = normalizeCapabilityBasePath(
     options.basePath ?? DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
   );
+  const storage = createReadOnlyStorageCapability(options.storage);
 
   const handler = async (request: Request): Promise<Response> => {
     const method = request.method.toUpperCase();
@@ -331,7 +335,7 @@ export function createStorageDownloadEndpoint(
 
     // Only NOW — after a verifying token — do we touch storage. A HEAD verifies identically but
     // returns no body.
-    const outcome = await respond.storedFile(options.storage, key, {
+    const outcome = await respond.storedFile(storage, key, {
       ...(options.storedFile?.disposition === undefined
         ? {}
         : { disposition: options.storedFile.disposition }),

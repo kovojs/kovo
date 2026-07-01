@@ -21,6 +21,7 @@ import {
   addEscapedAttackerTextProof,
   addInternalHtmlImportProof,
   addNoJsFailureProof,
+  addStorageQueryWriteProof,
   attributeValue,
   buildProductionArtifact,
   execFileSyncErrorOutput,
@@ -70,6 +71,30 @@ describe('create-kovo starter (build integration: production security artifacts)
         expect(output).toContain('KV235');
         expect(output).toContain('@kovojs/server/internal/html');
         expect(output).toContain('raw-helper.ts');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('blocks storage writes from query loaders in the production build artifact', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-storage-query-write-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Storage Query Write Proof' });
+      linkStarterBuildDependencies(root);
+      addStorageQueryWriteProof(root);
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail with KV433.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV433');
+        expect(output).toContain('storage-write-query');
+        expect(output).toContain('operation=put');
       }
     } finally {
       rmSync(root, { force: true, recursive: true });

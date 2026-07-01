@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import type { StorageReadCapability } from '@kovojs/core';
 import { createMemoryStorage } from '@kovojs/core/internal/storage';
 
 import { createApp, createRequestHandler } from './app.js';
@@ -65,6 +66,24 @@ describe('capability download route: verify-before-read sink', () => {
       reservedHeaders: ['X-Content-Type-Options'],
     });
   });
+
+  it('accepts read-only storage authority for the verified download sink', async () => {
+    const key = 'receipts/read-only.txt';
+    const storage = await storageWith(key, 'read-only-download');
+    const readOnly: StorageReadCapability = {
+      get: storage.get.bind(storage),
+      stat: storage.stat.bind(storage),
+      stream: storage.stream.bind(storage),
+    };
+    const route = createStorageDownloadEndpoint({ secret: SECRET, storage: readOnly });
+    const ctx = createSignUrl({ secret: SECRET });
+    const { url } = await ctx.signUrl({ key });
+
+    const response = await runEndpoint(route, new Request(`https://app.example${url}`));
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('read-only-download');
+  });
+
   it('a VALID scoped signed URL dereferences the object when the route derives the same scope', async () => {
     const key = 'receipts/ord_1.pdf';
     const storage = await storageWith(key, 'receipt-bytes');

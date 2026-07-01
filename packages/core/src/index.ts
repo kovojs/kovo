@@ -46,10 +46,13 @@ export type {
   S3CompatibleStorageOptions,
   StorageBody,
   StorageCapability,
+  StorageDeleteCapability,
   StorageGetResult,
   StorageObjectInfo,
+  StoragePutCapability,
   StoragePutOptions,
   StoragePutResult,
+  StorageReadCapability,
   StorageStreamResult,
 } from './storage.js';
 export {

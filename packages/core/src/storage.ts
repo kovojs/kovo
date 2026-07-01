@@ -40,14 +40,26 @@ export interface StorageStreamResult extends StorageObjectInfo {
   body: ReadableStream<Uint8Array>;
 }
 
-/** The object-storage interface an app uses to read, write, stat, and stream objects by key. */
-export interface StorageCapability {
-  delete(key: string): Promise<void>;
+/** Read-only object-storage authority: fetch, stat, and stream objects by key. */
+export interface StorageReadCapability {
   get(key: string): Promise<StorageGetResult | undefined>;
-  put(key: string, body: StorageBody, options?: StoragePutOptions): Promise<StoragePutResult>;
   stat(key: string): Promise<StorageObjectInfo | undefined>;
   stream(key: string): Promise<StorageStreamResult | undefined>;
 }
+
+/** Write authority for storing upload bytes by key. */
+export interface StoragePutCapability {
+  put(key: string, body: StorageBody, options?: StoragePutOptions): Promise<StoragePutResult>;
+}
+
+/** Write authority for deleting stored objects by key. */
+export interface StorageDeleteCapability {
+  delete(key: string): Promise<void>;
+}
+
+/** The full object-storage interface an app wires into upload, delete, and download surfaces. */
+export interface StorageCapability
+  extends StorageDeleteCapability, StoragePutCapability, StorageReadCapability {}
 
 /** Options for the filesystem-backed storage adapter: the root directory objects are stored under. */
 export interface FileSystemStorageOptions {
@@ -354,6 +366,33 @@ export function createS3CompatibleStorage(options: S3CompatibleStorageOptions): 
       };
     },
   };
+}
+
+/**
+ * @internal Create a runtime read-only storage view for GET/read surfaces.
+ *
+ * SPEC §6.6 honesty boundary: the narrowed TypeScript type is only author-time ergonomics. The
+ * façade keeps the sink fail-closed if same-process code casts the read view back to a write shape.
+ */
+export function createReadOnlyStorageCapability(
+  storage: StorageReadCapability,
+): StorageReadCapability {
+  const denyWrite = async (): Promise<never> => {
+    throw new Error(
+      'KV433: read-only storage capability cannot write from a query or public GET path ' +
+        '(SPEC §6.6/§9.4). Route upload/store/delete work through mutation(), endpoint(), or an ' +
+        'audited capability surface.',
+    );
+  };
+  return Object.freeze({
+    get: storage.get.bind(storage),
+    stat: storage.stat.bind(storage),
+    stream: storage.stream.bind(storage),
+    // Deliberately present only at runtime so `as any` cannot recover write authority from a read
+    // view. The public type omits these methods.
+    delete: denyWrite,
+    put: denyWrite,
+  }) as StorageReadCapability;
 }
 
 /**

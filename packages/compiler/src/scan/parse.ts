@@ -71,6 +71,7 @@ const HANDLER_WRITE_SINK_OPERATIONS = new Set<HandlerWriteSinkOperationKind>([
   'delete',
   'execute',
   'insert',
+  'put',
   'run',
   'update',
 ]);

@@ -118,7 +118,9 @@ export type HandlerWriteSinkOperationKind =
   | 'delete'
   | 'execute'
   | 'insert'
+  | 'put'
   | 'run'
+  | 'store'
   | 'update'
   | 'UNRESOLVED';
 
@@ -493,7 +495,9 @@ export type QueryWriteReachabilityOperationKind =
   | 'delete'
   | 'execute'
   | 'insert'
+  | 'put'
   | 'run'
+  | 'store'
   | 'update'
   | 'UNRESOLVED';
 
@@ -506,6 +510,7 @@ export type QueryWriteReachabilityOperationProvenance =
 /** @internal */
 export type QueryWriteReachabilityTargetProvenance =
   | 'raw-receiver-method'
+  | 'storage-receiver'
   | 'table-argument'
   | 'unresolved-table';
 
@@ -515,7 +520,7 @@ export interface QueryWriteReachabilityUnresolved {
   reason: 'computed-member';
 }
 
-/** A `query()` loader that reaches a Drizzle write — the §9.4 read-only finding (KV433 Stage 2). */
+/** A `query()` loader that reaches a write-capable handle — the §9.4 read-only finding (KV433 Stage 2). */
 export interface QueryWriteReachabilityFact {
   canonicalTarget?: {
     identity: string;

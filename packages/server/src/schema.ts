@@ -1,4 +1,4 @@
-import type { JsonValue, Secret, StorageCapability, StorageObjectInfo } from '@kovojs/core';
+import type { JsonValue, Secret, StorageObjectInfo, StoragePutCapability } from '@kovojs/core';
 
 import {
   type UnverifiedAcceptance,
@@ -380,7 +380,7 @@ export interface StoredFileSchemaOptions {
   /** Optional namespace segment for the server-minted random key (e.g. `'avatars'`). */
   keyPrefix?: string;
   metadata?: (file: FileLike) => Readonly<Record<string, string>>;
-  storage: StorageCapability;
+  storage: StoragePutCapability;
 }
 
 /**

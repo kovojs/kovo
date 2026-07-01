@@ -17,8 +17,13 @@ import {
   type S3CompatiblePutObjectInput,
   type S3CompatiblePutObjectOutput,
   type StorageCapability,
+  type StorageReadCapability,
 } from './index.js';
-import { normalizeStorageKey, storageBodyToBytes } from './internal/storage.js';
+import {
+  createReadOnlyStorageCapability,
+  normalizeStorageKey,
+  storageBodyToBytes,
+} from './internal/storage.js';
 
 interface StorageHarness {
   cleanup?: () => Promise<void>;
@@ -123,6 +128,27 @@ function storageConformance(name: string, createHarness: () => Promise<StorageHa
 storageConformance('memory', async () => ({
   storage: createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') }),
 }));
+
+describe('storage read/write authority split', () => {
+  it('keeps read-only storage views fail-closed even when cast back to a write shape', async () => {
+    const storage = createMemoryStorage({ now: () => new Date('2026-06-11T12:00:00.000Z') });
+    await storage.put('receipts/order-1.txt', 'paid');
+
+    const readOnly: StorageReadCapability = createReadOnlyStorageCapability(storage);
+    await expect(readOnly.get('receipts/order-1.txt')).resolves.toMatchObject({
+      key: 'receipts/order-1.txt',
+    });
+
+    // @ts-expect-error Read-only storage views do not expose upload/write authority.
+    void readOnly.put;
+    // @ts-expect-error Read-only storage views do not expose delete authority.
+    void readOnly.delete;
+
+    const forged = readOnly as unknown as StorageCapability;
+    await expect(forged.put('receipts/evil.txt', 'evil')).rejects.toThrow(/KV433/u);
+    await expect(forged.delete('receipts/order-1.txt')).rejects.toThrow(/KV433/u);
+  });
+});
 
 storageConformance('filesystem', async () => {
   const root = await mkdtemp(path.join(os.tmpdir(), 'kovo-storage-'));
