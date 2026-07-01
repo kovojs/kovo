@@ -322,7 +322,7 @@ check:api-surface`, and `pnpm run check:vp`.
 
 ## Final Completion Gate
 
-- [ ] **Before marking this plan complete, run and record the final broad gates.**
+- [x] **Before marking this plan complete, run and record the final broad gates.**
   - [x] `node scripts/fundamental-fixes-inventory.mjs`
         Evidence: reports 28 syntactic recognition candidates, 23 literal comparisons, 5 import-specifier
         comparisons, 1,823 AST-kind gates, and 99 KV406/fail-closed sites.
@@ -335,4 +335,7 @@ check:api-surface`, and `pnpm run check:vp`.
         conformance, and webhook idempotency Playwright test passed in this session.
   - [x] Relevant create-kovo prod-artifact tests for every artifact-observable contract.
         Evidence: serialized `pnpm exec vitest run packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts packages/create-kovo/src/index.build.prod-artifact.defer.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts packages/create-kovo/src/index.build.scaffold.typecheck.test.ts packages/create-kovo/src/index.test.ts --no-file-parallelism` passed.
-  - [ ] Push from local `main` and monitor GitHub CI to completion.
+  - [x] Push from local `main` and monitor GitHub CI to completion.
+        Evidence: implementation batch push completed; GitHub CI run `28498101105`, Race-Prone
+        Integration Repeats run `28498101130`, and GitHub Pages run `28498101126` all concluded
+        successfully.
