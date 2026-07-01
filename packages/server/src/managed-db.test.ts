@@ -759,6 +759,25 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['with', 'with.select', 'all']);
   });
 
+  it('read capability fails closed on raw SQL DDL before execution', () => {
+    const log: string[] = [];
+    const handle = wrapManagedDbForSqlSafety(
+      {
+        run(statement: unknown) {
+          log.push('run');
+          return statement;
+        },
+      },
+      undefined,
+      { capability: 'read', dialect: 'sqlite' },
+    ) as { run(statement: unknown): unknown };
+
+    expect(() =>
+      handle.run(stampTrustedSql({ sql: 'DROP TABLE contacts' }, 'read-handle DDL attempt')),
+    ).toThrow(/KV433/);
+    expect(log).toEqual([]);
+  });
+
   it.each([
     {
       dialect: undefined,
@@ -901,6 +920,30 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/KV406/);
     expect(log).toEqual(['execute']);
+  });
+
+  it('write mode fails closed on raw SQL DDL even when the table is declared', () => {
+    const log: string[] = [];
+    const handle = wrapManagedDbForSqlSafety(
+      {
+        run(statement: unknown) {
+          log.push('run');
+          return statement;
+        },
+      },
+      undefined,
+      {
+        capability: 'write',
+        dialect: 'sqlite',
+        tables: ['contacts'],
+        touches: ['contact'],
+      },
+    ) as { run(statement: unknown): unknown };
+
+    expect(() =>
+      handle.run(stampTrustedSql({ sql: 'DROP TABLE contacts' }, 'managed write DDL attempt')),
+    ).toThrow(/KV406/);
+    expect(log).toEqual([]);
   });
 
   it('write mode enforces the raw-SQL table allowlist inside transactions', async () => {

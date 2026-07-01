@@ -1,6 +1,8 @@
 import { createHash } from 'node:crypto';
-import { readdirSync, readFileSync, statSync } from 'node:fs';
-import { join, relative } from 'node:path';
+import { readFileSync } from 'node:fs';
+import { relative } from 'node:path';
+
+import { collectSourceFiles } from './lib/source-files.mjs';
 
 const repoRoot = new URL('..', import.meta.url).pathname.replace(/\/$/, '');
 const compilerPackageName = '@kovojs/compiler';
@@ -8,7 +10,10 @@ const compilerPackageVersion = '0.1.0';
 const compilerBuildIdVersion = 'compiler-build-id/v1';
 
 const sourceFingerprints = Object.fromEntries(
-  walk(join(repoRoot, 'packages/compiler/src'))
+  collectSourceFiles(repoRoot, ['packages/compiler/src'], {
+    absolute: true,
+    includeFile: ({ relativePath }) => relativePath.endsWith('.ts'),
+  })
     .filter((fileName) => fileName.endsWith('.ts'))
     .map((fileName) => [
       relative(repoRoot, fileName).replaceAll('\\', '/'),
@@ -26,15 +31,6 @@ const payload = {
 process.stdout.write(
   `${compilerPackageName}@${compilerPackageVersion}/${sha256(canonicalJson(payload)).slice(0, 16)}\n`,
 );
-
-function walk(dir) {
-  return readdirSync(dir)
-    .flatMap((entry) => {
-      const fileName = join(dir, entry);
-      return statSync(fileName).isDirectory() ? walk(fileName) : [fileName];
-    })
-    .sort((left, right) => left.localeCompare(right));
-}
 
 function sha256(value) {
   return createHash('sha256').update(value).digest('hex');

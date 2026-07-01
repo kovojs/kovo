@@ -13,7 +13,9 @@ import {
 import os from 'node:os';
 import path from 'node:path';
 
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { derivePublishPlan } from './build-publish.mjs';
+import { collectFiles } from './lib/source-files.mjs';
 import { normalizePackageExports, resolveSourceExportTarget } from './package-exports.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 
@@ -421,25 +423,12 @@ function readTarball(tarballPath, extractBaseDir) {
   mkdirSync(extractDir, { recursive: true });
   execFileSync('tar', ['-xzf', tarballPath, '-C', extractDir], { stdio: 'ignore' });
   const packageDir = path.join(extractDir, 'package');
-  return walkFiles(packageDir)
+  return collectFiles(packageDir, ['.'], { absolute: true })
     .map((diskPath) => {
       const rel = path.relative(packageDir, diskPath).replace(/\\/g, '/');
       return { diskPath, path: rel, size: statSync(diskPath).size };
     })
     .sort((left, right) => compareStrings(left.path, right.path));
-}
-
-function walkFiles(dir) {
-  const files = [];
-  for (const entry of readdirSync(dir, { withFileTypes: true })) {
-    const entryPath = path.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      files.push(...walkFiles(entryPath));
-    } else if (entry.isFile()) {
-      files.push(entryPath);
-    }
-  }
-  return files;
 }
 
 function createReader(files) {
@@ -532,9 +521,4 @@ function main() {
   }
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)
-) {
-  main();
-}
+if (isMainEntry(import.meta.url)) await runGate(main);

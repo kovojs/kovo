@@ -2039,12 +2039,6 @@ function rawWriteScopeFactsForFunction(
   ];
 }
 
-interface RawWriteSqlTrust {
-  hasRawSqlSink: boolean;
-  site?: string;
-  trusted: boolean;
-}
-
 function rawWriteSqlTrustByDomainWriteCallback(
   file: SourceFileInput,
 ): ReadonlyMap<string, RawWriteSqlTrust> {
@@ -2127,67 +2121,6 @@ function projectSourceFileInput(file: SourceFileInput): SourceFileInput {
   return fileName === file.fileName ? file : { ...file, fileName };
 }
 
-function forEachMutationConfig(
-  sourceFile: SourceFile,
-  visit: (key: string, config: ObjectLiteralExpression) => void,
-): void {
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    const initializer = declaration.getInitializer();
-    if (!initializer) continue;
-    const call = unwrappedStaticExpressionNode(initializer);
-    if (!Node.isCallExpression(call)) continue;
-    const mutation = staticMutationDeclarationFromCall(declaration, call);
-    if (!mutation || !Node.isObjectLiteralExpression(mutation.bodyArgument)) continue;
-    visit(mutation.key, mutation.bodyArgument);
-  }
-
-  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration)) continue;
-    if (!isKovoServerCalleeExpression(call.getExpression(), 'mutation')) continue;
-
-    const [keyArgument, configArgument] = call.getArguments();
-    if (
-      !(
-        (Node.isStringLiteral(keyArgument) || Node.isNoSubstitutionTemplateLiteral(keyArgument)) &&
-        Node.isObjectLiteralExpression(configArgument)
-      )
-    ) {
-      continue;
-    }
-
-    visit(keyArgument.getLiteralText(), configArgument);
-  }
-}
-
-function rawTablesFromMutationRegistry(config: ObjectLiteralExpression): string[] {
-  const registry = objectPropertyInitializer(config, 'registry');
-  if (!registry) return [];
-  const registryObject = unwrappedStaticExpressionNode(registry);
-  if (!Node.isObjectLiteralExpression(registryObject)) return [];
-  return stringArrayPropertyFromObject(registryObject, 'tables');
-}
-
-function mutationHandlerCallback(config: ObjectLiteralExpression): Node | undefined {
-  for (const property of config.getProperties()) {
-    if (Node.isMethodDeclaration(property)) {
-      if (propertyNameText(property.getNameNode()) === 'handler') return property;
-      continue;
-    }
-
-    if (!Node.isPropertyAssignment(property)) continue;
-    if (propertyNameText(property.getNameNode()) !== 'handler') continue;
-
-    const initializer = property.getInitializer();
-    if (!initializer) continue;
-    const expression = unwrappedStaticExpressionNode(initializer);
-    if (Node.isArrowFunction(expression) || Node.isFunctionExpression(expression)) {
-      return expression;
-    }
-  }
-
-  return undefined;
-}
-
 function mergedRawTables(
   left: readonly string[] | undefined,
   right: readonly string[] | undefined,
@@ -2210,148 +2143,6 @@ function declaredRawTableCoversUnresolved(
     rawTables.includes(KOVO_DURABLE_TASK_QUEUE_TABLE) &&
     KOVO_DURABLE_TASK_QUEUE_OPERATIONS.has(operation)
   );
-}
-
-function mergedRawWriteSqlTrust(
-  left: RawWriteSqlTrust | undefined,
-  right: RawWriteSqlTrust | undefined,
-): RawWriteSqlTrust | undefined {
-  if (!left) return right;
-  if (!right) return left;
-
-  return {
-    hasRawSqlSink: left.hasRawSqlSink || right.hasRawSqlSink,
-    ...(left.site || right.site ? { site: left.site ?? right.site } : {}),
-    trusted: (!left.hasRawSqlSink || left.trusted) && (!right.hasRawSqlSink || right.trusted),
-  };
-}
-
-function rawWriteSqlTrustForCallback(callback: Node, file: SourceFileInput): RawWriteSqlTrust {
-  return rawWriteSqlTrustForNode(
-    callback,
-    file,
-    rawSqlLocalFunctionsByName(callback.getSourceFile()),
-    new Set(),
-  );
-}
-
-function rawWriteSqlTrustForNode(
-  node: Node,
-  file: SourceFileInput,
-  localFunctions: ReadonlyMap<string, Node>,
-  visited: Set<string>,
-): RawWriteSqlTrust {
-  const rawSqlSinkCalls = node.getDescendantsOfKind(SyntaxKind.CallExpression).filter((call) => {
-    const surface = directDrizzleReceiverCallSurface(call);
-    if (!surface || !RAW_SQL_WRITE_RECEIVER_SINK_METHODS.has(surface.name)) return false;
-    return sqlSinkReceiverCanCarrySql(call.getExpression(), surface.name);
-  });
-  const firstUntrusted = rawSqlSinkCalls.find((call) => !isTrustedSqlArgument(call));
-  const siteCall = firstUntrusted ?? rawSqlSinkCalls[0];
-
-  let trust: RawWriteSqlTrust = {
-    hasRawSqlSink: rawSqlSinkCalls.length > 0,
-    ...(siteCall
-      ? { site: `${file.fileName}:${lineForIndex(file.source, siteCall.getStart())}` }
-      : {}),
-    trusted: rawSqlSinkCalls.length > 0 && !firstUntrusted,
-  };
-
-  for (const call of node.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!rawSqlHelperCallReceivesDriver(call)) continue;
-    const helper = rawSqlLocalHelperCallTarget(call, localFunctions);
-    if (!helper) continue;
-    const helperName = rawSqlLocalHelperCallName(call);
-    if (!helperName || visited.has(helperName)) continue;
-    visited.add(helperName);
-    trust =
-      mergedRawWriteSqlTrust(
-        trust,
-        rawWriteSqlTrustForNode(helper, file, localFunctions, visited),
-      ) ?? trust;
-  }
-
-  return trust;
-}
-
-function rawSqlLocalFunctionsByName(sourceFile: SourceFile): ReadonlyMap<string, Node> {
-  const functions = new Map<string, Node>();
-  for (const declaration of sourceFile.getFunctions()) {
-    const name = declaration.getName();
-    const body = declaration.getBody();
-    if (name && body) functions.set(name, body);
-  }
-  for (const declaration of sourceFile.getVariableDeclarations()) {
-    const name = declaration.getNameNode();
-    if (!Node.isIdentifier(name)) continue;
-    const initializer = declaration.getInitializer();
-    if (!initializer) continue;
-    const expression = unwrappedStaticExpressionNode(initializer);
-    if (!Node.isArrowFunction(expression) && !Node.isFunctionExpression(expression)) continue;
-    functions.set(name.getText(), expression.getBody());
-  }
-  return functions;
-}
-
-function rawSqlLocalHelperCallTarget(
-  call: CallExpression,
-  localFunctions: ReadonlyMap<string, Node>,
-): Node | undefined {
-  const name = rawSqlLocalHelperCallName(call);
-  return name ? localFunctions.get(name) : undefined;
-}
-
-function rawSqlLocalHelperCallName(call: CallExpression): string | undefined {
-  const expression = unwrappedStaticExpressionNode(call.getExpression());
-  return Node.isIdentifier(expression) ? expression.getText() : undefined;
-}
-
-function rawSqlHelperCallReceivesDriver(call: CallExpression): boolean {
-  return call.getArguments().some(rawSqlReceiverArgument);
-}
-
-function rawSqlLocalHelperCallNamesReceivingDriver(
-  node: Node,
-  localFunctions: ReadonlyMap<string, Node>,
-  visited: Set<string>,
-): Set<string> {
-  const names = new Set<string>();
-  for (const call of node.getDescendantsOfKind(SyntaxKind.CallExpression)) {
-    if (!rawSqlHelperCallReceivesDriver(call)) continue;
-    const helperName = rawSqlLocalHelperCallName(call);
-    if (!helperName || visited.has(helperName)) continue;
-    const helper = localFunctions.get(helperName);
-    if (!helper) continue;
-
-    visited.add(helperName);
-    names.add(helperName);
-    for (const nestedName of rawSqlLocalHelperCallNamesReceivingDriver(
-      helper,
-      localFunctions,
-      visited,
-    )) {
-      names.add(nestedName);
-    }
-  }
-  return names;
-}
-
-function rawSqlReceiverArgument(argument: Node): boolean {
-  const expression = unwrappedStaticExpressionNode(argument);
-  if (Node.isIdentifier(expression)) return isLikelyDrizzleReceiver(expression.getText());
-  if (Node.isPropertyAccessExpression(expression) || Node.isElementAccessExpression(expression)) {
-    const name = staticAccessName(expression);
-    if (name && isLikelyDrizzleReceiver(name)) return true;
-  }
-  return isProjectDrizzleReceiverContainerExpression(expression);
-}
-
-function isTrustedSqlArgument(call: CallExpression): boolean {
-  const argument = call.getArguments()[0];
-  if (!argument) return false;
-  const expression = unwrappedStaticExpressionNode(argument);
-  if (!Node.isCallExpression(expression)) return false;
-  return isKovoDrizzleTrustedSqlCall(expression);
 }
 
 function extractedTablesForRawNames(
@@ -4186,14 +3977,22 @@ export { projectTablesBySyntheticName } from './static/tables.js';
 import {
   domainWriteObject,
   functionReceiverParametersByKey,
+  forEachMutationConfig,
+  mergedRawWriteSqlTrust,
+  mutationHandlerCallback,
   rawTablesByDomainWriteCallback,
+  rawTablesFromMutationRegistry,
   rawTablesFromWriteInitializer,
+  rawSqlLocalFunctionsByName,
+  rawSqlLocalHelperCallNamesReceivingDriver,
+  rawWriteSqlTrustForCallback,
   unresolvedDomainWriteCallbacks,
   writeActionCallbackFunction,
   writeCallbackFunction,
   domainWriteProperties,
   extractedFunctionKey,
   typeHasOpaqueStringMembers,
+  type RawWriteSqlTrust,
 } from './static/domain-writes.js';
 /** @internal */
 export { typeHasOpaqueStringMembers } from './static/domain-writes.js';

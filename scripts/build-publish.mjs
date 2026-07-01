@@ -2,6 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
 
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 import {
   isSourceTarget,
@@ -242,19 +243,20 @@ function buildAndVerify() {
   }
   if (failures > 0) {
     console.error(`\n${failures} package(s) failed publish-build verification.`);
-    process.exit(1);
+    return 1;
   }
   console.log('\nAll public packages built; every publishConfig target file exists.');
+  return 0;
 }
 
 const mode = process.argv.includes('--write') ? 'write' : 'build';
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)
-) {
+if (isMainEntry(import.meta.url)) {
   if (mode === 'write') {
-    write();
+    await runGate(() => {
+      write();
+      return 0;
+    });
   } else {
-    buildAndVerify();
+    await runGate(buildAndVerify);
   }
 }

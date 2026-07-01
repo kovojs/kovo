@@ -1,3 +1,7 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -5,6 +9,7 @@ import {
   balanceShards,
   extractPlaywrightDurations,
   extractVitestDurations,
+  discoverTests,
   includeVitest,
   mergeDurationHistory,
   starterEntries,
@@ -184,6 +189,27 @@ describe('ci-shards', () => {
     expect(includeVitest('packages/server/src/guards.test.ts')).toBe(false);
   });
 
+  it('discovers shard inputs through the shared walker without skipped-directory escapes', async () => {
+    const root = await fixtureRoot();
+    await writeFixture(root, 'packages/a/src/a.test.ts', 'it("a", () => {});\n');
+    await writeFixture(root, 'packages/a/src/b.test.js', 'it("b", () => {});\n');
+    await writeFixture(root, 'packages/a/src/c.spec.ts', 'test("c", async () => {});\n');
+    await writeFixture(root, 'packages/a/src/dist/hidden.test.ts', 'it("hidden", () => {});\n');
+    await writeFixture(
+      root,
+      'packages/a/src/node_modules/pkg/hidden.test.ts',
+      'it("hidden", () => {});\n',
+    );
+
+    await expect(discoverTests('vitest', { roots: [root] })).resolves.toEqual([
+      path.join(root, 'packages/a/src/a.test.ts'),
+      path.join(root, 'packages/a/src/b.test.js'),
+    ]);
+    await expect(discoverTests('integration', { roots: [root] })).resolves.toEqual([
+      path.join(root, 'packages/a/src/c.spec.ts'),
+    ]);
+  });
+
   it('load-balances starter production artifact entries into eight CI shards', () => {
     const entries = starterEntries();
     const shards = balanceStarterShards(8, entries);
@@ -211,4 +237,16 @@ describe('ci-shards', () => {
 
 function compareStrings(a, b) {
   return a.localeCompare(b);
+}
+
+async function fixtureRoot() {
+  return mkdir(path.join(tmpdir(), `kovo-ci-shards-${process.pid}-${Date.now()}`), {
+    recursive: true,
+  });
+}
+
+async function writeFixture(rootDir, relativePath, source) {
+  const filePath = path.join(rootDir, relativePath);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, source);
 }

@@ -12,10 +12,11 @@ unification IS the bug fix and the intended semantics is decided in the item.
 ## Why this order
 
 The refactoring items are the **substrate** for the hardening items:
+
 - The hardening program promises "**one** classifier / **one** choke / brand-derived census." You cannot have
   "one" while there are 2–4 divergent live copies (D1/D2/D3, C2, S1/S3/S4/S5) — hardening copy A while B stays
-  fail-open, or minting a *third* copy, is the trap. **Dedup first.**
-- The hardening program *adds gates*. **T1** is a silent gate-bypass (a checkout path with a space makes a gate
+  fail-open, or minting a _third_ copy, is the trap. **Dedup first.**
+- The hardening program _adds gates_. **T1** is a silent gate-bypass (a checkout path with a space makes a gate
   `exit 0` without running) and **T2** is a walker where files silently escape a gate — new gates on that infra
   are bypassable and their completeness claims unsound. **Fix gate infra first.**
 - Exception: the **live, self-verified DDL hole (Phase 0)** sits in files the refactors don't touch, so it ships first.
@@ -77,7 +78,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
 
 ## Phase 0 — Stop the live bleed (self-verified HIGH; isolated files; no gate deps)
 
-- [ ] **J.1 — Classify DDL as a write in `writeTablesForStatement`.**
+- [x] **J.1 — Classify DDL as a write in `writeTablesForStatement`.**
   - Problem: `packages/server/src/sql-write-allowlist.ts:119-134` switches only on
     `insert/update/delete/truncate table/with/with recursive`; `drop/alter/create table` (parsed fine by
     `pgsql-ast-parser`) hit `default: return []` → "not a write".
@@ -85,7 +86,8 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     `drop/alter/create table`, `create/drop index/trigger/view`, `attach database`, write-`pragma`, `vacuum`,
     `reindex`, and procedural blocks.
   - Verify: `parseSqlWriteTables('DROP TABLE contacts',{dialect:'sqlite'})` returns non-empty; `DELETE FROM contacts` still returns `['contacts']`.
-- [ ] **J.2 — Make both enforcement sites fail closed on non-proven-reads (closes `bugz-26` B1).**
+  - Evidence: `pnpm exec vitest --run packages/server/src/sql-write-allowlist.test.ts packages/server/src/managed-db.test.ts` proves DDL/procedural statements return `UNTABLED_SQL_WRITE` while `DELETE FROM contacts` remains `['contacts']`.
+- [x] **J.2 — Make both enforcement sites fail closed on non-proven-reads (closes `bugz-26` B1).**
   - Problem (self-verified both sites): `packages/server/src/sql-safe-handle.ts:582` (`assertReadSqlStatement`, the
     read-only floor) and `:550` (`assertSqlWriteTablesAllowed`, the declared-tables allowlist) both `if (writeTables.length === 0) return;`
     → a DDL statement (empty write set) is allowed. Confirmed: `readonlyDb(db).run(ksql`DROP TABLE contacts`)`
@@ -95,10 +97,11 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     `UNTABLED_WRITE` and any write not proven within `tables:`. Add a test that the starter's schema-init path runs
     on the un-managed provider, not a managed handle (DEC12).
   - Verify: the two isolation flips above now throw; a plain read still passes; starter `build:prod` stays green.
+  - Evidence: `pnpm exec vitest --run packages/server/src/sql-write-allowlist.test.ts packages/server/src/managed-db.test.ts` proves read/write managed handles throw before executing raw SQL DDL and still pass ordinary reads/allowed DML; `pnpm exec vitest --run packages/create-kovo/src/index.test.ts` proves starter DDL runs on raw client/database before managed readonly wrapping.
 
 ## Phase 1 — Fix the gate infrastructure (so every later gate is trustworthy)
 
-- [ ] **T1 — One `isMainEntry` + one exit convention (silent gate-bypass hazard).** (M · low)
+- [x] **T1 — One `isMainEntry` + one exit convention (silent gate-bypass hazard).** (M · low)
   - Problem: ≥8 run-as-main spellings; the `` `file://${process.argv[1]}` `` form
     (`scripts/check-spec-index.mjs:238`, `no-committed-generated.mjs:44`) and `.pathname` comparisons
     (`build-publish.mjs:253`, `check-pack-security.mjs:537`, `egress-floor.mjs:115`, `supply-chain-gates.mjs:96`) do
@@ -107,26 +110,30 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
   - Fix: add `scripts/lib/cli-entry.mjs` — `isMainEntry(importMetaUrl)` via `pathToFileURL`, `runGate(main)` setting
     `exitCode`; adopt everywhere. **Every new gate below uses `runGate`.**
   - Verify: each gate's `.test.mjs`; a path-with-space test that the gate still runs.
-- [ ] **T2 — One source-file walker + `isProductionSourceFile` policy.** (M · med)
+  - Evidence: `pnpm exec vitest --run scripts/check-spec-index.test.mjs scripts/no-committed-generated.test.mjs scripts/check-sink-policy-gate.test.mjs scripts/fundamental-fixes-census-gate.test.mjs scripts/check-pack-security.test.mjs scripts/egress-floor.test.mjs scripts/supply-chain-gates.test.mjs scripts/public-packages.test.mjs scripts/security-gate-mutations.test.mjs` passed after merging `agent/fundamental-t1-cli`.
+- [x] **T2 — One source-file walker + `isProductionSourceFile` policy.** (M · med)
   - Problem: six independent recursive walkers with differing exclusion sets feed gates that decide which files get
     scanned for dangerous sinks (`check-sink-policy-gate.mjs:2344/2354/2374`, `check-pack-security.mjs:432`,
     `compiler-build-id.mjs:30`, `import-boundary.mjs:258`, `fundamental-fixes-inventory.mjs:117`, `ci-shards.mjs:515`);
     an omission in one means files silently escape a gate.
   - Fix: `scripts/lib/source-files.mjs` with one canonical collect + `isProductionSourceFile` predicate; adopt in all
     six; preserve each caller's current filter (their `.test.mjs` siblings cover it).
-- [ ] **T8 — Fold repo-root bootstrapping into `scripts/lib`.** (S · low)
+  - Evidence: `pnpm exec vitest --run scripts/lib/source-files.test.mjs scripts/check-sink-policy-gate.test.mjs scripts/check-pack-security.test.mjs scripts/import-boundary.test.mjs scripts/fundamental-fixes-inventory.test.mjs scripts/ci-shards.test.mjs` passed after merging `agent/fundamental-t2-source-files`.
+- [x] **T8 — Fold repo-root bootstrapping into `scripts/lib`.** (S · low)
   - Problem: four `repoRoot` computations (`check-sink-policy-gate.mjs:6`, `public-packages.mjs:14`,
     `security-gate-mutations.mjs:13`, `fundamental-fixes-census-gate.mjs:9`).
   - Fix: one `repoRoot()` in `scripts/lib`; adopt (rides T1/T2's shared module).
+  - Evidence: `pnpm exec vitest --run scripts/check-spec-index.test.mjs scripts/no-committed-generated.test.mjs scripts/check-sink-policy-gate.test.mjs scripts/fundamental-fixes-census-gate.test.mjs scripts/check-pack-security.test.mjs scripts/egress-floor.test.mjs scripts/supply-chain-gates.test.mjs scripts/public-packages.test.mjs scripts/security-gate-mutations.test.mjs` passed after merging `agent/fundamental-t1-cli`.
 
 ## Phase 2 — Collapse divergent security copies to one authority
 
-- [ ] **D3 — Move the byte-identical mutation-config cluster to `static/domain-writes.ts`.** (S · low; precursor to D1)
+- [x] **D3 — Move the byte-identical mutation-config cluster to `static/domain-writes.ts`.** (S · low; precursor to D1)
   - Problem: `forEachMutationConfig`, `mutationHandlerCallback`, `rawTablesFromMutationRegistry`,
     `isTrustedSqlArgument` are exact copies in `packages/drizzle/src/static.ts` (2130/2170/2162/2349) and
     `static/derivation.ts` (1266/1306/1298/1353) — the cluster D1 already drifted in.
   - Fix: pure mechanical dedup into `static/domain-writes.ts`.
-- [ ] **D1 — Unify `rawWriteSqlTrustForCallback` (security divergence).** (M · med)
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/raw-sql-static.test.ts packages/drizzle/src` passed after merging `agent/fundamental-d1-domain-writes`.
+- [x] **D1 — Unify `rawWriteSqlTrustForCallback` (security divergence).** (M · med)
   - Problem: `static.ts:2229` recursively follows raw-SQL sinks through local helpers
     (`rawWriteSqlTrustForNode`/`rawSqlLocalFunctionsByName` 2238-2277) with a method-aware
     `sqlSinkReceiverCanCarrySql(expr, surface.name)`; `derivation.ts:1327` does a flat one-level scan with a
@@ -135,6 +142,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
   - Decision: the helper-following (`static.ts`) version is intended (confirm vs SPEC §11.1). Extract it as the one
     impl in `domain-writes.ts`; delete the divergence.
   - Verify: `pnpm --filter @kovojs/drizzle test`; a fixture where a helper-hidden raw write is now flagged.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/raw-sql-static.test.ts packages/drizzle/src` passed after merging `agent/fundamental-d1-domain-writes`, including the helper-mediated mutation registry raw-write regression.
 - [ ] **D2 — Single `isQueryShapeWrapper`; the `schema.ts` copy drops `table-row` (secret-projection bug).** (S · med)
   - Problem: triplicated at `static.ts:366`, `static/query-shapes.ts:2797`, `static/schema.ts:111`. The schema.ts copy
     (116-120) omits `shape.kind === 'table-row'`, so `secretQueryShape` (schema.ts:103) wraps a table-row secret whole
@@ -154,7 +162,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
   - Fix: one shared AST-util (superset unless a phase demonstrably needs less); pin with fixpoint/golden tests first.
 - [ ] **S1 — Shared `guardFailureToResult`; four copies disagree on `auth`.** (S · low)
   - Problem: `route.ts:664` (`routeGuardFailure`, incl. `auth`) + `query.ts:431` (incl. `auth`) vs `mutation.ts:293`
-    + `mutation.ts:450` (omit `auth`) → can drop the unauthenticated→login redirect / `retryAfter` on the mutation surface.
+    plus `mutation.ts:450` (omit `auth`) → can drop the unauthenticated→login redirect / `retryAfter` on the mutation surface.
   - Decision: determine whether the mutation paths' missing `auth` is intended (SPEC §9.5) before unifying; move
     `routeGuardFailure` into `guards.ts` as the single mapper; call from all four.
 - [ ] **S3 — Collapse the double CSRF→parse→guard in the mutation lifecycle.** (M · med)
@@ -178,7 +186,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
 - [ ] **S2 — De-duplicate the Node⇄Web HTTP adapter (Set-Cookie parity).** (M · med)
   - Problem: live `node.ts:344` (with `getSetCookie()` splitting + HTTP/2 pseudo-header rationale) vs the string-emitted
     copy in `nodeAdapterRuntimeSource()` `build.ts:606` (already diverged: `build.ts:713` guards `typeof
-    headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev.ts imports node.ts) and every prod
+headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev.ts imports node.ts) and every prod
     preset run different physical copies of the header bridge.
   - Fix: generate the emitted adapter from the same source, or add a parity test asserting Set-Cookie + pseudo-header agreement.
 - [ ] **G2 + J.3 — SQL oracle + validate J (DEC3, M12).**
@@ -310,7 +318,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
   - [ ] **C4** generic `mergeFactsByKey` for 7 byte-identical app-graph merge triplets (`app-graph.ts:164/194/215/236/316/351/361`, each with an unenforced key-fn/comparator, e.g. `mergeAccessExplainFacts` dedups on `kind\0name` but sorts on `kind,name,decision`). S · low.
   - [ ] **C5** move byte-identical compiler micro-helpers to `shared.ts` — `uniqueSorted` (app-graph.ts:984, css.ts:554, package-styles.ts:283, route-pages.ts:380), `sanitizeIdentifier`/no-op `outputWriteFact` (style.ts + lower/structural-jsx.ts), three kebab variants. S · low.
   - [ ] **C6** promote the rich `propertyAccessPath` (`parse.ts:708-745`: element access, zero-arg call receivers, optional chaining) as shared; retire the simplified `route-pages.ts:1034` / `query-binding.ts:146` copies (route/query-key facts diverge for accessor/call/optional forms). M · med.
-  - [ ] **T3** one CLI arg-parsing framework: express check/audit/explain as `CommandArgvSpec`s (`graph-output.ts:1261` `parseFlaggedArgs` diverges from `commands-manifest.ts:708` `parseCommandArgv` on `--flag=value`/missing-value/unknown-option); delete `parseFlaggedArgs`. M · med. *(precedes T6)*
+  - [ ] **T3** one CLI arg-parsing framework: express check/audit/explain as `CommandArgvSpec`s (`graph-output.ts:1261` `parseFlaggedArgs` diverges from `commands-manifest.ts:708` `parseCommandArgv` on `--flag=value`/missing-value/unknown-option); delete `parseFlaggedArgs`. M · med. _(precedes T6)_
   - [ ] **T4** shared `commandArgvError(name,error,usage)` + `requireSinglePositional(...)` (`build-export.ts:153,226` byte-identical; `compile.ts:587-822` repeats the mapper 7×). M · low.
   - [ ] **T5** shared `findNearestFile` + `readJsonRecord` (three drifted walk-ups: `build-export.ts:918` stops at `stopDir`, `compile.ts:416` to root, `build-export.ts:1556` to cwd; ~6 JSON idiom copies). S · low.
   - [ ] **T7** tightly-scoped `inline-loader-build.ts` cleanup: extract the ~80-entry line-array emission (`:1215`) into a named-parts builder; merge the readable/minified trusted-types assertions (`:1560,:1590`). Do NOT touch the `String.raw` installer (`:113-1042`) — byte-exact artifact parity. M · high (gate on `check:inline-loader` before/after).

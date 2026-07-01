@@ -272,6 +272,12 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('await client.exec(SCHEMA_DDL)');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('void client.exec');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const ready = initializeAppDb(client);\n  const db = drizzle({ client });',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'readonlyDb(db).exec(SCHEMA_DDL)',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
@@ -524,6 +530,12 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("from 'drizzle-orm/better-sqlite3'");
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'client.exec(SCHEMA_DDL);\n  client.exec(SEED_CONTACTS);\n  const db = drizzle({ client, schema });',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'readonlyDb(db).exec(SCHEMA_DDL)',
+    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'return { db, readonlyDb: readonlyDb(db), ready: Promise.resolve() }',
     );
