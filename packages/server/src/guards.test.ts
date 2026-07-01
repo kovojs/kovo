@@ -639,8 +639,24 @@ describe('server guard and session primitives', () => {
   it('rejects anonymous default-scoped rate limiting without an explicit key', () => {
     const guard = guards.rateLimit<{ session?: { id?: string } }>({ max: 5 });
 
-    expect(() => guard({})).toThrow(/cannot derive a per-client key/);
-    expect(() => guard({ session: {} })).toThrow(/cannot derive a per-client key/);
+    expect(() => guard({})).toThrow(/cannot derive a proven per-principal key/);
+    expect(() => guard({ session: {} })).toThrow(/cannot derive a proven per-principal key/);
+  });
+
+  it('rejects unresolved session principals instead of sharing an implicit unknown bucket', () => {
+    const guard = guards.rateLimit<{
+      session?: { id?: string; user?: { id?: string } | null } | null;
+    }>({ max: 5, per: 'session' });
+
+    expect(() => guard({ session: { id: 'unknown' } })).toThrow(
+      /cannot derive a proven per-principal key/,
+    );
+    expect(() => guard({ session: { user: { id: 'anonymous' } } })).toThrow(
+      /cannot derive a proven per-principal key/,
+    );
+    expect(() => guard({ session: { id: ' user-1 ' } })).toThrow(
+      /cannot derive a proven per-principal key/,
+    );
   });
 
   it('allows anonymous rate limiting when an explicit key or per:global is supplied', () => {
@@ -658,12 +674,17 @@ describe('server guard and session primitives', () => {
     expect(global({})).toMatchObject({ kind: 'rateLimited' });
   });
 
-  it('keys default-scoped rate limiting by the authenticated session id', () => {
-    const guard = guards.rateLimit<{ session?: { id?: string } }>({ max: 1, per: 'session' });
+  it('keys default-scoped rate limiting by the proven session principal', () => {
+    const guard = guards.rateLimit<{
+      session?: { id?: string; user?: { id?: string } | null };
+    }>({ max: 1, per: 'session' });
 
     expect(guard({ session: { id: 's1' } })).toBe(true);
     expect(guard({ session: { id: 's1' } })).toMatchObject({ kind: 'rateLimited' });
     expect(guard({ session: { id: 's2' } })).toBe(true);
+    expect(guard({ session: { user: { id: 'u1' } } })).toBe(true);
+    expect(guard({ session: { user: { id: 'u1' } } })).toMatchObject({ kind: 'rateLimited' });
+    expect(guard({ session: { user: { id: 'u2' } } })).toBe(true);
   });
 
   it('evicts oldest rate-limit keys when the key cap is reached', async () => {
