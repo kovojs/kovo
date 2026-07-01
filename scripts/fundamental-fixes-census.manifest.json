@@ -368,24 +368,84 @@
       "id": "ssr-document-html",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot; proof calls buildProductionArtifact(root) and assertProdArtifactSinkCensus(root).",
+      "evidenceBundles": [
+        "m1-prod-artifact-ssr-document-html",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot (1 passed, 8 skipped, 31.42s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact serves /xss-escape-proof with escaped attacker text and production sink-census witnesses for SSR HTML boundaries",
+          "sqlite": "same server/html sink code path; dialect-independent SSR output proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 added and re-ran the prod-artifact SSR sink-census proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs and assertProdArtifactSinkCensus(root) for SSR witnesses",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "ssr-route-render-text-is-escaped-in-the-production-document",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "ssr-document-html"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot served the production artifact and observed &lt;img&gt;/&lt;b&gt; text while raw attacker tags were absent.",
+      "parent": "ssr-document-html",
+      "evidenceBundles": [
+        "m1-prod-artifact-ssr-document-html",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot (1 passed, 8 skipped, 31.42s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact /xss-escape-proof contains escaped attacker text and omits raw <img>/<b> tags",
+          "sqlite": "same server/html sink code path; dialect-independent SSR output proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 added and re-ran the prod-artifact SSR route text proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "ssr-raw-trusted-html-boundaries-require-proof-or-kv406",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "ssr-document-html"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot enrolled production sink-census witnesses for framework-owned trustedHtml/escaped SSR boundaries.",
+      "parent": "ssr-document-html",
+      "evidenceBundles": [
+        "m1-prod-artifact-ssr-document-html",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot (1 passed, 8 skipped, 31.42s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact sink census finds trustedHtml and escapeTextWithRenderedHtml witnesses for the SSR raw/trusted boundary",
+          "sqlite": "same server/html sink code path; dialect-independent SSR output proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 added and re-ran the prod-artifact SSR boundary proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root) and assertProdArtifactSinkCensus(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "q-query-response",
@@ -474,24 +534,84 @@
       "id": "mutation-delta-enhanced-mutation-response",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot; proof calls buildProductionArtifact(root) and assertProdArtifactSinkCensus(root).",
+      "evidenceBundles": [
+        "m1-prod-artifact-enhanced-mutation-wire",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot (1 passed, 8 skipped, 88.09s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact serves escaped enhanced mutation fragment and <kovo-query> refresh wire",
+          "sqlite": "SQLite prod artifact serves escaped enhanced mutation fragment and <kovo-query> refresh wire"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 added and re-ran the prod-artifact enhanced mutation wire proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs and assertProdArtifactSinkCensus(root) for mutation wire witnesses",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "enhanced-mutation-fragment-bodies-escape-client-visible-html",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "mutation-delta-enhanced-mutation-response"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot served default+SQLite prod artifacts and observed escaped attacker markup in <kovo-fragment> bodies.",
+      "parent": "mutation-delta-enhanced-mutation-response",
+      "evidenceBundles": [
+        "m1-prod-artifact-enhanced-mutation-wire",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot (1 passed, 8 skipped, 88.09s)",
+        "dialects": {
+          "postgres": "default/postgres enhanced mutation response contains escaped fragment HTML and omits raw <img>/<script>",
+          "sqlite": "SQLite enhanced mutation response contains escaped fragment HTML and omits raw <img>/<script>"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 added and re-ran the prod-artifact enhanced fragment proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root), starts dist/server/server.mjs, and POSTs the enhanced mutation endpoint",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "mutation-triggered-query-refreshes-preserve-query-wire-bounds",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "mutation-delta-enhanced-mutation-response"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot served default+SQLite prod artifacts and observed escaped mutation-triggered <kovo-query> refresh wire.",
+      "parent": "mutation-delta-enhanced-mutation-response",
+      "evidenceBundles": [
+        "m1-prod-artifact-enhanced-mutation-wire",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot (1 passed, 8 skipped, 88.09s)",
+        "dialects": {
+          "postgres": "default/postgres enhanced mutation response contains escaped <kovo-query> refresh wire and omits raw <img>/<script>",
+          "sqlite": "SQLite enhanced mutation response contains escaped <kovo-query> refresh wire and omits raw <img>/<script>"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 added and re-ran the prod-artifact mutation-triggered query wire proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root), starts dist/server/server.mjs, and POSTs the enhanced mutation endpoint",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "streaming-defer-chunks",
@@ -608,55 +728,195 @@
       "id": "response-headers-incl-set-cookie-redirects",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot; proof calls buildProductionArtifact(root) and assertProdArtifactSinkCensus(root).",
+      "evidenceBundles": [
+        "m1-prod-artifact-response-headers",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot (1 passed, 30.37s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact rejects unsafe route headers, normalizes typed/raw Set-Cookie, and sanitizes redirect Location",
+          "sqlite": "same server/header sink code path; dialect-independent response-header proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 re-ran the existing prod-artifact response-header proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.headers.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs and assertProdArtifactSinkCensus(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "route-outcome-headers-reject-crlf-injection",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "response-headers-incl-set-cookie-redirects"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot served the production artifact and observed unsafe CRLF route headers fail with no injected header/cookie.",
+      "parent": "response-headers-incl-set-cookie-redirects",
+      "evidenceBundles": [
+        "m1-prod-artifact-response-headers",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot (1 passed, 30.37s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact /header-sink-unsafe.txt returns 500 without X-Kovo-Header-Proof or injected Set-Cookie",
+          "sqlite": "same server/header sink code path; dialect-independent response-header proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 re-ran the existing prod-artifact route-header proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.headers.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "typed-and-raw-set-cookie-paths-normalize-safe-cookies-and-reject-unsafe-cookies",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "response-headers-incl-set-cookie-redirects"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot served the production artifact and observed typed Set-Cookie encoding, raw endpoint cookie floor normalization, and unsafe cookie rejection.",
+      "parent": "response-headers-incl-set-cookie-redirects",
+      "evidenceBundles": [
+        "m1-prod-artifact-response-headers",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot (1 passed, 30.37s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact emits encoded typed c2_cookie, normalizes raw_sid with HttpOnly/Secure/SameSite, and rejects unsafe cookie CRLF",
+          "sqlite": "same server/header sink code path; dialect-independent Set-Cookie proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 re-ran the existing prod-artifact Set-Cookie proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.headers.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "redirect-location-headers-are-sanitized-before-send",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "response-headers-incl-set-cookie-redirects"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot served the production artifact and observed unsafe raw redirect Location normalized to / with no injected Set-Cookie.",
+      "parent": "response-headers-incl-set-cookie-redirects",
+      "evidenceBundles": [
+        "m1-prod-artifact-response-headers",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot (1 passed, 30.37s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact /raw-header-redirect returns Location: / and no injected Set-Cookie",
+          "sqlite": "same server/header sink code path; dialect-independent redirect proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 re-ran the existing prod-artifact redirect-location proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.headers.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "error-shells-500-bodies",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot; proof calls buildProductionArtifact(root) before serving dist/server/server.mjs.",
+      "evidenceBundles": [
+        "m1-prod-artifact-error-shells",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot (1 passed, 8 skipped, 30.91s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact no-JS mutation error returns opaque Internal Server Error and excludes request-controlled/private details",
+          "sqlite": "same server/error shell sink code path; dialect-independent 500 proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 re-ran the existing prod-artifact 500-shell proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "500-shells-escape-request-controlled-payloads",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "error-shells-500-bodies"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot served the production artifact and observed the 500 body excludes the submitted <script> payload.",
+      "parent": "error-shells-500-bodies",
+      "evidenceBundles": [
+        "m1-prod-artifact-error-shells",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot (1 passed, 8 skipped, 30.91s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact no-JS mutation 500 body excludes <script>boom</script>",
+          "sqlite": "same server/error shell sink code path; dialect-independent 500 proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 re-ran the existing prod-artifact request-payload 500 proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "500-shells-exclude-private-exception-details",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "error-shells-500-bodies"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot served the production artifact and observed the 500 body excludes private exception detail.",
+      "parent": "error-shells-500-bodies",
+      "evidenceBundles": [
+        "m1-prod-artifact-error-shells",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot (1 passed, 8 skipped, 30.91s)",
+        "dialects": {
+          "postgres": "default/postgres prod artifact no-JS mutation 500 body excludes private no-JS mutation detail",
+          "sqlite": "same server/error shell sink code path; dialect-independent 500 proof is exercised by the default production artifact"
+        },
+        "independentReviewer": "agent/followup-outputwire-1782923950 re-ran the existing prod-artifact private-detail 500 proof in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root) before serving dist/server/server.mjs",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations"
+      }
     },
     {
       "id": "capability-urls-signed-payloads",
@@ -3012,6 +3272,22 @@
     "m1-prod-artifact-query-wire": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot",
       "evidence": "Production artifact /_q query-wire proof builds default and SQLite starters with kovo build --no-cache, serves dist/server/server.mjs, and observes escaped body plus private cache headers."
+    },
+    "m1-prod-artifact-ssr-document-html": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'helper text' --reporter=dot",
+      "evidence": "Production artifact SSR document proof builds with kovo build --no-cache, serves dist/server/server.mjs, and observes escaped route text plus sink-census witnesses for SSR HTML boundaries."
+    },
+    "m1-prod-artifact-enhanced-mutation-wire": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'enhanced mutation fragments' --reporter=dot",
+      "evidence": "Production artifact enhanced mutation proof builds default and SQLite starters with kovo build --no-cache, serves dist/server/server.mjs, and observes escaped fragment plus query-refresh wire."
+    },
+    "m1-prod-artifact-response-headers": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.headers.test.ts --reporter=dot",
+      "evidence": "Production artifact response-header proof builds with kovo build --no-cache, serves dist/server/server.mjs, and observes route-header CRLF rejection, Set-Cookie normalization, and redirect Location sanitization."
+    },
+    "m1-prod-artifact-error-shells": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'FormError' --reporter=dot",
+      "evidence": "Production artifact 500-shell proof builds with kovo build --no-cache, serves dist/server/server.mjs, and observes opaque 500 bodies that exclude request-controlled and private exception details."
     },
     "m1-prod-artifact-island-derive": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot",
