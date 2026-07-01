@@ -42,9 +42,10 @@ the IR/fact-store migration in C1.
     and monitor CI.
 
 - [ ] **Do not duplicate active worker work.**
-  - Active B worker: `019f1bdd-fc74-78e1-9fe2-e26e138a629d` owns identity hardening.
-  - Active D worker: `019f1bde-43ab-7080-86a9-042631d99076` owns mutation query warning/limit parity.
-  - No active F worker as of this compaction; F1 below is ready to delegate.
+  - Integrated B worker: `019f1bdd-fc74-78e1-9fe2-e26e138a629d` as `dcb8202ed`.
+  - Integrated D worker: `019f1bde-43ab-7080-86a9-042631d99076` as `552865d74`.
+  - Active F1 worker: `019f1be8-5499-76c2-9d40-1ac56bd6d269` owns starter DB encapsulation.
+  - Active C1 worker: `019f1bec-9c84-7a02-9094-ff29e559e1b9` owns task/webhook handler write-sink facts.
 
 ## Active Worker Slices
 
@@ -100,7 +101,7 @@ packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts`; `
     `pnpm run check:vp`.
 
 - [ ] **F1. Encapsulate starter runtime DB so `src/db.ts` exposes only read-safe app DB values.**
-  - Ready to delegate; no active worker at compaction time.
+  - Owner: worker `019f1be8-5499-76c2-9d40-1ac56bd6d269`.
   - Files:
     `packages/create-kovo/templates/src/db.ts`,
     `packages/create-kovo/templates/src/db.sqlite.ts`,
