@@ -23,6 +23,7 @@ import { isSchemaValidationError } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { reserveReplayBeforeRun } from './replay.js';
+import { parseUntrustedJsonBodyBytes } from './untrusted-request-body.js';
 
 const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
 
@@ -778,13 +779,8 @@ async function verifyWebhook(
 function parseWebhookBody(
   rawBody: Uint8Array,
 ): { ok: true; value: unknown } | { message: string; ok: false } {
-  if (rawBody.byteLength === 0) return { ok: true, value: {} };
-
-  try {
-    return { ok: true, value: JSON.parse(new TextDecoder().decode(rawBody)) };
-  } catch {
-    return { message: 'Invalid JSON webhook body', ok: false };
-  }
+  const result = parseUntrustedJsonBodyBytes(rawBody);
+  return result.ok ? result : { message: 'Invalid JSON webhook body', ok: false };
 }
 
 async function parseLooseWebhookInput<InputSchema extends Schema<unknown>>(

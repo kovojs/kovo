@@ -33,6 +33,10 @@ export const defaultRootedFileServeSinkFiles = ['packages/server/src/file.ts'];
 export const defaultDynamicCodeExecutionSinkFiles = [];
 
 export const defaultDeserializationRoots = ['packages/server/src'];
+export const defaultRequestBodyParserChokeFiles = [
+  'packages/server/src/app-load-shed.ts',
+  'packages/server/src/untrusted-request-body.ts',
+];
 
 export const defaultLogChannelRoots = ['packages/server/src'];
 
@@ -153,6 +157,9 @@ export function checkSinkPolicyGate(options = {}) {
     options.dynamicCodeExecutionSinkFiles ?? defaultDynamicCodeExecutionSinkFiles;
   const deserializationFiles =
     options.deserializationFiles ?? collectSourceFiles(root, defaultDeserializationRoots);
+  const requestBodyParserChokeFileSet = new Set(
+    options.requestBodyParserChokeFiles ?? defaultRequestBodyParserChokeFiles,
+  );
   const logChannelRoots = options.logChannelRoots ?? defaultLogChannelRoots;
   const logChannelNeutralizerFiles =
     options.logChannelNeutralizerFiles ?? defaultLogChannelNeutralizerFiles;
@@ -310,12 +317,17 @@ export function checkSinkPolicyGate(options = {}) {
   }
 
   for (const filePath of deserializationFiles) {
-    if (commandExecutionFiles.includes(filePath)) continue;
     if (!exists(filePath)) {
       findings.push(`${filePath}: deserialization gate input is missing`);
       continue;
     }
-    findings.push(...deserializationSinkFindings(filePath, readText(filePath)));
+    const text = readText(filePath);
+    findings.push(...deserializationSinkFindings(filePath, text));
+    findings.push(
+      ...requestBodyParserChokeFindings(filePath, text, {
+        allowedChokeFile: requestBodyParserChokeFileSet.has(filePath),
+      }),
+    );
   }
 
   for (const filePath of logChannelFiles) {
@@ -477,6 +489,9 @@ export function sqlSafetyInvariantFindings(filePath, text) {
     ) {
       findings.push(`${filePath}: kovo check must fail on error-severity SQL-safety diagnostics`);
     }
+  }
+
+  if (filePath.endsWith('packages/cli/src/graph-explain-format.ts')) {
     if (
       !/\bconst\s+severity\s*=\s*diagnostic\s*\.\s*severity\s*\?\?\s*definition\?\s*\.\s*severity\s*\?\?\s*['"]error['"]/.test(
         source,
@@ -1411,6 +1426,35 @@ export function deserializationSinkFindings(filePath, text) {
         );
       }
     }
+  }
+
+  return dedupe(findings);
+}
+
+export function requestBodyParserChokeFindings(filePath, text, options = {}) {
+  if (options.allowedChokeFile === true) return [];
+
+  const source = stripComments(text);
+  const findings = [];
+
+  const requestReceiver = String.raw`(?:request|req|rawRequest|endpointRequest|mutationRequest|authRequest|target)`;
+  if (
+    new RegExp(String.raw`\b${requestReceiver}\s*\.\s*(?:json|formData)\s*\(`).test(source) ||
+    /\bnew\s+Request\s*\([^)]*\)\s*\.\s*formData\s*\(/.test(source)
+  ) {
+    findings.push(
+      `${filePath}: KV442 request body parser bypass; route JSON/form body parsing through packages/server/src/untrusted-request-body.ts so runtime inputs hit one schema-bounded choke`,
+    );
+  }
+
+  if (
+    /\bJSON\s*\.\s*parse\s*\(\s*new\s+TextDecoder\s*\([^)]*\)\s*\.\s*decode\s*\(\s*(?:rawBody|requestBody|bodyBytes|body)\s*\)/.test(
+      source,
+    )
+  ) {
+    findings.push(
+      `${filePath}: KV442 raw request body JSON parser bypass; route raw-byte JSON decode through packages/server/src/untrusted-request-body.ts before schema validation`,
+    );
   }
 
   return dedupe(findings);

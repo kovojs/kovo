@@ -314,7 +314,8 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
 - [ ] **Q.1 egress / SSRF** — choke DEC6; destination allowlist; census section.
 - [ ] **Q.2 filesystem** — single fs-access boundary; path-confinement gate.
 - [ ] **Q.3 subprocess / command execution** — single exec boundary; default-deny.
-- [ ] **Q.4 deserialization** — the request-body parser is the choke; schema-bounded shapes only.
+- [x] **Q.4 deserialization** — the request-body parser is the choke; schema-bounded shapes only.
+  - Evidence: `pnpm exec vitest --run packages/server/src/untrusted-request-body.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/webhook.test.ts scripts/check-sink-policy-gate.test.mjs`, `pnpm run check:sink-policy`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after raw webhook JSON decoding moved through `untrusted-request-body.ts` and request-body parser canaries were added to the sink-policy gate.
 - [ ] **Q.5 secret-material lifecycle** — `console.*` / logger / `reportServerError` / `createDurableTaskStatus` /
       at-rest columns scrub secret-tagged values via the DEC5 provenance tag.
 - [ ] **Q.6 auth-decision points** — guard eval / `verifyCapability` / session provenance fail closed on an unresolved principal.
@@ -358,7 +359,8 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     - Evidence: Same focused headless-ui Vitest/VP/API/gallery-browser/diff checks listed for U1 passed after routing combobox/autocomplete/select/dropdown/context/menubar trigger ARIA and disabled attributes through `triggerAttributes`.
   - [x] **U6** `createCollectionAdapter({getItems,projector})` factory retiring the six-fold typeahead/move + option/result scaffolding (e.g. `dropdown-menu.ts:774-795` vs `select.ts:802-818`); home for U1/U2/U4. L · med.
     - Evidence: Same focused headless-ui Vitest/VP/API/gallery-browser/diff checks listed for U1 passed after moving combobox/autocomplete/select/dropdown/context/menubar movement/typeahead projection through `createCollectionAdapter`.
-  - [ ] **U7** delete or document the dead `lib/positioning-fallback.ts` (exported via `internal.ts:9,43`, consumed by nothing but its own test; primitives use CSS anchor positioning). Run `audit-public-api` first. S · low.
+  - [x] **U7** delete or document the dead `lib/positioning-fallback.ts` (exported via `internal.ts:9,43`, consumed by nothing but its own test; primitives use CSS anchor positioning). Run `audit-public-api` first. S · low.
+    - Evidence: targeted API audit confirmed `positioning-fallback` was internal-only and unused outside its own test; `pnpm run check:api-surface`, focused headless-ui Vitest, touched-file `vp check`, reference scan, and `git diff --check` passed after deleting the dead module and internal exports.
 
 ## Verification map
 

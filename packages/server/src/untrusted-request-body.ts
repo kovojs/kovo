@@ -9,6 +9,10 @@ export type UntrustedRequestBodyResult =
   | { carrier: UntrustedRequestBodyCarrier; ok: true; value: unknown }
   | { ok: false; reason: UntrustedRequestBodyFailureReason };
 
+export type UntrustedJsonBodyResult =
+  | { ok: true; value: unknown }
+  | { ok: false; reason: 'invalid-json' };
+
 /**
  * SPEC §9.2: attacker-controlled mutation/endpoint bodies are expected client
  * input. Parse failures return typed outcomes so callers can choose their local
@@ -36,6 +40,21 @@ export async function readUntrustedRequestBody(
   }
 
   return { ok: false, reason: 'unsupported-content-type' };
+}
+
+/**
+ * SPEC §9.1: webhook verification owns raw-byte capture, but JSON decode still
+ * routes through the same untrusted-body parser choke as browser mutation and
+ * endpoint CSRF bodies.
+ */
+export function parseUntrustedJsonBodyBytes(rawBody: Uint8Array): UntrustedJsonBodyResult {
+  if (rawBody.byteLength === 0) return { ok: true, value: {} };
+
+  try {
+    return { ok: true, value: JSON.parse(new TextDecoder().decode(rawBody)) };
+  } catch {
+    return { ok: false, reason: 'invalid-json' };
+  }
 }
 
 /**
