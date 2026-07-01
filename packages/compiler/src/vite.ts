@@ -770,7 +770,8 @@ function compileViteComponentModule(
   });
 }
 
-function viteFrameworkIdentityFiles(
+/** @internal Collect project sibling files needed by framework-identity resolution. */
+export function viteFrameworkIdentityFiles(
   root: string,
   fileName: string,
   source: string,

@@ -1317,6 +1317,42 @@ export default createApp({
     }
   }, 90_000);
 
+  it('resolves local trustedHtml barrels during production build preflight', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-trustedhtml-barrel-'));
+    const appPath = join(root, 'app.ts');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
+      writeFileSync(
+        join(root, 'safe-html.ts'),
+        "export { trustedHtml } from '@kovojs/browser';\n",
+        'utf8',
+      );
+      writeFileSync(join(root, 'promo.tsx'), trustedHtmlBarrelPreflightComponentSource(), 'utf8');
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toMatch(/ERROR KV426 promo\.tsx:\d+:\d+/);
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
   it('surfaces fatal optimistic coverage gaps as build errors', async () => {
     const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fatal-kv310-'));
     const appPath = join(root, 'app.mjs');
@@ -2987,6 +3023,39 @@ const paymentWebhook = webhook('/webhooks/payment', {
 
 export default createApp({
   endpoints: [paymentWebhook],
+});
+`;
+}
+
+function trustedHtmlBarrelPreflightAppModuleSource(): string {
+  return `
+import { createApp, publicAccess, route, trustedHtml } from '@kovojs/server';
+
+export default createApp({
+  routes: [
+    route('/', {
+      access: publicAccess('trustedHtml barrel build preflight fixture'),
+      page: () => trustedHtml('<main>Home</main>', 'trustedHtml barrel build preflight fixture'),
+    }),
+  ],
+});
+`;
+}
+
+function trustedHtmlBarrelPreflightComponentSource(): string {
+  return `
+import { component, publicAccess, query, s } from '@kovojs/server';
+import { trustedHtml } from './safe-html';
+
+export const postQuery = query('post', {
+  access: publicAccess('trustedHtml barrel build preflight fixture'),
+  load: () => ({ body: '<img src=x onerror=alert(1)>' }),
+  output: s.object({ body: s.string() }),
+});
+
+export const Promo = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{trustedHtml(post.body)}</article>,
 });
 `;
 }

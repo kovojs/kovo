@@ -165,8 +165,12 @@ to change. Do not open a broad audit before the concrete items are implemented, 
     `kovo explain`; the expression-kind table has no blank/silent-clean cell; M1–M3 green.
 
 - [ ] **E2. Harness fidelity (the concrete implementation of M2).** Closes the divergence behind `bugz-25` B7.
-  - [ ] Register project sibling files with the resolver in the real Vite/compile transform + build driver so
+  - [x] Register project sibling files with the resolver in the real Vite/compile transform + build driver so
         `resolveProjectSourceFile` runs in production (today it is fed only by conformance `extraFiles`).
+        Evidence: `packages/cli/src/commands/build-export.ts` now feeds
+        `viteFrameworkIdentityFiles(...)` into build-preflight `compileComponentModule(...)`;
+        `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts -t "resolves local trustedHtml barrels" --reporter=dot`
+        proves a real `kovo build --no-cache` catches a local `export { trustedHtml }` barrel with KV426.
   - [ ] Route the metamorphic harness through the SAME production build/resolve path — a green metamorphic
         result MUST imply a green production result.
   - [ ] Add the M2 lint/gate: any security test not exercising the real build path fails CI.
