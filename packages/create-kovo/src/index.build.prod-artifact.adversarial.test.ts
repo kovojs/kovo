@@ -24,13 +24,13 @@ describe('create-kovo starter (build integration: adversarial production artifac
     (_label: string, dialect: CreateKovoDialect | undefined) => {
       withProject(`create-kovo-m1-storage-${_label}-red-`, dialect, (root) => {
         addStorageQueryWriteProof(root);
-        expectBuildFailure(root, ['KV433', 'storage-write-query', 'operation=put']);
+        expectStorageWriteBuildFailure(root);
       });
 
       withProject(`create-kovo-m1-storage-${_label}-flip-`, dialect, (root) => {
         buildProductionArtifact(root);
         addStorageQueryWriteProof(root);
-        expectBuildFailure(root, ['KV433', 'storage-write-query', 'operation=put']);
+        expectStorageWriteBuildFailure(root);
       });
     },
     240_000,
@@ -42,6 +42,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
       expectBuildFailure(root, [
         'KV426',
         'trustedUrl() sends query-derived data',
+        'renderedHtml() sends query-derived data',
         'trustedHtml() sends request-derived data',
       ]);
     });
@@ -57,6 +58,7 @@ describe('create-kovo starter (build integration: adversarial production artifac
       expectBuildFailure(root, [
         'KV426',
         'trustedUrl() sends query-derived data',
+        'renderedHtml() sends query-derived data',
         'trustedHtml() sends request-derived data',
       ]);
     });
@@ -113,4 +115,17 @@ function expectBuildFailure(root: string, expectedOutput: readonly string[]): vo
       expect(output).toContain(expected);
     }
   }
+}
+
+function expectStorageWriteBuildFailure(root: string): void {
+  expectBuildFailure(root, [
+    'KV433',
+    'storage-put-write-query',
+    'storage-computed-write-query',
+    'storage-file-store-write-query',
+    'storage-upload-write-query',
+    'operation=put',
+    'operation=store',
+    'operation=upload',
+  ]);
 }
