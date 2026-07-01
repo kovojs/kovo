@@ -1001,6 +1001,75 @@ export default async function handler(request) {
     }
   });
 
+  it('scrubs secret-tagged material from generated node server error logs', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-secret-errors-'));
+    const originalConsoleError = console.error;
+    const consoleErrors: unknown[][] = [];
+
+    try {
+      const build = await writeKovoNeutralBuild({
+        app: createApp({
+          routes: [
+            route('/boom', {
+              page() {
+                return renderedHtml('<main>Boom</main>');
+              },
+            }),
+          ],
+        }),
+        outDir: join(root, '.kovo'),
+        serverHandlerSource: `
+export default async function handler() {
+  const token = {
+    [Symbol.toStringTag]: 'Secret',
+    toJSON() { return '[secret]'; },
+    toString() { return '[secret]'; },
+  };
+  Object.defineProperty(token, 'raw', { value: 'sk_live_q5_generated_node', enumerable: false });
+  throw { reason: 'provider failed', token };
+}
+`,
+      });
+      const nodeOutDir = join(root, 'node-output');
+
+      await node({ dockerfile: false }).emit!(build, {
+        declaredEnv: [],
+        log() {},
+        outDir: nodeOutDir,
+        readNeutral() {
+          return build;
+        },
+      });
+
+      const serverModule = (await import(pathToFileURL(join(nodeOutDir, 'server.mjs')).href)) as {
+        createKovoNodeServer(): Server;
+      };
+      const server = serverModule.createKovoNodeServer();
+      const baseUrl = await listen(server);
+
+      console.error = (...args: unknown[]) => {
+        consoleErrors.push(args);
+      };
+
+      try {
+        const response = await fetch(`${baseUrl}/boom`, { method: 'POST' });
+        expect(response.status).toBe(500);
+      } finally {
+        console.error = originalConsoleError;
+        await close(server);
+      }
+
+      expect(consoleErrors).toHaveLength(1);
+      expect(consoleErrors[0]?.[1]).toMatchObject({
+        error: { reason: 'provider failed', token: '[secret]' },
+      });
+      expect(JSON.stringify(consoleErrors)).not.toContain('sk_live_q5_generated_node');
+    } finally {
+      console.error = originalConsoleError;
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('emits an installable Dockerfile and runtime package for the node preset by default', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-node-preset-dockerfile-'));
 

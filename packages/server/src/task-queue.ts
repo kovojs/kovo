@@ -5,6 +5,7 @@ import type {
   DurableTaskStatusSqlResult,
   DurableTaskStatusSqlStatement,
 } from './task-observability.js';
+import { scrubSecretLifecycleValue } from './logging.js';
 import { frameworkManagedDbRawTarget } from './sql-safe-handle.js';
 
 export type DurableTaskJobStatus =
@@ -226,13 +227,15 @@ export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
     const now = new Date();
     const runAt = input.runAt ?? now;
     const id = createJobId();
-    const argsJson = canonicalJsonStringify(input.args, { root: 'args' });
+    const argsJson = canonicalJsonStringify(scrubSecretLifecycleValue(input.args), {
+      root: 'args',
+    });
     const coalesce = input.coalesce ?? 'debounce';
     const lineage = input.lineage ?? id;
     const generation = normalizeNonNegativeInteger(input.generation, 0);
     const priority = normalizePriority(input.priority);
     const status = input.status ?? 'ready';
-    const lastError = input.lastError ?? null;
+    const lastError = input.lastError === undefined ? null : scrubErrorMessage(input.lastError);
 
     if (input.key !== undefined && coalesce === 'throttle') {
       const result = await this.executor.execute<{ id: string }>(
@@ -363,7 +366,9 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
   async enqueue(input: DurableTaskEnqueueInput): Promise<TaskHandle> {
     const now = new Date();
     const runAt = input.runAt ?? now;
-    const args = assertAndCloneJsonValue(input.args, { root: 'args' });
+    const args = assertAndCloneJsonValue(scrubSecretLifecycleValue(input.args), {
+      root: 'args',
+    });
     const coalesce = input.coalesce ?? 'debounce';
     const id = createJobId();
     const lineage = input.lineage ?? id;
@@ -399,7 +404,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
       updatedAt: now,
     };
     if (input.key !== undefined) job.key = input.key;
-    if (input.lastError !== undefined) job.lastError = input.lastError;
+    if (input.lastError !== undefined) job.lastError = scrubErrorMessage(input.lastError);
     this.jobs.set(id, job);
     return { id, task: input.task };
   }
@@ -481,7 +486,7 @@ export class MemoryDurableTaskQueue implements DurableTaskQueueStore {
     const normalized = normalizeFailureOptions(options);
     if (!leaseMatches(job, normalized)) return false;
     job.status = job.attempts >= normalized.maxAttempts ? 'dead' : 'ready';
-    job.lastError = errorMessage(error);
+    job.lastError = scrubErrorMessage(error);
     if (job.status === 'ready') {
       job.runAt = copyDate(normalized.retryAt ?? normalized.now);
     }
@@ -721,6 +726,10 @@ function createJobId(): string {
 
 function createLeaseToken(): string {
   return `lease_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function scrubErrorMessage(error: unknown): string {
+  return errorMessage(scrubSecretLifecycleValue(error));
 }
 
 function errorMessage(error: unknown): string {
