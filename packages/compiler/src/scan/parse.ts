@@ -711,6 +711,11 @@ function propertyAccessReceiverSegments(expression: ts.Expression): string[] | n
   const callReceiver = callExpressionReceiverSegments(expression);
   if (callReceiver) return callReceiver;
 
+  if (ts.isElementAccessExpression(expression)) {
+    const path = literalElementAccessPath(expression);
+    return path ? path.split('.') : null;
+  }
+
   if (!ts.isPropertyAccessExpression(expression)) return null;
 
   return propertyAccessPath(expression)?.split('.') ?? null;
@@ -724,7 +729,25 @@ function callExpressionReceiverSegments(expression: ts.Expression): string[] | n
     const receiver = propertyAccessPath(unwrapped.expression);
     return receiver ? [`${receiver}()`] : null;
   }
+  if (ts.isElementAccessExpression(unwrapped.expression)) {
+    const receiver = literalElementAccessPath(unwrapped.expression);
+    return receiver ? [`${receiver}()`] : null;
+  }
   return null;
+}
+
+function literalElementAccessPath(expression: ts.ElementAccessExpression): string | null {
+  const member = literalElementAccessMember(expression);
+  if (!member) return null;
+  const receiver = propertyAccessReceiverSegments(expression.expression);
+  if (!receiver) return null;
+  return [...receiver, member].join('.');
+}
+
+function literalElementAccessMember(expression: ts.ElementAccessExpression): string | undefined {
+  return ts.isStringLiteralLike(expression.argumentExpression)
+    ? expression.argumentExpression.text
+    : undefined;
 }
 
 /**

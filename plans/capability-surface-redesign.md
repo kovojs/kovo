@@ -90,6 +90,8 @@ preserving compatibility for a model that is hard to explain.
         `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test.ts -t "direct DB writes"`;
         `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts -t "fails task and webhook direct-write diagnostics carried by the build graph"`;
         `pnpm run check:api-surface`; `git diff --check`; `pnpm run check:vp`.
+        Regression close-out: focused CLI mutation write-sink tests passed, and the `direct-db-facts`
+        no-cache dogfood build now fails with KV330 for direct mutation handler writes.
   - [x] Move query loader write reachability onto canonical Drizzle facts carrying operation, target,
         provenance, span, and explicit KV406 unresolved state.
         Evidence: `pnpm exec vitest run packages/drizzle/src/index.toctou-readonly.test.ts packages/drizzle/src/static-analysis-context.test.ts`;

@@ -804,6 +804,12 @@ export function kovoCheck(
       );
     }
 
+    if (!hasStaticHandlerWriteSinkDiagnostic(graph.diagnostics ?? [])) {
+      for (const line of handlerWriteSinkCheckLines(graph.handlerWriteSinks ?? [])) {
+        pushFinding(line, true);
+      }
+    }
+
     for (const sink of graph.unregisteredSinks ?? []) {
       pushFinding(unregisteredSinkLine(sink), true);
     }
@@ -1530,6 +1536,77 @@ function handlerWriteSinkIsUnresolved(fact: CoreGraph.HandlerWriteSinkExplain): 
     fact.owner.value === 'UNRESOLVED' ||
     fact.canonicalTarget.identity === 'UNRESOLVED'
   );
+}
+
+function handlerWriteSinkCheckLines(facts: readonly CoreGraph.HandlerWriteSinkExplain[]): string[] {
+  return sortedHandlerWriteSinks(facts).map((fact) => {
+    const surface = fact.surface.toUpperCase();
+    if (handlerWriteSinkIsUnresolved(fact)) {
+      return [
+        'ERROR KV406',
+        `${surface} ${fact.owner.kind}:${fact.owner.value}`,
+        unresolvedHandlerWriteSinkMessage(fact.surface),
+        `operation=${fact.operationKind}`,
+        `target=${fact.canonicalTarget.identity}`,
+        `path=${fact.path}`,
+        `span=${fact.span.start}-${fact.span.end}`,
+      ].join(' ');
+    }
+    return [
+      'ERROR KV330',
+      `${surface} ${fact.owner.kind}:${fact.owner.value}`,
+      resolvedHandlerWriteSinkMessage(fact.surface),
+      `operation=${fact.operationKind}`,
+      `target=${fact.canonicalTarget.identity}`,
+      `path=${fact.path}`,
+      `span=${fact.span.start}-${fact.span.end}`,
+    ].join(' ');
+  });
+}
+
+function hasStaticHandlerWriteSinkDiagnostic(
+  diagnostics: readonly CoreGraph.StaticDiagnosticFact[],
+): boolean {
+  return diagnostics.some((diagnostic) => {
+    if (diagnostic.code === 'KV330') {
+      return handlerWriteSinkKv330Messages.has(
+        diagnostic.message ?? diagnosticDefinitions.KV330.message,
+      );
+    }
+    return (
+      diagnostic.code === 'KV406' &&
+      typeof diagnostic.message === 'string' &&
+      diagnostic.message.includes('Unresolved write sink in a')
+    );
+  });
+}
+
+const handlerWriteSinkKv330Messages = new Set([
+  diagnosticDefinitions.KV330.message,
+  'Direct db access in a task run body; route through ctx.runMutation.',
+  'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
+  'Direct db access in a webhook handler; route writes through an audited mutation/domain write.',
+]);
+
+function resolvedHandlerWriteSinkMessage(surface: CoreGraph.HandlerWriteSinkSurface): string {
+  if (surface === 'mutation') return diagnosticDefinitions.KV330.message;
+  if (surface === 'task')
+    return 'Direct db access in a task run body; route through ctx.runMutation.';
+  if (surface === 'endpoint') {
+    return 'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.';
+  }
+  return 'Direct db access in a webhook handler; route writes through an audited mutation/domain write.';
+}
+
+function unresolvedHandlerWriteSinkMessage(surface: CoreGraph.HandlerWriteSinkSurface): string {
+  if (surface === 'task')
+    return 'Unresolved write sink in a task run body; route through ctx.runMutation.';
+  if (surface === 'mutation')
+    return 'Unresolved write sink in a mutation handler; route through domain.';
+  if (surface === 'endpoint') {
+    return 'Unresolved write sink in an endpoint handler; route writes through an audited mutation/domain write.';
+  }
+  return 'Unresolved write sink in a webhook handler; route writes through an audited mutation/domain write.';
 }
 
 function sqlSafetyFactsForTarget(

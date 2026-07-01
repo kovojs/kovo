@@ -315,6 +315,9 @@ describe('CompileCache', () => {
 
   it('includes every declared component compile input that can affect lowering', () => {
     const base = compileComponentCacheKeyInput({
+      extraFiles: [
+        { fileName: 'browser-barrel.ts', source: 'export const th = (value) => value;' },
+      ],
       fileName: 'product-card.tsx',
       packagePrefixDiscoveryRoot: '/workspace/app',
       queryShapeFacts: [{ query: 'product', shape: { name: 'string' }, source: 'queries.ts' }],
@@ -333,6 +336,25 @@ describe('CompileCache', () => {
     expect(compileCacheKey({ ...base, queryShapes: { product: { name: 'number' } } })).not.toBe(
       compileCacheKey(base),
     );
+    expect(
+      compileCacheKey(
+        compileComponentCacheKeyInput({
+          extraFiles: [
+            {
+              fileName: 'browser-barrel.ts',
+              source: "export { trustedHtml as th } from '@kovojs/browser';",
+            },
+          ],
+          fileName: 'product-card.tsx',
+          packagePrefixDiscoveryRoot: '/workspace/app',
+          queryShapeFacts: [{ query: 'product', shape: { name: 'string' }, source: 'queries.ts' }],
+          queryShapes: { product: { name: 'string' } },
+          registryFacts: { mutationInputs: { updateProduct: [] } },
+          source: 'component({})',
+          sourceProvenance: 'app',
+        }),
+      ),
+    ).not.toBe(compileCacheKey(base));
     expect(compileCacheKey({ ...base, sourceProvenance: 'compiler-emitted' })).not.toBe(
       compileCacheKey(base),
     );

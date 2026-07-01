@@ -1269,6 +1269,9 @@ export default createApp({
       expect(stdout).not.toHaveBeenCalled();
       expect(errorOutput).toContain('kovo build check preflight failed');
       expect(errorOutput).toMatch(
+        /ERROR KV330 app\.ts:\d+:\d+ Direct db access in a mutation handler; route through domain\./,
+      );
+      expect(errorOutput).toMatch(
         /ERROR KV330 app\.ts:\d+:\d+ Direct db access in a task run body; route through ctx\.runMutation\./,
       );
       expect(errorOutput).toMatch(
@@ -2912,7 +2915,7 @@ export default createApp({
 
 function handlerWriteSinkPreflightAppModuleSource(): string {
   return `
-import { createApp, createMemoryWebhookReplayStore, s, task, webhook } from '@kovojs/server';
+import { createApp, createMemoryWebhookReplayStore, mutation, s, task, webhook } from '@kovojs/server';
 
 const appDb = {
   insert() {
@@ -2921,6 +2924,15 @@ const appDb = {
 };
 const payments = {};
 const receipts = {};
+const carts = {};
+
+const saveCart = mutation('cart/save', {
+  input: s.object({ id: s.string() }),
+  handler(input) {
+    appDb.insert(carts).values({ id: input.id });
+    return { ok: true };
+  },
+});
 
 const sendReceipt = task('tasks/send-receipt', {
   input: s.object({ id: s.string() }),
@@ -2945,6 +2957,7 @@ const paymentWebhook = webhook('/webhooks/payment', {
 
 export default createApp({
   endpoints: [paymentWebhook],
+  mutations: [saveCart],
   tasks: [sendReceipt],
 });
 `;

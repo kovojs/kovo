@@ -48,6 +48,17 @@ export const C = component({
     ).toHaveLength(1);
   });
 
+  it('flags trustedHtml() over a renamed request render parameter', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  render: ({}, _state, r) => <div>{trustedHtml(r.body)}</div>,
+});
+`),
+    ).toHaveLength(1);
+  });
+
   it('flags trustedHtml() over a req.* request accessor chain', () => {
     expect(
       kv426(`
@@ -57,6 +68,40 @@ export const C = component({
 });
 `),
     ).toHaveLength(1);
+  });
+
+  it('flags trustedHtml() over a non-destructured render data query field access', () => {
+    expect(
+      kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: (data) => <article>{trustedHtml(data.post.body)}</article>,
+});
+`),
+    ).toHaveLength(1);
+  });
+
+  it('flags trustedHtml() over taint-preserving local composition', () => {
+    const cases = [
+      "post.body ?? ''",
+      "post.body || ''",
+      "post.body && '<p>ok</p>'",
+      "'<h1>' + post.body",
+      '`${post.body}`',
+    ];
+
+    for (const expr of cases) {
+      expect(
+        kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{trustedHtml(${expr})}</article>,
+});
+`),
+      ).toHaveLength(1);
+    }
   });
 
   it('flags a same-scope alias of a query field (const b = post.body; trustedHtml(b))', () => {
@@ -254,6 +299,29 @@ const kovo = { trustedHtml: (value) => value };
 export const C = component({
   queries: { post: postQuery },
   render: ({ post }) => <article>{kovo.trustedHtml(post.body)}</article>,
+});
+`),
+    ).toHaveLength(0);
+  });
+
+  it('resolves literal element access to trustedHtml without trusting computed keys', () => {
+    expect(
+      kv426(`
+import * as browser from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{browser['trustedHtml'](post.body)}</article>,
+});
+`),
+    ).toHaveLength(1);
+
+    expect(
+      kv426(`
+import * as browser from '@kovojs/browser';
+const key = 'trustedHtml';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{browser[key](post.body)}</article>,
 });
 `),
     ).toHaveLength(0);

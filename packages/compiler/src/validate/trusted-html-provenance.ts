@@ -24,7 +24,8 @@ import type { ComponentModuleModel } from '../scan/parse.js';
  *   - a request root: the conventional mutation/form `input` identifier, or a `req`/`request`
  *     accessor chain (`req.search`/`req.params`/`req.body`/`req.headers`/`req.cookies`/…);
  *   - a query root: a render binding destructured from the component's `queries` result;
- *   - those reached directly, via a field access (`question.body`), or via a same-scope
+ *   - those reached directly, via a field access (`question.body`), via taint-preserving local
+ *     composition (`question.body ?? ''`, `` `${question.body}` ``), or via a same-scope
  *     alias/destructure/derive (`const { body } = question; trustedHtml(body)`).
  * It deliberately does NOT flag a function-call result (`trustedHtml(renderUserCard(q.name))`):
  * the compiler has no inter-procedural return provenance here (cf. KV437's callee-position reasoning
@@ -45,7 +46,7 @@ export function validateTrustedHtmlProvenance(
   model: ComponentModuleModel,
 ): CompilerDiagnostic[] {
   const sourceFile = model.sourceFile;
-  const queryBindingsByRender = renderQueryBindings(sourceFile);
+  const bindingsByRender = renderProvenanceBindings(sourceFile);
 
   const found: CompilerDiagnostic[] = [];
   const visit = (node: ts.Node): void => {
@@ -53,7 +54,7 @@ export function validateTrustedHtmlProvenance(
       const value = node.arguments[0];
       if (value !== undefined && !ts.isSpreadElement(value) && !hasAuditedReason(node)) {
         const provenance = classifyExpression(value, {
-          queryBindings: enclosingRenderQueryBindings(node, queryBindingsByRender),
+          ...enclosingRenderProvenanceBindings(node, bindingsByRender),
           depth: 0,
           visited: new Set<ts.Node>(),
         });
@@ -72,8 +73,16 @@ type Provenance = 'request' | 'query';
 
 interface ClassifyContext {
   readonly queryBindings: ReadonlySet<string>;
+  readonly queryDataRoots: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly requestBindings: ReadonlySet<string>;
   readonly depth: number;
   readonly visited: Set<ts.Node>;
+}
+
+interface RenderProvenanceBindings {
+  readonly queryBindings: ReadonlySet<string>;
+  readonly queryDataRoots: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly requestBindings: ReadonlySet<string>;
 }
 
 const MAX_ALIAS_DEPTH = 6;
@@ -163,10 +172,33 @@ function classifyExpression(node: ts.Expression, ctx: ClassifyContext): Provenan
     if (whenTrue !== null) return whenTrue;
     return classifyExpression(expr.whenFalse, { ...ctx, visited: new Set(ctx.visited) });
   }
-  // Function-call results, literals, binary/template concatenations, etc. are opaque: the gate does
-  // not invent inter-procedural taint (documented residue), and a literal/concatenation carries no
-  // proven request/query root.
+  if (ts.isBinaryExpression(expr) && binaryOperatorMayPropagateTaint(expr.operatorToken.kind)) {
+    const left = classifyExpression(expr.left, ctx);
+    if (left !== null) return left;
+    return classifyExpression(expr.right, { ...ctx, visited: new Set(ctx.visited) });
+  }
+  if (ts.isTemplateExpression(expr)) {
+    for (const span of expr.templateSpans) {
+      const provenance = classifyExpression(span.expression, {
+        ...ctx,
+        visited: new Set(ctx.visited),
+      });
+      if (provenance !== null) return provenance;
+    }
+  }
+  // Function-call results and literals are opaque: the gate does not invent inter-procedural taint
+  // (documented residue), while taint-preserving local composition is handled above.
   return null;
+}
+
+function binaryOperatorMayPropagateTaint(kind: ts.SyntaxKind): boolean {
+  return (
+    kind === ts.SyntaxKind.PlusToken ||
+    kind === ts.SyntaxKind.BarBarToken ||
+    kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+    kind === ts.SyntaxKind.QuestionQuestionToken ||
+    kind === ts.SyntaxKind.CommaToken
+  );
 }
 
 /** Classify a member-access chain (`a.b.c`, `req.params.id`) by its leftmost root and first member. */
@@ -186,6 +218,8 @@ function classifyMemberRoot(
       firstMember = cursor.name.text;
       cursor = cursor.expression;
     } else if (ts.isElementAccessExpression(cursor)) {
+      const member = elementAccessName(cursor.argumentExpression);
+      if (member !== null) firstMember = member;
       cursor = cursor.expression;
     } else {
       cursor = cursor.expression;
@@ -196,12 +230,20 @@ function classifyMemberRoot(
     // `req.params.id` / `request.body.html`: request-derived when the root is an unshadowed request
     // accessor and the first member is a request channel.
     if (
-      REQUEST_ACCESSOR_ROOTS.has(cursor.text) &&
+      (ctx.requestBindings.has(cursor.text) || REQUEST_ACCESSOR_ROOTS.has(cursor.text)) &&
       firstMember !== undefined &&
       REQUEST_ACCESSORS.has(firstMember) &&
       localConstInitializer(cursor, cursor.text) === undefined
     ) {
       return 'request';
+    }
+    const queryRootKeys = ctx.queryDataRoots.get(cursor.text);
+    if (
+      queryRootKeys !== undefined &&
+      firstMember !== undefined &&
+      queryRootKeys.has(firstMember)
+    ) {
+      return 'query';
     }
     return classifyIdentifier(cursor, ctx);
   }
@@ -218,6 +260,8 @@ function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance
   }
 
   if (ctx.queryBindings.has(id.text)) return 'query';
+  if (ctx.queryDataRoots.has(id.text)) return 'query';
+  if (ctx.requestBindings.has(id.text)) return 'request';
   if (id.text === REQUEST_INPUT_IDENTIFIER) return 'request';
   return null;
 }
@@ -344,6 +388,13 @@ function objectBindingPatternBindsName(pattern: ts.ObjectBindingPattern, name: s
   return false;
 }
 
+function elementAccessName(argument: ts.Expression | undefined): string | null {
+  if (argument === undefined) return null;
+  const expr = unwrap(argument);
+  if (ts.isStringLiteralLike(expr)) return literalText(expr);
+  return null;
+}
+
 /** Discharge: a non-empty STATIC reason as the second argument (`"…"` or `{ reason: "…" }`). */
 function hasAuditedReason(call: ts.CallExpression): boolean {
   const metadata = call.arguments[1];
@@ -383,8 +434,10 @@ function unwrap(node: ts.Expression): ts.Expression {
  * destructured from the component's `queries` result. `component({ queries: { question, answers },
  * render: ({ question }, …) => … })` makes `question` a query-derived binding inside that render.
  */
-function renderQueryBindings(sourceFile: ts.SourceFile): Map<ts.Node, ReadonlySet<string>> {
-  const byRender = new Map<ts.Node, ReadonlySet<string>>();
+function renderProvenanceBindings(
+  sourceFile: ts.SourceFile,
+): Map<ts.Node, RenderProvenanceBindings> {
+  const byRender = new Map<ts.Node, RenderProvenanceBindings>();
   const componentNames = componentFactoryLocalNames(sourceFile);
   if (componentNames.size === 0) return byRender;
 
@@ -397,7 +450,7 @@ function renderQueryBindings(sourceFile: ts.SourceFile): Map<ts.Node, ReadonlySe
       node.arguments[0] !== undefined &&
       ts.isObjectLiteralExpression(node.arguments[0])
     ) {
-      collectRenderQueryBindings(node.arguments[0] as ts.ObjectLiteralExpression, byRender);
+      collectRenderProvenanceBindings(node.arguments[0] as ts.ObjectLiteralExpression, byRender);
     }
     ts.forEachChild(node, visit);
   };
@@ -405,9 +458,9 @@ function renderQueryBindings(sourceFile: ts.SourceFile): Map<ts.Node, ReadonlySe
   return byRender;
 }
 
-function collectRenderQueryBindings(
+function collectRenderProvenanceBindings(
   options: ts.ObjectLiteralExpression,
-  byRender: Map<ts.Node, ReadonlySet<string>>,
+  byRender: Map<ts.Node, RenderProvenanceBindings>,
 ): void {
   const queryKeys = new Set<string>();
   let render: ts.FunctionExpression | ts.ArrowFunction | undefined;
@@ -432,25 +485,60 @@ function collectRenderQueryBindings(
     }
   }
 
-  if (render === undefined || queryKeys.size === 0) return;
+  if (render === undefined) return;
   const dataParam = render.parameters[0];
-  if (dataParam === undefined || !ts.isObjectBindingPattern(dataParam.name)) {
-    // Non-destructured render data param: query-binding detection is residue (documented).
-    return;
-  }
-
   const bindings = new Set<string>();
-  for (const element of dataParam.name.elements) {
-    const sourceName = element.propertyName ?? element.name;
-    if (
-      ts.isIdentifier(sourceName) &&
-      queryKeys.has(sourceName.text) &&
-      ts.isIdentifier(element.name)
-    ) {
-      bindings.add(element.name.text);
+  const queryDataRoots = new Map<string, ReadonlySet<string>>();
+  const requestBindings = new Set<string>();
+
+  if (dataParam !== undefined && queryKeys.size > 0) {
+    if (ts.isObjectBindingPattern(dataParam.name)) {
+      for (const element of dataParam.name.elements) {
+        const sourceName = element.propertyName ?? element.name;
+        if (
+          ts.isIdentifier(sourceName) &&
+          queryKeys.has(sourceName.text) &&
+          ts.isIdentifier(element.name)
+        ) {
+          bindings.add(element.name.text);
+        }
+      }
+    } else if (ts.isIdentifier(dataParam.name)) {
+      queryDataRoots.set(dataParam.name.text, queryKeys);
     }
   }
-  if (bindings.size > 0) byRender.set(render, bindings);
+
+  collectRenderRequestBindings(render.parameters[2], requestBindings);
+
+  if (bindings.size > 0 || queryDataRoots.size > 0 || requestBindings.size > 0) {
+    byRender.set(render, { queryBindings: bindings, queryDataRoots, requestBindings });
+  }
+}
+
+function collectRenderRequestBindings(
+  requestParam: ts.ParameterDeclaration | undefined,
+  bindings: Set<string>,
+): void {
+  if (requestParam === undefined) return;
+  if (ts.isIdentifier(requestParam.name)) {
+    bindings.add(requestParam.name.text);
+    return;
+  }
+  if (!ts.isObjectBindingPattern(requestParam.name)) return;
+
+  for (const element of requestParam.name.elements) {
+    const sourceName = element.propertyName ?? element.name;
+    if (!ts.isIdentifier(sourceName)) continue;
+    if (identifierName(sourceName) !== 'request') continue;
+
+    if (ts.isIdentifier(element.name)) {
+      bindings.add(identifierName(element.name));
+    } else if (ts.isObjectBindingPattern(element.name)) {
+      for (const nested of element.name.elements) {
+        if (ts.isIdentifier(nested.name)) bindings.add(identifierName(nested.name));
+      }
+    }
+  }
 }
 
 /**
@@ -499,20 +587,26 @@ function moduleExportNameText(name: ts.ModuleExportName): string {
   return literalText(name);
 }
 
-function enclosingRenderQueryBindings(
+function enclosingRenderProvenanceBindings(
   node: ts.Node,
-  byRender: ReadonlyMap<ts.Node, ReadonlySet<string>>,
-): ReadonlySet<string> {
+  byRender: ReadonlyMap<ts.Node, RenderProvenanceBindings>,
+): RenderProvenanceBindings {
   let cursor: ts.Node | undefined = node;
   while (cursor) {
     const bindings = byRender.get(cursor);
     if (bindings !== undefined) return bindings;
     cursor = cursor.parent;
   }
-  return EMPTY_BINDINGS;
+  return EMPTY_RENDER_BINDINGS;
 }
 
 const EMPTY_BINDINGS: ReadonlySet<string> = new Set<string>();
+const EMPTY_QUERY_DATA_ROOTS: ReadonlyMap<string, ReadonlySet<string>> = new Map();
+const EMPTY_RENDER_BINDINGS: RenderProvenanceBindings = {
+  queryBindings: EMPTY_BINDINGS,
+  queryDataRoots: EMPTY_QUERY_DATA_ROOTS,
+  requestBindings: EMPTY_BINDINGS,
+};
 
 function trustedHtmlProvenanceDiagnostic(
   diagnostics: DiagnosticFactory,

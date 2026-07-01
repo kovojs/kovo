@@ -114,6 +114,13 @@ function canonicalExpression(
     return canonicalNamespaceMember(node.getExpression(), node.getName(), options, seen, depth + 1);
   }
 
+  if (Node.isElementAccessExpression(node)) {
+    const member = propertyNameText(node.getArgumentExpression());
+    return member
+      ? canonicalNamespaceMember(node.getExpression(), member, options, seen, depth + 1)
+      : undefined;
+  }
+
   return canonicalSymbol(node.getSymbol(), options, seen, depth + 1);
 }
 

@@ -20,6 +20,7 @@ import { parseSqlWriteTables, type ParseSqlWriteTablesOptions } from './sql-writ
 
 /** Runtime raw-SQL write table policy enforced on mutation managed DB handles. */
 export interface ManagedSqlWritePolicy {
+  capability?: 'read' | 'write';
   dialect?: ParseSqlWriteTablesOptions['dialect'];
   tables?: readonly string[];
   touches?: readonly string[];
@@ -60,7 +61,7 @@ export function wrapManagedDbForSqlSafety<DbValue>(
   mode: SqlSafetyMode = managedSqlSafetyMode(),
   writePolicy?: ManagedSqlWritePolicy,
 ): DbValue {
-  if (!isDbAdapterLike(db)) return db;
+  if (!isManagedDbAdapterLike(db)) return db;
 
   const proxyCache = new WeakMap<object, object>();
   const methodCache = new WeakMap<object, Map<PropertyKey, Function>>();
@@ -95,16 +96,16 @@ function wrapDbAdapter(
         return wrapSqlHandle(value, mode, proxyCache, methodCache, writePolicy);
       }
 
-      if (prop === 'sql' && typeof value === 'function' && isDbAdapterLike(target)) {
+      if (prop === 'sql' && typeof value === 'function' && isManagedDbAdapterLike(target)) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
           guardedSqlMethod(target, value, mode, writePolicy),
         );
       }
 
       if (
-        (prop === 'query' || prop === 'exec' || prop === 'execute') &&
+        isDirectSqlExecutionMethod(prop) &&
         typeof value === 'function' &&
-        (isDbAdapterLike(target) || isSqlHandleLike(target))
+        (isManagedDbAdapterLike(target) || isSqlHandleLike(target))
       ) {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
           guardedSqlMethod(target, value, mode, writePolicy),
@@ -153,10 +154,7 @@ function wrapSqlHandle(
         );
       }
 
-      if (
-        (prop === 'query' || prop === 'exec' || prop === 'execute') &&
-        typeof value === 'function'
-      ) {
+      if (isDirectSqlExecutionMethod(prop) && typeof value === 'function') {
         return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
           guardedSqlMethod(target, value, mode, writePolicy),
         );
@@ -321,7 +319,7 @@ function wrapTransactionDb(
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
   writePolicy: ManagedSqlWritePolicy | undefined,
 ): unknown {
-  if (!isDbAdapterLike(tx)) return tx;
+  if (!isManagedDbAdapterLike(tx)) return tx;
   return wrapDbAdapter(tx, mode, proxyCache, methodCache, writePolicy);
 }
 
@@ -383,6 +381,11 @@ function assertSqlWriteTablesAllowed(
   statement: unknown,
   writePolicy: ManagedSqlWritePolicy | undefined,
 ): void {
+  if (writePolicy?.capability === 'read') {
+    assertReadSqlStatement(statement, writePolicy?.dialect);
+    return;
+  }
+
   const declaredTables = writePolicy?.tables;
   if (declaredTables === undefined || declaredTables.length === 0) return;
 
@@ -410,6 +413,32 @@ function assertSqlWriteTablesAllowed(
       `  unexpected: ${[...new Set(unexpected)].sort().join(', ')}`,
       `  declared tables: ${[...new Set(declaredTables)].sort().join(', ')}`,
       `  touches: ${[...new Set(writePolicy?.touches ?? [])].sort().join(', ') || '<none>'}`,
+    ].join('\n'),
+  );
+}
+
+function assertReadSqlStatement(
+  statement: unknown,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
+): void {
+  const sql = sqlStatementText(statement);
+  if (sql === undefined) return;
+
+  let writeTables: string[];
+  try {
+    writeTables = parseManagedSqlWriteTables(sql, dialect);
+  } catch (error) {
+    throw new Error(
+      'KV433: read-only SQL capability could not parse an executable statement on a managed query DB handle (SPEC §10.3/§11.2).',
+      { cause: error },
+    );
+  }
+  if (writeTables.length === 0) return;
+
+  throw new Error(
+    [
+      'KV433: read-only SQL capability attempted to mutate table(s) from a query loader (SPEC §10.3/§11.2).',
+      `  tables: ${writeTables.join(', ')}`,
     ].join('\n'),
   );
 }
@@ -484,6 +513,30 @@ function sqlFromQueryChunk(chunk: unknown, nextParameter: () => string): string 
   }
 
   return nextParameter();
+}
+
+function isManagedDbAdapterLike(value: unknown): value is Record<PropertyKey, unknown> {
+  if (isDbAdapterLike(value)) return true;
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<PropertyKey, unknown>;
+  return (
+    typeof record.all === 'function' ||
+    typeof record.get === 'function' ||
+    typeof record.run === 'function' ||
+    typeof record.values === 'function'
+  );
+}
+
+function isDirectSqlExecutionMethod(prop: PropertyKey): boolean {
+  return (
+    prop === 'query' ||
+    prop === 'exec' ||
+    prop === 'execute' ||
+    prop === 'all' ||
+    prop === 'get' ||
+    prop === 'run' ||
+    prop === 'values'
+  );
 }
 
 function cachedSqlSafetyMethod(

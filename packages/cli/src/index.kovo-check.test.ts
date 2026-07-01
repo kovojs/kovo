@@ -1234,6 +1234,66 @@ describe('kovo check', () => {
     });
   });
 
+  it('fails handler direct-write facts carried by the build graph', () => {
+    expect(
+      kovoCheck({
+        handlerWriteSinks: [
+          {
+            canonicalTarget: { identity: 'request.db', provenance: 'property-access-path' },
+            operationKind: 'insert',
+            owner: { kind: 'key', value: '/api/sync' },
+            path: 'request.db.insert',
+            span: { end: 87, start: 70 },
+            surface: 'endpoint',
+          },
+          {
+            canonicalTarget: { identity: 'request.db', provenance: 'property-access-path' },
+            operationKind: 'insert',
+            owner: { kind: 'key', value: 'cart/add' },
+            path: 'request.db.insert',
+            span: { end: 17, start: 1 },
+            surface: 'mutation',
+          },
+          {
+            canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-property-access' },
+            operationKind: 'UNRESOLVED',
+            owner: { kind: 'key', value: 'cart/opaque' },
+            path: 'UNRESOLVED',
+            span: { end: 41, start: 25 },
+            surface: 'mutation',
+          },
+          {
+            canonicalTarget: { identity: 'appDb', provenance: 'property-access-path' },
+            operationKind: 'insert',
+            owner: { kind: 'key', value: 'tasks/send-receipt' },
+            path: 'appDb.insert',
+            span: { end: 109, start: 97 },
+            surface: 'task',
+          },
+          {
+            canonicalTarget: { identity: 'appDb', provenance: 'property-access-path' },
+            operationKind: 'insert',
+            owner: { kind: 'path', value: '/webhooks/payment' },
+            path: 'appDb.insert',
+            span: { end: 143, start: 131 },
+            surface: 'webhook',
+          },
+        ],
+      }),
+    ).toEqual({
+      exitCode: 1,
+      output: [
+        'kovo-check/v1',
+        'ERROR KV330 ENDPOINT key:/api/sync Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write. operation=insert target=request.db path=request.db.insert span=70-87',
+        'ERROR KV330 MUTATION key:cart/add Direct db access in a mutation handler; route through domain. operation=insert target=request.db path=request.db.insert span=1-17',
+        'ERROR KV406 MUTATION key:cart/opaque Unresolved write sink in a mutation handler; route through domain. operation=UNRESOLVED target=UNRESOLVED path=UNRESOLVED span=25-41',
+        'ERROR KV330 TASK key:tasks/send-receipt Direct db access in a task run body; route through ctx.runMutation. operation=insert target=appDb path=appDb.insert span=97-109',
+        'ERROR KV330 WEBHOOK path:/webhooks/payment Direct db access in a webhook handler; route writes through an audited mutation/domain write. operation=insert target=appDb path=appDb.insert span=131-143',
+        '',
+      ].join('\n'),
+    });
+  });
+
   it('prints KV302 data-bind path lints using the SPEC §11.3 diagnostic registry message', () => {
     expect(
       kovoCheck({
