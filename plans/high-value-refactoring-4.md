@@ -197,7 +197,7 @@ that removes the broader source of drift.
     leak timers/listeners or visibility behavior into each other.
   - Verification: `pnpm exec vitest --run packages/browser/src/clock-tick-bus.test.ts packages/browser/src/loader-query.test.ts packages/compiler/src/query-coverage.test.ts examples/gallery/src/interactive-gallery.compile.test.ts`.
 
-- [ ] **P1.8 - Share core, UI, and headless safe-URL policy.**
+- [x] **P1.8 - Share core, UI, and headless safe-URL policy.**
   - Current signals: `packages/ui/src/safe-url.ts` and `packages/headless-ui/src/lib/safe-url.ts` maintain
     local scheme allowlists that already differ from core security URL expectations.
   - Refactor shape: route UI and headless safe URL handling through one core/internal URL sink helper, with
@@ -205,6 +205,7 @@ that removes the broader source of drift.
   - Risk reduced: anchor-like primitives cannot drift from framework URL sink policy when allowed schemes
     or sanitization rules change.
   - Verification: `pnpm exec vitest --run packages/core/src/security-url.test.ts packages/headless-ui/src/lib/safe-url.test.ts packages/ui/src/breadcrumb.test.tsx packages/ui/src/navigation-menu.test.tsx` plus `pnpm run check:api-surface`.
+  - Evidence: `pnpm exec vitest --run packages/core/src/security-url.test.ts packages/headless-ui/src/lib/safe-url.test.ts packages/ui/src/breadcrumb.test.tsx packages/ui/src/navigation-menu.test.tsx` passed with 4 files/19 tests; `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check` passed in `/Users/mini/kovo-high-value-refactoring-4-20260630-235424`.
 
 ## P2 - Gate Quality and Artifact Ownership
 

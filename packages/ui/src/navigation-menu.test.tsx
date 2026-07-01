@@ -30,6 +30,18 @@ describe('NavigationMenuLink href sanitization (SECURITY_FINDINGS.md H3)', () =>
 
     expect(html).toContain('href="/company"');
   });
+
+  it('uses the shared core URL allowlist', () => {
+    const html = String(
+      NavigationMenuLink.definition.render({
+        children: 'Download',
+        href: 'ftp://example.test/file.txt',
+        itemValue: 'download',
+      }),
+    );
+
+    expect(html).toContain('href="ftp://example.test/file.txt"');
+  });
 });
 
 describe('navigation-menu scalar text props are escaped (SECURITY_FINDINGS.md C1)', () => {
