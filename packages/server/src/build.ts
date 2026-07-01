@@ -956,7 +956,33 @@ function logUnhandledNodeError(error, nodeRequest) {
     error && typeof error === 'object' && 'stack' in error && typeof error.stack === 'string'
       ? error.stack
       : error;
-  console.error('[kovo] unhandled node server error', { method, url, error: detail });
+  console.error('[kovo] unhandled node server error', scrubConsoleValue({ method, url, error: detail }));
+}
+
+function scrubConsoleValue(value, seen = new WeakMap()) {
+  if (isSecretDisplayValue(value)) return '[secret]';
+  if (value === null || (typeof value !== 'object' && typeof value !== 'function')) return value;
+  if (seen.has(value)) return seen.get(value);
+  if (Array.isArray(value)) {
+    const next = [];
+    seen.set(value, next);
+    for (const item of value) next.push(scrubConsoleValue(item, seen));
+    return next;
+  }
+  if (!isPlainConsoleObject(value)) return String(value);
+  const next = {};
+  seen.set(value, next);
+  for (const key of Object.keys(value)) next[key] = scrubConsoleValue(value[key], seen);
+  return next;
+}
+
+function isSecretDisplayValue(value) {
+  return Object.prototype.toString.call(value) === '[object Secret]' && String(value) === '[secret]';
+}
+
+function isPlainConsoleObject(value) {
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
 }
 
 async function maybeServeStatic(nodeRequest, nodeResponse) {

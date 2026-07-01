@@ -1,4 +1,5 @@
 import { assertAndCloneJsonValue } from '@kovojs/core/internal/json';
+import { scrubSecretLifecycleValue } from './logging.js';
 import type { TaskHandle } from './task.js';
 
 /** Persisted durable-task job states visible through the SPEC §9.6 status surface. */
@@ -206,11 +207,15 @@ function statusRecord(
     createdAt: copyDate(job.createdAt),
     updatedAt: copyDate(job.updatedAt),
     ...(options?.includeArgs === true
-      ? { args: assertAndCloneJsonValue(job.args, { root: 'args' }) }
+      ? {
+          args: assertAndCloneJsonValue(scrubSecretLifecycleValue(job.args), {
+            root: 'args',
+          }),
+        }
       : {}),
     ...(job.key === undefined ? {} : { key: job.key }),
     ...(options?.includeArgs === true && job.lastError !== undefined
-      ? { lastError: job.lastError }
+      ? { lastError: String(scrubSecretLifecycleValue(job.lastError)) }
       : {}),
     ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
     ...(job.leaseOwner === undefined ? {} : { leaseOwner: job.leaseOwner }),
@@ -253,14 +258,16 @@ function copyJob(job: DurableTaskStatusJob): DurableTaskStatusJob {
   return {
     id: job.id,
     task: job.task,
-    args: assertAndCloneJsonValue(job.args, { root: 'args' }),
+    args: assertAndCloneJsonValue(scrubSecretLifecycleValue(job.args), { root: 'args' }),
     runAt: copyDate(job.runAt),
     status: job.status,
     attempts: job.attempts,
     createdAt: copyDate(job.createdAt),
     updatedAt: copyDate(job.updatedAt),
     ...(job.key === undefined ? {} : { key: job.key }),
-    ...(job.lastError === undefined ? {} : { lastError: job.lastError }),
+    ...(job.lastError === undefined
+      ? {}
+      : { lastError: String(scrubSecretLifecycleValue(job.lastError)) }),
     ...(job.leasedUntil === undefined ? {} : { leasedUntil: copyDate(job.leasedUntil) }),
     ...(job.leaseOwner === undefined ? {} : { leaseOwner: job.leaseOwner }),
   };

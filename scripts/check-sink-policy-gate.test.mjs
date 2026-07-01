@@ -1524,6 +1524,26 @@ describe('sink-policy gate', () => {
         `,
       ),
     ).toEqual([]);
+    expect(
+      logChannelNeutralizerInvariantFindings(
+        'packages/server/src/logging.ts',
+        `
+          const CONTROL_CHARACTER_PATTERN = /[\\u0000-\\u001f\\u007f-\\u009f]/g;
+          function visibleControlEscape(char: string): string {
+            return \`\\\\u\${char.charCodeAt(0).toString(16).padStart(4, '0')}\`;
+          }
+          export function neutralizeLogValue(value: unknown): string {
+            return String(value).replace(
+              CONTROL_CHARACTER_PATTERN,
+              visibleControlEscape,
+            );
+          }
+          export function formatLogMessage(strings: TemplateStringsArray, ...values: unknown[]): string {
+            return neutralizeLogValue(String.raw(strings, ...values));
+          }
+        `,
+      ),
+    ).toEqual([]);
   });
 
   it('rejects fail-open SQL guard env and config downgrade paths in production source', () => {

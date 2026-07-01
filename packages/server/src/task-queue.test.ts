@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { secret } from '@kovojs/core';
 
 import {
   KOVO_JOBS_TABLE_SQL,
@@ -293,6 +294,46 @@ describe('durable task queue store (SPEC §9.6)', () => {
     });
 
     expect(statements[0]!.values[2]).toBe('{"a":{"x":1,"y":2},"z":1}');
+  });
+
+  it('scrubs secret-tagged args and initial errors before Postgres _kovo_jobs storage', async () => {
+    const statements: DurableTaskSqlStatement[] = [];
+    const store = new PostgresDurableTaskQueue({
+      async execute(statement) {
+        statements.push(statement);
+        return { rows: [{ id: statement.values[0] }] };
+      },
+    });
+
+    await store.enqueue({
+      args: { publicId: 'order_1', token: secret('sk_live_q5_pg_args') },
+      lastError: secret('sk_live_q5_pg_initial_error') as unknown as string,
+      task: 'email.send',
+    });
+
+    expect(statements[0]!.values[2]).toBe('{"publicId":"order_1","token":"[secret]"}');
+    expect(statements[0]!.values[10]).toBe('[secret]');
+    expect(JSON.stringify(statements)).not.toContain('sk_live_q5_pg');
+  });
+
+  it('scrubs secret-tagged args and failure text before in-memory task storage', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const handle = await store.enqueue({
+      args: { publicId: 'order_1', token: secret('sk_live_q5_memory_args') },
+      task: 'email.send',
+    });
+    const [job] = await store.claimDue({ leaseMs: 1000, limit: 1, now: new Date() });
+
+    await store.markFailed(job!.id, secret('sk_live_q5_memory_error'));
+
+    expect(handle.task).toBe('email.send');
+    expect(store.snapshot()).toEqual([
+      expect.objectContaining({
+        args: { publicId: 'order_1', token: '[secret]' },
+        lastError: '[secret]',
+      }),
+    ]);
+    expect(JSON.stringify(store.snapshot())).not.toContain('sk_live_q5_memory');
   });
 
   it('rejects lossy durable task args before queue storage', async () => {
