@@ -47,6 +47,7 @@ const SQL_BUILDER_FAST_PATH_METHODS = new Set<PropertyKey>([
   'update',
   'with',
 ]);
+const frameworkManagedDbRawTargets = new WeakMap<object, object>();
 
 /**
  * Resolve the managed-SQL guard mode (SPEC §10.2/§744). The fail-closed default — in every
@@ -78,6 +79,20 @@ export function wrapManagedDbForSqlSafety<DbValue>(
   const proxyCache = new WeakMap<object, object>();
   const methodCache = new WeakMap<object, Map<PropertyKey, Function>>();
   return wrapDbAdapter(db, mode, proxyCache, methodCache, writePolicy) as DbValue;
+}
+
+/**
+ * Resolve the raw target behind a framework-owned managed DB proxy.
+ *
+ * @internal This is deliberately not exported from the package barrel. Framework subsystems such
+ * as durable tasks use it for their own audited internal tables while app-authored code keeps the
+ * managed KV422/KV433 surface.
+ */
+export function frameworkManagedDbRawTarget(value: unknown): object | undefined {
+  if (!isRecord(value)) return undefined;
+  const target = frameworkManagedDbRawTargets.get(value);
+  if (target === undefined) return undefined;
+  return frameworkManagedDbRawTarget(target) ?? target;
 }
 
 function wrapDbAdapter(
@@ -146,6 +161,7 @@ function wrapDbAdapter(
   });
 
   proxyCache.set(db, proxy);
+  frameworkManagedDbRawTargets.set(proxy, db);
   return proxy;
 }
 
