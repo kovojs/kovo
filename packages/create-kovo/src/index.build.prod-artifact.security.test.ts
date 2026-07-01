@@ -122,15 +122,16 @@ describe('create-kovo starter (build integration: production security artifacts)
   it('blocks trusted output provenance leaks through the production build artifact', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-trusted-output-'));
+    const unsafeRoot = mkdtempSync(join(tempParent, 'create-kovo-prod-trusted-output-unsafe-'));
+    const safeRoot = mkdtempSync(join(tempParent, 'create-kovo-prod-trusted-output-safe-'));
 
     try {
-      writeKovoProject(root, { name: 'Prod Trusted Output Proof' });
-      linkStarterBuildDependencies(root);
-      addTrustedOutputProvenanceBuildProof(root);
+      writeKovoProject(unsafeRoot, { name: 'Prod Trusted Output Proof' });
+      linkStarterBuildDependencies(unsafeRoot);
+      addTrustedOutputProvenanceBuildProof(unsafeRoot);
 
       try {
-        buildProductionArtifact(root);
+        buildProductionArtifact(unsafeRoot);
         throw new Error('Expected kovo build --no-cache to fail with KV426.');
       } catch (error) {
         const output = execFileSyncErrorOutput(error);
@@ -139,8 +140,14 @@ describe('create-kovo starter (build integration: production security artifacts)
         expect(output).toContain('renderedHtml() sends query-derived data');
         expect(output).toContain('trustedHtml() sends request-derived data');
       }
+
+      writeKovoProject(safeRoot, { name: 'Prod Trusted Output Safe Sibling' });
+      linkStarterBuildDependencies(safeRoot);
+      addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false });
+      buildProductionArtifact(safeRoot);
     } finally {
-      rmSync(root, { force: true, recursive: true });
+      rmSync(unsafeRoot, { force: true, recursive: true });
+      rmSync(safeRoot, { force: true, recursive: true });
     }
   }, 120_000);
 

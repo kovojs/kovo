@@ -457,6 +457,23 @@ describe('security-test-build-gate', () => {
       ]),
     });
   });
+
+  it('keeps the KV426 trusted-output safe sibling enrolled in the production artifact gate', () => {
+    expect(
+      SECURITY_BUILD_PROOFS.find(
+        (proof) => proof.code === 'KV426' && proof.claimId === 'trusted-output-prod-artifact',
+      ),
+    ).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+      requiredNeedles: expect.arrayContaining([
+        'addTrustedOutputProvenanceBuildProof(unsafeRoot)',
+        'buildProductionArtifact(unsafeRoot)',
+        'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',
+        'buildProductionArtifact(safeRoot)',
+      ]),
+    });
+  });
 });
 
 function withTempRepo(callback) {

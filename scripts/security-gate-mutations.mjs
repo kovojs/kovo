@@ -25,6 +25,10 @@ const coreFrameworkIdentityPath = path.join(
 );
 const compilerCompilePath = path.join(repoRoot, 'packages/compiler/src/compile.ts');
 const compilerVitePath = path.join(repoRoot, 'packages/compiler/src/vite.ts');
+const trustedHtmlProvenancePath = path.join(
+  repoRoot,
+  'packages/compiler/src/validate/trusted-html-provenance.ts',
+);
 
 const missingRealBuildProofBranch = [
   '      if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
@@ -150,6 +154,14 @@ const weakenedKv311IslandDeriveProofEnrollmentBranch = [
 const kv435SafeSiblingProofNeedle = `      'addAuthSecretLeakProof(safeRoot, { leakToWire: false })',`;
 
 const weakenedKv435SafeSiblingProofNeedle = `      'addAuthSecretLeakProof(safeRoot)',`;
+
+const kv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',`;
+
+const weakenedKv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvenanceBuildProof(safeRoot)',`;
+
+const trustedHtmlCallTaintFailClosedBranch = `    return firstProvenance([argumentProvenance, calleeProvenance]) ?? 'unprovable';`;
+
+const weakenedTrustedHtmlCallTaintFailClosedBranch = `    return firstProvenance([argumentProvenance, calleeProvenance]);`;
 
 const productionBuildInvocationBranch = [
   '  if (!testBlockHasBuildInvocation(testBlock, proof.buildInvocation)) {',
@@ -490,6 +502,18 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
     description:
+      'Weakens the KV426 trusted-output proof enrollment so the safe sibling no longer proves audited trusted output stays green.',
+    expectedKiller:
+      'KV426 trusted-output proof enrollment must retain the explicit safe sibling build needle',
+    name: 'security-test-build-gate/weaken-kv426-trusted-output-safe-sibling-proof-enrollment',
+    replacement: weakenedKv426TrustedOutputSafeSiblingProofNeedle,
+    search: kv426TrustedOutputSafeSiblingProofNeedle,
+    sourceFile: securityTestBuildGatePath,
+    test: assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
       'Deletes the branch that rejects fixture-only proof tests without the declared production build invocation.',
     expectedKiller: 'B3 resolver proofs must call the real kovo build path',
     name: 'security-test-build-gate/drop-production-build-invocation-check',
@@ -497,6 +521,17 @@ export const SECURITY_GATE_MUTANTS = [
     search: productionBuildInvocationBranch,
     sourceFile: securityTestBuildGatePath,
     test: assertFixtureOnlyProofIsCaught,
+  },
+  {
+    description:
+      'Weakens KV426 call/new expression value-flow so unknown call results are treated as clean.',
+    expectedKiller: 'KV426 trusted-output value-flow must fail closed for unknown call results',
+    name: 'trusted-html-provenance/weaken-call-result-taint-fail-closed',
+    replacement: weakenedTrustedHtmlCallTaintFailClosedBranch,
+    search: trustedHtmlCallTaintFailClosedBranch,
+    sourceFile: trustedHtmlProvenancePath,
+    sourceOnly: true,
+    test: assertTrustedHtmlProvenanceKeepsCallResultFailClosed,
   },
   {
     baseModule: securityTestBuildGate,
@@ -1001,6 +1036,34 @@ async function assertKv435SafeSiblingProofEnrollmentIsPinned(moduleUnderTest) {
     throw new Error(
       `KV435 value-flow proof must require the safe sibling build needle ${JSON.stringify(needle)}`,
     );
+  }
+}
+
+async function assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned(moduleUnderTest) {
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV426' &&
+      candidate.claimId === 'trusted-output-prod-artifact' &&
+      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  );
+  if (!proof) throw new Error('KV426 trusted-output production build proof is not enrolled');
+  const needle = 'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })';
+  if (!proof.requiredNeedles?.includes(needle)) {
+    throw new Error(
+      `KV426 trusted-output proof must require the safe sibling build needle ${JSON.stringify(
+        needle,
+      )}`,
+    );
+  }
+}
+
+async function assertTrustedHtmlProvenanceKeepsCallResultFailClosed(
+  _moduleUnderTest,
+  { sourceText },
+) {
+  const needle = "return firstProvenance([argumentProvenance, calleeProvenance]) ?? 'unprovable';";
+  if (!sourceText.includes(needle)) {
+    throw new Error(`KV426 value-flow must keep call/new results fail-closed via ${needle}`);
   }
 }
 

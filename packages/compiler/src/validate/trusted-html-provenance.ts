@@ -88,6 +88,7 @@ interface RawTrustSink {
 interface ClassifyContext {
   readonly queryBindings: ReadonlySet<string>;
   readonly queryDataRoots: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly render: RenderFunction | undefined;
   readonly requestBindings: ReadonlySet<string>;
   readonly requestSlotRoots: ReadonlySet<string>;
   readonly depth: number;
@@ -97,9 +98,12 @@ interface ClassifyContext {
 interface RenderProvenanceBindings {
   readonly queryBindings: ReadonlySet<string>;
   readonly queryDataRoots: ReadonlyMap<string, ReadonlySet<string>>;
+  readonly render: RenderFunction | undefined;
   readonly requestBindings: ReadonlySet<string>;
   readonly requestSlotRoots: ReadonlySet<string>;
 }
+
+type RenderFunction = ts.ArrowFunction | ts.FunctionExpression;
 
 const MAX_ALIAS_DEPTH = 6;
 
@@ -446,6 +450,13 @@ function classifyMemberRoot(
     // The component render request reaches authored code only as the `request` slot on the third
     // render parameter. Track that parameter by position, then require its `request` property by
     // symbol/AST shape; a random in-scope value named `request` is not proof of request provenance.
+    const localRoot = localBinding(cursor, cursor.text);
+    if (localRoot !== undefined && !bindingIsRenderParameter(localRoot.binding, ctx.render)) {
+      if (localRoot.initializer !== undefined && ctx.depth < MAX_ALIAS_DEPTH) {
+        return classifyExpression(localRoot.initializer, { ...ctx, depth: ctx.depth + 1 });
+      }
+      return 'unprovable';
+    }
     if (ctx.requestBindings.has(cursor.text)) return 'request';
     if (ctx.requestSlotRoots.has(cursor.text) && firstMember === 'request') {
       return 'request';
@@ -466,10 +477,17 @@ function classifyMemberRoot(
 /** Classify a bare identifier: same-scope alias/derive first (it shadows), then query/request roots. */
 function classifyIdentifier(id: ts.Identifier, ctx: ClassifyContext): Provenance | null {
   // A same-scope `const name = <expr>` shadows any param/query binding: follow the alias/derive.
-  const init = localConstInitializer(id, id.text);
-  if (init !== undefined && ctx.depth < MAX_ALIAS_DEPTH && !ctx.visited.has(init)) {
-    ctx.visited.add(init);
-    return classifyExpression(init, { ...ctx, depth: ctx.depth + 1 });
+  const local = localBinding(id, id.text);
+  if (local !== undefined && !bindingIsRenderParameter(local.binding, ctx.render)) {
+    if (
+      local.initializer !== undefined &&
+      ctx.depth < MAX_ALIAS_DEPTH &&
+      !ctx.visited.has(local.initializer)
+    ) {
+      ctx.visited.add(local.initializer);
+      return classifyExpression(local.initializer, { ...ctx, depth: ctx.depth + 1 });
+    }
+    return 'unprovable';
   }
 
   if (ctx.queryBindings.has(id.text)) return 'query';
@@ -489,21 +507,24 @@ function localConstInitializer(node: ts.Node, name: string): ts.Expression | und
 function localBinding(
   node: ts.Node,
   name: string,
-): { readonly initializer?: ts.Expression } | undefined {
+): { readonly binding: ts.Node; readonly initializer?: ts.Expression } | undefined {
   const sourceFile = node.getSourceFile();
   const position = node.getStart(sourceFile);
   let cursor: ts.Node | undefined = node.parent;
   while (cursor) {
     if (isFunctionLikeWithParameters(cursor) && cursor.getStart(sourceFile) < position) {
-      if (cursor.parameters.some((parameter) => bindingNameBinds(parameter.name, name))) {
-        return {};
+      const parameter = cursor.parameters.find((candidate) =>
+        bindingNameBinds(candidate.name, name),
+      );
+      if (parameter !== undefined) {
+        return { binding: parameter };
       }
     }
     if (ts.isBlock(cursor) || ts.isSourceFile(cursor)) {
       for (const statement of cursor.statements) {
         if (statement.getStart(sourceFile) >= position) continue;
         if (!ts.isVariableStatement(statement)) {
-          if (statementBindsName(statement, name)) return {};
+          if (statementBindsName(statement, name)) return { binding: statement };
           continue;
         }
         for (const declaration of statement.declarationList.declarations) {
@@ -514,7 +535,7 @@ function localBinding(
             declaration.initializer &&
             isConstVariableDeclaration(declaration)
           ) {
-            return { initializer: declaration.initializer };
+            return { binding: declaration, initializer: declaration.initializer };
           }
           if (
             ts.isObjectBindingPattern(declaration.name) &&
@@ -522,15 +543,24 @@ function localBinding(
             objectBindingPatternBindsName(declaration.name, name) &&
             isConstVariableDeclaration(declaration)
           ) {
-            return { initializer: declaration.initializer };
+            return { binding: declaration, initializer: declaration.initializer };
           }
-          if (bindingNameBinds(declaration.name, name)) return {};
+          if (bindingNameBinds(declaration.name, name)) return { binding: declaration };
         }
       }
     }
     cursor = cursor.parent;
   }
   return undefined;
+}
+
+function bindingIsRenderParameter(binding: ts.Node, render: RenderFunction | undefined): boolean {
+  return (
+    render !== undefined &&
+    ts.isParameter(binding) &&
+    binding.parent === render &&
+    (binding === render.parameters[0] || binding === render.parameters[2])
+  );
 }
 
 function statementBindsName(statement: ts.Statement, name: string): boolean {
@@ -742,7 +772,7 @@ function collectRenderProvenanceBindings(
   byRender: Map<ts.Node, RenderProvenanceBindings>,
 ): void {
   const queryKeys = new Set<string>();
-  let render: ts.FunctionExpression | ts.ArrowFunction | undefined;
+  let render: RenderFunction | undefined;
 
   for (const property of options.properties) {
     if (!ts.isPropertyAssignment(property) || !ts.isIdentifier(property.name)) continue;
@@ -799,6 +829,7 @@ function collectRenderProvenanceBindings(
     byRender.set(render, {
       queryBindings: bindings,
       queryDataRoots,
+      render,
       requestBindings,
       requestSlotRoots,
     });
@@ -900,6 +931,7 @@ const EMPTY_QUERY_DATA_ROOTS: ReadonlyMap<string, ReadonlySet<string>> = new Map
 const EMPTY_RENDER_BINDINGS: RenderProvenanceBindings = {
   queryBindings: EMPTY_BINDINGS,
   queryDataRoots: EMPTY_QUERY_DATA_ROOTS,
+  render: undefined,
   requestBindings: EMPTY_BINDINGS,
   requestSlotRoots: EMPTY_BINDINGS,
 };
