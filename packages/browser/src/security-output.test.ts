@@ -19,6 +19,14 @@ import {
   trustedHtml,
   trustedUrl,
 } from './security-output.js';
+import type { TrustedHtml, TrustedUrl } from './security-output.js';
+
+// SPEC §6.6: the public types are only author-time guardrails. Plain structural objects must not
+// satisfy the trusted wrappers; runtime enforcement remains the module-private WeakSets below.
+// @ts-expect-error structural objects cannot mint Kovo TrustedHtml.
+const forgedTrustedHtmlType: TrustedHtml = { value: '<b>unsafe</b>' };
+// @ts-expect-error structural objects cannot mint Kovo TrustedUrl.
+const forgedTrustedUrlType: TrustedUrl = { value: 'javascript:alert(1)' };
 
 describe('runtime output-context helpers', () => {
   it('escapes HTML-fragment placeholders and neutralizes unsafe URL attributes', () => {
@@ -31,15 +39,16 @@ describe('runtime output-context helpers', () => {
   });
 
   it('passes author-vouched trustedUrl values through unsafe-scheme neutralization (SPEC §4.8)', () => {
-    expect(trustedUrl('javascript:alert(1)')).toEqual({
-      __kovoTrustedUrl: true,
-      value: 'javascript:alert(1)',
-    });
-    expect(trustedUrl('data:image/png;base64,AAAA', 'reviewed CDN image')).toEqual({
-      __kovoTrustedUrl: true,
+    const dangerousUrl = trustedUrl('javascript:alert(1)');
+    const imageUrl = trustedUrl('data:image/png;base64,AAAA', 'reviewed CDN image');
+
+    expect(dangerousUrl).toEqual({ value: 'javascript:alert(1)' });
+    expect('__kovoTrustedUrl' in dangerousUrl).toBe(false);
+    expect(imageUrl).toEqual({
       reason: 'reviewed CDN image',
       value: 'data:image/png;base64,AAAA',
     });
+    expect('__kovoTrustedUrl' in imageUrl).toBe(false);
     expect(isKovoTrustedUrl(trustedUrl('data:text/html,x'))).toBe(true);
     expect(isKovoTrustedUrl('data:text/html,x')).toBe(false);
 
@@ -54,10 +63,9 @@ describe('runtime output-context helpers', () => {
     );
   });
 
-  // bugz H6 (SPEC §4.8 KV236): the `__kovoTrustedUrl`/`__kovoTrustedHtml` properties are a
-  // DiD brand, not the enforcement check. A wire/query-JSON object that reproduces the
-  // structural property must NOT be treated as author-vouched — the trust check is now a
-  // process-private witness that JSON cannot forge.
+  // bugz H6 (SPEC §4.8 KV236 / §6.6): historical `__kovoTrustedUrl`/`__kovoTrustedHtml`
+  // properties, process-global symbols, and hand-built object literals must NOT be treated as
+  // author-vouched. Only the module-private WeakSet witness mints trust.
   it('rejects a structurally-forged trust brand from wire/query JSON', () => {
     const forgedUrl = JSON.parse(
       '{"__kovoTrustedUrl":true,"value":"javascript:alert(document.cookie)"}',
@@ -127,17 +135,15 @@ describe('runtime output-context helpers', () => {
       toString: () => '<i>browser trusted</i>',
     } as const;
 
-    expect(trustedHtml('<b>safe</b>')).toEqual({
-      __kovoTrustedHtml: true,
-      value: '<b>safe</b>',
-    });
+    const html = trustedHtml('<b>safe</b>');
+    expect(html).toEqual({ value: '<b>safe</b>' });
+    expect('__kovoTrustedHtml' in html).toBe(false);
     expect(
       trustedHtml('<b>safe</b>', {
         reason: 'cms sanitizer owns rich text',
         source: 'cms.promo.body',
       }),
     ).toEqual({
-      __kovoTrustedHtml: true,
       reason: 'cms sanitizer owns rich text',
       source: 'cms.promo.body',
       value: '<b>safe</b>',

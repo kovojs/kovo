@@ -53,20 +53,22 @@ export type KovoOutputContext =
   | 'script-text'
   | 'trusted-html';
 
+const trustedHtmlBrand: unique symbol = Symbol('kovo.security.trustedHtml');
+const trustedUrlBrand: unique symbol = Symbol('kovo.security.trustedUrl');
+
 /**
  * Kovo's explicit raw HTML escape-hatch wrapper.
  */
 export interface TrustedHtml {
-  readonly __kovoTrustedHtml: true;
+  readonly [trustedHtmlBrand]: true;
   readonly reason?: string;
   readonly source?: string;
   readonly value: string | BrowserTrustedHTML;
 }
 
-// SPEC §4.8 KV236: the `__kovoTrustedHtml` / `__kovoTrustedUrl` properties are a
-// DEFENSE-IN-DEPTH brand for source/`kovo explain`, NOT the enforcement check. A
-// structural property or process-global symbol is userland-forgeable, so only
-// objects minted by this owner module are recognized by raw HTML / URL sinks.
+// SPEC §6.6 honesty boundary: private unique-symbol brands are author-time guardrails, not
+// the security proof. Only objects minted by this owner module and recorded in the WeakSets are
+// recognized by raw HTML / URL sinks.
 const trustedHtmlValues = new WeakSet<object>();
 const trustedUrlValues = new WeakSet<object>();
 
@@ -78,7 +80,6 @@ export function trustedHtml(
   metadata?: TrustedOutputMetadataInput,
 ): TrustedHtml {
   const trusted = {
-    __kovoTrustedHtml: true,
     ...trustedOutputMetadata(metadata),
     value,
   } as TrustedHtml;
@@ -124,9 +125,9 @@ export function sanitizeRichHtml(value: string, options?: SafeRichHtmlOptions): 
 
 /**
  * Returns whether a value is a process-minted Kovo trusted-HTML brand. SPEC §4.8
- * KV236: checks the non-forgeable module-private witness, NOT the structural
- * `__kovoTrustedHtml` property, so a wire/query-JSON object that merely reproduces
- * the property shape is never honored as author-vouched raw HTML.
+ * KV236 / §6.6: checks the non-forgeable module-private witness, NOT any userland
+ * property shape, so a wire/query-JSON object is never honored as author-vouched
+ * raw HTML.
  */
 export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
   return typeof value === 'object' && value !== null && trustedHtmlValues.has(value);
@@ -139,7 +140,7 @@ export function isKovoTrustedHtml(value: unknown): value is TrustedHtml {
  * neutralizing it against the scheme allowlist.
  */
 export interface TrustedUrl {
-  readonly __kovoTrustedUrl: true;
+  readonly [trustedUrlBrand]: true;
   readonly reason?: string;
   readonly source?: string;
   readonly value: string;
@@ -153,16 +154,16 @@ export interface TrustedUrl {
  * brand is visible in source and `kovo explain`.
  */
 export function trustedUrl(value: string, metadata?: TrustedOutputMetadataInput): TrustedUrl {
-  const trusted: TrustedUrl = { __kovoTrustedUrl: true, ...trustedOutputMetadata(metadata), value };
+  const trusted = { ...trustedOutputMetadata(metadata), value } as TrustedUrl;
   trustedUrlValues.add(trusted);
   return trusted;
 }
 
 /**
  * Returns whether a value is a process-minted Kovo trusted-URL brand. SPEC §4.8
- * KV236: checks the non-forgeable module-private witness, NOT the structural
- * `__kovoTrustedUrl` property, so a wire/query-JSON object that merely reproduces
- * the property shape is never honored as an author-vouched URL.
+ * KV236 / §6.6: checks the non-forgeable module-private witness, NOT any userland
+ * property shape, so a wire/query-JSON object is never honored as an
+ * author-vouched URL.
  */
 export function isKovoTrustedUrl(value: unknown): value is TrustedUrl {
   return typeof value === 'object' && value !== null && trustedUrlValues.has(value);
