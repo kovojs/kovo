@@ -255,106 +255,25 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 120_000);
 
-  it('serves attacker-shaped helper text escaped from the production build artifact', async () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-escaped-helper-text-'));
-    const port = await reservePort();
-    let server: ChildProcessWithoutNullStreams | undefined;
-
-    try {
-      writeKovoProject(root, { name: 'Prod Escaped Helper Text Proof' });
-      linkStarterBuildDependencies(root);
-      addEscapedAttackerTextProof(root);
-
-      buildProductionArtifact(root);
-      const census = assertProdArtifactSinkCensus(root, [
-        {
-          proof: {
-            evidence:
-              'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes escaped SSR route text from the production server artifact',
-            kind: 'proof',
-          },
-          sink: 'SSR document HTML route text',
-          witnesses: ['xss-escape-proof', 'escapeTextWithRenderedHtml'],
-        },
-        {
-          proof: {
-            evidence:
-              'packages/create-kovo/src/index.build.prod-artifact.security.test.ts builds the production artifact only through framework-owned escaped/trusted HTML boundaries',
-            kind: 'proof',
-          },
-          sink: 'SSR raw/trusted HTML boundary',
-          witnesses: ['trustedHtml', 'escapeTextWithRenderedHtml'],
-        },
-      ]);
-      expect(census.entries).toHaveLength(2);
-
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          HOST: '127.0.0.1',
-          NODE_ENV: 'production',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
-
-      const html = await fetchTextWhenReady(`${origin}/xss-escape-proof`, output);
-      expect(html).toContain('data-proof="xss-escape"');
-      expect(html).toContain('&lt;img src=x onerror="alert(1)"&gt;');
-      expect(html).toContain('&lt;b id="xss-probe"&gt;RAW&lt;/b&gt;');
-      expect(html).not.toContain('<img src=x onerror="alert(1)">');
-      expect(html).not.toContain('<b id="xss-probe">RAW</b>');
-    } finally {
-      await stopProcess(server);
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 120_000);
-
-  it('serves enhanced mutation fragments and query refreshes escaped from production artifacts', async () => {
+  it('serves escaped runtime security wires from shared production artifacts', async () => {
     for (const dialect of ['postgres', 'sqlite'] as const) {
       const tempParent = tmpdir();
       mkdirSync(tempParent, { recursive: true });
-      const root = mkdtempSync(join(tempParent, `create-kovo-prod-enhanced-wire-${dialect}-`));
+      const root = mkdtempSync(join(tempParent, `create-kovo-prod-runtime-security-${dialect}-`));
       const port = await reservePort();
       let server: ChildProcessWithoutNullStreams | undefined;
 
       try {
-        writeKovoProject(root, { dialect, name: `Prod Enhanced Wire Proof ${dialect}` });
+        writeKovoProject(root, { dialect, name: `Prod Runtime Security Proof ${dialect}` });
         linkStarterBuildDependencies(root);
+        addEscapedAttackerTextProof(root);
+        addQueryWireProof(root);
         addEnhancedMutationWireProof(root);
 
         buildProductionArtifact(root);
-        const census = assertProdArtifactSinkCensus(root, [
-          {
-            proof: {
-              evidence:
-                'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes escaped enhanced mutation fragment HTML from the production server artifact',
-              kind: 'proof',
-            },
-            sink: 'enhanced mutation fragment body',
-            witnesses: [
-              'enhanced-mutation-wire-proof',
-              'renderFragmentWireHtml',
-              'escapeTextWithRenderedHtml',
-            ],
-          },
-          {
-            proof: {
-              evidence:
-                'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes escaped mutation-triggered query refresh wire from the production server artifact',
-              kind: 'proof',
-            },
-            sink: 'mutation-triggered query refresh wire',
-            witnesses: ['enhanced-mutation-wire-proof', 'renderQueryWireHtml', 'escapeHtml'],
-          },
-        ]);
-        expect(census.entries).toHaveLength(2);
-        expect(JSON.stringify(readProductionGraph(root))).toContain('enhanced-mutation-wire-proof');
+        assertEscapedAttackerTextCensus(root);
+        assertEnhancedMutationWireCensus(root);
+        assertQueryWireCensus(root);
 
         server = spawn(process.execPath, ['dist/server/server.mjs'], {
           cwd: root,
@@ -369,120 +288,9 @@ describe('create-kovo starter (build integration: production security artifacts)
         const output = collectOutput(server);
         const origin = `http://127.0.0.1:${port}`;
 
-        const pageHtml = await fetchTextWhenReady(`${origin}/enhanced-mutation-wire-proof`, output);
-        const form = firstFormHtml(pageHtml);
-        const action = attributeValue(form, 'action');
-        if (!action) throw new Error('Expected enhanced mutation proof form action.');
-        const proofRoot = rootElementWithAttribute(pageHtml, 'data-proof', 'enhanced-wire');
-        const target = requiredAttribute(proofRoot, 'kovo-fragment-target');
-        const deps = requiredAttribute(proofRoot, 'kovo-deps');
-        const component = requiredAttribute(proofRoot, 'kovo-live-component');
-        const liveToken = requiredAttribute(proofRoot, 'kovo-live-token');
-        const props = attributeValue(proofRoot, 'kovo-props') ?? '{}';
-
-        expect(pageHtml).toContain('&lt;img src=x onerror="alert(1)"&gt;');
-        expect(pageHtml).not.toContain('<img src=x onerror="alert(1)">');
-
-        const response = await fetch(`${origin}${action}`, {
-          body: new URLSearchParams({
-            'Kovo-Idem': `enhanced-wire-${Date.now()}-${dialect}`,
-            note: '<img src=x onerror="alert(1)"><script>alert(1)</script>',
-          }),
-          headers: {
-            accept: 'text/vnd.kovo.fragment+html',
-            'content-type': 'application/x-www-form-urlencoded',
-            'Kovo-Form-Target': target,
-            'Kovo-Fragment': 'true',
-            'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
-            'Kovo-Targets': `${target}=${deps}`,
-            origin,
-          },
-          method: 'POST',
-        });
-        const body = await response.text();
-
-        expect(response.status, body).toBe(200);
-        expect(response.headers.get('content-type')).toContain('text/vnd.kovo.fragment+html');
-        expect(response.headers.get('cache-control')).toBe('private, no-store');
-        expect(response.headers.get('kovo-changes')).toContain('enhanced-mutation-wire-proof');
-        expect(body).toContain('<kovo-query');
-        expect(body).toContain('<kovo-fragment');
-        expect(body).toContain('&lt;img src=x onerror=\\"alert(1)\\"&gt;');
-        expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-        expect(body).toContain('&lt;img src=x onerror="alert(1)"&gt;');
-        expect(body).not.toContain('<img src=x onerror="alert(1)">');
-        expect(body).not.toContain('<script>alert(1)</script>');
-      } finally {
-        await stopProcess(server);
-        rmSync(root, { force: true, recursive: true });
-      }
-    }
-  }, 240_000);
-
-  it('serves /_q query wire bodies escaped and private from production artifacts', async () => {
-    for (const dialect of ['postgres', 'sqlite'] as const) {
-      const tempParent = tmpdir();
-      mkdirSync(tempParent, { recursive: true });
-      const root = mkdtempSync(join(tempParent, `create-kovo-prod-query-wire-${dialect}-`));
-      const port = await reservePort();
-      let server: ChildProcessWithoutNullStreams | undefined;
-
-      try {
-        writeKovoProject(root, { dialect, name: `Prod Query Wire Proof ${dialect}` });
-        linkStarterBuildDependencies(root);
-        addQueryWireProof(root);
-
-        buildProductionArtifact(root);
-        const census = assertProdArtifactSinkCensus(root, [
-          {
-            proof: {
-              evidence:
-                'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes escaped /_q body wire from the production server artifact',
-              kind: 'proof',
-            },
-            sink: '/_q query response body',
-            witnesses: ['renderQueryWireHtml', 'escapeHtml', 'q-response-proof'],
-          },
-          {
-            proof: {
-              evidence:
-                'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes /_q private cache headers from the production server artifact',
-              kind: 'proof',
-            },
-            sink: '/_q query response headers',
-            witnesses: ['querySuccessCacheHeaders', 'private, no-store', 'Vary'],
-          },
-        ]);
-        expect(census.entries).toHaveLength(2);
-        const queryKey = 'queries/q-response-proof-query';
-        expect(JSON.stringify(readProductionGraph(root))).toContain(queryKey);
-
-        server = spawn(process.execPath, ['dist/server/server.mjs'], {
-          cwd: root,
-          detached: process.platform !== 'win32',
-          env: {
-            ...withRepoBinOnPath(),
-            HOST: '127.0.0.1',
-            NODE_ENV: 'production',
-            PORT: String(port),
-          },
-        });
-        const output = collectOutput(server);
-        const origin = `http://127.0.0.1:${port}`;
-
-        await fetchTextWhenReady(`${origin}/_q/${encodeURIComponent(queryKey)}`, output);
-        const response = await fetch(`${origin}/_q/${encodeURIComponent(queryKey)}`);
-        const body = await response.text();
-
-        expect(response.status, body).toBe(200);
-        expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
-        expect(response.headers.get('cache-control')).toBe('private, no-store');
-        expect(response.headers.get('vary')).toContain('Cookie');
-        expect(body).toContain(`<kovo-query name="${queryKey}">`);
-        expect(body).toContain('&lt;img src=x onerror=\\"alert(1)\\"&gt;');
-        expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
-        expect(body).not.toContain('<img src=x onerror="alert(1)">');
-        expect(body).not.toContain('<script>alert(1)</script>');
+        await assertEscapedAttackerTextServed(origin, output);
+        await assertEnhancedMutationWireServed(origin, dialect, output);
+        await assertQueryWireServed(origin, output);
       } finally {
         await stopProcess(server);
         rmSync(root, { force: true, recursive: true });
@@ -589,6 +397,164 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 120_000);
 });
+
+function assertEscapedAttackerTextCensus(root: string): void {
+  const census = assertProdArtifactSinkCensus(root, [
+    {
+      proof: {
+        evidence:
+          'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes escaped SSR route text from the production server artifact',
+        kind: 'proof',
+      },
+      sink: 'SSR document HTML route text',
+      witnesses: ['xss-escape-proof', 'escapeTextWithRenderedHtml'],
+    },
+    {
+      proof: {
+        evidence:
+          'packages/create-kovo/src/index.build.prod-artifact.security.test.ts builds the production artifact only through framework-owned escaped/trusted HTML boundaries',
+        kind: 'proof',
+      },
+      sink: 'SSR raw/trusted HTML boundary',
+      witnesses: ['trustedHtml', 'escapeTextWithRenderedHtml'],
+    },
+  ]);
+  expect(census.entries).toHaveLength(2);
+}
+
+function assertEnhancedMutationWireCensus(root: string): void {
+  const census = assertProdArtifactSinkCensus(root, [
+    {
+      proof: {
+        evidence:
+          'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes escaped enhanced mutation fragment HTML from the production server artifact',
+        kind: 'proof',
+      },
+      sink: 'enhanced mutation fragment body',
+      witnesses: [
+        'enhanced-mutation-wire-proof',
+        'renderFragmentWireHtml',
+        'escapeTextWithRenderedHtml',
+      ],
+    },
+    {
+      proof: {
+        evidence:
+          'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes escaped mutation-triggered query refresh wire from the production server artifact',
+        kind: 'proof',
+      },
+      sink: 'mutation-triggered query refresh wire',
+      witnesses: ['enhanced-mutation-wire-proof', 'renderQueryWireHtml', 'escapeHtml'],
+    },
+  ]);
+  expect(census.entries).toHaveLength(2);
+  expect(JSON.stringify(readProductionGraph(root))).toContain('enhanced-mutation-wire-proof');
+}
+
+function assertQueryWireCensus(root: string): void {
+  const census = assertProdArtifactSinkCensus(root, [
+    {
+      proof: {
+        evidence:
+          'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes escaped /_q body wire from the production server artifact',
+        kind: 'proof',
+      },
+      sink: '/_q query response body',
+      witnesses: ['renderQueryWireHtml', 'escapeHtml', 'q-response-proof'],
+    },
+    {
+      proof: {
+        evidence:
+          'packages/create-kovo/src/index.build.prod-artifact.security.test.ts observes /_q private cache headers from the production server artifact',
+        kind: 'proof',
+      },
+      sink: '/_q query response headers',
+      witnesses: ['querySuccessCacheHeaders', 'private, no-store', 'Vary'],
+    },
+  ]);
+  expect(census.entries).toHaveLength(2);
+  expect(JSON.stringify(readProductionGraph(root))).toContain(queryWireProofKey);
+}
+
+async function assertEscapedAttackerTextServed(
+  origin: string,
+  output: () => string,
+): Promise<void> {
+  const html = await fetchTextWhenReady(`${origin}/xss-escape-proof`, output);
+  expect(html).toContain('data-proof="xss-escape"');
+  expect(html).toContain('&lt;img src=x onerror="alert(1)"&gt;');
+  expect(html).toContain('&lt;b id="xss-probe"&gt;RAW&lt;/b&gt;');
+  expect(html).not.toContain('<img src=x onerror="alert(1)">');
+  expect(html).not.toContain('<b id="xss-probe">RAW</b>');
+}
+
+async function assertEnhancedMutationWireServed(
+  origin: string,
+  dialect: 'postgres' | 'sqlite',
+  output: () => string,
+): Promise<void> {
+  const pageHtml = await fetchTextWhenReady(`${origin}/enhanced-mutation-wire-proof`, output);
+  const form = firstFormHtml(pageHtml);
+  const action = attributeValue(form, 'action');
+  if (!action) throw new Error('Expected enhanced mutation proof form action.');
+  const proofRoot = rootElementWithAttribute(pageHtml, 'data-proof', 'enhanced-wire');
+  const target = requiredAttribute(proofRoot, 'kovo-fragment-target');
+  const deps = requiredAttribute(proofRoot, 'kovo-deps');
+  const component = requiredAttribute(proofRoot, 'kovo-live-component');
+  const liveToken = requiredAttribute(proofRoot, 'kovo-live-token');
+  const props = attributeValue(proofRoot, 'kovo-props') ?? '{}';
+
+  expect(pageHtml).toContain('&lt;img src=x onerror="alert(1)"&gt;');
+  expect(pageHtml).not.toContain('<img src=x onerror="alert(1)">');
+
+  const response = await fetch(`${origin}${action}`, {
+    body: new URLSearchParams({
+      'Kovo-Idem': `enhanced-wire-${Date.now()}-${dialect}`,
+      note: '<img src=x onerror="alert(1)"><script>alert(1)</script>',
+    }),
+    headers: {
+      accept: 'text/vnd.kovo.fragment+html',
+      'content-type': 'application/x-www-form-urlencoded',
+      'Kovo-Form-Target': target,
+      'Kovo-Fragment': 'true',
+      'Kovo-Live-Targets': `${target}#${component}@${liveToken}:${props}`,
+      'Kovo-Targets': `${target}=${deps}`,
+      origin,
+    },
+    method: 'POST',
+  });
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(response.headers.get('content-type')).toContain('text/vnd.kovo.fragment+html');
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('kovo-changes')).toContain('enhanced-mutation-wire-proof');
+  expect(body).toContain('<kovo-query');
+  expect(body).toContain('<kovo-fragment');
+  expect(body).toContain('&lt;img src=x onerror=\\"alert(1)\\"&gt;');
+  expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  expect(body).toContain('&lt;img src=x onerror="alert(1)"&gt;');
+  expect(body).not.toContain('<img src=x onerror="alert(1)">');
+  expect(body).not.toContain('<script>alert(1)</script>');
+}
+
+async function assertQueryWireServed(origin: string, output: () => string): Promise<void> {
+  await fetchTextWhenReady(`${origin}/_q/${encodeURIComponent(queryWireProofKey)}`, output);
+  const response = await fetch(`${origin}/_q/${encodeURIComponent(queryWireProofKey)}`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(response.headers.get('content-type')).toBe('text/html; charset=utf-8');
+  expect(response.headers.get('cache-control')).toBe('private, no-store');
+  expect(response.headers.get('vary')).toContain('Cookie');
+  expect(body).toContain(`<kovo-query name="${queryWireProofKey}">`);
+  expect(body).toContain('&lt;img src=x onerror=\\"alert(1)\\"&gt;');
+  expect(body).toContain('&lt;script&gt;alert(1)&lt;/script&gt;');
+  expect(body).not.toContain('<img src=x onerror="alert(1)">');
+  expect(body).not.toContain('<script>alert(1)</script>');
+}
+
+const queryWireProofKey = 'queries/q-response-proof-query';
 
 function addQueryWireProof(root: string): void {
   const queriesPath = join(root, 'src/queries.ts');
@@ -706,15 +672,14 @@ function addEnhancedMutationWireProof(root: string): void {
   );
   const appWithQuery = replaceRequired(
     appWithMutation,
-    '  queries: [contactsQuery],',
-    '  queries: [contactsQuery, enhancedMutationWireProofQuery],',
+    '  queries: [contactsQuery, qResponseProofQuery],',
+    '  queries: [contactsQuery, qResponseProofQuery, enhancedMutationWireProofQuery],',
     'enhanced mutation wire proof query registration',
   );
   const app = replaceRequired(
     appWithQuery,
-    "  routes: [\n    route('/', {",
+    "    route('/', {",
     [
-      '  routes: [',
       "    route('/enhanced-mutation-wire-proof', {",
       "      access: publicAccess('public enhanced mutation output escaping proof'),",
       "      meta: { title: 'Enhanced mutation wire proof' },",
