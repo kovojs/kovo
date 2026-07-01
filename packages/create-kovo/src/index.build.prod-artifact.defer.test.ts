@@ -17,7 +17,7 @@ import {
 import { buildProductionArtifact } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production Defer artifacts)', () => {
-  it('streams nested Defer regions discovered after an async outer region settles', async () => {
+  it('streams nested Defer regions and isolates throwing regions in production artifacts', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-nested-defer-'));
@@ -27,7 +27,7 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
     try {
       writeKovoProject(root, { dialect: 'sqlite', name: 'Prod Nested Defer Proof' });
       linkStarterBuildDependencies(root);
-      addNestedDeferRoute(root);
+      addDeferProofRoutes(root);
 
       buildProductionArtifact(root);
 
@@ -65,6 +65,30 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
             '<kovo-defer target="inner-region" state="pending" data-kovo-region-priority="after-paint"><p>Loading inner</p></kovo-defer>',
           ),
       ).toBe(false);
+
+      const errorBody = await fetchTextWhenReady(`${origin}/probe/defer-error`, output);
+      expect(errorBody).toContain(
+        '<kovo-defer target="unsafe-region" state="pending" data-kovo-region-priority="after-paint"><section>Loading &lt;img src=x onerror=alert(1)&gt;</section></kovo-defer>',
+      );
+      expect(errorBody).toContain(
+        '<kovo-defer target="unsafe-region" state="error" data-kovo-region-priority="after-paint"><section>Loading &lt;img src=x onerror=alert(1)&gt;</section></kovo-defer>',
+      );
+      expect(errorBody).toContain('<kovo-fragment target="safe-sibling" priority="normal">');
+      expect(errorBody).toContain('&lt;strong&gt;raw sibling&lt;/strong&gt;');
+      expect(errorBody).not.toContain('<img src=x onerror=alert(1)>');
+      expect(errorBody).not.toContain('<strong>raw sibling</strong>');
+      expect(errorBody).not.toContain('private deferred detail');
+
+      const shellPayload = encodeURIComponent('<img src=x onerror=alert(1)>');
+      const shellResponse = await fetch(`${origin}/probe/error-shell?payload=${shellPayload}`);
+      const shellBody = await shellResponse.text();
+      expect(shellResponse.status, shellBody).toBe(500);
+      expect(shellBody).toContain(
+        '&lt;main data-shell="500"&gt;&lt;img src=x onerror=alert(1)&gt; Set-Cookie: session=evil&lt;/main&gt;',
+      );
+      expect(shellBody).not.toContain('<main data-shell="500">');
+      expect(shellBody).not.toContain('<img src=x onerror=alert(1)>');
+      expect(shellBody).not.toContain('private route detail');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -72,10 +96,26 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
   }, 120_000);
 });
 
-function addNestedDeferRoute(root: string): void {
+function addDeferProofRoutes(root: string): void {
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
     .replace('  createRequestHandler,', ['  createRequestHandler,', '  Defer,'].join('\n'))
+    .replace(
+      '  endpoints: [healthEndpoint],',
+      [
+        '  endpoints: [healthEndpoint],',
+        '  errorShells: {',
+        '    serverError({ request, status }) {',
+        '      const payload = new URL(request.url).searchParams.get("payload") ?? "";',
+        '      return {',
+        '        body: `<main data-shell="${status}">${payload} Set-Cookie: session=evil</main>`,',
+        '        headers: { "Content-Type": "text/html; charset=utf-8" },',
+        '        status,',
+        '      };',
+        '    },',
+        '  },',
+      ].join('\n'),
+    )
     .replace(
       "  routes: [\n    route('/', {",
       [
@@ -112,6 +152,41 @@ function addNestedDeferRoute(root: string): void {
         '            />',
         '          </main>',
         '        );',
+        '      },',
+        '    }),',
+        "    route('/probe/defer-error', {",
+        "      access: publicAccess('public Defer error production artifact proof'),",
+        "      meta: { title: 'Defer error proof' },",
+        '      layout: AppLayout,',
+        '      stylesheets,',
+        '      async page() {',
+        "        const unsafe = '<img src=x onerror=alert(1)>';",
+        '        return (',
+        '          <main>',
+        '            <Defer',
+        '              fallback={<section>Loading {unsafe}</section>}',
+        '              priority="after-paint"',
+        '              render={async () => {',
+        '                await new Promise((resolve) => setTimeout(resolve, 30));',
+        '                throw new Error(`private deferred detail ${unsafe}`);',
+        '              }}',
+        '              target="unsafe-region"',
+        '            />',
+        '            <Defer',
+        '              fallback={<p>Loading sibling</p>}',
+        '              priority="after-paint"',
+        "              render={async () => '<strong>raw sibling</strong>'}",
+        '              target="safe-sibling"',
+        '            />',
+        '          </main>',
+        '        );',
+        '      },',
+        '    }),',
+        "    route('/probe/error-shell', {",
+        "      access: publicAccess('public error shell production artifact proof'),",
+        '      layout: AppLayout,',
+        '      page() {',
+        "        throw new Error('private route detail <script>boom</script>');",
         '      },',
         '    }),',
         "    route('/', {",

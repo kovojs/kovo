@@ -424,14 +424,14 @@ function normalizeConfiguredErrorShellResponse(
   if (isRoutePageResponseLike(rendered)) {
     return {
       ...rendered,
-      body: typeof rendered.body === 'string' ? rendered.body : '',
+      body: 'body' in rendered ? renderConfiguredErrorShellBody(rendered.body) : '',
       headers: rendered.headers ?? {},
       status,
     };
   }
 
   return {
-    body: renderDefaultRouteValue(rendered),
+    body: renderConfiguredErrorShellBody(rendered),
     headers: { 'Content-Type': 'text/html; charset=utf-8' },
     status,
   };
@@ -439,12 +439,19 @@ function normalizeConfiguredErrorShellResponse(
 
 function isRoutePageResponseLike(
   value: unknown,
-): value is Partial<RoutePageResponse> & Pick<RoutePageResponse, 'body'> {
+): value is { body?: unknown; headers?: RoutePageResponse['headers']; status?: unknown } {
   return (
     typeof value === 'object' &&
     value !== null &&
     ('body' in value || 'headers' in value || 'status' in value)
   );
+}
+
+function renderConfiguredErrorShellBody(value: unknown): string {
+  // SPEC §5.2/§9.2/§9.5: configured error shells are still request-shell output
+  // sinks. Plain strings are untrusted text; framework-rendered/trusted HTML is
+  // the explicit proof that markup may pass through.
+  return renderHtmlValue(value);
 }
 
 function stripContentTypeHeader(
