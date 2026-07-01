@@ -63,6 +63,20 @@ export type FrameworkIdentityTypeScript = Pick<
   | 'SyntaxKind'
 >;
 
+/** @internal Resolver behavior for an expression syntax kind. */
+export type FrameworkIdentityExpressionKindResolution =
+  | 'fail-closed'
+  | 'resolve-element-access'
+  | 'resolve-identifier'
+  | 'resolve-property-access'
+  | 'unwrap-expression';
+
+/** @internal One row in the resolver expression-kind table. */
+export interface FrameworkIdentityExpressionKindRow {
+  readonly kind: TypeScript.SyntaxKind | 'default';
+  readonly resolution: FrameworkIdentityExpressionKindResolution;
+}
+
 const MAX_RESOLUTION_DEPTH = 12;
 
 interface DeclarationIndexEntry {
@@ -188,6 +202,28 @@ export function frameworkExportForModuleSpecifier(
   return specifierExportIdentity(specifier, exportName);
 }
 
+/**
+ * @internal Expression-kind coverage table for framework identity resolution.
+ *
+ * SPEC §5.2 and §11 require security recognition to fail closed: rows not listed
+ * here use the explicit `default` row instead of silently resolving clean.
+ */
+export function frameworkIdentityExpressionKindRows(
+  ts: FrameworkIdentityTypeScript,
+): readonly FrameworkIdentityExpressionKindRow[] {
+  return [
+    { kind: ts.SyntaxKind.Identifier, resolution: 'resolve-identifier' },
+    { kind: ts.SyntaxKind.PropertyAccessExpression, resolution: 'resolve-property-access' },
+    { kind: ts.SyntaxKind.ElementAccessExpression, resolution: 'resolve-element-access' },
+    { kind: ts.SyntaxKind.ParenthesizedExpression, resolution: 'unwrap-expression' },
+    { kind: ts.SyntaxKind.AsExpression, resolution: 'unwrap-expression' },
+    { kind: ts.SyntaxKind.SatisfiesExpression, resolution: 'unwrap-expression' },
+    { kind: ts.SyntaxKind.TypeAssertionExpression, resolution: 'unwrap-expression' },
+    { kind: ts.SyntaxKind.NonNullExpression, resolution: 'unwrap-expression' },
+    { kind: 'default', resolution: 'fail-closed' },
+  ];
+}
+
 /** @internal Register extra local source files that source-only identity resolution may inspect. */
 export function registerFrameworkIdentityProject(
   sourceFile: TypeScript.SourceFile,
@@ -232,34 +268,41 @@ function canonicalExpression(
   if (depth > MAX_RESOLUTION_DEPTH) return undefined;
   const node = unwrapExpression(ts, expression);
 
-  if (ts.isIdentifier(node)) {
-    const declaration = declarationForIdentifier(ts, sourceFile, node);
-    if (declaration) {
-      return declarationIdentity(ts, sourceFile, declaration, options, seen, depth + 1);
+  switch (frameworkIdentityExpressionKindResolution(ts, node.kind)) {
+    case 'resolve-identifier': {
+      if (!ts.isIdentifier(node)) return undefined;
+      const declaration = declarationForIdentifier(ts, sourceFile, node);
+      if (declaration) {
+        return declarationIdentity(ts, sourceFile, declaration, options, seen, depth + 1);
+      }
+      return legacyGlobalIdentity(node.text, options);
     }
-    return legacyGlobalIdentity(node.text, options);
-  }
 
-  if (ts.isPropertyAccessExpression(node)) {
-    return namespaceMemberIdentity(
-      ts,
-      sourceFile,
-      node.expression,
-      node.name.text,
-      options,
-      seen,
-      depth + 1,
-    );
-  }
+    case 'resolve-property-access': {
+      if (!ts.isPropertyAccessExpression(node)) return undefined;
+      return namespaceMemberIdentity(
+        ts,
+        sourceFile,
+        node.expression,
+        node.name.text,
+        options,
+        seen,
+        depth + 1,
+      );
+    }
 
-  if (ts.isElementAccessExpression(node)) {
-    const member = elementAccessMemberName(ts, node);
-    return member
-      ? namespaceMemberIdentity(ts, sourceFile, node.expression, member, options, seen, depth + 1)
-      : undefined;
-  }
+    case 'resolve-element-access': {
+      if (!ts.isElementAccessExpression(node)) return undefined;
+      const member = elementAccessMemberName(ts, node);
+      return member
+        ? namespaceMemberIdentity(ts, sourceFile, node.expression, member, options, seen, depth + 1)
+        : undefined;
+    }
 
-  return undefined;
+    case 'fail-closed':
+    case 'unwrap-expression':
+      return undefined;
+  }
 }
 
 function declarationIdentity(
@@ -662,12 +705,27 @@ function exportedIdentity(
   for (const statement of sourceFile.statements) {
     if (ts.isExportDeclaration(statement)) {
       const moduleSpecifier = statement.moduleSpecifier;
-      if (moduleSpecifier === undefined || !ts.isStringLiteralLike(moduleSpecifier)) continue;
       const exportClause = statement.exportClause;
       if (exportClause && ts.isNamedExports(exportClause)) {
         for (const element of exportClause.elements) {
           if (element.name.text !== exportName) continue;
           const importedName = element.propertyName?.text ?? element.name.text;
+          if (moduleSpecifier === undefined) {
+            return declarationIdentity(
+              ts,
+              sourceFile,
+              declarationForExportedLocal(
+                ts,
+                sourceFile,
+                importedName,
+                statement.getStart(sourceFile),
+              ) ?? element,
+              options,
+              seen,
+              depth + 1,
+            );
+          }
+          if (!ts.isStringLiteralLike(moduleSpecifier)) continue;
           const specifier = moduleSpecifier.text;
           return (
             specifierExportIdentity(specifier, importedName) ??
@@ -684,6 +742,7 @@ function exportedIdentity(
         }
       }
       if (!exportClause) {
+        if (moduleSpecifier === undefined || !ts.isStringLiteralLike(moduleSpecifier)) continue;
         const specifier = moduleSpecifier.text;
         const starIdentity =
           specifierExportIdentity(specifier, exportName) ??
@@ -718,6 +777,44 @@ function exportedIdentity(
   }
 
   return undefined;
+}
+
+function declarationForExportedLocal(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  name: string,
+  exportPosition: number,
+): TypeScript.Node | undefined {
+  const declaration = declarationInContainerBefore(
+    ts,
+    sourceFile,
+    sourceFile,
+    name,
+    exportPosition,
+  );
+  return declaration && !ts.isExportSpecifier(declaration) ? declaration : undefined;
+}
+
+function frameworkIdentityExpressionKindResolution(
+  ts: FrameworkIdentityTypeScript,
+  kind: TypeScript.SyntaxKind,
+): FrameworkIdentityExpressionKindResolution {
+  switch (kind) {
+    case ts.SyntaxKind.Identifier:
+      return 'resolve-identifier';
+    case ts.SyntaxKind.PropertyAccessExpression:
+      return 'resolve-property-access';
+    case ts.SyntaxKind.ElementAccessExpression:
+      return 'resolve-element-access';
+    case ts.SyntaxKind.ParenthesizedExpression:
+    case ts.SyntaxKind.AsExpression:
+    case ts.SyntaxKind.SatisfiesExpression:
+    case ts.SyntaxKind.TypeAssertionExpression:
+    case ts.SyntaxKind.NonNullExpression:
+      return 'unwrap-expression';
+    default:
+      return 'fail-closed';
+  }
 }
 
 function resolveProjectSourceFile(

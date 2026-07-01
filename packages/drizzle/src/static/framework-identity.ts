@@ -27,6 +27,30 @@ export interface FrameworkIdentityOptions {
   legacyGlobals?: readonly CanonicalFrameworkExportIdentity[];
 }
 
+/** @internal Resolver behavior for an expression syntax kind. */
+export type FrameworkIdentityExpressionKindResolution =
+  | 'fail-closed'
+  | 'resolve-element-access'
+  | 'resolve-identifier'
+  | 'resolve-property-access'
+  | 'unwrap-expression';
+
+/** @internal Expression-kind coverage table for the ts-morph framework identity adapter. */
+export const frameworkIdentityExpressionKindRows = [
+  { kind: SyntaxKind.Identifier, resolution: 'resolve-identifier' },
+  { kind: SyntaxKind.PropertyAccessExpression, resolution: 'resolve-property-access' },
+  { kind: SyntaxKind.ElementAccessExpression, resolution: 'resolve-element-access' },
+  { kind: SyntaxKind.ParenthesizedExpression, resolution: 'unwrap-expression' },
+  { kind: SyntaxKind.AsExpression, resolution: 'unwrap-expression' },
+  { kind: SyntaxKind.SatisfiesExpression, resolution: 'unwrap-expression' },
+  { kind: SyntaxKind.TypeAssertionExpression, resolution: 'unwrap-expression' },
+  { kind: SyntaxKind.NonNullExpression, resolution: 'unwrap-expression' },
+  { kind: 'default', resolution: 'fail-closed' },
+] as const satisfies readonly {
+  readonly kind: SyntaxKind | 'default';
+  readonly resolution: FrameworkIdentityExpressionKindResolution;
+}[];
+
 /** @internal */
 export function frameworkExport(
   module: CanonicalFrameworkModule,
@@ -95,33 +119,46 @@ function canonicalExpression(
   if (depth > 12) return undefined;
   const node = unwrappedExpression(expression);
 
-  if (Node.isIdentifier(node)) {
-    const symbolIdentity = canonicalSymbol(symbolForIdentifier(node), options, seen, depth + 1);
-    if (symbolIdentity) return symbolIdentity;
+  switch (frameworkIdentityExpressionKindResolution(node.getKind())) {
+    case 'resolve-identifier': {
+      if (!Node.isIdentifier(node)) return undefined;
+      const symbolIdentity = canonicalSymbol(symbolForIdentifier(node), options, seen, depth + 1);
+      if (symbolIdentity) return symbolIdentity;
 
-    const initializer = localConstIdentifierInitializer(node);
-    if (initializer) return canonicalExpression(initializer, options, seen, depth + 1);
+      const initializer = localConstIdentifierInitializer(node);
+      if (initializer) return canonicalExpression(initializer, options, seen, depth + 1);
 
-    const localBinding = localBindingIdentityByName(node, options, seen, depth + 1);
-    if (localBinding) return localBinding;
+      const localBinding = localBindingIdentityByName(node, options, seen, depth + 1);
+      if (localBinding) return localBinding;
 
-    return legacyGlobalIdentity(node, options);
+      return legacyGlobalIdentity(node, options);
+    }
+
+    case 'resolve-property-access': {
+      if (!Node.isPropertyAccessExpression(node)) return undefined;
+      const direct = canonicalSymbol(node.getSymbol(), options, seen, depth + 1);
+      if (direct) return direct;
+      return canonicalNamespaceMember(
+        node.getExpression(),
+        node.getName(),
+        options,
+        seen,
+        depth + 1,
+      );
+    }
+
+    case 'resolve-element-access': {
+      if (!Node.isElementAccessExpression(node)) return undefined;
+      const member = propertyNameText(node.getArgumentExpression());
+      return member
+        ? canonicalNamespaceMember(node.getExpression(), member, options, seen, depth + 1)
+        : undefined;
+    }
+
+    case 'fail-closed':
+    case 'unwrap-expression':
+      return undefined;
   }
-
-  if (Node.isPropertyAccessExpression(node)) {
-    const direct = canonicalSymbol(node.getSymbol(), options, seen, depth + 1);
-    if (direct) return direct;
-    return canonicalNamespaceMember(node.getExpression(), node.getName(), options, seen, depth + 1);
-  }
-
-  if (Node.isElementAccessExpression(node)) {
-    const member = propertyNameText(node.getArgumentExpression());
-    return member
-      ? canonicalNamespaceMember(node.getExpression(), member, options, seen, depth + 1)
-      : undefined;
-  }
-
-  return canonicalSymbol(node.getSymbol(), options, seen, depth + 1);
 }
 
 function canonicalSymbol(
@@ -648,4 +685,25 @@ function unwrappedExpression(node: Node): Node {
     current = current.getExpression();
   }
   return current;
+}
+
+function frameworkIdentityExpressionKindResolution(
+  kind: SyntaxKind,
+): FrameworkIdentityExpressionKindResolution {
+  switch (kind) {
+    case SyntaxKind.Identifier:
+      return 'resolve-identifier';
+    case SyntaxKind.PropertyAccessExpression:
+      return 'resolve-property-access';
+    case SyntaxKind.ElementAccessExpression:
+      return 'resolve-element-access';
+    case SyntaxKind.ParenthesizedExpression:
+    case SyntaxKind.AsExpression:
+    case SyntaxKind.SatisfiesExpression:
+    case SyntaxKind.TypeAssertionExpression:
+    case SyntaxKind.NonNullExpression:
+      return 'unwrap-expression';
+    default:
+      return 'fail-closed';
+  }
 }
