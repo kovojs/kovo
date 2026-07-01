@@ -166,6 +166,18 @@ describe('sink-policy gate', () => {
     ).toEqual([
       'packages/server/src/unsafe.ts: raw child_process.execSync call is outside the command primitive; use cmd()/runCommand()',
     ]);
+
+    expect(
+      commandExecutionSinkFindings(
+        'packages/server/src/unsafe.ts',
+        `
+          const childProcess = await import("node:child_process");
+          childProcess.spawn("git", ["status"]);
+        `,
+      ),
+    ).toEqual([
+      'packages/server/src/unsafe.ts: raw child_process.spawn call from dynamic import is outside the command primitive; use cmd()/runCommand()',
+    ]);
   });
 
   it('allows only the command primitive to hold execFile while keeping shell sinks forbidden', () => {
@@ -194,7 +206,10 @@ describe('sink-policy gate', () => {
         'packages/server/src/command.ts',
         `
           const COMMAND_EXEC_FILE_SINK = 'server:command-exec-file';
+          const commandAllowlists = new WeakMap();
           export function cmd(value) {
+            const allowedPrograms = commandAllowlists.get(options?.allow);
+            if (!allowedPrograms.has(program)) throw new TypeError();
             return blessSink(COMMAND_EXEC_FILE_SINK, value);
           }
           export function isCommand(value) {
@@ -214,7 +229,9 @@ describe('sink-policy gate', () => {
         'packages/server/src/command.ts',
         `
           const COMMAND_EXEC_FILE_SINK = 'server:command-exec-file';
+          const commandAllowlists = new WeakMap();
           export function cmd(value) {
+            const allowedPrograms = commandAllowlists.get(options?.allow);
             return value;
           }
           export function runCommand(command) {
@@ -224,10 +241,32 @@ describe('sink-policy gate', () => {
       ),
     ).toEqual([
       'packages/server/src/command.ts: cmd() must mint Command values with the registered command execution witness',
+      'packages/server/src/command.ts: cmd() must deny programs absent from the explicit allowlist',
       'packages/server/src/command.ts: runCommand() must re-check the registered command execution witness',
       'packages/server/src/command.ts: runCommand() must execute the minted program/argv through execFile with explicit options',
       'packages/server/src/command.ts: runCommand() execFile options must set shell: false',
     ]);
+
+    expect(
+      commandPrimitiveInvariantFindings(
+        'packages/server/src/command.ts',
+        `
+          const COMMAND_EXEC_FILE_SINK = 'server:command-exec-file';
+          export function cmd(value) {
+            return blessSink(COMMAND_EXEC_FILE_SINK, value);
+          }
+          export function isCommand(value) {
+            return isBlessedSink(COMMAND_EXEC_FILE_SINK, value);
+          }
+          export function runCommand(command) {
+            const execOptions = { shell: false };
+            execFile(command.program, [...command.argv], execOptions, () => {});
+          }
+        `,
+      ),
+    ).toContain(
+      'packages/server/src/command.ts: cmd() must require an explicit commandAllowlist before minting Command values',
+    );
   });
 
   it('asserts rootedFiles keeps constructor-owned root and witness checks', () => {
@@ -481,6 +520,63 @@ describe('sink-policy gate', () => {
       }),
     ).toEqual([
       'packages/server/src/unsafe.ts: forbidden child_process.execSync import; use cmd()/runCommand() so command execution stays shell-free and witnessed',
+    ]);
+  });
+
+  it('allows audited CLI subprocess tooling with an explicit rationale', () => {
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: ['packages/cli/src/bin.ts'],
+        commandExecutionSinkFiles: [],
+        commandExecutionToolingRationales: {
+          'packages/cli/src/bin.ts':
+            'CLI bootstrap delegates to the implementation before framework runtime boot.',
+        },
+        deserializationFiles: [],
+        logChannelFiles: [],
+        exists: (file) => file === 'packages/cli/src/bin.ts' || file === 'sink-policy.ts',
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'import { spawnSync } from "node:child_process"; spawnSync("node", ["--version"]);',
+        queryWireHtmlPath: undefined,
+        responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([]);
+
+    expect(
+      checkSinkPolicyGate({
+        blessedSinkFiles: [],
+        commandExecutionFiles: ['packages/cli/src/bin.ts'],
+        commandExecutionSinkFiles: [],
+        commandExecutionToolingRationales: {
+          'packages/cli/src/bin.ts': 'too broad',
+        },
+        deserializationFiles: [],
+        logChannelFiles: [],
+        exists: (file) => file === 'packages/cli/src/bin.ts' || file === 'sink-policy.ts',
+        publicEntrypointFiles: [],
+        readText: (file) =>
+          file === 'sink-policy.ts'
+            ? validPolicy
+            : 'import { spawnSync } from "node:child_process"; spawnSync("node", ["--version"]);',
+        queryWireHtmlPath: undefined,
+        responseFragmentApplyPath: undefined,
+        rootedFileServeSinkFiles: [],
+        sinkPolicyPath: 'sink-policy.ts',
+        sqlBlessedBrandFiles: [],
+        sqlGuardDowngradeFiles: [],
+        sqlSafetyInvariantFiles: [],
+      }),
+    ).toEqual([
+      'packages/cli/src/bin.ts: command execution tooling allowance must carry a narrow rationale',
     ]);
   });
 

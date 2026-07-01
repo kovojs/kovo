@@ -4,7 +4,11 @@ import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
-import { collectSourceFiles, isProductionSourceFile } from './lib/source-files.mjs';
+import {
+  collectSourceFiles,
+  isProductionSourceFile,
+  productionSourceRoots,
+} from './lib/source-files.mjs';
 
 export const repoRoot = findRepoRoot();
 export const defaultSinkPolicyPath = 'packages/core/src/internal/sink-policy.ts';
@@ -24,9 +28,18 @@ export const defaultPublicEntrypointFiles = [
   'packages/server/src/index.ts',
 ];
 
-export const defaultCommandExecutionRoots = ['packages/server/src'];
+export const defaultCommandExecutionRoots = productionSourceRoots;
 
 export const defaultCommandExecutionSinkFiles = ['packages/server/src/command.ts'];
+
+export const defaultCommandExecutionToolingRationales = {
+  'packages/cli/src/bin.ts':
+    'CLI bootstrap synchronously delegates to the real implementation before framework runtime boot.',
+  'packages/cli/src/commands/build-export.ts':
+    'CLI build/export tooling invokes TypeScript/Vite subprocesses outside request/runtime paths.',
+  'packages/cli/src/commands/compile.ts':
+    'CLI compile tooling runs the TypeScript checker outside request/runtime paths.',
+};
 
 export const defaultRootedFileServeSinkFiles = ['packages/server/src/file.ts'];
 
@@ -153,6 +166,8 @@ export function checkSinkPolicyGate(options = {}) {
   const commandExecutionRoots = options.commandExecutionRoots ?? defaultCommandExecutionRoots;
   const commandExecutionSinkFiles =
     options.commandExecutionSinkFiles ?? defaultCommandExecutionSinkFiles;
+  const commandExecutionToolingRationales =
+    options.commandExecutionToolingRationales ?? defaultCommandExecutionToolingRationales;
   const dynamicCodeExecutionSinkFiles =
     options.dynamicCodeExecutionSinkFiles ?? defaultDynamicCodeExecutionSinkFiles;
   const deserializationFiles =
@@ -272,6 +287,14 @@ export function checkSinkPolicyGate(options = {}) {
   }
 
   const commandExecutionSinkFileSet = new Set(commandExecutionSinkFiles);
+  const commandExecutionToolingFileSet = new Set(Object.keys(commandExecutionToolingRationales));
+  for (const [filePath, rationale] of Object.entries(commandExecutionToolingRationales)) {
+    if (typeof rationale !== 'string' || rationale.trim().length < 20) {
+      findings.push(
+        `${filePath}: command execution tooling allowance must carry a narrow rationale`,
+      );
+    }
+  }
   const dynamicCodeExecutionSinkFileSet = new Set(dynamicCodeExecutionSinkFiles);
   const rootedFileServeSinkFileSet = new Set(rootedFileServeSinkFiles);
   const logChannelNeutralizerFileSet = new Set(logChannelNeutralizerFiles);
@@ -283,7 +306,8 @@ export function checkSinkPolicyGate(options = {}) {
     const text = readText(filePath);
     findings.push(
       ...commandExecutionSinkFindings(filePath, text, {
-        allowedExecutionSink: commandExecutionSinkFileSet.has(filePath),
+        allowedExecutionSink:
+          commandExecutionSinkFileSet.has(filePath) || commandExecutionToolingFileSet.has(filePath),
       }),
     );
     findings.push(
@@ -849,6 +873,17 @@ export function commandExecutionSinkFindings(filePath, text, options = {}) {
       if (pattern.test(source)) {
         findings.push(
           `${filePath}: raw child_process.${name} call is outside the command primitive; use cmd()/runCommand()`,
+        );
+      }
+    }
+  }
+
+  for (const imported of childProcessImports.dynamicNamespaces) {
+    for (const name of commandExecutionImportNames) {
+      const pattern = new RegExp(`\\b${escapeRegExp(imported.local)}\\s*\\.\\s*${name}\\s*\\(`);
+      if (pattern.test(source) && !allowedExecutionSink) {
+        findings.push(
+          `${filePath}: raw child_process.${name} call from dynamic import is outside the command primitive; use cmd()/runCommand()`,
         );
       }
     }
@@ -1654,6 +1689,14 @@ export function commandPrimitiveInvariantFindings(filePath, text) {
       `${filePath}: cmd() must mint Command values with the registered command execution witness`,
     );
   }
+  if (!/\bcommandAllowlists\s*\.get\s*\(\s*options\s*\?\.\s*allow\s*\)/.test(source)) {
+    findings.push(
+      `${filePath}: cmd() must require an explicit commandAllowlist before minting Command values`,
+    );
+  }
+  if (!/\ballowedPrograms\s*\.has\s*\(\s*program\s*\)/.test(source)) {
+    findings.push(`${filePath}: cmd() must deny programs absent from the explicit allowlist`);
+  }
   if (!/\bisBlessedSink\s*(?:<[^>()]*>)?\s*\(\s*COMMAND_EXEC_FILE_SINK\s*,/.test(source)) {
     findings.push(
       `${filePath}: runCommand() must re-check the registered command execution witness`,
@@ -2030,6 +2073,7 @@ function vmModuleImportPattern() {
 function childProcessImportLocals(text) {
   const named = [];
   const namespaces = new Set();
+  const dynamicNamespaces = [];
   const childProcessModule = String.raw`(?:node:)?child_process`;
 
   const namedImportPattern = new RegExp(
@@ -2068,7 +2112,16 @@ function childProcessImportLocals(text) {
     namespaces.add(namespaceRequire[1]);
   }
 
-  return { named, namespaces };
+  const dynamicImportPattern = new RegExp(
+    String.raw`\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:await\s+)?import\s*\(\s*(['"])${childProcessModule}\2\s*\)`,
+    'g',
+  );
+  let dynamicImport;
+  while ((dynamicImport = dynamicImportPattern.exec(text)) !== null) {
+    dynamicNamespaces.push({ local: dynamicImport[1] });
+  }
+
+  return { dynamicNamespaces, named, namespaces };
 }
 
 function fsImportLocals(text) {
