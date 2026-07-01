@@ -83,7 +83,8 @@ export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
           );
         };
       }
-      return Reflect.get(target, prop, receiver);
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
     },
   }) as Reader<Db>;
 }

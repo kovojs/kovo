@@ -197,7 +197,17 @@ export function addRawSqlOwnerWriteProof(
   writeFileSync(mutationsPath, mutations, 'utf8');
 }
 
-export function addRuntimeMutationSafetyProofs(root: string): void {
+export interface RuntimeMutationSafetyProofOptions {
+  includeRawTableDrift?: boolean;
+  includeReadonlyMutationAttempt?: boolean;
+}
+
+export function addRuntimeMutationSafetyProofs(
+  root: string,
+  options: RuntimeMutationSafetyProofOptions = {},
+): void {
+  const includeRawTableDrift = options.includeRawTableDrift === true;
+  const includeReadonlyMutationAttempt = options.includeReadonlyMutationAttempt === true;
   const schemaPath = join(root, 'src/schema.ts');
   writeFileSync(
     schemaPath,
@@ -262,64 +272,70 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
       'const runtimeTableDriftError = s.object({ message: s.string() });',
       "const publicProof = publicAccess('public production mutation safety regression proof');",
       "const txProof = domain('tx_proof');",
-      "const rawRuntimeDriftDomain = domain('raw_runtime_drift');",
+      ...(includeRawTableDrift
+        ? ["const rawRuntimeDriftDomain = domain('raw_runtime_drift');"]
+        : []),
       '',
-      'const insertTxProof = write({',
-      "  key: 'runtime-safety-proofs/insert-tx-proof',",
-      '  touches: [txProof],',
-      "  async run(db: AppRequest['db'], id: string) {",
-      '    await db.insert(txProofs).values({ id });',
-      '  },',
-      '});',
+      "async function insertTxProofRow(db: AppRequest['db'], id: string) {",
+      '  await db.insert(txProofs).values({ id });',
+      '}',
       '',
-      'const insertRawRuntimeDrift = write({',
-      "  key: 'runtime-safety-proofs/insert-raw-runtime-drift',",
-      "  tables: ['contacts'],",
-      '  touches: [rawRuntimeDriftDomain],',
-      "  async run(db: AppRequest['db'], input: { id: string; label: string }) {",
-      '    await db.execute(',
-      '      trustedSql(',
-      '        sql`insert into raw_runtime_drift (id, label) values (${input.id}, ${input.label})`,',
-      "        { justification: 'audited runtime table-drift proof' },",
-      '      ),',
-      '    );',
-      '  },',
-      '});',
-      '',
+      ...(includeRawTableDrift
+        ? [
+            'const insertRawRuntimeDrift = write({',
+            "  key: 'runtime-safety-proofs/insert-raw-runtime-drift',",
+            "  tables: ['contacts'],",
+            '  touches: [rawRuntimeDriftDomain],',
+            "  async run(db: AppRequest['db'], input: { id: string; label: string }) {",
+            '    await db.execute(',
+            '      trustedSql(',
+            '        sql`insert into raw_runtime_drift (id, label) values (${input.id}, ${input.label})`,',
+            "        { justification: 'audited runtime table-drift proof' },",
+            '      ),',
+            '    );',
+            '  },',
+            '});',
+            '',
+          ]
+        : []),
       'export const failAfterWrite = mutation({',
       '  access: publicProof,',
       '  csrf: false,',
       '  input: s.object({ id: s.string() }),',
-      '  registry: { touches: insertTxProof.touches },',
+      '  registry: { touches: [txProof] },',
       '  async handler(input: { id: string }, request: AppRequest) {',
-      '    await insertTxProof.run(request.db, input.id);',
+      '    await insertTxProofRow(request.db, input.id);',
       "    throw new Error('rollback proof');",
       '  },',
       '});',
       '',
-      'export const rawTableDrift = mutation({',
-      '  access: publicProof,',
-      '  csrf: false,',
-      '  errors: { RUNTIME_TABLE_DRIFT: runtimeTableDriftError },',
-      '  input: s.object({ id: s.string(), label: s.string() }),',
-      "  registry: { tables: ['contacts'], touches: insertRawRuntimeDrift.touches },",
-      '  async handler(',
-      '    input: { id: string; label: string },',
-      '    request: AppRequest,',
-      '    context: MutationContext<{ RUNTIME_TABLE_DRIFT: typeof runtimeTableDriftError }>,',
-      '  ) {',
-      '    try {',
-      '      await insertRawRuntimeDrift.run(request.db, input);',
-      '    } catch (error) {',
-      "      if (error instanceof Error && error.message.includes('KV406')) {",
-      "        return context.fail('RUNTIME_TABLE_DRIFT', { message: 'KV406' });",
-      '      }',
-      '      throw error;',
-      '    }',
-      "    return { status: 'executed' };",
-      '  },',
-      '});',
-      '',
+      ...(includeRawTableDrift
+        ? [
+            'export const rawTableDrift = mutation({',
+            '  access: publicProof,',
+            '  csrf: false,',
+            '  errors: { RUNTIME_TABLE_DRIFT: runtimeTableDriftError },',
+            '  input: s.object({ id: s.string(), label: s.string() }),',
+            "  registry: { tables: ['contacts'], touches: insertRawRuntimeDrift.touches },",
+            '  async handler(',
+            '    input: { id: string; label: string },',
+            '    request: AppRequest,',
+            '    context: MutationContext<{ RUNTIME_TABLE_DRIFT: typeof runtimeTableDriftError }>,',
+            '  ) {',
+            '    try {',
+            '      await insertRawRuntimeDrift.run(request.db, input);',
+            '    } catch (error) {',
+            "      if (error instanceof Error && error.message.includes('KV406')) {",
+            "        return context.fail('RUNTIME_TABLE_DRIFT', { message: 'KV406' });",
+            '      }',
+            '      throw error;',
+            '    }',
+            "    return { status: 'executed' };",
+            '  },',
+            '});',
+            '',
+          ]
+        : []),
       "export const txProofCountEndpoint = endpoint('/api/tx-proof-count', {",
       '  access: publicProof,',
       "  auth: { justification: 'public transaction rollback proof', kind: 'none' },",
@@ -348,9 +364,60 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
       "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
       '});',
       '',
+      ...(includeReadonlyMutationAttempt
+        ? [
+            "export const readonlyMutationAttemptEndpoint = endpoint('/api/readonly-mutation-attempt', {",
+            '  access: publicProof,',
+            "  auth: { justification: 'public readonly handle mutation proof', kind: 'none' },",
+            '  csrf: false,',
+            "  csrfJustification: 'GET endpoint proves readonlyAppDb cannot mutate',",
+            '  async handler() {',
+            '    try {',
+            "      const run = (readonlyAppDb as unknown as Record<string, (statement: unknown) => Promise<unknown>>)['run']!;",
+            '      await run(',
+            '        trustedSql(',
+            "          sql`insert into raw_runtime_drift (id, label) values (${'readonly-get'}, ${'must-not-insert'})`,",
+            "          { justification: 'audited readonly GET mutation-attempt proof' },",
+            '        ),',
+            '      );',
+            "      return Response.json({ blocked: false }, { headers: { 'Cache-Control': 'no-store' } });",
+            '    } catch (error) {',
+            '      const message = error instanceof Error ? error.message : String(error);',
+            '      const blocked = /read-only|readonly|KV433|query\\(\\) loader cannot access/u.test(message);',
+            "      return Response.json({ blocked, message }, { headers: { 'Cache-Control': 'no-store' } });",
+            '    }',
+            '  },',
+            "  method: 'GET',",
+            "  reason: 'public readonly handle mutation proof',",
+            "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+            '});',
+            '',
+          ]
+        : []),
     ].join('\n'),
     'utf8',
   );
+
+  const runtimeSafetyImports = [
+    'failAfterWrite',
+    ...(includeReadonlyMutationAttempt ? ['readonlyMutationAttemptEndpoint'] : []),
+    'rawRuntimeDriftCountEndpoint',
+    ...(includeRawTableDrift ? ['rawTableDrift'] : []),
+    'txProofCountEndpoint',
+  ];
+  const runtimeSafetyEndpoints = [
+    'healthEndpoint',
+    'txProofCountEndpoint',
+    'rawRuntimeDriftCountEndpoint',
+    ...(includeReadonlyMutationAttempt ? ['readonlyMutationAttemptEndpoint'] : []),
+  ];
+  const runtimeSafetyMutations = [
+    'addContact',
+    'failAfterWrite',
+    ...(includeRawTableDrift ? ['rawTableDrift'] : []),
+    'appSignIn',
+    'appSignOut',
+  ];
 
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
@@ -359,20 +426,14 @@ export function addRuntimeMutationSafetyProofs(root: string): void {
       [
         "import { addContact } from './mutations.js';",
         'import {',
-        '  failAfterWrite,',
-        '  rawRuntimeDriftCountEndpoint,',
-        '  rawTableDrift,',
-        '  txProofCountEndpoint,',
+        ...runtimeSafetyImports.map((name) => `  ${name},`),
         "} from './runtime-safety-proofs.js';",
       ].join('\n'),
     )
-    .replace(
-      'endpoints: [healthEndpoint],',
-      'endpoints: [healthEndpoint, txProofCountEndpoint, rawRuntimeDriftCountEndpoint],',
-    )
+    .replace('endpoints: [healthEndpoint],', `endpoints: [${runtimeSafetyEndpoints.join(', ')}],`)
     .replace(
       'mutations: [addContact, appSignIn, appSignOut],',
-      'mutations: [addContact, failAfterWrite, rawTableDrift, appSignIn, appSignOut],',
+      `mutations: [${runtimeSafetyMutations.join(', ')}],`,
     );
   writeFileSync(appPath, app, 'utf8');
 }

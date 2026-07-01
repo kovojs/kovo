@@ -85,7 +85,7 @@ describe('create-kovo starter (build integration: production raw-SQL artifacts)'
     try {
       writeKovoProject(root, { name: 'Prod Runtime SQL Allowlist Proof' });
       linkStarterBuildDependencies(root);
-      addRuntimeMutationSafetyProofs(root);
+      addRuntimeMutationSafetyProofs(root, { includeRawTableDrift: true });
 
       try {
         buildProductionArtifact(root);

@@ -1,5 +1,6 @@
 import { createHmac } from 'node:crypto';
 import { customVerifier, hmacSignature } from '@kovojs/core';
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { describe, expect, it } from 'vitest';
 
 import { domain } from './domain.js';
@@ -185,6 +186,74 @@ describe('server webhook primitive', () => {
     await expect(second.response.text()).resolves.toBe('ok');
     expect(writes).toBe(1);
     expect(steps).toEqual(['begin', 'handler:tx_1', 'commit']);
+  });
+
+  it('wraps WebhookTxDb with the managed SQL runtime floor before the handler sees it', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    const calls: string[] = [];
+    const input = s.object({ id: s.string() });
+    const sqlWebhook = webhook('/webhooks/sql-tx', {
+      handler(_input, context) {
+        expect(() =>
+          (context.tx as unknown as { execute(statement: unknown): unknown }).execute(
+            'select * from products',
+          ),
+        ).toThrow(/KV422/);
+        expect(() =>
+          (context.tx as unknown as { session: { run(statement: unknown): unknown } }).session.run(
+            'select * from products',
+          ),
+        ).toThrow(/KV422/);
+        expect(
+          (context.tx as unknown as { execute(statement: unknown): unknown }).execute({
+            text: 'select id from products where id = $1',
+            values: ['p1'],
+          }),
+        ).toMatchObject({ text: 'select id from products where id = $1' });
+        expect(
+          (context.tx as unknown as { session: { run(statement: unknown): unknown } }).session.run(
+            stampTrustedSql(
+              { text: 'update products set name = $1 where id = $2', values: ['Ada', 'p1'] },
+              'audited webhook tx update',
+            ),
+          ),
+        ).toMatchObject({ text: 'update products set name = $1 where id = $2' });
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input,
+      replayStore,
+      async transaction(_context, run) {
+        return run({
+          execute(statement: unknown) {
+            calls.push('tx.execute');
+            return statement;
+          },
+          session: {
+            run(statement: unknown) {
+              calls.push('tx.session.run');
+              return statement;
+            },
+          },
+        });
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook transaction SQL safety test',
+    });
+    const body = JSON.stringify({ id: 'evt_sql_tx' });
+
+    const result = await runWebhook(
+      sqlWebhook,
+      new Request('https://example.test/webhooks/sql-tx', {
+        body,
+        headers: { 'content-type': 'application/json' },
+        method: 'POST',
+      }),
+    );
+
+    expect(result.replayed).toBe(false);
+    expect(result.response.status).toBe(200);
+    expect(calls).toEqual(['tx.execute', 'tx.session.run']);
   });
 
   it('dispatches webhook writes through an audited mutation and replays provider duplicates', async () => {

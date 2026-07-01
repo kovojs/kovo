@@ -30,7 +30,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     try {
       writeKovoProject(root, { name: 'Prod Default Transaction Proof' });
       linkStarterBuildDependencies(root);
-      addRuntimeMutationSafetyProofs(root);
+      addRuntimeMutationSafetyProofs(root, { includeReadonlyMutationAttempt: true });
 
       buildProductionArtifact(root);
 
@@ -52,6 +52,21 @@ describe('create-kovo starter (build integration: production transaction artifac
         count: number;
       };
       expect(before.count).toBe(0);
+
+      const readonlyAttempt = (await (
+        await fetch(`${origin}/api/readonly-mutation-attempt`)
+      ).json()) as {
+        blocked: boolean;
+        message?: string;
+      };
+      expect(readonlyAttempt).toMatchObject({ blocked: true });
+      expect(readonlyAttempt.message).toMatch(/read-only|readonly|KV433|loader cannot access/iu);
+      const afterReadonlyAttempt = (await (
+        await fetch(`${origin}/api/raw-runtime-drift-count`)
+      ).json()) as {
+        count: number;
+      };
+      expect(afterReadonlyAttempt.count).toBe(0);
 
       const response = await fetch(`${origin}/_m/runtime-safety-proofs/fail-after-write`, {
         body: new URLSearchParams({
