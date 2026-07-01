@@ -8,7 +8,8 @@ import {
 } from '@kovojs/better-auth';
 import { publicAccess, s, session, type CsrfValidationOptions } from '@kovojs/server';
 
-import { appRuntimeDbProvider, type AppDb } from './db.js';
+import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';
+import type { AppDb } from './db.js';
 import { authSchema } from './schema.js';
 
 // Load .env into process.env for runtimes that don't do it automatically (plain

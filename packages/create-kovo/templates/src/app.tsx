@@ -25,7 +25,8 @@ import {
   seedDemoUser,
   type AppRequest,
 } from './auth.js';
-import { appRuntimeDbProvider, appDbReady } from './db.js';
+import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';
+import { appDbReady } from './db.js';
 import { addContact } from './mutations.js';
 import { contactsQuery } from './queries.js';
 import { appTheme } from './theme.js';
