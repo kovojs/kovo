@@ -13,6 +13,7 @@ import type { MutationInputFieldCoercion, MutationInputFieldFact } from '../type
 ensureTypescriptRuntime(ts);
 
 const MUTATION_FACTORY_IDENTITY = frameworkExport('@kovojs/server', 'mutation');
+const SCHEMA_IDENTITY = frameworkExport('@kovojs/server', 's');
 
 /** @internal Local mutation input facts extracted at the scanner/fact boundary. */
 export interface LocalMutationInputFact {
@@ -93,7 +94,7 @@ function mutationInputFields(
 ): MutationInputFieldFact[] {
   const input = unwrapTsExpression(expression);
   if (!input || !ts.isCallExpression(input)) return [];
-  if (!isPropertyCall(input.expression, 'object')) return [];
+  if (schemaMethodName(sourceFile, input) !== 'object') return [];
 
   const [shapeArg] = input.arguments;
   if (!shapeArg || !ts.isObjectLiteralExpression(shapeArg)) return [];
@@ -143,11 +144,7 @@ function propertyNameText(name: ts.PropertyName): string | null {
 function schemaExpressionHasCall(expression: ts.Expression, methodName: string): boolean {
   let found = false;
   const visit = (node: ts.Node): void => {
-    if (
-      ts.isCallExpression(node) &&
-      ts.isPropertyAccessExpression(node.expression) &&
-      node.expression.name.text === methodName
-    ) {
+    if (ts.isCallExpression(node) && schemaMethodName(node.getSourceFile(), node) === methodName) {
       found = true;
       return;
     }
@@ -162,22 +159,19 @@ function schemaExpressionCoercion(expression: ts.Expression): MutationInputField
 
   const visit = (node: ts.Node): void => {
     if (coercion !== 'unknown') return;
-    if (ts.isCallExpression(node) && ts.isPropertyAccessExpression(node.expression)) {
-      const receiver = node.expression.expression;
-      if (ts.isIdentifier(receiver) && receiver.text === 's') {
-        const name = node.expression.name.text;
-        if (name === 'enum') {
-          coercion = 'string';
-          return;
-        }
-        if (name === 'file') {
-          coercion = 'file';
-          return;
-        }
-        if (name === 'string' || name === 'number' || name === 'boolean') {
-          coercion = name;
-          return;
-        }
+    if (ts.isCallExpression(node)) {
+      const name = schemaMethodName(node.getSourceFile(), node);
+      if (name === 'enum') {
+        coercion = 'string';
+        return;
+      }
+      if (name === 'file') {
+        coercion = 'file';
+        return;
+      }
+      if (name === 'string' || name === 'number' || name === 'boolean') {
+        coercion = name;
+        return;
       }
     }
     ts.forEachChild(node, visit);
@@ -187,8 +181,39 @@ function schemaExpressionCoercion(expression: ts.Expression): MutationInputField
   return coercion;
 }
 
-function isPropertyCall(expression: ts.Expression, propertyName: string): boolean {
-  return ts.isPropertyAccessExpression(expression) && expression.name.text === propertyName;
+function schemaMethodName(sourceFile: ts.SourceFile, call: ts.CallExpression): string | null {
+  const callee = unwrapTsExpression(call.expression);
+  if (!callee || !ts.isPropertyAccessExpression(callee)) return null;
+  if (
+    isKovoSchemaReceiver(sourceFile, callee.expression) ||
+    isKovoSchemaExpression(sourceFile, callee.expression)
+  ) {
+    return callee.name.text;
+  }
+  return null;
+}
+
+function isKovoSchemaExpression(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+  const current = unwrapTsExpression(expression);
+  if (!current) return false;
+  if (ts.isCallExpression(current)) return schemaMethodName(sourceFile, current) !== null;
+  if (ts.isPropertyAccessExpression(current)) {
+    return (
+      isKovoSchemaReceiver(sourceFile, current.expression) ||
+      isKovoSchemaExpression(sourceFile, current.expression)
+    );
+  }
+  return isKovoSchemaReceiver(sourceFile, current);
+}
+
+function isKovoSchemaReceiver(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    SCHEMA_IDENTITY,
+    { legacyGlobals: [SCHEMA_IDENTITY] },
+  );
 }
 
 function unwrapTsExpression(expression: ts.Expression | undefined): ts.Expression | null {

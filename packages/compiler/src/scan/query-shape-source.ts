@@ -9,6 +9,7 @@ import {
 import type { QueryShape, QueryShapeFact } from '../types.js';
 
 const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
+const SCHEMA_IDENTITY = frameworkExport('@kovojs/server', 's');
 
 /**
  * @internal Merge projected query-shape facts from multiple analyzers. Primary facts win for
@@ -103,7 +104,7 @@ function outputSchemaQueryShapeFactFromVariable(
   if (!declaration) return null;
   const output = objectPropertyExpression(declaration.definition, 'output');
   if (!output) return null;
-  const shape = compilerQueryShapeFromSchemaExpression(output);
+  const shape = compilerQueryShapeFromSchemaExpression(sourceFile, output);
   if (!shape || !isSubstantiveQueryShape(shape)) return null;
 
   const line = sourceFile.getLineAndCharacterOfPosition(output.getStart(sourceFile)).line + 1;
@@ -135,12 +136,15 @@ function staticQueryDeclaration(
   return { definition, query: node.name.text };
 }
 
-function compilerQueryShapeFromSchemaExpression(expression: ts.Expression): QueryShape | null {
+function compilerQueryShapeFromSchemaExpression(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): QueryShape | null {
   const current = unwrapTsExpression(expression);
   if (!current) return null;
-  if (ts.isCallExpression(current)) return compilerQueryShapeFromSchemaCall(current);
+  if (ts.isCallExpression(current)) return compilerQueryShapeFromSchemaCall(sourceFile, current);
   if (ts.isPropertyAccessExpression(current)) {
-    const receiverShape = compilerQueryShapeFromSchemaExpression(current.expression);
+    const receiverShape = compilerQueryShapeFromSchemaExpression(sourceFile, current.expression);
     if (!receiverShape) return null;
     if (current.name.text === 'optional') return { kind: 'optional', shape: receiverShape };
     if (current.name.text === 'nullable' || current.name.text === 'nullish') {
@@ -151,13 +155,16 @@ function compilerQueryShapeFromSchemaExpression(expression: ts.Expression): Quer
   return null;
 }
 
-function compilerQueryShapeFromSchemaCall(call: ts.CallExpression): QueryShape | null {
+function compilerQueryShapeFromSchemaCall(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+): QueryShape | null {
   const callee = call.expression;
   if (!ts.isPropertyAccessExpression(callee)) return null;
 
   const receiver = callee.expression;
   const method = callee.name.text;
-  const receiverShape = compilerQueryShapeFromSchemaExpression(receiver);
+  const receiverShape = compilerQueryShapeFromSchemaExpression(sourceFile, receiver);
 
   if (receiverShape) {
     if (method === 'optional') return { kind: 'optional', shape: receiverShape };
@@ -167,11 +174,11 @@ function compilerQueryShapeFromSchemaCall(call: ts.CallExpression): QueryShape |
     return receiverShape;
   }
 
-  if (!ts.isIdentifier(receiver) || receiver.text !== 's') return null;
+  if (!isKovoSchemaReceiver(sourceFile, receiver)) return null;
   switch (method) {
     case 'array': {
       const item = call.arguments[0];
-      const itemShape = item ? compilerQueryShapeFromSchemaExpression(item) : null;
+      const itemShape = item ? compilerQueryShapeFromSchemaExpression(sourceFile, item) : null;
       return [itemShape ?? 'object'];
     }
     case 'boolean':
@@ -183,7 +190,7 @@ function compilerQueryShapeFromSchemaCall(call: ts.CallExpression): QueryShape |
       if (!shapeArg) return {};
       const object = unwrapTsExpression(shapeArg);
       if (!object || !ts.isObjectLiteralExpression(object)) return 'object';
-      return compilerQueryShapeFromSchemaObject(object);
+      return compilerQueryShapeFromSchemaObject(sourceFile, object);
     }
     case 'string':
     case 'enum':
@@ -193,13 +200,26 @@ function compilerQueryShapeFromSchemaCall(call: ts.CallExpression): QueryShape |
   }
 }
 
-function compilerQueryShapeFromSchemaObject(object: ts.ObjectLiteralExpression): QueryShape {
+function isKovoSchemaReceiver(sourceFile: ts.SourceFile, expression: ts.Expression): boolean {
+  return expressionResolvesToFrameworkExport(
+    ts as FrameworkIdentityTypeScript,
+    sourceFile,
+    expression,
+    SCHEMA_IDENTITY,
+    { legacyGlobals: [SCHEMA_IDENTITY] },
+  );
+}
+
+function compilerQueryShapeFromSchemaObject(
+  sourceFile: ts.SourceFile,
+  object: ts.ObjectLiteralExpression,
+): QueryShape {
   const shape: Record<string, QueryShape> = {};
   for (const property of object.properties) {
     if (!ts.isPropertyAssignment(property)) continue;
     const name = propertyNameText(property.name);
     if (!name) continue;
-    const child = compilerQueryShapeFromSchemaExpression(property.initializer);
+    const child = compilerQueryShapeFromSchemaExpression(sourceFile, property.initializer);
     if (child) shape[name] = child;
   }
   return shape;

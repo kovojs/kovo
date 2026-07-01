@@ -89,18 +89,20 @@ export const addToCart = mutation({
 
   it('extracts mutation inputs through subpath aliases and namespace imports', () => {
     const source = `
-import { mutation as defineMutation } from '@kovojs/server/api/data';
+import { mutation as defineMutation, s as schema } from '@kovojs/server/api/data';
 import * as data from '@kovojs/server/api/data';
 
 const mutationAlias = defineMutation;
+const schemaAlias = schema;
+const { s: destructuredSchema } = data;
 
 export const save = mutationAlias({
-  input: s.object({ productId: s.string() }),
+  input: schemaAlias.object({ productId: schema.string().optional() }),
   handler() {},
 });
 
 export const remove = data.mutation('cart/remove', {
-  input: s.object({ productId: s.string() }),
+  input: data.s.object({ productId: destructuredSchema.string(), quantity: data.s.number().default(1) }),
   handler() {},
 });
 `;
@@ -109,17 +111,35 @@ export const remove = data.mutation('cart/remove', {
 
     expect(facts.get('save')).toMatchObject({
       key: 'cart/mutations/save',
-      fields: [{ name: 'productId', provenance: 'local-mutation' }],
+      fields: [{ name: 'productId', optional: true, provenance: 'local-mutation' }],
     });
     expect(facts.get('remove')).toMatchObject({
       key: 'cart/remove',
-      fields: [{ name: 'productId', provenance: 'local-mutation' }],
+      fields: [
+        { name: 'productId', provenance: 'local-mutation' },
+        { defaulted: true, name: 'quantity', provenance: 'local-mutation' },
+      ],
     });
   });
 
   it('does not extract mutation inputs from local lookalike functions', () => {
     const source = `
 function mutation(value) { return value; }
+
+export const save = mutation({
+  input: s.object({ productId: s.string() }),
+  handler() {},
+});
+`;
+
+    expect([...mutationInputFactsFromSource('src/cart/mutations.ts', source)]).toEqual([]);
+  });
+
+  it('does not trust local schema lookalikes for mutation input facts', () => {
+    const source = `
+import { mutation } from '@kovojs/server/api/data';
+
+const s = { object: (value) => value, string: () => 'string' };
 
 export const save = mutation({
   input: s.object({ productId: s.string() }),

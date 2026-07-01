@@ -7,18 +7,19 @@ describe('non-Drizzle query output schema identity recognition', () => {
     const facts = outputSchemaQueryShapeFactsFromSource(
       'queries.ts',
       `
-import { query as defineQuery, s } from '@kovojs/server/api/data';
+import { query as defineQuery, s as schema } from '@kovojs/server/api/data';
 import * as data from '@kovojs/server/api/data';
 
 const q = defineQuery;
+const schemaAlias = schema;
 
 export const product = q({
-  output: s.object({ name: s.string() }),
+  output: schemaAlias.object({ name: schema.string() }),
   load: () => ({ name: 'Desk' }),
 });
 
 export const audit = data.query.elevated({
-  output: s.object({ ok: s.boolean() }),
+  output: data.s.object({ ok: data.s.boolean() }),
   reads: [],
   load: () => ({ ok: true }),
 });
@@ -41,6 +42,20 @@ export const audit = data.query.elevated({
         `
 const s = { object: (value) => value, string: () => 'string' };
 function query(value) { return value; }
+export const product = query({ output: s.object({ name: s.string() }) });
+`,
+      ),
+    ).toEqual([]);
+  });
+
+  it('does not extract schemas from local s lookalikes', () => {
+    expect(
+      outputSchemaQueryShapeFactsFromSource(
+        'queries.ts',
+        `
+import { query } from '@kovojs/server/api/data';
+
+const s = { object: (value) => value, string: () => 'string' };
 export const product = query({ output: s.object({ name: s.string() }) });
 `,
       ),

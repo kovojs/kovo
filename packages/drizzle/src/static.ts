@@ -3513,7 +3513,7 @@ function extractQueryDefinitionsFromSourceFile(
       selection && !isEmptyQueryShape(selection.shape)
         ? selection.shape
         : (outputShape ?? selection?.shape ?? {});
-    const hasOutputSchema = objectHasProperty(bodyObject, 'output');
+    const hasOutputSchema = outputShape !== undefined;
     const declaredReadExpressions = queryDeclaredReadExpressions(
       bodyObject,
       options.readTableIdentifier,

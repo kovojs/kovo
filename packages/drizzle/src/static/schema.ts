@@ -61,6 +61,8 @@ import {
 import { projectSourceModuleContext, type SourceModuleContext } from './tables.js';
 import { receiverParameterDeclaration, symbolForIdentifierReference } from './receiver-surface.js';
 
+const SCHEMA_IDENTITY = frameworkExport('@kovojs/server', 's');
+
 /** @internal */ export function sourceColumnShapesForTables(
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): Readonly<Record<string, QueryShape>> {
@@ -1197,7 +1199,7 @@ function kebabCase(value: string): string {
     if (['int', 'min', 'max', 'default'].includes(method)) {
       return queryShapeFromSchemaExpression(callee.getExpression());
     }
-    if (Node.isIdentifier(callee.getExpression()) && callee.getExpression().getText() === 's') {
+    if (isKovoSchemaReceiver(callee.getExpression())) {
       if (method === 'string') return 'string';
       if (method === 'number') return 'number';
       if (method === 'boolean') return 'boolean';
@@ -1228,6 +1230,12 @@ function kebabCase(value: string): string {
   }
 
   return undefined;
+}
+
+function isKovoSchemaReceiver(expression: Node): boolean {
+  return expressionResolvesToFrameworkExport(expression, SCHEMA_IDENTITY, {
+    legacyGlobals: [SCHEMA_IDENTITY],
+  });
 }
 
 /** @internal */ export function columnBuilderShape(

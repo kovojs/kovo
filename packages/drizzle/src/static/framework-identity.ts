@@ -41,6 +41,7 @@ const SERVER_EXPORTS = new Set([
   'query',
   'Reader',
   'route',
+  's',
   'serverValue',
   'stream',
   'tag',

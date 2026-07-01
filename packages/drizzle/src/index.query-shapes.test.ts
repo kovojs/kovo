@@ -334,6 +334,70 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('recognizes output schema receivers by identity and rejects local shadows', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'schema-api.ts',
+          source: 'export { s as schema } from "@kovojs/server/api/data";',
+        },
+        {
+          fileName: 'cart.queries.ts',
+          source: [
+            'import { sql } from "drizzle-orm";',
+            'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+            'import { schema } from "./schema-api";',
+            'import * as data from "@kovojs/server/api/data";',
+            '',
+            'const schemaAlias = schema;',
+            'const s = { object: (value: unknown) => value, number: () => "number" };',
+            'export const cartItems = pgTable("cart_items", { id: text("id").primaryKey() }, kovo({ domain: "cart", key: "id" }));',
+            '',
+            'export const aliasQuery = query("cart/alias", {',
+            '  output: schemaAlias.object({ count: schema.number() }),',
+            '  reads: [cartItems],',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({ count: sql`count(*)` }).from(cartItems);',
+            '  },',
+            '});',
+            '',
+            'export const namespaceQuery = query("cart/namespace", {',
+            '  output: data.s.object({ count: data.s.number() }),',
+            '  reads: [cartItems],',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({ count: sql`count(*)` }).from(cartItems);',
+            '  },',
+            '});',
+            '',
+            'export const shadowQuery = query("cart/shadow", {',
+            '  output: s.object({ count: s.number() }),',
+            '  reads: [cartItems],',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({ count: sql`count(*)` }).from(cartItems);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(facts).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ query: 'cart/alias', shape: { count: 'number' } }),
+        expect.objectContaining({ query: 'cart/namespace', shape: { count: 'number' } }),
+      ]),
+    );
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      {
+        code: 'KV410',
+        message:
+          'Opaque query projection requires a declared output schema. cart/shadow.count uses sql/raw projection without output.',
+        severity: 'error',
+        site: 'cart.queries.ts:26',
+      },
+    ]);
+  });
+
   it('marks read-only table domains on extracted query facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [

@@ -65,6 +65,7 @@ const SERVER_DATA_EXPORTS = new Set([
   'mutation',
   'query',
   'Reader',
+  's',
   'tag',
   'task',
   'write',
