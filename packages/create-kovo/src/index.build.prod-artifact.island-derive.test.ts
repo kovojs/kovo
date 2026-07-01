@@ -16,6 +16,8 @@ import { chromium, type Browser } from 'playwright';
 import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject } from './index.js';
+import { buildProductionArtifact } from './index.build.test-support.js';
+import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
 import {
   collectOutput,
   fetchTextWhenReady,
@@ -24,7 +26,6 @@ import {
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
-import { buildProductionArtifact } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production island derives)', () => {
   it('hydrates destructured state aliases from the production artifact without stale or throwing derives', async () => {
@@ -42,6 +43,29 @@ describe('create-kovo starter (build integration: production island derives)', (
       configureNodeRetention(root);
 
       buildProductionArtifact(root);
+      const census = assertProdArtifactSinkCensus(root, [
+        {
+          proof: {
+            evidence:
+              'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts observes state-path derives in the production client artifact and hydrates them without ReferenceError/stale values',
+            kind: 'proof',
+          },
+          sink: 'client-derive bodies',
+          witnesses: [
+            'IslandDeriveProof',
+            'state.count',
+            'state.items[0]',
+            'state.nested.label',
+            'state.groups[0][0]',
+            'state.extra["computed-key"]',
+          ],
+        },
+      ]);
+      expect(census.entries).toHaveLength(1);
+      const clientSources = clientArtifactSources(root).join('\n');
+      expect(clientSources).not.toMatch(
+        /\b(?:chained|direct|firstItem|firstGroup|computedLabel)\b/u,
+      );
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -73,6 +97,7 @@ describe('create-kovo starter (build integration: production island derives)', (
       await expectOutputText(page, 'first', 'first');
       await expectOutputText(page, 'nested', 'alpha');
       await expectOutputText(page, 'group', 'inner');
+      await expectOutputText(page, 'computed', 'delta');
 
       await page.click('[data-proof="advance"]');
       try {
@@ -84,7 +109,8 @@ describe('create-kovo starter (build integration: production island derives)', (
               text('count') === '2' &&
               text('first') === 'second' &&
               text('nested') === 'beta' &&
-              text('group') === 'updated'
+              text('group') === 'updated' &&
+              text('computed') === 'gamma'
             );
           },
           undefined,
@@ -175,7 +201,7 @@ function addIslandDeriveProof(root: string): void {
       "import { component } from '@kovojs/core';",
       '',
       'export const IslandDeriveProof = component({',
-      "  state: () => ({ count: 1, groups: [[{ label: 'inner' }]], items: ['first'], nested: { label: 'alpha' } }),",
+      "  state: () => ({ count: 1, extra: { 'computed-key': 'delta' }, groups: [[{ label: 'inner' }]], items: ['first'], nested: { label: 'alpha' } }),",
       '  render: (_queries, state) => (',
       '      <island-derive-proof data-proof="island-derive">',
       '        {(() => {',
@@ -196,6 +222,10 @@ function addIslandDeriveProof(root: string): void {
       '          const { groups: [[firstGroup]] } = state;',
       '          return <output data-proof="group">{firstGroup.label}</output>;',
       '        })()}',
+      '        {(() => {',
+      '          const { extra: { ["computed-key"]: computedLabel } } = state;',
+      '          return <output data-proof="computed">{computedLabel}</output>;',
+      '        })()}',
       '        <button',
       '          data-proof="advance"',
       '          type="button"',
@@ -204,6 +234,7 @@ function addIslandDeriveProof(root: string): void {
       "            state.items = ['second'];",
       "            state.nested = { label: 'beta' };",
       "            state.groups = [[{ label: 'updated' }]];",
+      "            state.extra = { 'computed-key': 'gamma' };",
       '          }}',
       '        >',
       '          Advance',

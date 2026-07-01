@@ -8,6 +8,10 @@ import { describe, expect, it } from 'vitest';
 import { writeKovoProject } from './index.js';
 import { buildProductionArtifact } from './index.build.test-support.js';
 import {
+  assertProdArtifactSinkCensus,
+  readProductionGraph,
+} from './index.build.prod-artifact.sink-census.js';
+import {
   collectOutput,
   fetchTextWhenReady,
   linkStarterBuildDependencies,
@@ -30,6 +34,46 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
       linkStarterBuildDependencies(root);
 
       buildProductionArtifact(root);
+      const census = assertProdArtifactSinkCensus(root, [
+        {
+          proof: {
+            evidence:
+              'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts observes sanitized Location on an unblessed redirect-shaped route response',
+            kind: 'proof',
+          },
+          sink: 'redirect Location header',
+          witnesses: [
+            'redirect-location-unsafe',
+            'redirectLocationHeaderValue',
+            'server:redirect-location',
+            'Location',
+          ],
+        },
+        {
+          proof: {
+            evidence:
+              'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts observes capability URL minting and verify-before-read behavior in the production server artifact',
+            kind: 'proof',
+          },
+          sink: 'capability URLs / signed payloads',
+          witnesses: [
+            'capability-download',
+            'createStorageDownloadEndpoint',
+            'deriveDownloadKey',
+            'verifyCapability',
+            'respond.storedFile',
+          ],
+        },
+      ]);
+      expect(census.entries).toHaveLength(2);
+      const graph = readProductionGraph(root);
+      const capabilityEndpoint = endpointByPath(graph, '/capability-download');
+      expect(capabilityEndpoint).toMatchObject({
+        auth: 'verifier:kovo-capability-url',
+        cache: 'private',
+        csrf: 'exempt',
+        mount: 'prefix',
+      });
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -66,12 +110,34 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
       expect(tampered.status).toBe(404);
       expect(tamperedBody).toBe('Not Found');
       expect(tamperedBody).not.toContain('capability secret');
+      expect(tamperedBody).not.toContain('before capability verification');
+
+      const missingToken = await fetch(`${origin}/capability-download/receipts/ord_1.txt`);
+      await expect(missingToken.text()).resolves.toBe('Not Found');
+      expect(missingToken.status).toBe(404);
+
+      const wrongMethod = await fetch(`${origin}${href}`, { method: 'HEAD' });
+      await expect(wrongMethod.text()).resolves.toBe('');
+      expect(wrongMethod.status).toBe(404);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
   }, 180_000);
 });
+
+function endpointByPath(graph: Record<string, unknown>, path: string): Record<string, unknown> {
+  const endpoints = Array.isArray(graph.endpoints) ? graph.endpoints : [];
+  const endpoint = endpoints.find(
+    (candidate): candidate is Record<string, unknown> =>
+      typeof candidate === 'object' &&
+      candidate !== null &&
+      'path' in candidate &&
+      candidate.path === path,
+  );
+  if (!endpoint) throw new Error(`Expected production graph endpoint for ${path}.`);
+  return endpoint;
+}
 
 function addRedirectAndCapabilityProof(root: string): void {
   const appPath = join(root, 'src/app.tsx');
@@ -102,10 +168,30 @@ function addRedirectAndCapabilityProof(root: string): void {
       "  contentType: 'text/plain',",
       "  metadata: { filename: 'ord_1.txt' },",
       '});',
+      'const guardedCapabilityStorage = {',
+      '  async get(key: string) {',
+      "    if (key !== 'receipts/ord_1.txt') {",
+      '      throw new Error(`storage get before capability verification for ${key}`);',
+      '    }',
+      '    return capabilityProofStorage.get(key);',
+      '  },',
+      '  async stat(key: string) {',
+      "    if (key !== 'receipts/ord_1.txt') {",
+      '      throw new Error(`storage stat before capability verification for ${key}`);',
+      '    }',
+      '    return capabilityProofStorage.stat(key);',
+      '  },',
+      '  async stream(key: string) {',
+      "    if (key !== 'receipts/ord_1.txt') {",
+      '      throw new Error(`storage stream before capability verification for ${key}`);',
+      '    }',
+      '    return capabilityProofStorage.stream(key);',
+      '  },',
+      '};',
       'const capabilityDownloadEndpoint = createStorageDownloadEndpoint({',
       "  basePath: '/capability-download',",
       '  secret: appCsrf.secret,',
-      '  storage: capabilityProofStorage,',
+      '  storage: guardedCapabilityStorage,',
       '});',
     ].join('\n'),
     'capability proof storage setup',

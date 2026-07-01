@@ -15,6 +15,7 @@ import {
   withRepoBinOnPath,
 } from './index.test-support.js';
 import { buildProductionArtifact } from './index.build.test-support.js';
+import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
 
 describe('create-kovo starter (build integration: production Defer artifacts)', () => {
   it('streams nested Defer regions and isolates throwing regions in production artifacts', async () => {
@@ -30,6 +31,33 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
       addDeferProofRoutes(root);
 
       buildProductionArtifact(root);
+      const census = assertProdArtifactSinkCensus(root, [
+        {
+          proof: {
+            evidence:
+              'packages/create-kovo/src/index.build.prod-artifact.defer.test.ts streams shell before slow regions and observes per-region fallback chunks',
+            kind: 'proof',
+          },
+          sink: 'streaming/<Defer> chunks',
+          witnesses: [
+            '<kovo-defer',
+            'renderDeferredStreamingResponse',
+            'data-kovo-region-priority',
+            'outer-region',
+            'unsafe-region',
+          ],
+        },
+        {
+          proof: {
+            evidence:
+              'packages/create-kovo/src/index.build.prod-artifact.defer.test.ts observes sanitized 500 shell output from the production server artifact',
+            kind: 'proof',
+          },
+          sink: 'error shells / 500 bodies',
+          witnesses: ['errorShells', 'serverError', 'Set-Cookie: session=evil'],
+        },
+      ]);
+      expect(census.entries).toHaveLength(2);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -44,7 +72,13 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
       const output = collectOutput(server);
       const origin = `http://127.0.0.1:${port}`;
 
-      const body = await fetchTextWhenReady(`${origin}/probe/nested-defer`, output);
+      await fetchTextWhenReady(`${origin}/probe/nested-defer`, output);
+      const streamed = await fetch(`${origin}/probe/nested-defer`);
+      const { firstChunk, text: body } = await readTextStreamWithFirstChunk(streamed);
+      expect(firstChunk).toContain(
+        '<kovo-defer target="outer-region" state="pending" data-kovo-region-priority="after-paint"><section>Loading outer</section></kovo-defer>',
+      );
+      expect(firstChunk).not.toContain('<h1>Outer done</h1>');
       expect(body).toContain(
         '<kovo-defer target="outer-region" state="pending" data-kovo-region-priority="after-paint"><section>Loading outer</section></kovo-defer>',
       );
@@ -66,7 +100,9 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
           ),
       ).toBe(false);
 
-      const errorBody = await fetchTextWhenReady(`${origin}/probe/defer-error`, output);
+      const errorResponse = await fetch(`${origin}/probe/defer-error`);
+      const errorBody = await errorResponse.text();
+      expect(errorResponse.status, errorBody).toBe(200);
       expect(errorBody).toContain(
         '<kovo-defer target="unsafe-region" state="pending" data-kovo-region-priority="after-paint"><section>Loading &lt;img src=x onerror=alert(1)&gt;</section></kovo-defer>',
       );
@@ -95,6 +131,30 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
     }
   }, 120_000);
 });
+
+async function readTextStreamWithFirstChunk(
+  response: Response,
+): Promise<{ firstChunk: string; text: string }> {
+  if (!response.body) throw new Error('Expected a streamed response body.');
+  const reader = response.body.getReader();
+  const first = await Promise.race([
+    reader.read(),
+    new Promise<never>((_resolve, reject) =>
+      setTimeout(() => reject(new Error('Timed out waiting for initial Defer shell chunk.')), 500),
+    ),
+  ]);
+  if (first.done) throw new Error('Expected initial Defer shell chunk before stream close.');
+  const decoder = new TextDecoder();
+  const chunks = [decoder.decode(first.value, { stream: true })];
+  for (;;) {
+    const next = await reader.read();
+    if (next.done) break;
+    chunks.push(decoder.decode(next.value, { stream: true }));
+  }
+  const tail = decoder.decode();
+  if (tail) chunks.push(tail);
+  return { firstChunk: chunks[0] ?? '', text: chunks.join('') };
+}
 
 function addDeferProofRoutes(root: string): void {
   const appPath = join(root, 'src/app.tsx');
@@ -132,7 +192,7 @@ function addDeferProofRoutes(root: string): void {
         '            fallback={<section>Loading outer</section>}',
         '            priority="after-paint"',
         '            render={async () => {',
-        '              await new Promise((resolve) => setTimeout(resolve, 30));',
+        '              await new Promise((resolve) => setTimeout(resolve, 1000));',
         '              return (',
         '                <section>',
         '                  <h1>Outer done</h1>',
