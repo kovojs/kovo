@@ -6,7 +6,14 @@ import { fileURLToPath } from 'node:url';
 const thisFile = fileURLToPath(import.meta.url);
 const defaultRepoRoot = path.resolve(path.dirname(thisFile), '..');
 
-export const SECURITY_BUILD_CERTIFICATION_CODES = ['KV414', 'KV422', 'KV426', 'KV435', 'KV330'];
+export const SECURITY_BUILD_CERTIFICATION_CODES = [
+  'KV414',
+  'KV422',
+  'KV426',
+  'KV435',
+  'KV311',
+  'KV330',
+];
 
 export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   {
@@ -45,6 +52,19 @@ export const SECURITY_BUILD_PROOFS = [
     sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
     testName:
       'blocks cross-select Better Auth credential laundering from the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    code: 'KV311',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+    requiredNeedles: [
+      'buildProductionArtifact(root)',
+      'expect(pageErrors).toEqual([])',
+      'expect(consoleErrors).toEqual([])',
+    ],
+    sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
+    testName:
+      'hydrates destructured state aliases from the production artifact without stale or throwing derives',
   },
   {
     buildInvocation: 'cli-main-build',
@@ -125,17 +145,10 @@ export function extractNamedTestBlock(sourceText, testName) {
   const nameIndex = sourceText.indexOf(testName);
   if (nameIndex === -1) return undefined;
 
-  const startCandidates = [
-    sourceText.lastIndexOf('\n  it(', nameIndex),
-    sourceText.lastIndexOf('\nit(', nameIndex),
-    sourceText.lastIndexOf('\n  test(', nameIndex),
-    sourceText.lastIndexOf('\ntest(', nameIndex),
-  ].filter((index) => index >= 0);
-  const start = startCandidates.length > 0 ? Math.max(...startCandidates) : nameIndex;
-  const nextCandidates = ['\n  it(', '\nit(', '\n  test(', '\ntest(']
-    .map((needle) => sourceText.indexOf(needle, nameIndex + testName.length))
-    .filter((index) => index >= 0);
-  const end = nextCandidates.length > 0 ? Math.min(...nextCandidates) : sourceText.length;
+  const testStartPattern = /(^|\n)\s*(?:it|test)(?:\.(?:skip|todo|only))?\s*\(/g;
+  const starts = [...sourceText.matchAll(testStartPattern)].map((match) => match.index ?? 0);
+  const start = starts.filter((index) => index <= nameIndex).at(-1) ?? nameIndex;
+  const end = starts.find((index) => index > nameIndex) ?? sourceText.length;
   return sourceText.slice(start, end);
 }
 
@@ -167,8 +180,17 @@ function validateProof(
     return;
   }
 
-  if (!testBlock.includes(proof.code)) {
-    violations.push(`${label}: proof test does not assert ${proof.code}`);
+  if (proofTestIsSkippedOrTodo(testBlock)) {
+    violations.push(`${label}: proof test is skipped or todo`);
+  }
+
+  const requiredNeedles = proof.requiredNeedles ?? [proof.code];
+  for (const needle of requiredNeedles) {
+    if (!testBlock.includes(needle)) {
+      violations.push(
+        `${label}: proof test is missing required evidence ${JSON.stringify(needle)}`,
+      );
+    }
   }
   if (!testBlockHasBuildInvocation(testBlock, proof.buildInvocation)) {
     violations.push(
@@ -176,6 +198,10 @@ function validateProof(
     );
   }
   validateBuildHelper(proof.buildInvocation, { repoRoot, violations });
+}
+
+function proofTestIsSkippedOrTodo(testBlock) {
+  return /(^|\n)\s*(?:it|test)\.(?:skip|todo)\s*\(/.test(testBlock);
 }
 
 function testBlockHasBuildInvocation(testBlock, buildInvocation) {

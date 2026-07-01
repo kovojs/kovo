@@ -7,13 +7,35 @@ import {
 } from './security-gate-mutations.mjs';
 
 describe('security-gate-mutations', () => {
-  it('kills the missing real-build proof branch deletion mutant', async () => {
-    await expect(runSecurityGateMutationHarness()).resolves.toEqual([
-      expect.objectContaining({
-        name: 'security-test-build-gate/drop-missing-real-build-proof',
-        status: 'killed',
-      }),
-    ]);
+  it('kills every enrolled security gate branch deletion mutant', async () => {
+    const results = await runSecurityGateMutationHarness();
+
+    expect(results).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          name: 'security-test-build-gate/drop-missing-real-build-proof',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'security-test-build-gate/drop-production-build-invocation-check',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'check-sink-policy-gate/drop-sql-guard-env-detector',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'check-sink-policy-gate/drop-managed-db-throw-invariant',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'check-sink-policy-gate/drop-response-fragment-trustedhtml-route-count',
+          status: 'killed',
+        }),
+      ]),
+    );
+    expect(results.every((result) => result.status === 'killed')).toBe(true);
+    expect(results.length).toBe(SECURITY_GATE_MUTANTS.length);
   });
 
   it('reports a surviving mutant when the branch mutation is a no-op', async () => {
