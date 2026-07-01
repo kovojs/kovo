@@ -38,6 +38,7 @@ import type { JsonSerializable } from './json-boundary.js';
 import {
   appendResponseHeader,
   blessRedirectResponse,
+  mergeResponseHeaders,
   redirectLocationHeader,
   retryAfterHeaders,
   type MutationResponseHeaders,
@@ -838,10 +839,10 @@ export async function renderMutationResponse<
       body: await renderFailureFragment(lifecycle.failure, wireRequest),
       // A1: a rate-limit (or other retry-able) guard failure carries Retry-After; preserve it on the
       // pre-replay guard-failure response (the old runMutation path added it via retryAfterHeaders).
-      headers: {
-        ...mutationWireResponseHeaders(wireRequest),
-        ...retryAfterHeaders(lifecycle.guardFailure),
-      },
+      headers: mergeMutationResponseHeaders(
+        mutationWireResponseHeaders(wireRequest),
+        retryAfterHeaders(lifecycle.guardFailure),
+      ),
       status: lifecycle.failure.status,
     };
   }
@@ -867,20 +868,20 @@ export async function renderMutationResponse<
     if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
       return {
         body: await renderFailureFragment(result, wireRequest),
-        headers: {
-          ...mutationWireResponseHeaders(wireRequest),
-          ...retryAfterHeaders(result),
-        },
+        headers: mergeMutationResponseHeaders(
+          mutationWireResponseHeaders(wireRequest),
+          retryAfterHeaders(result),
+        ),
         status: result.status,
       };
     }
 
     return commitReservedMutationReplay(lifecycle.reservation, async () => ({
       body: await renderFailureFragment(result, wireRequest),
-      headers: {
-        ...mutationWireResponseHeaders(wireRequest),
-        ...retryAfterHeaders(result),
-      },
+      headers: mergeMutationResponseHeaders(
+        mutationWireResponseHeaders(wireRequest),
+        retryAfterHeaders(result),
+      ),
       status: result.status,
     }));
   }
@@ -1410,10 +1411,12 @@ async function renderNoJsMutationFailureResponse<Request, Value>(
 
   return {
     body,
-    headers: stampNoJsMutationFailureHeaders({
-      'Content-Type': 'text/html; charset=utf-8',
-      ...retryAfterHeaders(failure),
-    }),
+    headers: stampNoJsMutationFailureHeaders(
+      mergeMutationResponseHeaders(
+        { 'Content-Type': 'text/html; charset=utf-8' },
+        retryAfterHeaders(failure),
+      ),
+    ),
     status: failure.status,
   };
 }
@@ -1515,10 +1518,9 @@ async function renderReplayUnavailableFragment<Request>(
 ): Promise<MutationWireResponse> {
   return {
     body: await renderFailureFragment(replayUnavailableFailure(), wireRequest),
-    headers: {
-      ...mutationWireResponseHeaders(wireRequest),
+    headers: mergeMutationResponseHeaders(mutationWireResponseHeaders(wireRequest), {
       'Retry-After': '1',
-    },
+    }),
     status: 429,
   };
 }
@@ -1632,17 +1634,7 @@ function replayUnavailableFailure(): MutationFail<'RATE_LIMITED', { reason: stri
 function mergeMutationResponseHeaders(
   ...sources: readonly (MutationResponseHeaders | undefined)[]
 ): MutationResponseHeaders {
-  const headers: MutationResponseHeaders = {};
-
-  for (const source of sources) {
-    if (!source) continue;
-
-    for (const [name, value] of Object.entries(source)) {
-      appendResponseHeader(headers, name, value);
-    }
-  }
-
-  return headers;
+  return mergeResponseHeaders(...sources);
 }
 
 async function parseMutationInput<InputSchema extends Schema<unknown>>(
@@ -1844,7 +1836,7 @@ function stampNoJsMutationFailureHeaders(headers: ResponseHeaders): ResponseHead
 
 function mutationWireResponseHeaders<Request>(
   wireRequest: MutationWireRequest<Request>,
-): Record<string, string> {
+): ResponseHeaders {
   return {
     'Cache-Control': 'private, no-store',
     'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
@@ -1865,10 +1857,12 @@ function enhancedMutationReauthResponse<Request>(
   // with a 401 Kovo-Reauth directive instead of rendering validation UI.
   return {
     body: '',
-    headers: {
-      ...mutationWireResponseHeaders({} as MutationWireRequest<Request>),
-      'Kovo-Reauth': loginLocation(options.currentUrl ?? '/'),
-    },
+    headers: mergeMutationResponseHeaders(
+      mutationWireResponseHeaders({} as MutationWireRequest<Request>),
+      {
+        'Kovo-Reauth': loginLocation(options.currentUrl ?? '/'),
+      },
+    ),
     status: 401,
   };
 }

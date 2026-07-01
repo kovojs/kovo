@@ -12,8 +12,11 @@ import {
   type EndpointRequest,
 } from './endpoint.js';
 import {
+  mergeResponseHeaders,
+  retryAfterHeaders,
   serverResponseToWebResponse,
   type MutationResponseHeaders,
+  type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
 import { isSchemaValidationError } from './schema.js';
@@ -965,11 +968,11 @@ function webhookFailWireResponse(
 ): WebhookWireResponse {
   return {
     body: JSON.stringify({ error: failure.error, ok: false }),
-    headers: {
-      'Content-Type': 'application/json; charset=utf-8',
-      ...webhookResponseHeaders(idem),
-      ...(failure.retryAfter === undefined ? {} : { 'Retry-After': String(failure.retryAfter) }),
-    },
+    headers: mergeResponseHeaders(
+      { 'Content-Type': 'application/json; charset=utf-8' },
+      webhookResponseHeaders(idem),
+      retryAfterHeaders(failure),
+    ),
     status: failure.status,
   };
 }
@@ -1034,16 +1037,18 @@ function webhookJsonResponse(status: 422, body: unknown): Response {
 function webhookSuccessHeaders(
   changes: readonly ChangeRecord[],
   idem: string | undefined,
-): Record<string, string> {
-  return {
-    'Cache-Control': 'private, no-store',
-    'Content-Type': 'text/plain; charset=utf-8',
-    ...webhookResponseHeaders(idem),
-    ...(changes.length === 0 ? {} : { 'Kovo-Changes': webhookChangeHeader(changes) }),
-  };
+): ResponseHeaders {
+  return mergeResponseHeaders(
+    {
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+    },
+    webhookResponseHeaders(idem),
+    changes.length === 0 ? undefined : { 'Kovo-Changes': webhookChangeHeader(changes) },
+  );
 }
 
-function webhookResponseHeaders(idem: string | undefined): Record<string, string> {
+function webhookResponseHeaders(idem: string | undefined): ResponseHeaders {
   return idem === undefined ? {} : { 'Kovo-Idem': idem };
 }
 

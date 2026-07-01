@@ -176,13 +176,14 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
   - Fix: route all callers through one gate via a module-private `csrfValidated` sentinel consumed by `runMutation`;
     preserve the normative CSRF→parse→guard order (SPEC §9.1).
   - Evidence: Same focused server Vitest/VP/diff checks listed for S1 passed after `runMutation` consumed a module-private validated lifecycle sentinel and regression coverage asserted a single CSRF→parse→guard pass.
-- [ ] **S4 — One cookie-safe header-bag; make the unsafe spread unrepresentable.** (M · low)
+- [x] **S4 — One cookie-safe header-bag; make the unsafe spread unrepresentable.** (M · low)
   - Problem: the correct multi-value model exists (`response.ts:12` `ResponseHeaders`, `appendResponseHeader`,
     `mergeMutationResponseHeaders`), but many paths build ad-hoc `Record<string,string>` combined by object spread
     (`mutation.ts:833-843`, `webhook.ts:1034`, `response.ts:409` `retryAfterHeaders`, `query.ts:887`) — a spread of two
     bags silently collapses multiple `Set-Cookie`.
   - Fix: make the ad-hoc builders return `ResponseHeaders`, route every merge through the cookie-safe combinator;
     consider a branded `HeaderBag` whose only combinator is the safe merge (per CLAUDE.md type-level ergonomics).
+  - Evidence: `pnpm exec vitest --run packages/server/src/response.test.ts packages/server/src/mutation-response.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/webhook.test.ts`, `vp check packages/server/src/response.ts packages/server/src/mutation.ts packages/server/src/query.ts packages/server/src/webhook.ts packages/server/src/response.test.ts packages/server/src/mutation-response.test.ts packages/server/src/query-endpoint.test.ts`, and `git diff --check HEAD~1..HEAD` passed after routing response header merges through the cookie-safe `mergeResponseHeaders` combinator and preserving repeated `Set-Cookie` in retry-after, mutation, and query response paths.
 - [ ] **S5 — Share the fail-closed replay reservation; one webhook response builder.** (M · med)
   - Problem: `webhook.ts:741` (`reserveWebhookReplayBeforeRun`) hand-mirrors the mutation reserve→get→re-reserve→
     fail-closed machine (`replay.ts` / `mutation.ts:1143-1250`); the `Cache-Control: private, no-store` + `Content-Type`

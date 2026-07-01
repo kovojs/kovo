@@ -212,6 +212,22 @@ export function cloneResponseHeaders<Headers extends ResponseHeaders>(headers: H
   ) as Headers;
 }
 
+export function mergeResponseHeaders(
+  ...sources: readonly (ResponseHeaders | undefined)[]
+): ResponseHeaders {
+  const headers: ResponseHeaders = {};
+
+  for (const source of sources) {
+    if (!source) continue;
+
+    for (const [name, value] of Object.entries(source)) {
+      appendResponseHeader(headers, name, value);
+    }
+  }
+
+  return headers;
+}
+
 /**
  * SPEC §6.6 (runtime defense-in-depth, NOT a by-construction proof): the
  * conservative, LOW-false-positive isolation/hardening header baseline carried
@@ -406,7 +422,7 @@ export function htmlServerErrorResponse(): RoutePageResponse {
   };
 }
 
-export function retryAfterHeaders(result: { retryAfter?: number }): Record<string, string> {
+export function retryAfterHeaders(result: { retryAfter?: number }): ResponseHeaders {
   return result.retryAfter === undefined ? {} : { 'Retry-After': String(result.retryAfter) };
 }
 

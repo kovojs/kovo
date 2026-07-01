@@ -6,6 +6,7 @@ import { renderRouteDocumentResponse } from './document-core.js';
 import {
   blessRedirectResponse,
   isHeaderSource,
+  mergeResponseHeaders,
   readHeader,
   redirectLocationHeader,
   respond,
@@ -13,6 +14,7 @@ import {
   routeResponseToDocumentResponse,
   routeResponseToWebResponse,
   serverResponseToWebResponse,
+  retryAfterHeaders,
   type RoutePageResponse,
 } from './response.js';
 
@@ -67,6 +69,27 @@ describe('server response adapters', () => {
       'csrf=c1; Path=/',
     ]);
     await expect(response.text()).resolves.toBe('created');
+  });
+
+  it('merges response header bags without collapsing repeated Set-Cookie values', () => {
+    const headers = mergeResponseHeaders(
+      {
+        'Cache-Control': 'private, no-store',
+        'Set-Cookie': 'session=s1; Path=/',
+      },
+      retryAfterHeaders({ retryAfter: 7 }),
+      {
+        'Content-Type': 'text/plain; charset=utf-8',
+        'set-cookie': ['csrf=c1; Path=/', 'pref=p1; Path=/'],
+      },
+    );
+
+    expect(headers).toEqual({
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'text/plain; charset=utf-8',
+      'Retry-After': '7',
+      'Set-Cookie': ['session=s1; Path=/', 'csrf=c1; Path=/', 'pref=p1; Path=/'],
+    });
   });
 
   it('emits safe custom response headers at the web response boundary', () => {

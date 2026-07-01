@@ -145,6 +145,31 @@ describe('server mutation primitives', () => {
     expect(accountLoad).not.toHaveBeenCalled();
   });
 
+  it('preserves multiple mutation Set-Cookie headers when merged with wire headers', async () => {
+    const setCookies = mutation('cookies/set-many', {
+      input: s.object({ id: s.string() }),
+      handler(input, _request, context) {
+        context.setCookie('session', 's1');
+        context.setCookie('csrf', 'c1', { sameSite: 'strict' });
+        return input;
+      },
+    });
+
+    const response = await renderMutationEndpointResponse(setCookies, {
+      headers: { 'Kovo-Fragment': 'true' },
+      rawInput: { id: 'p1' },
+      redirectTo: '/done',
+      request: {},
+    });
+
+    expect(response.status).toBe(200);
+    expect(response.headers['Set-Cookie']).toEqual([
+      'session=s1; Path=/; HttpOnly; SameSite=Lax',
+      'csrf=c1; Path=/; HttpOnly; SameSite=Strict',
+    ]);
+    expect(response.headers['Content-Type']).toBe('text/vnd.kovo.fragment+html; charset=utf-8');
+  });
+
   it('caps enhanced mutation query chunks and emits the shared query warning header', async () => {
     const catalog = domain('catalog');
     const catalogQuery = query('catalogItems', {

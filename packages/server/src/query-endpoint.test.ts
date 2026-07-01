@@ -634,6 +634,31 @@ describe('query endpoints', () => {
     expect(result.headers['Vary']).toBe('Cookie');
   });
 
+  it('preserves multiple guard response Set-Cookie headers when adding query cache headers', async () => {
+    const productQuery = query('product-cookie-forbidden', {
+      guard: () => ({ kind: 'forbidden' as const }),
+      load: () => ({ id: 'p1' }),
+      reads: [],
+    });
+
+    const result = await renderQueryEndpointResponse(productQuery, {
+      renderForbidden: (() => ({
+        body: '<main>Forbidden</main>',
+        headers: {
+          'Content-Type': 'text/html; charset=utf-8',
+          'Set-Cookie': ['session=s1; Path=/', 'csrf=c1; Path=/'],
+        },
+        status: 403,
+      })) as never,
+      request: { session: { user: { id: 'u1' } } },
+    });
+
+    expect(result.status).toBe(403);
+    expect(result.headers['Cache-Control']).toBe('private, no-store');
+    expect(result.headers['Set-Cookie']).toEqual(['session=s1; Path=/', 'csrf=c1; Path=/']);
+    expect(result.headers['Vary']).toBe('Cookie');
+  });
+
   it('H3: stamps Cache-Control + Vary on /_q/ 303 unauthenticated guard-failure redirect', async () => {
     const productQuery = query('product', {
       guard: () => ({ kind: 'unauthenticated' as const }),

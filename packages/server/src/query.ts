@@ -16,6 +16,7 @@ import { resolveKovoLifecycleRequest } from './response-posture.js';
 import {
   blessRedirectResponse,
   isBlessedRedirectResponse,
+  mergeResponseHeaders,
   retryAfterHeaders,
   type ResponseHeaders,
   type ServerResponseBase,
@@ -581,13 +582,15 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
 
     return {
       body: JSON.stringify(result.error),
-      headers: {
-        'Cache-Control': 'private, no-store',
-        'Content-Type': 'application/json; charset=utf-8',
-        Vary: 'Cookie',
-        ...queryBuildHeaders(endpointRequest),
-        ...retryAfterHeaders(result),
-      },
+      headers: mergeResponseHeaders(
+        {
+          'Cache-Control': 'private, no-store',
+          'Content-Type': 'application/json; charset=utf-8',
+          Vary: 'Cookie',
+        },
+        queryBuildHeaders(endpointRequest),
+        retryAfterHeaders(result),
+      ),
       status: result.status,
     };
   }
@@ -616,14 +619,14 @@ export async function renderQueryEndpointResponse<const Key extends string, Valu
 
   return {
     body,
-    headers: {
-      'Content-Type': 'text/html; charset=utf-8',
-      ...querySuccessCacheHeaders(),
+    headers: mergeResponseHeaders(
+      { 'Content-Type': 'text/html; charset=utf-8' },
+      querySuccessCacheHeaders(),
       // SPEC §5.2.1 rule 2(d): stamp the build token so a background refetch into a stale
       // tab can detect deploy skew and avoid merging new-build data into a stale document.
-      ...queryBuildHeaders(endpointRequest),
-      ...queryWarningHeaders(result.warnings),
-    },
+      queryBuildHeaders(endpointRequest),
+      queryWarningHeaders(result.warnings),
+    ),
     status: 200,
   };
 }
@@ -643,10 +646,10 @@ export async function renderQueryRegistryEndpointResponse<Request>(
   if (!definition) {
     return withQueryCacheHeaders({
       body: 'Not Found',
-      headers: {
-        'Content-Type': 'text/plain; charset=utf-8',
-        ...queryBuildHeaders(endpointRequest),
-      },
+      headers: mergeResponseHeaders(
+        { 'Content-Type': 'text/plain; charset=utf-8' },
+        queryBuildHeaders(endpointRequest),
+      ),
       status: 404,
     });
   }
@@ -864,22 +867,24 @@ function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, n
 
 function queryJsonHeaders<Request>(
   endpointRequest: QueryEndpointRequest<Request>,
-): Record<string, string> {
-  return {
-    'Cache-Control': 'private, no-store',
-    'Content-Type': 'application/json; charset=utf-8',
-    Vary: 'Cookie',
-    ...queryBuildHeaders(endpointRequest),
-  };
+): ResponseHeaders {
+  return mergeResponseHeaders(
+    {
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'application/json; charset=utf-8',
+      Vary: 'Cookie',
+    },
+    queryBuildHeaders(endpointRequest),
+  );
 }
 
 function queryBuildHeaders<Request>(
   endpointRequest: QueryEndpointRequest<Request>,
-): Record<string, string> {
+): ResponseHeaders {
   return endpointRequest.buildToken ? { 'Kovo-Build': endpointRequest.buildToken } : {};
 }
 
-function querySuccessCacheHeaders(): Record<string, string> {
+function querySuccessCacheHeaders(): ResponseHeaders {
   // SPEC §9.4: guarded, session-dependent, or unproven /_q reads stay private and
   // uncacheable. `publicAccess()` is author audit metadata, not the compiler proof
   // that the query has no guard and no `req.session` reads in its key or load.
@@ -893,7 +898,7 @@ function querySuccessCacheHeaders(): Record<string, string> {
 
 function queryWarningHeaders(
   warnings: readonly QueryRuntimeWarning[] | undefined,
-): Record<string, string> {
+): ResponseHeaders {
   const value = queryRuntimeWarningHeaderValue(warnings);
   return value === undefined ? {} : { 'Kovo-Warn': value };
 }
@@ -916,10 +921,7 @@ function withQueryBuildHeaders<Request>(
 ): QueryEndpointResponse {
   const next = {
     ...response,
-    headers: {
-      ...response.headers,
-      ...queryBuildHeaders(endpointRequest),
-    },
+    headers: mergeResponseHeaders(response.headers, queryBuildHeaders(endpointRequest)),
   };
   return isBlessedRedirectResponse(response) ? blessRedirectResponse(next) : next;
 }
@@ -933,11 +935,13 @@ function withQueryBuildHeaders<Request>(
 function withQueryCacheHeaders(response: QueryEndpointResponse): QueryEndpointResponse {
   const next = {
     ...response,
-    headers: {
-      'Cache-Control': 'private, no-store',
-      Vary: 'Cookie',
-      ...response.headers,
-    },
+    headers: mergeResponseHeaders(
+      {
+        'Cache-Control': 'private, no-store',
+        Vary: 'Cookie',
+      },
+      response.headers,
+    ),
   };
   return isBlessedRedirectResponse(response) ? blessRedirectResponse(next) : next;
 }
