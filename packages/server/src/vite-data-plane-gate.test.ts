@@ -367,6 +367,20 @@ const NON_DRIZZLE_OUTPUT_BARREL_QUERY_SOURCE = [
   '});',
 ].join('\n');
 
+const NON_DRIZZLE_OUTPUT_NAMESPACE_QUERY_SOURCE = [
+  'import * as data from "@kovojs/server";',
+  '',
+  'export const status = data.query({',
+  '  reads: [],',
+  '  output: data.s.object({',
+  '    summary: data.s.string(),',
+  '    generatedAt: data.s.string(),',
+  '    metrics: data.s.object({ count: data.s.number().optional() }),',
+  '  }),',
+  '  load: () => ({ summary: "ready", generatedAt: "now", metrics: {} }),',
+  '});',
+].join('\n');
+
 const NON_DRIZZLE_OUTPUT_ALIAS_COMPONENT = [
   'import { component } from "@kovojs/core";',
   'import { statusQuery } from "../status";',
@@ -770,6 +784,30 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
           message: expect.stringContaining('status.missing'),
         }),
       ]),
+    );
+  });
+
+  it('feeds namespace-imported JS non-Drizzle query output schemas to compiler validation', async () => {
+    const root = await fixture({
+      'src/components/status-card.tsx': NON_DRIZZLE_OUTPUT_VALID_COMPONENT,
+      'src/status.jsx': NON_DRIZZLE_OUTPUT_NAMESPACE_QUERY_SOURCE,
+    });
+    const captured: CapturedReport[] = [];
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await plugin.configResolved({ command: 'serve', root });
+    await configureDevServer(plugin, root, captured);
+
+    await expect(
+      plugin.transform(
+        NON_DRIZZLE_OUTPUT_VALID_COMPONENT,
+        join(root, 'src/components/status-card.tsx'),
+      ),
+    ).resolves.toEqual(expect.objectContaining({ map: null }));
+
+    const componentReport = captured.find((report) => report.fileName.endsWith('status-card.tsx'));
+    expect(componentReport?.diagnostics.some((diagnostic) => diagnostic.code === 'KV302')).toBe(
+      false,
     );
   });
 

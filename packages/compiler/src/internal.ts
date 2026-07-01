@@ -101,6 +101,7 @@ export {
 } from './types.js';
 export {
   mergeQueryShapeFactSets,
+  outputSchemaQueryShapeFactsFromProject,
   outputSchemaQueryShapeFactsFromSource,
 } from './scan/query-shape-source.js';
 export { collectMinifierReservedNames } from './compile.js';

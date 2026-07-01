@@ -96,6 +96,93 @@ describe('data-plane static analysis aggregate ABI', () => {
     });
   });
 
+  it('runs aggregate analysis for app source even when aliases and wrappers avoid text relevance regexes', async () => {
+    const extractStaticBuildAnalysisFactsFromProject = vi.fn(() => ({
+      queries: [],
+      sqlSafetyDiagnostics: [
+        {
+          code: 'KV422',
+          message: 'wrapper SQL text reaches a managed sink',
+          severity: 'error',
+          site: 'src/search.js:5',
+        },
+      ],
+      toctouFacts: [],
+      touchGraph: {},
+    }));
+    vi.doMock('@kovojs/drizzle/internal/static', () => ({
+      deriveMutationTouchRegistry: () => ({}),
+      extractStaticBuildAnalysisFactsFromProject,
+    }));
+    const { staticDataPlaneBuildFacts } = await loadSubject();
+
+    const facts = await staticDataPlaneBuildFacts(
+      [
+        {
+          fileName: 'src/search.js',
+          source: [
+            'export function search(input, database) {',
+            '  const runner = database;',
+            '  const method = "execute";',
+            '  return runner[method]("select * from products where id = " + input.id);',
+            '}',
+          ].join('\n'),
+        },
+      ],
+      { cache: false },
+    );
+
+    expect(extractStaticBuildAnalysisFactsFromProject).toHaveBeenCalledWith({
+      files: [
+        expect.objectContaining({
+          fileName: 'src/search.js',
+        }),
+      ],
+    });
+    expect(facts.sqlSafetyDiagnostics).toEqual([
+      expect.objectContaining({ code: 'KV422', site: 'src/search.js:5' }),
+    ]);
+  });
+
+  it('uses one app source discovery policy for JS/JSX extensions and generated/test/setup exclusions', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-source-'));
+    const srcDir = join(root, 'src');
+    try {
+      await mkdir(join(srcDir, 'generated'), { recursive: true });
+      await mkdir(join(srcDir, 'components'), { recursive: true });
+      await Promise.all([
+        writeFile(join(srcDir, 'query.js'), 'export const querySource = true;\n', 'utf8'),
+        writeFile(
+          join(srcDir, 'components/card.jsx'),
+          'export const Card = () => <p />;\n',
+          'utf8',
+        ),
+        writeFile(join(srcDir, 'ignored.test.ts'), 'export const ignored = true;\n', 'utf8'),
+        writeFile(join(srcDir, 'app.setup.js'), 'export const setup = true;\n', 'utf8'),
+        writeFile(join(srcDir, 'generated/query.ts'), 'export const generated = true;\n', 'utf8'),
+      ]);
+      const { buildCheckSourceFiles, dataPlaneSourceFiles, isDataPlaneSourceFile } =
+        await loadSubject();
+
+      expect(
+        dataPlaneSourceFiles(srcDir, root)
+          .map((file) => file.fileName)
+          .sort(),
+      ).toEqual(['src/components/card.jsx', 'src/query.js']);
+      expect(
+        buildCheckSourceFiles(join(srcDir, 'app.tsx'))
+          .map((file) => file.fileName)
+          .sort(),
+      ).toEqual(['components/card.jsx', 'query.js']);
+      expect(isDataPlaneSourceFile(join(srcDir, 'query.js'), srcDir)).toBe(true);
+      expect(isDataPlaneSourceFile(join(srcDir, 'components/card.jsx'), srcDir)).toBe(true);
+      expect(isDataPlaneSourceFile(join(srcDir, 'app.setup.js'), srcDir)).toBe(false);
+      expect(isDataPlaneSourceFile(join(srcDir, 'generated/query.ts'), srcDir)).toBe(false);
+    } finally {
+      await rm(root, { force: true, recursive: true });
+    }
+  });
+
   it('scopes build graph derivation to KovoBuildContext instead of process env', async () => {
     const root = await mkdtemp(join(tmpdir(), 'kovo-data-plane-context-'));
     const srcDir = join(root, 'src');

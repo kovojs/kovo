@@ -9,45 +9,13 @@ import { isMainThread, parentPort, Worker, workerData } from 'node:worker_thread
 import type { DiagnosticCode } from '@kovojs/core';
 import { diagnosticDefinitions, isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
 import {
-  expressionResolvesToFrameworkExport,
-  frameworkExport,
-  registerFrameworkIdentityProject,
-  type FrameworkIdentityTypeScript,
-} from '@kovojs/core/internal/framework-identity';
+  outputSchemaQueryShapeFactsFromProject,
+  type QueryShape,
+  type QueryShapeFact,
+} from '@kovojs/core/internal/query-shape-source';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 
-/** @internal Compiler-compatible query shape used for KV302/KV435 validation. */
-export type QueryShape =
-  | 'array'
-  | 'boolean'
-  | 'number'
-  | 'object'
-  | 'string'
-  | readonly QueryShape[]
-  | {
-      readonly [key: string]: QueryShape;
-    }
-  | {
-      kind: 'nullable' | 'optional' | 'secret' | 'volatile-time';
-      shape: QueryShape;
-    }
-  | {
-      kind: 'table-row';
-      shape: QueryShape;
-      table: string;
-    }
-  | {
-      kind: 'revealed';
-      reveal: unknown;
-      shape: QueryShape;
-    };
-
-/** @internal Compiler-compatible query-shape fact. */
-export interface QueryShapeFact {
-  query: string;
-  shape: QueryShape;
-  source: string;
-}
+export type { QueryShape, QueryShapeFact };
 
 /** @internal SPEC.md §10.2/§10.3/§11.4 shared data-plane static-analysis source input. */
 export interface DataPlaneSourceFile {
@@ -169,7 +137,6 @@ const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-06-30.shared-data-plane.v1';
 const OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND = 'kovo.output-schema-query-shape';
 const OUTPUT_SCHEMA_WORKER_MIN_FILES = 8;
 const OUTPUT_SCHEMA_WORKER_MAX_COUNT = 4;
-const QUERY_IDENTITY = frameworkExport('@kovojs/server', 'query');
 
 interface OutputSchemaQueryShapeWorkerData {
   files: readonly DataPlaneSourceFile[];
@@ -216,11 +183,11 @@ export function dataPlaneSourceFiles(sourceDir: string, root: string): DataPlane
 /** @internal Whether a changed file is an app data-plane source file the Vite gate should re-run. */
 export function isDataPlaneSourceFile(file: string, sourceDir: string): boolean {
   const normalized = slashPath(file.split(/[?#]/, 1)[0] ?? file);
-  if (!/\.[cm]?tsx?$/.test(normalized)) return false;
-  if (normalized.includes('.test.') || normalized.includes('.setup.')) return false;
-  if (normalized.includes('/generated/')) return false;
   const normalizedSourceDir = slashPath(sourceDir);
-  return normalized === normalizedSourceDir || normalized.startsWith(`${normalizedSourceDir}/`);
+  if (normalized !== normalizedSourceDir && !normalized.startsWith(`${normalizedSourceDir}/`)) {
+    return false;
+  }
+  return isDataPlaneAppSourcePath(normalized, { includeDeclarations: true });
 }
 
 /** @internal Build the analyzer SourceFileInput[] for CLI build/check. */
@@ -314,7 +281,7 @@ export async function staticDataPlaneBuildFacts(
   files: readonly DataPlaneSourceFile[],
   options: StaticDataPlaneBuildFactsOptions,
 ): Promise<StaticDataPlaneBuildFacts> {
-  const analysisFiles = files.filter(isBuildSecurityAnalysisSourceFile);
+  const analysisFiles = files.filter(isBuildStaticAnalysisSourceFile);
   if (analysisFiles.length === 0) return { ...emptyStaticDataPlaneBuildFacts(), touchGraph: {} };
 
   const rawFacts = await cachedStaticBuildAnalysisFacts(files, options);
@@ -456,7 +423,7 @@ async function createDataPlaneAnalysis(
       staticFacts: cached,
     };
   }
-  const analysisFiles = files.filter(isBuildSecurityAnalysisSourceFile);
+  const analysisFiles = files.filter(isBuildStaticAnalysisSourceFile);
   const staticFacts =
     analysisFiles.length === 0
       ? emptyStaticBuildAnalysisFactsLike()
@@ -759,228 +726,7 @@ function outputSchemaQueryShapeFactsSerial(
   files: readonly DataPlaneSourceFile[],
   projectFiles: readonly DataPlaneSourceFile[] = files,
 ): readonly QueryShapeFact[] {
-  const ts = typeScript();
-  const sourceFiles = projectFiles.map((file) =>
-    ts.createSourceFile(
-      file.fileName,
-      file.source,
-      ts.ScriptTarget.Latest,
-      true,
-      ts.ScriptKind.TSX,
-    ),
-  );
-  for (const sourceFile of sourceFiles) {
-    registerFrameworkIdentityProject(sourceFile, sourceFiles);
-  }
-
-  const scanFileNames = new Set(files.map((file) => file.fileName));
-  return sourceFiles
-    .filter((sourceFile) => scanFileNames.has(sourceFile.fileName))
-    .flatMap((sourceFile) => outputSchemaQueryShapeFactsFromSourceFile(ts, sourceFile));
-}
-
-function outputSchemaQueryShapeFactsFromSourceFile(
-  ts: TypeScriptModule,
-  sourceFile: import('typescript').SourceFile,
-): readonly QueryShapeFact[] {
-  const facts: QueryShapeFact[] = [];
-
-  const visit = (node: import('typescript').Node): void => {
-    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
-      const fact = outputSchemaQueryShapeFactFromVariable(ts, sourceFile, node);
-      if (fact) facts.push(fact);
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(sourceFile);
-  return facts;
-}
-
-function outputSchemaQueryShapeFactFromVariable(
-  ts: TypeScriptModule,
-  sourceFile: import('typescript').SourceFile,
-  node: import('typescript').VariableDeclaration,
-): QueryShapeFact | null {
-  const initializer = unwrapTsExpression(ts, node.initializer);
-  if (!initializer || !ts.isCallExpression(initializer)) return null;
-  if (!isQueryCallee(ts, sourceFile, initializer.expression)) return null;
-
-  const declaration = staticQueryDeclaration(ts, node, initializer);
-  if (!declaration) return null;
-  const output = objectPropertyExpression(ts, declaration.definition, 'output');
-  if (!output) return null;
-  const shape = compilerQueryShapeFromSchemaExpression(ts, output);
-  if (!shape || !isSubstantiveCompilerQueryShape(shape)) return null;
-
-  const line = sourceFile.getLineAndCharacterOfPosition(output.getStart(sourceFile)).line + 1;
-  return { query: declaration.query, shape, source: `${sourceFile.fileName}:${line}` };
-}
-
-function staticQueryDeclaration(
-  ts: TypeScriptModule,
-  node: import('typescript').VariableDeclaration,
-  call: import('typescript').CallExpression,
-): { definition: import('typescript').ObjectLiteralExpression; query: string } | null {
-  const [firstArgument, secondArgument] = call.arguments;
-  if (
-    firstArgument &&
-    (ts.isStringLiteralLike(firstArgument) || ts.isNoSubstitutionTemplateLiteral(firstArgument))
-  ) {
-    const definition = unwrapTsExpression(ts, secondArgument);
-    return definition && ts.isObjectLiteralExpression(definition)
-      ? { definition, query: firstArgument.text }
-      : null;
-  }
-
-  const definition = unwrapTsExpression(ts, firstArgument);
-  if (!definition || !ts.isObjectLiteralExpression(definition)) return null;
-  if (!ts.isIdentifier(node.name) || !isExportedVariableDeclaration(ts, node)) return null;
-  return { definition, query: node.name.text };
-}
-
-function compilerQueryShapeFromSchemaExpression(
-  ts: TypeScriptModule,
-  expression: import('typescript').Expression,
-): QueryShape | null {
-  const current = unwrapTsExpression(ts, expression);
-  if (!current) return null;
-  if (ts.isCallExpression(current)) return compilerQueryShapeFromSchemaCall(ts, current);
-  if (ts.isPropertyAccessExpression(current)) {
-    const receiverShape = compilerQueryShapeFromSchemaExpression(ts, current.expression);
-    if (!receiverShape) return null;
-    if (current.name.text === 'optional') return { kind: 'optional', shape: receiverShape };
-    if (current.name.text === 'nullable' || current.name.text === 'nullish') {
-      return { kind: 'nullable', shape: receiverShape };
-    }
-    return receiverShape;
-  }
-  return null;
-}
-
-function compilerQueryShapeFromSchemaCall(
-  ts: TypeScriptModule,
-  call: import('typescript').CallExpression,
-): QueryShape | null {
-  const callee = call.expression;
-  if (!ts.isPropertyAccessExpression(callee)) return null;
-
-  const receiver = callee.expression;
-  const method = callee.name.text;
-  const receiverShape = compilerQueryShapeFromSchemaExpression(ts, receiver);
-  if (receiverShape) {
-    if (method === 'optional') return { kind: 'optional', shape: receiverShape };
-    if (method === 'nullable' || method === 'nullish')
-      return { kind: 'nullable', shape: receiverShape };
-    return receiverShape;
-  }
-
-  if (!ts.isIdentifier(receiver) || receiver.text !== 's') return null;
-  switch (method) {
-    case 'array': {
-      const item = call.arguments[0];
-      const itemShape = item ? compilerQueryShapeFromSchemaExpression(ts, item) : null;
-      return [itemShape ?? 'object'];
-    }
-    case 'boolean':
-      return 'boolean';
-    case 'number':
-      return 'number';
-    case 'object': {
-      const shapeArg = call.arguments[0];
-      if (!shapeArg) return {};
-      const object = unwrapTsExpression(ts, shapeArg);
-      if (!object || !ts.isObjectLiteralExpression(object)) return 'object';
-      return compilerQueryShapeFromSchemaObject(ts, object);
-    }
-    case 'string':
-    case 'enum':
-      return 'string';
-    default:
-      return null;
-  }
-}
-
-function compilerQueryShapeFromSchemaObject(
-  ts: TypeScriptModule,
-  object: import('typescript').ObjectLiteralExpression,
-): QueryShape {
-  const shape: Record<string, QueryShape> = {};
-  for (const property of object.properties) {
-    if (!ts.isPropertyAssignment(property)) continue;
-    const name = propertyNameText(ts, property.name);
-    if (!name) continue;
-    const child = compilerQueryShapeFromSchemaExpression(ts, property.initializer);
-    if (child) shape[name] = child;
-  }
-  return shape;
-}
-
-function objectPropertyExpression(
-  ts: TypeScriptModule,
-  object: import('typescript').ObjectLiteralExpression,
-  propertyName: string,
-): import('typescript').Expression | null {
-  for (const property of object.properties) {
-    if (!ts.isPropertyAssignment(property)) continue;
-    if (propertyNameText(ts, property.name) === propertyName) return property.initializer;
-  }
-  return null;
-}
-
-function propertyNameText(
-  ts: TypeScriptModule,
-  name: import('typescript').PropertyName,
-): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name))
-    return name.text;
-  return null;
-}
-
-function isQueryCallee(
-  ts: TypeScriptModule,
-  sourceFile: import('typescript').SourceFile,
-  expression: import('typescript').Expression,
-): boolean {
-  return expressionResolvesToFrameworkExport(
-    ts as FrameworkIdentityTypeScript,
-    sourceFile,
-    expression,
-    QUERY_IDENTITY,
-  );
-}
-
-function isExportedVariableDeclaration(
-  ts: TypeScriptModule,
-  declaration: import('typescript').VariableDeclaration,
-): boolean {
-  let current: import('typescript').Node = declaration;
-  while (current.parent) {
-    current = current.parent;
-    if (ts.isVariableStatement(current)) {
-      return (
-        current.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ??
-        false
-      );
-    }
-  }
-  return false;
-}
-
-function unwrapTsExpression(
-  ts: TypeScriptModule,
-  expression: import('typescript').Expression | undefined,
-): import('typescript').Expression | null {
-  let current = expression;
-  while (
-    current &&
-    (ts.isAsExpression(current) ||
-      ts.isSatisfiesExpression(current) ||
-      ts.isParenthesizedExpression(current) ||
-      ts.isNonNullExpression(current))
-  ) {
-    current = current.expression;
-  }
-  return current ?? null;
+  return outputSchemaQueryShapeFactsFromProject(typeScript(), projectFiles, files);
 }
 
 function outputSchemaQueryShapeFactsInWorker(
@@ -1085,33 +831,19 @@ function isCompilerQueryShapeFact(value: unknown): value is QueryShapeFact {
   );
 }
 
-function isBuildSecurityAnalysisSourceFile(file: DataPlaneSourceFile): boolean {
-  const source = file.source;
-  if (source.startsWith('// @kovojs-ui-copy\n')) return false;
-  if (/from ['"](?:@kovojs\/drizzle|drizzle-orm)/.test(source)) return true;
-  if (/\b(?:pgTable|sqliteTable|mysqlTable|kovo)\s*\(/.test(source)) return true;
-  if (/\b(?:db|tx)\s*\.\s*(?:all|get|query|run|execute|select|insert|update|delete)\b/.test(source))
-    return true;
-  if (
-    /\brequest\s*\.\s*db\s*\.\s*(?:all|get|query|run|execute|select|insert|update|delete)\b/.test(
-      source,
-    )
-  )
-    return true;
-  if (/\bsql\s*(?:`|\.raw\s*\(|\.identifier\s*\()/.test(source)) return true;
-  return false;
+function isBuildStaticAnalysisSourceFile(file: DataPlaneSourceFile): boolean {
+  return !file.source.startsWith('// @kovojs-ui-copy\n');
 }
 
 function sourceFilesUnder(dir: string, root: string): DataPlaneSourceFile[] {
   if (!existsSync(dir)) return [];
   return readdirSafe(dir).flatMap((entry) => {
     const path = join(dir, entry);
-    if (entry === 'node_modules' || entry === 'dist' || entry === '.kovo') return [];
+    if (isIgnoredDataPlaneDirectory(entry)) return [];
     const stat = statSafe(path);
     if (!stat) return [];
     if (stat.isDirectory()) return sourceFilesUnder(path, root);
-    if (isBuildCheckIgnoredSource(entry)) return [];
-    if (!/\.[cm]?[jt]sx?$/.test(entry) || entry.endsWith('.d.ts')) return [];
+    if (!isDataPlaneAppSourcePath(entry, { includeDeclarations: false })) return [];
     return [
       {
         fileName: relative(root, path).split(/[\\/]/).join('/'),
@@ -1121,26 +853,37 @@ function sourceFilesUnder(dir: string, root: string): DataPlaneSourceFile[] {
   });
 }
 
-function isBuildCheckIgnoredSource(entry: string): boolean {
-  const lower = entry.toLowerCase();
-  return (
-    /\.(?:test|spec)\.[cm]?[jt]sx?$/.test(lower) ||
-    /(?:^|[.-])test-helpers\.[cm]?[jt]sx?$/.test(lower) ||
-    /\.test-support\.[cm]?[jt]sx?$/.test(lower)
-  );
-}
-
 function dataPlaneSourceFilePaths(directory: string): string[] {
   return readdirSync(directory, { withFileTypes: true }).flatMap((entry) => {
     const path = resolve(directory, entry.name);
     if (entry.isDirectory()) {
-      if (entry.name === 'generated' || entry.name === 'node_modules') return [];
+      if (isIgnoredDataPlaneDirectory(entry.name)) return [];
       return dataPlaneSourceFilePaths(path);
     }
-    if (!/\.[cm]?tsx?$/.test(entry.name)) return [];
-    if (entry.name.includes('.test.') || entry.name.includes('.setup.')) return [];
+    if (!isDataPlaneAppSourcePath(entry.name, { includeDeclarations: true })) return [];
     return [path];
   });
+}
+
+function isDataPlaneAppSourcePath(
+  filePath: string,
+  options: { includeDeclarations: boolean },
+): boolean {
+  const normalized = slashPath(filePath.split(/[?#]/, 1)[0] ?? filePath).toLowerCase();
+  const baseName = normalized.slice(normalized.lastIndexOf('/') + 1);
+  if (normalized.includes('/generated/')) return false;
+  if (baseName === 'generated') return false;
+  if (baseName.endsWith('.d.ts') && !options.includeDeclarations) return false;
+  if (!/\.(?:[cm]?[jt]sx?)$/.test(baseName)) return false;
+  if (/\.(?:test|spec)\.[cm]?[jt]sx?$/.test(baseName)) return false;
+  if (/(?:^|[.-])test-helpers\.[cm]?[jt]sx?$/.test(baseName)) return false;
+  if (/\.test-support\.[cm]?[jt]sx?$/.test(baseName)) return false;
+  if (/(?:^|[.-])setup\.[cm]?[jt]sx?$/.test(baseName)) return false;
+  return true;
+}
+
+function isIgnoredDataPlaneDirectory(entry: string): boolean {
+  return entry === 'node_modules' || entry === 'dist' || entry === '.kovo' || entry === 'generated';
 }
 
 function sqlSafetyDiagnosticFact(value: unknown): CoreGraph.SqlSafetyDiagnosticFact[] {
