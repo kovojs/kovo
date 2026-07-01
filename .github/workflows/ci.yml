@@ -166,7 +166,10 @@ jobs:
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
       - name: Generated starter proofs (${{ matrix.shard }})
-        run: vp exec vitest --run ${{ matrix.files }}
+        run: |
+          for file in ${{ matrix.files }}; do
+            vp exec vitest --run "$file"
+          done
 
   build:
     runs-on: ubuntu-latest
