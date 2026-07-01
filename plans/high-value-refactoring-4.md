@@ -66,7 +66,7 @@ that removes the broader source of drift.
     false positives outside the compiler/server graph producers.
   - Verification: `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-explain.test.ts packages/core/src/graph.test.ts packages/compiler/src/registry.test.ts packages/server/src/access-graph.test.ts`.
 
-- [ ] **P0.5 - Make scope audits consume canonical read provenance only.**
+- [x] **P0.5 - Make scope audits consume canonical read provenance only.**
   - Current signals: `packages/drizzle/src/static.ts` still lets `QueryFact` carry parallel legacy scope
     fields such as `argScopedReads`, `hasClientArgPredicate`, `sessionAnchoredReads`, and
     `ownerScopedPrivateReadKeys`; `scopeAuditReadProvenance()` falls back to synthesizing provenance
@@ -77,6 +77,7 @@ that removes the broader source of drift.
   - Risk reduced: KV414 owner-scope audits become a simple fact-store consumer and cannot be influenced by
     stale shadow fields after the producer model evolves.
   - Verification: add a missing-provenance regression that fails closed; run `pnpm exec vitest --run packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/cli/src/index.kovo-check.test.ts`.
+  - Evidence: `pnpm exec vitest --run --no-file-parallelism packages/drizzle/src/index.scope-audits.test.ts packages/drizzle/src/index.columns-keys-predicates-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/cli/src/index.kovo-check.test.ts` passed with 4 files/279 tests after merging `agent/hvr4-drizzle-provenance-20260630-235607`; `git diff --check HEAD^..HEAD` passed.
 
 - [x] **P0.6 - Apply SQL side-effect observation to prepared statement execution.**
   - Current signals: `packages/test/src/verifier-observation.ts` gives direct SQL execution unconditional
