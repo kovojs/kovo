@@ -502,9 +502,45 @@ export function addRuntimeContractProofs(root: string): void {
     ].join('\n'),
     'utf8',
   );
+  writeFileSync(
+    join(root, 'src/mutations.ts'),
+    [
+      "import { mutation, publicAccess, s } from '@kovojs/server';",
+      "import { contact } from './model.js';",
+      "import { contactsQuery } from './queries.js';",
+      '',
+      "const publicProof = publicAccess('unused runtime contract fixture mutation');",
+      '',
+      'export interface AddContactInput {',
+      '  company: string;',
+      '  email: string;',
+      '  name: string;',
+      '}',
+      '',
+      'export const addContact = mutation({',
+      '  access: publicProof,',
+      '  csrf: false,',
+      '  input: s.object({',
+      '    name: s.string(),',
+      '    email: s.string(),',
+      '    company: s.string(),',
+      '  }),',
+      "  optimistic: { [contactsQuery.key]: 'await-fragment' },",
+      '  registry: { touches: [contact] },',
+      '  handler(input: AddContactInput) {',
+      '    return { id: input.email };',
+      '  },',
+      '});',
+      '',
+      'export const appMutations = [addContact];',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
 
   const appPath = join(root, 'src/app.tsx');
   const app = readFileSync(appPath, 'utf8')
+    .replace("import { ContactsRegion } from './components/contacts.js';\n", '')
     .replace(
       "import { addContact } from './mutations.js';",
       [
@@ -526,6 +562,7 @@ export function addRuntimeContractProofs(root: string): void {
       '  mutations: [addContact, appSignIn, appSignOut],',
       '  mutations: [addContact, acceptPngUpload, refreshWarningItems, appSignIn, appSignOut],',
     )
+    .replace('      <ContactsRegion />', '      <main data-proof="runtime-contracts-home" />')
     .replace(
       '  queries: [contactsQuery],',
       '  queries: [contactsQuery, syncVerifiedFileParseQuery, warningItemsQuery],',
