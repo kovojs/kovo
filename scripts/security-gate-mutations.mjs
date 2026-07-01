@@ -138,6 +138,10 @@ const kv311IslandDeriveProofEnrollmentBranch = [
   '    requiredNeedles: [',
   "      'buildProductionArtifact(root)',",
   "      'assertProdArtifactSinkCensus(root',",
+  "      'state.count',",
+  "      'state.items[0]',",
+  '      \'state.extra["computed-key"]\',',
+  "      'frameworkDataRequestsAfterInteraction',",
   "      'expect(pageErrors).toEqual([])',",
   "      'expect(consoleErrors).toEqual([])',",
   '    ],',
@@ -1055,6 +1059,10 @@ async function assertKv311IslandDeriveProofEnrollmentIsPinned(moduleUnderTest) {
   const needles = [
     'buildProductionArtifact(root)',
     'assertProdArtifactSinkCensus(root',
+    'state.count',
+    'state.items[0]',
+    'state.extra["computed-key"]',
+    'frameworkDataRequestsAfterInteraction',
     'expect(pageErrors).toEqual([])',
     'expect(consoleErrors).toEqual([])',
   ];

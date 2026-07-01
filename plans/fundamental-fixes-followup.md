@@ -114,10 +114,14 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
   - [x] KV426 blocks `@internal renderedHtml()` query taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.
   - [ ] real build resolves local/star barrels and literal element access for raw-HTML sinks [B3/E2]
-- [ ] client-derive bodies (leak / `ReferenceError` boundary) [C2]
-  - [ ] emitted client derives use state paths instead of render-local aliases [C2]
-  - [ ] hydrated derives update on interaction without `ReferenceError` or framework requests [C2]
-  - [ ] module-helper-in-derive stays either lowered safely or fails KV311 [C2]
+- [x] client-derive bodies (leak / `ReferenceError` boundary) [C2]
+  - Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot` passed 2 prod-artifact tests; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 29 mutants.
+  - [x] emitted client derives use state paths instead of render-local aliases [C2]
+    - Evidence: M1 fetched the served `/c/__v/...client.js` from `packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts` and asserted `state.count`, `state.items[0]`, nested/computed state paths, and no render-local alias names.
+  - [x] hydrated derives update on interaction without `ReferenceError` or framework requests [C2]
+    - Evidence: M1 same prod-artifact browser test clicked the state-only control, observed all derived outputs update, `pageErrors=[]`, `consoleErrors=[]`, and no post-interaction `/_q` or `/_m` requests.
+  - [x] module-helper-in-derive stays either lowered safely or fails KV311 [C2]
+    - Evidence: M1 same prod-artifact shard passed the helper proof asserting built artifacts do not ship `format(state.count)`/`format =`; focused compiler shard `pnpm exec vitest --run packages/compiler/src/state-bindings.test.ts -t "state aliases|helper" --reporter=dot` passed 9 alias/helper tests including KV311 helper failures.
 - [ ] secret-column-to-wire across ALL value-flow paths [C2]
   - [ ] direct secret projection to query wire fails KV435 in every supported dialect [C2]
   - [ ] transformed query-loader return laundering fails KV435/KV406 [C2]

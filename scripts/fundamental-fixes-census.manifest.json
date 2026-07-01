@@ -651,32 +651,116 @@
       "id": "client-derive-bodies-leak-referenceerror-boundary",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s); pnpm run check:security-test-builds (14 real-build proofs passed); pnpm run check:security-gate-mutations (29 mutants killed)",
+      "evidenceBundles": [
+        "m1-prod-artifact-island-derive",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s)",
+        "clientArtifact": "the prod-artifact test fetched the served /c/__v/...client.js module from the production server before asserting derive bodies",
+        "dialects": {
+          "postgres": "client derive lowering is dialect-independent; the starter prod artifact built and served with the default Postgres scaffold dependencies",
+          "sqlite": "client derive lowering is dialect-independent; no SQL dialect branch participates in emitted client derive bodies"
+        },
+        "independentReviewer": "agent/derive-census-1782922363 hardened and reverified the existing C2/KV311 proof on a fresh origin/main worktree"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts calls buildProductionArtifact(root) before serving or inspecting the production server artifact",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed, including KV311 island-derive-prod-artifact and module-helper-derive-prod-artifact)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (29 mutants killed, including security-test-build-gate/weaken-kv311-island-derive-proof-enrollment)"
+      }
     },
     {
       "id": "emitted-client-derives-use-state-paths-instead-of-render-local-aliases",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "client-derive-bodies-leak-referenceerror-boundary"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s) fetched the served client module and asserted state paths with no render-local alias names; M2/M3 gates passed.",
+      "parent": "client-derive-bodies-leak-referenceerror-boundary",
+      "evidenceBundles": [
+        "m1-prod-artifact-island-derive",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s)",
+        "clientArtifact": "served /c/__v/...client.js contains state.count, state.items[0], state.nested.label, state.groups[0][0], state.extra[\"computed-key\"], and (state.cards[0]).label; render-local alias names are absent",
+        "dialects": {
+          "postgres": "client derive lowering is dialect-independent; the starter prod artifact built and served with the default Postgres scaffold dependencies",
+          "sqlite": "client derive lowering is dialect-independent; no SQL dialect branch participates in emitted client derive bodies"
+        },
+        "independentReviewer": "agent/derive-census-1782922363 reverified the served client artifact in a fresh origin/main worktree"
+      },
+      "m2": {
+        "productionBuild": "row proof uses buildProductionArtifact(root) and the served production client module, not fixture-only compile output",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (29 mutants killed; KV311 proof enrollment pins state-path evidence)"
+      }
     },
     {
       "id": "hydrated-derives-update-on-interaction-without-referenceerror-or-framework-requests",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "client-derive-bodies-leak-referenceerror-boundary"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s) clicked the hydrated state-only control and observed updated derives, no page/console errors, and no /_q or /_m requests; M2/M3 gates passed.",
+      "parent": "client-derive-bodies-leak-referenceerror-boundary",
+      "evidenceBundles": [
+        "m1-prod-artifact-island-derive",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s)",
+        "browser": "Playwright observed count/first/nested/group/computed/card derives update after click with pageErrors=[], consoleErrors=[], and frameworkDataRequestsAfterInteraction=[]",
+        "dialects": {
+          "postgres": "client derive hydration is dialect-independent; the starter prod artifact built and served with the default Postgres scaffold dependencies",
+          "sqlite": "client derive hydration is dialect-independent; no SQL dialect branch participates in local state hydration or client derive updates"
+        },
+        "independentReviewer": "agent/derive-census-1782922363 reverified the browser interaction in a fresh origin/main worktree"
+      },
+      "m2": {
+        "productionBuild": "row proof serves dist/server/server.mjs created by buildProductionArtifact(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (29 mutants killed; KV311 proof enrollment pins no-console-error evidence)"
+      }
     },
     {
       "id": "module-helper-in-derive-stays-either-lowered-safely-or-fails-kv311",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "client-derive-bodies-leak-referenceerror-boundary"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s) proved the prod artifact does not ship unbound format(state.count); pnpm exec vitest --run packages/compiler/src/state-bindings.test.ts -t \"state aliases|helper\" --reporter=dot passed 9 alias/helper tests including KV311 helper failures; M2/M3 gates passed.",
+      "parent": "client-derive-bodies-leak-referenceerror-boundary",
+      "evidenceBundles": [
+        "m1-prod-artifact-island-derive",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot (2 passed, 51.36s)",
+        "compiler": "pnpm exec vitest --run packages/compiler/src/state-bindings.test.ts -t \"state aliases|helper\" --reporter=dot (9 passed, 20 skipped) covers KV311 helper fail-closed cases",
+        "dialects": {
+          "postgres": "module-helper derive safety is dialect-independent; the starter prod artifact built with the default Postgres scaffold dependencies",
+          "sqlite": "module-helper derive safety is dialect-independent; no SQL dialect branch participates in helper-dependent state derive lowering"
+        },
+        "independentReviewer": "agent/derive-census-1782922363 reverified the helper prod artifact and compiler KV311 shard in a fresh origin/main worktree"
+      },
+      "m2": {
+        "productionBuild": "module-helper-derive-prod-artifact is enrolled in packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts and calls buildProductionArtifact(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (14 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (29 mutants killed, including required KV311 proof-evidence and proof-enrollment mutants)"
+      }
     },
     {
       "id": "secret-column-to-wire-across-all-value-flow-paths",
@@ -1491,6 +1575,10 @@
     "m1-prod-artifact-query-wire": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t '/_q query wire' --reporter=dot",
       "evidence": "Production artifact /_q query-wire proof builds default and SQLite starters with kovo build --no-cache, serves dist/server/server.mjs, and observes escaped body plus private cache headers."
+    },
+    "m1-prod-artifact-island-derive": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts --reporter=dot",
+      "evidence": "Production artifact island-derive browser test builds with kovo build --no-cache, fetches the served client module, clicks hydrated state, and checks helper-derived client artifacts."
     }
   }
 }
