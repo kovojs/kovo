@@ -106,6 +106,7 @@ export {
 } from './scan/query-shape-source.js';
 export { collectMinifierReservedNames } from './compile.js';
 export { lowerStandaloneSourceDerivedRegistryDeclarations } from './source-derived-lowering.js';
+export { viteFrameworkIdentityFiles } from './vite.js';
 export type {
   KovoHmrEventName,
   KovoHmrEventPayload,

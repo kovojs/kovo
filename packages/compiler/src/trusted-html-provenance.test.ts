@@ -224,7 +224,7 @@ export const C = component({
     ).toHaveLength(1);
   });
 
-  it('stays clean for a function-call result (bounded: documented inter-procedural residue)', () => {
+  it('fails closed for a function-call result that carries query data', () => {
     expect(
       kv426(`
 import { trustedHtml } from '@kovojs/browser';
@@ -233,7 +233,28 @@ export const C = component({
   render: ({ post }) => <article>{trustedHtml(renderCard(post.body))}</article>,
 });
 `),
-    ).toHaveLength(0);
+    ).toHaveLength(1);
+  });
+
+  it('fails closed for unprovable function-call, spread, object, and array values', () => {
+    const cases = [
+      'renderStaticCard()',
+      '... [post.body]',
+      '({ ...post }).body',
+      '["safe", post.body].join("")',
+    ];
+
+    for (const expr of cases) {
+      expect(
+        kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{trustedHtml(${expr})}</article>,
+});
+`),
+      ).toHaveLength(1);
+    }
   });
 
   it('does not treat a shadowing local trustedHtml as the brand (symbol identity, fail-closed)', () => {
@@ -415,7 +436,7 @@ export const C = component({
   render: ({ post }) => <article>{unsafeTrust(post.body)}</article>,
 });
 `),
-    ).toHaveLength(1);
+    ).toHaveLength(2);
 
     expect(
       kv426(`
@@ -428,6 +449,80 @@ export const C = component({
   render: ({ post }) => <article>{unsafeTrust(post.body)}</article>,
 });
 `),
+    ).toHaveLength(2);
+  });
+
+  it('flags trustedUrl over request/query-derived data and supports audited reasons', () => {
+    expect(
+      kv426(`
+import { trustedUrl } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <a href={trustedUrl(post.href)}>read</a>,
+});
+`),
     ).toHaveLength(1);
+
+    expect(
+      kv426(`
+import { trustedUrl } from '@kovojs/browser';
+export const C = component({
+  render: ({}, _state, { request }) => <a href={trustedUrl(request.query.next)}>next</a>,
+});
+`),
+    ).toHaveLength(1);
+
+    expect(
+      kv426(`
+import { trustedUrl } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <a href={trustedUrl(post.href, 'admin-curated redirect')}>read</a>,
+});
+`),
+    ).toHaveLength(0);
+  });
+
+  it('resolves trustedUrl through @kovojs/server and keeps local lookalikes clean', () => {
+    expect(
+      kv426(`
+import { trustedUrl } from '@kovojs/server';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <a href={trustedUrl(post.href)}>read</a>,
+});
+`),
+    ).toHaveLength(1);
+
+    expect(
+      kv426(`
+const trustedUrl = (value) => value;
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <a href={trustedUrl(post.href)}>read</a>,
+});
+`),
+    ).toHaveLength(0);
+  });
+
+  it('flags @internal renderedHtml over request/query-derived raw bytes', () => {
+    expect(
+      kv426(`
+import { renderedHtml } from '@kovojs/server/internal/html';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => renderedHtml(post.body),
+});
+`),
+    ).toHaveLength(1);
+
+    expect(
+      kv426(`
+import { renderedHtml } from '@kovojs/server/internal/html';
+export const C = component({
+  render: () => renderedHtml('<main>static</main>'),
+});
+`),
+    ).toHaveLength(0);
   });
 });

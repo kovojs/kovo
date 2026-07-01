@@ -430,6 +430,7 @@ async function runTypeScriptBuildPreflight(appModulePath: string): Promise<void>
       [
         tscBin,
         '--noEmit',
+        '--allowImportingTsExtensions',
         '--incremental',
         '--tsBuildInfoFile',
         buildInfoFile,
@@ -576,7 +577,7 @@ async function staticBuildCheckGraph(
         ]
       : await Promise.all([
           staticDataPlaneBuildFacts(files, { cache: options.cache }),
-          sourceGraphFactsFromFiles(files),
+          sourceGraphFactsFromFiles(files, dirname(appModulePath)),
         ]);
   const queryShapeFacts = buildCompilerQueryShapeFacts(
     files,
@@ -625,18 +626,23 @@ interface SourceGraphFacts {
 
 async function sourceGraphFactsFromFiles(
   files: readonly BuildCheckSourceFile[],
+  root: string,
 ): Promise<SourceGraphFacts> {
-  const { compileComponentModule, compileRouteModule } = await import('@kovojs/compiler');
+  const [{ compileComponentModule, compileRouteModule }, { viteFrameworkIdentityFiles }] =
+    await Promise.all([import('@kovojs/compiler'), import('@kovojs/compiler/internal')]);
   const components: SourceComponentGraphFacts[] = [];
   const routeOutcomes = new Map<string, 'file' | 'stream'>();
   const routePages: SourceRoutePageFacts[] = [];
 
   for (const file of files) {
-    const component = compileComponentModule({
+    const extraFiles = viteFrameworkIdentityFiles(root, file.fileName, file.source);
+    const componentOptions = {
+      ...(extraFiles.length === 0 ? {} : { extraFiles }),
       fileName: file.fileName,
       source: file.source,
       sourceProvenance: 'app',
-    });
+    } as const;
+    const component = compileComponentModule(componentOptions);
     if (
       component.componentGraphFacts.length > 0 ||
       component.diagnostics.length > 0 ||

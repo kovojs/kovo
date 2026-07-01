@@ -30,7 +30,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     try {
       writeKovoProject(root, { name: 'Prod Default Transaction Proof' });
       linkStarterBuildDependencies(root);
-      addRuntimeMutationSafetyProofs(root);
+      addRuntimeMutationSafetyProofs(root, { includeReadonlyMutationAttempt: true });
 
       buildProductionArtifact(root);
 
@@ -53,6 +53,21 @@ describe('create-kovo starter (build integration: production transaction artifac
       };
       expect(before.count).toBe(0);
 
+      const readonlyAttempt = (await (
+        await fetch(`${origin}/api/readonly-mutation-attempt`)
+      ).json()) as {
+        blocked: boolean;
+        message?: string;
+      };
+      expect(readonlyAttempt).toMatchObject({ blocked: true });
+      expect(readonlyAttempt.message).toMatch(/read-only|readonly|KV433|loader cannot access/iu);
+      const afterReadonlyAttempt = (await (
+        await fetch(`${origin}/api/raw-runtime-drift-count`)
+      ).json()) as {
+        count: number;
+      };
+      expect(afterReadonlyAttempt.count).toBe(0);
+
       const response = await fetch(`${origin}/_m/runtime-safety-proofs/fail-after-write`, {
         body: new URLSearchParams({
           id: `partial-${Date.now()}`,
@@ -72,6 +87,60 @@ describe('create-kovo starter (build integration: production transaction artifac
         count: number;
       };
       expect(after.count).toBe(0);
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('keeps SQLite public GET readonly handles from mutating the production artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-readonly-handle-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Readonly Handle Proof' });
+      linkStarterBuildDependencies(root);
+      addRuntimeMutationSafetyProofs(root, { includeReadonlyMutationAttempt: true });
+
+      buildProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+
+      await fetchTextWhenReady(`${origin}/api/tx-proof-count`, output);
+      const positiveRead = (await (await fetch(`${origin}/api/tx-proof-count`)).json()) as {
+        count: number;
+      };
+      expect(positiveRead.count).toBe(0);
+
+      const readonlyAttempt = (await (
+        await fetch(`${origin}/api/readonly-mutation-attempt`)
+      ).json()) as {
+        blocked: boolean;
+        message?: string;
+      };
+      expect(readonlyAttempt).toMatchObject({ blocked: true });
+      expect(readonlyAttempt.message).toMatch(/read-only|readonly|KV433|loader cannot access/iu);
+
+      const afterReadonlyAttempt = (await (
+        await fetch(`${origin}/api/raw-runtime-drift-count`)
+      ).json()) as {
+        count: number;
+      };
+      expect(afterReadonlyAttempt.count).toBe(0);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });

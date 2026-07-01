@@ -18,7 +18,7 @@ import {
   type FrameworkIdentityTypeScript,
 } from '@kovojs/core/internal/framework-identity';
 import type { QueryProjectedColumn } from '@kovojs/core/internal/graph';
-import { drizzleDiagnostic } from './diagnostics.js';
+import { drizzleDiagnostic, sourceSiteForNode } from './diagnostics.js';
 import {
   appendSourceDestructuredReceiverBinding,
   boundReceiverMethodAccessName,
@@ -307,17 +307,316 @@ function appendRelationalProjectionShape(
   receiverReferences: QueryReceiverReferences,
   mode: 'project' | 'source' = 'source',
 ): CallExpression | undefined {
-  const selectCalls = queryBodyCallExpressions(body, mode, (call) =>
-    isSelectQueryCallName(staticAccessName(call.getExpression())) &&
-    isQueryCallOnReceiver(call, receiverReferences)
-      ? [call]
-      : [],
-  );
+  const selectCalls = selectCallsFromQueryBody(body, receiverReferences, mode);
 
   return (
     selectCalls.find((call) => call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) ??
     selectCalls[0]
   );
+}
+
+function selectCallsFromQueryBody(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  mode: 'project' | 'source' = 'source',
+): CallExpression[] {
+  return queryBodyCallExpressions(body, mode, (call) =>
+    isSelectQueryCallName(staticAccessName(call.getExpression())) &&
+    isQueryCallOnReceiver(call, receiverReferences)
+      ? [call]
+      : [],
+  );
+}
+
+/** @internal */ export function wireRelevantProjectedColumnsFromQueryBody(
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  columnShapes: Readonly<Record<string, QueryShape>> = {},
+  mode: 'project' | 'source' = 'source',
+): QueryProjectedColumn[] {
+  const columns: QueryProjectedColumn[] = [];
+  const nullableTables = nullableJoinTables(body, receiverReferences, mode);
+
+  for (const call of selectCallsFromQueryBody(body, receiverReferences, mode)) {
+    const projection = selectProjectionArgument(call);
+    if (!projection || !Node.isObjectLiteralExpression(projection)) continue;
+
+    const selection = queryShapeFromObjectLiteralNode(projection.compilerNode, {
+      columnShapes,
+      nullableTables,
+    });
+    if (
+      selection.projectedColumns.length > 0 &&
+      selectResultProvenOffWire(call, body, receiverReferences, mode)
+    ) {
+      continue;
+    }
+    columns.push(...selection.projectedColumns);
+  }
+
+  return columns;
+}
+
+function selectResultProvenOffWire(
+  call: CallExpression,
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  mode: 'project' | 'source',
+): boolean {
+  if (call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) return false;
+
+  const callbackBody = queryCallbackBodies(body, mode).find((candidate) =>
+    nodeContainsNode(candidate, call),
+  );
+  if (!callbackBody || !Node.isBlock(callbackBody)) return false;
+
+  const declaration = selectResultVariableDeclaration(call);
+  if (!declaration)
+    return call.getFirstAncestorByKind(SyntaxKind.ExpressionStatement) !== undefined;
+
+  const name = declaration.getNameNode();
+  if (!Node.isIdentifier(name)) return false;
+
+  const list = declaration.getParent();
+  if (!Node.isVariableDeclarationList(list) || list.getDeclarationKind() !== 'const') return false;
+
+  const selectedKey = localSymbolKey(name);
+  if (!selectedKey) return false;
+
+  return !taintedValueReachesTopLevelReturn(callbackBody, selectedKey);
+}
+
+function selectResultVariableDeclaration(call: CallExpression): VariableDeclaration | undefined {
+  const declaration = call.getFirstAncestorByKind(SyntaxKind.VariableDeclaration);
+  if (!declaration) return undefined;
+
+  const initializer = declaration.getInitializer();
+  return initializer && nodeContainsNode(initializer, call) ? declaration : undefined;
+}
+
+function taintedValueReachesTopLevelReturn(body: Node, selectedKey: string): boolean {
+  const returnExpressions = topLevelReturnExpressions(body);
+  const wireRoots = returnedValueRootKeys(body, returnExpressions);
+  const elementAliases = wireElementAliasRoots(body, wireRoots);
+  const tainted = new Set<string>([selectedKey]);
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+      if (!topLevelDescendant(body, declaration)) continue;
+      const initializer = declaration.getInitializer();
+      if (!initializer || !expressionContainsAnyKey(initializer, tainted)) continue;
+
+      const name = declaration.getNameNode();
+      if (!Node.isIdentifier(name)) return true;
+
+      const key = localSymbolKey(name);
+      if (key && !tainted.has(key)) {
+        tainted.add(key);
+        changed = true;
+      }
+    }
+
+    for (const assignment of body.getDescendantsOfKind(SyntaxKind.BinaryExpression)) {
+      if (!topLevelDescendant(body, assignment)) continue;
+      if (assignment.getOperatorToken().getKind() !== SyntaxKind.EqualsToken) continue;
+      const right = assignment.getRight();
+      if (!expressionContainsAnyKey(right, tainted)) continue;
+
+      const left = assignment.getLeft();
+      const targetRoot = expressionRootKey(left);
+      if (!targetRoot) return true;
+      if (wireRoots.has(targetRoot) || elementAliases.has(targetRoot)) return true;
+      if (!tainted.has(targetRoot)) {
+        tainted.add(targetRoot);
+        changed = true;
+      }
+    }
+
+    for (const statement of body.getDescendantsOfKind(SyntaxKind.ForOfStatement)) {
+      if (!topLevelDescendant(body, statement)) continue;
+      if (!expressionContainsAnyKey(statement.getExpression(), tainted)) continue;
+      const initializer = statement.getInitializer();
+      if (!Node.isVariableDeclarationList(initializer)) return true;
+      for (const declaration of initializer.getDeclarations()) {
+        const name = declaration.getNameNode();
+        if (!Node.isIdentifier(name)) return true;
+        const key = localSymbolKey(name);
+        if (key && !tainted.has(key)) {
+          tainted.add(key);
+          changed = true;
+        }
+      }
+    }
+  }
+
+  if (returnExpressions.some((expression) => expressionContainsAnyKey(expression, tainted))) {
+    return true;
+  }
+
+  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!topLevelDescendant(body, call)) continue;
+    const args = call.getArguments();
+    if (!args.some((argument) => expressionContainsAnyKey(argument, tainted))) continue;
+
+    const receiver = staticAccessExpression(call.getExpression());
+    const receiverRoot = receiver ? expressionRootKey(receiver) : undefined;
+    if (receiverRoot && (wireRoots.has(receiverRoot) || elementAliases.has(receiverRoot))) {
+      return true;
+    }
+    if (args.some((argument) => expressionContainsAnyKey(argument, wireRoots))) return true;
+  }
+
+  return false;
+}
+
+function topLevelReturnExpressions(body: Node): Node[] {
+  if (!Node.isBlock(body)) return [body];
+  return body
+    .getDescendantsOfKind(SyntaxKind.ReturnStatement)
+    .filter((statement) => topLevelDescendant(body, statement))
+    .flatMap((statement) => {
+      const expression = statement.getExpression();
+      return expression ? [expression] : [];
+    });
+}
+
+function returnedValueRootKeys(body: Node, returnExpressions: readonly Node[]): Set<string> {
+  const roots = new Set<string>();
+  for (const expression of returnExpressions) {
+    for (const key of expressionIdentifierKeys(expression)) roots.add(key);
+  }
+
+  let changed = true;
+  while (changed) {
+    changed = false;
+    for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+      if (!topLevelDescendant(body, declaration)) continue;
+      const name = declaration.getNameNode();
+      if (!Node.isIdentifier(name)) continue;
+      const key = localSymbolKey(name);
+      if (!key || !roots.has(key)) continue;
+      const initializer = declaration.getInitializer();
+      if (!initializer) continue;
+      for (const dependency of expressionIdentifierKeys(initializer)) {
+        if (!roots.has(dependency)) {
+          roots.add(dependency);
+          changed = true;
+        }
+      }
+    }
+  }
+
+  return roots;
+}
+
+function wireElementAliasRoots(body: Node, wireRoots: ReadonlySet<string>): Set<string> {
+  const aliases = new Set<string>();
+
+  for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
+    if (!topLevelDescendant(body, declaration)) continue;
+    const name = declaration.getNameNode();
+    if (!Node.isIdentifier(name)) continue;
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const receiverRoot = receiverRootKey(initializer) ?? expressionRootKey(initializer);
+    if (!receiverRoot || !wireRoots.has(receiverRoot)) continue;
+    const key = localSymbolKey(name);
+    if (key) aliases.add(key);
+  }
+
+  for (const statement of body.getDescendantsOfKind(SyntaxKind.ForOfStatement)) {
+    if (!topLevelDescendant(body, statement)) continue;
+    const expressionRoot = expressionRootKey(statement.getExpression());
+    if (!expressionRoot || !wireRoots.has(expressionRoot)) continue;
+    const initializer = statement.getInitializer();
+    if (!Node.isVariableDeclarationList(initializer)) continue;
+    const declarations = initializer.getDeclarations();
+    for (const declaration of declarations) {
+      const name = declaration.getNameNode();
+      if (!Node.isIdentifier(name)) continue;
+      const key = localSymbolKey(name);
+      if (key) aliases.add(key);
+    }
+  }
+
+  for (const call of body.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (!topLevelDescendant(body, call)) continue;
+    const receiver = staticAccessExpression(call.getExpression());
+    const receiverRoot = receiver ? expressionRootKey(receiver) : undefined;
+    if (!receiverRoot || !wireRoots.has(receiverRoot)) continue;
+    const callback = call
+      .getArguments()
+      .find((argument) => Node.isArrowFunction(argument) || Node.isFunctionExpression(argument));
+    if (!callback || (!Node.isArrowFunction(callback) && !Node.isFunctionExpression(callback))) {
+      continue;
+    }
+    const first = callback.getParameters()[0]?.getNameNode();
+    if (!Node.isIdentifier(first)) continue;
+    const key = localSymbolKey(first);
+    if (key) aliases.add(key);
+  }
+
+  return aliases;
+}
+
+function receiverRootKey(expression: Node): string | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (!Node.isCallExpression(node)) return undefined;
+  const receiver = staticAccessExpression(node.getExpression());
+  return receiver ? expressionRootKey(receiver) : undefined;
+}
+
+function expressionRootKey(expression: Node): string | undefined {
+  const node = unwrappedStaticExpressionNode(expression);
+  if (Node.isIdentifier(node)) return localSymbolKey(node);
+  if (Node.isAwaitExpression(node)) return expressionRootKey(node.getExpression());
+  if (Node.isPropertyAccessExpression(node) || Node.isElementAccessExpression(node)) {
+    return expressionRootKey(node.getExpression());
+  }
+  if (Node.isCallExpression(node)) return receiverRootKey(node);
+  return undefined;
+}
+
+function expressionContainsAnyKey(expression: Node, keys: ReadonlySet<string>): boolean {
+  for (const key of expressionIdentifierKeys(expression)) {
+    if (keys.has(key)) return true;
+  }
+  return false;
+}
+
+function expressionIdentifierKeys(expression: Node): string[] {
+  const keys = [
+    ...(Node.isIdentifier(expression) ? [localSymbolKey(expression)] : []),
+    ...expression.getDescendantsOfKind(SyntaxKind.Identifier).map(localSymbolKey),
+  ];
+  return keys.filter((key): key is string => key !== undefined);
+}
+
+function localSymbolKey(node: Node): string | undefined {
+  return resolvedSymbolKey(symbolForIdentifierReference(node) ?? node.getSymbol());
+}
+
+function nodeContainsNode(container: Node, candidate: Node): boolean {
+  return candidate.getStart() >= container.getStart() && candidate.getEnd() <= container.getEnd();
+}
+
+function topLevelDescendant(body: Node, candidate: Node): boolean {
+  let current = candidate.getParent();
+  while (current && current !== body) {
+    if (
+      Node.isArrowFunction(current) ||
+      Node.isFunctionDeclaration(current) ||
+      Node.isFunctionExpression(current) ||
+      Node.isMethodDeclaration(current)
+    ) {
+      return false;
+    }
+    current = current.getParent();
+  }
+  return current === body;
 }
 
 /** @internal */ export function isSelectQueryCallName(name: string | undefined): boolean {
@@ -645,11 +944,12 @@ function relationalProjectionIsFullyStatic(projection: RelationalProjection): bo
     if (!isQueryReceiverIdentifier(surface.receiver, receiverReferences)) return [];
 
     return [
-      drizzleDiagnostic({
+      {
         code: 'KV406' as const,
-        detail: `Query uses unclassified Drizzle receiver call ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
-        node: call,
-      }),
+        message: `Statically un-analyzable raw/opaque query read; declare output and reads: to attest the read set. Query uses ${surface.displayName ?? `${surface.receiver.getText()}.${surface.name}`}().`,
+        severity: 'error' as const,
+        site: sourceSiteForNode(call),
+      },
     ];
   });
 }

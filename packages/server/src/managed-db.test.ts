@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { KovoReadonlyHandleError, managedDb, readonlyDb } from './managed-db.js';
 import type { Reader } from './managed-db.js';
+import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
 import { domain } from './domain.js';
@@ -110,6 +111,8 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
       readHandle.update('products');
       // @ts-expect-error managedDb(..., 'read') exposes only the read capability allowlist.
       readHandle.transaction(() => undefined);
+      // @ts-expect-error managedDb(..., 'read') does not expose raw driver escape handles.
+      void readHandle.$client;
       const writeHandle = managedDb(raw, 'write');
       writeHandle.insert('products');
     };
@@ -141,6 +144,47 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
     const log: string[] = [];
     const reader = readonlyDb(fakeDb(log));
     const rows = await reader.select().from('products');
+    expect(rows).toEqual([{ id: 'p1' }]);
+    expect(log).toEqual(['select:products']);
+  });
+
+  it('parses allowed SQL-shaped read methods instead of trusting the allowlist alone', async () => {
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log));
+    const queryMethod = (reader as unknown as { query(statement: unknown): Promise<unknown> })
+      .query;
+
+    expect(() => queryMethod('select * from products')).toThrow(/KV422/);
+    expect(() =>
+      queryMethod(
+        stampTrustedSql(
+          { sql: 'delete from products where id = ? returning id', values: ['p1'] },
+          'attempted public read-handle write',
+        ),
+      ),
+    ).toThrow(/KV433/);
+    expect(log).toEqual([]);
+
+    await expect(
+      queryMethod({ sql: 'select id from products where id = ?', values: ['p1'] }),
+    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(log).toEqual(['query']);
+  });
+
+  it('binds allowed read methods to the wrapped DB target', async () => {
+    const log: string[] = [];
+    const raw = {
+      select() {
+        if (this !== raw) throw new Error('select this binding was not preserved');
+        return {
+          from(table: string) {
+            log.push(`select:${table}`);
+            return Promise.resolve([{ id: 'p1' }]);
+          },
+        };
+      },
+    };
+    const rows = await readonlyDb(raw).select().from('products');
     expect(rows).toEqual([{ id: 'p1' }]);
     expect(log).toEqual(['select:products']);
   });
@@ -208,6 +252,42 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         log.push('callback-entered');
       }),
     ).toThrow(KovoReadonlyHandleError);
+    expect(log).toEqual([]);
+  });
+
+  it('read mode denies raw driver escape properties instead of exposing them', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        $client: {
+          execute(statement: unknown) {
+            log.push(`$client:${String(statement)}`);
+          },
+        },
+        session: {
+          run(statement: unknown) {
+            log.push(`session:${String(statement)}`);
+          },
+        },
+        select(): { from(table: string): Promise<FakeRow[]> } {
+          return {
+            from(table: string) {
+              log.push(`select:${table}`);
+              return Promise.resolve([{ id: 'p1' }]);
+            },
+          };
+        },
+      },
+      'read',
+      { sqlWritePolicy: { dialect: 'sqlite' } },
+    );
+
+    expect(() => (handle as unknown as { $client(): unknown }).$client()).toThrow(
+      KovoReadonlyHandleError,
+    );
+    expect(() => (handle as unknown as { session(): unknown }).session()).toThrow(
+      KovoReadonlyHandleError,
+    );
     expect(log).toEqual([]);
   });
 
@@ -342,6 +422,181 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/KV406/);
     expect(log).toEqual(['get', 'run']);
+  });
+
+  it('write mode wraps raw driver escape properties instead of exposing them', async () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        $client: {
+          execute(statement: unknown) {
+            log.push('$client.execute');
+            return statement;
+          },
+        },
+        session: {
+          run(statement: unknown) {
+            log.push('session.run');
+            return statement;
+          },
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    );
+
+    expect(() => handle.$client.execute('select * from products')).toThrow(/KV422/);
+    expect(() => handle.session.run('select * from products')).toThrow(/KV422/);
+    expect(log).toEqual([]);
+
+    expect(
+      handle.$client.execute({ sql: 'select id from products where id = ?', values: ['p1'] }),
+    ).toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(() =>
+      handle.session.run(
+        stampTrustedSql(
+          { sql: 'delete from users where id = ?', values: ['u1'] },
+          'drifted session delete',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['$client.execute']);
+  });
+
+  it('write mode parses unknown nested driver methods before execution', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        $client: {
+          futureStatement(statement: unknown) {
+            log.push('$client.futureStatement');
+            return statement;
+          },
+        },
+        session: {
+          futureStatement(statement: unknown) {
+            log.push('session.futureStatement');
+            return statement;
+          },
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    );
+
+    expect(() => handle.$client.futureStatement('select id from products')).toThrow(/KV422/);
+    expect(log).toEqual([]);
+
+    expect(
+      handle.$client.futureStatement({
+        sql: 'select id from products where id = ?',
+        values: ['p1'],
+      }),
+    ).toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(() =>
+      handle.session.futureStatement(
+        stampTrustedSql(
+          { sql: 'update users set name = ? where id = ?', values: ['Ada', 'u1'] },
+          'drifted nested future update',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['$client.futureStatement']);
+  });
+
+  it('statement-parses pglite-like, better-sqlite3-like, and future driver methods', async () => {
+    const log: string[] = [];
+    const pglite = managedDb(
+      {
+        query(statement: unknown) {
+          log.push('pglite.query');
+          return statement;
+        },
+      },
+      'write',
+      { sqlWritePolicy: { tables: ['products'], touches: ['product'] } },
+    );
+    const sqlite = managedDb(
+      {
+        all(statement: unknown) {
+          log.push('sqlite.all');
+          return statement;
+        },
+        get(statement: unknown) {
+          log.push('sqlite.get');
+          return statement;
+        },
+        run(statement: unknown) {
+          log.push('sqlite.run');
+          return statement;
+        },
+      },
+      'write',
+      { sqlWritePolicy: { dialect: 'sqlite', tables: ['products'], touches: ['product'] } },
+    );
+    const future = wrapManagedDbForSqlSafety(
+      {
+        futureStatement(statement: unknown) {
+          log.push('future.futureStatement');
+          return statement;
+        },
+      },
+      undefined,
+      { capability: 'write', tables: ['products'], touches: ['product'] },
+    );
+
+    expect(() => pglite.query('select * from products')).toThrow(/KV422/);
+    expect(() => sqlite.all('select * from products')).toThrow(/KV422/);
+    expect(() => future.futureStatement('select * from products')).toThrow(/KV422/);
+    expect(log).toEqual([]);
+
+    expect(
+      pglite.query({ text: 'select id from products where id = $1', values: ['p1'] }),
+    ).toMatchObject({ text: 'select id from products where id = $1' });
+    expect(
+      sqlite.get({ sql: 'select id from products where id = ?', values: ['p1'] }),
+    ).toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(
+      future.futureStatement({ text: 'select id from products where id = $1', values: ['p1'] }),
+    ).toMatchObject({ text: 'select id from products where id = $1' });
+
+    expect(() =>
+      pglite.query(
+        stampTrustedSql(
+          { text: 'update users set name = $1 where id = $2', values: ['Ada', 'u1'] },
+          'drifted pglite update',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(() =>
+      sqlite.run(
+        stampTrustedSql(
+          { sql: 'delete from users where id = ?', values: ['u1'] },
+          'drifted sqlite delete',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(() =>
+      future.futureStatement(
+        stampTrustedSql(
+          { text: 'insert into users (id) values ($1)', values: ['u1'] },
+          'drifted future insert',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['pglite.query', 'sqlite.get', 'future.futureStatement']);
   });
 });
 

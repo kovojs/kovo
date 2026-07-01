@@ -282,6 +282,55 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     ]);
   });
 
+  it('flags raw string literals across pglite, SQLite, and computed SQL sinks', () => {
+    const diagnostics = diagnosticsFor(`
+      export async function migrate(input: { method: string }, db: any) {
+        await db.execute("delete from orders");
+        await db.run("delete from orders");
+        await db.get("delete from orders returning id");
+        await db.all("delete from orders returning id");
+        await db.values("delete from orders returning id");
+        await db[input.method]("delete from orders");
+        await db.insert(orders).values({ id: input.method });
+      }
+    `);
+
+    expect(diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'KV422',
+      'KV422',
+      'KV422',
+      'KV422',
+      'KV422',
+      'KV422',
+    ]);
+    expect(diagnostics.map((diagnostic) => diagnostic.message)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('execute() receives unbranded literal SQL text'),
+        expect.stringContaining('run() receives unbranded literal SQL text'),
+        expect.stringContaining('get() receives unbranded literal SQL text'),
+        expect.stringContaining('all() receives unbranded literal SQL text'),
+        expect.stringContaining('values() receives unbranded literal SQL text'),
+        expect.stringContaining('<computed-sql-method>() receives unbranded literal SQL text'),
+      ]),
+    );
+  });
+
+  it('does not classify reusable write-definition run methods as SQLite SQL sinks', () => {
+    const diagnostics = diagnosticsFor(`
+      export async function handler(input: { id: string }, request: { db: unknown }) {
+        const insertTxProof = {
+          async run(db: unknown, id: string) {
+            void db;
+            void id;
+          },
+        };
+        await insertTxProof.run(request.db, input.id);
+      }
+    `);
+
+    expect(diagnostics).toEqual([]);
+  });
+
   it('bans native drizzle-orm raw helpers so Kovo-owned helpers carry audit metadata', () => {
     const diagnostics = diagnosticsFor(`
       import { sql as drizzleSql } from 'drizzle-orm';

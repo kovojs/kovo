@@ -1,3 +1,4 @@
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import {
   resolveLifecycleRequest,
   type RequestLifecycleOptions,
@@ -30,6 +31,15 @@ import type {
  */
 
 export type RequestLifecycleSurface = 'document' | 'endpoint' | 'mutation' | 'query' | 'system';
+
+export class ResponseHeaderChannelError extends Error {
+  readonly code = 'KV415' as const;
+
+  constructor(message: string) {
+    super(`KV415 ${message}`);
+    this.name = 'ResponseHeaderChannelError';
+  }
+}
 
 type LifecycleCommonOptions<RawRequest, SessionValue, DbValue> = Pick<
   RequestLifecycleOptions<RawRequest, SessionValue, DbValue>,
@@ -271,19 +281,41 @@ function finalizeResponseHeaders(
 ): Headers {
   const webHeaders = new Headers();
   for (const [name, value] of Object.entries(headers)) {
+    assertSafeResponseHeaderName(name);
     if (isRedirectStatus(options.status) && name.toLowerCase() === 'location') {
-      webHeaders.set(name, redirectLocationHeaderValue(value, options.blessedRedirect));
+      const location = redirectLocationHeaderValue(value, options.blessedRedirect);
+      assertSafeResponseHeaderValue(name, location);
+      webHeaders.set(name, location);
       continue;
     }
 
     if (Array.isArray(value)) {
-      for (const entry of value) webHeaders.append(name, entry);
+      for (const entry of value) {
+        assertSafeResponseHeaderValue(name, entry);
+        webHeaders.append(name, entry);
+      }
     } else {
+      assertSafeResponseHeaderValue(name, value);
       webHeaders.set(name, value);
     }
   }
 
   return webHeaders;
+}
+
+function assertSafeResponseHeaderName(name: string): void {
+  if (/^[!#$%&'*+\-.^_`|~0-9A-Za-z]+$/u.test(name)) return;
+  throw new ResponseHeaderChannelError(diagnosticDefinitions.KV415.message);
+}
+
+function assertSafeResponseHeaderValue(name: string, value: string): void {
+  for (let index = 0; index < value.length; index += 1) {
+    const code = value.charCodeAt(index);
+    if (code > 0x1f && code !== 0x7f) continue;
+    throw new ResponseHeaderChannelError(
+      `${diagnosticDefinitions.KV415.message} Header ${name} contains a control character.`,
+    );
+  }
 }
 
 function webResponseBodyToBodyInit(body: WebResponseBody): BodyInit | null {

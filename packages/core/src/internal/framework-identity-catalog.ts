@@ -83,6 +83,25 @@ function serverRendering(
   };
 }
 
+function serverBrowserRenderingReExport(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/browser',
+    scopes: ['authoring', 'rendering'],
+    specifiers: SERVER_RENDERING_SPECIFIERS,
+  };
+}
+
+function serverInternalRendering(exportName: string): FrameworkIdentityCatalogEntry {
+  return {
+    exportName,
+    module: '@kovojs/server',
+    packageSourceFiles: ['html', 'internal/html'],
+    scopes: ['rendering'],
+    specifiers: ['@kovojs/server/internal/html'],
+  };
+}
+
 function serverWriteGovernance(exportName: string): FrameworkIdentityCatalogEntry {
   return {
     exportName,
@@ -142,6 +161,9 @@ export const frameworkIdentityCatalog = [
   serverRendering('safeRichHtml'),
   serverRendering('trustedHtml', '@kovojs/browser'),
   serverRendering('trustedUrl', '@kovojs/browser'),
+  serverBrowserRenderingReExport('trustedHtml'),
+  serverBrowserRenderingReExport('trustedUrl'),
+  serverInternalRendering('renderedHtml'),
   ...['adminAssign', 'encryptAtRest', 'hashPassword', 'serverValue', 'stream'].map((exportName) =>
     exportName === 'adminAssign' || exportName === 'serverValue'
       ? serverWriteGovernance(exportName)

@@ -7,9 +7,14 @@ import type {
   FormErrorProps,
   JsonValue,
 } from '@kovojs/core';
-import type { TrustedHtml } from '@kovojs/browser';
+import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
-import { kovoStyleProperty, kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
+import { isUrlAttributeName } from '@kovojs/core/internal/security-url';
+import {
+  isKovoTrustedUrl,
+  kovoStyleProperty,
+  kovoTrustedHtmlContent,
+} from '@kovojs/browser/internal/output';
 import { attrs as kovoStyleAttrs, type StyleInput } from '@kovojs/style';
 
 import { componentMutationFailureSlots } from './component-render.js';
@@ -331,7 +336,10 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     if (!safeRuntimeAttributeName(name)) continue;
     // URL values are scheme-checked, srcset candidate lists are filtered, and
     // executable sinks (`on*`, `srcdoc`, raw CSS/HTML text) are omitted.
-    const attributeValue = safeRuntimeAttribute(name, attributeText(name, value));
+    const attributeValue =
+      isKovoTrustedUrl(value) && isUrlAttributeName(name)
+        ? escapeAttribute(value.value)
+        : safeRuntimeAttribute(name, attributeText(name, value));
     if (attributeValue === null) continue;
     rendered +=
       value === true && !isAriaAttribute(name) ? ` ${name}` : ` ${name}="${attributeValue}"`;
@@ -560,6 +568,7 @@ function renderJsxContent(props: JsxProps): JsxChild {
 }
 
 function attributeText(name: string, value: unknown): string {
+  if (isKovoTrustedUrl(value)) return value.value;
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'bigint') return value.toString();
   if (name === 'style' && isStyleProperties(value)) return renderStyleProperties(value);
@@ -782,7 +791,15 @@ export declare namespace JSX {
     key?: number | string;
     'kovo-key'?: number | string;
   }
-  type AttributeValue = boolean | number | RenderedHtml | string | TrustedHtml | null | undefined;
+  type AttributeValue =
+    | boolean
+    | number
+    | RenderedHtml
+    | string
+    | TrustedHtml
+    | TrustedUrl
+    | null
+    | undefined;
   type StyleProperties = Record<string, boolean | number | string | null | undefined>;
   type AriaBoolean = boolean | 'false' | 'true';
   interface AriaAttributes {

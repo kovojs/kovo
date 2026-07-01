@@ -18,6 +18,7 @@ import {
 } from './response.js';
 import { isSchemaValidationError } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
+import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 
 const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
 
@@ -560,6 +561,7 @@ export async function runWebhook<
   const changes: ChangeRecord<string, WebhookInputFor<InputSchema>>[] = [];
   try {
     const runHandler = async (tx: Tx): Promise<Value> => {
+      const managedTx = webhookManagedTransactionDb(tx);
       const context = webhookHandlerContext(
         input,
         endpointRequest,
@@ -576,7 +578,7 @@ export async function runWebhook<
             );
           }
 
-          const mutationRequest = webhookMutationRequest(endpointRequest, tx);
+          const mutationRequest = webhookMutationRequest(endpointRequest, managedTx);
           const result = await runMutation(definition as never, mutationInput, mutationRequest, {
             ...options.mutationOptions,
             csrf: false,
@@ -594,7 +596,7 @@ export async function runWebhook<
       );
       const value = await declaration.webhookDefinition.handler(input, {
         ...context,
-        tx: tx as WebhookTxDb<Tx>,
+        tx: managedTx as WebhookTxDb<Tx>,
       });
       if (isWebhookFail(value)) throw new WebhookRollback(value);
       return value as Value;
@@ -914,6 +916,10 @@ function webhookMutationRequest<Tx>(request: EndpointRequest, tx: Tx): EndpointR
       return keys.includes('db') ? keys : [...keys, 'db'];
     },
   }) as EndpointRequest;
+}
+
+function webhookManagedTransactionDb<Tx>(tx: Tx): Tx {
+  return wrapManagedDbForSqlSafety(tx, undefined, { capability: 'write' });
 }
 
 function assertDeclaredWebhookChangeDomain(

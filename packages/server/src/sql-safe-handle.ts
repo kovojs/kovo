@@ -37,6 +37,17 @@ export type AsyncMutationTransactionCapableDb = {
 const managedTransactionQueue = new WeakMap<object, Promise<void>>();
 let sqliteSavepointId = 0;
 
+const SQL_BUILDER_FAST_PATH_METHODS = new Set<PropertyKey>([
+  '$count',
+  '$with',
+  'delete',
+  'insert',
+  'select',
+  'selectDistinct',
+  'update',
+  'with',
+]);
+
 /**
  * Resolve the managed-SQL guard mode (SPEC §10.2/§744). The fail-closed default — in every
  * environment, production included — is `enforce`. Fail-open `KOVO_SQL_GUARD=warn/off` migration
@@ -61,7 +72,8 @@ export function wrapManagedDbForSqlSafety<DbValue>(
   mode: SqlSafetyMode = managedSqlSafetyMode(),
   writePolicy?: ManagedSqlWritePolicy,
 ): DbValue {
-  if (!isManagedDbAdapterLike(db)) return db;
+  if (!isRecord(db)) return db;
+  if (writePolicy === undefined && !isManagedDbAdapterLike(db)) return db;
 
   const proxyCache = new WeakMap<object, object>();
   const methodCache = new WeakMap<object, Map<PropertyKey, Function>>();
@@ -92,8 +104,8 @@ function wrapDbAdapter(
 
       const value = Reflect.get(target, prop, receiver);
 
-      if (isSqlHandleProperty(prop) && isSqlHandleLike(value)) {
-        return wrapSqlHandle(value, mode, proxyCache, methodCache, writePolicy);
+      if (isNestedSqlHandleProperty(prop) && typeof value === 'object' && value !== null) {
+        return wrapDbAdapter(value, mode, proxyCache, methodCache, writePolicy);
       }
 
       if (prop === 'sql' && typeof value === 'function' && isManagedDbAdapterLike(target)) {
@@ -124,55 +136,16 @@ function wrapDbAdapter(
         );
       }
 
-      return typeof value === 'function'
-        ? cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target))
-        : value;
+      if (typeof value !== 'function') return value;
+      return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
+        SQL_BUILDER_FAST_PATH_METHODS.has(prop)
+          ? value.bind(target)
+          : guardedUnknownSqlMethod(target, value, mode, writePolicy),
+      );
     },
   });
 
   proxyCache.set(db, proxy);
-  return proxy;
-}
-
-function wrapSqlHandle(
-  handle: object,
-  mode: SqlSafetyMode,
-  proxyCache: WeakMap<object, object>,
-  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
-  writePolicy: ManagedSqlWritePolicy | undefined,
-): object {
-  const cached = proxyCache.get(handle);
-  if (cached) return cached;
-
-  const proxy = new Proxy(handle as Record<PropertyKey, unknown>, {
-    get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
-
-      if (prop === 'transaction' && typeof value === 'function') {
-        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedTransactionMethod(target, value, mode, proxyCache, methodCache, writePolicy),
-        );
-      }
-
-      if (isDirectSqlExecutionMethod(prop) && typeof value === 'function') {
-        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedSqlMethod(target, value, mode, writePolicy),
-        );
-      }
-
-      if (prop === 'prepare' && typeof value === 'function') {
-        return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-          guardedPrepareMethod(target, value, mode, proxyCache, methodCache, writePolicy),
-        );
-      }
-
-      return typeof value === 'function'
-        ? cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target))
-        : value;
-    },
-  });
-
-  proxyCache.set(handle, proxy);
   return proxy;
 }
 
@@ -185,6 +158,21 @@ function guardedSqlMethod(
   return (statement: unknown, ...args: unknown[]) => {
     assertManagedSqlStatement(statement, mode, writePolicy);
     return value.call(target, statement, ...args);
+  };
+}
+
+function guardedUnknownSqlMethod(
+  target: object,
+  value: Function,
+  mode: SqlSafetyMode,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): Function {
+  return (...args: unknown[]) => {
+    const [statement] = args;
+    if (isSqlStatementCandidate(statement)) {
+      assertManagedSqlStatement(statement, mode, writePolicy);
+    }
+    return value.apply(target, args);
   };
 }
 
@@ -319,7 +307,8 @@ function wrapTransactionDb(
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
   writePolicy: ManagedSqlWritePolicy | undefined,
 ): unknown {
-  if (!isManagedDbAdapterLike(tx)) return tx;
+  if (!isRecord(tx)) return tx;
+  if (writePolicy === undefined && !isManagedDbAdapterLike(tx)) return tx;
   return wrapDbAdapter(tx, mode, proxyCache, methodCache, writePolicy);
 }
 
@@ -523,7 +512,31 @@ function isManagedDbAdapterLike(value: unknown): value is Record<PropertyKey, un
     typeof record.all === 'function' ||
     typeof record.get === 'function' ||
     typeof record.run === 'function' ||
-    typeof record.values === 'function'
+    typeof record.values === 'function' ||
+    isSqlHandleLike(record.session)
+  );
+}
+
+function isNestedSqlHandleProperty(prop: PropertyKey): boolean {
+  return isSqlHandleProperty(prop) || prop === 'session';
+}
+
+function isSqlStatementCandidate(value: unknown): boolean {
+  if (typeof value === 'string') return looksLikeSqlStatement(value);
+  if (typeof value !== 'object' || value === null) return false;
+
+  const record = value as Record<PropertyKey, unknown>;
+  return (
+    typeof record.text === 'string' ||
+    typeof record.sql === 'string' ||
+    Array.isArray(record.queryChunks) ||
+    typeof record.getSQL === 'function'
+  );
+}
+
+function looksLikeSqlStatement(value: string): boolean {
+  return /^(?:alter|begin|call|commit|create|delete|drop|exec|execute|explain|insert|merge|pragma|replace|rollback|savepoint|select|truncate|update|vacuum|with)\b/iu.test(
+    value.trimStart(),
   );
 }
 

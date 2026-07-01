@@ -1510,9 +1510,11 @@ function inlineTextDerive(
   ) {
     return null;
   }
+  const deriveExpression = reactiveExpressionForJsxExpression(expression.expression, model);
+  if (!deriveExpression) return null;
   return {
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
-    expression: reactiveExpressionForJsxExpression(expression.expression, model),
+    expression: deriveExpression,
     expressionNode: expression,
     wrapper: element,
   };
@@ -1569,9 +1571,11 @@ function inlineMixedTextDerive(
   if (!element) return null;
   if (element.attributes.some((attribute) => isBindingAttributeName(attribute.name))) return null;
   if (element.childNonWhitespaceCount === 1) return null;
+  const deriveExpression = reactiveExpressionForJsxExpression(expression.expression, model);
+  if (!deriveExpression) return null;
   return {
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
-    expression: reactiveExpressionForJsxExpression(expression.expression, model),
+    expression: deriveExpression,
     expressionNode: expression,
   };
 }

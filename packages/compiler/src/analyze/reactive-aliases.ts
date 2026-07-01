@@ -27,18 +27,26 @@ export function reactivePropertyAccessesForJsxExpression(
 export function reactiveExpressionForJsxExpression(
   expression: JsxExpressionModel,
   model: ComponentModuleModel,
-): string {
-  const aliases = localAliasesForExpression(expression, model).filter(isExpressionAlias);
-  if (aliases.length === 0) return expression.expression;
+): string | null {
+  const aliases = localAliasesForExpression(expression, model);
+  const referencedAliases = aliases.filter((alias) => expression.references.includes(alias.name));
+  if (referencedAliases.some((alias) => alias.expression === undefined)) return null;
+  if (aliases.length === 0) {
+    return expressionReferencesOnlyDeriveInputs(expression.expression, ['state'])
+      ? expression.expression
+      : null;
+  }
 
   let expanded = expression.expression;
-  for (const alias of [...aliases].sort((left, right) => right.name.length - left.name.length)) {
+  for (const alias of [...aliases]
+    .filter(isExpressionAlias)
+    .sort((left, right) => right.name.length - left.name.length)) {
     expanded = expanded.replace(
       new RegExp(`\\b${escapeRegExp(alias.name)}\\b`, 'g'),
       `(${alias.expression})`,
     );
   }
-  return expanded;
+  return expressionReferencesOnlyDeriveInputs(expanded, ['state']) ? expanded : null;
 }
 
 interface ReactiveAliasModel {
@@ -82,8 +90,12 @@ function identifierConstReadAliasesForExpression(
       functions,
     );
     if (accesses.length === 0) continue;
+    const aliasExpression = ts.isIdentifier(declaration.initializer)
+      ? canonicalExpressionForAccesses(accesses)
+      : undefined;
     aliases.push({
       accesses,
+      ...(aliasExpression ? { expression: aliasExpression } : {}),
       name,
       start: declaration.getStart(model.sourceFile),
     });
@@ -129,7 +141,7 @@ function destructuredAliasesForExpression(
     if (node !== body && isFunctionOrClassLike(node)) return;
     if (
       ts.isVariableDeclaration(node) &&
-      ts.isObjectBindingPattern(node.name) &&
+      (ts.isObjectBindingPattern(node.name) || ts.isArrayBindingPattern(node.name)) &&
       node.initializer &&
       isConstVariableDeclaration(node)
     ) {
@@ -216,35 +228,43 @@ function resolvedInitializerAccesses(
 
 function bindingPatternAliases(
   sourceFile: ts.SourceFile,
-  pattern: ts.ObjectBindingPattern,
+  pattern: ts.BindingPattern,
   initializer: ts.Expression,
   references: ReadonlySet<string>,
-  prefix: readonly string[],
+  prefix: readonly BindingPathSegment[],
 ): readonly ReactiveAliasModel[] {
   const aliases: ReactiveAliasModel[] = [];
-  const initializerPath = initializerPathFromExpression(sourceFile, initializer);
-  if (!initializerPath) return [];
+  const initializerExpression = initializerExpressionFromExpression(sourceFile, initializer);
+  if (!initializerExpression) return [];
 
-  for (const element of pattern.elements) {
+  for (const [index, element] of pattern.elements.entries()) {
+    if (ts.isOmittedExpression(element)) continue;
     if (element.dotDotDotToken) continue;
 
-    const propertyName = bindingPropertyName(element);
-    if (!propertyName) continue;
+    const propertyName = ts.isObjectBindingPattern(pattern)
+      ? bindingPropertyName(element)
+      : index.toString();
+    if (propertyName === null) continue;
 
-    const path = [...prefix, propertyName];
+    const segment: BindingPathSegment = ts.isObjectBindingPattern(pattern)
+      ? { kind: 'property', value: propertyName }
+      : { kind: 'index', value: propertyName };
+    const path = [...prefix, segment];
     if (ts.isIdentifier(element.name)) {
       const name = element.name.text;
       if (!references.has(name)) continue;
-      const resolvedPath = `${initializerPath}.${path.join('.')}`;
+      const resolvedPath = bindingPathAccessPath(initializerExpression.accessPath, path);
+      const resolvedExpression = bindingPathExpression(initializerExpression.expression, path);
       aliases.push({
         accesses: [
           {
             end: element.name.getEnd(),
             path: resolvedPath,
             start: element.name.getStart(sourceFile),
-            terminalName: path.at(-1) ?? name,
+            terminalName: path.at(-1)?.value ?? name,
           },
         ],
+        expression: resolvedExpression,
         name,
         start: element.getStart(sourceFile),
       });
@@ -261,12 +281,23 @@ function bindingPatternAliases(
   return aliases;
 }
 
-function initializerPathFromExpression(
+interface InitializerExpression {
+  accessPath: string;
+  expression: string;
+}
+
+type BindingPathSegment = { kind: 'index'; value: string } | { kind: 'property'; value: string };
+
+function initializerExpressionFromExpression(
   sourceFile: ts.SourceFile,
   initializer: ts.Expression,
-): string | null {
-  if (ts.isIdentifier(initializer)) return initializer.text;
-  return exactInitializerPath(propertyAccessPathModels(sourceFile, initializer));
+): InitializerExpression | null {
+  if (ts.isIdentifier(initializer)) {
+    return { accessPath: initializer.text, expression: initializer.text };
+  }
+  const accessPath = exactInitializerPath(propertyAccessPathModels(sourceFile, initializer));
+  if (!accessPath) return null;
+  return { accessPath, expression: initializer.getText(sourceFile) };
 }
 
 function exactInitializerPath(accesses: readonly PropertyAccessPathModel[]): string | null {
@@ -307,8 +338,66 @@ function bindingPropertyName(element: ts.BindingElement): string | null {
   if (!propertyName) return null;
   if (ts.isIdentifier(propertyName) || ts.isStringLiteral(propertyName)) return propertyName.text;
   if (ts.isNumericLiteral(propertyName)) return propertyName.text;
+  if (
+    ts.isComputedPropertyName(propertyName) &&
+    (ts.isStringLiteralLike(propertyName.expression) ||
+      ts.isNumericLiteral(propertyName.expression))
+  ) {
+    return propertyName.expression.text;
+  }
   return null;
 }
+
+function bindingPathAccessPath(root: string, path: readonly BindingPathSegment[]): string {
+  const suffix = path.map((segment) => segment.value).join('.');
+  return suffix ? `${root}.${suffix}` : root;
+}
+
+function bindingPathExpression(root: string, path: readonly BindingPathSegment[]): string {
+  return path.reduce((expression, segment) => {
+    if (segment.kind === 'index') return `${expression}[${segment.value}]`;
+    if (/^[A-Za-z_$][\w$]*$/.test(segment.value)) return `${expression}.${segment.value}`;
+    return `${expression}[${JSON.stringify(segment.value)}]`;
+  }, root);
+}
+
+function canonicalExpressionForAccesses(
+  accesses: readonly PropertyAccessPathModel[],
+): string | undefined {
+  const path = exactInitializerPath(accesses);
+  return path ?? undefined;
+}
+
+function expressionReferencesOnlyDeriveInputs(
+  expression: string,
+  inputs: readonly string[],
+): boolean {
+  const sourceFile = ts.createSourceFile(
+    'derive-expression.tsx',
+    `const __kovo_derive_value = (${expression});`,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TSX,
+  );
+  const allowed = new Set([...inputs, ...safeGlobalIdentifiers]);
+  return identifierReferences(sourceFile).every((name) => allowed.has(name));
+}
+
+const safeGlobalIdentifiers = [
+  'Array',
+  'BigInt',
+  'Boolean',
+  'Date',
+  'Intl',
+  'JSON',
+  'Math',
+  'Number',
+  'Object',
+  'RegExp',
+  'String',
+  'encodeURIComponent',
+  'decodeURIComponent',
+] as const;
 
 function smallestFunctionBlockContaining(
   sourceFile: ts.SourceFile,
