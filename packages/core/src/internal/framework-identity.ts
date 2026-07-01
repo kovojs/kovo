@@ -632,8 +632,9 @@ function expressionSpanIndex(
   if (cached) return cached;
 
   const index = new Map<string, TypeScript.Expression>();
+  const expressionKinds = new Set(frameworkIdentityExpressionSyntaxKinds(ts));
   const visit = (node: TypeScript.Node): void => {
-    if (isExpressionNode(ts, node)) {
+    if (isFrameworkIdentityExpressionNode(node, expressionKinds)) {
       const key = nodeSpanCacheKey(sourceFile, node);
       if (!index.has(key)) index.set(key, node);
     }
@@ -995,19 +996,9 @@ function isFunctionLikeWithParameters(
   );
 }
 
-function isExpressionNode(
-  ts: FrameworkIdentityTypeScript,
+function isFrameworkIdentityExpressionNode(
   node: TypeScript.Node,
+  expressionKinds: ReadonlySet<TypeScript.SyntaxKind>,
 ): node is TypeScript.Expression {
-  return (
-    ts.isIdentifier(node) ||
-    ts.isCallExpression(node) ||
-    ts.isPropertyAccessExpression(node) ||
-    ts.isElementAccessExpression(node) ||
-    ts.isParenthesizedExpression(node) ||
-    ts.isAsExpression(node) ||
-    ts.isSatisfiesExpression(node) ||
-    ts.isTypeAssertionExpression(node) ||
-    ts.isNonNullExpression(node)
-  );
+  return expressionKinds.has(node.kind);
 }

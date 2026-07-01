@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   canonicalFrameworkExportForExpression,
+  expressionAtSpan,
   frameworkExport,
   frameworkIdentityExpressionKindRows,
   registerFrameworkIdentityProject,
@@ -200,5 +201,23 @@ describe('framework identity resolver', () => {
     expect(
       canonicalFrameworkExportForExpression(ts, usage, initializerByName(usage, 'opaque')),
     ).toBeUndefined();
+  });
+
+  it('indexes fail-closed expression kinds for source span lookups', () => {
+    const usage = sourceFile(
+      '/app/usage.tsx',
+      [
+        "import { trustedHtml } from '@kovojs/browser';",
+        "const mixed = trustedHtml('<strong>safe</strong>') + taint;",
+      ].join('\n'),
+    );
+    const expression = initializerByName(usage, 'mixed');
+    const indexed = expressionAtSpan(ts, usage, {
+      end: expression.getEnd(),
+      start: expression.getStart(usage),
+    });
+
+    expect(indexed?.kind).toBe(ts.SyntaxKind.BinaryExpression);
+    expect(canonicalFrameworkExportForExpression(ts, usage, indexed!)).toBeUndefined();
   });
 });

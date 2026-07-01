@@ -118,6 +118,35 @@ describe('@kovojs/drizzle trust-escape collector (KV426, audit-only)', () => {
     ]);
   });
 
+  it('resolves literal element access through export-star barrels without trusting computed keys', () => {
+    const escapes = trustEscapesForFiles([
+      {
+        fileName: 'browser-root.ts',
+        source: "export { trustedHtml, trustedUrl } from '@kovojs/browser';",
+      },
+      {
+        fileName: 'browser-barrel.ts',
+        source: "export * from './browser-root';",
+      },
+      {
+        fileName: 'app.tsx',
+        source: `
+          import * as browser from './browser-barrel';
+          const htmlKey = 'trustedHtml';
+
+          browser['trustedHtml'](starHtml);
+          browser['trustedUrl'](starHref);
+          browser[htmlKey](opaqueHtml);
+        `,
+      },
+    ]);
+
+    expect(escapes.map((escape) => `${escape.kind}:${escape.source}`).sort()).toEqual([
+      'trustedHtml:starHtml',
+      'trustedUrl:starHref',
+    ]);
+  });
+
   it('does not collect local shadows as framework trust escapes', () => {
     const escapes = trustEscapesFor(`
       function trustedHtml(value: string) { return value; }
