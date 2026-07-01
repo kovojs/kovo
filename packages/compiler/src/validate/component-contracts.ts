@@ -487,22 +487,11 @@ export function validateDirectDbAccess(
   }
 
   for (const handler of endpointHandlers(model)) {
-    const directWrite = handlerDirectDbWrite(handler);
-    if (!directWrite) continue;
-    found.push({
-      ...diagnostics.at('KV330', {
-        start: directWrite.start,
-        length: directWrite.path.length,
-      }),
-      help: [
-        'Would lower to: an endpoint whose database reads use a read-only app handle.',
-        'Blocked reason: direct DB writes in endpoint handlers bypass the mutation/domain write-surface audit and can turn an ordinary endpoint into an untracked state change.',
-        'Fixes: use readonlyAppDb for endpoint reads, or move writes into a mutation/domain write with declared touch metadata.',
-        'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
-      ].join('\n'),
-      message:
-        'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
-    });
+    found.push(
+      ...(handler.handlerWriteSinks ?? [])
+        .filter((sink) => sink.surface === 'endpoint')
+        .map((sink) => handlerWriteSinkDiagnostic(diagnostics, sink)),
+    );
   }
 
   return found;
@@ -578,7 +567,9 @@ function handlerWriteSinkDiagnostic(
       message:
         sink.surface === 'task'
           ? 'Unresolved write sink in a task run body; route through ctx.runMutation.'
-          : 'Unresolved write sink in a webhook handler; route writes through an audited mutation/domain write.',
+          : sink.surface === 'endpoint'
+            ? 'Unresolved write sink in an endpoint handler; route writes through an audited mutation/domain write.'
+            : 'Unresolved write sink in a webhook handler; route writes through an audited mutation/domain write.',
     };
   }
 
@@ -592,6 +583,20 @@ function handlerWriteSinkDiagnostic(
         'SPEC §9.6 requires task DB writes to go through ctx.runMutation; SPEC §10.3 makes mutation/domain writes the audited write surface.',
       ].join('\n'),
       message: 'Direct db access in a task run body; route through ctx.runMutation.',
+    };
+  }
+
+  if (sink.surface === 'endpoint') {
+    return {
+      ...diagnostics.at('KV330', { start: sink.span.start, length }),
+      help: [
+        'Would lower to: an endpoint whose database reads use a read-only app handle.',
+        'Blocked reason: direct DB writes in endpoint handlers bypass the mutation/domain write-surface audit and can turn an ordinary endpoint into an untracked state change.',
+        'Fixes: use readonlyAppDb for endpoint reads, or move writes into a mutation/domain write with declared touch metadata.',
+        'SPEC §10.3 makes mutation/domain writes the audited write surface; SPEC §6.6 requires fail-closed sinks rather than importable write handles.',
+      ].join('\n'),
+      message:
+        'Direct db access in an endpoint handler; use readonlyAppDb for reads and route writes through an audited mutation/domain write.',
     };
   }
 
@@ -614,30 +619,6 @@ function handlerWriteSinkIsUnresolved(sink: HandlerWriteSinkFact): boolean {
     sink.path === 'UNRESOLVED' ||
     sink.owner.value === 'UNRESOLVED' ||
     sink.canonicalTarget.identity === 'UNRESOLVED'
-  );
-}
-
-function handlerDirectDbWrite(
-  handler: { bodyPropertyAccesses: readonly PropertyAccessPathModel[] },
-  allowedContextParam?: string,
-): PropertyAccessPathModel | undefined {
-  return handler.bodyPropertyAccesses.find(
-    (access) =>
-      isDbWriteVerb(access.terminalName) &&
-      (allowedContextParam === undefined ||
-        (access.path !== `${allowedContextParam}.${access.terminalName}` &&
-          !access.path.startsWith(`${allowedContextParam}.${access.terminalName}.`))),
-  );
-}
-
-function isDbWriteVerb(name: string): boolean {
-  return (
-    name === 'batch' ||
-    name === 'delete' ||
-    name === 'execute' ||
-    name === 'insert' ||
-    name === 'run' ||
-    name === 'update'
   );
 }
 

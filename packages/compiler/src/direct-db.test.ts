@@ -4,6 +4,7 @@ import { describe, expect, it } from 'vitest';
 import { compileComponentModule } from './index.js';
 
 const kv330 = diagnosticDefinitions.KV330;
+const kv406 = diagnosticDefinitions.KV406;
 
 describe('compiler direct db diagnostics', () => {
   it('reports KV330 when mutation handlers access request db directly', () => {
@@ -335,6 +336,18 @@ export const unsafeEndpoint = endpoint('/api/unsafe', {
         severity: kv330.severity,
       },
     ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: {
+          identity: 'appRuntimeDbProvider()',
+          provenance: 'property-access-path',
+        },
+        operationKind: 'insert',
+        owner: { kind: 'path', value: '/api/unsafe' },
+        path: 'appRuntimeDbProvider().insert',
+        surface: 'endpoint',
+      }),
+    ]);
   });
 
   it('reports KV330 when endpoint handlers write through the read-only app db handle', () => {
@@ -367,6 +380,55 @@ export const unsafeEndpoint = endpoint('/api/unsafe', {
         severity: kv330.severity,
       },
     ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'readonlyAppDb', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'path', value: '/api/unsafe' },
+        path: 'readonlyAppDb.insert',
+        surface: 'endpoint',
+      }),
+    ]);
+  });
+
+  it('reports KV406 for unresolved endpoint write sinks', () => {
+    const result = compileComponentModule({
+      fileName: 'endpoints.ts',
+      source: `
+import { endpoint, publicAccess } from '@kovojs/server';
+
+export const unsafeEndpoint = endpoint('/api/unsafe', {
+  access: publicAccess('test'),
+  auth: { kind: 'none', justification: 'test' },
+  csrf: false,
+  csrfJustification: 'test',
+  method: 'POST',
+  async handler(request) {
+    await dbFor(request).insert(payments).values({ id: await request.text() });
+    return Response.json({ ok: true });
+  },
+});
+`,
+    });
+
+    expect(result.diagnostics).toMatchObject([
+      {
+        code: 'KV406',
+        fileName: 'endpoints.ts',
+        message:
+          'Unresolved write sink in an endpoint handler; route writes through an audited mutation/domain write.',
+        severity: kv406.severity,
+      },
+    ]);
+    expect(result.handlerWriteSinkFacts).toEqual([
+      expect.objectContaining({
+        canonicalTarget: { identity: 'UNRESOLVED', provenance: 'unresolved-property-access' },
+        operationKind: 'insert',
+        owner: { kind: 'path', value: '/api/unsafe' },
+        path: 'UNRESOLVED',
+        surface: 'endpoint',
+      }),
+    ]);
   });
 
   it('does not report KV330 for endpoint reads through the read-only app db handle', () => {
@@ -391,5 +453,6 @@ export const countEndpoint = endpoint('/api/count', {
     });
 
     expect(result.diagnostics).toEqual([]);
+    expect(result.handlerWriteSinkFacts).toEqual([]);
   });
 });

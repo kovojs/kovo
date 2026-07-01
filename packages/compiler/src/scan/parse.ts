@@ -23,6 +23,7 @@ import type {
   HandlerWriteSinkFact,
   HandlerWriteSinkOperationKind,
   HandlerWriteSinkOwner,
+  HandlerWriteSinkSurface,
   IdentifierReferenceModel,
   JsxCommentModel,
   JsxElementChildBody,
@@ -191,7 +192,7 @@ export function parseComponentModule(
     ) {
       calls.push(callExpressionModel(sourceFile, source, node));
       if (isFrameworkExpression(sourceFile, node.expression, ENDPOINT_FACTORY_IDENTITY)) {
-        endpointHandlers.push(...handlerPropertyModels(sourceFile, source, node));
+        endpointHandlers.push(...endpointHandlerModels(sourceFile, source, node));
       }
       if (isFrameworkExpression(sourceFile, node.expression, MUTATION_FACTORY_IDENTITY)) {
         mutationHandlers.push(...handlerPropertyModels(sourceFile, source, node));
@@ -642,6 +643,7 @@ export function webhookHandlers(model: ComponentModuleModel): MutationHandlerMod
 
 export function handlerWriteSinks(model: ComponentModuleModel): HandlerWriteSinkFact[] {
   return [
+    ...model.endpointHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
     ...model.taskRunHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
     ...model.webhookHandlers.flatMap((handler) => handler.handlerWriteSinks ?? []),
   ];
@@ -1240,6 +1242,21 @@ function handlerPropertyModels(
   return handlerPropertyEntries(sourceFile, source, call).map((entry) => entry.model);
 }
 
+function endpointHandlerModels(
+  sourceFile: ts.SourceFile,
+  source: string,
+  call: ts.CallExpression,
+): MutationHandlerModel[] {
+  const owner = endpointOwner(call);
+  return handlerPropertyEntries(sourceFile, source, call).map(({ body, model }) => ({
+    ...model,
+    handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
+      owner,
+      surface: 'endpoint',
+    }),
+  }));
+}
+
 interface HandlerPropertyEntry {
   body: ts.ConciseBody;
   model: MutationHandlerModel;
@@ -1374,6 +1391,13 @@ function webhookOwner(sourceFile: ts.SourceFile, call: ts.CallExpression): Handl
 
   const exported = exportedConstInitializerName(call);
   if ('exportedConstName' in exported) return { kind: 'path', value: exported.exportedConstName };
+  return { kind: 'path', value: 'UNRESOLVED' };
+}
+
+function endpointOwner(call: ts.CallExpression): HandlerWriteSinkOwner {
+  const [first] = call.arguments;
+  if (first && ts.isStringLiteralLike(first)) return { kind: 'path', value: first.text };
+
   return { kind: 'path', value: 'UNRESOLVED' };
 }
 
@@ -1559,7 +1583,7 @@ function handlerWriteSinkFacts(
   body: ts.ConciseBody,
   options: {
     readonly owner: HandlerWriteSinkOwner;
-    readonly surface: 'task' | 'webhook';
+    readonly surface: HandlerWriteSinkSurface;
   },
 ): HandlerWriteSinkFact[] {
   const facts = new Map<string, HandlerWriteSinkFact>();
@@ -1587,7 +1611,7 @@ function resolvedHandlerWriteSinkFact(
   access: PropertyAccessPathModel,
   options: {
     readonly owner: HandlerWriteSinkOwner;
-    readonly surface: 'task' | 'webhook';
+    readonly surface: HandlerWriteSinkSurface;
   },
 ): HandlerWriteSinkFact {
   const operationKind = handlerWriteSinkOperation(access.terminalName);
@@ -1615,7 +1639,7 @@ function unresolvedHandlerWriteSinkFact(
   node: ts.CallExpression,
   options: {
     readonly owner: HandlerWriteSinkOwner;
-    readonly surface: 'task' | 'webhook';
+    readonly surface: HandlerWriteSinkSurface;
   },
 ): HandlerWriteSinkFact | null {
   const callee = unwrapParentheses(node.expression);

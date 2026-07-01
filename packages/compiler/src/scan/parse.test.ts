@@ -554,6 +554,34 @@ export const paymentWebhook = webhook('/webhooks/payment', {
     ]);
   });
 
+  it('records endpoint direct write sink facts with the endpoint path owner', () => {
+    const source = `
+import { endpoint } from '@kovojs/server';
+
+export const unsafeEndpoint = endpoint('/api/unsafe', {
+  async handler(request) {
+    await appDb.insert(payments).values({ id: await request.text() });
+    return Response.json({ ok: true });
+  },
+});
+`;
+    const facts = handlerWriteSinks(parseComponentModule('endpoints.ts', source));
+
+    expect(facts).toEqual([
+      {
+        canonicalTarget: { identity: 'appDb', provenance: 'property-access-path' },
+        operationKind: 'insert',
+        owner: { kind: 'path', value: '/api/unsafe' },
+        path: 'appDb.insert',
+        span: {
+          end: source.indexOf('appDb.insert') + 'appDb.insert'.length,
+          start: source.indexOf('appDb.insert'),
+        },
+        surface: 'endpoint',
+      },
+    ]);
+  });
+
   it('records webhook recordChange facts with declared write keys', () => {
     const source = `
 import { domain, webhook } from '@kovojs/server';
