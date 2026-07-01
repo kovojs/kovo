@@ -126,12 +126,13 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
 
 ## Phase 2 — Collapse divergent security copies to one authority
 
-- [ ] **D3 — Move the byte-identical mutation-config cluster to `static/domain-writes.ts`.** (S · low; precursor to D1)
+- [x] **D3 — Move the byte-identical mutation-config cluster to `static/domain-writes.ts`.** (S · low; precursor to D1)
   - Problem: `forEachMutationConfig`, `mutationHandlerCallback`, `rawTablesFromMutationRegistry`,
     `isTrustedSqlArgument` are exact copies in `packages/drizzle/src/static.ts` (2130/2170/2162/2349) and
     `static/derivation.ts` (1266/1306/1298/1353) — the cluster D1 already drifted in.
   - Fix: pure mechanical dedup into `static/domain-writes.ts`.
-- [ ] **D1 — Unify `rawWriteSqlTrustForCallback` (security divergence).** (M · med)
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/raw-sql-static.test.ts packages/drizzle/src` passed after merging `agent/fundamental-d1-domain-writes`.
+- [x] **D1 — Unify `rawWriteSqlTrustForCallback` (security divergence).** (M · med)
   - Problem: `static.ts:2229` recursively follows raw-SQL sinks through local helpers
     (`rawWriteSqlTrustForNode`/`rawSqlLocalFunctionsByName` 2238-2277) with a method-aware
     `sqlSinkReceiverCanCarrySql(expr, surface.name)`; `derivation.ts:1327` does a flat one-level scan with a
@@ -140,6 +141,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
   - Decision: the helper-following (`static.ts`) version is intended (confirm vs SPEC §11.1). Extract it as the one
     impl in `domain-writes.ts`; delete the divergence.
   - Verify: `pnpm --filter @kovojs/drizzle test`; a fixture where a helper-hidden raw write is now flagged.
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/raw-sql-static.test.ts packages/drizzle/src` passed after merging `agent/fundamental-d1-domain-writes`, including the helper-mediated mutation registry raw-write regression.
 - [ ] **D2 — Single `isQueryShapeWrapper`; the `schema.ts` copy drops `table-row` (secret-projection bug).** (S · med)
   - Problem: triplicated at `static.ts:366`, `static/query-shapes.ts:2797`, `static/schema.ts:111`. The schema.ts copy
     (116-120) omits `shape.kind === 'table-row'`, so `secretQueryShape` (schema.ts:103) wraps a table-row secret whole
