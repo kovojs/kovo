@@ -16,7 +16,12 @@ import {
   validateManagedSqlStatement,
   type SqlSafetyMode,
 } from '@kovojs/core/internal/sql-safety';
-import { parseSqlWriteTables, type ParseSqlWriteTablesOptions } from './sql-write-allowlist.js';
+import {
+  parseSqlWriteTables,
+  UNTABLED_SQL_WRITE,
+  type ParsedSqlWriteTarget,
+  type ParseSqlWriteTablesOptions,
+} from './sql-write-allowlist.js';
 
 /** Runtime raw-SQL write table policy enforced on mutation managed DB handles. */
 export interface ManagedSqlWritePolicy {
@@ -538,7 +543,7 @@ function assertSqlWriteTablesAllowed(
   const sql = sqlStatementText(statement);
   if (sql === undefined) return;
 
-  let writeTables: string[];
+  let writeTables: ParsedSqlWriteTarget[];
   try {
     writeTables = parseManagedSqlWriteTables(sql, writePolicy?.dialect);
   } catch (error) {
@@ -548,6 +553,11 @@ function assertSqlWriteTablesAllowed(
     );
   }
   if (writeTables.length === 0) return;
+  if (writeTables.includes(UNTABLED_SQL_WRITE)) {
+    throw new Error(
+      'KV406: raw-SQL write table allowlist encountered a write with no provable table allowlist target on a managed mutation DB handle (SPEC §10.3/§11.2).',
+    );
+  }
 
   const allowed = new Set(declaredTables);
   const unexpected = writeTables.filter((table) => !allowed.has(table));
@@ -570,7 +580,7 @@ function assertReadSqlStatement(
   const sql = sqlStatementText(statement);
   if (sql === undefined) return;
 
-  let writeTables: string[];
+  let writeTables: ParsedSqlWriteTarget[];
   try {
     writeTables = parseManagedSqlWriteTables(sql, dialect);
   } catch (error) {
@@ -584,7 +594,7 @@ function assertReadSqlStatement(
   throw new Error(
     [
       'KV433: read-only SQL capability attempted to mutate table(s) from a query loader (SPEC §10.3/§11.2).',
-      `  tables: ${writeTables.join(', ')}`,
+      `  tables: ${formatSqlWriteTargets(writeTables)}`,
     ].join('\n'),
   );
 }
@@ -592,13 +602,19 @@ function assertReadSqlStatement(
 function parseManagedSqlWriteTables(
   sql: string,
   dialect: ParseSqlWriteTablesOptions['dialect'],
-): string[] {
+): ParsedSqlWriteTarget[] {
   try {
     return parseSqlWriteTables(sql, { dialect });
   } catch (error) {
     if (dialect !== undefined) throw error;
     return parseSqlWriteTables(sql, { dialect: 'sqlite' });
   }
+}
+
+function formatSqlWriteTargets(targets: readonly ParsedSqlWriteTarget[]): string {
+  return targets
+    .map((target) => (target === UNTABLED_SQL_WRITE ? '<untabled write>' : target))
+    .join(', ');
 }
 
 function sqlStatementText(statement: unknown): string | undefined {

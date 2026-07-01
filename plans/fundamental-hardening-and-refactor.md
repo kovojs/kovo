@@ -86,7 +86,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     `reindex`, and procedural blocks.
   - Verify: `parseSqlWriteTables('DROP TABLE contacts',{dialect:'sqlite'})` returns non-empty; `DELETE FROM contacts` still returns `['contacts']`.
   - Evidence: `pnpm exec vitest --run packages/server/src/sql-write-allowlist.test.ts packages/server/src/managed-db.test.ts` proves DDL/procedural statements return `UNTABLED_SQL_WRITE` while `DELETE FROM contacts` remains `['contacts']`.
-- [ ] **J.2 — Make both enforcement sites fail closed on non-proven-reads (closes `bugz-26` B1).**
+- [x] **J.2 — Make both enforcement sites fail closed on non-proven-reads (closes `bugz-26` B1).**
   - Problem (self-verified both sites): `packages/server/src/sql-safe-handle.ts:582` (`assertReadSqlStatement`, the
     read-only floor) and `:550` (`assertSqlWriteTablesAllowed`, the declared-tables allowlist) both `if (writeTables.length === 0) return;`
     → a DDL statement (empty write set) is allowed. Confirmed: `readonlyDb(db).run(ksql`DROP TABLE contacts`)`
@@ -96,6 +96,7 @@ corpus · **M13** the security suites run `dialect × preset × adversary`.
     `UNTABLED_WRITE` and any write not proven within `tables:`. Add a test that the starter's schema-init path runs
     on the un-managed provider, not a managed handle (DEC12).
   - Verify: the two isolation flips above now throw; a plain read still passes; starter `build:prod` stays green.
+  - Evidence: `pnpm exec vitest --run packages/server/src/sql-write-allowlist.test.ts packages/server/src/managed-db.test.ts` proves read/write managed handles throw before executing raw SQL DDL and still pass ordinary reads/allowed DML; `pnpm exec vitest --run packages/create-kovo/src/index.test.ts` proves starter DDL runs on raw client/database before managed readonly wrapping.
 
 ## Phase 1 — Fix the gate infrastructure (so every later gate is trustworthy)
 
