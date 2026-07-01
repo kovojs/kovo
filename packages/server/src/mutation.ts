@@ -1,4 +1,3 @@
-import type { Redirect } from '@kovojs/core';
 import {
   forwardSetCookie,
   serializeCookie,
@@ -12,12 +11,9 @@ import {
   type CsrfValidationOptions,
 } from './csrf.js';
 import { invalidate, mutationRegistryChangeRecords, type ChangeRecord } from './change-record.js';
-import { reportServerError } from './diagnostics.js';
-import { generatedFragmentHtml, generatedFragmentHtmlValue } from './html.js';
 import {
   explainGuard,
   guardFailureToResult,
-  guardFailureIsUnauthenticated,
   resolveLifecycleRequest,
   runGuard,
   withGuardArgs,
@@ -25,35 +21,23 @@ import {
   type RequestLifecycleOptions,
   type ResolvedGuardFailure,
 } from './guards.js';
-import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
-import { renderFragmentWireHtml } from './wire-html.js';
 import type { JsonSerializable } from './json-boundary.js';
-import {
-  appendResponseHeader,
-  blessRedirectResponse,
-  mergeResponseHeaders,
-  redirectLocationHeader,
-  retryAfterHeaders,
-  type MutationResponseHeaders,
-  type ResponseHeaders,
-} from './response.js';
+import { appendResponseHeader, type MutationResponseHeaders } from './response.js';
 import {
   mutationWireRequestFromHeaders,
-  type LiveTargetRenderer,
   type BufferedMutationWireResponse,
+  type LiveTargetRenderer,
   type MutationEndpointRequest,
-  type MutationEndpointReplayResponse,
   type MutationEndpointResponse,
   type MutationWireRequest,
   type MutationWireResponse,
   type NoJsMutationRequest,
   type NoJsMutationResponse,
 } from './mutation-wire.js';
-import type { GeneratedFragmentRenderable } from './renderable.js';
 import type { TaskHandle, TaskInput, TaskSchedulingRequest } from './task.js';
 import { durableTaskScheduleInput } from './task-runner.js';
-import { commitReservedMutationReplay, MutationReplayConflictError } from './replay.js';
+import { MutationReplayConflictError } from './replay.js';
 import {
   formLikeToRecord,
   isSchemaValidationError,
@@ -62,28 +46,23 @@ import {
   type Schema,
   type ValidationFailurePayload,
 } from './schema.js';
-import { renderStreamingMutationWireResponse } from './mutation/streaming.js';
-import {
-  renderDefaultFailureFragmentContent,
-  renderDefaultFailurePage,
-} from './mutation/failure-html.js';
 import {
   enhancedMutationReplayPolicy,
-  isEnhancedReplayResponse,
-  isNoJsReplayResponse,
+  type MutationLifecycleOutcome,
   noJsMutationReplayPolicy,
   optionalReplayPolicy,
   type MutationLifecycleReplayPolicy,
   type MutationLifecycleReplayReservation,
 } from './mutation/replay-policy.js';
 import {
-  queriesToRerun,
-  renderFragmentChunks,
-  renderLiveTargetChunks,
-  renderQueryChunks,
-  selectMutationResponseTargets,
-} from './mutation/targets.js';
-import { queryRuntimeWarningHeaderValue, queryRuntimeWarningsFromRequest } from './query.js';
+  enhancedMutationReauthResponse,
+  renderMutationWireLifecycleResponse,
+} from './mutation/wire-response.js';
+import {
+  noJsMutationReauthResponse,
+  renderNoJsMutationLifecycleResponse,
+} from './mutation/no-js.js';
+import { queriesToRerun } from './mutation/targets.js';
 import { mutationWithRuntimeRegistryFacts, type RuntimeRegistryFacts } from './registry-facts.js';
 import {
   canRunSqliteAsyncTransaction,
@@ -151,34 +130,6 @@ export type {
 } from './mutation/streaming.js';
 export { invalidate } from './change-record.js';
 export type { ChangeRecord, InvalidateOptions, MutationTouchSite } from './change-record.js';
-
-type MutationLifecycleOutcome<Value, Input, ReplayResponse> =
-  | { kind: 'csrf-failure'; failure: MutationFail<'CSRF', Record<string, never>> }
-  | { kind: 'validation-failure'; failure: MutationFail<'VALIDATION', ValidationFailurePayload> }
-  | {
-      failure: MutationFail;
-      guardFailure: ResolvedGuardFailure;
-      kind: 'guard-failure';
-      lifecycleRequest: unknown;
-    }
-  | { kind: 'replay-conflict' }
-  | { kind: 'replay-unavailable' }
-  | { kind: 'replayed'; response: ReplayResponse }
-  | {
-      error: unknown;
-      kind: 'handler-error';
-      reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
-    }
-  | {
-      kind: 'mutation-failure';
-      reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
-      result: MutationFail;
-    }
-  | {
-      kind: 'success';
-      reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
-      result: MutationSuccess<Value, Input>;
-    };
 
 type ExecuteMutationLifecycleOptions<Request, ReplayResponse> = RunMutationOptions<Request> & {
   catchHandlerErrors?: boolean;
@@ -775,264 +726,13 @@ export async function renderMutationResponse<
     ...optionalReplayPolicy(enhancedMutationReplayPolicy(deliveryMode)),
   });
 
-  if (lifecycle.kind === 'csrf-failure') {
-    const reauthResponse = await staleSessionEnhancedCsrfReauthResponse(
-      definition,
-      csrf,
-      wireRequest,
-    );
-    if (reauthResponse) return reauthResponse;
-    return {
-      body: await renderFailureFragment(lifecycle.failure, wireRequest),
-      headers: mutationWireResponseHeaders(wireRequest),
-      status: 422,
-    };
-  }
-
-  if (lifecycle.kind === 'validation-failure') {
-    return {
-      body: await renderFailureFragment(lifecycle.failure, wireRequest),
-      headers: mutationWireResponseHeaders(wireRequest),
-      status: 422,
-    };
-  }
-
-  if (lifecycle.kind === 'guard-failure') {
-    const reauthResponse = enhancedMutationReauthResponse(
-      lifecycle.guardFailure,
-      lifecycle.lifecycleRequest as Request,
-      wireRequest.currentUrl === undefined ? {} : { currentUrl: wireRequest.currentUrl },
-    );
-    if (reauthResponse) return reauthResponse;
-    return {
-      body: await renderFailureFragment(lifecycle.failure, wireRequest),
-      // A1: a rate-limit (or other retry-able) guard failure carries Retry-After; preserve it on the
-      // pre-replay guard-failure response (the old runMutation path added it via retryAfterHeaders).
-      headers: mergeMutationResponseHeaders(
-        mutationWireResponseHeaders(wireRequest),
-        retryAfterHeaders(lifecycle.guardFailure),
-      ),
-      status: lifecycle.failure.status,
-    };
-  }
-
-  if (isReplayTerminalOutcome(lifecycle)) {
-    return (
-      (await mapReplayOutcomeToModeResponse(deliveryMode, lifecycle)) ?? unreachableReplayOutcome()
-    );
-  }
-
-  if (lifecycle.kind === 'handler-error') {
-    reportServerError(wireRequest.onError, lifecycle.error, {
-      mutationKey: definition.key,
-      operation: 'mutation-handler',
-      request: wireRequest.request,
-      ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
-    });
-    return mutationServerErrorResponse(wireRequest);
-  }
-
-  if (lifecycle.kind === 'mutation-failure') {
-    const result = lifecycle.result;
-    if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
-      return {
-        body: await renderFailureFragment(result, wireRequest),
-        headers: mergeMutationResponseHeaders(
-          mutationWireResponseHeaders(wireRequest),
-          retryAfterHeaders(result),
-        ),
-        status: result.status,
-      };
-    }
-
-    return commitReservedMutationReplay(lifecycle.reservation, async () => ({
-      body: await renderFailureFragment(result, wireRequest),
-      headers: mergeMutationResponseHeaders(
-        mutationWireResponseHeaders(wireRequest),
-        retryAfterHeaders(result),
-      ),
-      status: result.status,
-    }));
-  }
-
-  const { reservation, result } = lifecycle;
-  const renderInput = mutationResponseInput(result, wireRequest.rawInput);
-  let finalResponse: BufferedMutationWireResponse;
-  try {
-    finalResponse = await renderSuccessfulMutationWireResponse(
-      definition,
-      wireRequest,
-      result,
-      renderInput,
-    );
-  } catch (error) {
-    reportServerError(wireRequest.onError, error, {
-      mutationKey: definition.key,
-      operation: 'mutation-render',
-      request: wireRequest.request,
-      ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
-    });
-    return commitReservedMutationReplay(reservation, async () =>
-      mutationRenderErrorResponse(result.changes, wireRequest, result.responseHeaders),
-    );
-  }
-
-  if (wireRequest.stream === true && definition.stream) {
-    // A3 (SPEC §10.3:1063 + §9): do NOT commit the head-only finalResponse before
-    // the stream runs — that would replay an unterminated empty body to duplicates.
-    // Instead pass the reservation into the streamer so it can commit the full
-    // settled body (head + streamed chunks + <kovo-done>) after the stream completes.
-    return renderStreamingMutationWireResponse(
-      definition.stream({
-        input: result.input,
-        request: wireRequest.request as GuardedRequest,
-        result,
-      }),
-      finalResponse,
-      reservation,
-      // L10-1 (SPEC §9): thread the error hook + diagnostic context so a generator that
-      // throws mid-stream reports via onError and emits a failure terminator instead of
-      // silently hanging the client.
-      {
-        onError: wireRequest.onError,
-        context: {
-          mutationKey: definition.key,
-          operation: 'mutation-stream',
-          request: wireRequest.request,
-          ...(wireRequest.targets === undefined ? {} : { targets: wireRequest.targets }),
-        },
-      },
-    );
-  }
-
-  reservation?.commit(finalResponse);
-  return finalResponse;
-}
-
-async function renderSuccessfulMutationWireResponse<
-  const Key extends string,
-  InputSchema extends Schema<unknown>,
-  Errors extends Record<string, Schema<unknown>>,
-  Request,
-  Value,
-  GuardedRequest extends Request = Request,
->(
-  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
-  wireRequest: MutationWireRequest<Request>,
-  result: MutationSuccess<Value, InferSchema<InputSchema>>,
-  renderInput: unknown,
-): Promise<BufferedMutationWireResponse> {
-  const selection = selectMutationResponseTargets({
-    changes: result.changes,
-    fragmentRenderers: wireRequest.fragmentRenderers ?? [],
-    liveTargetDescriptors: wireRequest.liveTargetDescriptors ?? [],
-    liveTargetRenderers: wireRequest.liveTargetRenderers ?? [],
-    liveTargets: wireRequest.liveTargets,
+  return renderMutationWireLifecycleResponse({
+    csrfReauthResponse: () => staleSessionEnhancedCsrfReauthResponse(definition, csrf, wireRequest),
+    definition,
+    lifecycle,
     registryFacts: mutationRuntimeRegistryFacts(definition, wireRequest.liveTargetRenderers ?? []),
-    rerunQueries: result.rerunQueryInstances ?? result.rerunQueries.map((key) => ({ key })),
-    targets: wireRequest.targets ?? [],
+    wireRequest,
   });
-  const queryChunks = await renderQueryChunks(
-    definition.registry?.queries ?? [],
-    selection.rerunQueries,
-    renderInput,
-    wireRequest.request,
-    result.changes,
-    wireRequest.maxListItems,
-  );
-  const fragmentChunks = [
-    ...(await renderLiveTargetChunks(
-      wireRequest.liveTargetRenderers ?? [],
-      selection.liveTargetDescriptors,
-      renderInput,
-      wireRequest.request,
-      wireRequest.csrf,
-      wireRequest.maxListItems,
-    )),
-    ...(await renderFragmentChunks(
-      wireRequest.fragmentRenderers ?? [],
-      selection.fragmentTargets,
-      renderInput,
-    )),
-  ];
-
-  // SPEC §5.2.1 rule 2(c): enhanced mutation/full fragment responses are build-scoped
-  // payloads, so a successful response must carry the render-plan token.
-  const buildHeaders: MutationResponseHeaders = {
-    'Kovo-Build': requiredMutationBuildToken(wireRequest),
-  };
-  const queryWarningHeader = queryRuntimeWarningHeaderValue(
-    queryRuntimeWarningsFromRequest(wireRequest.request),
-  );
-  const queryWarningHeaders =
-    queryWarningHeader === undefined ? undefined : { 'Kovo-Warn': queryWarningHeader };
-
-  return {
-    body: [...queryChunks, ...fragmentChunks].join('\n'),
-    headers: mergeMutationResponseHeaders(
-      mutationWireResponseHeaders(wireRequest),
-      {
-        'Kovo-Changes': mutationWireChangeHeader(result.changes),
-      },
-      buildHeaders,
-      result.responseHeaders,
-      queryWarningHeaders,
-    ),
-    status: 200,
-  };
-}
-
-function requiredMutationBuildToken<Request>(wireRequest: MutationWireRequest<Request>): string {
-  if (wireRequest.buildToken !== undefined && wireRequest.buildToken !== '') {
-    return wireRequest.buildToken;
-  }
-
-  throw new TypeError(
-    'renderMutationResponse() requires a non-empty buildToken for successful mutation wire responses. SPEC §5.2.1 requires every mutation delta/full response to carry the render-plan token.',
-  );
-}
-
-function mutationRenderErrorResponse<Request>(
-  changes: readonly ChangeRecord[],
-  wireRequest: MutationWireRequest<Request>,
-  responseHeaders?: MutationResponseHeaders,
-): BufferedMutationWireResponse {
-  return {
-    body: renderMutationRenderErrorFragment(wireRequest),
-    headers: mergeMutationResponseHeaders(
-      mutationWireResponseHeaders(wireRequest),
-      {
-        'Kovo-Changes': mutationWireChangeHeader(changes),
-      },
-      responseHeaders,
-    ),
-    status: 500,
-  };
-}
-
-function mutationServerErrorResponse<Request>(
-  wireRequest: MutationWireRequest<Request>,
-): MutationWireResponse {
-  return {
-    body: renderMutationServerErrorFragment(wireRequest),
-    headers: mutationWireResponseHeaders(wireRequest),
-    status: 500,
-  };
-}
-
-function renderReplayConflictFragment<Request>(
-  wireRequest: MutationWireRequest<Request>,
-): BufferedMutationWireResponse {
-  return {
-    body: renderFragmentWireHtml({
-      html: generatedFragmentHtml(
-        '<output role="alert" data-error-code="IDEMPOTENCY_CONFLICT">Conflict</output>',
-      ),
-      target: mutationFailureTarget(wireRequest),
-    }),
-    headers: mutationWireResponseHeaders(wireRequest),
-    status: 422,
-  };
 }
 
 /**
@@ -1142,23 +842,6 @@ function mutationRuntimeRegistryFacts<
   };
 }
 
-function isReplayTerminalOutcome<Value, Input, ReplayResponse>(
-  outcome: MutationLifecycleOutcome<Value, Input, ReplayResponse>,
-): outcome is Extract<
-  MutationLifecycleOutcome<Value, Input, ReplayResponse>,
-  { kind: 'replay-conflict' } | { kind: 'replay-unavailable' } | { kind: 'replayed' }
-> {
-  return (
-    outcome.kind === 'replay-conflict' ||
-    outcome.kind === 'replay-unavailable' ||
-    outcome.kind === 'replayed'
-  );
-}
-
-function unreachableReplayOutcome(): never {
-  throw new Error('Mutation replay outcome mapper returned no response for a replay outcome.');
-}
-
 /**
  * Run a mutation and render the no-JavaScript POST-redirect-GET response: a 303
  * redirect on success, or a re-rendered failure page. The fallback half of
@@ -1205,80 +888,12 @@ export async function renderNoJsMutationResponse<
     ...optionalReplayPolicy(noJsMutationReplayPolicy(deliveryMode)),
   });
 
-  if (lifecycle.kind === 'csrf-failure') {
-    const reauthResponse = await staleSessionNoJsCsrfReauthResponse(definition, csrf, noJsRequest);
-    if (reauthResponse) return reauthResponse;
-    return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
-  }
-
-  if (lifecycle.kind === 'validation-failure') {
-    return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
-  }
-
-  if (lifecycle.kind === 'guard-failure') {
-    const reauthResponse = noJsMutationReauthResponse(
-      lifecycle.guardFailure,
-      lifecycle.lifecycleRequest as Request,
-      noJsRequest.currentUrl === undefined ? {} : { currentUrl: noJsRequest.currentUrl },
-    );
-    if (reauthResponse) return reauthResponse;
-    return renderNoJsMutationFailureResponse(lifecycle.failure, noJsRequest);
-  }
-
-  if (isReplayTerminalOutcome(lifecycle)) {
-    return (
-      (await mapReplayOutcomeToModeResponse(deliveryMode, lifecycle)) ?? unreachableReplayOutcome()
-    );
-  }
-  if (lifecycle.kind === 'handler-error') {
-    reportServerError(noJsRequest.onError, lifecycle.error, {
-      mutationKey: definition.key,
-      operation: 'no-js-mutation-handler',
-      request: noJsRequest.request,
-    });
-    return noJsMutationServerErrorResponse();
-  }
-
-  if (lifecycle.kind === 'mutation-failure') {
-    lifecycle.reservation?.abort?.();
-    return renderNoJsMutationFailureResponse(lifecycle.result, noJsRequest);
-  }
-
-  const successResponse = blessRedirectResponse({
-    body: '',
-    headers: mergeMutationResponseHeaders(
-      {
-        'Cache-Control': 'no-store',
-        Location: redirectLocationHeader(
-          mutationRedirectLocation(noJsRequest.redirectTo, lifecycle.result),
-        ),
-      },
-      lifecycle.result.responseHeaders,
-    ),
-    status: 303 as const,
+  return renderNoJsMutationLifecycleResponse({
+    csrfReauthResponse: () => staleSessionNoJsCsrfReauthResponse(definition, csrf, noJsRequest),
+    definition,
+    lifecycle,
+    noJsRequest,
   });
-  lifecycle.reservation?.commit(successResponse);
-  return successResponse;
-}
-
-async function renderNoJsMutationFailureResponse<Request, Value>(
-  failure: MutationFail,
-  noJsRequest: NoJsMutationRequest<Request, Value>,
-): Promise<NoJsMutationResponse> {
-  const body = noJsRequest.renderFailurePage
-    ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
-    : renderDefaultFailurePage(failure);
-
-  return {
-    body,
-    headers: stampNoJsMutationFailureHeaders(
-      mergeMutationResponseHeaders(
-        { 'Content-Type': 'text/html; charset=utf-8' },
-        retryAfterHeaders(failure),
-      ),
-    ),
-    status: failure.status,
-  };
 }
 
 function isMutationFail(value: unknown): value is MutationFail {
@@ -1293,130 +908,6 @@ function isMutationFail(value: unknown): value is MutationFail {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
-}
-
-function mutationRedirectLocation<Value>(
-  redirectTo: string | Redirect | ((result: MutationSuccess<Value>) => string | Redirect),
-  result: MutationSuccess<Value>,
-): string {
-  const target = typeof redirectTo === 'function' ? redirectTo(result) : redirectTo;
-  // SPEC §6.4/§9.1 (PRG): a typed `redirect()` value carries its path-typed `location`; a plain
-  // string is the location itself. Either way the framework Location sink re-sanitizes (SPEC §6.6),
-  // so an app-derived `redirect()` location and a legacy string path converge on the same emission.
-  return redirectLocationHeader(typeof target === 'string' ? target : target.location);
-}
-
-function noJsMutationServerErrorResponse(): NoJsMutationResponse {
-  return {
-    body: 'Internal Server Error',
-    headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
-    status: 500,
-  };
-}
-
-async function renderReplayUnavailableFragment<Request>(
-  wireRequest: MutationWireRequest<Request>,
-): Promise<MutationWireResponse> {
-  return {
-    body: await renderFailureFragment(replayUnavailableFailure(), wireRequest),
-    headers: mergeMutationResponseHeaders(mutationWireResponseHeaders(wireRequest), {
-      'Retry-After': '1',
-    }),
-    status: 429,
-  };
-}
-
-async function renderNoJsReplayUnavailablePage<Request, Value>(
-  noJsRequest: NoJsMutationRequest<Request, Value>,
-): Promise<NoJsMutationResponse> {
-  const failure = replayUnavailableFailure();
-  return {
-    body: noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
-      : renderDefaultFailurePage(failure),
-    headers: stampNoJsMutationFailureHeaders({
-      'Content-Type': 'text/html; charset=utf-8',
-      'Retry-After': '1',
-    }),
-    status: 429,
-  };
-}
-
-async function renderNoJsReplayConflictPage<Request, Value>(
-  noJsRequest: NoJsMutationRequest<Request, Value>,
-): Promise<NoJsMutationResponse> {
-  const failure: MutationFail = {
-    error: { code: 'IDEMPOTENCY_CONFLICT', payload: {} },
-    ok: false,
-    status: 422,
-  };
-  return {
-    body: noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
-      : renderDefaultFailurePage(failure),
-    headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
-    status: 422,
-  };
-}
-
-function mapReplayOutcomeToModeResponse<Request, Value>(
-  mode: Extract<MutationResponseDeliveryMode<Request, Value>, { kind: 'enhanced-fragment' }>,
-  lifecycle: MutationLifecycleOutcome<unknown, unknown, MutationEndpointReplayResponse>,
-): Promise<MutationWireResponse | undefined>;
-function mapReplayOutcomeToModeResponse<Request, Value>(
-  mode: Extract<MutationResponseDeliveryMode<Request, Value>, { kind: 'no-js-prg' }>,
-  lifecycle: MutationLifecycleOutcome<unknown, unknown, MutationEndpointReplayResponse>,
-): Promise<NoJsMutationResponse | undefined>;
-async function mapReplayOutcomeToModeResponse<Request, Value>(
-  mode: MutationResponseDeliveryMode<Request, Value>,
-  lifecycle: MutationLifecycleOutcome<unknown, unknown, MutationEndpointReplayResponse>,
-): Promise<MutationEndpointResponse | undefined> {
-  if (lifecycle.kind === 'replay-conflict') return replayConflictResponseForMode(mode);
-  if (lifecycle.kind === 'replay-unavailable') return replayUnavailableResponseForMode(mode);
-  if (lifecycle.kind !== 'replayed') return undefined;
-
-  if (replayResponseMatchesMode(mode, lifecycle.response)) return lifecycle.response;
-  return replayConflictResponseForMode(mode);
-}
-
-function replayResponseMatchesMode<Request, Value>(
-  mode: MutationResponseDeliveryMode<Request, Value>,
-  response: MutationEndpointReplayResponse,
-): boolean {
-  return mode.kind === 'no-js-prg'
-    ? isNoJsReplayResponse(response)
-    : isEnhancedReplayResponse(response);
-}
-
-async function replayConflictResponseForMode<Request, Value>(
-  mode: MutationResponseDeliveryMode<Request, Value>,
-): Promise<MutationEndpointResponse> {
-  return mode.kind === 'enhanced-fragment'
-    ? renderReplayConflictFragment(mode.request)
-    : renderNoJsReplayConflictPage(mode.request);
-}
-
-async function replayUnavailableResponseForMode<Request, Value>(
-  mode: MutationResponseDeliveryMode<Request, Value>,
-): Promise<MutationEndpointResponse> {
-  return mode.kind === 'enhanced-fragment'
-    ? renderReplayUnavailableFragment(mode.request)
-    : renderNoJsReplayUnavailablePage(mode.request);
-}
-
-function replayUnavailableFailure(): MutationFail<'RATE_LIMITED', { reason: string }> {
-  return {
-    error: { code: 'RATE_LIMITED', payload: { reason: 'replay-unavailable' } },
-    ok: false,
-    retryAfter: 1,
-    status: 429,
-  };
-}
-
-function mergeMutationResponseHeaders(
-  ...sources: readonly (MutationResponseHeaders | undefined)[]
-): MutationResponseHeaders {
-  return mergeResponseHeaders(...sources);
 }
 
 async function parseMutationInput<InputSchema extends Schema<unknown>>(
@@ -1460,152 +951,6 @@ function runMutationOptions<Request>(
       ? {}
       : { sessionProvider: lifecycle.sessionProvider }),
     ...(lifecycle?.taskScheduler === undefined ? {} : { taskScheduler: lifecycle.taskScheduler }),
-  };
-}
-
-function mutationWireChangeRecords(
-  changes: readonly ChangeRecord[],
-): Pick<ChangeRecord, 'domain' | 'keys'>[] {
-  return changes.map((change) => ({
-    domain: change.domain,
-    ...(change.keys === undefined ? {} : { keys: change.keys }),
-  }));
-}
-
-function mutationWireChangeHeader(changes: readonly ChangeRecord[]): string {
-  return asciiJsonHeaderValue(mutationWireChangeRecords(changes));
-}
-
-function asciiJsonHeaderValue(value: unknown): string {
-  return JSON.stringify(value).replace(
-    /[^\x20-\x7e]/g,
-    (character) => `\\u${character.charCodeAt(0).toString(16).padStart(4, '0')}`,
-  );
-}
-
-function mutationResponseInput<Value>(result: MutationSuccess<Value>, rawInput: unknown): unknown {
-  if (Object.hasOwn(result, 'input')) return result.input;
-
-  return result.changes.find((change) => change.input !== undefined)?.input ?? rawInput;
-}
-
-async function renderFailureFragment<Request>(
-  failure: MutationFail,
-  wireRequest: MutationWireRequest<Request>,
-): Promise<string> {
-  const target = mutationFailureTarget(wireRequest);
-  const html = wireRequest.renderFailureFragment
-    ? await wireRequest.renderFailureFragment(failure, wireRequest.rawInput)
-    : await renderDefaultFailureFragment(failure, wireRequest, target);
-
-  return renderFragmentWireHtml({
-    html: generatedFragmentHtmlValue(html),
-    stylesheets: wireRequest.failureStylesheets,
-    target,
-  });
-}
-
-async function renderDefaultFailureFragment<Request>(
-  failure: MutationFail,
-  wireRequest: MutationWireRequest<Request>,
-  target: string,
-): Promise<GeneratedFragmentRenderable> {
-  const descriptor = wireRequest.liveTargetDescriptors?.find((entry) => entry.target === target);
-  const renderer =
-    descriptor === undefined
-      ? undefined
-      : wireRequest.liveTargetRenderers?.find(
-          (candidate) => candidate.component === descriptor.component,
-        );
-  if (descriptor && renderer) {
-    return renderer.render({
-      failure,
-      input: wireRequest.rawInput,
-      ...(wireRequest.csrf === undefined ? {} : { csrf: wireRequest.csrf }),
-      ...(wireRequest.mutationKey === undefined ? {} : { mutationKey: wireRequest.mutationKey }),
-      props: descriptor.props,
-      request: wireRequest.request,
-      target,
-    });
-  }
-
-  return renderDefaultFailureFragmentContent(failure);
-}
-
-function renderMutationRenderErrorFragment<Request>(
-  wireRequest: MutationWireRequest<Request>,
-): string {
-  const target = mutationFailureTarget(wireRequest);
-
-  return renderFragmentWireHtml({
-    html: generatedFragmentHtml(
-      '<output role="alert" data-error-code="RENDER_ERROR">Internal Server Error</output>',
-    ),
-    target,
-  });
-}
-
-function renderMutationServerErrorFragment<Request>(
-  wireRequest: MutationWireRequest<Request>,
-): string {
-  const target = mutationFailureTarget(wireRequest);
-
-  return renderFragmentWireHtml({
-    html: generatedFragmentHtml(
-      '<output role="alert" data-error-code="SERVER_ERROR">Internal Server Error</output>',
-    ),
-    stylesheets: wireRequest.failureStylesheets,
-    target,
-  });
-}
-
-function mutationFailureTarget<Request>(wireRequest: MutationWireRequest<Request>): string {
-  return (
-    wireRequest.failureTarget ??
-    wireRequest.submittedFormTarget ??
-    wireRequest.targets?.[0] ??
-    'error'
-  );
-}
-
-function stampNoJsMutationFailureHeaders(headers: ResponseHeaders): ResponseHeaders {
-  return stampGuardFailureDocumentSecurityFloor({
-    body: '',
-    headers,
-    status: 422,
-  }).headers;
-}
-
-function mutationWireResponseHeaders<Request>(
-  wireRequest: MutationWireRequest<Request>,
-): ResponseHeaders {
-  return {
-    'Cache-Control': 'private, no-store',
-    'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
-    Vary: 'Cookie',
-    ...(wireRequest.buildToken ? { 'Kovo-Build': wireRequest.buildToken } : {}),
-    ...(wireRequest.idem ? { 'Kovo-Idem': wireRequest.idem } : {}),
-  };
-}
-
-function enhancedMutationReauthResponse<Request>(
-  guardFailure: ResolvedGuardFailure,
-  request: Request,
-  options: { currentUrl?: string },
-): BufferedMutationWireResponse | undefined {
-  if (!mutationGuardFailureIsUnauthenticated(guardFailure, request)) return undefined;
-
-  // SPEC §6.5: enhanced unauthenticated mutation guard failures re-enter auth
-  // with a 401 Kovo-Reauth directive instead of rendering validation UI.
-  return {
-    body: '',
-    headers: mergeMutationResponseHeaders(
-      mutationWireResponseHeaders({} as MutationWireRequest<Request>),
-      {
-        'Kovo-Reauth': loginLocation(options.currentUrl ?? '/'),
-      },
-    ),
-    status: 401,
   };
 }
 
@@ -1701,40 +1046,6 @@ function hasSubmittedCsrfTokenShape(rawInput: unknown, field: string): boolean {
   );
 }
 
-function noJsMutationReauthResponse<Request>(
-  guardFailure: ResolvedGuardFailure,
-  request: Request,
-  options: { currentUrl?: string },
-): NoJsMutationResponse | undefined {
-  if (!mutationGuardFailureIsUnauthenticated(guardFailure, request)) return undefined;
-
-  return blessRedirectResponse({
-    body: '',
-    headers: {
-      'Cache-Control': 'no-store',
-      Location: redirectLocationHeader(loginLocation(options.currentUrl ?? '/')),
-    },
-    status: 303 as const,
-  });
-}
-
-function mutationGuardFailureIsUnauthenticated<Request>(
-  guardFailure: ResolvedGuardFailure,
-  request: Request,
-): boolean {
-  // SPEC §6.5: mutation reauth is reserved for auth guard failures. Non-auth guard denials such as
-  // RATE_LIMITED must preserve their own status/Retry-After instead of being inferred as sessionless
-  // login redirects.
-  if (guardFailure.code !== 'UNAUTHORIZED' || guardFailure.status !== 422) return false;
-  return guardFailureIsUnauthenticated(guardFailure, request);
-}
-
 function mutationGuardFailureToResult(guardFailure: ResolvedGuardFailure): MutationFail {
   return guardFailureToResult(guardFailure, { authenticatedUnauthorizedStatus: 403 });
-}
-
-function loginLocation(next: string): string {
-  const url = new URL('/login', 'https://kovo.local');
-  url.searchParams.set('next', next.startsWith('/') && !next.startsWith('//') ? next : '/');
-  return `${url.pathname}${url.search}${url.hash}`;
 }

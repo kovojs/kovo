@@ -16,6 +16,9 @@ import type {
   NoJsMutationRequest,
   NoJsMutationResponse,
 } from '../mutation-wire.js';
+import type { ResolvedGuardFailure } from '../guards.js';
+import type { MutationFail, MutationSuccess } from './definition.js';
+import type { ValidationFailurePayload } from '../schema.js';
 
 export type MutationLifecycleReplayReservation<Response> = {
   abort?(): void;
@@ -40,6 +43,34 @@ export type MutationLifecycleReplayPolicy<Response> = {
     | { kind: 'unavailable' }
     | { kind: 'unreserved' };
 };
+
+export type MutationLifecycleOutcome<Value, Input, ReplayResponse> =
+  | { kind: 'csrf-failure'; failure: MutationFail<'CSRF', Record<string, never>> }
+  | { kind: 'validation-failure'; failure: MutationFail<'VALIDATION', ValidationFailurePayload> }
+  | {
+      failure: MutationFail;
+      guardFailure: ResolvedGuardFailure;
+      kind: 'guard-failure';
+      lifecycleRequest: unknown;
+    }
+  | { kind: 'replay-conflict' }
+  | { kind: 'replay-unavailable' }
+  | { kind: 'replayed'; response: ReplayResponse }
+  | {
+      error: unknown;
+      kind: 'handler-error';
+      reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
+    }
+  | {
+      kind: 'mutation-failure';
+      reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
+      result: MutationFail;
+    }
+  | {
+      kind: 'success';
+      reservation: MutationLifecycleReplayReservation<ReplayResponse> | undefined;
+      result: MutationSuccess<Value, Input>;
+    };
 
 export function optionalReplayPolicy<Response>(
   replay: MutationLifecycleReplayPolicy<Response> | undefined,
