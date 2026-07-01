@@ -89,7 +89,7 @@ that removes the broader source of drift.
   - Verification: add prepared unparseable write and trigger tests; run `pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts`.
   - Evidence: `pnpm exec vitest --run packages/test/src/verifier.test.ts packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sql-observer.test.ts` passed with 4 files/37 tests after building the local `better-sqlite3` native binding; `pnpm run check:vp` and `git diff --check` passed.
 
-- [ ] **P0.7 - Centralize trusted request scheme provenance.**
+- [x] **P0.7 - Centralize trusted request scheme provenance.**
   - Current signals: `packages/server/src/app-document.ts` treats `x-forwarded-proto: https` as enough to
     attach HSTS, while `packages/server/src/node.ts` only trusts forwarded proto when `trustedProxy` is
     configured.
@@ -99,8 +99,9 @@ that removes the broader source of drift.
   - Risk reduced: spoofed proxy headers cannot affect security posture on direct Node deployments, and
     trusted proxy behavior is reviewed in one place.
   - Verification: `pnpm exec vitest --run packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/server/src/node.test.ts packages/server/src/csrf.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/app-document.test.ts packages/server/src/document.test.ts packages/server/src/node.test.ts packages/server/src/csrf.test.ts` passed with 4 files/132 tests after merging `agent/hvr4-server-security-20260630-235550`; `git diff --check HEAD^..HEAD` passed.
 
-- [ ] **P0.8 - Make stylesheet source provenance unforgeable and root-confined.**
+- [x] **P0.8 - Make stylesheet source provenance unforgeable and root-confined.**
   - Current signals: `packages/server/src/hints.ts` stores stylesheet source metadata with
     `Symbol.for('kovo.stylesheet.source')` and `Symbol.for('kovo.stylesheet.sourcePath')`; neutral build
     materialization consumes that metadata to read local stylesheet files.
@@ -110,6 +111,7 @@ that removes the broader source of drift.
   - Risk reduced: app-authored objects cannot forge framework stylesheet metadata to influence neutral
     build file reads or static export asset materialization.
   - Verification: add forged-symbol negative tests; run `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/build.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/neutral-build.test.ts`.
+  - Evidence: `pnpm exec vitest --run packages/server/src/hints.test.ts packages/server/src/build.test.ts packages/server/src/static-export-assets.test.ts packages/server/src/neutral-build.test.ts` passed with the 3 existing files/54 tests after merging `agent/hvr4-server-security-20260630-235550`; `packages/server/src/neutral-build.test.ts` does not exist in this checkout, and `git diff --check HEAD^..HEAD` passed.
 
 - [x] **P0.9 - Preserve production render-plan gates in every compile-cache projection.**
   - Current signals: exact compiler cache keys include `productionRenderPlanGate`, but
