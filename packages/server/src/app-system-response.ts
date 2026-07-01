@@ -1,4 +1,5 @@
 import { mergeVaryHeader } from './document-core.js';
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { blessRedirectResponse } from './response.js';
 import type { ResponseHeaders, ResponseHeaderValue, WebResponseBody } from './response.js';
 import { finalizeServerResponse } from './response-posture.js';
@@ -20,24 +21,28 @@ interface AppSystemResponseInit {
  *
  * @internal
  */
-export function appSystemResponse(
-  body: WebResponseBody | null,
-  init: AppSystemResponseInit,
-): Response {
-  const response = {
-    body,
-    headers: appSystemResponseHeaders(init.headers, {
-      buildToken: init.buildToken,
-      hasBody: body !== null,
-      surface: init.surface,
-    }),
-    status: init.status,
-  };
-  if (response.status >= 300 && response.status < 400 && readHeader(response.headers, 'Location')) {
-    blessRedirectResponse(response);
-  }
-  return finalizeServerResponse(response, { method: init.method ?? 'GET' });
-}
+export const appSystemResponse = wireEmitter(
+  'server.wire.system-response',
+  function (body: WebResponseBody | null, init: AppSystemResponseInit): Response {
+    const response = {
+      body,
+      headers: appSystemResponseHeaders(init.headers, {
+        buildToken: init.buildToken,
+        hasBody: body !== null,
+        surface: init.surface,
+      }),
+      status: init.status,
+    };
+    if (
+      response.status >= 300 &&
+      response.status < 400 &&
+      readHeader(response.headers, 'Location')
+    ) {
+      blessRedirectResponse(response);
+    }
+    return finalizeServerResponse(response, { method: init.method ?? 'GET' });
+  },
+);
 
 function appSystemResponseHeaders(
   initHeaders: HeadersInit | ResponseHeaders | undefined,

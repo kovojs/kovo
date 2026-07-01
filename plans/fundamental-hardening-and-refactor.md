@@ -246,7 +246,7 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     exit 1 on any permissive default arm. Wire `check:fail-closed-classifiers` into `check`. Add
     `packages/conformance-fixtures/src/fail-closed-canary.fixture.ts` (a branded classifier with a permissive
     `default:`) + a test asserting the lint flags it (M11 canary).
-- [ ] **G3 — Security-decision brand (DEC1, M11).**
+- [x] **G3 — Security-decision brand (DEC1, M11).**
   - Add `packages/core/src/internal/security-markers.ts`: `securityClassifier(name, fn)` + `wireEmitter(name, fn)`
     (module-private `unique symbol`). Wrap: (a) the DB-write choke + SQL classifiers (`sql-safe-handle.ts`,
     `sql-write-allowlist.ts`); (b) the response emitters (SSR document, `/_q`, mutation delta, stream, headers, error
@@ -254,6 +254,7 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     (`trusted-html-provenance.ts`, `confidentiality.ts`, `query-shapes.ts`, `framework-identity.ts`). Add
     `scripts/check-security-brands.mjs`: every function reachable from an enforcement site / in a security-decision file
     MUST be branded; unbranded → fail. (Split into 3.2a/3.2b/3.2c commits + the check.)
+  - Evidence: `pnpm exec vitest --run scripts/check-security-brands.test.mjs packages/core/src/internal/security-markers.test.ts packages/compiler/src/trusted-html-provenance.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/confidentiality-folded-read-set.test.ts packages/server/src/capability-url.test.ts packages/server/src/mutation-response.test.ts packages/server/src/response.test.ts packages/server/src/generated-query-registry.test.ts packages/server/src/route-query-guards.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/route-response.test.ts packages/server/src/static-export-headers.test.ts packages/server/src/sql-write-allowlist.test.ts packages/server/src/sql-write-allowlist.oracle.test.ts`, `pnpm run check:security-brands`, `pnpm run check:api-surface`, `pnpm run check:publish`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after the classifier/wire-emitter marker and gate enrolled 52 branded security-decision functions.
 - [ ] **G4 — Fuzz corpus + green corpus (DEC10, M12).**
   - `packages/conformance-fixtures/src/adversarial-corpus.ts` + property generators (SQL, taint expressions,
     import/alias shapes). `scripts/check-green-corpus.mjs` builds the DEC10 corpus on both dialects and asserts zero new

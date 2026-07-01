@@ -1,4 +1,5 @@
 import type { JsonValue } from '@kovojs/core';
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import { reportServerError } from './diagnostics.js';
 import type { Domain } from './domain.js';
 import type { AccessDecision } from './access.js';
@@ -526,136 +527,142 @@ export interface QueryEndpointFailure {
  * @returns A `QueryEndpointResponse` (status, headers, JSON body).
  * @internal
  */
-export async function renderQueryEndpointResponse<const Key extends string, Value, Input, Request>(
-  definition: QueryDefinition<Key, Value, Input, Request>,
-  endpointRequest: QueryEndpointRequest<Request>,
-): Promise<QueryEndpointResponse> {
-  const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
-  let result: QueryEndpointResult<Value, Input>;
-  let lifecycleRequest: Request = endpointRequest.request;
-  try {
-    lifecycleRequest = await resolveKovoLifecycleRequest(endpointRequest.request, {
-      ...(endpointRequest.clientIp === undefined ? {} : { clientIp: endpointRequest.clientIp }),
-      ...(endpointRequest.db === undefined ? {} : { db: endpointRequest.db }),
-      ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),
-      ...(endpointRequest.sessionProvider === undefined
-        ? {}
-        : { sessionProvider: endpointRequest.sessionProvider }),
-      surface: 'query',
-    });
-    result = await runQuery(
-      definition,
-      rawInput,
-      lifecycleRequest,
-      endpointRequest.maxListItems === undefined
-        ? {}
-        : { maxListItems: endpointRequest.maxListItems },
-    );
-  } catch (error) {
-    reportServerError(endpointRequest.onError, error, {
-      operation: 'query-endpoint',
-      queryKey: definition.key,
-      request: lifecycleRequest,
-    });
-    // SPEC §9.4:895: the private, no-store cache posture applies to every /_q/ response,
-    // including error responses, so a shared/intermediary cache cannot store and replay
-    // any response (even an anon 403) to a different user.
-    return {
-      body: JSON.stringify(serverErrorPayload()),
-      headers: queryJsonHeaders(endpointRequest),
-      status: 500,
-    };
-  }
+export const renderQueryEndpointResponse = wireEmitter(
+  'server.wire.query-endpoint',
+  async function <const Key extends string, Value, Input, Request>(
+    definition: QueryDefinition<Key, Value, Input, Request>,
+    endpointRequest: QueryEndpointRequest<Request>,
+  ): Promise<QueryEndpointResponse> {
+    const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
+    let result: QueryEndpointResult<Value, Input>;
+    let lifecycleRequest: Request = endpointRequest.request;
+    try {
+      lifecycleRequest = await resolveKovoLifecycleRequest(endpointRequest.request, {
+        ...(endpointRequest.clientIp === undefined ? {} : { clientIp: endpointRequest.clientIp }),
+        ...(endpointRequest.db === undefined ? {} : { db: endpointRequest.db }),
+        ...(endpointRequest.onError === undefined ? {} : { onError: endpointRequest.onError }),
+        ...(endpointRequest.sessionProvider === undefined
+          ? {}
+          : { sessionProvider: endpointRequest.sessionProvider }),
+        surface: 'query',
+      });
+      result = await runQuery(
+        definition,
+        rawInput,
+        lifecycleRequest,
+        endpointRequest.maxListItems === undefined
+          ? {}
+          : { maxListItems: endpointRequest.maxListItems },
+      );
+    } catch (error) {
+      reportServerError(endpointRequest.onError, error, {
+        operation: 'query-endpoint',
+        queryKey: definition.key,
+        request: lifecycleRequest,
+      });
+      // SPEC §9.4:895: the private, no-store cache posture applies to every /_q/ response,
+      // including error responses, so a shared/intermediary cache cannot store and replay
+      // any response (even an anon 403) to a different user.
+      return {
+        body: JSON.stringify(serverErrorPayload()),
+        headers: queryJsonHeaders(endpointRequest),
+        status: 500,
+      };
+    }
 
-  if (!result.ok) {
-    const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
-      ...endpointRequest,
-      currentUrl:
-        endpointRequest.currentUrl ??
-        queryEndpointCurrentUrl(definition.key, endpointRequest.search ?? {}),
-    });
-    // SPEC §9.4:895: guard-failure responses (303 redirect, 403) also carry the private
-    // cache posture — an anon 403 must not be cached and replayed to an authed user.
-    if (authResponse) {
-      return withQueryBuildHeaders(withQueryCacheHeaders(authResponse), endpointRequest);
+    if (!result.ok) {
+      const authResponse = await renderHttpGuardFailureResponse(result, lifecycleRequest, {
+        ...endpointRequest,
+        currentUrl:
+          endpointRequest.currentUrl ??
+          queryEndpointCurrentUrl(definition.key, endpointRequest.search ?? {}),
+      });
+      // SPEC §9.4:895: guard-failure responses (303 redirect, 403) also carry the private
+      // cache posture — an anon 403 must not be cached and replayed to an authed user.
+      if (authResponse) {
+        return withQueryBuildHeaders(withQueryCacheHeaders(authResponse), endpointRequest);
+      }
+
+      return {
+        body: JSON.stringify(result.error),
+        headers: mergeResponseHeaders(
+          {
+            'Cache-Control': 'private, no-store',
+            'Content-Type': 'application/json; charset=utf-8',
+            Vary: 'Cookie',
+          },
+          queryBuildHeaders(endpointRequest),
+          retryAfterHeaders(result),
+        ),
+        status: result.status,
+      };
+    }
+
+    // SPEC §9.4:895 (bugs-part4 L3): the success render is wrapped in the SAME private-cache
+    // try/catch as the error branch above. The wire encode seam normalizes unserializable
+    // values (bigint→tagged, Date→tagged) so `JSON.stringify` no longer throws on a `bigint`
+    // column; if any render still throws, this catch keeps the mandated `private, no-store` +
+    // `Vary: Cookie` posture on the resulting 500 instead of letting the throw escape and drop
+    // those headers (which would let a shared cache replay one user's data to another).
+    let body: string;
+    try {
+      body = renderQueryEndpointChunk(definition, result.input, result.value);
+    } catch (error) {
+      reportServerError(endpointRequest.onError, error, {
+        operation: 'query-endpoint',
+        queryKey: definition.key,
+        request: lifecycleRequest,
+      });
+      return {
+        body: JSON.stringify(serverErrorPayload()),
+        headers: queryJsonHeaders(endpointRequest),
+        status: 500,
+      };
     }
 
     return {
-      body: JSON.stringify(result.error),
+      body,
       headers: mergeResponseHeaders(
-        {
-          'Cache-Control': 'private, no-store',
-          'Content-Type': 'application/json; charset=utf-8',
-          Vary: 'Cookie',
-        },
+        { 'Content-Type': 'text/html; charset=utf-8' },
+        querySuccessCacheHeaders(),
+        // SPEC §5.2.1 rule 2(d): stamp the build token so a background refetch into a stale
+        // tab can detect deploy skew and avoid merging new-build data into a stale document.
         queryBuildHeaders(endpointRequest),
-        retryAfterHeaders(result),
+        queryWarningHeaders(result.warnings),
       ),
-      status: result.status,
+      status: 200,
     };
-  }
-
-  // SPEC §9.4:895 (bugs-part4 L3): the success render is wrapped in the SAME private-cache
-  // try/catch as the error branch above. The wire encode seam normalizes unserializable
-  // values (bigint→tagged, Date→tagged) so `JSON.stringify` no longer throws on a `bigint`
-  // column; if any render still throws, this catch keeps the mandated `private, no-store` +
-  // `Vary: Cookie` posture on the resulting 500 instead of letting the throw escape and drop
-  // those headers (which would let a shared cache replay one user's data to another).
-  let body: string;
-  try {
-    body = renderQueryEndpointChunk(definition, result.input, result.value);
-  } catch (error) {
-    reportServerError(endpointRequest.onError, error, {
-      operation: 'query-endpoint',
-      queryKey: definition.key,
-      request: lifecycleRequest,
-    });
-    return {
-      body: JSON.stringify(serverErrorPayload()),
-      headers: queryJsonHeaders(endpointRequest),
-      status: 500,
-    };
-  }
-
-  return {
-    body,
-    headers: mergeResponseHeaders(
-      { 'Content-Type': 'text/html; charset=utf-8' },
-      querySuccessCacheHeaders(),
-      // SPEC §5.2.1 rule 2(d): stamp the build token so a background refetch into a stale
-      // tab can detect deploy skew and avoid merging new-build data into a stale document.
-      queryBuildHeaders(endpointRequest),
-      queryWarningHeaders(result.warnings),
-    ),
-    status: 200,
-  };
-}
+  },
+);
 
 /**
  * Render a registered query endpoint by key for generated/framework dispatch.
  *
  * @internal
  */
-export async function renderQueryRegistryEndpointResponse<Request>(
-  registry: QueryEndpointRegistry<Request>,
-  queryKey: string,
-  endpointRequest: QueryEndpointRequest<Request>,
-): Promise<QueryEndpointResponse> {
-  const definition = registry.queries.find((queryDefinition) => queryDefinition.key === queryKey);
+export const renderQueryRegistryEndpointResponse = wireEmitter(
+  'server.wire.query-registry-endpoint',
+  async function <Request>(
+    registry: QueryEndpointRegistry<Request>,
+    queryKey: string,
+    endpointRequest: QueryEndpointRequest<Request>,
+  ): Promise<QueryEndpointResponse> {
+    const definition = registry.queries.find((queryDefinition) => queryDefinition.key === queryKey);
 
-  if (!definition) {
-    return withQueryCacheHeaders({
-      body: 'Not Found',
-      headers: mergeResponseHeaders(
-        { 'Content-Type': 'text/plain; charset=utf-8' },
-        queryBuildHeaders(endpointRequest),
-      ),
-      status: 404,
-    });
-  }
+    if (!definition) {
+      return withQueryCacheHeaders({
+        body: 'Not Found',
+        headers: mergeResponseHeaders(
+          { 'Content-Type': 'text/plain; charset=utf-8' },
+          queryBuildHeaders(endpointRequest),
+        ),
+        status: 404,
+      });
+    }
 
-  return renderQueryEndpointResponse(definition, endpointRequest);
-}
+    return renderQueryEndpointResponse(definition, endpointRequest);
+  },
+);
 
 export function readQueryInstanceKey<const Key extends string, Value, Input, Request>(
   queryDefinition: QueryDefinition<Key, Value, Input, Request>,
@@ -846,11 +853,12 @@ function searchParamValue(value: unknown): string {
   return JSON.stringify(value) ?? '';
 }
 
-function renderQueryEndpointChunk<const Key extends string, Value, Input, Request>(
-  queryDefinition: QueryDefinition<Key, Value, Input, Request>,
-  input: Input,
-  value: Value,
-): string {
+const renderQueryEndpointChunk = wireEmitter('server.wire.query-endpoint-chunk', function <
+  const Key extends string,
+  Value,
+  Input,
+  Request,
+>(queryDefinition: QueryDefinition<Key, Value, Input, Request>, input: Input, value: Value): string {
   const key = readQueryInstanceKey(queryDefinition, input);
 
   return renderQueryWireHtml({
@@ -859,15 +867,15 @@ function renderQueryEndpointChunk<const Key extends string, Value, Input, Reques
     value,
     version: readQueryVersion(queryDefinition, input, value),
   });
-}
+});
 
 function serverErrorPayload(): { code: 'SERVER_ERROR'; payload: Record<string, never> } {
   return { code: 'SERVER_ERROR', payload: {} };
 }
 
-function queryJsonHeaders<Request>(
-  endpointRequest: QueryEndpointRequest<Request>,
-): ResponseHeaders {
+const queryJsonHeaders = wireEmitter('server.wire.query-json-headers', function <
+  Request,
+>(endpointRequest: QueryEndpointRequest<Request>): ResponseHeaders {
   return mergeResponseHeaders(
     {
       'Cache-Control': 'private, no-store',
@@ -876,7 +884,7 @@ function queryJsonHeaders<Request>(
     },
     queryBuildHeaders(endpointRequest),
   );
-}
+});
 
 function queryBuildHeaders<Request>(
   endpointRequest: QueryEndpointRequest<Request>,
@@ -932,16 +940,19 @@ function withQueryBuildHeaders<Request>(
  * by default; stamping them prevents a shared cache from serving one user's denial
  * to another.
  */
-function withQueryCacheHeaders(response: QueryEndpointResponse): QueryEndpointResponse {
-  const next = {
-    ...response,
-    headers: mergeResponseHeaders(
-      {
-        'Cache-Control': 'private, no-store',
-        Vary: 'Cookie',
-      },
-      response.headers,
-    ),
-  };
-  return isBlessedRedirectResponse(response) ? blessRedirectResponse(next) : next;
-}
+const withQueryCacheHeaders = wireEmitter(
+  'server.wire.query-cache-headers',
+  function (response: QueryEndpointResponse): QueryEndpointResponse {
+    const next = {
+      ...response,
+      headers: mergeResponseHeaders(
+        {
+          'Cache-Control': 'private, no-store',
+          Vary: 'Cookie',
+        },
+        response.headers,
+      ),
+    };
+    return isBlessedRedirectResponse(response) ? blessRedirectResponse(next) : next;
+  },
+);

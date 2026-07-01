@@ -3,6 +3,7 @@ import {
   inlineKovoLoaderInstallerSource,
 } from '@kovojs/browser/internal/inline-loader';
 import { stringifyWireValue } from '@kovojs/core/internal/wire-json';
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import {
   KOVO_CSP_REPORT_GROUP,
   cspHashAttribute,
@@ -222,17 +223,20 @@ const fallbackTitles = {
  *
  * @internal
  */
-export function renderDocument(options: DocumentAssemblyOptions): DocumentRenderResult {
-  const assembled = assembleDocumentShellParts(options);
-  const context = { csp: assembled.csp, parts: assembled.parts };
-  const html = renderStructuredDocumentShell(context, assembled.document);
+export const renderDocument = wireEmitter(
+  'server.wire.ssr-document',
+  function (options: DocumentAssemblyOptions): DocumentRenderResult {
+    const assembled = assembleDocumentShellParts(options);
+    const context = { csp: assembled.csp, parts: assembled.parts };
+    const html = renderStructuredDocumentShell(context, assembled.document);
 
-  return {
-    csp: mergeCspInlineMetadata(assembled.csp, styleAttributeCspInlineMetadata(html)),
-    earlyHints: assembled.earlyHints,
-    html,
-  };
-}
+    return {
+      csp: mergeCspInlineMetadata(assembled.csp, styleAttributeCspInlineMetadata(html)),
+      earlyHints: assembled.earlyHints,
+      html,
+    };
+  },
+);
 
 /**
  * Assemble a deferred Kovo document response for framework-owned streaming.
@@ -370,122 +374,125 @@ function assembleDocumentShellParts(
  *
  * @internal
  */
-export function renderRouteDocumentResponse(
-  response: DocumentRoutePageResponse,
-  options: DocumentResponseOptions = {},
-): DocumentRoutePageResponseWithCsp {
-  const {
-    csp: cspConfig,
-    noStore,
-    reportingOrigin,
-    secure,
-    wrapNonOk,
-    ...assemblyOptions
-  } = options;
-  const contentType = readHeader(response.headers, 'Content-Type');
-  if (
-    isRouteResponseOutcome(response) ||
-    (response.status !== 200 && wrapNonOk !== true) ||
-    typeof response.body !== 'string' ||
-    (contentType !== undefined && !contentType.toLowerCase().includes('text/html'))
-  ) {
-    // bugz-3 M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a NON-HTML 200
-    // route outcome (`respond.file`/`respond.stream`/`respond.storedFile`) was previously
-    // returned UNCHANGED, so a guarded/per-principal download silently lost the `noStore`
-    // floor the HTML path computes — it was shared-cache-storable (cross-principal CDN leak),
-    // bfcache-restorable after logout, AND BREACH-compressible. A per-principal route outcome
-    // MUST get the same floor the HTML document path gets (no-store + Vary: Cookie + the §6.6
-    // isolation baseline). Non-200 outcomes (redirects/304/5xx) still pass through unchanged.
-    if (response.status === 200 && noStore) {
-      return stampPerPrincipalRouteOutcomeFloor(response);
+export const renderRouteDocumentResponse = wireEmitter(
+  'server.wire.route-document',
+  function (
+    response: DocumentRoutePageResponse,
+    options: DocumentResponseOptions = {},
+  ): DocumentRoutePageResponseWithCsp {
+    const {
+      csp: cspConfig,
+      noStore,
+      reportingOrigin,
+      secure,
+      wrapNonOk,
+      ...assemblyOptions
+    } = options;
+    const contentType = readHeader(response.headers, 'Content-Type');
+    if (
+      isRouteResponseOutcome(response) ||
+      (response.status !== 200 && wrapNonOk !== true) ||
+      typeof response.body !== 'string' ||
+      (contentType !== undefined && !contentType.toLowerCase().includes('text/html'))
+    ) {
+      // bugz-3 M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a NON-HTML 200
+      // route outcome (`respond.file`/`respond.stream`/`respond.storedFile`) was previously
+      // returned UNCHANGED, so a guarded/per-principal download silently lost the `noStore`
+      // floor the HTML path computes — it was shared-cache-storable (cross-principal CDN leak),
+      // bfcache-restorable after logout, AND BREACH-compressible. A per-principal route outcome
+      // MUST get the same floor the HTML document path gets (no-store + Vary: Cookie + the §6.6
+      // isolation baseline). Non-200 outcomes (redirects/304/5xx) still pass through unchanged.
+      if (response.status === 200 && noStore) {
+        return stampPerPrincipalRouteOutcomeFloor(response);
+      }
+      return response;
     }
-    return response;
-  }
 
-  const document = routeDocumentResult({ ...response, body: response.body }, assemblyOptions);
-  const shouldAttachFrameworkCsp =
-    findHeaderRecordName(response.headers, 'Content-Security-Policy') === undefined;
-  const shouldAttachReporting =
-    shouldAttachFrameworkCsp &&
-    findHeaderRecordName(response.headers, 'Report-To') === undefined &&
-    findHeaderRecordName(response.headers, 'Reporting-Endpoints') === undefined;
-  const documentCspConfig: DocumentCspConfig =
-    shouldAttachReporting || cspConfig?.reporting === false
-      ? (cspConfig ?? {})
-      : { ...cspConfig, reporting: false };
-  const reportingHeaders = shouldAttachReporting
-    ? renderCspReportingHeaders(
-        documentCspConfig,
-        reportingOrigin === undefined ? {} : { endpointOrigin: reportingOrigin },
-      )
-    : undefined;
+    const document = routeDocumentResult({ ...response, body: response.body }, assemblyOptions);
+    const shouldAttachFrameworkCsp =
+      findHeaderRecordName(response.headers, 'Content-Security-Policy') === undefined;
+    const shouldAttachReporting =
+      shouldAttachFrameworkCsp &&
+      findHeaderRecordName(response.headers, 'Report-To') === undefined &&
+      findHeaderRecordName(response.headers, 'Reporting-Endpoints') === undefined;
+    const documentCspConfig: DocumentCspConfig =
+      shouldAttachReporting || cspConfig?.reporting === false
+        ? (cspConfig ?? {})
+        : { ...cspConfig, reporting: false };
+    const reportingHeaders = shouldAttachReporting
+      ? renderCspReportingHeaders(
+          documentCspConfig,
+          reportingOrigin === undefined ? {} : { endpointOrigin: reportingOrigin },
+        )
+      : undefined;
 
-  let htmlHeaders: ResponseHeaders = {
-    ...mergeDocumentHeaders(response.headers, document.earlyHints),
-    'Content-Type': 'text/html; charset=utf-8',
-    // CSP-3 (bugs-part3): baseline security headers on every HTML document, matching
-    // the file/stream posture (response.ts routeOutcomeHeaders). `nosniff` stops
-    // content-type sniffing; `Referrer-Policy` limits cross-origin referrer leakage.
-    // Authors may override by setting these headers on the route response (preserved
-    // by `mergeDocumentHeaders` above, which keeps the existing header name).
-    ...(findHeaderRecordName(response.headers, 'X-Content-Type-Options') === undefined
-      ? { 'X-Content-Type-Options': 'nosniff' }
-      : {}),
-    // SPEC §6.6 (runtime defense-in-depth, NOT a by-construction proof): the
-    // conservative LOW-false-positive isolation/hardening baseline
-    // (`X-Frame-Options: DENY` clickjacking defense, COOP cross-window-scripting
-    // severance, `Permissions-Policy` ambient-capability deny-all, `Referrer-Policy`).
-    // Each is applied only when the route response didn't already set it, so an author
-    // opt-out is preserved. See `DOCUMENT_ISOLATION_HEADERS` for the per-header rationale.
-    ...documentIsolationHeaders(
-      response.headers,
-      reportingHeaders === undefined ? undefined : KOVO_CSP_REPORT_GROUP,
-    ),
-    // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): the STRICT CSP is
-    // auto-attached to every framework-rendered HTML document by default. Kovo is the
-    // sole DOM-writer and emits no inline app code, so the hash-locked `'self'` policy
-    // (plus the non-overridable `base-uri`/`object-src`/`form-action`/`frame-ancestors`
-    // hardening directives) fits its own output by construction. `cspConfig` carries
-    // the app-facing third-party allowlist that EXTENDS the per-fetch directives —
-    // there is no report-only ramp, so a third-party embed is denied until declared.
-    // Applied only when the route response did not already set a
-    // `Content-Security-Policy`, so an author who needs full control (or wants no CSP)
-    // can override on the route response — same opt-out posture as the isolation headers.
-    ...(shouldAttachFrameworkCsp
-      ? {
-          'Content-Security-Policy': renderDefaultDocumentCsp(document.csp, documentCspConfig),
-        }
-      : {}),
-    ...reportingHeaders,
-    // SPEC §6.6: HSTS is attached ONLY on a prod+HTTPS document so a non-HTTPS or
-    // dev/localhost request is never pinned to https. Gated by the call site's
-    // `secure` flag (SF-WIRE in DocumentResponseOptions) plus prod detection.
-    ...(secure !== undefined &&
-    shouldEmitDocumentHsts(secure) &&
-    findHeaderRecordName(response.headers, 'Strict-Transport-Security') === undefined
-      ? { 'Strict-Transport-Security': DOCUMENT_HSTS_VALUE }
-      : {}),
-    // bugs-1 F34: guarded/session-dependent documents are not bfcache-restorable.
-    ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
-  };
-  if (noStore) {
-    // bugz-3 L2/M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a guarded or
-    // per-principal document varies by identity, so it MUST carry `Vary: Cookie` alongside
-    // `no-store` — otherwise a shared cache could key it across principals, and the node
-    // adapter would BREACH-compress it (`isSensitiveResponse` keys on no-store/Vary:Cookie).
-    // `mergeVaryHeader` preserves any existing `Vary` (e.g. the enhanced-navigation `Accept`).
-    htmlHeaders = mergeVaryHeader(htmlHeaders, 'Cookie');
-  }
+    let htmlHeaders: ResponseHeaders = {
+      ...mergeDocumentHeaders(response.headers, document.earlyHints),
+      'Content-Type': 'text/html; charset=utf-8',
+      // CSP-3 (bugs-part3): baseline security headers on every HTML document, matching
+      // the file/stream posture (response.ts routeOutcomeHeaders). `nosniff` stops
+      // content-type sniffing; `Referrer-Policy` limits cross-origin referrer leakage.
+      // Authors may override by setting these headers on the route response (preserved
+      // by `mergeDocumentHeaders` above, which keeps the existing header name).
+      ...(findHeaderRecordName(response.headers, 'X-Content-Type-Options') === undefined
+        ? { 'X-Content-Type-Options': 'nosniff' }
+        : {}),
+      // SPEC §6.6 (runtime defense-in-depth, NOT a by-construction proof): the
+      // conservative LOW-false-positive isolation/hardening baseline
+      // (`X-Frame-Options: DENY` clickjacking defense, COOP cross-window-scripting
+      // severance, `Permissions-Policy` ambient-capability deny-all, `Referrer-Policy`).
+      // Each is applied only when the route response didn't already set it, so an author
+      // opt-out is preserved. See `DOCUMENT_ISOLATION_HEADERS` for the per-header rationale.
+      ...documentIsolationHeaders(
+        response.headers,
+        reportingHeaders === undefined ? undefined : KOVO_CSP_REPORT_GROUP,
+      ),
+      // SF (secure-framework Tier 3, SPEC §6.6 runtime DiD): the STRICT CSP is
+      // auto-attached to every framework-rendered HTML document by default. Kovo is the
+      // sole DOM-writer and emits no inline app code, so the hash-locked `'self'` policy
+      // (plus the non-overridable `base-uri`/`object-src`/`form-action`/`frame-ancestors`
+      // hardening directives) fits its own output by construction. `cspConfig` carries
+      // the app-facing third-party allowlist that EXTENDS the per-fetch directives —
+      // there is no report-only ramp, so a third-party embed is denied until declared.
+      // Applied only when the route response did not already set a
+      // `Content-Security-Policy`, so an author who needs full control (or wants no CSP)
+      // can override on the route response — same opt-out posture as the isolation headers.
+      ...(shouldAttachFrameworkCsp
+        ? {
+            'Content-Security-Policy': renderDefaultDocumentCsp(document.csp, documentCspConfig),
+          }
+        : {}),
+      ...reportingHeaders,
+      // SPEC §6.6: HSTS is attached ONLY on a prod+HTTPS document so a non-HTTPS or
+      // dev/localhost request is never pinned to https. Gated by the call site's
+      // `secure` flag (SF-WIRE in DocumentResponseOptions) plus prod detection.
+      ...(secure !== undefined &&
+      shouldEmitDocumentHsts(secure) &&
+      findHeaderRecordName(response.headers, 'Strict-Transport-Security') === undefined
+        ? { 'Strict-Transport-Security': DOCUMENT_HSTS_VALUE }
+        : {}),
+      // bugs-1 F34: guarded/session-dependent documents are not bfcache-restorable.
+      ...(noStore ? { 'Cache-Control': 'no-store' } : {}),
+    };
+    if (noStore) {
+      // bugz-3 L2/M2 (SPEC §9.4:927 caching contract, §9.5:780 bfcache posture): a guarded or
+      // per-principal document varies by identity, so it MUST carry `Vary: Cookie` alongside
+      // `no-store` — otherwise a shared cache could key it across principals, and the node
+      // adapter would BREACH-compress it (`isSensitiveResponse` keys on no-store/Vary:Cookie).
+      // `mergeVaryHeader` preserves any existing `Vary` (e.g. the enhanced-navigation `Accept`).
+      htmlHeaders = mergeVaryHeader(htmlHeaders, 'Cookie');
+    }
 
-  return {
-    body: document.body,
-    // CSP-3 (bugs-part3): surface the assembled CSP so the dispatch path can attach a
-    // `Content-Security-Policy` header when the app opts in (previously discarded).
-    csp: document.csp,
-    headers: htmlHeaders,
-    status: response.status,
-  };
-}
+    return {
+      body: document.body,
+      // CSP-3 (bugs-part3): surface the assembled CSP so the dispatch path can attach a
+      // `Content-Security-Policy` header when the app opts in (previously discarded).
+      csp: document.csp,
+      headers: htmlHeaders,
+      status: response.status,
+    };
+  },
+);
 
 function routeDocumentResult(
   response: DocumentRoutePageResponse & { body: string },
@@ -707,49 +714,52 @@ export type { QueryScriptRenderOptions };
  *
  * @internal
  */
-export function renderErrorDocument(options: ErrorDocumentOptions): DocumentRoutePageResponse {
-  const title = options.title ?? fallbackTitles[options.status];
-  const message = options.message ?? title;
-  const document = renderDocument({
-    body: `<main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></main>`,
-    ...(options.document === undefined ? {} : { document: options.document }),
-    hints: {
-      ...options.hints,
-      meta: [{ title }, ...withoutStaticTitleMeta(routeMetaArray(options.hints?.meta))],
-    },
-    ...(options.lang === undefined ? {} : { lang: options.lang }),
-    ...(options.loaderRuntimeHref === undefined
-      ? {}
-      : { loaderRuntimeHref: options.loaderRuntimeHref }),
-  });
+export const renderErrorDocument = wireEmitter(
+  'server.wire.error-document-shell',
+  function (options: ErrorDocumentOptions): DocumentRoutePageResponse {
+    const title = options.title ?? fallbackTitles[options.status];
+    const message = options.message ?? title;
+    const document = renderDocument({
+      body: `<main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p></main>`,
+      ...(options.document === undefined ? {} : { document: options.document }),
+      hints: {
+        ...options.hints,
+        meta: [{ title }, ...withoutStaticTitleMeta(routeMetaArray(options.hints?.meta))],
+      },
+      ...(options.lang === undefined ? {} : { lang: options.lang }),
+      ...(options.loaderRuntimeHref === undefined
+        ? {}
+        : { loaderRuntimeHref: options.loaderRuntimeHref }),
+    });
 
-  return {
-    body: document.html,
-    headers: {
-      ...document.earlyHints,
-      'Content-Type': 'text/html; charset=utf-8',
-      // CSP-3 (bugs-part3): error documents are HTML responses too; carry the same
-      // baseline security headers as successful documents.
-      'X-Content-Type-Options': 'nosniff',
-      // SPEC §6.6 (runtime defense-in-depth): the same conservative isolation/hardening
-      // baseline as successful documents (X-Frame-Options/COOP/Permissions-Policy/
-      // Referrer-Policy). Error documents have no route response to carry an author
-      // opt-out, so the static baseline applies unconditionally. HSTS is intentionally
-      // omitted here: error documents render without the request's secure context.
-      ...documentIsolationHeaders({}, KOVO_CSP_REPORT_GROUP),
-      // SF (secure-framework Tier 3): error documents are framework-rendered HTML with
-      // the same inline loader/hashes, so they carry the strict default-on CSP too. No
-      // route response means no author allowlist here — the plain strict `'self'` policy
-      // (with the non-overridable hardening directives) applies unconditionally.
-      'Content-Security-Policy': renderDefaultDocumentCsp(document.csp),
-      ...renderCspReportingHeaders(
-        {},
-        options.reportingOrigin === undefined ? {} : { endpointOrigin: options.reportingOrigin },
-      ),
-    },
-    status: options.status,
-  };
-}
+    return {
+      body: document.html,
+      headers: {
+        ...document.earlyHints,
+        'Content-Type': 'text/html; charset=utf-8',
+        // CSP-3 (bugs-part3): error documents are HTML responses too; carry the same
+        // baseline security headers as successful documents.
+        'X-Content-Type-Options': 'nosniff',
+        // SPEC §6.6 (runtime defense-in-depth): the same conservative isolation/hardening
+        // baseline as successful documents (X-Frame-Options/COOP/Permissions-Policy/
+        // Referrer-Policy). Error documents have no route response to carry an author
+        // opt-out, so the static baseline applies unconditionally. HSTS is intentionally
+        // omitted here: error documents render without the request's secure context.
+        ...documentIsolationHeaders({}, KOVO_CSP_REPORT_GROUP),
+        // SF (secure-framework Tier 3): error documents are framework-rendered HTML with
+        // the same inline loader/hashes, so they carry the strict default-on CSP too. No
+        // route response means no author allowlist here — the plain strict `'self'` policy
+        // (with the non-overridable hardening directives) applies unconditionally.
+        'Content-Security-Policy': renderDefaultDocumentCsp(document.csp),
+        ...renderCspReportingHeaders(
+          {},
+          options.reportingOrigin === undefined ? {} : { endpointOrigin: options.reportingOrigin },
+        ),
+      },
+      status: options.status,
+    };
+  },
+);
 
 function renderStructuredDocumentShell(
   { parts }: DocumentAssemblyContext,
