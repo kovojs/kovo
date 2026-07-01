@@ -3,6 +3,8 @@ import { existsSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { resolveSiteStaticRequest } from './serve-static.mjs';
+
 /**
  * Link + anchor gate (plan W9): every internal href in the exported site must
  * resolve to a file, and every #fragment must match an id on the target page.
@@ -41,11 +43,12 @@ function pageLinks(html) {
 }
 
 function targetFor(urlPath) {
-  const clean = urlPath.split('?')[0].replace(/^\//, '');
-  if (clean === '') return path.join(distDir, 'index.html');
-  if (clean.endsWith('/')) return path.join(distDir, clean, 'index.html');
-  if (path.extname(clean)) return path.join(distDir, clean);
-  return path.join(distDir, clean, 'index.html');
+  const resolved = resolveSiteStaticRequest({
+    method: 'GET',
+    rawUrl: urlPath,
+    staticRoot: distDir,
+  });
+  return resolved.kind === 'file' && resolved.status === 200 ? resolved.filePath : null;
 }
 
 async function main() {
@@ -76,7 +79,7 @@ async function main() {
       }
 
       const target = urlPath ? targetFor(urlPath) : file;
-      if (!existsSync(target)) {
+      if (!target || !existsSync(target)) {
         failures.push(`${relative}: broken link "${href}"`);
         continue;
       }
@@ -104,7 +107,7 @@ async function main() {
   const llmsFull = await readFile(path.join(distDir, 'llms-full.txt'), 'utf8');
   for (const [, urlPath] of llmsFull.matchAll(/^URL: https:\/\/[^/]+(\/\S*)$/gm)) {
     const target = targetFor(urlPath);
-    if (!existsSync(target)) {
+    if (!target || !existsSync(target)) {
       failures.push(`llms-full.txt: missing canonical URL "${urlPath}"`);
     }
   }

@@ -1,10 +1,8 @@
-import { createServer } from 'node:http';
-import { readFile } from 'node:fs/promises';
-import { existsSync } from 'node:fs';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { chromium } from 'playwright';
+
+import { createSiteStaticServeServer } from './serve-static.mjs';
 
 /**
  * Browser smoke gate (plan W8/W9): against the exported site, prove
@@ -16,23 +14,6 @@ import { chromium } from 'playwright';
  */
 
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
-
-const MIME = {
-  '.css': 'text/css',
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript',
-  '.json': 'application/json',
-  '.md': 'text/markdown',
-  '.txt': 'text/plain',
-};
-
-function fileFor(urlPath) {
-  const clean = decodeURIComponent(urlPath.split('?')[0]).replace(/^\//, '');
-  if (clean === '') return path.join(distDir, 'index.html');
-  if (clean.endsWith('/')) return path.join(distDir, clean, 'index.html');
-  if (path.extname(clean)) return path.join(distDir, clean);
-  return path.join(distDir, clean, 'index.html');
-}
 
 const failures = [];
 
@@ -53,21 +34,13 @@ function isEagerHandlerRequest(pathname) {
   return pathname.startsWith('/c/') || pathname === '/search-index.json';
 }
 
-const server = createServer(async (request, response) => {
-  const file = fileFor(request.url ?? '/');
-  if (!existsSync(file)) {
-    response.writeHead(404, { 'content-type': 'text/plain' });
-    response.end('not found');
-    return;
-  }
-  response.writeHead(200, {
-    'content-type': MIME[path.extname(file)] ?? 'application/octet-stream',
-  });
-  response.end(await readFile(file));
+const served = await createSiteStaticServeServer({
+  host: '127.0.0.1',
+  port: 0,
+  staticRoot: distDir,
+  strictPort: true,
 });
-
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-const origin = `http://127.0.0.1:${server.address().port}`;
+const origin = `http://127.0.0.1:${served.port}`;
 const browser = await chromium.launch();
 
 try {
@@ -292,7 +265,7 @@ try {
   await context.close();
 } finally {
   await browser.close();
-  server.close();
+  await served.close();
 }
 
 if (failures.length > 0) {

@@ -257,6 +257,8 @@ export async function exportSiteStaticApp({
   outDir = defaultDistDir,
   skipPipeline = false,
 } = {}) {
+  const { runExportCommandStructured } =
+    await import('../../packages/cli/src/commands/build-export.js');
   if (!skipPipeline) await runContentPipeline();
   // The export owns the whole static-host directory; clear stale routes/assets
   // so removed pages cannot linger (the W9 link gate would otherwise pass on
@@ -277,36 +279,31 @@ export async function exportSiteStaticApp({
     root: siteRoot,
     server: { hmr: false, middlewareMode: true, watch: null, ws: false },
   });
-  let exportOutput;
   let auxModule;
   let examplesModule;
+  let staticExportResult;
   try {
-    const [{ runKovoCommand }, loadedAuxModule, loadedExamplesModule] = await Promise.all([
-      viteServer.ssrLoadModule('@kovojs/cli'),
+    const [loadedAuxModule, loadedExamplesModule] = await Promise.all([
       viteServer.ssrLoadModule('/src/aux.ts'),
       viteServer.ssrLoadModule('/src/examples.ts'),
     ]);
     auxModule = loadedAuxModule;
     examplesModule = loadedExamplesModule;
-    const exportResult = await captureKovoCommandOutput(() =>
-      runKovoCommand([
-        'export',
-        '/src/app.tsx',
-        '--vite',
-        '--root',
-        siteRoot,
-        '--out',
-        outDir,
-        '--manifest',
-        manifestFile,
-        '--dist',
-        cssDistDir,
-      ]),
-    );
-    if (exportResult.exitCode !== 0) {
-      throw new Error(exportResult.stderr || exportResult.stdout || 'kovo export failed');
+    const exportResult = await runExportCommandStructured({
+      appModulePath: '/src/app.tsx',
+      distDir: cssDistDir,
+      manifestFile,
+      outDir,
+      root: siteRoot,
+      vite: true,
+    });
+    if ('error' in exportResult) {
+      throw new Error(exportResult.error || 'kovo export failed');
     }
-    exportOutput = exportResult.stdout;
+    if (exportResult.exitCode !== 0) {
+      throw new Error(exportResult.output || 'kovo export failed');
+    }
+    staticExportResult = exportResult.staticExport;
   } finally {
     await viteServer.close();
   }
@@ -322,52 +319,7 @@ export async function exportSiteStaticApp({
   await auxModule.emitAuxOutputs(outDir);
   await examplesModule.exportExampleApps(outDir);
 
-  return siteExportResultFromKovoOutput(exportOutput);
-}
-
-async function captureKovoCommandOutput(run) {
-  const stdoutChunks = [];
-  const stderrChunks = [];
-  const stdoutWrite = process.stdout.write.bind(process.stdout);
-  const stderrWrite = process.stderr.write.bind(process.stderr);
-
-  try {
-    process.stdout.write = (chunk) => {
-      stdoutChunks.push(String(chunk));
-      return true;
-    };
-    process.stderr.write = (chunk) => {
-      stderrChunks.push(String(chunk));
-      return true;
-    };
-
-    return {
-      exitCode: await run(),
-      stderr: stderrChunks.join(''),
-      stdout: stdoutChunks.join(''),
-    };
-  } finally {
-    process.stdout.write = stdoutWrite;
-    process.stderr.write = stderrWrite;
-  }
-}
-
-function siteExportResultFromKovoOutput(output) {
-  const count = (prefix) => output.split(/\r?\n/).filter((line) => line.startsWith(prefix)).length;
-  const diagnostics = output
-    .split(/\r?\n/)
-    .filter((line) => line.startsWith('WARN '))
-    .map((line) => ({ code: line.split(/\s+/)[1] ?? 'KV229', message: line, routePath: 'app' }));
-
-  const htmlCount = count('HTML ');
-
-  return {
-    artifacts: Array.from({ length: htmlCount }),
-    assets: Array.from({ length: count('ASSET ') }),
-    clientModules: Array.from({ length: count('CLIENT-MODULE ') }),
-    diagnostics,
-    manifest: { routeDocuments: Array.from({ length: htmlCount }) },
-  };
+  return staticExportResult;
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {
@@ -385,7 +337,7 @@ if (process.argv[1] === fileURLToPath(import.meta.url)) {
         `html=${result.artifacts.length}`,
         `client-modules=${result.clientModules.length}`,
         `assets=${result.assets.length}`,
-        `manifest-html=${result.manifest?.routeDocuments.length ?? 0}`,
+        `manifest-html=${result.artifacts.length}`,
         `diagnostics=${result.diagnostics.length}`,
         '',
       ].join('\n'),

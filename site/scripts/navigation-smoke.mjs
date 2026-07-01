@@ -1,28 +1,11 @@
-import { existsSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
-import { createServer } from 'node:http';
-import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { chromium } from 'playwright';
 
+import { createSiteStaticServeServer, resolveSiteStaticRequest } from './serve-static.mjs';
+
 const distDir = fileURLToPath(new URL('../dist/', import.meta.url));
-
-const MIME = {
-  '.css': 'text/css',
-  '.html': 'text/html; charset=utf-8',
-  '.js': 'text/javascript',
-  '.json': 'application/json',
-  '.woff2': 'font/woff2',
-};
-
-function fileFor(urlPath) {
-  const clean = decodeURIComponent(urlPath.split('?')[0]).replace(/^\//, '');
-  if (clean === '') return path.join(distDir, 'index.html');
-  if (clean.endsWith('/')) return path.join(distDir, clean, 'index.html');
-  if (path.extname(clean)) return path.join(distDir, clean);
-  return path.join(distDir, clean, 'index.html');
-}
 
 const failures = [];
 
@@ -107,15 +90,15 @@ async function assertApiRailState(page, hash, label) {
     await page.waitForFunction(
       (expectedHash) =>
         document
-          .querySelector(`.api-nav li > a:first-child[href="${expectedHash}"]`)
-          ?.classList.contains('active') === true,
+          .querySelector(`[data-api-nav] li > a:first-child[href="${expectedHash}"]`)
+          ?.getAttribute('data-active') === 'true',
       hash,
       { timeout: 1500 },
     );
   } catch {}
   await check(label, () =>
     page.evaluate((expectedHash) => {
-      const nav = document.querySelector('.api-nav');
+      const nav = document.querySelector('[data-api-nav]');
       if (!nav) return false;
       const link = Array.from(nav.querySelectorAll('li > a:first-child')).find(
         (candidate) => candidate.getAttribute('href') === expectedHash,
@@ -142,7 +125,7 @@ async function assertApiRailState(page, hash, label) {
           .every((details) => details.open);
 
       return (
-        link?.classList.contains('active') === true &&
+        link?.getAttribute('data-active') === 'true' &&
         detailsOpen &&
         linkRect !== undefined &&
         linkRect.top >= navRect.top - 1 &&
@@ -173,37 +156,40 @@ async function deepApiRailHashFor(page, path) {
   return page.evaluate(async (urlPath) => {
     const html = await fetch(urlPath).then((response) => response.text());
     const doc = new DOMParser().parseFromString(html, 'text/html');
-    const links = Array.from(doc.querySelectorAll('.api-nav li > a:first-child'));
+    const links = Array.from(doc.querySelectorAll('[data-api-nav] li > a:first-child'));
     return links.at(-1)?.getAttribute('href');
   }, path);
 }
 
-const server = createServer(async (request, response) => {
-  if (request.url?.startsWith('/__kovo-smoke-build-mismatch/')) {
-    const html = await readFile(path.join(distDir, 'index.html'), 'utf8');
+const served = await createSiteStaticServeServer({
+  host: '127.0.0.1',
+  onRequest: async ({ rawUrl, response, staticRoot }) => {
+    if (!rawUrl.startsWith('/__kovo-smoke-build-mismatch/')) return false;
+
+    const rootDocument = resolveSiteStaticRequest({
+      method: 'GET',
+      rawUrl: '/',
+      staticRoot,
+    });
+    if (rootDocument.kind !== 'file' || rootDocument.status !== 200) {
+      throw new Error(
+        'navigation smoke: expected the site root document to resolve for the build-mismatch fixture.',
+      );
+    }
+    const html = await readFile(rootDocument.filePath, 'utf8');
     const mismatched = html.replace(
       /<meta name="kovo-build" content="[^"]*">/,
       '<meta name="kovo-build" content="smoke-build-mismatch">',
     );
     response.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });
     response.end(mismatched);
-    return;
-  }
-
-  const file = fileFor(request.url ?? '/');
-  if (!existsSync(file)) {
-    response.writeHead(404, { 'content-type': 'text/plain' });
-    response.end('not found');
-    return;
-  }
-  response.writeHead(200, {
-    'content-type': MIME[path.extname(file)] ?? 'application/octet-stream',
-  });
-  response.end(await readFile(file));
+    return true;
+  },
+  port: 0,
+  staticRoot: distDir,
+  strictPort: true,
 });
-
-await new Promise((resolve) => server.listen(0, '127.0.0.1', resolve));
-const origin = `http://127.0.0.1:${server.address().port}`;
+const origin = `http://127.0.0.1:${served.port}`;
 const browser = await chromium.launch();
 
 try {
@@ -219,7 +205,7 @@ try {
   );
   await assertEnhancedClick(
     page,
-    () => page.click('.site-nav a[href="/reference/"]'),
+    () => page.click('a[href="/reference/"]'),
     '/reference/',
     'docs reference click',
   );
@@ -233,7 +219,7 @@ try {
   );
   await assertEnhancedClick(
     page,
-    () => page.click('.site-nav a[href="/getting-started/why-kovo/"]'),
+    () => page.click('a[href="/getting-started/why-kovo/"]'),
     '/getting-started/why-kovo/',
     'docs page click',
   );
@@ -241,7 +227,7 @@ try {
 
   await page.goto(`${origin}/api/core/`, { waitUntil: 'networkidle' });
   await installNavigationProbe(page);
-  const railLink = page.locator('.api-nav li > a:first-child').nth(10);
+  const railLink = page.locator('[data-api-nav] li > a:first-child').nth(10);
   const hash = await railLink.getAttribute('href');
   if (!hash) {
     failures.push('API rail exposes a symbol hash');
@@ -298,7 +284,7 @@ try {
       'cross-page API rail reinitializes active symbol, details, and rail scroll',
     );
 
-    await page.click('.site-nav a[href="/getting-started/why-kovo/"]');
+    await page.click('a[href="/getting-started/why-kovo/"]');
     await page.waitForFunction(() => location.pathname === '/getting-started/why-kovo/');
     await installNavigationProbe(page);
     await page.evaluate((targetHash) => {
@@ -328,7 +314,7 @@ try {
     );
 
     const apiScroll = await page.evaluate(() => window.scrollY);
-    await page.click('.site-nav a[href="/getting-started/why-kovo/"]');
+    await page.click('a[href="/getting-started/why-kovo/"]');
     await page.waitForFunction(() => location.pathname === '/getting-started/why-kovo/');
     const docsScroll = await page.evaluate(() => {
       window.scrollTo(0, 220);
@@ -427,7 +413,7 @@ try {
   }
 } finally {
   await browser.close();
-  server.close();
+  await served.close();
 }
 
 if (failures.length > 0) {

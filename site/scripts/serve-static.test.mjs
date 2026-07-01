@@ -4,7 +4,7 @@ import path from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { createSiteStaticServeServer } from './serve-static.mjs';
+import { createSiteStaticServeServer, resolveSiteStaticRequest } from './serve-static.mjs';
 
 const roots = [];
 const servers = [];
@@ -53,6 +53,57 @@ describe('site static Cloud Run server', () => {
     expect(module.status).toBe(200);
     expect(module.headers.get('cache-control')).toBe('public, max-age=31536000, immutable');
     expect(await module.text()).toBe('export {};');
+  });
+
+  it('resolves export paths through the shared request resolver', async () => {
+    const root = await createStaticRoot();
+
+    expect(
+      resolveSiteStaticRequest({ method: 'GET', rawUrl: '/getting-started', staticRoot: root }),
+    ).toMatchObject({
+      filePath: path.join(root, 'getting-started', 'index.html'),
+      kind: 'file',
+      requestPath: '/getting-started',
+      responsePath: '/getting-started',
+      status: 200,
+    });
+    expect(
+      resolveSiteStaticRequest({ method: 'GET', rawUrl: '/missing', staticRoot: root }),
+    ).toMatchObject({
+      filePath: path.join(root, '404.html'),
+      kind: 'file',
+      requestPath: '/missing',
+      responsePath: '/404.html',
+      status: 404,
+    });
+    expect(
+      resolveSiteStaticRequest({ method: 'POST', rawUrl: '/', staticRoot: root }),
+    ).toMatchObject({
+      body: 'Method not allowed for static docs.\n',
+      kind: 'text',
+      status: 405,
+    });
+  });
+
+  it('lets smoke fixtures intercept requests before the shared static server', async () => {
+    const root = await createStaticRoot();
+    const served = await createSiteStaticServeServer({
+      host: '127.0.0.1',
+      onRequest: async ({ rawUrl, response }) => {
+        if (rawUrl !== '/fixture') return false;
+        response.writeHead(200, { 'content-type': 'text/plain; charset=utf-8' });
+        response.end('fixture');
+        return true;
+      },
+      port: 0,
+      staticRoot: root,
+      strictPort: true,
+    });
+    servers.push(served);
+
+    const origin = `http://127.0.0.1:${served.port}`;
+    expect(await fetch(`${origin}/fixture`).then((result) => result.text())).toBe('fixture');
+    expect((await fetch(`${origin}/getting-started`)).status).toBe(200);
   });
 });
 
