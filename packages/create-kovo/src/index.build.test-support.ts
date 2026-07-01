@@ -564,6 +564,72 @@ export function addInternalHtmlImportProof(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
+export function addTrustedOutputProvenanceBuildProof(root: string): void {
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    '/** @jsxImportSource @kovojs/server */\nimport {',
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { trustedHtml, trustedUrl } from '@kovojs/browser';",
+      "import { component } from '@kovojs/core';",
+      'import {',
+    ].join('\n'),
+    'trusted output proof imports',
+  );
+  app = replaceRequired(
+    app,
+    "import { contactsQuery } from './queries.js';",
+    "import { contactsQuery, type ContactListResult } from './queries.js';",
+    'trusted output proof query type import',
+  );
+  app = replaceRequired(
+    app,
+    ['function HomePage({ request }: { request: AppRequest }): string {', '  return ('].join('\n'),
+    [
+      'const TrustedOutputProvenanceProof = component({',
+      '  queries: { contacts: contactsQuery },',
+      '  render: (',
+      '    data: { contacts: ContactListResult },',
+      '    _state,',
+      '    slots: { request?: AppRequest },',
+      '  ) => (',
+      '    <main data-proof="trusted-output-provenance">',
+      '      <a href={trustedUrl(data.contacts.items.map((contact) => contact.email).join(""))}>',
+      '        Unsafe URL',
+      '      </a>',
+      '      {trustedHtml(slots.request?.headers.get("x-proof") ?? "")}',
+      '    </main>',
+      '  ),',
+      '});',
+      '',
+      'function HomePage({ request }: { request: AppRequest }): string {',
+      '  return (',
+    ].join('\n'),
+    'trusted output proof component',
+  );
+  app = replaceRequired(
+    app,
+    "  routes: [\n    route('/', {",
+    [
+      '  routes: [',
+      "    route('/trusted-output-provenance-proof', {",
+      "      access: publicAccess('public trusted output provenance build proof'),",
+      "      meta: { title: 'Trusted output provenance proof' },",
+      '      layout: AppLayout,',
+      '      stylesheets,',
+      '      page() {',
+      '        return <TrustedOutputProvenanceProof />;',
+      '      },',
+      '    }),',
+      "    route('/', {",
+    ].join('\n'),
+    'trusted output proof route',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export function addEscapedAttackerTextProof(root: string): void {
   writeFileSync(
     join(root, 'src/raw-helper.ts'),

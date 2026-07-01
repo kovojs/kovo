@@ -88,6 +88,7 @@ interface ClassifyContext {
   readonly queryBindings: ReadonlySet<string>;
   readonly queryDataRoots: ReadonlyMap<string, ReadonlySet<string>>;
   readonly requestBindings: ReadonlySet<string>;
+  readonly requestSlotRoots: ReadonlySet<string>;
   readonly depth: number;
   readonly visited: Set<ts.Node>;
 }
@@ -96,26 +97,13 @@ interface RenderProvenanceBindings {
   readonly queryBindings: ReadonlySet<string>;
   readonly queryDataRoots: ReadonlyMap<string, ReadonlySet<string>>;
   readonly requestBindings: ReadonlySet<string>;
+  readonly requestSlotRoots: ReadonlySet<string>;
 }
 
 const MAX_ALIAS_DEPTH = 6;
 
 /** Conventional request-derived root identifier (the mutation/form input object; KV438 source set). */
 const REQUEST_INPUT_IDENTIFIER = 'input';
-/** Request accessor roots and their first-segment members (SPEC §11.1 request-derived source set). */
-const REQUEST_ACCESSOR_ROOTS = new Set(['req', 'request']);
-const REQUEST_ACCESSORS = new Set([
-  'body',
-  'cookies',
-  'formData',
-  'headers',
-  'json',
-  'params',
-  'query',
-  'search',
-  'text',
-  'url',
-]);
 const AUDITED_REASON_PROPERTY = 'reason';
 const COMPONENT_FACTORY_NAME = 'component';
 const CORE_MODULE_SPECIFIER = '@kovojs/core';
@@ -229,7 +217,11 @@ function classifyExpression(
         classifyExpression(arg, { ...ctx, visited: new Set(ctx.visited) }),
       ),
     );
-    return argumentProvenance ?? 'unprovable';
+    const calleeProvenance = classifyExpression(expr.expression, {
+      ...ctx,
+      visited: new Set(ctx.visited),
+    });
+    return firstProvenance([argumentProvenance, calleeProvenance]) ?? 'unprovable';
   }
   if (ts.isArrayLiteralExpression(expr)) {
     return firstProvenance(
@@ -317,21 +309,11 @@ function classifyMemberRoot(
   }
 
   if (ts.isIdentifier(cursor)) {
-    // `req.params.id` / `request.body.html`: request-derived when the root is an unshadowed request
-    // accessor and the first member is a request channel.
-    if (
-      ctx.requestBindings.has(cursor.text) &&
-      firstMember !== undefined &&
-      REQUEST_ACCESSORS.has(firstMember)
-    ) {
-      return 'request';
-    }
-    if (
-      REQUEST_ACCESSOR_ROOTS.has(cursor.text) &&
-      firstMember !== undefined &&
-      REQUEST_ACCESSORS.has(firstMember) &&
-      !hasLocalBinding(cursor, cursor.text)
-    ) {
+    // The component render request reaches authored code only as the `request` slot on the third
+    // render parameter. Track that parameter by position, then require its `request` property by
+    // symbol/AST shape; a random in-scope value named `request` is not proof of request provenance.
+    if (ctx.requestBindings.has(cursor.text)) return 'request';
+    if (ctx.requestSlotRoots.has(cursor.text) && firstMember === 'request') {
       return 'request';
     }
     const queryRootKeys = ctx.queryDataRoots.get(cursor.text);
@@ -645,6 +627,7 @@ function collectRenderProvenanceBindings(
   const bindings = new Set<string>();
   const queryDataRoots = new Map<string, ReadonlySet<string>>();
   const requestBindings = new Set<string>();
+  const requestSlotRoots = new Set<string>();
 
   if (dataParam !== undefined && queryKeys.size > 0) {
     if (ts.isObjectBindingPattern(dataParam.name)) {
@@ -663,28 +646,43 @@ function collectRenderProvenanceBindings(
     }
   }
 
-  collectRenderRequestBindings(render.parameters[2], requestBindings);
+  collectRenderRequestBindings(render.parameters[2], requestBindings, requestSlotRoots);
 
-  if (bindings.size > 0 || queryDataRoots.size > 0 || requestBindings.size > 0) {
-    byRender.set(render, { queryBindings: bindings, queryDataRoots, requestBindings });
+  if (
+    bindings.size > 0 ||
+    queryDataRoots.size > 0 ||
+    requestBindings.size > 0 ||
+    requestSlotRoots.size > 0
+  ) {
+    byRender.set(render, {
+      queryBindings: bindings,
+      queryDataRoots,
+      requestBindings,
+      requestSlotRoots,
+    });
   }
 }
 
 function collectRenderRequestBindings(
-  requestParam: ts.ParameterDeclaration | undefined,
+  slotsParam: ts.ParameterDeclaration | undefined,
   bindings: Set<string>,
+  slotRoots: Set<string>,
 ): void {
-  if (requestParam === undefined) return;
-  if (ts.isIdentifier(requestParam.name)) {
-    bindings.add(requestParam.name.text);
+  if (slotsParam === undefined) return;
+  if (ts.isIdentifier(slotsParam.name)) {
+    slotRoots.add(slotsParam.name.text);
     return;
   }
-  if (!ts.isObjectBindingPattern(requestParam.name)) return;
+  if (!ts.isObjectBindingPattern(slotsParam.name)) return;
 
-  for (const element of requestParam.name.elements) {
-    const sourceName = element.propertyName ?? element.name;
-    if (!ts.isIdentifier(sourceName)) continue;
-    if (identifierName(sourceName) !== 'request') continue;
+  for (const element of slotsParam.name.elements) {
+    const sourceName =
+      element.propertyName !== undefined
+        ? propertyNameText(element.propertyName)
+        : ts.isIdentifier(element.name)
+          ? identifierName(element.name)
+          : null;
+    if (sourceName !== 'request') continue;
 
     if (ts.isIdentifier(element.name)) {
       bindings.add(identifierName(element.name));
@@ -761,6 +759,7 @@ const EMPTY_RENDER_BINDINGS: RenderProvenanceBindings = {
   queryBindings: EMPTY_BINDINGS,
   queryDataRoots: EMPTY_QUERY_DATA_ROOTS,
   requestBindings: EMPTY_BINDINGS,
+  requestSlotRoots: EMPTY_BINDINGS,
 };
 
 function rawTrustProvenanceDiagnostic(

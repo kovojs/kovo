@@ -22,6 +22,7 @@ import {
   addInternalHtmlImportProof,
   addNoJsFailureProof,
   addStorageQueryWriteProof,
+  addTrustedOutputProvenanceBuildProof,
   attributeValue,
   buildProductionArtifact,
   execFileSyncErrorOutput,
@@ -95,6 +96,30 @@ describe('create-kovo starter (build integration: production security artifacts)
         expect(output).toContain('KV433');
         expect(output).toContain('storage-write-query');
         expect(output).toContain('operation=put');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('blocks trusted output provenance leaks through the production build artifact', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-trusted-output-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod Trusted Output Proof' });
+      linkStarterBuildDependencies(root);
+      addTrustedOutputProvenanceBuildProof(root);
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail with KV426.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('KV426');
+        expect(output).toContain('trustedUrl() sends query-derived data');
+        expect(output).toContain('trustedHtml() sends request-derived data');
       }
     } finally {
       rmSync(root, { force: true, recursive: true });
