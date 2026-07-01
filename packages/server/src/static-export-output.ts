@@ -1,7 +1,7 @@
-import { constants as fsConstants, type Dirent } from 'node:fs';
-import { access, lstat, mkdir, readdir, rm, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import {
   staticExportOutputTargets,
@@ -177,7 +177,9 @@ async function pruneStaleStaticExportRouteDocuments(plan: StaticExportOutputPlan
     if (!ownedIndexHtmlDocuments.has(indexHtmlPath)) {
       // Remove only the stale directory-index document; leave any sibling files (assets the export
       // does not own a manifest for, user-managed files) untouched.
-      await rm(indexHtmlPath, { force: true });
+      const fileSystem = createFrameworkOutputFileSystemBoundary(plan.root);
+      const relativePath = path.relative(plan.root, indexHtmlPath);
+      await fileSystem.deleteFile(relativePath);
     }
   }
 }
@@ -191,23 +193,17 @@ async function* enumerateStaticExportRouteDocuments(
   root: string,
   clientModuleRoot: string,
 ): AsyncGenerator<string> {
-  let entries: Dirent[];
-  try {
-    entries = await readdir(root, { withFileTypes: true });
-  } catch {
-    return;
-  }
-
-  for (const entry of entries) {
-    const entryPath = path.join(root, entry.name);
-    if (entry.isDirectory()) {
+  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+  for await (const entry of fileSystem.entries('.')) {
+    const entryPath = path.join(root, entry.relativePath);
+    if (entry.kind === 'directory') {
       // `/c/` holds immutable versioned client modules — never descend (SPEC §14 retention).
       if (entryPath === clientModuleRoot) continue;
       yield* enumerateStaticExportRouteDocuments(entryPath, clientModuleRoot);
       continue;
     }
 
-    if (entry.isFile() && entry.name === 'index.html') {
+    if (entry.kind === 'file' && entry.name === 'index.html') {
       yield entryPath;
     }
   }
@@ -370,30 +366,9 @@ function appendStaticExportHeaderPolicyStanza(
 async function assertReadableStaticExportAssetSource(
   artifact: StaticExportAssetArtifact,
 ): Promise<void> {
-  let sourceStat: Awaited<ReturnType<typeof stat>>;
-  try {
-    sourceStat = await stat(artifact.source);
-  } catch {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        artifact.path,
-        `KV229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a readable file.`,
-      ),
-    ]);
-  }
-
-  if (!sourceStat.isFile()) {
-    throw new StaticExportError([
-      staticExportDiagnostic(
-        artifact.path,
-        `KV229 static export cannot copy static asset '${artifact.path}' because source '${artifact.source}' is not a file.`,
-      ),
-    ]);
-  }
-
-  try {
-    await access(artifact.source, fsConstants.R_OK);
-  } catch {
+  const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(artifact.source));
+  const sourceStat = await fileSystem.statFile(path.basename(artifact.source));
+  if (sourceStat === undefined) {
     throw new StaticExportError([
       staticExportDiagnostic(
         artifact.path,
@@ -424,22 +399,17 @@ function staticExportArtifactOutputEntry(write: StaticExportPlannedWrite): Artif
 }
 
 async function assertStaticExportOutputRoot(root: string): Promise<void> {
-  let rootStat: Awaited<ReturnType<typeof lstat>>;
+  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
   try {
-    rootStat = await lstat(root);
+    await fileSystem.ensureDirectory();
   } catch {
-    await mkdir(root, { recursive: true });
-    rootStat = await lstat(root);
+    throw new StaticExportError([
+      staticExportDiagnostic(
+        root,
+        `KV229 static export cannot write output because output root '${root}' is not a directory.`,
+      ),
+    ]);
   }
-
-  if (rootStat.isDirectory()) return;
-
-  throw new StaticExportError([
-    staticExportDiagnostic(
-      root,
-      `KV229 static export cannot write output because output root '${root}' is not a directory.`,
-    ),
-  ]);
 }
 
 function staticExportAssetHeaders(asset: StaticExportAssetInput): Record<string, string> {

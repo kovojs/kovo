@@ -1,6 +1,7 @@
-import { readFile, stat } from 'node:fs/promises';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
+
+import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import type { KovoApp } from './app-types.js';
 import { isKovoApp } from './app-guards.js';
@@ -193,7 +194,7 @@ async function stylesheetReferencedStaticAssetPaths(
 
     let css: string;
     try {
-      css = await readFile(source, 'utf8');
+      css = await readFrameworkTextFile(source);
     } catch {
       continue;
     }
@@ -295,8 +296,8 @@ function staticExportPublicAssetSource(root: string, base: string, hrefPath: str
     decodedPathname = sourcePathname;
   }
 
-  const source = path.resolve(root, `.${decodedPathname}`);
-  if (source === root || source.startsWith(`${root}${path.sep}`)) return source;
+  const source = createFrameworkOutputFileSystemBoundary(root).confinedPath(`.${decodedPathname}`);
+  if (source !== undefined && source !== root) return source;
 
   throw new StaticExportError([
     staticExportDiagnostic(
@@ -327,11 +328,17 @@ function staticExportPublicAssetRoot(root: string | URL): string {
 }
 
 async function readableFileExists(source: string): Promise<boolean> {
-  try {
-    return (await stat(source)).isFile();
-  } catch {
-    return false;
-  }
+  const root = path.dirname(source);
+  return createFrameworkOutputFileSystemBoundary(root).fileExists(path.basename(source));
+}
+
+async function readFrameworkTextFile(source: string): Promise<string> {
+  const root = path.dirname(source);
+  const bytes = await createFrameworkOutputFileSystemBoundary(root).fileBytes(
+    path.basename(source),
+  );
+  if (bytes === undefined) throw new Error(`File '${source}' was not found.`);
+  return new TextDecoder().decode(bytes);
 }
 
 function assertStaticExportAppAggregate(app: KovoApp): void {

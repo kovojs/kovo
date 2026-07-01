@@ -1,17 +1,10 @@
 import { createHash } from 'node:crypto';
-import { constants as fsConstants } from 'node:fs';
-import {
-  access,
-  copyFile,
-  lstat,
-  mkdir,
-  mkdtemp,
-  readFile,
-  rename,
-  rm,
-  writeFile,
-} from 'node:fs/promises';
 import * as path from 'node:path';
+
+import {
+  createFrameworkOutputFileSystemBoundary,
+  pathRelativeToRoot,
+} from '@kovojs/core/internal/filesystem';
 
 /**
  * @internal Manifest-backed artifact staging primitive for build/export output (SPEC.md §9.5).
@@ -91,6 +84,7 @@ export async function writeArtifactOutput(
 ): Promise<WriteArtifactOutputResult> {
   const mode = options.mode ?? 'write';
   const resolvedRoot = path.resolve(root);
+  const fileSystem = createFrameworkOutputFileSystemBoundary(resolvedRoot);
   const manifest = await artifactOutputManifest(resolvedRoot, entries, options.diagnostics);
   const changed = mode === 'dry-run' ? [] : await changedArtifactOutputEntries(manifest);
   const stale = options.cleanup
@@ -114,24 +108,27 @@ export async function writeArtifactOutput(
 
   await assertArtifactOutputRoot(resolvedRoot, options.diagnostics);
   if (manifest.length > 0) {
-    const stagingRoot = await createArtifactOutputStagingRoot(resolvedRoot, options.stagingPrefix);
+    const stagingRoot = await fileSystem.createStagingRoot(options.stagingPrefix);
+    const stagingFileSystem = createFrameworkOutputFileSystemBoundary(stagingRoot);
     try {
       await Promise.all(
         entries.map((entry, index) =>
           writeStagedArtifactOutput(
             entry,
-            artifactOutputStagedPath(resolvedRoot, stagingRoot, manifest[index]!.targetPath),
+            path.relative(resolvedRoot, manifest[index]!.targetPath),
+            stagingFileSystem,
           ),
         ),
       );
       await validateArtifactOutputTargets(resolvedRoot, entries, manifest, options.diagnostics);
       await commitArtifactOutput(resolvedRoot, stagingRoot, manifest);
     } finally {
-      await rm(stagingRoot, { force: true, recursive: true });
+      await stagingFileSystem.removeTree();
     }
   }
   for (const stalePath of stale) {
-    await rm(stalePath, { force: true });
+    const relativePath = pathRelativeToRoot(resolvedRoot, stalePath);
+    if (relativePath !== undefined) await fileSystem.deleteFile(relativePath);
   }
   return { changed, manifest, mode, stale };
 }
@@ -191,15 +188,12 @@ async function assertArtifactOutputRoot(
   root: string,
   diagnostics?: ArtifactOutputDiagnostics,
 ): Promise<void> {
-  let rootStat: Awaited<ReturnType<typeof lstat>>;
+  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
   try {
-    rootStat = await lstat(root);
+    await fileSystem.ensureDirectory();
   } catch {
-    await mkdir(root, { recursive: true });
-    rootStat = await lstat(root);
+    throw rootError(root, `output root '${root}' is not a directory`, diagnostics);
   }
-  if (rootStat.isDirectory() && !rootStat.isSymbolicLink()) return;
-  throw rootError(root, `output root '${root}' is not a directory`, diagnostics);
 }
 
 async function changedArtifactOutputEntries(
@@ -207,12 +201,13 @@ async function changedArtifactOutputEntries(
 ): Promise<ArtifactOutputManifestEntry[]> {
   const changed: ArtifactOutputManifestEntry[] = [];
   for (const entry of manifest) {
-    try {
-      const current = await readFile(entry.targetPath);
-      if (sha256(current) !== entry.hash) changed.push(entry);
-    } catch {
+    const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(entry.targetPath));
+    const current = await fileSystem.fileBytes(path.basename(entry.targetPath));
+    if (current === undefined) {
       changed.push(entry);
+      continue;
     }
+    if (sha256(current) !== entry.hash) changed.push(entry);
   }
   return changed;
 }
@@ -226,8 +221,7 @@ async function staleArtifactOutputPaths(
   const stale: string[] = [];
   for await (const candidate of cleanup.enumerate(root)) {
     const resolved = path.resolve(candidate);
-    const relativePath = path.relative(root, resolved);
-    if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) continue;
+    if (pathRelativeToRoot(root, resolved) === undefined) continue;
     if (!owned.has(resolved)) stale.push(resolved);
   }
   return stale;
@@ -235,19 +229,14 @@ async function staleArtifactOutputPaths(
 
 async function writeStagedArtifactOutput(
   entry: ArtifactOutputEntry,
-  targetPath: string,
+  relativePath: string,
+  fileSystem: ReturnType<typeof createFrameworkOutputFileSystemBoundary>,
 ): Promise<void> {
-  await mkdir(path.dirname(targetPath), { recursive: true });
   if (entry.sourcePath !== undefined) {
-    await access(entry.sourcePath, fsConstants.R_OK);
-    await copyFile(entry.sourcePath, targetPath);
+    await fileSystem.copyFile(entry.sourcePath, relativePath);
     return;
   }
-  await writeFile(
-    targetPath,
-    entry.content!,
-    typeof entry.content === 'string' ? 'utf8' : undefined,
-  );
+  await fileSystem.writeFile(relativePath, entry.content!);
 }
 
 async function validateArtifactOutputTargets(
@@ -269,9 +258,13 @@ async function commitArtifactOutput(
   stagingRoot: string,
   manifest: readonly ArtifactOutputManifestEntry[],
 ): Promise<void> {
+  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
   for (const entry of manifest) {
-    await mkdir(path.dirname(entry.targetPath), { recursive: true });
-    await rename(artifactOutputStagedPath(root, stagingRoot, entry.targetPath), entry.targetPath);
+    const relativePath = path.relative(root, entry.targetPath);
+    await fileSystem.renameFrom(
+      artifactOutputStagedPath(root, stagingRoot, entry.targetPath),
+      relativePath,
+    );
   }
 }
 
@@ -281,23 +274,13 @@ async function assertArtifactOutputParents(
   targetPath: string,
   diagnostics?: ArtifactOutputDiagnostics,
 ): Promise<void> {
-  const relativeDirectory = path.relative(root, path.dirname(targetPath));
-  const segments = relativeDirectory === '' ? [] : relativeDirectory.split(path.sep);
-  let current = root;
-  for (const segment of segments) {
-    current = path.join(current, segment);
-    let parentStat: Awaited<ReturnType<typeof lstat>>;
-    try {
-      parentStat = await lstat(current);
-    } catch {
-      continue;
-    }
-    if (parentStat.isSymbolicLink()) {
-      throw targetError(entry, `output parent '${current}' is a symbolic link`, diagnostics);
-    }
-    if (!parentStat.isDirectory()) {
-      throw targetError(entry, `output parent '${current}' is not a directory`, diagnostics);
-    }
+  const fileSystem = createFrameworkOutputFileSystemBoundary(root);
+  try {
+    await fileSystem.validateFileTarget(path.relative(root, targetPath));
+  } catch (error) {
+    const rawMessage = error instanceof Error ? error.message : String(error);
+    const message = rawMessage.replace(/^Filesystem parent/u, 'output parent');
+    throw targetError(entry, message, diagnostics);
   }
 }
 
@@ -306,22 +289,12 @@ async function assertArtifactOutputTargetIsNotDirectory(
   targetPath: string,
   diagnostics?: ArtifactOutputDiagnostics,
 ): Promise<void> {
-  let targetStat: Awaited<ReturnType<typeof lstat>>;
+  const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(targetPath));
   try {
-    targetStat = await lstat(targetPath);
+    await fileSystem.validateFileTarget(path.basename(targetPath));
   } catch {
-    return;
+    throw targetError(entry, `target '${targetPath}' is a directory`, diagnostics);
   }
-  if (!targetStat.isDirectory()) return;
-  throw targetError(entry, `target '${targetPath}' is a directory`, diagnostics);
-}
-
-async function createArtifactOutputStagingRoot(
-  root: string,
-  prefix = '.kovo-output-staging-',
-): Promise<string> {
-  await mkdir(path.dirname(root), { recursive: true });
-  return await mkdtemp(path.join(path.dirname(root), prefix));
 }
 
 function artifactOutputStagedPath(root: string, stagingRoot: string, targetPath: string): string {
@@ -329,7 +302,13 @@ function artifactOutputStagedPath(root: string, stagingRoot: string, targetPath:
 }
 
 async function artifactOutputHash(entry: ArtifactOutputEntry): Promise<string> {
-  if (entry.sourcePath !== undefined) return sha256(await readFile(entry.sourcePath));
+  if (entry.sourcePath !== undefined) {
+    const fileSystem = createFrameworkOutputFileSystemBoundary(path.dirname(entry.sourcePath));
+    const bytes = await fileSystem.fileBytes(path.basename(entry.sourcePath));
+    if (bytes === undefined)
+      throw new Error(`Artifact source '${entry.sourcePath}' was not found.`);
+    return sha256(bytes);
+  }
   return sha256(entry.content!);
 }
 

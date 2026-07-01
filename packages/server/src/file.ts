@@ -1,7 +1,8 @@
-import { constants } from 'node:fs';
-import { open, realpath } from 'node:fs/promises';
-import { basename, isAbsolute, resolve, sep } from 'node:path';
-
+import {
+  createFrameworkFileSystemBoundary,
+  isFrameworkFileSystemBoundary,
+  type FrameworkFileSystemBoundary,
+} from '@kovojs/core/internal/filesystem';
 import { blessSink, isBlessedSink } from '@kovojs/core/internal/sink-policy';
 
 import { respond, type RouteResponseOutcome, type RouteStreamOptions } from './response.js';
@@ -37,10 +38,10 @@ export interface RootedFiles {
  * not-found outcomes so callers do not branch on filesystem internals.
  */
 export async function rootedFiles(root: string): Promise<RootedFiles> {
-  const realRoot = await realpath(root);
+  const fileSystem = await createFrameworkFileSystemBoundary(root);
   const capability: RootedFiles = {
-    root: realRoot,
-    serve: (path, options) => serveRootedFile(realRoot, path, options),
+    root: fileSystem.root,
+    serve: (path, options) => serveRootedFile(fileSystem, path, options),
   };
   return blessSink<RootedFileServeSink, RootedFiles>(
     ROOTED_FILE_SERVE_SINK,
@@ -56,71 +57,15 @@ export function isRootedFileServeCapability(value: unknown): value is RootedFile
 }
 
 async function serveRootedFile(
-  realRoot: string,
+  fileSystem: FrameworkFileSystemBoundary,
   requestedPath: string,
   options: RootedFileServeOptions,
 ): Promise<RouteResponseOutcome | undefined> {
-  const candidate = rootedCandidate(realRoot, requestedPath);
-  if (candidate === undefined) return undefined;
-
-  const resolved = await safeRealpath(candidate);
-  if (resolved === undefined || !containsPath(realRoot, resolved)) return undefined;
-
-  const handle = await safeOpen(resolved);
-  if (handle === undefined) return undefined;
-
-  try {
-    const [stat, postOpenResolved] = await Promise.all([handle.stat(), safeRealpath(resolved)]);
-    if (
-      !stat.isFile() ||
-      postOpenResolved === undefined ||
-      !containsPath(realRoot, postOpenResolved)
-    ) {
-      return undefined;
-    }
-
-    const body = await handle.readFile();
-    return respond.stream(body, {
-      ...options,
-      filename: options.filename ?? basename(postOpenResolved),
-    });
-  } finally {
-    await handle.close();
-  }
-}
-
-function rootedCandidate(realRoot: string, requestedPath: string): string | undefined {
-  if (requestedPath.includes('\0') || isAbsolute(requestedPath)) return undefined;
-  const candidate = resolve(realRoot, requestedPath);
-  return containsPath(realRoot, candidate) ? candidate : undefined;
-}
-
-function containsPath(root: string, target: string): boolean {
-  return target === root || target.startsWith(`${root}${sep}`);
-}
-
-async function safeRealpath(path: string): Promise<string | undefined> {
-  try {
-    return await realpath(path);
-  } catch (error) {
-    if (isMissingPathError(error)) return undefined;
-    throw error;
-  }
-}
-
-async function safeOpen(path: string) {
-  try {
-    return await open(path, constants.O_RDONLY);
-  } catch (error) {
-    if (isMissingPathError(error)) return undefined;
-    throw error;
-  }
-}
-
-function isMissingPathError(error: unknown): boolean {
-  return (
-    error instanceof Error &&
-    'code' in error &&
-    (error.code === 'ENOENT' || error.code === 'ENOTDIR' || error.code === 'ELOOP')
-  );
+  if (!isFrameworkFileSystemBoundary(fileSystem)) return undefined;
+  const file = await fileSystem.readFile(requestedPath);
+  if (file === undefined || !(file.body instanceof Uint8Array)) return undefined;
+  return respond.stream(file.body, {
+    ...options,
+    filename: options.filename ?? file.fileName,
+  });
 }
