@@ -23,6 +23,7 @@ import {
   addNoJsFailureProof,
   addStorageQueryWriteProof,
   addTrustedOutputProvenanceBuildProof,
+  addTrustedUrlAttributeTypeGateProof,
   attributeValue,
   buildProductionArtifact,
   execFileSyncErrorOutput,
@@ -120,6 +121,29 @@ describe('create-kovo starter (build integration: production security artifacts)
         expect(output).toContain('KV426');
         expect(output).toContain('trustedUrl() sends query-derived data');
         expect(output).toContain('trustedHtml() sends request-derived data');
+      }
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 120_000);
+
+  it('blocks TrustedUrl values in non-URL JSX attributes during production build', () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-trusted-url-attribute-'));
+
+    try {
+      writeKovoProject(root, { name: 'Prod TrustedUrl Attribute Proof' });
+      linkStarterBuildDependencies(root);
+      addTrustedUrlAttributeTypeGateProof(root);
+
+      try {
+        buildProductionArtifact(root);
+        throw new Error('Expected kovo build --no-cache to fail on TrustedUrl attribute typing.');
+      } catch (error) {
+        const output = execFileSyncErrorOutput(error);
+        expect(output).toContain('TrustedUrl');
+        expect(output).toContain('AttributeValue');
       }
     } finally {
       rmSync(root, { force: true, recursive: true });

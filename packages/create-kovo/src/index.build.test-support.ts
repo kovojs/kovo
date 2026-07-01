@@ -630,6 +630,31 @@ export function addTrustedOutputProvenanceBuildProof(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
+export function addTrustedUrlAttributeTypeGateProof(root: string): void {
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    '/** @jsxImportSource @kovojs/server */\nimport {',
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { trustedUrl } from '@kovojs/browser';",
+      'import {',
+    ].join('\n'),
+    'trusted URL attribute type-gate import',
+  );
+  app = replaceRequired(
+    app,
+    '      <ContactsRegion />',
+    [
+      '      <span title={trustedUrl("/reviewed-non-url-attribute")}>type gate proof</span>',
+      '      <ContactsRegion />',
+    ].join('\n'),
+    'trusted URL non-URL attribute proof',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export function addEscapedAttackerTextProof(root: string): void {
   writeFileSync(
     join(root, 'src/raw-helper.ts'),

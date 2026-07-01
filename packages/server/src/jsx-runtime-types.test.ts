@@ -69,6 +69,8 @@ const raw = <section html={trustedHtml('<em>safe</em>')} />;
 const trustedHref = <a href={trustedUrl('/safe')}>Safe</a>;
 const typedTrustedHref: TrustedUrl = trustedUrl('/typed-safe');
 const trustedTypedHref = <a href={typedTrustedHref}>Typed safe</a>;
+const trustedFormAction = <button formaction={trustedUrl('javascript:reviewed()')}>Go</button>;
+const trustedPoster = <video poster={trustedUrl('data:image/png;base64,AAAA')} />;
 const streaming = (
   <form enhance stream mutation={{ key: 'chat/send' }}>
     <p streamText="assistant:a1" aria-live="polite" />
@@ -88,17 +90,27 @@ const badAttribute = <button hrefx="/bad">Bad</button>;
 // @ts-expect-error SPEC §4.6: known ARIA state values stay typed.
 const badAria = <span aria-live="maybe" />;
 
+// @ts-expect-error SPEC §4.8/§6.6: TrustedUrl is scoped to URL-bearing attributes.
+const trustedUrlInTitle = <span title={typedTrustedHref}>Bad</span>;
+
+// @ts-expect-error SPEC §4.8/§6.6: TrustedUrl is scoped to URL-bearing attributes.
+const trustedUrlInAriaLabel = <span aria-label={typedTrustedHref}>Bad</span>;
+
 void ok;
 void interactive;
 void raw;
 void trustedHref;
 void trustedTypedHref;
+void trustedFormAction;
+void trustedPoster;
 void streaming;
 void uploadInput;
 void missingRequiredProp;
 void badChild;
 void badAttribute;
 void badAria;
+void trustedUrlInTitle;
+void trustedUrlInAriaLabel;
 `,
         'utf8',
       );

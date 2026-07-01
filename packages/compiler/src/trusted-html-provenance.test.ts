@@ -72,6 +72,18 @@ export const C = component({
     expect(messages[0]).toContain('request-derived data');
   });
 
+  it('does not treat a render slots parameter named request as the request object by name', () => {
+    const messages = kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  render: ({}, _state, request) => <div>{trustedHtml(request.body)}</div>,
+});
+`);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('provenance cannot be proven locally');
+  });
+
   it('does not treat a local object named request as request provenance', () => {
     expect(
       kv426(`
@@ -161,6 +173,26 @@ import { trustedHtml } from '@kovojs/browser';
 export const C = component({
   queries: { post: postQuery },
   render: ({ post }) => <article>{trustedHtml(${expr})}</article>,
+});
+`),
+      ).toHaveLength(1);
+    }
+  });
+
+  it('fails closed for expression forms that are not explicitly proven clean', () => {
+    const cases = [
+      "((() => '<p>static</p>') as unknown as string)",
+      "((function () { return '<p>static</p>'; }) as unknown as string)",
+      "((class { static html = '<p>static</p>'; }) as unknown as string)",
+      '(/static/ as unknown as string)',
+    ];
+
+    for (const expr of cases) {
+      expect(
+        kv426(`
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  render: () => <article>{trustedHtml(${expr})}</article>,
 });
 `),
       ).toHaveLength(1);
@@ -587,5 +619,17 @@ export const C = component({
 });
 `),
     ).toHaveLength(0);
+  });
+
+  it('fails closed for @internal renderedHtml over unprovable raw bytes', () => {
+    const messages = kv426(`
+import { renderedHtml } from '@kovojs/server/internal/html';
+export const C = component({
+  render: () => renderedHtml(renderShell()),
+});
+`);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('renderedHtml() sends data whose provenance cannot be proven');
   });
 });
