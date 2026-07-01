@@ -149,7 +149,7 @@ pattern-match authored source, the next dogfood (or attacker) finds the next spe
   - Done when: no importable handle can write outside the audited channel, so 22 B1 / 24 B3 are
     _unconstructable_ rather than diagnosed; the legit endpoint-read path has a blessed read-only handle.
 
-- [ ] **G. Branded provenance types (defense-in-depth on top of A/C — never the proof).**
+- [x] **G. Branded provenance types (defense-in-depth on top of A/C — never the proof).**
       Make `Reader<Db>`, trusted HTML/URL, and the Tx-db genuine module-private `unique symbol` brands so the
       _type_ carries provenance and the safe value is awkward to forge casually (CLAUDE.md type-ergonomics).
       Per §6.6 the honesty boundary, runtime validation / IR-provenance (A/C) remain the enforcer; G only
@@ -157,6 +157,12 @@ pattern-match authored source, the next dogfood (or attacker) finds the next spe
       shadow are the cautionary cases the runtime gate must still cover.)
   - Done when: the unsafe call shapes are awkward to write, while the runtime/IR gate still owns
     enforcement and a forged/aliased brand is caught by A/C regardless of the type.
+  - Evidence: `packages/server/src/managed-db.ts`, `packages/server/src/webhook.ts`, and
+    `packages/browser/src/security-output.ts` use module-private `unique symbol` brands for `Reader<Db>`,
+    `WebhookTxDb`, `TrustedHtml`, and `TrustedUrl`; verified by `vp exec vitest --run
+packages/server/src/managed-db.test.ts packages/server/src/webhook.test.ts packages/server/src/html.test.ts
+packages/browser/src/security-output.test.ts packages/compiler/src/trusted-html-provenance.test.ts`,
+    `pnpm run check:api-surface`, and `pnpm run check:vp`.
 
 ## How workstream C works (extract-once, then check the model)
 
@@ -330,8 +336,8 @@ packages/cli/src/index.kovo-check.test.ts packages/cli/src/index.kovo-build.test
 - Integrated KV426/KV311 metamorphic slice: trusted HTML provenance now catches namespace, local-alias,
   and same-file direct wrapper-helper variants; query update coverage now follows same-render destructured
   fields and wrapper/helper aliases. Verified with `vp exec vitest --run
-  packages/compiler/src/trusted-html-provenance.test.ts
-  packages/compiler/src/output-context-trusted-brand-identity.test.ts
-  packages/compiler/src/query-coverage.test.ts
-  packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `pnpm run check:vp`; and
+packages/compiler/src/trusted-html-provenance.test.ts
+packages/compiler/src/output-context-trusted-brand-identity.test.ts
+packages/compiler/src/query-coverage.test.ts
+packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts`; `pnpm run check:vp`; and
   `git diff --check`.
