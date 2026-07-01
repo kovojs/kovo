@@ -169,14 +169,18 @@ export function addRawSqlOwnerWriteProof(
 ): void {
   const declareTables = options.declareTables !== false;
   const schemaPath = join(root, 'src/schema.ts');
+  const schemaSource = readFileSync(schemaPath, 'utf8');
+  const isSqlite = schemaSource.includes('sqliteTable(');
+  const tableFactory = isSqlite ? 'sqliteTable' : 'pgTable';
+  const rawSqlMethod = isSqlite ? 'run' : 'execute';
   writeFileSync(
     schemaPath,
-    readFileSync(schemaPath, 'utf8').replace(
+    schemaSource.replace(
       ');\n\n// --- Auth infrastructure',
       [
         ');',
         '',
-        'export const rawOwners = pgTable(',
+        `export const rawOwners = ${tableFactory}(`,
         "  'raw_owners',",
         '  {',
         "    id: text('id').primaryKey(),",
@@ -230,7 +234,7 @@ export function addRawSqlOwnerWriteProof(
       "    .values({ id: serverValue(id, 'server-generated contact id'), name, email, company });",
     ].join('\n'),
     [
-      '  await db.execute(',
+      `  await db.${rawSqlMethod}(`,
       options.trusted
         ? "    trustedSql(sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`, { justification: 'reviewed owner predicate' }),"
         : "    sql`update raw_owners set label = ${company} where id = ${serverValue(id, 'server-generated contact id')}`,",

@@ -690,6 +690,33 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual([]);
   });
 
+  it('write mode fails closed for an unknown future driver method with no known adapter shape', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        futureStatement(options: unknown) {
+          log.push(`futureStatement:${JSON.stringify(options)}`);
+          return options;
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['products'],
+          touches: ['product'],
+        },
+      },
+    );
+
+    expect(() =>
+      (handle as unknown as { futureStatement(options: unknown): unknown }).futureStatement({
+        mode: 'opaque',
+      }),
+    ).toThrow(/unknown managed DB method db\.futureStatement/);
+    expect(log).toEqual([]);
+  });
+
   it('write mode fails closed for unknown nested driver methods without a SQL carrier', () => {
     const log: string[] = [];
     const handle = managedDb(

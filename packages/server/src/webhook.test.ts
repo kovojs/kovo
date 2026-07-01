@@ -224,8 +224,26 @@ describe('server webhook primitive', () => {
             'select * from products',
           ),
         ).toThrow(/KV422/);
+        expect(() =>
+          (
+            context.tx as unknown as { $client: { execute(statement: unknown): unknown } }
+          ).$client.execute('select * from products'),
+        ).toThrow(/KV422/);
+        expect(() =>
+          (context.tx as unknown as { futureStatement(options: unknown): unknown }).futureStatement(
+            { mode: 'opaque' },
+          ),
+        ).toThrow(/unknown managed DB method db\.futureStatement/);
         expect(
           (context.tx as unknown as { execute(statement: unknown): unknown }).execute({
+            text: 'select id from products where id = $1',
+            values: ['p1'],
+          }),
+        ).toMatchObject({ text: 'select id from products where id = $1' });
+        expect(
+          (
+            context.tx as unknown as { $client: { execute(statement: unknown): unknown } }
+          ).$client.execute({
             text: 'select id from products where id = $1',
             values: ['p1'],
           }),
@@ -238,6 +256,14 @@ describe('server webhook primitive', () => {
             ),
           ),
         ).toMatchObject({ text: 'update products set name = $1 where id = $2' });
+        expect(
+          (
+            context.tx as unknown as { futureStatement(statement: unknown): unknown }
+          ).futureStatement({
+            text: 'select id from products where id = $1',
+            values: ['p1'],
+          }),
+        ).toMatchObject({ text: 'select id from products where id = $1' });
         return { ok: true };
       },
       idempotency: (input) => input.id,
@@ -247,6 +273,16 @@ describe('server webhook primitive', () => {
         return run({
           execute(statement: unknown) {
             calls.push('tx.execute');
+            return statement;
+          },
+          $client: {
+            execute(statement: unknown) {
+              calls.push('tx.$client.execute');
+              return statement;
+            },
+          },
+          futureStatement(statement: unknown) {
+            calls.push('tx.futureStatement');
             return statement;
           },
           session: {
@@ -273,7 +309,12 @@ describe('server webhook primitive', () => {
 
     expect(result.replayed).toBe(false);
     expect(result.response.status).toBe(200);
-    expect(calls).toEqual(['tx.execute', 'tx.session.run']);
+    expect(calls).toEqual([
+      'tx.execute',
+      'tx.$client.execute',
+      'tx.session.run',
+      'tx.futureStatement',
+    ]);
   });
 
   it('dispatches webhook writes through an audited mutation and replays provider duplicates', async () => {
@@ -756,7 +797,10 @@ describe('server webhook primitive', () => {
     const wh = webhook('/webhooks/durable-charge', {
       async handler(input, context) {
         enteredTotal += 1;
-        (context.tx as unknown as { write(): void }).write();
+        (context.tx as unknown as { execute(statement: unknown): void }).execute({
+          text: 'insert into ledger_h9 (id) values ($1)',
+          values: [input.id],
+        });
         context.recordChange(ledger, { keys: [input.id] });
         if (enteredTotal === 1) {
           resolveAEntered();
@@ -768,7 +812,7 @@ describe('server webhook primitive', () => {
       input: s.object({ id: s.string() }),
       replayStore: durable,
       async transaction(_context, run) {
-        return run({ write: () => (sideEffects += 1) });
+        return run({ execute: () => (sideEffects += 1) });
       },
       verify: 'none',
       verifyJustification: 'fixture-only webhook test',
