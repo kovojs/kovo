@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { publicPackages, repoRoot } from './public-packages.mjs';
 
 const approvedBuiltDependencies = Object.freeze(['@node-rs/argon2', 'better-sqlite3']);
@@ -91,9 +92,4 @@ function readAuditJson() {
   }
 }
 
-if (
-  process.argv[1] &&
-  path.resolve(process.argv[1]) === path.resolve(new URL(import.meta.url).pathname)
-) {
-  main();
-}
+if (isMainEntry(import.meta.url)) await runGate(main);

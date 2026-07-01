@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { execFileSync } from 'node:child_process';
 
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import {
   GENERATED_ARTIFACT_CATEGORIES,
   generatedArtifactPathsInCategory,
@@ -41,6 +42,4 @@ export function runNoCommittedGeneratedCheck(options = {}) {
   return 1;
 }
 
-if (import.meta.url === new URL(`file://${process.argv[1]}`).href) {
-  process.exit(runNoCommittedGeneratedCheck());
-}
+if (isMainEntry(import.meta.url)) await runGate(runNoCommittedGeneratedCheck);

@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
+import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 export { declaredPackageExportSubpaths } from './package-exports.mjs';
 
 /**
@@ -11,7 +11,7 @@ export { declaredPackageExportSubpaths } from './package-exports.mjs';
  * gate read the boundary from here so it can never drift between docs and enforcement.
  */
 
-export const repoRoot = fileURLToPath(new URL('../', import.meta.url));
+export const repoRoot = findRepoRoot();
 export const manifestPath = path.join(repoRoot, 'public-packages.json');
 
 export function loadPublicPackages() {

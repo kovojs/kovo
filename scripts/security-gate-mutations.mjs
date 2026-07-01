@@ -1,16 +1,25 @@
 #!/usr/bin/env node
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
 
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 import * as sinkPolicyGate from './check-sink-policy-gate.mjs';
 import * as fundamentalFixesCensusGate from './fundamental-fixes-census-gate.mjs';
 import * as securityTestBuildGate from './security-test-build-gate.mjs';
 
-const thisFile = fileURLToPath(import.meta.url);
-const scriptsDir = path.dirname(thisFile);
-const repoRoot = path.resolve(scriptsDir, '..');
+const repoRoot = findRepoRoot();
+const scriptsDir = path.join(repoRoot, 'scripts');
 const sinkPolicyGatePath = path.join(scriptsDir, 'check-sink-policy-gate.mjs');
 const fundamentalFixesCensusGatePath = path.join(scriptsDir, 'fundamental-fixes-census-gate.mjs');
 const fundamentalFixesCensusManifestPath = path.join(
@@ -845,7 +854,7 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
 
     const tempRoot = mkdtempSync(path.join(tmpdir(), 'kovo-security-gate-mutant-'));
     try {
-      const mutantPath = path.join(tempRoot, path.basename(mutant.sourceFile));
+      const mutantPath = path.join(tempRoot, 'scripts', path.basename(mutant.sourceFile));
       const sourceText = readFileSync(mutant.sourceFile, 'utf8');
       const mutatedSourceText = applyExactMutation(sourceText, mutant);
       if (mutant.sourceOnly === true) {
@@ -866,6 +875,8 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
         continue;
       }
 
+      installMutantScriptLib(tempRoot);
+      mkdirSync(path.dirname(mutantPath), { recursive: true });
       writeFileSync(mutantPath, mutatedSourceText, 'utf8');
       const mutantModule = await import(`${pathToFileURL(mutantPath).href}?mutant=${Date.now()}`);
 
@@ -895,6 +906,23 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
   }
 
   return results;
+}
+
+function installMutantScriptLib(tempRoot) {
+  const libDir = path.join(tempRoot, 'scripts', 'lib');
+  mkdirSync(libDir, { recursive: true });
+  writeFileSync(path.join(tempRoot, 'package.json'), '{"type":"module"}\n', 'utf8');
+  const repoNodeModules = path.join(repoRoot, 'node_modules');
+  if (existsSync(repoNodeModules)) {
+    symlinkSync(repoNodeModules, path.join(tempRoot, 'node_modules'), 'dir');
+  }
+  for (const file of ['cli-entry.mjs', 'repo-root.mjs']) {
+    writeFileSync(
+      path.join(libDir, file),
+      readFileSync(path.join(scriptsDir, 'lib', file), 'utf8'),
+      'utf8',
+    );
+  }
 }
 
 export function applyExactMutation(sourceText, mutant) {
@@ -1638,6 +1666,4 @@ async function main() {
   }
 }
 
-if (process.argv[1] === thisFile) {
-  await main();
-}
+if (isMainEntry(import.meta.url)) await runGate(main);

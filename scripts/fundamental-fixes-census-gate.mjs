@@ -2,13 +2,11 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import path from 'node:path';
-import { fileURLToPath } from 'node:url';
 
-const thisFile = fileURLToPath(import.meta.url);
-const scriptsDir = path.dirname(thisFile);
-const repoRoot = existsSync(path.join(path.resolve(scriptsDir, '..'), 'package.json'))
-  ? path.resolve(scriptsDir, '..')
-  : process.cwd();
+import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+
+const repoRoot = findRepoRoot();
 const requireFromRepo = createRequire(path.join(repoRoot, 'package.json'));
 
 export const defaultPlanPath = 'plans/fundamental-fixes-followup.md';
@@ -626,4 +624,4 @@ function main() {
   if (!report.ok) process.exitCode = 1;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === thisFile) main();
+if (isMainEntry(import.meta.url)) await runGate(main);
