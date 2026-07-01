@@ -9,6 +9,7 @@ import {
   classifyHost,
   classifyIp,
   evaluateEgress,
+  frameworkEgressFetch,
   installNetConnectFloor,
   isNetConnectFloorInstalled,
   normalizeIpLiteral,
@@ -190,6 +191,17 @@ describe('resolveEgressPolicy config validation', () => {
     expect(warnings.length).toBeGreaterThan(0);
     expect(policy.allowInternal.has('10.0.0.1:0')).toBe(false);
   });
+
+  it('normalizes framework-owned destination allowlist origins and ignores malformed entries', () => {
+    const warnings: string[] = [];
+    const policy = resolveEgressPolicy(
+      { allowDestinations: ['https://api.example.com', 'http://localhost:8080', '/relative'] },
+      (m) => warnings.push(m),
+    );
+    expect(policy.allowDestinations.has('https://api.example.com:443')).toBe(true);
+    expect(policy.allowDestinations.has('http://localhost:8080')).toBe(true);
+    expect(warnings.join('\\n')).toContain('allowDestinations entry');
+  });
 });
 
 // ---------------------------------------------------------------------------
@@ -226,6 +238,37 @@ describe('net.connect floor: live enforcement (dual-path: http.get and fetch)', 
     expect(isNetConnectFloorInstalled()).toBe(false);
     uninstall = installNetConnectFloor(emptyPolicy());
     expect(isNetConnectFloorInstalled()).toBe(true);
+  });
+
+  it('frameworkEgressFetch fails closed when the floor is missing or the origin is not allowlisted', async () => {
+    await expect(frameworkEgressFetch('https://api.example.com/v1')).rejects.toMatchObject({
+      name: EGRESS_BLOCKED_ERROR_NAME,
+      reason: 'missing-floor',
+    });
+
+    uninstall = installNetConnectFloor(resolveEgressPolicy({ allowDestinations: [] }, () => {}));
+    await expect(frameworkEgressFetch('https://api.example.com/v1')).rejects.toMatchObject({
+      name: EGRESS_BLOCKED_ERROR_NAME,
+      reason: 'destination-allowlist',
+    });
+  });
+
+  it('frameworkEgressFetch allows only explicitly allowlisted destinations', async () => {
+    uninstall = installNetConnectFloor(
+      resolveEgressPolicy(
+        {
+          allowDestinations: [`http://127.0.0.1:${port}`],
+          allowInternal: [`127.0.0.1:${port}`],
+        },
+        () => {},
+      ),
+    );
+
+    const ok = await frameworkEgressFetch(`http://127.0.0.1:${port}/`);
+    expect(await ok.text()).toBe('ok');
+    await expect(frameworkEgressFetch(`http://localhost:${port}/`)).rejects.toMatchObject({
+      reason: 'destination-allowlist',
+    });
   });
 
   it('DENIES http.get to a literal loopback IP not in allowInternal', async () => {

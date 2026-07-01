@@ -257,9 +257,11 @@ export interface CreateAppOptions<
    * Outbound-egress private-network deny floor (SPEC §6.6; `plans/secure-framework.md`
    * Phase 5). DEFAULT-ON fail-closed runtime *defense-in-depth* floor (NOT a by-construction
    * proof) that DENIES outbound connections to private / loopback / link-local /
-   * cloud-metadata destinations while leaving all public egress unrestricted. Omit this option
-   * to install the floor by default: production uses an empty internal allowlist, while
-   * development keeps localhost/private sidecars reachable except cloud metadata. List a
+   * cloud-metadata destinations at the process transport floor. Framework-owned runtime egress
+   * surfaces such as durable task `ctx.fetch` additionally require an exact origin in
+   * `allowDestinations`; public destinations are not implicitly trusted on those paths. Omit
+   * this option to install the floor by default: production uses an empty internal allowlist,
+   * while development keeps localhost/private sidecars reachable except cloud metadata. List a
    * specific internal destination by `host:port` in `allowInternal` to use exact allowlist
    * semantics in any mode. Cloud instance-metadata is reachable only from a `kovo` credential
    * factory, never via `allowInternal`. Disable only with an audited `{ enabled: false,

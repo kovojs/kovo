@@ -24,15 +24,16 @@ import type { LookupAddress } from 'node:dns';
  *     spawn a worker/child process that doesn't inherit the hook, or open a native socket
  *     the JS layer never sees. Those are documented residual fail-open holes (see
  *     {@link installEgressFloor} doc and the SPEC section).
- *   - **Non-goal: data exfiltration.** This floor allows *all public egress* — it does
- *     NOT stop a request to `attacker.example.com`. Stopping exfiltration needs a
- *     *positive* destination allowlist (a different, app-specific control); this floor
- *     deliberately does not impose one. Document that gap to the operator.
+ *   - Process-global transport hooks allow public egress unless a framework-owned caller
+ *     asks for the destination allowlist. Kovo runtime egress surfaces such as `ctx.fetch`
+ *     use that stricter posture: an exact `egress.allowDestinations` origin is required
+ *     before any public/private destination can be reached.
  *   - **Non-goal: a code sandbox.** This is not a defense against intentionally malicious
  *     in-process code, only against an SSRF *coaxing trusted code* to the wrong IP.
  *
  * DESIGN (SPEC §6.6).
- *   - Public / external IPs: **UNRESTRICTED**.
+ *   - Public / external IPs: **UNRESTRICTED** at the process-global transport floor,
+ *     **ALLOWLISTED** for framework-owned runtime egress surfaces.
  *   - Private / loopback / link-local / unique-local / CGNAT / IANA-special IPs: **DENIED**
  *     by default, reachable only when the exact `host:port` is in the operator's narrow
  *     `egress.allowInternal` allowlist.
@@ -68,6 +69,8 @@ export class EgressBlockedError extends Error {
   readonly resolvedIp: string | undefined;
   /** Coarse reason class for audit. */
   readonly classification: PrivateAddressClass;
+  /** Which egress posture rejected the destination. */
+  readonly reason: 'private-network' | 'destination-allowlist' | 'missing-floor';
   /** Suggested HTTP status for adapters that surface this on the wire (SPEC §9.5). */
   readonly status = 502;
 
@@ -76,16 +79,28 @@ export class EgressBlockedError extends Error {
     resolvedIp?: string | undefined;
     classification: PrivateAddressClass;
     metadata?: boolean;
+    reason?: 'private-network' | 'destination-allowlist' | 'missing-floor' | undefined;
   }) {
     const where =
       args.resolvedIp && args.resolvedIp !== args.destination.split(':')[0]
         ? `${args.destination} (resolved to ${args.resolvedIp})`
         : args.destination;
-    const remediation = args.metadata
-      ? 'Cloud instance-metadata is reachable only inside an awsCredential()/gcpCredential()/' +
-        'azureCredential() frame, never via egress.allowInternal.'
-      : `If this internal destination is intended, add "${args.destination}" to ` +
+    const reason = args.reason ?? 'private-network';
+    let remediation: string;
+    if (reason === 'missing-floor') {
+      remediation =
+        'Install createApp({ egress }) / installEgressFloor() before invoking Kovo runtime egress.';
+    } else if (reason === 'destination-allowlist') {
+      remediation = 'Add the exact origin to createApp({ egress: { allowDestinations: [...] } }).';
+    } else if (args.metadata) {
+      remediation =
+        'Cloud instance-metadata is reachable only inside an awsCredential()/gcpCredential()/' +
+        'azureCredential() frame, never via egress.allowInternal.';
+    } else {
+      remediation =
+        `If this internal destination is intended, add "${args.destination}" to ` +
         'createApp({ egress: { allowInternal: [...] } }).';
+    }
     super(
       `Outbound egress to ${where} was blocked by the Kovo private-network deny floor ` +
         `(${args.classification}; SPEC §6.6 runtime defense-in-depth). ${remediation}`,
@@ -93,6 +108,7 @@ export class EgressBlockedError extends Error {
     this.destination = args.destination;
     this.resolvedIp = args.resolvedIp;
     this.classification = args.classification;
+    this.reason = reason;
   }
 }
 
@@ -139,6 +155,8 @@ function isMetadataAllowed(): boolean {
 export interface EgressPolicy {
   /** `host:port` (lowercased host) entries permitted to reach a private/loopback IP. */
   readonly allowInternal: ReadonlySet<string>;
+  /** Exact normalized origins permitted for framework-owned HTTP egress surfaces. */
+  readonly allowDestinations: ReadonlySet<string>;
   /** Broad-CIDR entries the operator passed (flagged + warned, honored as a fallback). */
   readonly allowInternalCidrs: readonly string[];
   /**
@@ -157,6 +175,14 @@ export interface EgressOptions {
    * the metadata endpoint can NEVER be allowlisted here.
    */
   allowInternal?: readonly string[];
+  /**
+   * Exact origin allowlist for framework-owned HTTP egress (`ctx.fetch` and future
+   * webhook/agent-tool outbound helpers), e.g. `['https://api.stripe.com']`. This is a
+   * positive destination allowlist: Kovo-owned runtime egress fails closed when omitted or
+   * when the request origin is not listed. Private/internal origins also require
+   * `allowInternal` because destination intent does not prove the resolved IP is safe.
+   */
+  allowDestinations?: readonly string[];
   /**
    * Optional same-process tamper hardening for the transport monkeypatches.
    *
@@ -192,7 +218,20 @@ export function resolveEgressPolicy(
   policyOptions: ResolveEgressPolicyOptions = {},
 ): EgressPolicy {
   const allowInternal = new Set<string>();
+  const allowDestinations = new Set<string>();
   const allowInternalCidrs: string[] = [];
+  for (const raw of options?.allowDestinations ?? []) {
+    const entry = String(raw).trim();
+    if (entry === '') continue;
+    const normalized = normalizeHttpOrigin(entry);
+    if (!normalized) {
+      warn(
+        `allowDestinations entry "${entry}" is not a valid http(s) origin (e.g. "https://api.example.com"); ignored.`,
+      );
+      continue;
+    }
+    allowDestinations.add(normalized);
+  }
   for (const raw of options?.allowInternal ?? []) {
     const entry = String(raw).trim();
     if (entry === '') continue;
@@ -227,6 +266,7 @@ export function resolveEgressPolicy(
   }
   return {
     allowInternal,
+    allowDestinations,
     allowInternalCidrs,
     allowPrivateNetwork: policyOptions.allowPrivateNetwork === true,
   };
@@ -267,6 +307,23 @@ function parseHostPort(entry: string): HostPort | null {
   const port = Number(portStr);
   if (host === '' || !Number.isInteger(port) || port < 1 || port > 65535) return null;
   return { host, port };
+}
+
+function normalizeHttpOrigin(entry: string): string | null {
+  try {
+    const url = new URL(entry);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.username || url.password || url.pathname !== '/' || url.search || url.hash) return null;
+    const port = normalizedUrlPort(url);
+    return `${url.protocol}//${url.hostname.toLowerCase()}:${port}`;
+  } catch {
+    return null;
+  }
+}
+
+function normalizedUrlPort(url: URL): number {
+  if (url.port) return Number(url.port);
+  return url.protocol === 'https:' ? 443 : 80;
 }
 
 // ---------------------------------------------------------------------------
@@ -455,10 +512,16 @@ function classifyIpv6(ipRaw: string): PrivateAddressClass {
 export function evaluateEgress(args: {
   host: string;
   port: number;
+  protocol?: 'http:' | 'https:' | undefined;
   resolvedIp: string;
   policy: EgressPolicy;
+  requireDestinationAllowlist?: boolean | undefined;
 }): EgressBlockedError | null {
-  const { host, port, resolvedIp, policy } = args;
+  const { host, port, protocol, resolvedIp, policy } = args;
+  if (args.requireDestinationAllowlist) {
+    const blocked = evaluateDestinationAllowlist({ host, port, protocol, resolvedIp, policy });
+    if (blocked) return blocked;
+  }
   const cls = classifyIp(resolvedIp);
   if (cls === 'public') return null;
 
@@ -490,6 +553,91 @@ export function evaluateEgress(args: {
     resolvedIp,
     classification: cls,
   });
+}
+
+function evaluateDestinationAllowlist(args: {
+  host: string;
+  port: number;
+  protocol?: 'http:' | 'https:' | undefined;
+  resolvedIp: string;
+  policy: EgressPolicy;
+}): EgressBlockedError | null {
+  const { host, port, protocol, resolvedIp, policy } = args;
+  if (protocol !== 'http:' && protocol !== 'https:') {
+    return new EgressBlockedError({
+      destination: `${host}:${port}`,
+      resolvedIp,
+      classification: classifyIp(resolvedIp),
+      reason: 'destination-allowlist',
+    });
+  }
+  const origin = `${protocol}//${host.toLowerCase()}:${port}`;
+  if (policy.allowDestinations.has(origin)) return null;
+  return new EgressBlockedError({
+    destination: origin,
+    resolvedIp,
+    classification: classifyIp(resolvedIp),
+    reason: 'destination-allowlist',
+  });
+}
+
+/**
+ * Framework-owned HTTP egress choke (DEC6). This helper is intentionally stricter than the
+ * process-global transport floor: it requires an active floor plus an exact
+ * `egress.allowDestinations` origin before delegating to `fetch`. The transport floor still
+ * performs resolved-IP validation, so DNS rebinding to private/metadata addresses remains
+ * denied at the sink.
+ */
+export const frameworkEgressFetch: typeof globalThis.fetch = (async (
+  input: RequestInfo | URL,
+  init?: RequestInit,
+): Promise<Response> => {
+  const policy = activeEgressPolicy();
+  if (!policy) {
+    throw new EgressBlockedError({
+      destination: requestDestination(input),
+      classification: 'special-use',
+      reason: 'missing-floor',
+    });
+  }
+  const url = urlFromRequestInput(input);
+  if (!url || (url.protocol !== 'http:' && url.protocol !== 'https:')) {
+    throw new EgressBlockedError({
+      destination: requestDestination(input),
+      classification: 'special-use',
+      reason: 'destination-allowlist',
+    });
+  }
+  const host = decodeURIComponent(url.hostname).replace(/^\[/, '').replace(/\]$/, '');
+  const port = normalizedUrlPort(url);
+  const literalIp = normalizeIpLiteral(host);
+  const resolvedIp = literalIp ?? host;
+  const blocked = evaluateEgress({
+    host,
+    port,
+    protocol: url.protocol,
+    resolvedIp,
+    policy,
+    requireDestinationAllowlist: true,
+  });
+  if (blocked) throw blocked;
+  return globalThis.fetch(input, init);
+}) as typeof globalThis.fetch;
+
+function urlFromRequestInput(input: RequestInfo | URL): URL | null {
+  try {
+    if (input instanceof URL) return input;
+    if (typeof input === 'string') return new URL(input);
+    return new URL(input.url);
+  } catch {
+    return null;
+  }
+}
+
+function requestDestination(input: RequestInfo | URL): string {
+  if (input instanceof URL) return input.toString();
+  if (typeof input === 'string') return input;
+  return input.url;
 }
 
 /** Minimal IPv4 CIDR membership for the broad-range fallback. IPv6 CIDR ranges are not honored. */
