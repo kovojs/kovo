@@ -22,6 +22,7 @@
  */
 
 import { securityClassifier, wireEmitter } from '@kovojs/core/internal/security-markers';
+import { isProvenPrincipal } from './auth-principal.js';
 import { signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 
 const TOKEN_VERSION = 'v1';
@@ -294,6 +295,13 @@ export const verifyCapability = securityClassifier(
     }
 
     if (now >= claims.expiry) return { ok: false, reason: 'expired' };
+
+    if (
+      (expected.scope !== undefined && !isProvenPrincipal(expected.scope)) ||
+      (claims.scope !== undefined && !isProvenPrincipal(claims.scope))
+    ) {
+      return { ok: false, reason: 'claim-mismatch' };
+    }
 
     // The token's claims must match what the route is about to do. The route derives `expected`
     // from the request URL, not from the token — this is what makes the token un-substitutable.

@@ -70,6 +70,20 @@ describe('capability-url: sign + constant-time verify before any storage read', 
     expect(result).toEqual({ ok: false, reason: 'claim-mismatch' });
   });
 
+  it.each(['unknown', 'unresolved', 'anonymous', ''])(
+    'REJECTS unresolved principal scope %j even when the signature matches',
+    async (scope) => {
+      const { token } = await signCapability(SECRET, { key: 'a.pdf', scope }, 0);
+      const result = await verifyCapability(
+        SECRET,
+        token,
+        { key: 'a.pdf', method: 'GET', scope },
+        { now: 1 },
+      );
+      expect(result).toEqual({ ok: false, reason: 'claim-mismatch' });
+    },
+  );
+
   it('REJECTS an expired token', async () => {
     const now = 1000;
     const { token } = await signCapability(SECRET, { key: 'a.pdf', expiresIn: 50 }, now);

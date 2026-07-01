@@ -322,7 +322,8 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
   - Evidence: `pnpm exec vitest --run packages/server/src/untrusted-request-body.test.ts packages/server/src/app-mutation-request.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/webhook.test.ts scripts/check-sink-policy-gate.test.mjs`, `pnpm run check:sink-policy`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after raw webhook JSON decoding moved through `untrusted-request-body.ts` and request-body parser canaries were added to the sink-policy gate.
 - [ ] **Q.5 secret-material lifecycle** — `console.*` / logger / `reportServerError` / `createDurableTaskStatus` /
       at-rest columns scrub secret-tagged values via the DEC5 provenance tag.
-- [ ] **Q.6 auth-decision points** — guard eval / `verifyCapability` / session provenance fail closed on an unresolved principal.
+- [x] **Q.6 auth-decision points** — guard eval / `verifyCapability` / session provenance fail closed on an unresolved principal.
+  - Evidence: `pnpm exec vitest --run packages/server/src/guards.test.ts packages/server/src/capability-url.test.ts packages/server/src/app-document.test.ts packages/server/src/mutation-wire.test.ts`, `pnpm run check:security-brands`, `pnpm run check:fail-closed-classifiers`, `pnpm run check:api-surface`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after guard evaluation, `verifyCapability`, document fingerprinting, and live-target attestation rejected unresolved principals fail-closed.
 - [ ] **Q.7 DoS / rate-limit** — per-principal bucket keyed on a proven identity, not a shared `unknown` bucket.
 - [ ] **Q.8 timing side-channel** — constant-time compare on secret-tagged material.
 - [ ] **Q.9 open-redirect / navigation** — `redirect()` / `Location` route through the DEC5 choke; same-origin or allowlisted target.

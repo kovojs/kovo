@@ -7,6 +7,7 @@ import {
 import { managedDb, type ManagedDbMode } from './managed-db.js';
 import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
+import { principalPostureFromRequest, provenPrincipalFromRequest } from './auth-principal.js';
 import { matchRoute, type RouteLike } from './match.js';
 import {
   blessRedirectResponse,
@@ -483,7 +484,10 @@ export const guards = {
   },
   authed<Request extends SessionRequestLike>(): Guard<Request, AuthenticatedRequest<Request>> {
     return stampGuardAudit(
-      (request) => (request.session?.user ? true : unauthenticatedGuardFailure()),
+      (request) =>
+        request.session?.user && provenPrincipalFromRequest(request) !== undefined
+          ? true
+          : unauthenticatedGuardFailure(),
       [{ auth: 'session-user', kind: 'authed', name: 'authed' }],
     );
   },
@@ -535,7 +539,9 @@ export const guards = {
   role<Request extends RoleSessionRequestLike>(role: string): Guard<Request> {
     return stampGuardAudit(
       (request) => {
-        if (!request.session?.user) return unauthenticatedGuardFailure();
+        if (!request.session?.user || provenPrincipalFromRequest(request) === undefined) {
+          return unauthenticatedGuardFailure();
+        }
         return request.session.user.roles?.includes(role) ? true : unauthorizedGuardFailure();
       },
       [
@@ -573,7 +579,9 @@ export const guards = {
   ): Guard<Request> {
     return stampGuardAudit(
       async (request) => {
-        if (!request.session?.user) return unauthenticatedGuardFailure();
+        if (!request.session?.user || provenPrincipalFromRequest(request) === undefined) {
+          return unauthenticatedGuardFailure();
+        }
         // The query/mutation/route runners merge the validated args / resolved params onto `request`
         // BEFORE this guard runs (SPEC §10.3:1155-1157), so the runtime value is a `KeyedRequest`
         // even though the guard's *attachment* type is the base request. View it as such for `keyOf`.
@@ -1031,19 +1039,7 @@ export function guardFailureIsUnauthenticated<Request>(
   if (result.auth === 'unauthenticated') return true;
   if (result.auth === 'unauthorized') return false;
 
-  return requestSession(request) == null;
-}
-
-function requestSession(request: unknown): unknown {
-  if (
-    (typeof request === 'object' || typeof request === 'function') &&
-    request !== null &&
-    'session' in request
-  ) {
-    return (request as { session?: unknown }).session;
-  }
-
-  return undefined;
+  return principalPostureFromRequest(request).kind !== 'proven';
 }
 
 function rateLimitKey<Request extends SessionRequestLike>(

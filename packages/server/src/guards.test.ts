@@ -85,6 +85,49 @@ describe('sanitizeNext (bugs-1 F2 open-redirect guard)', () => {
   });
 });
 
+describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
+  type Req = {
+    session?: { id?: string; user?: { id?: string; roles?: readonly string[] } | null } | null;
+  };
+
+  it('allows built-in auth guards only for a proven session principal', async () => {
+    expect(guards.authed<Req>()({ session: { user: { id: 'user_1' } } })).toBe(true);
+    expect(
+      guards.role<Req & { session: { user: { roles: readonly string[] } } }>('admin')({
+        session: { id: 'session_1', user: { roles: ['admin'] } },
+      }),
+    ).toBe(true);
+  });
+
+  it.each(['', ' ', 'unknown', 'unresolved', 'anonymous'])(
+    'treats unresolved principal %j as unauthenticated at guard eval',
+    async (id) => {
+      expect(guards.authed<Req>()({ session: { user: { id } } })).toEqual({
+        kind: 'unauthenticated',
+        payload: {},
+      });
+    },
+  );
+
+  it('does not let role or ownership checks authorize an unresolved principal', async () => {
+    const roleGuard = guards.role<
+      Req & { session: { user: { id: string; roles: readonly string[] } } }
+    >('admin');
+    expect(roleGuard({ session: { user: { id: 'unknown', roles: ['admin'] } } })).toEqual({
+      kind: 'unauthenticated',
+      payload: {},
+    });
+
+    type OwnsReq = GuardArgsRequest<Req, { id: string }>;
+    const ownsRow = vi.fn(() => true);
+    const ownsGuard = guards.owns<OwnsReq, OwnsReq, string>((request) => request.args.id, ownsRow);
+    await expect(
+      ownsGuard({ session: { user: { id: 'unresolved' } }, args: { id: 'r1' } }),
+    ).resolves.toEqual({ kind: 'unauthenticated', payload: {} });
+    expect(ownsRow).not.toHaveBeenCalled();
+  });
+});
+
 describe('server guard and session primitives', () => {
   it('guards managed DB handles from unbranded raw SQL strings before driver execution', async () => {
     const calls: unknown[] = [];
@@ -453,7 +496,11 @@ describe('server guard and session primitives', () => {
     });
 
     await expect(
-      runMutation(guarded, { productId: 'p1' }, { session: { user: { roles: ['staff'] } } }),
+      runMutation(
+        guarded,
+        { productId: 'p1' },
+        { session: { user: { id: 'staff_1', roles: ['staff'] } } },
+      ),
     ).resolves.toEqual({
       auth: 'unauthorized',
       error: { code: 'UNAUTHORIZED', payload: {} },
@@ -461,7 +508,11 @@ describe('server guard and session primitives', () => {
       status: 403,
     });
     await expect(
-      runMutation(guarded, { productId: 'p1' }, { session: { user: { roles: ['admin'] } } }),
+      runMutation(
+        guarded,
+        { productId: 'p1' },
+        { session: { user: { id: 'admin_1', roles: ['admin'] } } },
+      ),
     ).resolves.toMatchObject({
       ok: true,
       value: 'ok',
@@ -928,7 +979,9 @@ describe('server guard and session primitives', () => {
   it('keeps authenticated authorization failures on typed enhanced fragments with 403', async () => {
     const guarded = mutation('admin/refund', {
       csrf: false,
-      guard: guards.role<{ session?: { user?: { roles: readonly string[] } } | null }>('admin'),
+      guard: guards.role<{ session?: { user?: { id?: string; roles: readonly string[] } } | null }>(
+        'admin',
+      ),
       input: s.object({ orderId: s.string() }),
       handler() {
         return 'ok';
@@ -939,7 +992,7 @@ describe('server guard and session primitives', () => {
       renderMutationResponse(guarded, {
         failureTarget: 'refund-form',
         rawInput: { orderId: 'o1' },
-        request: { session: { user: { roles: ['staff'] } } },
+        request: { session: { user: { id: 'staff_1', roles: ['staff'] } } },
       }),
     ).resolves.toEqual({
       body: '<kovo-fragment target="refund-form"><output role="alert" data-error-code="UNAUTHORIZED">{}</output></kovo-fragment>',

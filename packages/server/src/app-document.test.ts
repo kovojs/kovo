@@ -368,6 +368,26 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     expect(response.body).not.toContain('kovo-session');
   });
 
+  it('fails closed for an unresolved session principal: no fingerprint, still no-store', async () => {
+    const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
+    const app = createApp({
+      routes: [homeRoute],
+      sessionProvider: () => ({ id: 'unknown' }),
+    });
+
+    const response = await renderAppRouteDocumentResponse({
+      app,
+      params: {},
+      request: new Request('https://example.test/'),
+      route: homeRoute,
+      url: new URL('https://example.test/'),
+    });
+
+    expect(response.body).not.toContain('kovo-session');
+    expect(headerValue(response.headers, 'cache-control')).toBe('no-store');
+    expect(headerValue(response.headers, 'vary')).toContain('Cookie');
+  });
+
   it('anonymous request (no cookies) produces no kovo-session meta (K3)', async () => {
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
     const app = createApp({ routes: [homeRoute] });
@@ -1119,7 +1139,9 @@ describe('server app document boundary', () => {
 
   it('renders route guard forbidden failures through the configured 403 shell', async () => {
     const adminRoute = route('/admin', {
-      guard: guards.role<Request & { session?: { user: { roles: readonly string[] } } }>('admin'),
+      guard: guards.role<
+        Request & { session?: { user: { id: string; roles: readonly string[] } } }
+      >('admin'),
       page: () => trustedHtml('<main data-secret>Admin</main>'),
     });
     const request = new Request('https://shop.example.test/admin');
@@ -1134,7 +1156,7 @@ describe('server app document boundary', () => {
         },
       },
       routes: [adminRoute],
-      sessionProvider: () => ({ user: { roles: ['staff'] } }),
+      sessionProvider: () => ({ user: { id: 'staff_1', roles: ['staff'] } }),
     });
 
     const response = await renderAppRouteDocumentResponse({
@@ -1154,7 +1176,9 @@ describe('server app document boundary', () => {
 
   it('renders route guard forbidden failures through a configured plain 403 shell body', async () => {
     const adminRoute = route('/admin', {
-      guard: guards.role<Request & { session?: { user: { roles: readonly string[] } } }>('admin'),
+      guard: guards.role<
+        Request & { session?: { user: { id: string; roles: readonly string[] } } }
+      >('admin'),
       page: () => trustedHtml('<main data-secret>Admin</main>'),
     });
     const request = new Request('https://shop.example.test/admin');
@@ -1165,7 +1189,7 @@ describe('server app document boundary', () => {
         },
       },
       routes: [adminRoute],
-      sessionProvider: () => ({ user: { roles: ['staff'] } }),
+      sessionProvider: () => ({ user: { id: 'staff_1', roles: ['staff'] } }),
     });
 
     const response = await renderAppRouteDocumentResponse({
@@ -1193,12 +1217,16 @@ describe('server app document boundary', () => {
       render: (_queries, _state, { children }) =>
         trustedHtml(`<section>${String(children)}</section>`),
     });
-    const AdminLayout = layout<Request & { session?: { user?: { roles: readonly string[] } } }>({
+    const AdminLayout = layout<
+      Request & { session?: { user?: { id?: string; roles: readonly string[] } } }
+    >({
       boundaries: {
         unauthorized: ({ status }) =>
           trustedHtml(`<main data-layout-boundary="403">layout:${status}</main>`),
       },
-      guard: guards.role<Request & { session?: { user?: { roles: readonly string[] } } }>('admin'),
+      guard: guards.role<
+        Request & { session?: { user?: { id?: string; roles: readonly string[] } } }
+      >('admin'),
       render: (_queries, _state, { children }) =>
         trustedHtml(`<section>${String(children)}</section>`),
     });
@@ -1224,7 +1252,7 @@ describe('server app document boundary', () => {
         }),
       },
       routes: [missingRoute, forbiddenRoute],
-      sessionProvider: () => ({ user: { roles: ['staff'] } }),
+      sessionProvider: () => ({ user: { id: 'staff_1', roles: ['staff'] } }),
     });
 
     const missingResponse = await renderAppRouteDocumentResponse({
