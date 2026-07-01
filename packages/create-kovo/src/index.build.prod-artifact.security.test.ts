@@ -223,6 +223,41 @@ describe('create-kovo starter (build integration: production security artifacts)
         '<output role="alert" data-error-code="BLOCKED_TITLE">{"title":"&lt;output&gt;helper&lt;/output&gt;"}</output>',
       );
       expect(body).not.toContain('&lt;output role=&quot;alert&quot;');
+
+      const errorPageResponse = await fetch(`${origin}/no-js-error-proof`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      mergeCookies(jar, errorPageResponse.headers.getSetCookie());
+      const errorPageHtml = await errorPageResponse.text();
+      const errorForm = firstFormHtml(errorPageHtml);
+      const errorAction = attributeValue(errorForm, 'action');
+      expect(errorAction).toBeTruthy();
+
+      const errorResponse = await fetch(`${origin}${errorAction}`, {
+        body: new URLSearchParams({
+          csrf: fieldValue(errorForm, 'csrf'),
+          'Kovo-Idem': fieldValue(errorForm, 'Kovo-Idem'),
+          title: 'boom',
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      const errorBody = await errorResponse.text();
+
+      expect(errorResponse.status, errorBody).toBe(500);
+      expect(errorResponse.headers.get('cache-control')).toBe('private, no-store');
+      expect(errorResponse.headers.get('content-security-policy')).toContain("default-src 'self'");
+      expect(errorResponse.headers.get('vary')).toContain('Cookie');
+      expect(errorResponse.headers.get('x-content-type-options')).toBe('nosniff');
+      expect(errorResponse.headers.get('x-frame-options')).toBe('DENY');
+      expect(errorBody).toBe('Internal Server Error');
+      expect(errorBody).not.toContain('private no-JS mutation detail');
+      expect(errorBody).not.toContain('<script>boom</script>');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });

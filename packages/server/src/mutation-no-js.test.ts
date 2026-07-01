@@ -132,9 +132,16 @@ describe('no-JS mutation responses', () => {
         redirectTo: '/cart',
         request,
       }),
-    ).resolves.toEqual({
+    ).resolves.toMatchObject({
       body: 'Internal Server Error',
-      headers: { 'Content-Type': 'text/html; charset=utf-8' },
+      headers: expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+      }),
       status: 500,
     });
     expect(onError).toHaveBeenCalledWith(thrown, {
@@ -355,6 +362,16 @@ describe('no-JS mutation responses', () => {
     expect(handlerCalls).toBe(0);
     expect(response.status).toBe(429);
     expect(response.headers['Retry-After']).toBe('1');
+    expect(response.headers).toEqual(
+      expect.objectContaining({
+        'Cache-Control': 'private, no-store',
+        'Content-Security-Policy': expect.stringContaining("default-src 'self'"),
+        'Content-Type': 'text/html; charset=utf-8',
+        Vary: 'Cookie',
+        'X-Content-Type-Options': 'nosniff',
+        'X-Frame-Options': 'DENY',
+      }),
+    );
     expect(response.body).toContain('data-error-code="RATE_LIMITED"');
   });
 
