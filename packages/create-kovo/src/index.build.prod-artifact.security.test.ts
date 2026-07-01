@@ -37,6 +37,10 @@ import {
 
 describe('create-kovo starter (build integration: production security artifacts)', () => {
   // @kovo-security-certifies KV435 local-helper-credential-laundering
+  // @kovo-security-certifies KV435 direct-secret-projection-to-query-wire
+  // @kovo-security-certifies KV435 transformed-query-loader-return-laundering
+  // @kovo-security-certifies KV435 render-value-flow-laundering
+  // @kovo-security-certifies KV435 cross-select-laundering
   // @kovo-security-certifies KV435 value-flow-sibling-laundering
   it('blocks local-helper Better Auth credential laundering from the production build artifact', () => {
     const tempParent = tmpdir();
@@ -56,6 +60,10 @@ describe('create-kovo starter (build integration: production security artifacts)
         const output = execFileSyncErrorOutput(error);
         expect(output).toContain('KV435');
         expect(output).toContain('Secret query value reaches the client wire');
+        expect(output).toContain('queries/auth-secret-direct-leak-query.accessToken');
+        expect(output).toContain('queries/auth-secret-transformed-leak-query.password');
+        expect(output).toContain('queries/auth-secret-render-leak-query.renderPassword');
+        expect(output).toContain('queries/auth-secret-leak-query.accessToken');
       }
 
       writeKovoProject(safeRoot, { name: 'Prod Auth Secret Safe Sibling' });

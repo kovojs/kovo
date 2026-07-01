@@ -101,6 +101,70 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
+    claimId: 'direct-secret-projection-to-query-wire',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addAuthSecretLeakProof(unsafeRoot)',
+      'buildProductionArtifact(unsafeRoot)',
+      'KV435',
+      'Secret query value reaches the client wire',
+      'queries/auth-secret-direct-leak-query.accessToken',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'blocks local-helper Better Auth credential laundering from the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'transformed-query-loader-return-laundering',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addAuthSecretLeakProof(unsafeRoot)',
+      'buildProductionArtifact(unsafeRoot)',
+      'KV435',
+      'Secret query value reaches the client wire',
+      'queries/auth-secret-transformed-leak-query.password',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'blocks local-helper Better Auth credential laundering from the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'render-value-flow-laundering',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addAuthSecretLeakProof(unsafeRoot)',
+      'buildProductionArtifact(unsafeRoot)',
+      'KV435',
+      'Secret query value reaches the client wire',
+      'queries/auth-secret-render-leak-query.renderPassword',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'blocks local-helper Better Auth credential laundering from the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'cross-select-laundering',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addAuthSecretLeakProof(unsafeRoot)',
+      'buildProductionArtifact(unsafeRoot)',
+      'KV435',
+      'Secret query value reaches the client wire',
+      'queries/auth-secret-leak-query.accessToken',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'blocks local-helper Better Auth credential laundering from the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
     claimId: 'value-flow-sibling-laundering',
     code: 'KV435',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',

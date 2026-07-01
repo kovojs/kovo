@@ -766,48 +766,168 @@
       "id": "secret-column-to-wire-across-all-value-flow-paths",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:secret-wire --reporter=dot (2 passed, 8 skipped, 106.08s); pnpm run check:security-test-builds (18 real-build proofs passed); pnpm run check:security-gate-mutations (30 mutants killed)",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:secret-wire --reporter=dot (2 passed, 8 skipped, 106.08s)",
+        "dialects": {
+          "postgres": "M1:secret-wire postgres no-cache red/green production artifact case passed",
+          "sqlite": "M1:secret-wire sqlite no-cache red/green production artifact case passed"
+        },
+        "independentReviewer": "pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts -t \"secret|cross-select|transformed\" --reporter=dot (16 passed, 72 skipped, 4.60s)"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV435 direct/transformed/render/cross-select/value-flow-sibling uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (18 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed)"
+      }
     },
     {
       "id": "direct-secret-projection-to-query-wire-fails-kv435-in-every-supported-dialect",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "secret-column-to-wire-across-all-value-flow-paths"
+      "status": "closed",
+      "evidence": "M1 secret-wire prod-artifact shard asserted queries/auth-secret-direct-leak-query.accessToken and .password fail KV435 for postgres and sqlite; M2/M3 gates passed.",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:secret-wire --reporter=dot (2 passed, 8 skipped, 106.08s)",
+        "dialects": {
+          "postgres": "queries/auth-secret-direct-leak-query.accessToken and .password failed KV435 in the postgres starter build",
+          "sqlite": "queries/auth-secret-direct-leak-query.accessToken and .password failed KV435 in the sqlite starter build"
+        },
+        "independentReviewer": "pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts -t \"secret|cross-select|transformed\" --reporter=dot (16 passed, 72 skipped, 4.60s)"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV435 direct-secret-projection-to-query-wire uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (18 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed)"
+      }
     },
     {
       "id": "transformed-query-loader-return-laundering-fails-kv435-kv406",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "secret-column-to-wire-across-all-value-flow-paths"
+      "status": "closed",
+      "evidence": "M1 secret-wire prod-artifact shard asserted queries/auth-secret-transformed-leak-query.password fails KV435; focused Drizzle static shard passed transformed KV435/KV406 cases; M2/M3 gates passed.",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:secret-wire --reporter=dot (2 passed, 8 skipped, 106.08s)",
+        "dialects": {
+          "postgres": "queries/auth-secret-transformed-leak-query.password failed KV435 in the postgres starter build",
+          "sqlite": "queries/auth-secret-transformed-leak-query.password failed KV435 in the sqlite starter build"
+        },
+        "independentReviewer": "pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts -t \"secret|cross-select|transformed\" --reporter=dot (16 passed, 72 skipped, 4.60s)"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV435 transformed-query-loader-return-laundering uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (18 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed)"
+      }
     },
     {
       "id": "render-value-flow-laundering-of-secret-selected-rows-fails-kv435-kv406",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "secret-column-to-wire-across-all-value-flow-paths"
+      "status": "closed",
+      "evidence": "M1 secret-wire prod-artifact shard asserted queries/auth-secret-render-leak-query.renderPassword fails KV435 before the rendered query prop can ship; focused Drizzle static shard passed secret value-flow cases; M2/M3 gates passed.",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:secret-wire --reporter=dot (2 passed, 8 skipped, 106.08s)",
+        "dialects": {
+          "postgres": "queries/auth-secret-render-leak-query.renderPassword failed KV435 in the postgres starter build",
+          "sqlite": "queries/auth-secret-render-leak-query.renderPassword failed KV435 in the sqlite starter build"
+        },
+        "independentReviewer": "pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts -t \"secret|cross-select|transformed\" --reporter=dot (16 passed, 72 skipped, 4.60s)"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV435 render-value-flow-laundering uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (18 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed)"
+      }
     },
     {
       "id": "cross-select-laundering-of-secret-columns-fails-kv435",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "secret-column-to-wire-across-all-value-flow-paths"
+      "status": "closed",
+      "evidence": "M1 secret-wire prod-artifact shard asserted queries/auth-secret-leak-query.accessToken and .password fail KV435; focused Drizzle static shard passed cross-select laundering cases; M2/M3 gates passed.",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:secret-wire --reporter=dot (2 passed, 8 skipped, 106.08s)",
+        "dialects": {
+          "postgres": "queries/auth-secret-leak-query.accessToken and .password failed KV435 in the postgres starter build",
+          "sqlite": "queries/auth-secret-leak-query.accessToken and .password failed KV435 in the sqlite starter build"
+        },
+        "independentReviewer": "pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts -t \"secret|cross-select|transformed\" --reporter=dot (16 passed, 72 skipped, 4.60s)"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV435 cross-select-laundering uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (18 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed)"
+      }
     },
     {
       "id": "explicit-non-secret-projection-sibling-builds-in-every-supported-dialect",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "secret-column-to-wire-across-all-value-flow-paths"
+      "status": "closed",
+      "evidence": "M1 secret-wire prod-artifact shard built addAuthSecretLeakProof(root, { leakToWire: false }) for postgres and sqlite; focused production security shard passed the unsafe/safe real build proof; M2/M3 gates passed.",
+      "parent": "secret-column-to-wire-across-all-value-flow-paths",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:secret-wire --reporter=dot (2 passed, 8 skipped, 106.08s)",
+        "dialects": {
+          "postgres": "addAuthSecretLeakProof(root, { leakToWire: false }) built in the postgres starter production artifact",
+          "sqlite": "addAuthSecretLeakProof(root, { leakToWire: false }) built in the sqlite starter production artifact"
+        },
+        "independentReviewer": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t \"local-helper Better Auth credential\" --reporter=dot (1 passed, 7 skipped, 50.76s)"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV435 value-flow-sibling-laundering uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds (18 real-build proofs passed)"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations (30 mutants killed)"
+      }
     },
     {
       "id": "resolver-property-access-expression",

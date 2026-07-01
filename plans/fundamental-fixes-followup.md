@@ -122,12 +122,18 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
     - Evidence: M1 same prod-artifact browser test clicked the state-only control, observed all derived outputs update, `pageErrors=[]`, `consoleErrors=[]`, and no post-interaction `/_q` or `/_m` requests.
   - [x] module-helper-in-derive stays either lowered safely or fails KV311 [C2]
     - Evidence: M1 same prod-artifact shard passed the helper proof asserting built artifacts do not ship `format(state.count)`/`format =`; focused compiler shard `pnpm exec vitest --run packages/compiler/src/state-bindings.test.ts -t "state aliases|helper" --reporter=dot` passed 9 alias/helper tests including KV311 helper failures.
-- [ ] secret-column-to-wire across ALL value-flow paths [C2]
-  - [ ] direct secret projection to query wire fails KV435 in every supported dialect [C2]
-  - [ ] transformed query-loader return laundering fails KV435/KV406 [C2]
-  - [ ] render value-flow laundering of secret-selected rows fails KV435/KV406 [C2]
-  - [ ] cross-select laundering of secret columns fails KV435 [C2]
-  - [ ] explicit non-secret projection sibling builds in every supported dialect [C2]
+- [x] secret-column-to-wire across ALL value-flow paths [C2]
+  - Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:secret-wire --reporter=dot` passed 2 dialect cases and asserted direct, transformed, render-bound, and cross-select KV435 diagnostics plus the green non-secret sibling; M2 `pnpm run check:security-test-builds` passed 18 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 30 mutants.
+  - [x] direct secret projection to query wire fails KV435 in every supported dialect [C2]
+    - Evidence: M1 same prod-artifact shard asserted `queries/auth-secret-direct-leak-query.accessToken` and `.password` fail KV435 for postgres and sqlite.
+  - [x] transformed query-loader return laundering fails KV435/KV406 [C2]
+    - Evidence: M1 same prod-artifact shard asserted `queries/auth-secret-transformed-leak-query.password` fails KV435; focused static shard `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts -t "secret|cross-select|transformed" --reporter=dot` passed 16 tests including transformed KV435/KV406 cases.
+  - [x] render value-flow laundering of secret-selected rows fails KV435/KV406 [C2]
+    - Evidence: M1 same prod-artifact shard asserted `queries/auth-secret-render-leak-query.renderPassword` fails KV435 before the rendered query prop can ship; the focused static shard passed the secret value-flow cases.
+  - [x] cross-select laundering of secret columns fails KV435 [C2]
+    - Evidence: M1 same prod-artifact shard asserted `queries/auth-secret-leak-query.accessToken` and `.password` fail KV435; the focused static shard passed cross-select laundering cases.
+  - [x] explicit non-secret projection sibling builds in every supported dialect [C2]
+    - Evidence: M1 same prod-artifact shard built the `addAuthSecretLeakProof(root, { leakToWire: false })` sibling for postgres and sqlite; focused security shard `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "local-helper Better Auth credential" --reporter=dot` passed the unsafe/safe production build proof.
 
 ## Traceability (finding → workstream); the census above is the master closure list
 
