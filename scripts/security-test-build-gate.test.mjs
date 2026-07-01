@@ -79,6 +79,39 @@ describe('security-test-build-gate', () => {
     });
   });
 
+  it('rejects skipped proof tests even when they mention a real build path', () => {
+    withTempRepo((repoRoot) => {
+      writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV426' }];");
+      writeProofFile(
+        repoRoot,
+        [
+          "it.skip('skipped trustedHtml proof', async () => {",
+          "  const exitCode = await mainAsync(['build', './app.ts', '--out', './dist']);",
+          "  expect(errorOutput).toContain('KV426');",
+          '});',
+        ].join('\n'),
+      );
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          proofs: [
+            {
+              buildInvocation: 'cli-main-build',
+              code: 'KV426',
+              proofFile: 'packages/cli/src/index.kovo-build.test.ts',
+              sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
+              testName: 'skipped trustedHtml proof',
+            },
+          ],
+          repoRoot,
+        }),
+      ).toContain(
+        'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426 -> packages/cli/src/index.kovo-build.test.ts: proof test is skipped or todo',
+      );
+    });
+  });
+
   it('keeps starter buildProductionArtifact tied to kovo build --no-cache', () => {
     withTempRepo((repoRoot) => {
       writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV435' }];");
@@ -110,6 +143,44 @@ describe('security-test-build-gate', () => {
       ).toContain(
         'packages/create-kovo/src/index.build.test-support.ts: starter-build-production-artifact helper is missing required build evidence "execFileSync"',
       );
+    });
+  });
+
+  it('allows production artifact proofs to require semantic evidence instead of a literal diagnostic code', () => {
+    withTempRepo((repoRoot) => {
+      writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV311' }];");
+      writeIslandDeriveProofFile(
+        repoRoot,
+        [
+          "it('artifact island derive proof', async () => {",
+          '  buildProductionArtifact(root);',
+          '  expect(pageErrors).toEqual([]);',
+          '  expect(consoleErrors).toEqual([]);',
+          '});',
+        ].join('\n'),
+      );
+      writeStarterBuildHelper(repoRoot, validStarterBuildHelperSource());
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: SECURITY_BUILD_CERTIFICATION_SOURCES,
+          proofs: [
+            {
+              buildInvocation: 'starter-build-production-artifact',
+              code: 'KV311',
+              proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+              requiredNeedles: [
+                'buildProductionArtifact(root)',
+                'expect(pageErrors).toEqual([])',
+                'expect(consoleErrors).toEqual([])',
+              ],
+              sourceFile: 'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts',
+              testName: 'artifact island derive proof',
+            },
+          ],
+          repoRoot,
+        }),
+      ).toEqual([]);
     });
   });
 
@@ -187,8 +258,25 @@ function writeStarterProofFile(repoRoot, source) {
   );
 }
 
+function writeIslandDeriveProofFile(repoRoot, source) {
+  writeFile(
+    repoRoot,
+    'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+    source,
+  );
+}
+
 function writeStarterBuildHelper(repoRoot, source) {
   writeFile(repoRoot, 'packages/create-kovo/src/index.build.test-support.ts', source);
+}
+
+function validStarterBuildHelperSource() {
+  return [
+    "import { execFileSync } from 'node:child_process';",
+    'export function buildProductionArtifact(root) {',
+    "  return execFileSync('kovo', ['build', './src/app.tsx', '--no-cache'], { cwd: root });",
+    '}',
+  ].join('\n');
 }
 
 function writeFile(repoRoot, relativePath, source) {
