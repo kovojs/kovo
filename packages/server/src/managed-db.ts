@@ -50,12 +50,9 @@ export class KovoReadonlyHandleError extends Error {
  * floor, and the static KV433 provenance gate remains the by-construction proof. Casts/`any` can
  * defeat this type and must never be accepted as security evidence.
  */
-type ReadCapabilityKeys<Db> = Extract<
-  keyof Db,
-  '$count' | '$with' | 'query' | 'select' | 'selectDistinct'
->;
-
-export type Reader<Db> = (Db extends object ? Pick<Db, ReadCapabilityKeys<Db>> : Db) & {
+export type Reader<Db> = (Db extends object
+  ? Pick<Db, Extract<keyof Db, '$count' | '$with' | 'query' | 'select' | 'selectDistinct'>>
+  : Db) & {
   readonly [readerDbBrand]: {
     readonly db: Db;
     readonly scope: 'framework-read-handle';
