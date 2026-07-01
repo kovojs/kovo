@@ -201,10 +201,11 @@ headers.getSetCookie === 'function'` where `node.ts:369` doesn't). Dev (vite-dev
     `sql-write-allowlist.oracle.test.ts` cross-checking `writeTablesForStatement` vs the oracle over the DDL corpus,
     on the DEC8 matrix (uses T1 `runGate`). A static/oracle mismatch fails CI.
   - Evidence: `pnpm exec vitest --run packages/server/src/sql-write-allowlist.oracle.test.ts packages/server/src/sql-write-allowlist.test.ts`, `vp check packages/server/src/sql-write-oracle.ts packages/server/src/sql-write-allowlist.oracle.test.ts`, and `git diff --check` passed with transaction-rollback oracle coverage for PGlite/Postgres and better-sqlite3/SQLite over DML, DDL, view/index, and SQLite pragma cases.
-- [ ] **P.1 — DB-write choke (DEC4, M8).**
+- [x] **P.1 — DB-write choke (DEC4, M8).**
   - Route every handle family (`readonlyDb`×6, `managedDb`, `wrapManagedDbForSqlSafety`, webhook Tx, storage,
     `createDurableTaskSqlExecutor`) through `enforceManagedSql()`; add `scripts/check-single-choke.mjs` (via `runGate`)
     asserting the driver methods appear only inside the choke.
+  - Evidence: `pnpm exec vitest --run scripts/check-single-choke.test.mjs packages/server/src/managed-db.test.ts packages/server/src/task-queue.test.ts packages/server/src/task-cron.test.ts`, `pnpm exec vitest --run packages/server/src/sql-write-allowlist.test.ts packages/server/src/sql-write-allowlist.oracle.test.ts`, `pnpm run check:single-choke`, touched-file `vp check`, and `git diff --check origin/main..HEAD` passed after routing managed SQL execution through `enforceManagedSql()` and enrolling the single-choke gate.
 
 ## Phase 3 — Structural splits (so later edits land in the right module)
 
