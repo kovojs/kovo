@@ -1586,6 +1586,13 @@ export const stripeWebhook = webhook('/webhooks/stripe', {
 
     expect(result.endpointGraphFacts).toEqual([
       {
+        access: { kind: 'verified-machine-auth' },
+        appOwnedSafety: false,
+        auth: 'webhook-verifier',
+        body: 'text',
+        cache: 'no-store',
+        csrf: 'exempt',
+        csrfJustification: '/webhooks/stripe webhook verifier',
         method: 'POST',
         mount: 'exact',
         name: '/webhooks/stripe',

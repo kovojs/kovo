@@ -65,21 +65,26 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
         Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` covers pglite/default, better-sqlite3, and synthetic unknown dialect sinks across the matrix.
   - [x] `wrapManagedDbForSqlSafety` enforces the same policy at every call site [H/I]
         Evidence: M1 `pnpm exec vitest --run packages/server/src/managed-db.test.ts --reporter=dot` covers top-level, transaction, with-builder, nested escape, and unknown-method call sites.
-- [ ] `WebhookTxDb` webhook transaction handle [H]
-  - [ ] `WebhookTxDb` declared transaction writes still execute through the audited path [H]
-  - [ ] `WebhookTxDb` raw `$client`/`.session` escape handles fail closed [H]
+- [x] `WebhookTxDb` webhook transaction handle [H]
+  - Evidence: children closed by M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] `WebhookTxDb` declared transaction writes still execute through the audited path [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite served webhook transaction cases; M2 uses `buildProductionArtifact(root)` / `kovo build --no-cache`; M3 killed the webhook KV330 proof-enrollment mutant.
+  - [x] `WebhookTxDb` raw `$client`/`.session` escape handles fail closed [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite build-fail cases for `context.tx.$client`/`.session`; M2/M3 security gates passed with the KV330 webhook proof enrolled and mutation-killed.
 - [x] storage / capability write handles (upload/store/delete) [H]
   - Evidence: children closed by current prod-artifact M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json`.
   - [x] query/load storage upload, store, delete, and put writes fail closed [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot` passed postgres+SQLite prod-artifact red/flip build-fail cases; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 31 mutants including KV433 storage-delete proof enrollment.
   - [x] declared mutation/capability storage writes still work through the audited path [H]
         Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'storage' --reporter=dot` served the production artifact and observed declared mutation `put`/`delete` storage effects.
-- [ ] raw driver `$client` / `.session` escape from any managed handle [H]
+- [x] raw driver `$client` / `.session` escape from any managed handle [H]
+  - Evidence: all children closed with production artifact fail-closed proofs in `scripts/fundamental-fixes-census.manifest.json`.
   - [x] managed write handle `$client`/`.session` escapes fail closed before nested wrapping [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed 4 prod-artifact tests including default+SQLite build-fail managed-write escape attempts; M2 row proof uses `buildProductionArtifact(root)` / `kovo build --no-cache`; M3 `pnpm run check:security-gate-mutations` kills `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
   - [x] read-only handle `$client`/`.session` escapes fail closed before execution [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts --reporter=dot` passed 8 prod-artifact tests including default+SQLite read-only escape attempts; M2 row proof uses `buildProductionArtifact(root)`; M3 `pnpm run check:security-gate-mutations` killed `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
-  - [ ] webhook transaction `$client`/`.session` escapes fail closed before execution [H]
+  - [x] webhook transaction `$client`/`.session` escapes fail closed before execution [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed default+SQLite build-fail cases for raw `context.tx.$client`/`.session` reads before artifact emission; M2/M3 security gates passed with the webhook KV330 proof enrolled and mutation-killed.
 - [x] unknown/future drizzle method OR driver dialect → **fails closed by default** (not a matrix update) [H/I]
   - Evidence: children closed by current futureStatement and synthetic unknown dialect matrix evidence in `scripts/fundamental-fixes-census.manifest.json`.
   - [x] unknown method with a SQL carrier is parsed before execution [H/I]

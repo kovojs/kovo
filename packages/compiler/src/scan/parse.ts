@@ -75,6 +75,13 @@ const HANDLER_WRITE_SINK_OPERATIONS = new Set<HandlerWriteSinkOperationKind>([
   'run',
   'update',
 ]);
+const WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES = new Set([
+  '$client',
+  'client',
+  'pglite',
+  'session',
+  'sqlite',
+]);
 const TASK_CONTEXT_COMPOSITION_METHODS = new Set(['runMutation', 'runQuery', 'schedule']);
 
 /**
@@ -1354,10 +1361,16 @@ function webhookHandlerModels(
     : [];
   return handlerPropertyEntries(sourceFile, source, call).map(({ body, model, parameters }) => ({
     ...model,
-    handlerWriteSinks: handlerWriteSinkFacts(sourceFile, source, body, {
-      owner,
-      surface: 'webhook',
-    }),
+    handlerWriteSinks: [
+      ...handlerWriteSinkFacts(sourceFile, source, body, {
+        owner,
+        surface: 'webhook',
+      }),
+      ...webhookTransactionRawDriverEscapeFacts(sourceFile, body, {
+        contextParamName: model.paramNames[1],
+        owner,
+      }),
+    ].sort((left, right) => left.span.start - right.span.start),
     webhookRecordChanges: webhookRecordChangeFacts(sourceFile, body, {
       contextParamName: model.paramNames[1],
       declaredWriteKeys,
@@ -1606,6 +1619,64 @@ function webhookDeclaredWriteKeys(
     const expression = ts.isSpreadElement(element) ? element.expression : element;
     return domainKeyFromExpression(sourceFile, expression, domainBindings) ?? 'UNRESOLVED';
   });
+}
+
+function webhookTransactionRawDriverEscapeFacts(
+  sourceFile: ts.SourceFile,
+  body: ts.ConciseBody,
+  options: {
+    readonly contextParamName: string | undefined;
+    readonly owner: HandlerWriteSinkOwner;
+  },
+): HandlerWriteSinkFact[] {
+  if (options.contextParamName === undefined) return [];
+
+  const txTargets = new Set([`${options.contextParamName}.tx`]);
+  const facts = new Map<string, HandlerWriteSinkFact>();
+
+  const addTxAlias = (name: ts.BindingName, initializer: ts.Expression | undefined): void => {
+    if (!initializer) return;
+    const identity = expressionTargetIdentity(unwrapExpression(initializer));
+    if (identity !== `${options.contextParamName}.tx`) return;
+
+    if (ts.isIdentifier(name)) {
+      txTargets.add(name.text);
+      return;
+    }
+
+    collectBindingIdentifiers(name, txTargets);
+  };
+
+  const visit = (node: ts.Node): void => {
+    if (ts.isVariableDeclaration(node)) addTxAlias(node.name, node.initializer);
+
+    if (ts.isPropertyAccessExpression(node)) {
+      const propertyName = node.name.text;
+      if (WEBHOOK_TRANSACTION_RAW_DRIVER_ESCAPE_PROPERTIES.has(propertyName)) {
+        const targetIdentity = expressionTargetIdentity(unwrapExpression(node.expression));
+        if (targetIdentity !== undefined && txTargets.has(targetIdentity)) {
+          const path = `${targetIdentity}.${propertyName}`;
+          const fact: HandlerWriteSinkFact = {
+            canonicalTarget: {
+              identity: targetIdentity,
+              provenance: 'property-access-path',
+            },
+            operationKind: 'raw-driver-escape',
+            owner: options.owner,
+            path,
+            span: { end: node.getEnd(), start: node.getStart(sourceFile) },
+            surface: 'webhook',
+          };
+          facts.set(handlerWriteSinkFactKey(fact), fact);
+        }
+      }
+    }
+
+    ts.forEachChild(node, visit);
+  };
+
+  visit(body);
+  return [...facts.values()].sort((left, right) => left.span.start - right.span.start);
 }
 
 function webhookRecordChangeFacts(

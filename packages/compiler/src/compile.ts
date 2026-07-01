@@ -834,6 +834,13 @@ function taskGraphFactsFromModel(model: ComponentModuleModel): TaskGraphFact[] {
 
 function webhookEndpointGraphFactsFromModel(model: ComponentModuleModel): EndpointGraphFact[] {
   return model.webhookHandlers.map((handler) => ({
+    access: { kind: 'verified-machine-auth' },
+    appOwnedSafety: false,
+    auth: 'webhook-verifier',
+    body: 'text',
+    cache: 'no-store',
+    csrf: 'exempt',
+    csrfJustification: `${handler.owner.value} webhook verifier`,
     method: 'POST',
     mount: 'exact',
     name: handler.owner.value,

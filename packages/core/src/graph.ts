@@ -119,6 +119,7 @@ export type HandlerWriteSinkOperationKind =
   | 'execute'
   | 'insert'
   | 'put'
+  | 'raw-driver-escape'
   | 'run'
   | 'store'
   | 'upload'
