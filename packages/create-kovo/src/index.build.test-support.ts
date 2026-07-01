@@ -177,6 +177,15 @@ export function addStorageQueryWriteProof(root: string): void {
       '  },',
       '});',
       '',
+      'export const storageDeleteWriteQuery = query({',
+      "  access: publicAccess('storage delete write query proof'),",
+      '  reads: [],',
+      '  async load(): Promise<{ ok: true }> {',
+      "    await storageWriteProbe.delete('receipts/query-delete-proof.txt');",
+      '    return { ok: true };',
+      '  },',
+      '});',
+      '',
       'export const storageComputedWriteQuery = query({',
       "  access: publicAccess('storage computed write query proof'),",
       '  reads: [],',
@@ -216,14 +225,92 @@ export function addStorageQueryWriteProof(root: string): void {
   app = replaceRequired(
     app,
     "import { contactsQuery } from './queries.js';",
-    "import { contactsQuery, storageComputedWriteQuery, storageFileStoreWriteQuery, storagePutWriteQuery, storageUploadWriteQuery } from './queries.js';",
+    "import { contactsQuery, storageComputedWriteQuery, storageDeleteWriteQuery, storageFileStoreWriteQuery, storagePutWriteQuery, storageUploadWriteQuery } from './queries.js';",
     'storage query write proof app import',
   );
   app = replaceRequired(
     app,
     '  queries: [contactsQuery],',
-    '  queries: [contactsQuery, storageComputedWriteQuery, storageFileStoreWriteQuery, storagePutWriteQuery, storageUploadWriteQuery],',
+    '  queries: [contactsQuery, storageComputedWriteQuery, storageDeleteWriteQuery, storageFileStoreWriteQuery, storagePutWriteQuery, storageUploadWriteQuery],',
     'storage query write proof app registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
+export function addStorageMutationWriteProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/storage-mutation-proof.tsx'),
+    [
+      '/** @jsxImportSource @kovojs/server */',
+      "import { createMemoryStorage, mutation, publicAccess, s } from '@kovojs/server';",
+      '',
+      'const storageMutationProof = createMemoryStorage();',
+      "await storageMutationProof.put('receipts/delete-target.txt', 'delete target');",
+      "const publicProof = publicAccess('public storage mutation capability proof');",
+      '',
+      'export const storageMutationWrite = mutation({',
+      '  access: publicProof,',
+      '  csrf: false,',
+      '  input: s.object({ mode: s.string() }),',
+      '  async handler(input: { mode: string }) {',
+      "    if (input.mode === 'put') {",
+      "      await storageMutationProof.put('receipts/mutation-put.txt', 'mutation put ok', {",
+      "        contentType: 'text/plain',",
+      '      });',
+      "      return { mode: 'put' };",
+      '    }',
+      "    if (input.mode === 'delete') {",
+      "      await storageMutationProof.delete('receipts/delete-target.txt');",
+      "      return { mode: 'delete' };",
+      '    }',
+      "    throw new Error('unsupported storage mutation proof mode');",
+      '  },',
+      '});',
+      '',
+      'export async function storageMutationStatus() {',
+      "  const put = await storageMutationProof.get('receipts/mutation-put.txt');",
+      "  const deleteTarget = await storageMutationProof.get('receipts/delete-target.txt');",
+      '  return (',
+      '    <main data-proof="storage-mutation">',
+      '      <p id="storage-put">{put === undefined ? "missing" : "present"}</p>',
+      '      <p id="storage-delete">{deleteTarget === undefined ? "missing" : "present"}</p>',
+      '    </main>',
+      '  );',
+      '}',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { addContact } from './mutations.js';",
+    [
+      "import { addContact } from './mutations.js';",
+      "import { storageMutationStatus, storageMutationWrite } from './storage-mutation-proof.js';",
+    ].join('\n'),
+    'storage mutation proof import',
+  );
+  app = replaceRequired(
+    app,
+    '  mutations: [addContact, appSignIn, appSignOut],',
+    '  mutations: [addContact, storageMutationWrite, appSignIn, appSignOut],',
+    'storage mutation proof registration',
+  );
+  app = replaceRequired(
+    app,
+    "  routes: [\n    route('/', {",
+    [
+      '  routes: [',
+      "    route('/storage-mutation-proof', {",
+      "      access: publicAccess('public storage mutation capability proof'),",
+      '      page: storageMutationStatus,',
+      '    }),',
+      "    route('/', {",
+    ].join('\n'),
+    'storage mutation proof route',
   );
   writeFileSync(appPath, app, 'utf8');
 }

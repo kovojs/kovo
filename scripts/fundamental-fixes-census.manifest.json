@@ -186,24 +186,85 @@
       "id": "storage-capability-write-handles-upload-store-delete",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by prod-artifact storage query fail-closed and declared mutation write proofs; pnpm run check:security-test-builds passed 14 real-build proofs; pnpm run check:security-gate-mutations killed 31 mutants.",
+      "evidenceBundles": [
+        "m1-prod-artifact-storage-write",
+        "m1-prod-artifact-storage-mutation-write",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot (2 passed, 8 skipped, 214.52s); pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'storage' --reporter=dot (2 passed, 7 skipped, 54.47s)",
+        "dialects": {
+          "postgres": "M1:storage-write default/postgres prod-artifact red/flip build-fail cases reject storage put/delete/store/upload query writes with KV433",
+          "sqlite": "M1:storage-write SQLite prod-artifact red/flip build-fail cases reject storage put/delete/store/upload query writes with KV433"
+        },
+        "independentReviewer": "agent/followup-capability-storage-1782923948 reverified the existing prod-artifact storage gate and added direct delete plus declared mutation storage write coverage in this isolated worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root), serves dist/server/server.mjs for the mutation proof, and the M1 adversarial storage sweep uses kovo build --no-cache",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 14 real-build proofs; KV433 storage-query-write-prod-artifact now pins operation=delete alongside put/store/upload"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 31 mutants killed, including security-test-build-gate/weaken-kv433-storage-delete-proof-enrollment"
+      }
     },
     {
       "id": "query-load-storage-upload-store-delete-and-put-writes-fail-closed",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "storage-capability-write-handles-upload-store-delete"
+      "status": "closed",
+      "evidence": "M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot` passed postgres+SQLite prod-artifact build-fail red/flip cases; focused storage test asserts KV433 includes operation=put/delete/store/upload.",
+      "parent": "storage-capability-write-handles-upload-store-delete",
+      "evidenceBundles": [
+        "m1-prod-artifact-storage-write",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot (2 passed, 8 skipped, 214.52s)",
+        "dialects": {
+          "postgres": "default/postgres production build rejects query loader storage put/delete/store/upload writes with KV433",
+          "sqlite": "SQLite production build rejects query loader storage put/delete/store/upload writes with KV433"
+        },
+        "independentReviewer": "agent/followup-capability-storage-1782923948 added direct delete to the existing storage query proof and re-ran focused low-level plus prod-artifact gates"
+      },
+      "m2": {
+        "productionBuild": "addStorageQueryWriteProof(root) is built through buildProductionArtifact(root) / kovo build --no-cache in the M1 adversarial and focused security tests",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 14 real-build proofs and requires KV433 operation=put/delete/store/upload evidence"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 31 mutants killed, including security-test-build-gate/weaken-kv433-storage-delete-proof-enrollment"
+      }
     },
     {
       "id": "declared-mutation-capability-storage-writes-still-work-through-the-audited-path",
       "kind": "write-capable-handle",
       "owner": ["H"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "storage-capability-write-handles-upload-store-delete"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'storage' --reporter=dot served the production artifact, posted to the declared mutation, and observed storage put/delete effects on the follow-up route.",
+      "parent": "storage-capability-write-handles-upload-store-delete",
+      "evidenceBundles": [
+        "m1-prod-artifact-storage-mutation-write",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'storage' --reporter=dot (2 passed, 7 skipped, 54.47s)",
+        "dialects": {
+          "postgres": "declared mutation storage put/delete path is storage-backend and SQL-dialect independent; default/postgres starter production artifact served and observed the write effects",
+          "sqlite": "query fail-closed M1 covers SQLite storage-write gates; declared mutation storage write runtime path does not branch on SQL dialect"
+        },
+        "independentReviewer": "agent/followup-capability-storage-1782923948 added the declared mutation production artifact proof and verified it in this worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts calls buildProductionArtifact(root), starts dist/server/server.mjs, posts /_m/storage-mutation-proof/storage-mutation-write, and fetches /storage-mutation-proof",
+        "noFixtureOnlyCertification": "the proof observes served production artifact behavior rather than fixture-only mutation unit coverage; pnpm run check:security-test-builds passed 14 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 31 mutants killed, including the KV433 storage proof enrollment mutant for the fail-closed sibling"
+      }
     },
     {
       "id": "raw-driver-client-session-escape-from-any-managed-handle",
@@ -521,24 +582,84 @@
       "id": "capability-urls-signed-payloads",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "Children closed by served prod-artifact capability URL mint/verify/tamper proofs; M1 output-wire sweep passed postgres+SQLite; security-test-builds passed 14 real-build proofs; security-gate-mutations killed 31 mutants.",
+      "evidenceBundles": [
+        "m1-prod-artifact-capability-url",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:output-wire' --reporter=dot (2 passed, 8 skipped, 169.53s); pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot (1 passed, 24.96s)",
+        "dialects": {
+          "postgres": "M1:output-wire default/postgres prod artifact minted a capability URL, verified the download, and rejected a tampered path",
+          "sqlite": "M1:output-wire SQLite prod artifact minted a capability URL, verified the download, and rejected a tampered path"
+        },
+        "independentReviewer": "agent/followup-capability-storage-1782923948 reverified the served capability URL artifact and M1 output-wire sweep in this isolated worker branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts calls buildProductionArtifact(root), starts dist/server/server.mjs, fetches the minted URL, and tampers the served href",
+        "noFixtureOnlyCertification": "proof observes generated production server behavior plus assertProdArtifactSinkCensus(root); pnpm run check:security-test-builds passed 14 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 31 mutants killed; census closed-row M1/M2/M3 enforcement remains mutation-tested"
+      }
     },
     {
       "id": "capability-urls-mint-and-verify-against-the-production-artifact",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "capability-urls-signed-payloads"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot served dist/server/server.mjs, fetched /capability-url-proof, then used the minted signed URL to read capability secret bytes.",
+      "parent": "capability-urls-signed-payloads",
+      "evidenceBundles": [
+        "m1-prod-artifact-capability-url",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot (1 passed, 24.96s); M1 output-wire sweep passed 2 dialect cases in 169.53s",
+        "dialects": {
+          "postgres": "default/postgres served artifact minted /capability-download/...?...kovo-cap= and verified the download with 200 + private no-store headers",
+          "sqlite": "M1:output-wire SQLite served artifact minted /m1-capability-download/...?...kovo-cap= and verified the download with 200"
+        },
+        "independentReviewer": "agent/followup-capability-storage-1782923948 reverified the focused served-artifact capability proof and the postgres+SQLite M1 output-wire sweep"
+      },
+      "m2": {
+        "productionBuild": "row proof uses buildProductionArtifact(root), readProductionGraph(root), assertProdArtifactSinkCensus(root), and the served dist/server/server.mjs artifact",
+        "noFixtureOnlyCertification": "the signed URL is fetched from the running production artifact; pnpm run check:security-test-builds passed 14 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 31 mutants killed; closed-row evidence enforcement remains mutation-tested"
+      }
     },
     {
       "id": "tampered-capability-path-query-payloads-reject-before-read",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "capability-urls-signed-payloads"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot tampered the signed capability path, received generic 404, and did not expose the storage guard's pre-verification read error.",
+      "parent": "capability-urls-signed-payloads",
+      "evidenceBundles": [
+        "m1-prod-artifact-capability-url",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot (1 passed, 24.96s); M1 output-wire sweep passed 2 dialect cases in 169.53s",
+        "dialects": {
+          "postgres": "default/postgres served artifact rejects a path-tampered capability URL and missing token with generic Not Found before exposing guarded storage reads",
+          "sqlite": "M1:output-wire SQLite served artifact rejects a tampered capability path with generic Not Found"
+        },
+        "independentReviewer": "agent/followup-capability-storage-1782923948 reverified the focused tamper proof and the postgres+SQLite M1 output-wire sweep"
+      },
+      "m2": {
+        "productionBuild": "row proof tampers the href emitted by the served production artifact after buildProductionArtifact(root), not a unit-only token fixture",
+        "noFixtureOnlyCertification": "assertProdArtifactSinkCensus(root) enumerates capability URLs / signed payloads witnesses; pnpm run check:security-test-builds passed 14 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 31 mutants killed; closed-row evidence enforcement remains mutation-tested"
+      }
     },
     {
       "id": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
@@ -1547,6 +1668,18 @@
     "m1-prod-artifact-adversarial-focused": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:<surface> --reporter=dot",
       "evidence": "Focused no-cache prod-artifact M1 sweep for one row/surface across postgres and sqlite."
+    },
+    "m1-prod-artifact-storage-write": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot",
+      "evidence": "Production artifact storage write M1 sweep covers postgres and SQLite query-loader build-fail red/flip cases."
+    },
+    "m1-prod-artifact-storage-mutation-write": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'storage' --reporter=dot",
+      "evidence": "Production artifact storage focused shard covers query write fail-closed and served declared mutation storage put/delete behavior."
+    },
+    "m1-prod-artifact-capability-url": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot; pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:output-wire' --reporter=dot",
+      "evidence": "Served production artifact capability URL proof mints/verifies signed URLs and rejects tampered path payloads; M1 output-wire sweep covers postgres and SQLite."
     },
     "m2-security-real-build-gate": {
       "command": "pnpm run check:security-test-builds",

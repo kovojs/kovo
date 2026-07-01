@@ -63,9 +63,12 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 - [ ] `WebhookTxDb` webhook transaction handle [H]
   - [ ] `WebhookTxDb` declared transaction writes still execute through the audited path [H]
   - [ ] `WebhookTxDb` raw `$client`/`.session` escape handles fail closed [H]
-- [ ] storage / capability write handles (upload/store/delete) [H]
-  - [ ] query/load storage upload, store, delete, and put writes fail closed [H]
-  - [ ] declared mutation/capability storage writes still work through the audited path [H]
+- [x] storage / capability write handles (upload/store/delete) [H]
+  - Evidence: children closed by current prod-artifact M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] query/load storage upload, store, delete, and put writes fail closed [H]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot` passed postgres+SQLite prod-artifact red/flip build-fail cases; M2 `pnpm run check:security-test-builds` passed 14 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 31 mutants including KV433 storage-delete proof enrollment.
+  - [x] declared mutation/capability storage writes still work through the audited path [H]
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'storage' --reporter=dot` served the production artifact and observed declared mutation `put`/`delete` storage effects.
 - [ ] raw driver `$client` / `.session` escape from any managed handle [H]
   - [x] managed write handle `$client`/`.session` escapes fail closed before nested wrapping [H]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot` passed 4 prod-artifact tests including default+SQLite build-fail managed-write escape attempts; M2 row proof uses `buildProductionArtifact(root)` / `kovo build --no-cache`; M3 `pnpm run check:security-gate-mutations` kills `sql-safe-handle/drop-managed-raw-driver-escape-denial`.
@@ -102,9 +105,12 @@ named workstream and must carry exact M1–M3 evidence in `scripts/fundamental-f
 - [ ] error shells / 500 bodies [C2]
   - [ ] 500 shells escape request-controlled payloads [C2]
   - [ ] 500 shells exclude private exception details [C2]
-- [ ] capability URLs / signed payloads [C2]
-  - [ ] capability URLs mint and verify against the production artifact [C2]
-  - [ ] tampered capability path/query payloads reject before read [C2]
+- [x] capability URLs / signed payloads [C2]
+  - Evidence: children closed by current prod-artifact M1/M2/M3 evidence in `scripts/fundamental-fixes-census.manifest.json`.
+  - [x] capability URLs mint and verify against the production artifact [C2]
+        Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:output-wire' --reporter=dot` passed postgres+SQLite served-artifact capability URL cases; focused `redirect-capability` prod-artifact test passed.
+  - [x] tampered capability path/query payloads reject before read [C2]
+        Evidence: focused `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts --reporter=dot` served `dist/server/server.mjs`, tampered the signed path, received generic 404, and storage guard did not expose pre-verification read errors.
 - [ ] raw-HTML sinks (`trustedHtml`, `trustedUrl`, `@internal renderedHtml`) [C2/B3]
   - [x] KV426 blocks `trustedHtml()` request taint in a prod artifact [C2/B3]
         Evidence: M1 `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:raw-html --reporter=dot` passed 2 dialect cases; M2 `pnpm run check:security-test-builds` passed 13 real-build proofs; M3 `pnpm run check:security-gate-mutations` killed 28 mutants.

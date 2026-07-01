@@ -25,6 +25,7 @@ import {
   addEscapedAttackerTextProof,
   addInternalHtmlImportProof,
   addNoJsFailureProof,
+  addStorageMutationWriteProof,
   addStorageQueryWriteProof,
   addTrustedOutputProvenanceBuildProof,
   addTrustedUrlAttributeTypeGateProof,
@@ -110,10 +111,12 @@ describe('create-kovo starter (build integration: production security artifacts)
         const output = execFileSyncErrorOutput(error);
         expect(output).toContain('KV433');
         expect(output).toContain('storage-put-write-query');
+        expect(output).toContain('storage-delete-write-query');
         expect(output).toContain('storage-computed-write-query');
         expect(output).toContain('storage-file-store-write-query');
         expect(output).toContain('storage-upload-write-query');
         expect(output).toContain('operation=put');
+        expect(output).toContain('operation=delete');
         expect(output).toContain('operation=store');
         expect(output).toContain('operation=upload');
       }
@@ -121,6 +124,71 @@ describe('create-kovo starter (build integration: production security artifacts)
       rmSync(root, { force: true, recursive: true });
     }
   }, 120_000);
+
+  it('serves declared mutation storage writes through the production artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-storage-mutation-write-'));
+    const port = await reservePort();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod Storage Mutation Write Proof' });
+      linkStarterBuildDependencies(root);
+      addStorageMutationWriteProof(root);
+
+      buildProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+
+      const initial = await fetchTextWhenReady(`${origin}/storage-mutation-proof`, output);
+      expect(initial).toContain('<p id="storage-put">missing</p>');
+      expect(initial).toContain('<p id="storage-delete">present</p>');
+
+      const put = await fetch(`${origin}/_m/storage-mutation-proof/storage-mutation-write`, {
+        body: new URLSearchParams({ mode: 'put' }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          'Kovo-Fragment': 'true',
+        },
+        method: 'POST',
+      });
+      await put.text();
+      expect(put.status).toBe(200);
+      const afterPut = await fetch(`${origin}/storage-mutation-proof`);
+      await expect(afterPut.text()).resolves.toContain('<p id="storage-put">present</p>');
+
+      const deleteResponse = await fetch(
+        `${origin}/_m/storage-mutation-proof/storage-mutation-write`,
+        {
+          body: new URLSearchParams({ mode: 'delete' }),
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            'Kovo-Fragment': 'true',
+          },
+          method: 'POST',
+        },
+      );
+      await deleteResponse.text();
+      expect(deleteResponse.status).toBe(200);
+      const afterDelete = await fetch(`${origin}/storage-mutation-proof`);
+      await expect(afterDelete.text()).resolves.toContain('<p id="storage-delete">missing</p>');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 180_000);
 
   // @kovo-security-certifies KV426 trusted-output-prod-artifact
   it('blocks trusted output provenance leaks through the production build artifact', () => {

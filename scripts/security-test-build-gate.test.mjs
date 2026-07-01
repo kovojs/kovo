@@ -474,6 +474,25 @@ describe('security-test-build-gate', () => {
       ]),
     });
   });
+
+  it('keeps the KV433 storage query write proof enrolled for every storage write verb', () => {
+    expect(
+      SECURITY_BUILD_PROOFS.find(
+        (proof) => proof.code === 'KV433' && proof.claimId === 'storage-query-write-prod-artifact',
+      ),
+    ).toMatchObject({
+      buildInvocation: 'starter-build-production-artifact',
+      proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+      requiredNeedles: expect.arrayContaining([
+        'addStorageQueryWriteProof(root)',
+        'buildProductionArtifact(root)',
+        'operation=put',
+        'operation=delete',
+        'operation=store',
+        'operation=upload',
+      ]),
+    });
+  });
 });
 
 function withTempRepo(callback) {

@@ -126,6 +126,7 @@ export const SECURITY_BUILD_PROOFS = [
       'buildProductionArtifact(root)',
       'KV433',
       'operation=put',
+      'operation=delete',
       'operation=store',
       'operation=upload',
     ],
