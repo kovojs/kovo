@@ -76,6 +76,26 @@ describe('security-gate-mutations', () => {
           name: 'fundamental-fixes-census-gate/drop-unknown-resolver-expression-kind-rejection',
           status: 'killed',
         }),
+        expect.objectContaining({
+          name: 'core-framework-identity/drop-element-access-kind-resolution',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'core-framework-identity/drop-element-access-canonicalization',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'core-framework-identity/drop-export-star-resolution',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-compile/drop-framework-identity-project-registration',
+          status: 'killed',
+        }),
+        expect.objectContaining({
+          name: 'compiler-vite/drop-js-to-ts-sibling-candidates',
+          status: 'killed',
+        }),
       ]),
     );
     expect(results.every((result) => result.status === 'killed')).toBe(true);
