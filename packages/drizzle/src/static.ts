@@ -472,41 +472,18 @@ function scopeAuditReadProvenance(
   ownerScopes: readonly OwnerDomainScope[],
 ): QueryReadProvenance[] {
   const owners = new Set(ownerScopes.map((owner) => owner.domain));
-  const provenance =
-    fact.readProvenance && fact.readProvenance.length > 0
-      ? [...fact.readProvenance]
-      : legacyQueryReadProvenanceForScopeAudit(fact, owners);
+  const provenance = [...(fact.readProvenance ?? [])];
   const provenDomains = new Set(provenance.map((read) => read.domain));
 
-  // Fail closed: an owner domain present in the canonical read set but missing a
-  // provenance row is not treated as green. It becomes an unscoped owner read and
-  // therefore KV414/unknown in the audit.
+  // Fail closed: scope audits consume only canonical readProvenance rows. An owner
+  // domain present in the read set but missing canonical provenance becomes an
+  // unresolved unscoped owner read and therefore KV414/unknown in the audit.
   for (const domain of fact.reads) {
     if (!owners.has(domain) || provenDomains.has(domain)) continue;
     provenance.push(unresolvedScopeAuditRead(fact, domain));
   }
 
   return prioritizedScopeAuditReadProvenance(provenance, owners);
-}
-
-function legacyQueryReadProvenanceForScopeAudit(
-  fact: QueryFact,
-  owners: ReadonlySet<string>,
-): QueryReadProvenance[] {
-  return fact.reads
-    .filter((domain) => owners.has(domain))
-    .map((domain) => {
-      const scope = legacyQueryReadScopeForDomain(fact, domain, owners);
-      return {
-        columns: [],
-        domain,
-        keys: fact.instanceKey?.domain === domain ? fact.instanceKey.key : null,
-        scope,
-        site: fact.site,
-        source: 'select',
-        via: domain,
-      };
-    });
 }
 
 function unresolvedScopeAuditRead(fact: QueryFact, domain: string): QueryReadProvenance {
@@ -574,37 +551,6 @@ function dedupeQueryReadProvenanceByScope(
       ]),
     ).values(),
   ];
-}
-
-function legacyQueryReadScopeForDomain(
-  fact: QueryFact,
-  domain: string,
-  owners: ReadonlySet<string>,
-): QueryReadScopeProvenance {
-  const argKey = legacyArgReadKeyForDomain(fact, domain);
-  if (argKey !== undefined) return argKey ? { key: argKey, kind: 'arg' } : { kind: 'arg' };
-
-  const privateKey = (fact.ownerScopedPrivateReadKeys ?? []).find(
-    (scoped) => scoped.domain === domain,
-  )?.privateKey;
-  if (privateKey) return privateScopeFromKey(privateKey, true);
-
-  if (owners.has(domain) && fact.hasClientArgPredicate) return { kind: 'arg' };
-  if (fact.instanceKey?.domain === domain) return readScopeFromKey(fact.instanceKey.key);
-  if ((fact.sessionAnchoredReads ?? []).includes(domain)) {
-    return privateScopeFromKey('session:<unknown>');
-  }
-  return { kind: 'unscoped' };
-}
-
-function legacyArgReadKeyForDomain(fact: QueryFact, domain: string): string | undefined {
-  if (fact.instanceKey?.domain === domain && fact.instanceKey.key.startsWith('arg:')) {
-    return fact.instanceKey.key;
-  }
-  const scoped = (fact.argScopedReadKeys ?? []).find((candidate) => candidate.domain === domain);
-  if (scoped) return scoped.key;
-  if ((fact.argScopedReads ?? []).includes(domain)) return '';
-  return undefined;
 }
 
 function isPrivateQueryReadScope(
