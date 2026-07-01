@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
 import { mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -10,6 +11,7 @@ const DEFAULT_ROOTS = {
 
 const DEFAULT_HISTORY_NAME = 'timing-history.json';
 const DEFAULT_DURATION_SECONDS = 5;
+const STARTER_SHARD_COUNT = 8;
 const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/cli/src/index.kovo-compile.test.ts',
   'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts',
@@ -43,6 +45,209 @@ const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/test/src/sqlite-harness.test.ts',
   'packages/test/src/verifier-sql.test.ts',
 ]);
+
+const STARTER_ENTRIES = [
+  {
+    id: 'contacts-add-contact',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
+    testName: 'non-empty enhanced add-contact',
+    seconds: 260,
+  },
+  {
+    id: 'contacts-sqlite-add-contact',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
+    testName: 'generated SQLite add-contact',
+    seconds: 190,
+  },
+  {
+    id: 'contacts-multi-component-refresh',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
+    testName: 'multi-component modules',
+    seconds: 260,
+  },
+  {
+    id: 'contacts-idempotency-collisions',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
+    testName: 'idempotency token collisions',
+    seconds: 220,
+  },
+  {
+    id: 'security-auth-helper',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'Better Auth credential laundering',
+    seconds: 70,
+  },
+  {
+    id: 'security-raw-html-helper-imports',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'raw-HTML helper imports',
+    seconds: 70,
+  },
+  {
+    id: 'security-query-loader-storage-writes',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'storage writes from query loaders',
+    seconds: 80,
+  },
+  {
+    id: 'security-mutation-storage-writes',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'declared mutation storage writes',
+    seconds: 100,
+  },
+  {
+    id: 'security-trusted-output-provenance',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'trusted output provenance leaks',
+    seconds: 90,
+  },
+  {
+    id: 'security-trusted-url-attributes',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'TrustedUrl values in non-URL JSX attributes',
+    seconds: 60,
+  },
+  {
+    id: 'security-helper-text',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'attacker-shaped helper text',
+    seconds: 60,
+  },
+  {
+    id: 'security-enhanced-mutation-fragments',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'enhanced mutation fragments',
+    seconds: 120,
+  },
+  {
+    id: 'security-query-wire',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: '/_q query wire',
+    seconds: 110,
+  },
+  {
+    id: 'security-form-error',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'FormError',
+    seconds: 100,
+  },
+  {
+    id: 'm1-storage-write',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'M1:storage-write',
+    seconds: 395,
+  },
+  {
+    id: 'm1-raw-html',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'M1:raw-html',
+    seconds: 317,
+  },
+  {
+    id: 'm1-secret-wire',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'M1:secret-wire',
+    seconds: 313,
+  },
+  {
+    id: 'm1-raw-sql',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'M1:raw-sql',
+    seconds: 289,
+  },
+  {
+    id: 'm1-output-wire',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
+    testName: 'M1:output-wire',
+    seconds: 299,
+  },
+  {
+    id: 'raw-sql-artifacts',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
+    seconds: 360,
+  },
+  {
+    id: 'starter-typecheck',
+    file: 'packages/create-kovo/src/index.build.scaffold.typecheck.test.ts',
+    seconds: 130,
+  },
+  {
+    id: 'asset-artifacts',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.assets.test.ts',
+    seconds: 130,
+  },
+  {
+    id: 'runtime-dev-server',
+    file: 'packages/create-kovo/src/index.build.runtime.test.ts',
+    seconds: 260,
+  },
+  {
+    id: 'starter-sqlite',
+    file: 'packages/create-kovo/src/index.build.scaffold.sqlite.test.ts',
+    seconds: 140,
+  },
+  {
+    id: 'starter-production',
+    file: 'packages/create-kovo/src/index.build.scaffold.production.test.ts',
+    seconds: 140,
+  },
+  {
+    id: 'starter-packed-postgres',
+    file: 'packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts',
+    seconds: 110,
+  },
+  {
+    id: 'durable-task-retries',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts',
+    seconds: 120,
+  },
+  {
+    id: 'starter-packed-sqlite',
+    file: 'packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts',
+    seconds: 160,
+  },
+  {
+    id: 'transaction-artifacts',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
+    seconds: 220,
+  },
+  {
+    id: 'starter-packed-runtime',
+    file: 'packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts',
+    seconds: 120,
+  },
+  {
+    id: 'runtime-contract-artifacts',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts',
+    seconds: 110,
+  },
+  {
+    id: 'durable-task-lifecycle',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts',
+    seconds: 110,
+  },
+  {
+    id: 'defer-artifacts',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.defer.test.ts',
+    seconds: 150,
+  },
+  {
+    id: 'header-artifacts',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
+    seconds: 110,
+  },
+  {
+    id: 'redirect-capability-artifacts',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
+    seconds: 100,
+  },
+  {
+    id: 'island-derive-artifacts',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+    seconds: 210,
+    needsBrowser: true,
+  },
+];
 
 export function percentile(values, ratio) {
   const sorted = values
@@ -87,6 +292,56 @@ export function balanceShards(files, history = {}, shardCount, options = {}) {
   }
   validateShardAssignment(files, shards);
   return shards;
+}
+
+export function starterEntries() {
+  return STARTER_ENTRIES.map((entry) => ({ ...entry }));
+}
+
+export function balanceStarterShards(shardCount = STARTER_SHARD_COUNT, entries = starterEntries()) {
+  if (!Number.isInteger(shardCount) || shardCount < 1) {
+    throw new Error(`shardCount must be a positive integer, received ${String(shardCount)}`);
+  }
+  const estimates = [...entries]
+    .sort((a, b) => b.seconds - a.seconds || a.id.localeCompare(b.id))
+    .map((entry) => ({ ...entry }));
+  const shards = Array.from({ length: shardCount }, () => ({ entries: [], seconds: 0 }));
+
+  for (const estimate of estimates) {
+    const lightest = shards
+      .map((shard, index) => ({ index, seconds: shard.seconds }))
+      .sort((a, b) => a.seconds - b.seconds || a.index - b.index)[0];
+    const shard = shards[lightest.index];
+    shard.entries.push(estimate);
+    shard.seconds += estimate.seconds;
+  }
+
+  for (const shard of shards) {
+    shard.entries.sort((a, b) => a.id.localeCompare(b.id));
+    shard.seconds = roundSeconds(shard.seconds);
+  }
+  validateStarterShardAssignment(entries, shards);
+  return shards;
+}
+
+export function validateStarterShardAssignment(entries, shards) {
+  const expected = new Set(entries.map((entry) => entry.id));
+  const seen = new Map();
+  for (const shard of shards) {
+    for (const entry of shard.entries) {
+      if (!expected.has(entry.id))
+        throw new Error(`Starter shard assigned unknown entry: ${entry.id}`);
+      seen.set(entry.id, (seen.get(entry.id) ?? 0) + 1);
+    }
+  }
+  const missing = [...expected].filter((id) => !seen.has(id));
+  const duplicated = [...seen].filter(([, count]) => count > 1).map(([id]) => id);
+  if (missing.length > 0 || duplicated.length > 0) {
+    const parts = [];
+    if (missing.length > 0) parts.push(`missing: ${missing.join(', ')}`);
+    if (duplicated.length > 0) parts.push(`duplicated: ${duplicated.join(', ')}`);
+    throw new Error(`Invalid starter shard assignment (${parts.join('; ')})`);
+  }
 }
 
 export function validateShardAssignment(discoveredFiles, shards) {
@@ -189,6 +444,55 @@ export async function writeShardManifests({
   if (!selected) throw new Error(`Shard index ${shardIndex} is outside 1..${shards.length}`);
   const selectedPath = path.join(root, `${kind}-${shardIndex}-of-${shards.length}.txt`);
   return { files, selectedPath, selected, shards };
+}
+
+export async function writeStarterShardManifest({ shardCount, shardIndex, outputDir }) {
+  const shards = balanceStarterShards(shardCount);
+  const root =
+    outputDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-starter-shards');
+  assertRunnerTempScoped(root);
+  await mkdir(root, { recursive: true });
+  for (let index = 0; index < shards.length; index += 1) {
+    const file = path.join(root, `starter-${index + 1}-of-${shards.length}.json`);
+    await writeJson(file, {
+      kind: 'starter',
+      shardIndex: index + 1,
+      shardCount: shards.length,
+      seconds: shards[index].seconds,
+      entries: shards[index].entries,
+    });
+  }
+  const selected = shards[shardIndex - 1];
+  if (!selected) throw new Error(`Shard index ${shardIndex} is outside 1..${shards.length}`);
+  const selectedPath = path.join(root, `starter-${shardIndex}-of-${shards.length}.json`);
+  return { selectedPath, selected, shards };
+}
+
+export async function readStarterShardManifest(file) {
+  const manifest = await readJsonIfExists(file);
+  if (manifest?.kind !== 'starter' || !Array.isArray(manifest.entries)) {
+    throw new Error(`Invalid starter shard manifest: ${file}`);
+  }
+  return manifest;
+}
+
+export async function starterShardNeedsBrowser(file) {
+  const manifest = await readStarterShardManifest(file);
+  return manifest.entries.some((entry) => entry.needsBrowser);
+}
+
+export async function runStarterShard(file) {
+  const manifest = await readStarterShardManifest(file);
+  for (const entry of manifest.entries) {
+    const args = ['exec', 'vitest', '--run', entry.file];
+    if (entry.testName) args.push('-t', entry.testName);
+    process.stderr.write(`\n[starter:${entry.id}] vp ${args.join(' ')}\n`);
+    const result = spawnSync('vp', args, { stdio: 'inherit' });
+    if (result.error) throw result.error;
+    if (result.status !== 0) {
+      throw new Error(`Starter entry ${entry.id} failed with exit code ${result.status}`);
+    }
+  }
 }
 
 function estimateSeconds(history, file, fallback) {
@@ -348,6 +652,30 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'generate-starter') {
+    const shardCount = Number(args.shards ?? STARTER_SHARD_COUNT);
+    const shardIndex = Number(args.index);
+    const outputDir = String(
+      args.outDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-starter-shards'),
+    );
+    const result = await writeStarterShardManifest({ shardCount, shardIndex, outputDir });
+    process.stdout.write(`${result.selectedPath}\n`);
+    process.stderr.write(
+      `Generated starter shard ${shardIndex}/${shardCount}: ${result.selected.entries.length}/${STARTER_ENTRIES.length} entries, estimate ${result.selected.seconds}s\n`,
+    );
+    return;
+  }
+
+  if (command === 'starter-needs-browser') {
+    process.exitCode = (await starterShardNeedsBrowser(String(args.manifest))) ? 0 : 1;
+    return;
+  }
+
+  if (command === 'run-starter') {
+    await runStarterShard(String(args.manifest));
+    return;
+  }
+
   if (command === 'merge-vitest' || command === 'merge-playwright') {
     const previous = await readJsonIfExists(args.previous);
     const report = await readJsonIfExists(args.report);
@@ -361,6 +689,9 @@ async function main(argv) {
 
   throw new Error(`Usage:
   node scripts/ci-shards.mjs generate --kind vitest|integration --shards N --index N --outDir "$RUNNER_TEMP/kovo-shards" [--history file]
+  node scripts/ci-shards.mjs generate-starter --shards N --index N --outDir "$RUNNER_TEMP/kovo-starter-shards"
+  node scripts/ci-shards.mjs starter-needs-browser --manifest starter-shard.json
+  node scripts/ci-shards.mjs run-starter --manifest starter-shard.json
   node scripts/ci-shards.mjs merge-vitest --report vitest.json --out timing-history.json [--previous timing-history.json]
   node scripts/ci-shards.mjs merge-playwright --report playwright.json --out timing-history.json [--previous timing-history.json]`);
 }

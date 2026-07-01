@@ -124,64 +124,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          # Grouped from the 2026-07-01 starter timings to keep each shard near
-          # 3-6 minutes while avoiding one runner setup per small file. The M1
-          # adversarial sweep is split by row-focused -t names because the full
-          # file is intentionally dialect-complete and too slow as one shard.
-          - shard: raw-sql-typecheck
-            files: >-
-              packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts
-              packages/create-kovo/src/index.build.scaffold.typecheck.test.ts
-          - shard: m1-storage-write
-            files: >-
-              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
-            testName: M1:storage-write
-          - shard: m1-raw-html
-            files: >-
-              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
-            testName: M1:raw-html
-          - shard: m1-secret-wire
-            files: >-
-              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
-            testName: M1:secret-wire
-          - shard: m1-raw-sql
-            files: >-
-              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
-            testName: M1:raw-sql
-          - shard: m1-output-wire
-            files: >-
-              packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts
-            testName: M1:output-wire
-          - shard: security-assets
-            files: >-
-              packages/create-kovo/src/index.build.prod-artifact.security.test.ts
-              packages/create-kovo/src/index.build.prod-artifact.assets.test.ts
-          - shard: runtime-sqlite-check
-            files: >-
-              packages/create-kovo/src/index.build.runtime.test.ts
-              packages/create-kovo/src/index.build.scaffold.sqlite.test.ts
-          - shard: production-postgres-retry
-            files: >-
-              packages/create-kovo/src/index.build.scaffold.production.test.ts
-              packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts
-              packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts
-          - shard: contacts-sqlite-transactions
-            files: >-
-              packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts
-              packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts
-              packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts
-          - shard: durable-packed-runtime-contracts
-            files: >-
-              packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts
-              packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts
-              packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts
-          - shard: defer-headers-redirect-islands
-            files: >-
-              packages/create-kovo/src/index.build.prod-artifact.defer.test.ts
-              packages/create-kovo/src/index.build.prod-artifact.headers.test.ts
-              packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts
-              packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts
+        # Shard budget: 3 root Vitest + 8 starter + 3 integration + 2 kovo-check = 16.
+        # Starter entries are timing-weighted in scripts/ci-shards.mjs from the
+        # latest successful 2026-07-01 run so long artifact proofs are balanced.
+        shard: [1, 2, 3, 4, 5, 6, 7, 8]
+        total: [8]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
@@ -199,20 +146,21 @@ jobs:
           key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
           restore-keys: |
             kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - id: starter-shard
+        name: Generate balanced starter shard
+        run: |
+          manifest="$(vp exec node scripts/ci-shards.mjs generate-starter --shards ${{ matrix.total }} --index ${{ matrix.shard }} --outDir "$RUNNER_TEMP/kovo-starter-shards")"
+          echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
+          if vp exec node scripts/ci-shards.mjs starter-needs-browser --manifest "$manifest"; then
+            echo "needsBrowser=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needsBrowser=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Install Chromium for browser-backed starter shard
-        if: matrix.shard == 'defer-headers-redirect-islands'
+        if: steps.starter-shard.outputs.needsBrowser == 'true'
         run: vp exec playwright install --with-deps chromium
       - name: Generated starter proofs (${{ matrix.shard }})
-        env:
-          STARTER_TEST_NAME: ${{ matrix.testName }}
-        run: |
-          for file in ${{ matrix.files }}; do
-            if [ -n "$STARTER_TEST_NAME" ]; then
-              vp exec vitest --run "$file" -t "$STARTER_TEST_NAME"
-            else
-              vp exec vitest --run "$file"
-            fi
-          done
+        run: vp exec node scripts/ci-shards.mjs run-starter --manifest "${{ steps.starter-shard.outputs.manifest }}"
 
   build:
     runs-on: ubuntu-latest
@@ -284,8 +232,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        shard: [1, 2, 3, 4, 5]
-        total: [5]
+        shard: [1, 2, 3]
+        total: [3]
     env:
       KOVO_FAIL_ON_FLAKY: '1'
     steps:

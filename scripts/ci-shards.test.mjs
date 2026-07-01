@@ -1,11 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+  balanceStarterShards,
   balanceShards,
   extractPlaywrightDurations,
   extractVitestDurations,
   includeVitest,
   mergeDurationHistory,
+  starterEntries,
   unknownDurationSeconds,
   validateShardAssignment,
 } from './ci-shards.mjs';
@@ -181,4 +183,32 @@ describe('ci-shards', () => {
     ).toBe(false);
     expect(includeVitest('packages/server/src/guards.test.ts')).toBe(false);
   });
+
+  it('load-balances starter production artifact entries into eight CI shards', () => {
+    const entries = starterEntries();
+    const shards = balanceStarterShards(8, entries);
+    const assigned = shards.flatMap((shard) => shard.entries.map((entry) => entry.id));
+
+    expect(shards).toHaveLength(8);
+    expect(new Set(assigned).size).toBe(entries.length);
+    expect(assigned.toSorted(compareStrings)).toEqual(
+      entries.map((entry) => entry.id).toSorted(compareStrings),
+    );
+    expect(shards.map((shard) => shard.seconds)).toEqual([785, 730, 787, 793, 739, 729, 730, 790]);
+  });
+
+  it('keeps browser-backed starter entries isolated to the shard that needs Chromium', () => {
+    const browserShards = balanceStarterShards(8)
+      .map((shard, index) => ({
+        index: index + 1,
+        entries: shard.entries.filter((entry) => entry.needsBrowser).map((entry) => entry.id),
+      }))
+      .filter((shard) => shard.entries.length > 0);
+
+    expect(browserShards).toEqual([{ index: 5, entries: ['island-derive-artifacts'] }]);
+  });
 });
+
+function compareStrings(a, b) {
+  return a.localeCompare(b);
+}
