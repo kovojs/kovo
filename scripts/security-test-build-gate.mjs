@@ -217,6 +217,20 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
+    claimId: 'trusted-url-attribute-type-gate',
+    code: 'KV426',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addTrustedUrlAttributeTypeGateProof(root)',
+      'buildProductionArtifact(root)',
+      'TrustedUrl',
+      'AttributeValue',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'blocks TrustedUrl values in non-URL JSX attributes during production build',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
     code: 'KV311',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
     requiredNeedles: [

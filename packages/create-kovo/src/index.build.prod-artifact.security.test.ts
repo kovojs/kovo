@@ -231,6 +231,7 @@ describe('create-kovo starter (build integration: production security artifacts)
     }
   }, 240_000);
 
+  // @kovo-security-certifies KV426 trusted-url-attribute-type-gate
   it('blocks TrustedUrl values in non-URL JSX attributes during production build', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });

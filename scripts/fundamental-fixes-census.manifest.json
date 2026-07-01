@@ -1005,8 +1005,29 @@
       "id": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
       "kind": "output-wire-sink",
       "owner": ["C2", "B3"],
-      "status": "open",
-      "evidence": "placeholder"
+      "status": "closed",
+      "evidence": "children closed with exact prod-artifact M1 evidence; pnpm run check:security-test-builds (19 real-build proofs passed); pnpm run check:security-gate-mutations (32 mutants killed)",
+      "evidenceBundles": [
+        "m1-prod-artifact-adversarial-focused",
+        "m1-prod-artifact-trustedurl-attribute-type-gate",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "children closed by focused prod-artifact build-fail tests for trustedHtml/trustedUrl/renderedHtml taint plus TrustedUrl non-URL JSX attributes",
+        "dialects": {
+          "postgres": "raw-HTML taint M1 covered postgres; TrustedUrl attribute type-gate is SQL-dialect independent and fails during production build preflight before artifact emission",
+          "sqlite": "raw-HTML taint M1 covered sqlite; TrustedUrl attribute type-gate is SQL-dialect independent and fails during production build preflight before artifact emission"
+        },
+        "independentReviewer": "agent/followup-m1-dialects-20260701070851 authored the dialect-complete raw-HTML adversarial gate; agent/followup-trustedurl-1782925929 added and verified the TrustedUrl attribute prod-artifact proof"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV426 trusted-url-attribute-type-gate uses buildProductionArtifact(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 19 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 32 mutants killed"
+      }
     },
     {
       "id": "kv426-blocks-trustedhtml-request-taint-in-a-prod-artifact",
@@ -1068,9 +1089,29 @@
       "id": "trustedurl-values-are-rejected-in-non-url-jsx-attributes",
       "kind": "output-wire-sink",
       "owner": ["C2"],
-      "status": "open",
-      "evidence": "placeholder",
-      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml"
+      "status": "closed",
+      "evidence": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'TrustedUrl values in non-URL JSX attributes' --reporter=dot (1 passed, 9 skipped, 27.85s); pnpm run check:security-test-builds (19 real-build proofs passed); pnpm run check:security-gate-mutations (32 mutants killed)",
+      "parent": "raw-html-sinks-trustedhtml-trustedurl-internal-renderedhtml",
+      "evidenceBundles": [
+        "m1-prod-artifact-trustedurl-attribute-type-gate",
+        "m2-security-real-build-gate",
+        "m3-security-gate-mutations"
+      ],
+      "m1": {
+        "prodArtifact": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'TrustedUrl values in non-URL JSX attributes' --reporter=dot (1 passed, 9 skipped, 27.85s)",
+        "dialects": {
+          "postgres": "TrustedUrl attribute type-gate is SQL-dialect independent; the no-cache starter production build preflight rejects <span title={trustedUrl(...)}> before artifact emission",
+          "sqlite": "TrustedUrl attribute type-gate is SQL-dialect independent; the no-cache starter production build preflight rejects <span title={trustedUrl(...)}> before artifact emission"
+        },
+        "independentReviewer": "agent/followup-trustedurl-1782925929 verified the prod-artifact build-fail proof and enrolled M2/M3 drift guards in this branch"
+      },
+      "m2": {
+        "productionBuild": "packages/create-kovo/src/index.build.prod-artifact.security.test.ts @kovo-security-certifies KV426 trusted-url-attribute-type-gate calls buildProductionArtifact(root) after addTrustedUrlAttributeTypeGateProof(root)",
+        "noFixtureOnlyCertification": "pnpm run check:security-test-builds passed 19 real-build proofs"
+      },
+      "m3": {
+        "mutationGate": "pnpm run check:security-gate-mutations passed with 32 mutants killed"
+      }
     },
     {
       "id": "kv426-blocks-internal-renderedhtml-query-taint-in-a-prod-artifact",
@@ -3228,6 +3269,10 @@
     "m1-prod-artifact-adversarial-focused": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t M1:<surface> --reporter=dot",
       "evidence": "Focused no-cache prod-artifact M1 sweep for one row/surface across postgres and sqlite."
+    },
+    "m1-prod-artifact-trustedurl-attribute-type-gate": {
+      "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'TrustedUrl values in non-URL JSX attributes' --reporter=dot",
+      "evidence": "Production artifact TrustedUrl attribute type-gate proof injects <span title={trustedUrl(...)}> into the starter and asserts kovo build --no-cache fails before artifact emission with TrustedUrl/AttributeValue diagnostics."
     },
     "m1-prod-artifact-storage-write": {
       "command": "pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts -t 'M1:storage-write' --reporter=dot",
