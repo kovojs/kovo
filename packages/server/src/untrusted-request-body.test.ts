@@ -25,9 +25,12 @@ describe('untrusted request body parser', () => {
 
     const origin = readUntrustedRequestHeader(request, 'origin');
     const session = readUntrustedCookieValue(request, 'session');
+    const nativeOrigin = request.headers.get('origin');
 
     expect(isUntrusted(origin)).toBe(true);
     expect(isUntrusted(session)).toBe(true);
+    expect(isUntrusted(nativeOrigin)).toBe(false);
+    expect(nativeOrigin).toBe('https://shop.example');
     expect(() => String(origin)).toThrow(/KV426/);
     expect(revealUntrustedRequestValue(origin, 'test validates Origin header')).toBe(
       'https://shop.example',

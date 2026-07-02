@@ -301,7 +301,7 @@ mattering.
 
 ### Phase 3 — Injection via a contextual default-deny renderer
 
-- [ ] **3.1 `Untrusted` request tags (DEC-D, DX-only).** Accessors return tags; used for error messages, not soundness.
+- [x] **3.1 `Untrusted` request tags (DEC-D, DX-only).** Accessors return tags; used for error messages, not soundness.
   - [x] **Body, route, and query request values are tagged and revealed by validation.** Parsed JSON/FormData leaves,
         route params/search, and query search inputs are tagged with `Untrusted`; schema/CSRF validation reveals with
         framework-owned reasons.
@@ -310,9 +310,10 @@ mattering.
         Origin/anonymous-cookie validation reveals them with framework-owned reasons.
         Evidence: `vp exec vitest --run packages/server/src/untrusted-request-body.test.ts` and
         `vp exec vitest --run packages/server/src/csrf.test.ts -t 'origin|anonymous|cookie|CSRF'`.
-  - [ ] **Request-shell accessor contract is explicit.** Native `Request.headers` remains the plain platform API by
+  - [x] **Request-shell accessor contract is explicit.** Native `Request.headers` remains the plain platform API by
         design; the supported Kovo-owned request accessor surface should be documented/covered as DX provenance, not a
         soundness dependency.
+        Evidence: `vp exec vitest --run packages/server/src/untrusted-request-body.test.ts`.
 - [x] **3.2 Contextual default-deny renderer over the final attribute set (DEC-D).** Escape-by-position; refuse at
       non-inert positions unless a proven trusted brand; spread-aware; unknown→escape, executable→refuse. Acceptance
       (paranoid mode): `meta http-equiv=refresh content`, spread-delivered sinks, `<style>`, event handlers,
