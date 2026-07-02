@@ -139,8 +139,6 @@ jobs:
   starter:
     needs: starter-packages
     runs-on: ubuntu-latest
-    env:
-      KOVO_PACKED_PACKAGES_DIR: ${{ runner.temp }}/kovo-packed-starter
     strategy:
       fail-fast: false
       matrix:
@@ -190,6 +188,8 @@ jobs:
           name: kovo-packed-starter
           path: ${{ runner.temp }}/kovo-packed-starter
       - name: Generated starter proofs (${{ matrix.shard }})
+        env:
+          KOVO_PACKED_PACKAGES_DIR: ${{ runner.temp }}/kovo-packed-starter
         run: vp exec node scripts/ci-shards.mjs run-starter --manifest "${{ steps.starter-shard.outputs.manifest }}"
 
   build:
