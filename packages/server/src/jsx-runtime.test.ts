@@ -463,6 +463,66 @@ describe('server jsx runtime', () => {
     ).toBe('<button on:click="/c/client.js#run">Run</button>');
   });
 
+  it('refuses spread-delivered executable attributes from the final runtime attribute set', () => {
+    const spread = {
+      content: '0; url=javascript:alert(1)',
+      href: 'data:text/html,<script>alert(1)</script>',
+      httpEquiv: 'refresh',
+      onclick: 'alert(1)',
+      srcdoc: '<script>alert(1)</script>',
+      title: 'kept',
+    };
+
+    expect(html(jsx('meta', spread))).toBe('<meta href="#" httpEquiv="refresh" title="kept">');
+    expect(
+      html(
+        jsx('iframe', {
+          ...spread,
+          'http-equiv': undefined,
+          content: undefined,
+          href: undefined,
+        }),
+      ),
+    ).toBe('<iframe httpEquiv="refresh" title="kept"></iframe>');
+  });
+
+  it('classifies meta refresh content by final http-equiv attributes', () => {
+    expect(
+      html(
+        jsx('meta', {
+          name: 'description',
+          content: 'ordinary <copy>',
+        }),
+      ),
+    ).toBe('<meta name="description" content="ordinary &lt;copy&gt;">');
+    expect(
+      html(
+        jsx('meta', {
+          'http-equiv': 'refresh',
+          content: '0; url=/login',
+        }),
+      ),
+    ).toBe('<meta http-equiv="refresh">');
+    expect(
+      html(
+        jsx('meta', {
+          httpEquiv: 'ReFrEsH',
+          content: '0; url=https://example.test/',
+        }),
+      ),
+    ).toBe('<meta httpEquiv="ReFrEsH">');
+  });
+
+  it('refuses plain script and style element text while preserving trusted raw HTML escapes', () => {
+    expect(html(jsx('script', { children: 'alert(1)' }))).toBe('<script></script>');
+    expect(html(jsx('style', { children: 'body{background:url(javascript:alert(1))}' }))).toBe(
+      '<style></style>',
+    );
+    expect(html(jsx('style', { rawHtml: trustedHtml('body{color:green}') }))).toBe(
+      '<style>body{color:green}</style>',
+    );
+  });
+
   it('renders style objects through property-level sanitizers', () => {
     expect(
       html(
