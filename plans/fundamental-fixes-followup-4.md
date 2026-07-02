@@ -216,7 +216,7 @@ exactly where an irreducible author-time obligation remains.
       `tableID`/`columnID` — and views report the view column origin, not the base table; so provenance boxing on Postgres
       needs a **new raw-protocol read path** and is only optional defense-in-depth. The Postgres confidentiality boundary
       is engine `REVOKE` (DEC-B), not boxing. Record the decision; do not assume PG provenance.
-- [ ] **2.0b Verify the builder exposes interpolated column refs for `sql` expressions (DEC-A sub-case 2).** Confirm
+- [x] **2.0b Verify the builder exposes interpolated column refs for `sql` expressions (DEC-A sub-case 2).** Confirm
       Drizzle's SQL-template object exposes chunk metadata so the framework can enumerate interpolated `Column`
       instances in builder SQL expressions, resolve each to `table.column`, and distinguish a plain-string chunk
       carrying no `Column` such as the round-8 B1 opaque select-token fragment. Record the result. **Fallback if
@@ -224,7 +224,8 @@ exactly where an irreducible author-time obligation remains.
       but re-introduces the P3 over-block for SQL-expression projections — discharged via the DEC-B capability /
       `reveal`. This is the
       expression-tree analogue of 2.0: the plan must not assume the introspection, it must verify it.
-- [ ] **2.1 SQLite provenance boxing at the row-mapping boundary (DEC-A, B1).** Box by source across the three DEC-A
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance|boxes schema-declared secret reads"` (2 tests) exercises safe `Column` chunks and hidden-select raw chunks in the deployed SQLite artifact.
+- [x] **2.1 SQLite provenance boxing at the row-mapping boundary (DEC-A, B1).** Box by source across the three DEC-A
       sub-cases: (1) simple ref via `Statement.columns()` origin (alias/JOIN/view/CTE proof), (2) modeled builder
       expression — serve only if EVERY chunk is a proven-non-secret interpolated `Column` or an inert whitelisted string;
       any un-whitelisted raw chunk → box (closes the mixed-chunk hole), (3) opaque fragment → fail-closed box. (Postgres
@@ -233,6 +234,7 @@ exactly where an irreducible author-time obligation remains.
       CTE/subquery all box → refused at egress; a legit non-secret projection/computation from a secret-bearing table
       serves (`papercuts-27` P3, no over-block); a raw-SQL opaque secret fragment boxes fail-closed. (The
       secret-copied-to-nonsecret-column case is 3.2, not here.)
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance|boxes schema-declared secret reads"` (2 tests) covers alias, view, derivation, JOIN alias, CTE/subquery, mixed raw SQL, mixed builder SQL, safe non-secret projection, and audited reveal without served secret leakage.
 - [ ] **2.2 Engine column-`REVOKE` primary on Postgres + declared secret-read capability (DEC-B).** Reader role cannot
       `SELECT` secret columns (raw SQL, alias, and view included); views run `security_invoker` (or the owner is also
       revoked) so a view cannot bypass the reader grant; confirm a non-superuser reader role is assumable via `SET ROLE`
@@ -357,5 +359,5 @@ self-catching rather than self-deceiving.
 - Grounded in first-hand round-8 evidence: `bugz-29` B1 (result-name-match box; served token under paranoid;
   `app-runtime-db.sqlite.ts` per-key `secretColumnNames.has(key)`), B2 (view regex), B3 (`touches:` write choke
   dormant); `papercuts-27` P1 (advisory set = `{KV406,KV422,KV438}` at `graph-output.ts:630`/`build-export.ts:465`/
-  `vite.ts:568`; `KOVO_PARANOID=1` still KV435-fatal), P2 (`app-runtime-db.sqlite.ts` 683 lines, not in TCB/boundary
-  lint). No framework source or `SPEC.md` changed by this document.
+  `vite.ts:568`; `KOVO_PARANOID=1` still KV435-fatal), P2 (`app-runtime-db.sqlite.ts` 683 lines, not in TCB/boundary lint).
+- Current integrated gates: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance|boxes schema-declared secret reads"`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
