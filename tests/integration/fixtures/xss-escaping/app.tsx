@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import {
   escapeAttribute,
@@ -30,11 +31,12 @@ export const updatePayload = mutation('xss/update', {
   input: s.object({}),
   registry: {
     queries: [payloadQuery],
+    tables: ['xss_payload'],
     touches: [xssDomain],
   },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
     await request.db.exec(
-      `update xss_payload set text = '<img src=x onerror="alert(1)">', url = 'javascript:alert(1)' where id = 1`,
+      staticSql`update xss_payload set text = '<img src=x onerror="alert(1)">', url = 'javascript:alert(1)' where id = 1`,
     );
     context.invalidate(xssDomain);
     return {};
@@ -79,7 +81,7 @@ export default defineFixture({
   // <script type="application/json"> JSON island must escape `<` to < (F8).
   seed: (db) =>
     db.exec(
-      `insert into xss_payload (id, text, url) values (1, '</script><script>alert(2)</script>', 'https://example.com')`,
+      staticSql`insert into xss_payload (id, text, url) values (1, '</script><script>alert(2)</script>', 'https://example.com')`,
     ),
 });
 

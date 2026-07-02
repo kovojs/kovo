@@ -39,14 +39,14 @@ const webhookEventInput = s.object({ id: s.string(), type: s.string() });
 const recordWebhookAttempt = mutation('webhook-idempotency/record-attempt', {
   async handler(input, request) {
     const webhookRequest = request as WebhookRequest;
-    await webhookRequest.db.query(
-      'insert into webhook_event_attempts (event_id, event_type) values ($1, $2)',
-      [input.id, input.type],
-    );
+    await webhookRequest.db.query({
+      text: 'insert into webhook_event_attempts (event_id, event_type) values ($1, $2)',
+      values: [input.id, input.type],
+    });
     return { ok: true };
   },
   input: webhookEventInput,
-  registry: { touches: [invoiceDomain] },
+  registry: { tables: ['webhook_event_attempts'], touches: [invoiceDomain] },
 });
 
 export default defineFixture({

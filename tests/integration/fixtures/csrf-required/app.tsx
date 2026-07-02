@@ -1,4 +1,5 @@
 // SPEC.md §6.6/§9.1: mutation POSTs validate CSRF before parsing or guards.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, csrfField, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -9,15 +10,19 @@ const csrf = {
 
 async function renderTotal(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ total: number }>(
-    'select coalesce(sum(amount), 0)::int as total from payments',
+    staticSql`select coalesce(sum(amount), 0)::int as total from payments`,
   );
   return `<section kovo-fragment-target="csrf-total" kovo-deps="csrf"><output data-bind="csrf.total">${rows[0]?.total ?? 0}</output></section>`;
 }
 
 export const deposit = mutation('csrf-required/deposit', {
   input: s.object({ amount: s.number().int().min(1) }),
+  registry: { tables: ['payments'] },
   handler: async (input: { amount: number }, request: KovoFixtureRequest) => {
-    await request.db.exec(`insert into payments (amount) values (${input.amount})`);
+    await request.db.exec({
+      text: 'insert into payments (amount) values ($1)',
+      values: [input.amount],
+    });
     return {};
   },
 });

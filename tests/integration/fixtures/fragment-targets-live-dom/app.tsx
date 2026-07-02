@@ -1,9 +1,12 @@
 // SPEC.md §9.1: Kovo-Targets is collected from the live DOM, including patched-in targets.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readStage(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ stage: number }>('select stage from live_dom_state where id = 1');
+  const rows = await db.query<{ stage: number }>(
+    staticSql`select stage from live_dom_state where id = 1`,
+  );
   return rows[0]?.stage ?? 0;
 }
 
@@ -32,8 +35,9 @@ async function renderDynamic(db: KovoFixtureRequest['db']): Promise<string> {
 export const advance = mutation('fragment-targets-live-dom/advance', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['live_dom_state'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
-    await request.db.exec('update live_dom_state set stage = stage + 1 where id = 1');
+    await request.db.exec(staticSql`update live_dom_state set stage = stage + 1 where id = 1`);
     return {};
   },
 });
@@ -64,5 +68,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table live_dom_state (id integer primary key, stage integer not null)',
-  seed: (db) => db.exec('insert into live_dom_state (id, stage) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into live_dom_state (id, stage) values (1, 0)`),
 });

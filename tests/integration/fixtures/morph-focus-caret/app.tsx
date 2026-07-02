@@ -1,10 +1,13 @@
 // Morph survival fixture: a focused keyed input lives inside a fragment target
 // whose sibling server-truth text changes on enhanced mutation (SPEC §9.1).
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readVersion(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ version: number }>('select version from profile where id = 1');
+  const rows = await db.query<{ version: number }>(
+    staticSql`select version from profile where id = 1`,
+  );
   return rows[0]?.version ?? 0;
 }
 
@@ -23,8 +26,9 @@ async function renderEditor(db: KovoFixtureRequest['db']): Promise<string> {
 export const saveDraft = mutation('profile/save-draft', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['profile'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
-    await request.db.exec('update profile set version = version + 1 where id = 1');
+    await request.db.exec(staticSql`update profile set version = version + 1 where id = 1`);
     return {};
   },
 });
@@ -55,5 +59,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table profile (id integer primary key, version integer not null default 0)',
-  seed: (db) => db.exec('insert into profile (id, version) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into profile (id, version) values (1, 0)`),
 });

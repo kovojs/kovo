@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -12,7 +13,7 @@ export const cardDomain = domain('card');
 
 export async function readCard(db: KovoFixtureRequest['db']): Promise<CardResult> {
   const rows = await db.query<CardResult>(
-    'select text, label, status from card_state where id = 1',
+    staticSql`select text, label, status from card_state where id = 1`,
   );
   return rows[0] ?? { label: 'Initial card', status: 'idle', text: 'Initial text' };
 }

@@ -1,5 +1,6 @@
 // Shared query + domain for the counter fixture. This module declares no Kovo
 // components, so the compiler plugin leaves it untouched.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -11,7 +12,7 @@ export interface CountResult {
 export const counter = domain('counter');
 
 export async function readCount(db: KovoFixtureRequest['db']): Promise<CountResult> {
-  const rows = await db.query<{ value: number }>('select value from counter where id = 1');
+  const rows = await db.query<{ value: number }>(staticSql`select value from counter where id = 1`);
   return { count: Number(rows[0]?.value ?? 0) };
 }
 

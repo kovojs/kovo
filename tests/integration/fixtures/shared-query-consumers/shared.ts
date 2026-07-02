@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -10,7 +11,9 @@ export interface ProfileResult {
 export const profileDomain = domain('profile');
 
 export async function readProfile(db: KovoFixtureRequest['db']): Promise<ProfileResult> {
-  const rows = await db.query<ProfileResult>('select name, status from profile where id = 1');
+  const rows = await db.query<ProfileResult>(
+    staticSql`select name, status from profile where id = 1`,
+  );
   return rows[0] ?? { name: 'Ada', status: 'draft' };
 }
 

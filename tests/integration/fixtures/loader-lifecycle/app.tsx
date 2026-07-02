@@ -1,5 +1,6 @@
 // SPEC.md §4.4/§4.7: delegated handlers receive ctx.signal, and enhanced
 // fragment morphs that remove an island abort its loader-scoped lifecycle.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -7,7 +8,7 @@ type LifecycleStage = 'active' | 'replaced';
 
 async function readStage(db: KovoFixtureRequest['db']): Promise<LifecycleStage> {
   const rows = await db.query<{ stage: LifecycleStage }>(
-    'select stage from lifecycle_state where id = 1',
+    staticSql`select stage from lifecycle_state where id = 1`,
   );
   return rows[0]?.stage ?? 'active';
 }
@@ -36,8 +37,9 @@ async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
 export const swapIsland = mutation('loader-lifecycle/swap', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['lifecycle_state'] },
   handler: async (_input, request: KovoFixtureRequest) => {
-    await request.db.exec("update lifecycle_state set stage = 'replaced' where id = 1");
+    await request.db.exec(staticSql`update lifecycle_state set stage = 'replaced' where id = 1`);
     return {};
   },
 });
@@ -70,5 +72,5 @@ export default defineFixture({
   app,
   schema:
     "create table lifecycle_state (id integer primary key, stage text not null default 'active')",
-  seed: (db) => db.exec("insert into lifecycle_state (id, stage) values (1, 'active')"),
+  seed: (db) => db.exec(staticSql`insert into lifecycle_state (id, stage) values (1, 'active')`),
 });

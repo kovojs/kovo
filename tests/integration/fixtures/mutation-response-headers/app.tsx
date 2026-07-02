@@ -1,10 +1,11 @@
 // SPEC.md §9.1: mutation handlers may attach narrow transport headers.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ count: number }>(
-    'select count(*)::int as count from header_events',
+    staticSql`select count(*)::int as count from header_events`,
   );
   return `<output data-bind="headers.count">${rows[0]?.count ?? 0}</output>`;
 }
@@ -12,8 +13,9 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 export const touchHeaders = mutation('mutation-response-headers/touch', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['header_events'] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
-    await request.db.exec('insert into header_events default values');
+    await request.db.exec(staticSql`insert into header_events (id) values (default)`);
     context.setCookie?.('header_seen', 'yes', {
       httpOnly: true,
       path: '/',

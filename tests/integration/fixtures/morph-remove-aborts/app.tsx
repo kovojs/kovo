@@ -1,5 +1,6 @@
 // SPEC.md §4.4/§4.7: fragment morphs that remove islands abort their ctx.signal
 // and leave patched/replacement islands inert until a declared trigger or interaction.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -7,7 +8,7 @@ type MorphStage = 'active' | 'removed';
 
 async function readStage(db: KovoFixtureRequest['db']): Promise<MorphStage> {
   const rows = await db.query<{ stage: MorphStage }>(
-    'select stage from morph_abort_state where id = 1',
+    staticSql`select stage from morph_abort_state where id = 1`,
   );
   return rows[0]?.stage ?? 'active';
 }
@@ -32,8 +33,9 @@ async function renderShell(db: KovoFixtureRequest['db']): Promise<string> {
 export const removeIsland = mutation('morph-remove-aborts/remove', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['morph_abort_state'] },
   handler: async (_input, request: KovoFixtureRequest) => {
-    await request.db.exec("update morph_abort_state set stage = 'removed' where id = 1");
+    await request.db.exec(staticSql`update morph_abort_state set stage = 'removed' where id = 1`);
     return {};
   },
 });
@@ -66,5 +68,5 @@ export default defineFixture({
   app,
   schema:
     "create table morph_abort_state (id integer primary key, stage text not null default 'active')",
-  seed: (db) => db.exec("insert into morph_abort_state (id, stage) values (1, 'active')"),
+  seed: (db) => db.exec(staticSql`insert into morph_abort_state (id, stage) values (1, 'active')`),
 });

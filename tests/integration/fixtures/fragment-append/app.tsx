@@ -1,5 +1,6 @@
 // Append-mode fixture: a mutation returns a kovo-fragment with mode="append",
 // so existing keyed rows stay connected while the new row is added (SPEC §9.1).
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -10,7 +11,7 @@ interface FeedRow {
 }
 
 async function readRows(db: KovoFixtureRequest['db']): Promise<FeedRow[]> {
-  return db.query<FeedRow>('select id, title from feed order by id');
+  return db.query<FeedRow>(staticSql`select id, title from feed order by id`);
 }
 
 function renderRow(row: FeedRow): string {
@@ -27,7 +28,9 @@ async function renderFeed(db: KovoFixtureRequest['db']): Promise<string> {
 }
 
 async function renderLastRow(db: KovoFixtureRequest['db']): Promise<string> {
-  const rows = await db.query<FeedRow>('select id, title from feed order by id desc limit 1');
+  const rows = await db.query<FeedRow>(
+    staticSql`select id, title from feed order by id desc limit 1`,
+  );
   const row = rows[0];
   if (!row) return '';
   return renderRow(row);
@@ -36,12 +39,16 @@ async function renderLastRow(db: KovoFixtureRequest['db']): Promise<string> {
 export const loadMore = mutation('feed/load-more', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['feed'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
     const rows = await request.db.query<{ next_id: number }>(
-      'select coalesce(max(id), 0) + 1 as next_id from feed',
+      staticSql`select coalesce(max(id), 0) + 1 as next_id from feed`,
     );
     const nextId = rows[0]?.next_id ?? 1;
-    await request.db.exec(`insert into feed (id, title) values (${nextId}, 'Item ${nextId}')`);
+    await request.db.exec({
+      text: 'insert into feed (id, title) values ($1, $2)',
+      values: [nextId, `Item ${nextId}`],
+    });
     return {};
   },
 });
@@ -75,5 +82,6 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table feed (id integer primary key, title text not null)',
-  seed: (db) => db.exec("insert into feed (id, title) values (1, 'Item 1'), (2, 'Item 2')"),
+  seed: (db) =>
+    db.exec(staticSql`insert into feed (id, title) values (1, 'Item 1'), (2, 'Item 2')`),
 });

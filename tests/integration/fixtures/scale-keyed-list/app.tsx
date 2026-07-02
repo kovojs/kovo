@@ -1,6 +1,7 @@
 // SPEC §4.8 keyed stamps at volume (plans/bugs-and-testing.md P3 scale; testing-audit §5.6):
 // a 300-row keyed list reconciled through a fragment patch must keep identity correct at
 // scale — the right row removed, order preserved, no mis-keying or duplicate keys.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import {
   escapeAttribute,
@@ -24,7 +25,7 @@ interface CartResult {
 
 async function readCart(db: KovoFixtureRequest['db']): Promise<CartResult> {
   const items = (await db.query(
-    'select id, name, qty from cart_item order by position asc',
+    staticSql`select id, name, qty from cart_item order by position asc`,
   )) as unknown as CartItem[];
   return { items };
 }
@@ -50,11 +51,11 @@ export const cartQuery = query('cart', {
 export const changeCart = mutation('scale-keyed-list/change', {
   csrf: false,
   input: s.object({}),
-  registry: { queries: [cartQuery], touches: [cartDomain] },
+  registry: { queries: [cartQuery], tables: ['cart_item'], touches: [cartDomain] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
     // Remove a row in the middle and bump the first row's qty: identity must hold.
-    await request.db.exec("delete from cart_item where id = 'r150'");
-    await request.db.exec("update cart_item set qty = 999 where id = 'r0'");
+    await request.db.exec(staticSql`delete from cart_item where id = 'r150'`);
+    await request.db.exec(staticSql`update cart_item set qty = 999 where id = 'r0'`);
     context.invalidate(cartDomain);
     return {};
   },
@@ -95,6 +96,6 @@ export default defineFixture({
     'create table cart_item (id text primary key, name text not null, qty integer not null, position integer not null)',
   seed: (db) =>
     db.exec(
-      "insert into cart_item (id, name, qty, position) select 'r' || g, 'Item ' || g, g, g from generate_series(0, 299) as g",
+      staticSql`insert into cart_item (id, name, qty, position) select 'r' || g, 'Item ' || g, g, g from generate_series(0, 299) as g`,
     ),
 });

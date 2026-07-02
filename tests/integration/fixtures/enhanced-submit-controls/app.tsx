@@ -1,5 +1,6 @@
 // SPEC.md §6.3/§9.1: enhanced submission preserves real POST form markup, and
 // schema-coerced inputs remain observable on the server after enhancement.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -11,7 +12,7 @@ interface SubmissionRow {
 
 async function readLatestSubmission(db: KovoFixtureRequest['db']): Promise<SubmissionRow | null> {
   const rows = await db.query<SubmissionRow>(
-    'select quantity, include_gift from enhanced_submit_log order by id desc limit 1',
+    staticSql`select quantity, include_gift from enhanced_submit_log order by id desc limit 1`,
   );
   return rows[0] ?? null;
 }
@@ -41,11 +42,12 @@ export const submitOrder = mutation('enhanced-submit-controls/submit', {
     includeGift: s.boolean(),
     quantity: s.number().int().min(1),
   }),
+  registry: { tables: ['enhanced_submit_log'] },
   handler: async (input, request: KovoFixtureRequest) => {
-    await request.db.query(
-      'insert into enhanced_submit_log (quantity, include_gift) values ($1, $2)',
-      [input.quantity, input.includeGift ? 1 : 0],
-    );
+    await request.db.query({
+      text: 'insert into enhanced_submit_log (quantity, include_gift) values ($1, $2)',
+      values: [input.quantity, input.includeGift ? 1 : 0],
+    });
     return {};
   },
 });

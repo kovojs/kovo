@@ -47,10 +47,10 @@ function providerAmount(input: unknown): number | null {
 const stripeLite = webhook('/webhooks/stripe-lite', {
   async handler(input, context) {
     const request = context.request as WebhookRequest;
-    await request.db.query(
-      'insert into webhook_events (id, event_type, raw_amount) values ($1, $2, $3)',
-      [input.id, input.type, providerAmount(input)],
-    );
+    await request.db.query({
+      text: 'insert into webhook_events (id, event_type, raw_amount) values ($1, $2, $3)',
+      values: [input.id, input.type, providerAmount(input)],
+    });
     context.recordChange(invoiceDomain, { keys: [input.id] });
     return { ok: true };
   },

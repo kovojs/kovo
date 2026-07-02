@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -11,7 +12,7 @@ interface InventoryResult {
 }
 
 async function readInventory(db: KovoFixtureRequest['db']): Promise<InventoryResult> {
-  const rows = await db.query('select count, label from inventory_state where id = 1');
+  const rows = await db.query(staticSql`select count, label from inventory_state where id = 1`);
   return rows[0] as unknown as InventoryResult;
 }
 
@@ -26,10 +27,13 @@ export const sellOutInventory = mutation('derive-binding/sell-out', {
   input: s.object({}),
   registry: {
     queries: [inventoryQuery],
+    tables: ['inventory_state'],
     touches: [inventoryDomain],
   },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
-    await request.db.exec("update inventory_state set count = 0, label = 'Sold out' where id = 1");
+    await request.db.exec(
+      staticSql`update inventory_state set count = 0, label = 'Sold out' where id = 1`,
+    );
     context.invalidate(inventoryDomain);
     return {};
   },
@@ -63,5 +67,5 @@ export default defineFixture({
   schema:
     'create table inventory_state (id integer primary key, count integer not null, label text not null)',
   seed: (db) =>
-    db.exec("insert into inventory_state (id, count, label) values (1, 3, 'Available')"),
+    db.exec(staticSql`insert into inventory_state (id, count, label) values (1, 3, 'Available')`),
 });

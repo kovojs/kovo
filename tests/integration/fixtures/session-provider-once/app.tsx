@@ -18,10 +18,10 @@ const csrf = {
 async function record(request: AppRequest, kind: string): Promise<void> {
   const caseKey = request.headers.get('x-session-case') ?? new URL(request.url).pathname;
   const subject = request.session?.user.id ?? 'anonymous';
-  await request.db.query(
-    'insert into session_once_events (case_key, kind, subject) values ($1, $2, $3)',
-    [caseKey, kind, subject],
-  );
+  await request.db.query({
+    text: 'insert into session_once_events (case_key, kind, subject) values ($1, $2, $3)',
+    values: [caseKey, kind, subject],
+  });
 }
 
 function recordingAuthed(kind: string) {
@@ -45,6 +45,7 @@ export const sessionOnceQuery = query('session-once', {
 export const sessionOnceMutation = mutation('session-once/mutate', {
   guard: recordingAuthed('mutation'),
   input: s.object({}),
+  registry: { tables: ['session_once_events'] },
   handler: async (_input: unknown, request: AppRequest) => {
     await record(request, 'handler:mutation');
     return { userId: request.session?.user.id ?? 'anonymous' };
@@ -72,10 +73,10 @@ export default defineFixture({
         id: `session-${caseKey}`,
         user: { id: `user-${caseKey}`, roles: [] },
       };
-      await appRequest.db.query(
-        'insert into session_once_events (case_key, kind, subject) values ($1, $2, $3)',
-        [caseKey, 'provider', session.user.id],
-      );
+      await appRequest.db.query({
+        text: 'insert into session_once_events (case_key, kind, subject) values ($1, $2, $3)',
+        values: [caseKey, 'provider', session.user.id],
+      });
       return session;
     },
     mutationResponses: {

@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -5,7 +6,9 @@ import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/in
 const cart = domain('cart');
 
 async function readCartCount(db: KovoFixtureRequest['db']): Promise<{ count: number }> {
-  const rows = await db.query<{ count: number }>('select count(*)::int as count from cart_items');
+  const rows = await db.query<{ count: number }>(
+    staticSql`select count(*)::int as count from cart_items`,
+  );
   return { count: rows[0]?.count ?? 0 };
 }
 
@@ -26,10 +29,14 @@ const addOpaqueCartItem = mutation('manual-touches-raw-write/add', {
   input: s.object({ productId: s.string() }),
   registry: {
     queries: [cartQuery],
+    tables: ['cart_items'],
     touches: [cart],
   },
   async handler(input, request: KovoFixtureRequest) {
-    await request.db.query('insert into cart_items (product_id) values ($1)', [input.productId]);
+    await request.db.query({
+      text: 'insert into cart_items (product_id) values ($1)',
+      values: [input.productId],
+    });
     return {};
   },
 });

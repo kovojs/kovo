@@ -1,9 +1,10 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readVersion(db: KovoFixtureRequest['db']): Promise<number> {
   const rows = await db.query<{ version: number }>(
-    'select version from nested_island_parent where id = 1',
+    staticSql`select version from nested_island_parent where id = 1`,
   );
   return rows[0]?.version ?? 0;
 }
@@ -23,8 +24,11 @@ async function renderPanel(db: KovoFixtureRequest['db']): Promise<string> {
 const refreshParent = mutation('morph-nested-island-state/refresh', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['nested_island_parent'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
-    await request.db.exec('update nested_island_parent set version = version + 1 where id = 1');
+    await request.db.exec(
+      staticSql`update nested_island_parent set version = version + 1 where id = 1`,
+    );
     return {};
   },
 });
@@ -55,5 +59,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table nested_island_parent (id integer primary key, version integer not null)',
-  seed: (db) => db.exec('insert into nested_island_parent (id, version) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into nested_island_parent (id, version) values (1, 0)`),
 });

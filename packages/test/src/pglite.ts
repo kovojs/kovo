@@ -8,6 +8,8 @@ import {
 
 /** SQL statement object accepted by `PgliteTestDb` helpers. */
 export interface PgliteStatementCarrier {
+  /** Drizzle SQL chunks, used by Kovo static/parameterized SQL objects. */
+  queryChunks?: readonly unknown[];
   /** SQL text, matching common driver carrier shape. */
   sql?: string;
   /** SQL text, matching common driver carrier shape. */
@@ -114,7 +116,7 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
         pglite,
         async (statement) => {
           const reader = await readonlyPgliteSession(readonlyDataDir);
-          return reader.exec(pgliteStatementText(statement));
+          return pgliteExecStatement(reader, statement);
         },
         async <Row extends Record<string, unknown>>(
           statement: PgliteStatementInput,
@@ -136,7 +138,7 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
     // read-only transactions and avoid setting a default that would poison the writer handle.
     readonlyDb ??= pgliteTestDbFromOperations(
       pglite,
-      async (statement) => runReadonly(() => pglite.exec(pgliteStatementText(statement))),
+      async (statement) => runReadonly(() => pgliteExecStatement(pglite, statement)),
       async <Row extends Record<string, unknown>>(
         statement: PgliteStatementInput,
         params: readonly unknown[] = [],
@@ -179,13 +181,13 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
       await pglite.close();
     },
     async exec(statement) {
-      return pglite.exec(pgliteStatementText(statement));
+      return pgliteExecStatement(pglite, statement);
     },
     insert(table) {
       return {
         values(value) {
           return insertPgliteRow(
-            (statement) => pglite.exec(pgliteStatementText(statement)),
+            (statement) => pgliteExecStatement(pglite, statement),
             async <Row extends Record<string, unknown>>(
               statement: PgliteStatementInput,
               params: readonly unknown[] = [],
@@ -222,7 +224,7 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
     },
     async write(table, value) {
       await insertPgliteRow(
-        (statement) => pglite.exec(pgliteStatementText(statement)),
+        (statement) => pgliteExecStatement(pglite, statement),
         async <Row extends Record<string, unknown>>(
           statement: PgliteStatementInput,
           params: readonly unknown[] = [],
@@ -242,7 +244,7 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
       return pgliteTestDbFromOperations(
         pglite,
         (statement) =>
-          runDeclaredWriteFallback(policy, () => pglite.exec(pgliteStatementText(statement))),
+          runDeclaredWriteFallback(policy, () => pgliteExecStatement(pglite, statement)),
         async <Row extends Record<string, unknown>>(
           statement: PgliteStatementInput,
           params: readonly unknown[] = [],
@@ -295,7 +297,7 @@ function pgliteTestDbFromOperations(
       return pgliteHandle();
     },
     async query<Row extends Record<string, unknown> = Record<string, unknown>>(
-      statement: string,
+      statement: PgliteStatementInput,
       params: readonly unknown[] = [],
     ) {
       return queryRows<Row>(statement, params);
@@ -304,7 +306,7 @@ function pgliteTestDbFromOperations(
       return queryRows<Row>(`select * from ${quoteSqlIdentifier(table)}`);
     },
     async sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-      statement: string,
+      statement: PgliteStatementInput,
       params: readonly unknown[] = [],
     ) {
       return queryRows<Row>(statement, params);
@@ -376,16 +378,19 @@ async function insertPgliteRow(
 ): Promise<void> {
   const entries = Object.entries(value);
   if (entries.length === 0) {
-    await execStatement(`insert into ${quoteSqlIdentifier(table)} default values`);
+    await execStatement({
+      text: `insert into ${quoteSqlIdentifier(table)} default values`,
+      values: [],
+    });
     return;
   }
 
   const columns = entries.map(([column]) => quoteSqlIdentifier(column)).join(', ');
   const placeholders = entries.map((_, index) => `$${index + 1}`).join(', ');
-  await queryRows(
-    `insert into ${quoteSqlIdentifier(table)} (${columns}) values (${placeholders})`,
-    entries.map(([, columnValue]) => columnValue),
-  );
+  await queryRows({
+    text: `insert into ${quoteSqlIdentifier(table)} (${columns}) values (${placeholders})`,
+    values: entries.map(([, columnValue]) => columnValue),
+  });
 }
 
 function assertDeclaredWriteTableAllowed(
@@ -431,10 +436,31 @@ function pgliteStatement(
 ): { text: string; values: readonly unknown[] } {
   if (typeof statement === 'string') return { text: statement, values: params };
   const text = statement.text ?? statement.sql;
-  if (typeof text !== 'string') throw new Error('PGlite statement carrier must include text/sql.');
-  return { text, values: statement.values ?? params };
+  if (typeof text === 'string') return { text, values: statement.values ?? params };
+  const chunkText = sqlTextFromQueryChunks(statement.queryChunks);
+  if (chunkText !== undefined) return { text: chunkText, values: statement.values ?? params };
+  throw new Error('PGlite statement carrier must include text/sql or queryChunks.');
 }
 
-function pgliteStatementText(statement: PgliteStatementInput): string {
-  return pgliteStatement(statement, []).text;
+async function pgliteExecStatement(
+  pglite: PGlite,
+  statement: PgliteStatementInput,
+): Promise<Results[]> {
+  const carrier = pgliteStatement(statement, []);
+  if (carrier.values.length === 0) return pglite.exec(carrier.text);
+  await pglite.query(carrier.text, [...carrier.values]);
+  return [];
+}
+
+function sqlTextFromQueryChunks(chunks: readonly unknown[] | undefined): string | undefined {
+  if (!Array.isArray(chunks)) return undefined;
+  const text = chunks
+    .flatMap((chunk) => {
+      const part = (chunk as { value?: unknown }).value;
+      return Array.isArray(part)
+        ? part.filter((item): item is string => typeof item === 'string')
+        : [];
+    })
+    .join('');
+  return text || undefined;
 }

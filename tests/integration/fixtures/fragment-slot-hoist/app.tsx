@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -9,12 +10,14 @@ export const deposit = mutation('fragment-slot-hoist/deposit', {
   input: s.object({ amount: s.number().int().min(1) }),
   registry: {
     queries: [balanceQuery],
+    tables: ['slot_account'],
     touches: [account],
   },
   handler: async (input, request: KovoFixtureRequest) => {
-    await request.db.query('update slot_account set balance = balance + $1 where id = 1', [
-      input.amount,
-    ]);
+    await request.db.query({
+      text: 'update slot_account set balance = balance + $1 where id = 1',
+      values: [input.amount],
+    });
     return { amount: input.amount };
   },
 });
@@ -53,5 +56,5 @@ export default defineFixture({
   schema:
     'create table slot_account (id integer primary key, account_id text not null, balance integer not null)',
   seed: (db) =>
-    db.exec("insert into slot_account (id, account_id, balance) values (1, 'acct-1', 10)"),
+    db.exec(staticSql`insert into slot_account (id, account_id, balance) values (1, 'acct-1', 10)`),
 });

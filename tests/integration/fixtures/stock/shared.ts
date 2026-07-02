@@ -1,5 +1,6 @@
 // Shared query + domain for the stock (error-union) fixture. Declares no Kovo
 // components, so the compiler plugin leaves it untouched.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -10,7 +11,7 @@ export interface StockResult {
 export const item = domain('item');
 
 export async function readStock(db: KovoFixtureRequest['db']): Promise<StockResult> {
-  const rows = await db.query<{ stock: number }>('select stock from item where id = 1');
+  const rows = await db.query<{ stock: number }>(staticSql`select stock from item where id = 1`);
   return { stock: Number(rows[0]?.stock ?? 0) };
 }
 

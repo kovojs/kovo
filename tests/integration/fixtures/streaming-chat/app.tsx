@@ -8,6 +8,7 @@ import {
   stream,
   type QueryLoadContext,
 } from '@kovojs/server';
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { trustedHtml } from '@kovojs/browser';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -28,7 +29,7 @@ const chatQuery = query('chatMessages', {
 
 async function readMessages(db: KovoFixtureRequest['db'] | undefined): Promise<MessageRow[]> {
   if (!db) throw new Error('streaming chat fixture requires request.db');
-  return db.query<MessageRow>('select id, role, body from messages order by id');
+  return db.query<MessageRow>(staticSql`select id, role, body from messages order by id`);
 }
 
 function escapeHtml(value: string): string {
@@ -81,27 +82,26 @@ export const sendMessage = mutation('chat/send', {
   }),
   registry: {
     queries: [chatQuery],
+    tables: ['messages'],
     touches: [chatDomain],
   },
   async handler(input, request: KovoFixtureRequest, context) {
     if (input.body === 'fail') return context.fail('MODEL_UNAVAILABLE', {});
 
     const rows = await request.db.query<{ next_id: number }>(
-      'select coalesce(max(id), 0) + 1 as next_id from messages',
+      staticSql`select coalesce(max(id), 0) + 1 as next_id from messages`,
     );
     const userId = Number(rows[0]?.next_id ?? 1);
     const assistantId = userId + 1;
     const finalAnswer = `Final answer for ${input.body}: table code image`;
-    await request.db.query('insert into messages (id, role, body) values ($1, $2, $3)', [
-      userId,
-      'user',
-      input.body,
-    ]);
-    await request.db.query('insert into messages (id, role, body) values ($1, $2, $3)', [
-      assistantId,
-      'assistant',
-      finalAnswer,
-    ]);
+    await request.db.query({
+      text: 'insert into messages (id, role, body) values ($1, $2, $3)',
+      values: [userId, 'user', input.body],
+    });
+    await request.db.query({
+      text: 'insert into messages (id, role, body) values ($1, $2, $3)',
+      values: [assistantId, 'assistant', finalAnswer],
+    });
     return { assistantId, body: input.body, finalAnswer, userId };
   },
   async *stream({ result }) {

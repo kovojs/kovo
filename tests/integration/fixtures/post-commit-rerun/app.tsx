@@ -1,5 +1,6 @@
 // Mutation wire fixture for SPEC.md §10.3: enhanced mutation responses rerun
 // invalidated queries after commit, so fragments and <kovo-query> carry truth.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -17,12 +18,14 @@ export const deposit = mutation('account/deposit', {
   input: s.object({ amount: s.number().int().min(1) }),
   registry: {
     queries: [balanceQuery],
+    tables: ['account'],
     touches: [account],
   },
   handler: async (input, request: KovoFixtureRequest) => {
-    await request.db.query('update account set balance = balance + $1 where id = 1', [
-      input.amount,
-    ]);
+    await request.db.query({
+      text: 'update account set balance = balance + $1 where id = 1',
+      values: [input.amount],
+    });
     return { amount: input.amount };
   },
 });
@@ -59,5 +62,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table account (id integer primary key, balance integer not null default 0)',
-  seed: (db) => db.exec('insert into account (id, balance) values (1, 10)'),
+  seed: (db) => db.exec(staticSql`insert into account (id, balance) values (1, 10)`),
 });

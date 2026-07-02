@@ -1,5 +1,6 @@
 // SPEC.md §8: the cross-engine degradation contract keeps L0 documents, L1
 // forms, and L2 loader enhancements usable outside Chromium.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -14,7 +15,7 @@ async function renderEngineCard(db: KovoFixtureRequest['db']): Promise<string> {
 
 async function renderInitialReport(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ include_gift: number; quantity: number }>(
-    'select quantity, include_gift from engine_matrix_submit_log order by id desc limit 1',
+    staticSql`select quantity, include_gift from engine_matrix_submit_log order by id desc limit 1`,
   );
   const row = rows[0];
   if (!row) return '<output data-submit-report>no submissions yet</output>';
@@ -40,11 +41,12 @@ export const submitMatrixForm = mutation('engine-matrix/submit', {
     includeGift: s.boolean(),
     quantity: s.number().int().min(1),
   }),
+  registry: { tables: ['engine_matrix_submit_log'] },
   handler: async (input, request: KovoFixtureRequest) => {
-    await request.db.query(
-      'insert into engine_matrix_submit_log (quantity, include_gift) values ($1, $2)',
-      [input.quantity, input.includeGift ? 1 : 0],
-    );
+    await request.db.query({
+      text: 'insert into engine_matrix_submit_log (quantity, include_gift) values ($1, $2)',
+      values: [input.quantity, input.includeGift ? 1 : 0],
+    });
     return {};
   },
 });
@@ -98,5 +100,5 @@ export default defineFixture({
     );
   `,
   seed: (db) =>
-    db.exec("insert into engine_matrix_state (id, message) values (1, 'Initial message')"),
+    db.exec(staticSql`insert into engine_matrix_state (id, message) values (1, 'Initial message')`),
 });

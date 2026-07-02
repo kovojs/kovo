@@ -1,10 +1,13 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const cart = domain('cart');
 
 async function cartCount(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ count: number }>('select count(*)::int as count from cart_items');
+  const rows = await db.query<{ count: number }>(
+    staticSql`select count(*)::int as count from cart_items`,
+  );
   return rows[0]?.count ?? 0;
 }
 
@@ -15,8 +18,12 @@ function renderCartCount(count: number): string {
 const addCartItem = mutation('touch-graph-runtime-crosscheck/add', {
   csrf: false,
   input: s.object({ productId: s.string() }),
+  registry: { tables: ['cart_items'], touches: [cart] },
   async handler(input, request: KovoFixtureRequest, context) {
-    await request.db.query('insert into cart_items (product_id) values ($1)', [input.productId]);
+    await request.db.query({
+      text: 'insert into cart_items (product_id) values ($1)',
+      values: [input.productId],
+    });
     context.invalidate(cart);
     return {};
   },
@@ -25,8 +32,12 @@ const addCartItem = mutation('touch-graph-runtime-crosscheck/add', {
 const smuggleAuditWrite = mutation('touch-graph-runtime-crosscheck/smuggle', {
   csrf: false,
   input: s.object({ productId: s.string() }),
+  registry: { tables: ['cart_items'], touches: [cart] },
   async handler(input, request: KovoFixtureRequest, context) {
-    await request.db.query('insert into audit_log (product_id) values ($1)', [input.productId]);
+    await request.db.query({
+      text: 'insert into audit_log (product_id) values ($1)',
+      values: [input.productId],
+    });
     context.invalidate(cart);
     return {};
   },

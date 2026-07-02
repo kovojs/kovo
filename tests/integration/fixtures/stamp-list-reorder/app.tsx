@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import {
   escapeAttribute,
@@ -21,7 +22,7 @@ interface BoardResult {
 
 async function readBoard(db: KovoFixtureRequest['db']): Promise<BoardResult> {
   const items = (await db.query(
-    'select id, label, rank from board_item order by rank asc',
+    staticSql`select id, label, rank from board_item order by rank asc`,
   )) as unknown as BoardItem[];
   return { items };
 }
@@ -56,12 +57,15 @@ export const reorderBoard = mutation('stamp-list-reorder/reorder', {
   input: s.object({}),
   registry: {
     queries: [boardQuery],
+    tables: ['board_item'],
     touches: [boardDomain],
   },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
-    await request.db.exec("update board_item set rank = 3, label = 'Alpha moved' where id = 'a'");
-    await request.db.exec("update board_item set rank = 1 where id = 'b'");
-    await request.db.exec("update board_item set rank = 2 where id = 'c'");
+    await request.db.exec(
+      staticSql`update board_item set rank = 3, label = 'Alpha moved' where id = 'a'`,
+    );
+    await request.db.exec(staticSql`update board_item set rank = 1 where id = 'b'`);
+    await request.db.exec(staticSql`update board_item set rank = 2 where id = 'c'`);
     context.invalidate(boardDomain);
     return {};
   },
@@ -101,8 +105,8 @@ export default defineFixture({
   schema:
     'create table board_item (id text primary key, label text not null, rank integer not null)',
   seed: async (db) => {
-    await db.exec("insert into board_item (id, label, rank) values ('a', 'Alpha', 1)");
-    await db.exec("insert into board_item (id, label, rank) values ('b', 'Beta', 2)");
-    await db.exec("insert into board_item (id, label, rank) values ('c', 'Gamma', 3)");
+    await db.exec(staticSql`insert into board_item (id, label, rank) values ('a', 'Alpha', 1)`);
+    await db.exec(staticSql`insert into board_item (id, label, rank) values ('b', 'Beta', 2)`);
+    await db.exec(staticSql`insert into board_item (id, label, rank) values ('c', 'Gamma', 3)`);
   },
 });

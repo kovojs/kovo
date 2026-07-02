@@ -7,6 +7,7 @@ import {
   s,
   type QueryLoadContext,
 } from '@kovojs/server';
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -15,7 +16,9 @@ type CartSummary = Record<string, unknown> & {
 };
 
 async function readCart(db: KovoFixtureRequest['db']): Promise<CartSummary> {
-  const rows = await db.query<CartSummary>('select count from optimistic_cart where id = 1');
+  const rows = await db.query<CartSummary>(
+    staticSql`select count from optimistic_cart where id = 1`,
+  );
   return rows[0] ?? { count: 0 };
 }
 
@@ -42,13 +45,15 @@ const addItem = mutation('optimistic-rebase/add', {
   input: s.object({ delay: s.number(), quantity: s.number() }),
   registry: {
     queries: [cartQuery],
+    tables: ['optimistic_cart'],
     touches: [cartDomain],
   },
   handler: async (input: { delay: number; quantity: number }, request: KovoFixtureRequest) => {
     await new Promise((resolve) => setTimeout(resolve, input.delay));
-    await request.db.exec(
-      `update optimistic_cart set count = count + ${input.quantity} where id = 1`,
-    );
+    await request.db.exec({
+      text: 'update optimistic_cart set count = count + $1 where id = 1',
+      values: [input.quantity],
+    });
     return {};
   },
 });
@@ -83,5 +88,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table optimistic_cart (id integer primary key, count integer not null)',
-  seed: (db) => db.exec('insert into optimistic_cart (id, count) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into optimistic_cart (id, count) values (1, 0)`),
 });

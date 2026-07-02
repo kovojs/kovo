@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -16,7 +17,9 @@ export interface PayloadResult {
 export const xssDomain = domain('xss');
 
 export async function readPayload(db: KovoFixtureRequest['db']): Promise<PayloadResult> {
-  const rows = await db.query<PayloadResult>('select text, url from xss_payload where id = 1');
+  const rows = await db.query<PayloadResult>(
+    staticSql`select text, url from xss_payload where id = 1`,
+  );
   return rows[0] ?? { text: '', url: '' };
 }
 

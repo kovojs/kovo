@@ -486,11 +486,9 @@ export const SECURITY_BUILD_PROOFS = [
     claimId: 'phase-5-1-full-paranoid-dogfood-write-acceptance',
     code: 'KV406',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    requiredNeedles: [
-      ...paranoidGeneratorAcceptanceProofNeedles().filter(
-        (needle) => needle !== "KOVO_PARANOID: '1'",
-      ),
-    ],
+    requiredNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
+      (needle) => needle !== "KOVO_PARANOID: '1'",
+    ),
     requiredProofFileNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
       (needle) => needle === "KOVO_PARANOID: '1'",
     ),

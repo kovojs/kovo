@@ -36,10 +36,10 @@ async function readInvoice(
   invoiceId: string,
   ownerId: string,
 ): Promise<InvoiceRow | null> {
-  const [row] = await db.query<InvoiceRow>(
-    'select id, owner_id, total from invoices where id = $1 and owner_id = $2',
-    [invoiceId, ownerId],
-  );
+  const [row] = await db.query<InvoiceRow>({
+    text: 'select id, owner_id, total from invoices where id = $1 and owner_id = $2',
+    values: [invoiceId, ownerId],
+  });
   return row ?? null;
 }
 

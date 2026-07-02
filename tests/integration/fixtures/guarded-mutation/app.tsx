@@ -1,6 +1,7 @@
 // SPEC §6.5 + §10.3: mutation guards run before the transaction/write path.
 // Unauthenticated enhanced failures return Kovo-Reauth; authenticated
 // authorization failures stay on typed mutation error fragments.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, csrfField, guards, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -28,7 +29,9 @@ function readSessionCookie(request: Request): AuthSession | null {
 }
 
 async function readCount(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ count: number }>('select count from guarded_counter where id = 1');
+  const rows = await db.query<{ count: number }>(
+    staticSql`select count from guarded_counter where id = 1`,
+  );
   return rows[0]?.count ?? 0;
 }
 
@@ -40,9 +43,10 @@ async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
 export const guardedIncrement = mutation('guarded-mutation/increment', {
   guard: guards.authed<AuthRequest>(),
   input: s.object({}),
+  registry: { tables: ['guarded_counter'] },
   transaction: async (_request, run) => run(_request),
   handler: async (_input: unknown, request: AuthRequest) => {
-    await request.db.exec('update guarded_counter set count = count + 1 where id = 1');
+    await request.db.exec(staticSql`update guarded_counter set count = count + 1 where id = 1`);
     return {};
   },
 });
@@ -86,5 +90,5 @@ export default defineFixture({
     },
   }),
   schema: 'create table guarded_counter (id integer primary key, count integer not null default 0)',
-  seed: (db) => db.exec('insert into guarded_counter (id, count) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into guarded_counter (id, count) values (1, 0)`),
 });

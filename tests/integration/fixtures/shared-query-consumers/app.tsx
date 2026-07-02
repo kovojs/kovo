@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
@@ -21,11 +22,12 @@ export const publishProfile = mutation('shared-query-consumers/publish', {
   input: s.object({}),
   registry: {
     queries: [profileQuery],
+    tables: ['profile'],
     touches: [profileDomain],
   },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
     await request.db.exec(
-      "update profile set name = 'Grace Hopper', status = 'published' where id = 1",
+      staticSql`update profile set name = 'Grace Hopper', status = 'published' where id = 1`,
     );
     context.invalidate(profileDomain);
     return {};
@@ -70,5 +72,5 @@ export default defineFixture({
   app,
   schema: 'create table profile (id integer primary key, name text not null, status text not null)',
   seed: (db) =>
-    db.exec("insert into profile (id, name, status) values (1, 'Ada Lovelace', 'draft')"),
+    db.exec(staticSql`insert into profile (id, name, status) values (1, 'Ada Lovelace', 'draft')`),
 });

@@ -7,6 +7,7 @@ import {
   route,
   s,
 } from '@kovojs/server';
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const csrf = {
@@ -16,17 +17,19 @@ const csrf = {
 
 async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ count: number }>(
-    'select count(*)::int as count from ledger_entries',
+    staticSql`select count(*)::int as count from ledger_entries`,
   );
   return `<output data-bind="idem.count">${rows[0]?.count ?? 0}</output>`;
 }
 
 export const recordEntry = mutation('idempotent-mutation/record', {
   input: s.object({ note: s.string() }),
+  registry: { tables: ['ledger_entries'] },
   handler: async (input: { note: string }, request: KovoFixtureRequest) => {
-    await request.db.exec(
-      `insert into ledger_entries (note) values ('${input.note.replaceAll("'", "''")}')`,
-    );
+    await request.db.exec({
+      text: 'insert into ledger_entries (note) values ($1)',
+      values: [input.note],
+    });
     return {};
   },
 });

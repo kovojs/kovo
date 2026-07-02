@@ -10,14 +10,15 @@ export const subscribe = mutation('newsletter/subscribe', {
     email: s.string(),
     seats: s.number().int().min(1),
   }),
+  registry: { tables: ['subscribers'] },
   handler: async (input, request: KovoFixtureRequest, context) => {
     if (input.email === 'taken@example.com') {
       return context.fail('ALREADY_SUBSCRIBED', { email: input.email });
     }
-    await request.db.query('insert into subscribers (email, seats) values ($1, $2)', [
-      input.email,
-      input.seats,
-    ]);
+    await request.db.query({
+      text: 'insert into subscribers (email, seats) values ($1, $2)',
+      values: [input.email, input.seats],
+    });
     return { email: input.email };
   },
 });

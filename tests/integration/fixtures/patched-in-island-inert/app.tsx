@@ -1,11 +1,12 @@
 // Morph application fixture: an island patched in by a fragment is discovered by
 // delegated future events, but its handler module is not imported eagerly (SPEC §4.4, §9.1).
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function readInstalled(db: KovoFixtureRequest['db']): Promise<boolean> {
   const rows = await db.query<{ installed: number }>(
-    'select installed from island_patch where id = 1',
+    staticSql`select installed from island_patch where id = 1`,
   );
   return rows[0]?.installed === 1;
 }
@@ -27,8 +28,9 @@ async function renderZone(db: KovoFixtureRequest['db']): Promise<string> {
 export const addIsland = mutation('island/add', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['island_patch'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
-    await request.db.exec('update island_patch set installed = 1 where id = 1');
+    await request.db.exec(staticSql`update island_patch set installed = 1 where id = 1`);
     return {};
   },
 });
@@ -63,5 +65,5 @@ export default defineFixture({
   app,
   schema:
     'create table island_patch (id integer primary key, installed integer not null default 0)',
-  seed: (db) => db.exec('insert into island_patch (id, installed) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into island_patch (id, installed) values (1, 0)`),
 });

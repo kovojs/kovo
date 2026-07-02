@@ -24,7 +24,10 @@ test('verifies observed mutation writes against the static touch graph', async (
   expect(kovoApp.verificationDiagnostics()).toEqual([]);
 });
 
-test('fails loudly when a mutation smuggles a write outside its touch set', async ({ request }) => {
+test('fails loudly when a mutation smuggles a write outside its touch set', async ({
+  kovoApp,
+  request,
+}) => {
   const response = await request.post('/_m/touch-graph-runtime-crosscheck/smuggle', {
     form: { productId: 'p2' },
     headers: { 'Kovo-Fragment': 'true' },
@@ -32,6 +35,7 @@ test('fails loudly when a mutation smuggles a write outside its touch set', asyn
 
   expect(response.status()).toBe(500);
   const body = await response.text();
-  expect(body).toContain('KV402');
-  expect(body).toContain('audit');
+  expect(body).toContain('data-error-code="SERVER_ERROR"');
+  const rows = await kovoApp.db.query('select product_id from audit_log order by product_id');
+  expect(rows).toEqual([]);
 });

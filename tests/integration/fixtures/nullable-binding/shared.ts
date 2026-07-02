@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -9,7 +10,7 @@ export const dealDomain = domain('deal');
 
 export async function readDeal(db: KovoFixtureRequest['db']): Promise<DealResult> {
   const rows = await db.query<{ contact_name: string | null }>(
-    'select contact_name from deal where id = 1',
+    staticSql`select contact_name from deal where id = 1`,
   );
   const name = rows[0]?.contact_name ?? null;
   return { contact: name === null ? null : { name } };

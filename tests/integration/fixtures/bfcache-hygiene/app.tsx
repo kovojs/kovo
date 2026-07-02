@@ -7,6 +7,7 @@ import {
   s,
   type QueryLoadContext,
 } from '@kovojs/server';
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { renderQueryScript } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -15,7 +16,9 @@ type NavCounter = Record<string, unknown> & {
 };
 
 async function readCounter(db: KovoFixtureRequest['db']): Promise<NavCounter> {
-  const rows = await db.query<NavCounter>('select value from nav_lifecycle_counter where id = 1');
+  const rows = await db.query<NavCounter>(
+    staticSql`select value from nav_lifecycle_counter where id = 1`,
+  );
   return rows[0] ?? { value: 0 };
 }
 
@@ -40,11 +43,13 @@ async function renderCounterPanel(db: KovoFixtureRequest['db']): Promise<string>
 const increment = mutation('nav-lifecycle/increment', {
   csrf: false,
   input: s.object({ quantity: s.number() }),
+  registry: { tables: ['nav_lifecycle_counter'], touches: [counterDomain] },
   handler: async (input: { quantity: number }, request: KovoFixtureRequest, context) => {
     await new Promise((resolve) => setTimeout(resolve, 700));
-    await request.db.exec(
-      `update nav_lifecycle_counter set value = value + ${input.quantity} + 1 where id = 1`,
-    );
+    await request.db.exec({
+      text: 'update nav_lifecycle_counter set value = value + $1 + 1 where id = 1',
+      values: [input.quantity],
+    });
     context.invalidate(counterDomain);
     return {};
   },
@@ -89,5 +94,5 @@ export default defineFixture({
   app,
   schema:
     'create table nav_lifecycle_counter (id integer primary key, value integer not null default 1)',
-  seed: (db) => db.exec('insert into nav_lifecycle_counter (id, value) values (1, 1)'),
+  seed: (db) => db.exec(staticSql`insert into nav_lifecycle_counter (id, value) values (1, 1)`),
 });

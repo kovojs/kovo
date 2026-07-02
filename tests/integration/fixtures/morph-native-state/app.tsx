@@ -2,13 +2,14 @@
 // fragment morph preserves user-agent/DOM-resident state. This fixture opens a
 // <details> by user action, then triggers an UNRELATED morph of the enclosing
 // fragment (an incremented counter) and asserts the open state survives.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const panelDomain = domain('panel');
 
 async function count(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ value: number }>('select value from panel where id = 1');
+  const rows = await db.query<{ value: number }>(staticSql`select value from panel where id = 1`);
   return rows[0]?.value ?? 0;
 }
 
@@ -23,8 +24,9 @@ function renderPanel(value: number): string {
 export const bump = mutation('morph-native-state/bump', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['panel'], touches: [panelDomain] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
-    await request.db.exec('update panel set value = value + 1 where id = 1');
+    await request.db.exec(staticSql`update panel set value = value + 1 where id = 1`);
     context.invalidate(panelDomain);
     return {};
   },
@@ -56,5 +58,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table panel (id integer primary key, value integer not null)',
-  seed: (db) => db.exec('insert into panel (id, value) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into panel (id, value) values (1, 0)`),
 });

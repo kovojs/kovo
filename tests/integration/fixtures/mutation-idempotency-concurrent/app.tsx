@@ -8,6 +8,7 @@ import {
   route,
   s,
 } from '@kovojs/server';
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const csrf = {
@@ -17,16 +18,20 @@ const csrf = {
 
 async function renderStatus(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ count: number }>(
-    'select count(*)::int as count from concurrent_entries',
+    staticSql`select count(*)::int as count from concurrent_entries`,
   );
   return `<output data-bind="idem.count">${rows[0]?.count ?? 0}</output>`;
 }
 
 export const slowRecord = mutation('mutation-idempotency-concurrent/record', {
   input: s.object({ note: s.string() }),
+  registry: { tables: ['concurrent_entries'] },
   handler: async (input: { note: string }, request: KovoFixtureRequest) => {
     await new Promise((resolve) => setTimeout(resolve, 300));
-    await request.db.query('insert into concurrent_entries (note) values ($1)', [input.note]);
+    await request.db.query({
+      text: 'insert into concurrent_entries (note) values ($1)',
+      values: [input.note],
+    });
     return {};
   },
 });

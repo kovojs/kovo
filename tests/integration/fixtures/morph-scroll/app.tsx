@@ -1,6 +1,7 @@
 // Morph survival fixture: a keyed scroll container keeps browser-owned
 // scrollTop while server-truth content is reconciled (SPEC §9.1).
 /** @jsxImportSource @kovojs/server */
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, Document, Head, InlineStyle, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -9,7 +10,9 @@ const SCROLL_REGION_CSS =
   '[data-scroll-region] [data-row]{height:24px;margin:0}';
 
 async function readVersion(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ version: number }>('select version from scroll_state where id = 1');
+  const rows = await db.query<{ version: number }>(
+    staticSql`select version from scroll_state where id = 1`,
+  );
   return rows[0]?.version ?? 0;
 }
 
@@ -33,8 +36,9 @@ async function renderPanel(db: KovoFixtureRequest['db']): Promise<string> {
 export const refreshScroll = mutation('scroll/refresh', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['scroll_state'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
-    await request.db.exec('update scroll_state set version = version + 1 where id = 1');
+    await request.db.exec(staticSql`update scroll_state set version = version + 1 where id = 1`);
     return {};
   },
 });
@@ -80,5 +84,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table scroll_state (id integer primary key, version integer not null default 0)',
-  seed: (db) => db.exec('insert into scroll_state (id, version) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into scroll_state (id, version) values (1, 0)`),
 });

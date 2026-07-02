@@ -7,10 +7,12 @@ const receiptDomain = domain('receipt');
 export const createReceipt = mutation('render-error-fragment/create', {
   csrf: false,
   input: s.object({ id: s.string(), secret: s.string() }),
+  registry: { tables: ['receipts'] },
   handler: async (input: { id: string; secret: string }, request: KovoFixtureRequest, context) => {
-    await request.db.exec(
-      `insert into receipts (id, secret) values ('${input.id.replaceAll("'", "''")}', '${input.secret.replaceAll("'", "''")}')`,
-    );
+    await request.db.exec({
+      text: 'insert into receipts (id, secret) values ($1, $2)',
+      values: [input.id, input.secret],
+    });
     context.invalidate(receiptDomain, {
       input: { secret: input.secret },
       keys: [input.id],

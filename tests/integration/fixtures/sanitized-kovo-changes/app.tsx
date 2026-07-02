@@ -7,10 +7,12 @@ const auditRecord = domain('audit-record');
 export const saveSecret = mutation('sanitized-kovo-changes/save', {
   csrf: false,
   input: s.object({ id: s.string(), secret: s.string() }),
+  registry: { tables: ['audit_records'] },
   handler: async (input: { id: string; secret: string }, request: KovoFixtureRequest, context) => {
-    await request.db.exec(
-      `insert into audit_records (id, secret) values ('${input.id.replaceAll("'", "''")}', '${input.secret.replaceAll("'", "''")}')`,
-    );
+    await request.db.query({
+      text: 'insert into audit_records (id, secret) values ($1, $2)',
+      values: [input.id, input.secret],
+    });
     context.invalidate(auditRecord, {
       input: { secret: input.secret, stack: 'internal-stack-detail' },
       keys: [input.id],

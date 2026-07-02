@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { domain, query, type QueryLoadContext } from '@kovojs/server';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -8,7 +9,9 @@ export interface EngineResult extends Record<string, unknown> {
 export const engineDomain = domain('engine_matrix_state');
 
 export async function readEngineState(db: KovoFixtureRequest['db']): Promise<EngineResult> {
-  const rows = await db.query<EngineResult>('select message from engine_matrix_state where id = 1');
+  const rows = await db.query<EngineResult>(
+    staticSql`select message from engine_matrix_state where id = 1`,
+  );
   return rows[0] ?? { message: 'Initial message' };
 }
 

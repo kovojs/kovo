@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import type { KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const account = { key: 'slot_account' };
@@ -9,7 +10,7 @@ export interface BalanceResult {
 
 export async function readBalance(db: KovoFixtureRequest['db']): Promise<BalanceResult> {
   const rows = await db.query(
-    'select account_id as "accountId", balance from slot_account where id = 1',
+    staticSql`select account_id as "accountId", balance from slot_account where id = 1`,
   );
   return rows[0] as unknown as BalanceResult;
 }

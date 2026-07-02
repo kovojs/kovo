@@ -16,7 +16,10 @@ export const reserve = mutation('validation/reserve', {
     quantity: s.number().int().min(1),
   }),
   handler: async (input, request: KovoFixtureRequest) => {
-    await request.db.query('insert into reservations (quantity) values ($1)', [input.quantity]);
+    await request.db.query({
+      text: 'insert into reservations (quantity) values ($1)',
+      values: [input.quantity],
+    });
     return { quantity: input.quantity };
   },
 });

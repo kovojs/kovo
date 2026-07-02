@@ -14,10 +14,10 @@ async function readProductPanel(
   id: string,
   label: string,
 ): Promise<ProductPanelResult> {
-  const rows = await db.query<ProductPanelResult>(
-    'select id, name as label, stock from products where id = $1',
-    [id],
-  );
+  const rows = await db.query<ProductPanelResult>({
+    text: 'select id, name as label, stock from products where id = $1',
+    values: [id],
+  });
   return rows[0] ?? { id, label, stock: 0 };
 }
 
@@ -47,12 +47,13 @@ const bulkRestock = mutation('table-level-invalidation/restock', {
   input: s.object({ category: s.string(), threshold: s.number().int().min(0) }),
   registry: {
     queries: [productQuery],
+    tables: ['products'],
   },
   async handler(input, request: KovoFixtureRequest, context) {
-    await request.db.query(
-      'update products set stock = stock + 1 where category = $1 and stock < $2',
-      [input.category, input.threshold],
-    );
+    await request.db.query({
+      text: 'update products set stock = stock + 1 where category = $1 and stock < $2',
+      values: [input.category, input.threshold],
+    });
     // SPEC.md §10.1/§11.1: a non-equality/range predicate degrades to table-level
     // invalidation, so the fixture emits an unkeyed product invalidation.
     context.invalidate(product);
@@ -108,18 +109,14 @@ export default defineFixture({
   schema:
     'create table products (id text primary key, name text not null, category text not null, stock integer not null)',
   seed: async (db) => {
-    await db.query('insert into products (id, name, category, stock) values ($1, $2, $3, $4)', [
-      'p1',
-      'Pen',
-      'office',
-      2,
-    ]);
-    await db.query('insert into products (id, name, category, stock) values ($1, $2, $3, $4)', [
-      'p2',
-      'Notebook',
-      'office',
-      9,
-    ]);
+    await db.query({
+      text: 'insert into products (id, name, category, stock) values ($1, $2, $3, $4)',
+      values: ['p1', 'Pen', 'office', 2],
+    });
+    await db.query({
+      text: 'insert into products (id, name, category, stock) values ($1, $2, $3, $4)',
+      values: ['p2', 'Notebook', 'office', 9],
+    });
   },
   touchGraph: {
     [bulkRestock.key]: {

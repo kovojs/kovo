@@ -1,5 +1,6 @@
 // SPEC.md §6.5/§9.1: Kovo-Targets is untrusted wire input. Unknown,
 // duplicated, malformed, or unauthorized targets must not leak protected data.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -17,7 +18,7 @@ function userId(request: Request): string | null {
 
 async function renderPublic(db: KovoFixtureRequest['db']): Promise<string> {
   const rows = await db.query<{ count: number }>(
-    'select count(*)::int as count from target_refreshes',
+    staticSql`select count(*)::int as count from target_refreshes`,
   );
   return `<output data-public-status>public:${rows[0]?.count ?? 0}</output>`;
 }
@@ -30,8 +31,12 @@ function renderPrivate(request: Request): string {
 export const refreshTargets = mutation('targets/refresh', {
   csrf: false,
   input: s.object({ value: s.string() }),
+  registry: { tables: ['target_refreshes'] },
   handler: async (input, request: KovoFixtureRequest) => {
-    await request.db.query('insert into target_refreshes (value) values ($1)', [input.value]);
+    await request.db.query({
+      text: 'insert into target_refreshes (value) values ($1)',
+      values: [input.value],
+    });
     return {};
   },
 });

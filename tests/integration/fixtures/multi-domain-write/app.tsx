@@ -1,6 +1,7 @@
 // SPEC §11.1/§11.2, KV402 (plans/bugs-and-testing.md C7; testing-audit §5.1): one
 // handler writing TWO domains. The runtime cross-check must pass when both are
 // declared and fail loudly naming the MISSING domain when one is omitted.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -8,14 +9,17 @@ const cart = domain('cart');
 const product = domain('product');
 
 async function cartCount(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ count: number }>('select count(*)::int as count from cart_items');
+  const rows = await db.query<{ count: number }>(
+    staticSql`select count(*)::int as count from cart_items`,
+  );
   return rows[0]?.count ?? 0;
 }
 
 async function productStock(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ stock: number }>('select stock from products where id = $1', [
-    'p1',
-  ]);
+  const rows = await db.query<{ stock: number }>({
+    text: 'select stock from products where id = $1',
+    values: ['p1'],
+  });
   return rows[0]?.stock ?? 0;
 }
 
@@ -31,9 +35,16 @@ function renderStock(stock: number): string {
 const addBoth = mutation('multi-domain-write/add-both', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['cart_items', 'products'], touches: [cart, product] },
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
-    await request.db.query('insert into cart_items (product_id) values ($1)', ['p1']);
-    await request.db.query('update products set stock = stock - 1 where id = $1', ['p1']);
+    await request.db.query({
+      text: 'insert into cart_items (product_id) values ($1)',
+      values: ['p1'],
+    });
+    await request.db.query({
+      text: 'update products set stock = stock - 1 where id = $1',
+      values: ['p1'],
+    });
     context.invalidate(cart);
     context.invalidate(product);
     return {};
@@ -45,9 +56,16 @@ const addBoth = mutation('multi-domain-write/add-both', {
 const addPartial = mutation('multi-domain-write/add-partial', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['cart_items', 'products'], touches: [cart] },
   async handler(_input: unknown, request: KovoFixtureRequest, context) {
-    await request.db.query('insert into cart_items (product_id) values ($1)', ['p2']);
-    await request.db.query('update products set stock = stock - 1 where id = $1', ['p1']);
+    await request.db.query({
+      text: 'insert into cart_items (product_id) values ($1)',
+      values: ['p2'],
+    });
+    await request.db.query({
+      text: 'update products set stock = stock - 1 where id = $1',
+      values: ['p1'],
+    });
     context.invalidate(cart);
     return {};
   },
@@ -95,7 +113,7 @@ export default defineFixture({
     'create table cart_items (id integer primary key generated always as identity, product_id text not null)',
     'create table products (id text primary key, stock integer not null)',
   ],
-  seed: (db) => db.exec("insert into products (id, stock) values ('p1', 5)"),
+  seed: (db) => db.exec(staticSql`insert into products (id, stock) values ('p1', 5)`),
   touchGraph: {
     [addBoth.key]: {
       touches: [

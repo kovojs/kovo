@@ -34,10 +34,10 @@ const downloadRoute = route('/files/download', {
   guard: guards.authed<StorageRequest>(),
   search: s.object({ key: s.string() }),
   async page({ search }, request: StorageRequest) {
-    const [row] = await request.db.query<FileRow>(
-      'select owner_id, storage_key, filename from files where storage_key = $1',
-      [search.key],
-    );
+    const [row] = await request.db.query<FileRow>({
+      text: 'select owner_id, storage_key, filename from files where storage_key = $1',
+      values: [search.key],
+    });
     if (!row || row.owner_id !== request.session?.user.id) return notFound();
 
     let stored: Awaited<ReturnType<typeof storage.stream>>;

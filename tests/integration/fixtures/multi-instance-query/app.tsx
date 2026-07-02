@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import { runQuery } from '@kovojs/test/internal/integration/fixture-abi';
 import {
@@ -49,12 +50,14 @@ export const restockProduct = mutation('multi-instance-query/restock', {
   input: s.object({ id: s.string(), restock: s.number().int().min(1) }),
   registry: {
     queries: [productQuery],
+    tables: ['product'],
     touches: [productDomain],
   },
   handler: async (input: { id: string; restock: number }, request: KovoFixtureRequest, context) => {
-    await request.db.exec(
-      `update product set stock = stock + ${input.restock} where id = '${input.id.replaceAll("'", "''")}'`,
-    );
+    await request.db.exec({
+      text: 'update product set stock = stock + $1 where id = $2',
+      values: [input.restock, input.id],
+    });
     context.invalidate(productDomain, { keys: [input.id] });
     return {};
   },
@@ -99,7 +102,7 @@ export default defineFixture({
   app,
   schema: 'create table product (id text primary key, name text not null, stock integer not null)',
   seed: async (db) => {
-    await db.exec("insert into product (id, name, stock) values ('p1', 'Pen', 2)");
-    await db.exec("insert into product (id, name, stock) values ('p2', 'Notebook', 9)");
+    await db.exec(staticSql`insert into product (id, name, stock) values ('p1', 'Pen', 2)`);
+    await db.exec(staticSql`insert into product (id, name, stock) values ('p2', 'Notebook', 9)`);
   },
 });

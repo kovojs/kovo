@@ -1,9 +1,12 @@
 // SPEC.md §5.3 + §11.4: explain output names the behavior surface humans drive.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 async function renderCartBadge(db: KovoFixtureRequest['db']): Promise<string> {
-  const rows = await db.query<{ count: number }>('select count(*)::int as count from cart_items');
+  const rows = await db.query<{ count: number }>(
+    staticSql`select count(*)::int as count from cart_items`,
+  );
   return `<output data-bind="cart.count">${rows[0]?.count ?? 0}</output>`;
 }
 
@@ -17,10 +20,12 @@ async function renderCartSection(db: KovoFixtureRequest['db']): Promise<string> 
 export const addToCart = mutation('cart/add', {
   csrf: false,
   input: s.object({ sku: s.string() }),
+  registry: { tables: ['cart_items'] },
   handler: async (input: { sku: string }, request: KovoFixtureRequest) => {
-    await request.db.exec(
-      `insert into cart_items (sku) values ('${input.sku.replaceAll("'", "''")}')`,
-    );
+    await request.db.exec({
+      text: 'insert into cart_items (sku) values ($1)',
+      values: [input.sku],
+    });
     return {};
   },
 });

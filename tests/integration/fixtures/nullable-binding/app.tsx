@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import {
   escapeAttribute,
@@ -38,10 +39,11 @@ export const fillDeal = mutation('nullable-binding/fill', {
   input: s.object({}),
   registry: {
     queries: [dealQuery],
+    tables: ['deal'],
     touches: [dealDomain],
   },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
-    await request.db.exec("update deal set contact_name = 'Server Contact' where id = 1");
+    await request.db.exec(staticSql`update deal set contact_name = 'Server Contact' where id = 1`);
     context.invalidate(dealDomain);
     return {};
   },
@@ -52,10 +54,11 @@ export const clearDeal = mutation('nullable-binding/clear', {
   input: s.object({}),
   registry: {
     queries: [dealQuery],
+    tables: ['deal'],
     touches: [dealDomain],
   },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
-    await request.db.exec('update deal set contact_name = null where id = 1');
+    await request.db.exec(staticSql`update deal set contact_name = null where id = 1`);
     context.invalidate(dealDomain);
     return {};
   },
@@ -104,5 +107,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table deal (id integer primary key, contact_name text)',
-  seed: (db) => db.exec('insert into deal (id, contact_name) values (1, null)'),
+  seed: (db) => db.exec(staticSql`insert into deal (id, contact_name) values (1, null)`),
 });

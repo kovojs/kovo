@@ -1,11 +1,13 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 export const record = mutation('methods/record', {
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['method_events'] },
   handler: async (_input: unknown, request: KovoFixtureRequest) => {
-    await request.db.exec("insert into method_events (kind) values ('mutation')");
+    await request.db.exec(staticSql`insert into method_events (kind) values ('mutation')`);
     return {};
   },
 });

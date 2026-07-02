@@ -3,6 +3,7 @@
 // leaves its exports — including `export default defineFixture(...)` — intact. NOTE:
 // the plugin claims any module whose source contains the call token for a Kovo
 // component (vite.ts), so keep that token out of comments in non-component modules.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
@@ -19,8 +20,9 @@ export const increment = mutation('counter/increment', {
   // Fixture: skip the CSRF/session dance (plans/integration-test-suite.md).
   csrf: false,
   input: s.object({}),
+  registry: { tables: ['counter'], touches: [counter] },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
-    await request.db.exec('update counter set value = value + 1 where id = 1');
+    await request.db.exec(staticSql`update counter set value = value + 1 where id = 1`);
     context.invalidate(counter);
     return {};
   },
@@ -55,5 +57,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table counter (id integer primary key, value integer not null default 0)',
-  seed: (db) => db.exec('insert into counter (id, value) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into counter (id, value) values (1, 0)`),
 });

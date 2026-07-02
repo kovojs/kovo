@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, mutation, route, s } from '@kovojs/server';
 import {
   escapeAttribute,
@@ -31,11 +32,12 @@ export const updateCard = mutation('binding-text-attr/update', {
   input: s.object({}),
   registry: {
     queries: [cardQuery],
+    tables: ['card_state'],
     touches: [cardDomain],
   },
   handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
     await request.db.exec(
-      "update card_state set text = 'Updated text', label = 'Updated card', status = 'ready' where id = 1",
+      staticSql`update card_state set text = 'Updated text', label = 'Updated card', status = 'ready' where id = 1`,
     );
     context.invalidate(cardDomain);
     return {};
@@ -77,6 +79,6 @@ export default defineFixture({
     'create table card_state (id integer primary key, text text not null, label text not null, status text not null)',
   seed: (db) =>
     db.exec(
-      "insert into card_state (id, text, label, status) values (1, 'Initial text', 'Initial card', 'idle')",
+      staticSql`insert into card_state (id, text, label, status) values (1, 'Initial text', 'Initial card', 'idle')`,
     ),
 });

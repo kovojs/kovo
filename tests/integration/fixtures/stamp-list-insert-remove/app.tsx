@@ -1,3 +1,4 @@
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 import {
   escapeAttribute,
@@ -21,7 +22,7 @@ interface CartResult {
 
 async function readCart(db: KovoFixtureRequest['db']): Promise<CartResult> {
   const items = (await db.query(
-    'select id, name, qty from cart_item order by position asc',
+    staticSql`select id, name, qty from cart_item order by position asc`,
   )) as unknown as CartItem[];
   return { items };
 }
@@ -56,16 +57,17 @@ export const changeCart = mutation('stamp-list-insert-remove/change', {
   input: s.object({ mode: s.string() }),
   registry: {
     queries: [cartQuery],
+    tables: ['cart_item'],
     touches: [cartDomain],
   },
   handler: async (input: { mode: string }, request: KovoFixtureRequest, context) => {
     if (input.mode === 'insert') {
       await request.db.exec(
-        "insert into cart_item (id, name, qty, position) values ('c', 'Cable', 1, 3)",
+        staticSql`insert into cart_item (id, name, qty, position) values ('c', 'Cable', 1, 3)`,
       );
     }
     if (input.mode === 'remove') {
-      await request.db.exec("delete from cart_item where id = 'b'");
+      await request.db.exec(staticSql`delete from cart_item where id = 'b'`);
     }
     context.invalidate(cartDomain);
     return {};
@@ -111,7 +113,11 @@ export default defineFixture({
   schema:
     'create table cart_item (id text primary key, name text not null, qty integer not null, position integer not null)',
   seed: async (db) => {
-    await db.exec("insert into cart_item (id, name, qty, position) values ('a', 'Adapter', 2, 1)");
-    await db.exec("insert into cart_item (id, name, qty, position) values ('b', 'Battery', 4, 2)");
+    await db.exec(
+      staticSql`insert into cart_item (id, name, qty, position) values ('a', 'Adapter', 2, 1)`,
+    );
+    await db.exec(
+      staticSql`insert into cart_item (id, name, qty, position) values ('b', 'Battery', 4, 2)`,
+    );
   },
 });

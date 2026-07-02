@@ -1,13 +1,14 @@
 // SPEC §10.3/§10.4 (plans/bugs-and-testing.md C6; testing-audit §5.2): two DISTINCT
 // mutations writing overlapping data concurrently must both land — no lost update from
 // a read-modify-write race across concurrent request lifecycles/transactions.
+import { staticSql } from '@kovojs/test/internal/integration/fixture-abi';
 import { createApp, domain, mutation, route, s } from '@kovojs/server';
 import { defineFixture, type KovoFixtureRequest } from '@kovojs/test/internal/integration/define';
 
 const counterDomain = domain('counter');
 
 async function readCount(db: KovoFixtureRequest['db']): Promise<number> {
-  const rows = await db.query<{ count: number }>('select count from counter where id = 1');
+  const rows = await db.query<{ count: number }>(staticSql`select count from counter where id = 1`);
   return rows[0]?.count ?? 0;
 }
 
@@ -20,9 +21,13 @@ function bump(key: string, amount: number) {
   return mutation(`concurrent-distinct-writes/${key}`, {
     csrf: false,
     input: s.object({}),
+    registry: { tables: ['counter'], touches: [counterDomain] },
     handler: async (_input: unknown, request: KovoFixtureRequest, context) => {
       await new Promise((resolve) => setTimeout(resolve, 200));
-      await request.db.exec(`update counter set count = count + ${amount} where id = 1`);
+      await request.db.exec({
+        text: 'update counter set count = count + $1 where id = 1',
+        values: [amount],
+      });
       context.invalidate(counterDomain);
       return {};
     },
@@ -65,5 +70,5 @@ const app = createApp({
 export default defineFixture({
   app,
   schema: 'create table counter (id integer primary key, count integer not null)',
-  seed: (db) => db.exec('insert into counter (id, count) values (1, 0)'),
+  seed: (db) => db.exec(staticSql`insert into counter (id, count) values (1, 0)`),
 });
