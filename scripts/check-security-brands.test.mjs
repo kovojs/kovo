@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkSecurityBrands } from './check-security-brands.mjs';
+import { checkSecurityBrands, deriveRequiredSecurityDecisions } from './check-security-brands.mjs';
 
 function runFixture(files, decisions) {
   return checkSecurityBrands({
@@ -81,5 +81,72 @@ export const classifyCanary = wireEmitter('canary.classify', function (value) { 
     expect(result.findings).toContain(
       'packages/server/src/canary.ts:3: classifyCanary uses wireEmitter() but expected securityClassifier()',
     );
+  });
+
+  it('derives the brand denominator from reachable security-decision callees', () => {
+    const files = {
+      'packages/server/src/canary.ts': `
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
+export const enforceManagedSql = securityClassifier('canary.root', function (value) {
+  return reachableUnbrandedCanary(value);
+});
+export function reachableUnbrandedCanary(value) {
+  return Boolean(value);
+}
+`,
+    };
+    const result = checkSecurityBrands({
+      exists: (relativePath) => Object.hasOwn(files, relativePath),
+      readText: (relativePath) => files[relativePath] ?? '',
+      repoRoot: '/fixture',
+      reachabilityFiles: ['packages/server/src/canary.ts'],
+      reachabilityRoots: [
+        { file: 'packages/server/src/canary.ts', kind: 'classifier', name: 'enforceManagedSql' },
+      ],
+      requireUnbrandedReachable: true,
+    });
+
+    expect(result.findings).toContain(
+      'packages/server/src/canary.ts:6: reachableUnbrandedCanary is an unbranded security-decision function; wrap it with securityClassifier()',
+    );
+  });
+
+  it('follows reachable callees across relative imports', () => {
+    const files = {
+      'packages/server/src/root.ts': `
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import { classifyImportedCanary } from './leaf.js';
+export const enforceManagedSql = securityClassifier('canary.root', function (value) {
+  return classifyImportedCanary(value);
+});
+`,
+      'packages/server/src/leaf.ts': `
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
+export const classifyImportedCanary = securityClassifier('canary.imported', function (value) {
+  return Boolean(value);
+});
+`,
+    };
+    const decisions = deriveRequiredSecurityDecisions({
+      exists: (relativePath) => Object.hasOwn(files, relativePath),
+      files: Object.keys(files),
+      readText: (relativePath) => files[relativePath] ?? '',
+      roots: [
+        { file: 'packages/server/src/root.ts', kind: 'classifier', name: 'enforceManagedSql' },
+      ],
+    });
+
+    expect(decisions).toEqual([
+      {
+        file: 'packages/server/src/leaf.ts',
+        kind: 'classifier',
+        names: ['classifyImportedCanary'],
+      },
+      {
+        file: 'packages/server/src/root.ts',
+        kind: 'classifier',
+        names: ['enforceManagedSql'],
+      },
+    ]);
   });
 });

@@ -5,6 +5,10 @@ import path from 'node:path';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
+import {
+  deriveRequiredSecurityDecisions,
+  wrappedSecurityFunctions,
+} from './check-security-brands.mjs';
 
 const repoRoot = findRepoRoot();
 const requireFromRepo = createRequire(path.join(repoRoot, 'package.json'));
@@ -125,21 +129,32 @@ export function extractSourceDecisionRows({
   root = repoRoot,
   readText = (relativePath) => readFileSync(path.join(root, relativePath), 'utf8'),
   scopes = SOURCE_DECISION_SCOPES,
+  decisions = deriveRequiredSecurityDecisions({ readText }),
 } = {}) {
   const rows = [];
+  const scopeByKindAndFile = new Map();
   for (const scope of scopes) {
-    for (const file of scope.files) {
-      const text = readText(file);
-      const pattern = new RegExp(`${scope.wrapper}\\(\\s*['"]([^'"]+)['"]`, 'gu');
-      for (const match of text.matchAll(pattern)) {
-        rows.push({
-          file,
-          kind: scope.kind,
-          line: lineNumberAtOffset(text, match.index ?? 0),
-          sourceDecision: match[1],
-          wrapper: scope.wrapper,
-        });
-      }
+    for (const file of scope.files) scopeByKindAndFile.set(`${scope.kind}:${file}`, scope);
+  }
+
+  for (const decision of decisions) {
+    // The security-brand gate uses classifier/wire-emitter terminology; census rows use the
+    // M4 handle/sink terms. This mapping keeps the manifest vocabulary stable.
+    const censusKind = decision.kind === 'classifier' ? 'write-capable-handle' : 'output-wire-sink';
+    const scope = scopeByKindAndFile.get(`${censusKind}:${decision.file}`);
+    if (!scope) continue;
+    const text = readText(decision.file);
+    const wrapped = wrappedSecurityFunctions(decision.file, text);
+    for (const name of decision.names) {
+      const actual = wrapped.get(name);
+      if (!actual?.decision) continue;
+      rows.push({
+        file: decision.file,
+        kind: censusKind,
+        line: actual.line,
+        sourceDecision: actual.decision,
+        wrapper: scope.wrapper,
+      });
     }
   }
   return rows.sort((left, right) =>
