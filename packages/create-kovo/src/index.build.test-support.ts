@@ -427,6 +427,7 @@ export interface RuntimeMutationSafetyProofOptions {
   includeManagedWriteEscapeAttempt?: boolean;
   includeRawTableDrift?: boolean;
   includeReadonlyMutationAttempt?: boolean;
+  includeSqliteAuthorizerTriggerDrift?: boolean;
   includeWebhookTransactionProof?: boolean;
   includeWebhookTxEscapeAttempt?: boolean;
 }
@@ -438,6 +439,7 @@ export function addRuntimeMutationSafetyProofs(
   const includeManagedWriteEscapeAttempt = options.includeManagedWriteEscapeAttempt === true;
   const includeRawTableDrift = options.includeRawTableDrift === true;
   const includeReadonlyMutationAttempt = options.includeReadonlyMutationAttempt === true;
+  const includeSqliteAuthorizerTriggerDrift = options.includeSqliteAuthorizerTriggerDrift === true;
   const includeWebhookTransactionProof = options.includeWebhookTransactionProof === true;
   const includeWebhookTxEscapeAttempt = options.includeWebhookTxEscapeAttempt === true;
   const schemaPath = join(root, 'src/schema.ts');
@@ -460,6 +462,20 @@ export function addRuntimeMutationSafetyProofs(
         "  id: text('id').primaryKey(),",
         "  label: text('label').notNull().default(''),",
         '});',
+        ...(includeSqliteAuthorizerTriggerDrift
+          ? [
+              '',
+              `export const sqliteAuthorizerDeclared = ${tableFactory}('kovo_authorizer_declared', {`,
+              "  id: text('id').primaryKey(),",
+              "  label: text('label').notNull().default(''),",
+              '});',
+              '',
+              `export const sqliteAuthorizerSideEffects = ${tableFactory}('kovo_authorizer_side_effects', {`,
+              "  id: text('id').primaryKey(),",
+              "  label: text('label').notNull().default(''),",
+              '});',
+            ]
+          : []),
         '',
         '// --- Auth infrastructure',
       ].join('\n'),
@@ -476,6 +492,14 @@ export function addRuntimeMutationSafetyProofs(
           '  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT \'\');",',
           '  "CREATE TABLE tx_proofs (id text PRIMARY KEY);",',
           '  "CREATE TABLE raw_runtime_drift (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
+          ...(includeSqliteAuthorizerTriggerDrift
+            ? [
+                '  "CREATE TABLE kovo_authorizer_declared (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
+                '  "CREATE TABLE kovo_authorizer_side_effects (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
+                "  \"INSERT INTO kovo_authorizer_declared (id, label) VALUES ('a1', 'before');\",",
+                '  "CREATE TRIGGER kovo_authorizer_side_effect AFTER UPDATE ON kovo_authorizer_declared BEGIN INSERT INTO kovo_authorizer_side_effects (id, label) VALUES (new.id, new.label); END;",',
+              ]
+            : []),
           '  // Better Auth tables',
         ].join('\n'),
       )
@@ -514,7 +538,13 @@ export function addRuntimeMutationSafetyProofs(
       '',
       "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';",
       "import { readonlyAppDb } from './db.js';",
-      "import { rawRuntimeDrift, txProofs } from './schema.js';",
+      [
+        'import {',
+        '  rawRuntimeDrift,',
+        ...(includeSqliteAuthorizerTriggerDrift ? ['  sqliteAuthorizerSideEffects,'] : []),
+        '  txProofs,',
+        "} from './schema.js';",
+      ].join('\n'),
       "import type { AppRequest } from './auth.js';",
       '',
       'const runtimeTableDriftError = s.object({ message: s.string() });',
@@ -526,8 +556,15 @@ export function addRuntimeMutationSafetyProofs(
             'const webhookTxProofInput = s.object({ id: s.string() });',
           ]
         : []),
-      ...(includeRawTableDrift
-        ? ["const rawRuntimeDriftDomain = domain('raw_runtime_drift');"]
+      ...(includeRawTableDrift || includeSqliteAuthorizerTriggerDrift
+        ? [
+            ...(includeRawTableDrift
+              ? ["const rawRuntimeDriftDomain = domain('raw_runtime_drift');"]
+              : []),
+            ...(includeSqliteAuthorizerTriggerDrift
+              ? ["const sqliteAuthorizerDeclaredDomain = domain('kovo_authorizer_declared');"]
+              : []),
+          ]
         : []),
       '',
       "async function insertTxProofRow(db: AppRequest['db'], id: string) {",
@@ -695,6 +732,48 @@ export function addRuntimeMutationSafetyProofs(
             '',
           ]
         : []),
+      ...(includeSqliteAuthorizerTriggerDrift
+        ? [
+            'async function runSqliteAuthorizerTriggerDrift(',
+            "  db: AppRequest['db'],",
+            '  _input: { id: string; label: string },',
+            ') {',
+            `  await db.${rawRuntimeDriftMethod}(`,
+            '    trustedSql(',
+            "      sql`update kovo_authorizer_declared set label = 'authorizer-trigger' where id = 'a1'`,",
+            "      { justification: 'audited SQLite authorizer trigger-drift proof' },",
+            '    ),',
+            '  );',
+            '}',
+            '',
+            'export const sqliteAuthorizerTriggerDrift = mutation({',
+            '  access: publicProof,',
+            '  csrf: false,',
+            '  errors: { RUNTIME_TABLE_DRIFT: runtimeTableDriftError },',
+            '  input: s.object({ id: s.string(), label: s.string() }),',
+            "  registry: { tables: ['kovo_authorizer_declared'], touches: [sqliteAuthorizerDeclaredDomain] },",
+            '  async handler(',
+            '    _input: { id: string; label: string },',
+            '    request: AppRequest,',
+            '    context: MutationContext<{ RUNTIME_TABLE_DRIFT: typeof runtimeTableDriftError }>,',
+            '  ) {',
+            '    try {',
+            '      await runSqliteAuthorizerTriggerDrift(request.db, _input);',
+            '    } catch (error) {',
+            "      if (error instanceof Error && error.message.includes('SQLite authorizer')) {",
+            "        return context.fail('RUNTIME_TABLE_DRIFT', { message: 'KV406' });",
+            '      }',
+            '      throw error;',
+            '    }',
+            "    return { status: 'executed' };",
+            '  },',
+            '});',
+            '(',
+            '  sqliteAuthorizerTriggerDrift as { key: string }',
+            ").key = 'runtime-safety-proofs/sqlite-authorizer-trigger-drift';",
+            '',
+          ]
+        : []),
       "export const txProofCountEndpoint = endpoint('/api/tx-proof-count', {",
       '  access: publicProof,',
       "  auth: { justification: 'public transaction rollback proof', kind: 'none' },",
@@ -723,6 +802,24 @@ export function addRuntimeMutationSafetyProofs(
       "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
       '});',
       '',
+      ...(includeSqliteAuthorizerTriggerDrift
+        ? [
+            "export const sqliteAuthorizerSideEffectCountEndpoint = endpoint('/api/sqlite-authorizer-side-effect-count', {",
+            '  access: publicProof,',
+            "  auth: { justification: 'public SQLite authorizer trigger side-effect proof', kind: 'none' },",
+            '  csrf: false,',
+            "  csrfJustification: 'read-only SQLite authorizer trigger side-effect proof',",
+            '  async handler() {',
+            '    const rows = await readonlyAppDb.select().from(sqliteAuthorizerSideEffects);',
+            "    return Response.json({ count: rows.length }, { headers: { 'Cache-Control': 'no-store' } });",
+            '  },',
+            "  method: 'GET',",
+            "  reason: 'read-only SQLite authorizer trigger side-effect proof',",
+            "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+            '});',
+            '',
+          ]
+        : []),
       ...(includeReadonlyMutationAttempt
         ? [
             'type ReadonlyAttemptResult = { blocked: boolean; message: string; method: string };',
@@ -811,6 +908,8 @@ export function addRuntimeMutationSafetyProofs(
     ...(includeReadonlyMutationAttempt ? ['readonlyMutationAttemptEndpoint'] : []),
     'rawRuntimeDriftCountEndpoint',
     ...(includeRawTableDrift ? ['rawTableDrift'] : []),
+    ...(includeSqliteAuthorizerTriggerDrift ? ['sqliteAuthorizerSideEffectCountEndpoint'] : []),
+    ...(includeSqliteAuthorizerTriggerDrift ? ['sqliteAuthorizerTriggerDrift'] : []),
     ...(includeWebhookTransactionProof ? ['txProofWebhook'] : []),
     ...(includeWebhookTxEscapeAttempt ? ['webhookTxEscapeAttempt'] : []),
     'txProofCountEndpoint',
@@ -820,6 +919,7 @@ export function addRuntimeMutationSafetyProofs(
     'healthEndpoint',
     'txProofCountEndpoint',
     'rawRuntimeDriftCountEndpoint',
+    ...(includeSqliteAuthorizerTriggerDrift ? ['sqliteAuthorizerSideEffectCountEndpoint'] : []),
     ...(includeReadonlyMutationAttempt ? ['readonlyMutationAttemptEndpoint'] : []),
     ...(includeWebhookTransactionProof ? ['txProofWebhook'] : []),
     ...(includeWebhookTxEscapeAttempt ? ['webhookTxEscapeAttempt'] : []),
@@ -829,6 +929,7 @@ export function addRuntimeMutationSafetyProofs(
     'failAfterWrite',
     ...(includeManagedWriteEscapeAttempt ? ['managedWriteEscapeAttempt'] : []),
     ...(includeRawTableDrift ? ['rawTableDrift'] : []),
+    ...(includeSqliteAuthorizerTriggerDrift ? ['sqliteAuthorizerTriggerDrift'] : []),
     'writeTxProof',
     'appSignIn',
     'appSignOut',

@@ -183,10 +183,12 @@ describe('create-kovo starter (build integration: production transaction artifac
       linkStarterBuildDependencies(root);
       addRuntimeMutationSafetyProofs(root, {
         includeReadonlyMutationAttempt: true,
+        includeSqliteAuthorizerTriggerDrift: true,
         includeWebhookTransactionProof: true,
       });
       const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
       expect(proofSource).toContain('txProofWebhook');
+      expect(proofSource).toContain('sqliteAuthorizerTriggerDrift');
 
       buildReusableProductionArtifact(root);
 
@@ -217,6 +219,40 @@ describe('create-kovo starter (build integration: production transaction artifac
         count: number;
       };
       expect(afterReadonlyAttempt.count).toBe(0);
+      const beforeTriggerDrift = (await (
+        await fetch(`${origin}/api/sqlite-authorizer-side-effect-count`)
+      ).json()) as {
+        count: number;
+      };
+      expect(beforeTriggerDrift.count).toBe(0);
+
+      const triggerDrift = await fetch(
+        `${origin}/_m/runtime-safety-proofs/sqlite-authorizer-trigger-drift`,
+        {
+          body: new URLSearchParams({
+            id: 'c1',
+            'Kovo-Idem': `idem-sqlite-authorizer-${Date.now()}`,
+            label: `authorizer-${Date.now()}`,
+          }),
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            origin,
+          },
+          method: 'POST',
+          redirect: 'manual',
+        },
+      );
+      const triggerDriftBody = await triggerDrift.text();
+      expect(triggerDrift.status, triggerDriftBody).toBe(422);
+      expect(triggerDriftBody).toContain('RUNTIME_TABLE_DRIFT');
+      expect(triggerDriftBody).toContain('KV406');
+
+      const afterTriggerDrift = (await (
+        await fetch(`${origin}/api/sqlite-authorizer-side-effect-count`)
+      ).json()) as {
+        count: number;
+      };
+      expect(afterTriggerDrift.count).toBe(0);
 
       const success = await fetch(`${origin}/_m/runtime-safety-proofs/write-tx-proof`, {
         body: new URLSearchParams({

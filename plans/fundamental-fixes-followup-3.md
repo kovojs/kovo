@@ -310,10 +310,9 @@ mattering.
         `sqlite3_set_authorizer` to deny writes to non-declared tables, trigger side-effect writes, DDL, and pragma at
         the engine, not only at the parser/choke layer.
         Evidence: `pnpm exec vitest --run packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/server/src/managed-db.test.ts --reporter=dot`.
-  - [ ] **Generated SQLite starter authorizer parity.** The generated SQLite starter still uses the Drizzle/
-        better-sqlite3 declared-write fallback; it must either route declared raw writes through an authorizer-backed
-        engine connection or document a narrower residual before 1.2 closes.
-        Gap evidence: `packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts`.
+  - [x] **Generated SQLite starter authorizer parity.** The generated SQLite starter routes declared raw writes through
+        an authorizer-backed engine connection and rejects trigger side-effect writes outside the declared table set.
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts --reporter=dot`.
   - [x] **Postgres declared-table engine enforcement.** Request-scoped role GRANTs, or the documented stat-delta
         fallback, reject schema-qualified out-of-scope writes and allow in-scope writes.
         Evidence: `pnpm exec vitest --run packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts packages/server/src/managed-db.test.ts --reporter=dot`.

@@ -1,3 +1,11 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import {
+  DatabaseSync as NodeSqliteDatabaseSync,
+  constants as nodeSqliteConstants,
+} from 'node:sqlite';
+
 import Database from 'better-sqlite3';
 import { secret } from '@kovojs/core';
 import { kovoDeclaredWriteDbHandle, kovoReadonlyDbHandle, readonlyDb } from '@kovojs/server';
@@ -46,7 +54,10 @@ interface DeclaredWritePolicy {
 }
 
 function createAppRuntimeDb(): CreatedAppRuntimeDb {
-  const client = new Database(':memory:');
+  const sqliteDir = mkdtempSync(join(tmpdir(), 'kovo-sqlite-runtime-'));
+  const sqliteFile = join(sqliteDir, 'app.sqlite');
+  process.once('exit', () => rmSync(sqliteDir, { force: true, recursive: true }));
+  const client = new Database(sqliteFile);
   client.exec(SCHEMA_DDL);
   client.exec(SEED_CONTACTS);
   const db = drizzle({ client, schema });
@@ -57,13 +68,18 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   });
   Object.defineProperty(db, kovoDeclaredWriteDbHandle, {
     configurable: true,
-    value: (policy: DeclaredWritePolicy) => declaredWriteDrizzleDb(db, policy),
+    value: (policy: DeclaredWritePolicy) => declaredWriteDrizzleDb(db, policy, sqliteFile),
   });
   return {
     db,
     readonlyDb: readonlyDb(db),
     ready: Promise.resolve(),
   };
+}
+
+interface SqlCarrier {
+  params: readonly unknown[];
+  text: string;
 }
 
 type SqliteTable = Parameters<typeof getTableConfig>[0];
@@ -178,13 +194,21 @@ function columnKeysByDbName(
   return keys;
 }
 
-function declaredWriteDrizzleDb<Db extends object>(db: Db, policy: DeclaredWritePolicy): Db {
-  // better-sqlite3 12 does not expose SQLite's native authorizer callback in its JS API. This
-  // adapter-level fallback enforces declared tables on Drizzle's parser-blind builder boundary;
-  // managedDb still guards executable raw SQL sinks before they reach the driver (SPEC §10.3/§11.2).
+function declaredWriteDrizzleDb<Db extends object>(
+  db: Db,
+  policy: DeclaredWritePolicy,
+  sqliteFile: string,
+): Db {
+  const authorizer = new DeclaredWriteSqliteAuthorizer(sqliteFile, policy);
   return new Proxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
+      if (isDirectSqlWriteMethod(prop) && typeof value === 'function') {
+        return (statement: unknown, ...args: unknown[]) => {
+          authorizer.assertDirectSqlAllowed(statement, args);
+          return Reflect.apply(value, target, [statement, ...args]);
+        };
+      }
       if (isDrizzleWriteMethod(prop) && typeof value === 'function') {
         return (table: unknown, ...args: unknown[]) => {
           assertDeclaredDrizzleTableAllowed(table, policy);
@@ -196,8 +220,103 @@ function declaredWriteDrizzleDb<Db extends object>(db: Db, policy: DeclaredWrite
   }) as Db;
 }
 
+class DeclaredWriteSqliteAuthorizer {
+  constructor(
+    private readonly sqliteFile: string,
+    private readonly policy: DeclaredWritePolicy,
+  ) {}
+
+  assertDirectSqlAllowed(statement: unknown, params: readonly unknown[]): void {
+    const carrier = sqlCarrierFromValue(statement, params);
+    if (carrier === undefined) {
+      throw new Error(
+        'KV406: SQLite declared-write authorizer could not resolve executable SQL text (SPEC §10.3/§11.2).',
+      );
+    }
+
+    const sqlite = new NodeSqliteDatabaseSync(this.sqliteFile);
+    try {
+      sqlite.setAuthorizer((action, objectName, _columnName, databaseName, triggerOrView) => {
+        if (
+          sqliteAuthorizerDdlActions.has(action) ||
+          action === nodeSqliteConstants.SQLITE_PRAGMA
+        ) {
+          return nodeSqliteConstants.SQLITE_DENY;
+        }
+
+        if (!sqliteAuthorizerWriteActions.has(action)) return nodeSqliteConstants.SQLITE_OK;
+
+        const table = `${databaseName ?? 'main'}.${objectName ?? '<unknown>'}`;
+        const allowed = new Set(
+          (this.policy.tables ?? []).map((name) => normalizePolicyTable(name)),
+        );
+        if (allowed.size > 0 && allowed.has(table)) return nodeSqliteConstants.SQLITE_OK;
+        if (
+          triggerOrView === null &&
+          (objectName === 'sqlite_sequence' || objectName === 'sqlite_stat1')
+        ) {
+          return nodeSqliteConstants.SQLITE_OK;
+        }
+        return nodeSqliteConstants.SQLITE_DENY;
+      });
+
+      sqlite.prepare(carrier.text);
+    } catch (error) {
+      if (error instanceof Error && /not authorized/i.test(error.message)) {
+        throw new Error(
+          [
+            'KV406: SQLite authorizer rejected a declared-write statement outside the mutation registry tables (SPEC §10.3/§11.2).',
+            `  declared tables: ${[...new Set(this.policy.tables ?? [])].sort().join(', ')}`,
+            `  touches: ${[...new Set(this.policy.touches ?? [])].sort().join(', ') || '<none>'}`,
+          ].join('\n'),
+        );
+      }
+      throw error;
+    } finally {
+      sqlite.close();
+    }
+  }
+}
+
+const sqliteAuthorizerWriteActions = new Set([
+  nodeSqliteConstants.SQLITE_DELETE,
+  nodeSqliteConstants.SQLITE_INSERT,
+  nodeSqliteConstants.SQLITE_UPDATE,
+]);
+
+const sqliteAuthorizerDdlActions = new Set([
+  nodeSqliteConstants.SQLITE_ALTER_TABLE,
+  nodeSqliteConstants.SQLITE_ATTACH,
+  nodeSqliteConstants.SQLITE_CREATE_INDEX,
+  nodeSqliteConstants.SQLITE_CREATE_TABLE,
+  nodeSqliteConstants.SQLITE_CREATE_TEMP_INDEX,
+  nodeSqliteConstants.SQLITE_CREATE_TEMP_TABLE,
+  nodeSqliteConstants.SQLITE_CREATE_TEMP_TRIGGER,
+  nodeSqliteConstants.SQLITE_CREATE_TEMP_VIEW,
+  nodeSqliteConstants.SQLITE_CREATE_TRIGGER,
+  nodeSqliteConstants.SQLITE_CREATE_VIEW,
+  nodeSqliteConstants.SQLITE_CREATE_VTABLE,
+  nodeSqliteConstants.SQLITE_DETACH,
+  nodeSqliteConstants.SQLITE_DROP_INDEX,
+  nodeSqliteConstants.SQLITE_DROP_TABLE,
+  nodeSqliteConstants.SQLITE_DROP_TEMP_INDEX,
+  nodeSqliteConstants.SQLITE_DROP_TEMP_TABLE,
+  nodeSqliteConstants.SQLITE_DROP_TEMP_TRIGGER,
+  nodeSqliteConstants.SQLITE_DROP_TEMP_VIEW,
+  nodeSqliteConstants.SQLITE_DROP_TRIGGER,
+  nodeSqliteConstants.SQLITE_DROP_VIEW,
+  nodeSqliteConstants.SQLITE_DROP_VTABLE,
+  nodeSqliteConstants.SQLITE_REINDEX,
+]);
+
 function isDrizzleWriteMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
   return prop === 'delete' || prop === 'insert' || prop === 'update';
+}
+
+function isDirectSqlWriteMethod(prop: PropertyKey): boolean {
+  return (
+    prop === 'all' || prop === 'execute' || prop === 'get' || prop === 'run' || prop === 'values'
+  );
 }
 
 function assertDeclaredDrizzleTableAllowed(table: unknown, policy: DeclaredWritePolicy): void {
@@ -450,14 +569,30 @@ function isDirectSqlReadMethod(prop: PropertyKey): boolean {
 }
 
 function querySqlText(value: unknown): string | undefined {
+  const carrier = sqlCarrierFromValue(value, []);
+  if (carrier !== undefined) return carrier.text;
+  return undefined;
+}
+
+function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCarrier | undefined {
+  if (typeof value === 'string') return { params, text: value };
   const toSQL = (value as { toSQL?: unknown }).toSQL;
-  if (typeof toSQL !== 'function') return undefined;
-  try {
-    const result = toSQL.call(value) as { sql?: unknown };
-    return typeof result?.sql === 'string' ? result.sql : undefined;
-  } catch {
-    return undefined;
+  if (typeof toSQL === 'function') {
+    try {
+      const result = toSQL.call(value) as { params?: unknown; sql?: unknown };
+      if (typeof result?.sql === 'string') {
+        return {
+          params: Array.isArray(result.params) ? result.params : params,
+          text: result.sql,
+        };
+      }
+    } catch {
+      return undefined;
+    }
   }
+  const text = sqlTextFromValue(value);
+  if (text !== undefined) return { params, text };
+  return undefined;
 }
 
 function sqlTextFromValue(value: unknown): string | undefined {
