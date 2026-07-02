@@ -449,10 +449,28 @@ async function runKovoBuildCheckPreflight(
   options: { cache: boolean },
 ): Promise<KovoBuildCheckArtifacts> {
   const artifacts = await buildCheckGraph(app, appModulePath, options);
-  const result = kovoCheck(artifacts.graph);
+  const result = kovoCheck(artifacts.graph, { paranoidStaticAdvisory: isParanoidMode() });
   if (result.exitCode === 0) return artifacts;
+  if (isParanoidMode() && paranoidBuildCheckMayProceed(result.output)) return artifacts;
 
   throw new Error(`kovo build check preflight failed:\n${buildCheckFailureOutput(result.output)}`);
+}
+
+function isParanoidMode(): boolean {
+  const value = process.env.KOVO_PARANOID;
+  return value === '1' || value === 'true';
+}
+
+function paranoidBuildCheckMayProceed(output: string): boolean {
+  const advisoryCodes = new Set(['KV406', 'KV422', 'KV438']);
+  const errorLines = output.split('\n').filter((line) => line.startsWith('ERROR '));
+  return (
+    errorLines.length > 0 &&
+    errorLines.every((line) => {
+      const code = /^ERROR\s+(\S+)/u.exec(line)?.[1];
+      return code !== undefined && advisoryCodes.has(code);
+    })
+  );
 }
 
 interface KovoBuildCheckArtifacts {

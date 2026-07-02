@@ -454,6 +454,21 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     );
   });
 
+  it('keeps KV422 data-plane findings advisory during paranoid production builds', async () => {
+    const previous = process.env.KOVO_PARANOID;
+    process.env.KOVO_PARANOID = '1';
+    const root = await fixture({ 'src/queries/search.ts': KV422_INJECTION });
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'build', root });
+
+    try {
+      await expect(plugin.buildStart()).resolves.toBeUndefined();
+    } finally {
+      if (previous === undefined) delete process.env.KOVO_PARANOID;
+      else process.env.KOVO_PARANOID = previous;
+    }
+  });
+
   it('passes the build on a clean (branded sql`...`) fixture', async () => {
     const root = await fixture({ 'src/queries/search.ts': KV422_CLEAN });
     const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;

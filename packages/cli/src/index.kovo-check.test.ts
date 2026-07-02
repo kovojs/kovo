@@ -325,6 +325,42 @@ describe('kovo check', () => {
     expect(kovoCheck({}).exitCode).toBe(0);
   });
 
+  it('keeps static SQL and declared-write classifier findings advisory for paranoid build preflight', () => {
+    const result = kovoCheck(
+      {
+        diagnostics: [
+          {
+            code: 'KV406',
+            message: 'Statically un-analyzable write site; manual touches required.',
+            severity: 'error',
+            site: 'products.ts:7',
+          },
+          {
+            code: 'KV438',
+            message: 'Request input reaches a governed column.',
+            severity: 'error',
+            site: 'products.ts:8',
+          },
+        ],
+        sqlSafetyDiagnostics: [
+          {
+            code: 'KV422',
+            message:
+              'SQL text injection risk. execute() receives unknown-provenance SQL text; use Kovo sql`...`.',
+            severity: 'error',
+            site: 'products.ts:9',
+          },
+        ],
+      } as Parameters<typeof kovoCheck>[0],
+      { paranoidStaticAdvisory: true },
+    );
+
+    expect(result.exitCode).toBe(0);
+    expect(result.output).toContain('ERROR KV406 products.ts:7');
+    expect(result.output).toContain('ERROR KV438 products.ts:8');
+    expect(result.output).toContain('ERROR KV422 products.ts:9');
+  });
+
   // SPEC §10.2/§11.2: end-to-end producer→graph merge. The KV422 producer
   // (analyzeSqlSafetyFromProject) runs over app source, its diagnostics ride through deriveAppGraph
   // into the build→graph.json shape, and `kovo check` fails on the merged graph — proving the gate
