@@ -324,6 +324,9 @@ mattering.
         `context.db`, box custom secret columns, and fail closed when raw SQL against a secret table returns an
         unclassified alias to query wire.
         Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.prod-artifact.security.test.ts --testNamePattern "boxes schema-declared secret reads"`.
+  - [x] **Computed secret value runtime twin.** A value computed from a runtime `Secret` read is still refused at
+        query-wire egress with static KV435 stubbed.
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'runtime Secret|schema-declared secret reads' --reporter=dot`.
   - [ ] **General `kovo({ secret })` runtime metadata extraction.** Every `context.db` query-builder, view, and computed
         read path must box secret-classified columns as `Secret` at the DB-read boundary.
   - [ ] **Raw-SQL secret fail-closed tagging.** Raw SQL that references a secret table tags the whole result `Secret`;
@@ -334,7 +337,7 @@ mattering.
         SQL.
   - [ ] **Declared secret-read capability.** Legitimate server-side reads that need the secret use a declared capability
         and still route egress through `Secret`/`reveal` policy.
-- [ ] **2.3 Every egress choke refuses `Secret` (DEC-C 4, DEC-J).** Wire, headers, redirect, static export, logs,
+- [x] **2.3 Every egress choke refuses `Secret` (DEC-C 4, DEC-J).** Wire, headers, redirect, static export, logs,
       error reporter, task status. Acceptance (paranoid mode): `bugz-28` B1 raw-SQL leak throws at the wire with static
       KV435 stubbed; `reveal('reason')` passes; a secret in a log/error/status is refused/redacted (`papercuts-25` O.1).
   - [x] **Current external-egress choke inventory refuses or redacts runtime `Secret`.** Wire JSON, framework headers,
@@ -342,10 +345,12 @@ mattering.
         egress sinks.
         Evidence: `packages/server/src/secret-egress.ts` plus the focused `query-endpoint`, `response-posture`,
         `static-export-headers`, `logging`, `diagnostics`, and `task-observability` tests.
-  - [ ] **Raw-SQL/view/computed leak acceptance.** `bugz-28` B1-style raw-SQL leaks must throw at wire egress with
-        static KV435 stubbed; blocked on 2.1 DB-read boundary boxing.
-  - [ ] **Audited reveal acceptance.** `reveal('reason')` must pass through the relevant egress choke with audit-grade
+  - [x] **Raw-SQL/view/computed leak acceptance.** `bugz-28` B1-style raw-SQL, Drizzle-view, and computed runtime
+        `Secret` leaks throw at query-wire egress with static KV435 stubbed.
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'runtime Secret|schema-declared secret reads' --reporter=dot`.
+  - [x] **Audited reveal acceptance.** `reveal('reason')` passes through the query-wire egress choke with audit-grade
         provenance.
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'runtime Secret|schema-declared secret reads' --reporter=dot`.
 - [ ] **2.4 Static KV435 → advisory (DEC-F, gated by A7).**
   - [ ] **Confidentiality runtime chokes live under paranoid mode.** 2.1/2.2/2.3 must prove no property is enforced by
         neither layer before KV435 incompleteness degrades to runtime.
