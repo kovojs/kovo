@@ -182,7 +182,7 @@ export const SECURITY_BUILD_PROOFS = [
       'addAuthSecretLeakProof(unsafeRoot)',
       'buildProductionArtifact(unsafeRoot)',
       'addAuthSecretLeakProof(safeRoot, { leakToWire: false })',
-      'buildProductionArtifact(safeRoot)',
+      'buildReusableProductionArtifact(safeRoot)',
       'KV435',
       'Secret query value reaches the client wire',
     ],
@@ -198,7 +198,7 @@ export const SECURITY_BUILD_PROOFS = [
     requiredNeedles: [
       'includeReadonlyMutationAttempt: true',
       'includeWebhookTransactionProof: true',
-      'buildProductionArtifact(root)',
+      'buildReusableProductionArtifact(root)',
       'expectReadonlyAttemptBlocked(origin)',
     ],
     requiredProofFileNeedles: ['/api/readonly-mutation-attempt', 'futureStatement'],
@@ -284,7 +284,7 @@ export const SECURITY_BUILD_PROOFS = [
       'addTrustedOutputProvenanceBuildProof(unsafeRoot)',
       'buildProductionArtifact(unsafeRoot)',
       'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',
-      'buildProductionArtifact(safeRoot)',
+      'buildReusableProductionArtifact(safeRoot)',
       'KV426',
       'trustedUrl() sends query-derived data',
       'renderedHtml() sends query-derived data',
@@ -312,7 +312,7 @@ export const SECURITY_BUILD_PROOFS = [
     code: 'KV311',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
     requiredNeedles: [
-      'buildProductionArtifact(root)',
+      'buildReusableProductionArtifact(root)',
       'expect(pageErrors).toEqual([])',
       'expect(consoleErrors).toEqual([])',
     ],
@@ -326,7 +326,7 @@ export const SECURITY_BUILD_PROOFS = [
     code: 'KV311',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
     requiredNeedles: [
-      'buildProductionArtifact(root)',
+      'buildReusableProductionArtifact(root)',
       'assertProdArtifactSinkCensus(root',
       'state.count',
       'state.items[0]',
@@ -345,7 +345,7 @@ export const SECURITY_BUILD_PROOFS = [
     code: 'KV311',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
     requiredNeedles: [
-      'buildProductionArtifact(root)',
+      'buildReusableProductionArtifact(root)',
       'clientArtifactSources(root)',
       'format(state.count)',
       "not.toContain('format(state.count)')",
@@ -383,15 +383,20 @@ export const PRODUCTION_BUILD_HELPERS = {
     file: 'packages/create-kovo/src/index.build.test-support.ts',
     requiredNeedles: [
       'export function buildProductionArtifact',
+      'export function buildReusableProductionArtifact',
       'execFileSync',
       "['build', './src/app.tsx', '--no-cache']",
+      "['build', './src/app.tsx']",
     ],
   },
 };
 
 const BUILD_INVOCATION_PATTERNS = {
   'cli-main-build': [/mainAsync\(\s*\[\s*['"]build['"]/],
-  'starter-build-production-artifact': [/\bbuildProductionArtifact\(/],
+  'starter-build-production-artifact': [
+    /\bbuildProductionArtifact\(/,
+    /\bbuildReusableProductionArtifact\(/,
+  ],
 };
 
 export function securityTestBuildGateViolations({

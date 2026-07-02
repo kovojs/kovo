@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { writeKovoProject } from './index.js';
 import {
   attributeValue,
-  buildProductionArtifact,
+  buildReusableProductionArtifact,
   firstFormHtml,
 } from './index.build.test-support.js';
 import {
@@ -37,7 +37,7 @@ describe('create-kovo starter (build integration: production response header art
       addHeaderSinkProofRoutes(root);
       linkStarterBuildDependencies(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
       const census = assertProdArtifactSinkCensus(root, [
         {
           proof: {

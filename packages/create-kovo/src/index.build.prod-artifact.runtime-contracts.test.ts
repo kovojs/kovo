@@ -15,7 +15,10 @@ import {
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
-import { addRuntimeContractProofs, buildProductionArtifact } from './index.build.test-support.js';
+import {
+  addRuntimeContractProofs,
+  buildReusableProductionArtifact,
+} from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production runtime contract artifacts)', () => {
   it('serves query warnings and upload MIME sniffing through the production build artifact', async () => {
@@ -30,7 +33,7 @@ describe('create-kovo starter (build integration: production runtime contract ar
       linkStarterBuildDependencies(root);
       addRuntimeContractProofs(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,

@@ -147,6 +147,14 @@ export function buildProductionArtifact(root: string): void {
   });
 }
 
+export function buildReusableProductionArtifact(root: string): void {
+  execFileSync(join(root, 'node_modules/.bin/kovo'), ['build', './src/app.tsx'], {
+    cwd: root,
+    env: withStarterBinOnPath(root),
+    stdio: 'pipe',
+  });
+}
+
 export function addStorageQueryWriteProof(root: string): void {
   const queriesPath = join(root, 'src/queries.ts');
   let queries = readFileSync(queriesPath, 'utf8');

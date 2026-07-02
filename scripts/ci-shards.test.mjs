@@ -10,9 +10,12 @@ import {
   extractPlaywrightDurations,
   extractVitestDurations,
   discoverTests,
+  groupStarterEntriesForExecution,
   includeVitest,
   mergeDurationHistory,
   starterEntries,
+  starterGroupVitestArgs,
+  starterShardNeedsPacked,
   unknownDurationSeconds,
   validateShardAssignment,
 } from './ci-shards.mjs';
@@ -220,7 +223,7 @@ describe('ci-shards', () => {
     expect(assigned.toSorted(compareStrings)).toEqual(
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
-    expect(shards.map((shard) => shard.seconds)).toEqual([617, 612, 613, 608, 618, 580, 577, 576]);
+    expect(shards.map((shard) => shard.seconds)).toEqual([549, 513, 551, 551, 551, 550, 517, 518]);
   });
 
   it('keeps browser-backed starter entries isolated to the shard that needs Chromium', () => {
@@ -231,7 +234,68 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 5, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 6, entries: ['island-derive-artifacts'] }]);
+  });
+
+  it('marks only packed starter shards as needing the packed package artifact', async () => {
+    const root = await fixtureRoot();
+    const packedManifest = path.join(root, 'packed.json');
+    const plainManifest = path.join(root, 'plain.json');
+    await writeFile(
+      packedManifest,
+      `${JSON.stringify({ kind: 'starter', entries: [{ id: 'packed', needsPacked: true }] })}\n`,
+    );
+    await writeFile(
+      plainManifest,
+      `${JSON.stringify({ kind: 'starter', entries: [{ id: 'plain' }] })}\n`,
+    );
+
+    await expect(starterShardNeedsPacked(packedManifest)).resolves.toBe(true);
+    await expect(starterShardNeedsPacked(plainManifest)).resolves.toBe(false);
+    expect(
+      starterEntries()
+        .filter((entry) => entry.needsPacked)
+        .map((entry) => entry.id)
+        .toSorted(compareStrings),
+    ).toEqual(['starter-packed-postgres', 'starter-packed-runtime', 'starter-packed-sqlite']);
+  });
+
+  it('groups starter execution by file while preserving assigned test filters', () => {
+    const groups = groupStarterEntriesForExecution([
+      { file: 'b.test.ts', id: 'b-two', testName: 'two?' },
+      { file: 'a.test.ts', id: 'a-one', testName: 'one' },
+      { file: 'b.test.ts', id: 'b-one', testName: 'one' },
+    ]);
+
+    expect(groups.map((group) => group.map((entry) => entry.id))).toEqual([
+      ['b-one', 'b-two'],
+      ['a-one'],
+    ]);
+    expect(starterGroupVitestArgs(groups[0])).toEqual([
+      'exec',
+      'vitest',
+      '--run',
+      'b.test.ts',
+      '-t',
+      'one|two\\?',
+    ]);
+    expect(starterGroupVitestArgs(groups[1])).toEqual([
+      'exec',
+      'vitest',
+      '--run',
+      'a.test.ts',
+      '-t',
+      'one',
+    ]);
+  });
+
+  it('runs a starter file once when a grouped manifest entry has no test filter', () => {
+    expect(
+      starterGroupVitestArgs([
+        { file: 'whole-file.test.ts', id: 'whole-file' },
+        { file: 'whole-file.test.ts', id: 'narrow', testName: 'narrow case' },
+      ]),
+    ).toEqual(['exec', 'vitest', '--run', 'whole-file.test.ts']);
   });
 });
 

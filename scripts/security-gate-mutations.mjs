@@ -145,7 +145,7 @@ const kv311IslandDeriveProofEnrollmentBranch = [
   "    code: 'KV311',",
   "    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',",
   '    requiredNeedles: [',
-  "      'buildProductionArtifact(root)',",
+  "      'buildReusableProductionArtifact(root)',",
   "      'assertProdArtifactSinkCensus(root',",
   "      'state.count',",
   "      'state.items[0]',",
@@ -161,7 +161,7 @@ const weakenedKv311IslandDeriveProofEnrollmentBranch = [
   "    code: 'KV311',",
   "    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',",
   '    requiredNeedles: [',
-  "      'buildProductionArtifact(root)',",
+  "      'buildReusableProductionArtifact(root)',",
   "      'expect(pageErrors).toEqual([])',",
   '    ],',
 ].join('\n');
@@ -1153,7 +1153,7 @@ async function assertKv311IslandDeriveProofEnrollmentIsPinned(moduleUnderTest) {
   );
   if (!proof) throw new Error('KV311 island-derive production artifact proof is not enrolled');
   const needles = [
-    'buildProductionArtifact(root)',
+    'buildReusableProductionArtifact(root)',
     'assertProdArtifactSinkCensus(root',
     'state.count',
     'state.items[0]',

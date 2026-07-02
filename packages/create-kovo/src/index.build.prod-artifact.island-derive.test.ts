@@ -16,7 +16,7 @@ import { chromium, type Browser } from 'playwright';
 import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject } from './index.js';
-import { buildProductionArtifact } from './index.build.test-support.js';
+import { buildReusableProductionArtifact } from './index.build.test-support.js';
 import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
 import {
   collectOutput,
@@ -43,7 +43,7 @@ describe('create-kovo starter (build integration: production island derives)', (
       addIslandDeriveProof(root);
       configureNodeRetention(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
       const census = assertProdArtifactSinkCensus(root, [
         {
           proof: {
@@ -176,7 +176,7 @@ describe('create-kovo starter (build integration: production island derives)', (
       linkStarterBuildDependencies(root);
       addModuleHelperDeriveProof(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       const clientSources = clientArtifactSources(root).join('\n');
       expect(clientSources).not.toContain('format(state.count)');

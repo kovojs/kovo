@@ -6,7 +6,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject } from './index.js';
-import { buildProductionArtifact } from './index.build.test-support.js';
+import { buildReusableProductionArtifact } from './index.build.test-support.js';
 import {
   assertProdArtifactSinkCensus,
   readProductionGraph,
@@ -33,7 +33,7 @@ describe('create-kovo starter (build integration: redirect and capability URL ar
       addRedirectAndCapabilityProof(root);
       linkStarterBuildDependencies(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
       const census = assertProdArtifactSinkCensus(root, [
         {
           proof: {

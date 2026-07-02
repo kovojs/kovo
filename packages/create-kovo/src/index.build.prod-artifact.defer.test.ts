@@ -14,7 +14,7 @@ import {
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
-import { buildProductionArtifact } from './index.build.test-support.js';
+import { buildReusableProductionArtifact } from './index.build.test-support.js';
 import { assertProdArtifactSinkCensus } from './index.build.prod-artifact.sink-census.js';
 
 describe('create-kovo starter (build integration: production Defer artifacts)', () => {
@@ -38,7 +38,7 @@ describe('create-kovo starter (build integration: production Defer artifacts)', 
         linkStarterBuildDependencies(root);
         addDeferProofRoutes(root);
 
-        buildProductionArtifact(root);
+        buildReusableProductionArtifact(root);
         const census = assertProdArtifactSinkCensus(root, [
           {
             proof: {

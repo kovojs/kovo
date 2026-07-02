@@ -119,8 +119,28 @@ jobs:
           path: ${{ runner.temp }}/kovo-root-timing-history/timing-history.json
           retention-days: 7
 
-  starter:
+  starter-packages:
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
+      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+        with:
+          node-version: 22.15.0
+      - run: vp install
+      - name: Pack starter workspace packages
+        run: vp exec node scripts/ci-shards.mjs pack-starter --outDir "$RUNNER_TEMP/kovo-packed-starter"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          if-no-files-found: error
+          name: kovo-packed-starter
+          path: ${{ runner.temp }}/kovo-packed-starter
+          retention-days: 7
+
+  starter:
+    needs: starter-packages
+    runs-on: ubuntu-latest
+    env:
+      KOVO_PACKED_PACKAGES_DIR: ${{ runner.temp }}/kovo-packed-starter
     strategy:
       fail-fast: false
       matrix:
@@ -156,9 +176,19 @@ jobs:
           else
             echo "needsBrowser=false" >> "$GITHUB_OUTPUT"
           fi
+          if vp exec node scripts/ci-shards.mjs starter-needs-packed --manifest "$manifest"; then
+            echo "needsPacked=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "needsPacked=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Install Chromium for browser-backed starter shard
         if: steps.starter-shard.outputs.needsBrowser == 'true'
         run: vp exec playwright install --with-deps chromium
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
+        if: steps.starter-shard.outputs.needsPacked == 'true'
+        with:
+          name: kovo-packed-starter
+          path: ${{ runner.temp }}/kovo-packed-starter
       - name: Generated starter proofs (${{ matrix.shard }})
         run: vp exec node scripts/ci-shards.mjs run-starter --manifest "${{ steps.starter-shard.outputs.manifest }}"
 
@@ -367,6 +397,7 @@ jobs:
     needs:
       - static-safety
       - test
+      - starter-packages
       - starter
       - integration
       - build

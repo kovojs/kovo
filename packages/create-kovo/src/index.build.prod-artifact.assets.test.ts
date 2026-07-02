@@ -15,7 +15,7 @@ import {
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
-import { buildProductionArtifact, signInDemoUser } from './index.build.test-support.js';
+import { buildReusableProductionArtifact, signInDemoUser } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production asset artifacts)', () => {
   it('serves referenced public assets from dynamic production node artifacts', async () => {
@@ -45,7 +45,7 @@ describe('create-kovo starter (build integration: production asset artifacts)', 
         'utf8',
       );
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,

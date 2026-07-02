@@ -31,6 +31,7 @@ import {
   addTrustedUrlAttributeTypeGateProof,
   attributeValue,
   buildProductionArtifact,
+  buildReusableProductionArtifact,
   execFileSyncErrorOutput,
   fieldValue,
   firstFormHtml,
@@ -70,7 +71,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       writeKovoProject(safeRoot, { name: 'Prod Auth Secret Safe Sibling' });
       linkStarterBuildDependencies(safeRoot);
       addAuthSecretLeakProof(safeRoot, { leakToWire: false });
-      buildProductionArtifact(safeRoot);
+      buildReusableProductionArtifact(safeRoot);
     } finally {
       rmSync(unsafeRoot, { force: true, recursive: true });
       rmSync(safeRoot, { force: true, recursive: true });
@@ -145,7 +146,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addStorageMutationWriteProof(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -224,7 +225,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       writeKovoProject(safeRoot, { name: 'Prod Trusted Output Safe Sibling' });
       linkStarterBuildDependencies(safeRoot);
       addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false });
-      buildProductionArtifact(safeRoot);
+      buildReusableProductionArtifact(safeRoot);
     } finally {
       rmSync(unsafeRoot, { force: true, recursive: true });
       rmSync(safeRoot, { force: true, recursive: true });
@@ -270,7 +271,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         addQueryWireProof(root);
         addEnhancedMutationWireProof(root);
 
-        buildProductionArtifact(root);
+        buildReusableProductionArtifact(root);
         assertEscapedAttackerTextCensus(root);
         assertEnhancedMutationWireCensus(root);
         assertQueryWireCensus(root);
@@ -310,7 +311,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       linkStarterBuildDependencies(root);
       addNoJsFailureProof(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,

@@ -12,7 +12,7 @@ import {
 } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
-import { dirname, join } from 'node:path';
+import { basename, dirname, join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
 import { writeKovoProject, type CreateKovoDialect } from './index.js';
@@ -74,6 +74,7 @@ const packedWorkspacePackages: readonly WorkspacePackage[] = [
 ];
 
 let packedKovoPackageCache: PackedKovoPackages | undefined;
+const packedKovoPackageManifest = 'packed-kovo-packages.json';
 
 export function createStarterApp(options: StarterAppOptions): StarterTestApp {
   const tempParent = options.tempParent ?? tmpdir();
@@ -288,11 +289,18 @@ export function withRepoBinOnPath(): NodeJS.ProcessEnv {
 function packKovoWorkspacePackages(): PackedKovoPackages {
   if (packedKovoPackageCache) return packedKovoPackageCache;
 
-  const tarballDir = join(
-    process.cwd(),
-    'node_modules/.tmp',
-    `create-kovo-packed-packages-${process.pid}`,
-  );
+  const envTarballDir = process.env.KOVO_PACKED_PACKAGES_DIR;
+  if (envTarballDir) {
+    const cached = readPackedKovoPackageManifest(envTarballDir);
+    if (cached) {
+      packedKovoPackageCache = cached;
+      return packedKovoPackageCache;
+    }
+  }
+
+  const tarballDir =
+    envTarballDir ??
+    join(process.cwd(), 'node_modules/.tmp', `create-kovo-packed-packages-${process.pid}`);
   rmSync(tarballDir, { force: true, recursive: true });
   mkdirSync(tarballDir, { recursive: true });
 
@@ -321,7 +329,45 @@ function packKovoWorkspacePackages(): PackedKovoPackages {
   }
 
   packedKovoPackageCache = { overridesByName, tarballByName, tarballDir };
+  writePackedKovoPackageManifest(packedKovoPackageCache);
   return packedKovoPackageCache;
+}
+
+function readPackedKovoPackageManifest(tarballDir: string): PackedKovoPackages | undefined {
+  const manifestPath = join(tarballDir, packedKovoPackageManifest);
+  if (!existsSync(manifestPath)) return undefined;
+  const manifest = JSON.parse(readFileSync(manifestPath, 'utf8')) as {
+    tarballs?: Record<string, string>;
+  };
+  const tarballByName = new Map<string, string>();
+  const overridesByName: Record<string, string> = {};
+  for (const pkg of packedWorkspacePackages) {
+    const file = manifest.tarballs?.[pkg.name];
+    if (!file) return undefined;
+    const tarball = join(tarballDir, file);
+    if (!existsSync(tarball)) return undefined;
+    const real = realpathSync(tarball);
+    tarballByName.set(pkg.name, real);
+    overridesByName[pkg.name] = fileSpec(process.cwd(), real);
+  }
+  return { overridesByName, tarballByName, tarballDir };
+}
+
+function writePackedKovoPackageManifest(packages: PackedKovoPackages): void {
+  writeFileSync(
+    join(packages.tarballDir, packedKovoPackageManifest),
+    `${JSON.stringify(
+      {
+        generatedBy: 'packages/create-kovo/src/index.test-support.ts',
+        tarballs: Object.fromEntries(
+          [...packages.tarballByName].map(([name, tarball]) => [name, basename(tarball)]),
+        ),
+      },
+      null,
+      2,
+    )}\n`,
+    'utf8',
+  );
 }
 
 function scaffoldWithPackedCreateKovo(

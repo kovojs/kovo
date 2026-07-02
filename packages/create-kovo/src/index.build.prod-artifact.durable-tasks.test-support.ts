@@ -14,7 +14,7 @@ import {
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
-import { buildProductionArtifact } from './index.build.test-support.js';
+import { buildReusableProductionArtifact } from './index.build.test-support.js';
 
 interface DurableTaskArtifactServer {
   origin: string;
@@ -37,7 +37,7 @@ export async function withDurableTaskArtifactServer(
     linkStarterBuildDependencies(root);
     addDurableTaskProofs(root);
 
-    buildProductionArtifact(root);
+    buildReusableProductionArtifact(root);
 
     server = spawn(process.execPath, ['dist/server/server.mjs'], {
       cwd: root,

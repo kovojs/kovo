@@ -17,7 +17,7 @@ import {
   stopProcess,
   withRepoBinOnPath,
 } from './index.test-support.js';
-import { buildProductionArtifact, waitForTcpPort } from './index.build.test-support.js';
+import { buildReusableProductionArtifact, waitForTcpPort } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: runtime and dev server)', () => {
   it('fingerprints the starter stylesheet URL before serving it as immutable', async () => {
@@ -31,7 +31,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
       writeKovoProject(root, { name: 'Build Prod Cache Proof' });
       linkStarterBuildDependencies(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       prodServer = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,

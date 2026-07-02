@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildProductionArtifact } from './index.build.test-support.js';
+import { buildReusableProductionArtifact } from './index.build.test-support.js';
 import { createStarterApp } from './index.test-support.js';
 
 describe('create-kovo starter (build integration: scaffold production)', () => {
@@ -14,7 +14,7 @@ describe('create-kovo starter (build integration: scaffold production)', () => {
     });
 
     try {
-      buildProductionArtifact(app.root);
+      buildReusableProductionArtifact(app.root);
     } finally {
       app.cleanup();
     }
@@ -27,7 +27,7 @@ describe('create-kovo starter (build integration: scaffold production)', () => {
     });
 
     try {
-      buildProductionArtifact(app.root);
+      buildReusableProductionArtifact(app.root);
       const firstHandler = readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8');
       expect(firstHandler).toContain('Contacts');
 
@@ -38,7 +38,7 @@ describe('create-kovo starter (build integration: scaffold production)', () => {
         'utf8',
       );
 
-      buildProductionArtifact(app.root);
+      buildReusableProductionArtifact(app.root);
       const secondHandler = readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8');
       expect(secondHandler).toContain('Current Source Contacts');
       expect(secondHandler).not.toBe(firstHandler);

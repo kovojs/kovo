@@ -2,7 +2,7 @@ import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
 
 import { describe, expect, it } from 'vitest';
 
-import { buildProductionArtifact } from './index.build.test-support.js';
+import { buildReusableProductionArtifact } from './index.build.test-support.js';
 import { expectPackedKovoPackageShape } from './index.build.scaffold-support.js';
 import {
   collectOutput,
@@ -28,7 +28,7 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
     try {
       expectPackedKovoPackageShape(app.root);
       runStarterVpCheck(app.root);
-      buildProductionArtifact(app.root);
+      buildReusableProductionArtifact(app.root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: app.root,

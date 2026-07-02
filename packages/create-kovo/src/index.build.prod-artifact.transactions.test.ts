@@ -17,6 +17,7 @@ import {
 import {
   addRuntimeMutationSafetyProofs,
   buildProductionArtifact,
+  buildReusableProductionArtifact,
   execFileSyncErrorOutput,
 } from './index.build.test-support.js';
 
@@ -63,7 +64,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
       expect(proofSource).toContain('txProofWebhook');
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -183,7 +184,7 @@ describe('create-kovo starter (build integration: production transaction artifac
       const proofSource = readFileSync(join(root, 'src/runtime-safety-proofs.ts'), 'utf8');
       expect(proofSource).toContain('txProofWebhook');
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,

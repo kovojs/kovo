@@ -233,7 +233,7 @@ describe('security-test-build-gate', () => {
     });
   });
 
-  it('keeps starter buildProductionArtifact tied to kovo build --no-cache', () => {
+  it('keeps starter production build helpers tied to kovo build invocations', () => {
     withTempRepo((repoRoot) => {
       writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV435' }];");
       writeStarterProofFile(
@@ -450,7 +450,7 @@ describe('security-test-build-gate', () => {
       buildInvocation: 'starter-build-production-artifact',
       proofFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
       requiredNeedles: expect.arrayContaining([
-        'buildProductionArtifact(root)',
+        'buildReusableProductionArtifact(root)',
         'assertProdArtifactSinkCensus(root',
         'expect(pageErrors).toEqual([])',
         'expect(consoleErrors).toEqual([])',
@@ -470,7 +470,7 @@ describe('security-test-build-gate', () => {
         'addTrustedOutputProvenanceBuildProof(unsafeRoot)',
         'buildProductionArtifact(unsafeRoot)',
         'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',
-        'buildProductionArtifact(safeRoot)',
+        'buildReusableProductionArtifact(safeRoot)',
       ]),
     });
   });
@@ -562,6 +562,9 @@ function validStarterBuildHelperSource() {
     "import { execFileSync } from 'node:child_process';",
     'export function buildProductionArtifact(root) {',
     "  return execFileSync('kovo', ['build', './src/app.tsx', '--no-cache'], { cwd: root });",
+    '}',
+    'export function buildReusableProductionArtifact(root) {',
+    "  return execFileSync('kovo', ['build', './src/app.tsx'], { cwd: root });",
     '}',
   ].join('\n');
 }

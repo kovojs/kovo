@@ -18,7 +18,7 @@ import {
 } from './index.test-support.js';
 import {
   attributeValue,
-  buildProductionArtifact,
+  buildReusableProductionArtifact,
   elementOpeningTagByAttribute,
   fieldValue,
   formHtmlByAction,
@@ -37,7 +37,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
       writeKovoProject(root, { name: 'Prod Add Contact Proof' });
       linkStarterBuildDependencies(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -172,7 +172,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
       writeKovoProject(root, { dialect: 'sqlite', name: 'Prod SQLite Add Contact Proof' });
       linkStarterBuildDependencies(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -241,7 +241,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
       linkStarterBuildDependencies(root);
       addMultiComponentLiveTargetProof(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,
@@ -334,7 +334,7 @@ describe('create-kovo starter (build integration: production contact artifacts)'
       writeKovoProject(root, { name: 'Prod NoJS Idem Proof' });
       linkStarterBuildDependencies(root);
 
-      buildProductionArtifact(root);
+      buildReusableProductionArtifact(root);
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: root,

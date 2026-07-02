@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { mkdir, readFile, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -14,6 +14,21 @@ const DEFAULT_ROOTS = {
 const DEFAULT_HISTORY_NAME = 'timing-history.json';
 const DEFAULT_DURATION_SECONDS = 5;
 const STARTER_SHARD_COUNT = 8;
+const PACKED_STARTER_MANIFEST = 'packed-kovo-packages.json';
+const PACKED_WORKSPACE_PACKAGES = [
+  { name: '@kovojs/core', dir: 'core' },
+  { name: '@kovojs/style', dir: 'style' },
+  { name: '@kovojs/browser', dir: 'browser' },
+  { name: '@kovojs/server', dir: 'server' },
+  { name: '@kovojs/drizzle', dir: 'drizzle' },
+  { name: '@kovojs/headless-ui', dir: 'headless-ui' },
+  { name: '@kovojs/icons', dir: 'icons' },
+  { name: '@kovojs/ui', dir: 'ui' },
+  { name: '@kovojs/better-auth', dir: 'better-auth' },
+  { name: '@kovojs/compiler', dir: 'compiler' },
+  { name: '@kovojs/cli', dir: 'cli' },
+  { name: 'create-kovo', dir: 'create-kovo' },
+];
 const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/cli/src/index.kovo-compile.test.ts',
   'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.test.ts',
@@ -125,19 +140,19 @@ const STARTER_ENTRIES = [
     id: 'm1-storage-write',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:storage-write',
-    seconds: 419,
+    seconds: 210,
   },
   {
     id: 'm1-raw-html',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:raw-html',
-    seconds: 301,
+    seconds: 151,
   },
   {
     id: 'm1-secret-wire',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:secret-wire',
-    seconds: 284,
+    seconds: 142,
   },
   {
     id: 'm1-raw-sql',
@@ -184,6 +199,7 @@ const STARTER_ENTRIES = [
   {
     id: 'starter-packed-postgres',
     file: 'packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts',
+    needsPacked: true,
     seconds: 68,
   },
   {
@@ -194,6 +210,7 @@ const STARTER_ENTRIES = [
   {
     id: 'starter-packed-sqlite',
     file: 'packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts',
+    needsPacked: true,
     seconds: 68,
   },
   {
@@ -235,6 +252,7 @@ const STARTER_ENTRIES = [
   {
     id: 'starter-packed-runtime',
     file: 'packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts',
+    needsPacked: true,
     seconds: 157,
   },
   {
@@ -502,18 +520,89 @@ export async function starterShardNeedsBrowser(file) {
   return manifest.entries.some((entry) => entry.needsBrowser);
 }
 
+export async function starterShardNeedsPacked(file) {
+  const manifest = await readStarterShardManifest(file);
+  return manifest.entries.some((entry) => entry.needsPacked);
+}
+
 export async function runStarterShard(file) {
   const manifest = await readStarterShardManifest(file);
-  for (const entry of manifest.entries) {
-    const args = ['exec', 'vitest', '--run', entry.file];
-    if (entry.testName) args.push('-t', entry.testName);
-    process.stderr.write(`\n[starter:${entry.id}] vp ${args.join(' ')}\n`);
+  for (const group of groupStarterEntriesForExecution(manifest.entries)) {
+    const args = starterGroupVitestArgs(group);
+    process.stderr.write(
+      `\n[starter:${group.map((entry) => entry.id).join(',')}] vp ${args.join(' ')}\n`,
+    );
     const result = spawnSync('vp', args, { stdio: 'inherit' });
     if (result.error) throw result.error;
     if (result.status !== 0) {
-      throw new Error(`Starter entry ${entry.id} failed with exit code ${result.status}`);
+      throw new Error(
+        `Starter entries ${group.map((entry) => entry.id).join(', ')} failed with exit code ${result.status}`,
+      );
     }
   }
+}
+
+export async function packStarterPackages(outputDir) {
+  const root = path.resolve(
+    outputDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-packed-starter'),
+  );
+  assertRunnerTempScoped(root);
+  await rm(root, { force: true, recursive: true });
+  await mkdir(root, { recursive: true });
+  const tarballs = {};
+
+  for (const pkg of PACKED_WORKSPACE_PACKAGES) {
+    const packageRoot = path.join(process.cwd(), 'packages', pkg.dir);
+    const before = new Set((await readdir(root)).filter((file) => file.endsWith('.tgz')));
+    const result = spawnSync('vp', ['exec', 'pnpm', 'pack', '--pack-destination', root], {
+      cwd: packageRoot,
+      stdio: 'inherit',
+    });
+    if (result.error) throw result.error;
+    if (result.status !== 0) throw new Error(`vp exec pnpm pack failed for ${pkg.name}`);
+    const created = (await readdir(root))
+      .filter((file) => file.endsWith('.tgz') && !before.has(file))
+      .sort();
+    if (created.length !== 1) {
+      throw new Error(`Expected one tarball for ${pkg.name}; found ${created.length}.`);
+    }
+    tarballs[pkg.name] = created[0];
+  }
+
+  await writeJson(path.join(root, PACKED_STARTER_MANIFEST), {
+    generatedBy: 'scripts/ci-shards.mjs pack-starter',
+    tarballs,
+  });
+  return root;
+}
+
+export function groupStarterEntriesForExecution(entries) {
+  const groupsByFile = new Map();
+  for (const entry of entries) {
+    const group = groupsByFile.get(entry.file) ?? [];
+    group.push(entry);
+    groupsByFile.set(entry.file, group);
+  }
+  return [...groupsByFile.values()].map((group) => group.sort((a, b) => a.id.localeCompare(b.id)));
+}
+
+export function starterGroupVitestArgs(group) {
+  if (group.length === 0) throw new Error('Starter execution group cannot be empty.');
+  const [first] = group;
+  const args = ['exec', 'vitest', '--run', first.file];
+  if (group.every((entry) => entry.testName)) {
+    args.push('-t', starterTestNamePattern(group.map((entry) => entry.testName)));
+  }
+  return args;
+}
+
+function starterTestNamePattern(testNames) {
+  if (testNames.length === 1) return testNames[0];
+  return testNames.map(escapeRegExp).join('|');
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[\\^$.*+?()[\]{}|]/g, '\\$&');
 }
 
 function estimateSeconds(history, file, fallback) {
@@ -678,6 +767,20 @@ async function main(argv) {
     return;
   }
 
+  if (command === 'starter-needs-packed') {
+    process.exitCode = (await starterShardNeedsPacked(String(args.manifest))) ? 0 : 1;
+    return;
+  }
+
+  if (command === 'pack-starter') {
+    const outputDir = String(
+      args.outDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-packed-starter'),
+    );
+    const packedDir = await packStarterPackages(outputDir);
+    process.stdout.write(`${packedDir}\n`);
+    return;
+  }
+
   if (command === 'run-starter') {
     await runStarterShard(String(args.manifest));
     return;
@@ -698,6 +801,8 @@ async function main(argv) {
   node scripts/ci-shards.mjs generate --kind vitest|integration --shards N --index N --outDir "$RUNNER_TEMP/kovo-shards" [--history file]
   node scripts/ci-shards.mjs generate-starter --shards N --index N --outDir "$RUNNER_TEMP/kovo-starter-shards"
   node scripts/ci-shards.mjs starter-needs-browser --manifest starter-shard.json
+  node scripts/ci-shards.mjs starter-needs-packed --manifest starter-shard.json
+  node scripts/ci-shards.mjs pack-starter --outDir "$RUNNER_TEMP/kovo-packed-starter"
   node scripts/ci-shards.mjs run-starter --manifest starter-shard.json
   node scripts/ci-shards.mjs merge-vitest --report vitest.json --out timing-history.json [--previous timing-history.json]
   node scripts/ci-shards.mjs merge-playwright --report playwright.json --out timing-history.json [--previous timing-history.json]`);
