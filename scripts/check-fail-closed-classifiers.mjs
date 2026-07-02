@@ -6,7 +6,7 @@ import ts from 'typescript';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { staticClassifierGateResult } from './lib/paranoid-mode.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
-import { collectSourceFiles, productionSourceRoots } from './lib/source-files.mjs';
+import { collectSourceFiles, securityMarkerSourceRoots } from './lib/source-files.mjs';
 
 export const repoRoot = findRepoRoot();
 
@@ -15,19 +15,15 @@ const SECURITY_CLASSIFIER_EXPORT = 'securityClassifier';
 const PERMISSIVE_STRING_VALUES = new Set(['', 'allow', 'allowed', 'ok', 'pass', 'safe', 'clean']);
 const RECOGNIZER_NAME_PATTERN =
   /(?:recogn|resolv|parse|classif|sink|lookup|detect|match|write.*tables?)/iu;
-const DEFAULT_EXTRA_SOURCE_FILES = ['packages/compiler/src/validate/trusted-html-provenance.ts'];
 
 export function checkFailClosedClassifiers(options = {}) {
   const root = options.repoRoot ?? repoRoot;
-  const roots = options.roots ?? productionSourceRoots;
+  const roots = options.roots ?? securityMarkerSourceRoots(root);
   const files =
     options.files ??
-    uniqueSortedFiles([
-      ...collectSourceFiles(root, roots, {
-        productionRoots: options.productionRoots ?? roots,
-      }),
-      ...DEFAULT_EXTRA_SOURCE_FILES,
-    ]);
+    collectSourceFiles(root, roots, {
+      productionRoots: options.productionRoots ?? roots,
+    });
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
   const findings = [];
@@ -594,10 +590,6 @@ function scriptKind(file) {
 
 function dedupeFindings(findings) {
   return [...new Set(findings)];
-}
-
-function uniqueSortedFiles(files) {
-  return [...new Set(files)].sort((left, right) => left.localeCompare(right));
 }
 
 if (isMainEntry(import.meta.url)) await runGate(main);

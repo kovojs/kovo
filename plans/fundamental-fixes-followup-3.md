@@ -288,8 +288,12 @@ mattering.
 ### Phase 4 — Unrepresentability + honest static + total proofs
 
 - [ ] **4.1 Choke unrepresentability (DEC-E).** Brand the constructors; reachability gate replaces shape recognition.
-- [ ] **4.2 Reword static gates as advisory + fix proof scope (DEC-F/G).** Diagnostics name their choke; scanned roots
+- [x] **4.2 Reword static gates as advisory + fix proof scope (DEC-F/G).** Diagnostics name their choke; scanned roots
       derived from marker-imports (fixes `papercuts-26` P4).
+      Evidence: `pnpm exec vitest --run packages/core/src/diagnostics.test.ts scripts/check-classifier-verdict-routing.test.mjs scripts/check-fail-closed-classifiers.test.mjs scripts/security-test-build-gate.test.mjs scripts/lib/source-files.test.mjs`
+      and `pnpm run check:fail-closed-classifiers && pnpm run check:classifier-verdict-routing && pnpm run check:security-test-builds`
+      prove static diagnostics name runtime chokes/proof scope and classifier gates derive scanned package roots from
+      security-marker imports, including compiler sources.
 - [ ] **4.3 Property-based generators (DEC-G).** Replace index enumerators with seeded grammar generators varying
       read-SOURCE / SINK-position / wrapping (`papercuts-26` P5).
 
@@ -353,6 +357,7 @@ point on an endless enumeration.
 - `vp exec vitest --run packages/server/src/managed-db.test.ts`
 - `KOVO_PARANOID=1 vp exec vitest --run packages/server/src/jsx-runtime.test.ts`
 - `vp exec vitest --run packages/server/src/untrusted-request-body.test.ts`
+- `pnpm exec vitest --run scripts/lib/source-files.test.mjs scripts/check-fail-closed-classifiers.test.mjs scripts/check-classifier-verdict-routing.test.mjs`
 - `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`
 - `vp exec vitest --run packages/create-kovo/src/index.test.ts && vp exec vitest --run packages/create-kovo/src/index.build.scaffold.sqlite.test.ts -t 'runs vp check'`
 - `pnpm run check:paranoid-classifiers && pnpm run check:paranoid-runtime`

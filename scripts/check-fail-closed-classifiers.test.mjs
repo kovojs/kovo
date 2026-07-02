@@ -1,3 +1,7 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
+
 import { describe, expect, it } from 'vitest';
 
 import { checkFailClosedClassifiers } from './check-fail-closed-classifiers.mjs';
@@ -169,4 +173,51 @@ function rawTrustSinkForCall(value: string): string | null {
       ),
     ]);
   });
+
+  it('scans package roots derived from security-marker imports by default', async () => {
+    const repoRoot = await fixtureRoot();
+    await writeFixture(
+      repoRoot,
+      'packages/compiler/src/validate/classifier.ts',
+      `
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
+
+export const compilerClassifier = securityClassifier('test.compiler', function (value) {
+  if (value.ok) return ['known'];
+  return [];
 });
+`,
+    );
+    await writeFixture(
+      repoRoot,
+      'packages/browser/src/client.ts',
+      `
+export const browserClassifier = function (value) {
+  if (value.ok) return ['known'];
+  return [];
+};
+`,
+    );
+
+    const result = checkFailClosedClassifiers({ repoRoot });
+
+    expect(result.findings).toHaveLength(1);
+    expect(result.findings[0]).toContain('packages/compiler/src/validate/classifier.ts');
+    expect(result.findings[0]).toContain(
+      'compilerClassifier (test.compiler) returns permissive `[]` from terminal fallback',
+    );
+    expect(result.summary).toContain('1 fail-closed classifier violation(s)');
+  });
+});
+
+async function fixtureRoot() {
+  return mkdir(path.join(tmpdir(), `kovo-fail-closed-${process.pid}-${Date.now()}`), {
+    recursive: true,
+  });
+}
+
+async function writeFixture(rootDir, relativePath, source) {
+  const filePath = path.join(rootDir, relativePath);
+  await mkdir(path.dirname(filePath), { recursive: true });
+  await writeFile(filePath, source);
+}

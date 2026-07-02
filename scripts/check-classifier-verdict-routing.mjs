@@ -6,13 +6,13 @@ import ts from 'typescript';
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
 import { staticClassifierGateResult } from './lib/paranoid-mode.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
-import { collectSourceFiles, productionSourceRoots } from './lib/source-files.mjs';
+import { collectSourceFiles, securityMarkerSourceRoots } from './lib/source-files.mjs';
 
 export const repoRoot = findRepoRoot();
 
 export function checkClassifierVerdictRouting(options = {}) {
   const root = options.repoRoot ?? repoRoot;
-  const roots = options.roots ?? productionSourceRoots;
+  const roots = options.roots ?? securityMarkerSourceRoots(root);
   const files =
     options.files ??
     collectSourceFiles(root, roots, {
