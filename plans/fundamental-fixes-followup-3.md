@@ -366,12 +366,14 @@ rejects it, if it's pure it runs. The incomplete allowlist stops mattering.
   - [x] **Raw-SQL secret fail-closed tagging.** Raw SQL that references a secret table tags the whole result `Secret`;
     parse-fail tags opaque direct-SQL results instead of depending on parser completeness.
     Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`
-- [ ] **2.2 Engine column-lockdown for the reader role (DEC-C 2).** Reader role `REVOKE` on secret columns; reading a
+- [x] **2.2 Engine column-lockdown for the reader role (DEC-C 2).** Reader role `REVOKE` on secret columns; reading a
   secret column requires a declared capability. Acceptance: the reader role cannot `SELECT` a secret column via raw SQL.
-  - [ ] **Reader role column-level `REVOKE`.** Default reader roles must be unable to `SELECT` secret columns, including
+  - [x] **Reader role column-level `REVOKE`.** Default reader roles must be unable to `SELECT` secret columns, including
     through raw SQL.
-  - [ ] **Engine-backed declared secret-read capability.** A declared secret-read capability must use the privileged
+    Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`
+  - [x] **Engine-backed declared secret-read capability.** A declared secret-read capability must use the privileged
     path needed to read the secret column without weakening the default reader role.
+    Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`
   - [x] **Starter adapter secret-read fallback.** Default generated reader raw SQL against secret tables refuses without
     a declared secret-read capability; this is a fallback, not true engine-column `REVOKE`.
     Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`
@@ -390,11 +392,13 @@ rejects it, if it's pure it runs. The incomplete allowlist stops mattering.
   - [x] **Audited reveal acceptance.** `reveal('reason')` passes through the query-wire egress choke with audit-grade
     provenance.
     Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'runtime Secret|schema-declared secret reads' --reporter=dot`
-- [ ] **2.4 Static KV435 → advisory (DEC-F, gated by A7).**
-  - [ ] **A7 reader-lockdown precondition.** 2.2 must have true reader-role column-lockdown before KV435 incompleteness
+- [x] **2.4 Static KV435 → advisory (DEC-F, gated by A7).**
+  - [x] **A7 reader-lockdown precondition.** 2.2 must have true reader-role column-lockdown before KV435 incompleteness
     degrades to runtime instead of remaining load-bearing.
-  - [ ] **Confidentiality runtime chokes live under paranoid mode.** 2.1/2.2/2.3 must prove no property is enforced by
-    neither layer; this remains open while true 2.2 reader-role `REVOKE` is open.
+    Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`
+  - [x] **Confidentiality runtime chokes live under paranoid mode.** 2.1/2.2/2.3 must prove no property is enforced by
+    neither layer when static KV435 is advisory.
+    Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`
   - [x] **KV435 runtime-twin deletion proof.** The confidentiality corpus still fails at runtime with static KV435
     stubbed to `proven-safe`.
     Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --reporter=dot`
