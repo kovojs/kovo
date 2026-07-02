@@ -343,8 +343,12 @@ mattering.
       secret column requires a declared capability. Acceptance: the reader role cannot `SELECT` a secret column via raw SQL.
   - [ ] **Reader role column-level `REVOKE`.** Default reader role cannot `SELECT` secret columns, including through raw
         SQL.
-  - [ ] **Declared secret-read capability.** Legitimate server-side reads that need the secret use a declared capability
+  - [x] **Starter adapter secret-read fallback.** Default generated reader raw SQL against secret tables refuses without
+        a declared secret-read capability, preserving the gap that this is not true engine-column `REVOKE`.
+        Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`.
+  - [x] **Declared secret-read capability.** Legitimate server-side reads that need the secret use a declared capability
         and still route egress through `Secret`/`reveal` policy.
+        Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`.
 - [x] **2.3 Every egress choke refuses `Secret` (DEC-C 4, DEC-J).** Wire, headers, redirect, static export, logs,
       error reporter, task status. Acceptance (paranoid mode): `bugz-28` B1 raw-SQL leak throws at the wire with static
       KV435 stubbed; `reveal('reason')` passes; a secret in a log/error/status is refused/redacted (`papercuts-25` O.1).
