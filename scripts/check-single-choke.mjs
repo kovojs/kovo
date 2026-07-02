@@ -31,6 +31,7 @@ export const defaultAllowedDriverFiles = [
 ];
 export const defaultAllowedRawTargetFiles = [
   'packages/server/src/sql-safe-handle.ts',
+  'packages/server/src/managed-db.ts',
   'packages/server/src/task-queue.ts',
   'packages/server/src/mutation.ts',
 ];
