@@ -444,9 +444,13 @@ mattering.
       only; `sql.unsafe` as an explicit escape through the DEC-A/DEC-C chokes); require statically-resolvable trust-sink
       callees; extend `check:sound-subset` to the whole security surface. Acceptance: the round-7 raw-SQL leak shape is
       a build error on the common path and, via the escape hatch, still refused at the runtime choke.
-- [ ] **6.2 Publish the guarantee statement + non-goals (DEC-M).** A `SECURITY.md`/SPEC section states the exact
+- [x] **6.2 Publish the guarantee statement + non-goals (DEC-M).** A `SECURITY.md`/SPEC section states the exact
       choke-backed invariants, threat model, and non-goals; a test proves every stated invariant names a TCB choke and a
       paranoid-mode proof, and that no claim lacks a backing choke.
+  - [x] **Machine-readable guarantee register and backing gate.** `SECURITY.md` publishes the current choke-backed
+        confidentiality guarantees, threat model, and non-goals; `check:security-guarantee` rejects claims without TCB
+        chokes or paranoid/runtime proof IDs.
+        Evidence: `pnpm run check:security-guarantee`.
 - [ ] **6.3 External adversarial audit + generative fuzzing.** A non-implementer audit against the guarantee statement,
       plus the DEC-G property-based generators run under `KOVO_PARANOID=1`. This validates that the TCB + sole-door hold;
       it does not replace them as the soundness proof.
@@ -516,4 +520,5 @@ TCB does not already refuse.
 - `vp exec vitest --run packages/create-kovo/src/index.test.ts && vp exec vitest --run packages/create-kovo/src/index.build.scaffold.sqlite.test.ts -t 'runs vp check'`
 - `pnpm run check:paranoid-classifiers && pnpm run check:paranoid-runtime`
 - `pnpm run check:api-surface && pnpm run check:single-choke && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census`
+- `pnpm run check:tcb-boundary && pnpm run check:security-guarantee`
 - `pnpm run check:sink-policy && pnpm run check:vp && git diff --check`
