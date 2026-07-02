@@ -4,7 +4,7 @@ description: Install the pinned Kovo CI toolchain and restore compiler cache.
 inputs:
   node-version:
     description: Node.js version for voidzero setup-vp.
-    default: 22.15.0
+    default: 24.18.0
   vp-version:
     description: Vite+ version for voidzero setup-vp.
     default: 0.1.24

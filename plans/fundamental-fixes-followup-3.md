@@ -306,8 +306,14 @@ mattering.
         expose declared-write handles that reject schema-qualified out-of-scope Drizzle helper writes before builder or
         driver execution where native role/authorizer APIs are unavailable.
         Evidence: `pnpm exec vitest run packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/server/src/managed-db.test.ts`.
-  - [ ] **SQLite authorizer enforcement.** `sqlite3_set_authorizer` denies writes to non-declared tables/columns and
-        denies DDL/pragma at the engine, not only at the parser/choke layer.
+  - [x] **SQLite test-harness authorizer enforcement.** File-backed SQLite declared writers use
+        `sqlite3_set_authorizer` to deny writes to non-declared tables, trigger side-effect writes, DDL, and pragma at
+        the engine, not only at the parser/choke layer.
+        Evidence: `pnpm exec vitest --run packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/server/src/managed-db.test.ts --reporter=dot`.
+  - [ ] **Generated SQLite starter authorizer parity.** The generated SQLite starter still uses the Drizzle/
+        better-sqlite3 declared-write fallback; it must either route declared raw writes through an authorizer-backed
+        engine connection or document a narrower residual before 1.2 closes.
+        Gap evidence: `packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts`.
   - [x] **Postgres declared-table engine enforcement.** Request-scoped role GRANTs, or the documented stat-delta
         fallback, reject schema-qualified out-of-scope writes and allow in-scope writes.
         Evidence: `pnpm exec vitest --run packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts packages/server/src/managed-db.test.ts --reporter=dot`.

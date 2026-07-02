@@ -5,7 +5,11 @@ import { describe, expect, it } from 'vitest';
 
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { mutation, s } from '@kovojs/server';
-import { managedDb } from '@kovojs/server/internal/execution';
+import {
+  kovoDeclaredWriteDbHandle,
+  managedDb,
+  type KovoDeclaredWriteDbCapable,
+} from '@kovojs/server/internal/execution';
 
 import { createKovoTestHarness } from './harness.js';
 import { createSqliteTestDb, type SqliteTestDb } from './sqlite.js';
@@ -129,6 +133,56 @@ describe('@kovojs/test SQLite harness integration', () => {
       expect(db.read('audit_log')).toEqual([]);
     } finally {
       db.close();
+    }
+  });
+
+  it('backs file SQLite declared writers with sqlite3_set_authorizer enforcement', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sqlite-authorizer-'));
+    const db = createSqliteTestDb({ filename: join(root, 'app.sqlite') });
+
+    try {
+      db.exec('create table cart_items (product_id text primary key, qty integer not null)');
+      db.exec('create table audit_log (product_id text primary key)');
+      db.exec(`
+        create trigger cart_audit
+        after update on cart_items
+        begin
+          insert into audit_log (product_id) values (new.product_id);
+        end
+      `);
+
+      const writer = (
+        db as SqliteTestDb &
+          KovoDeclaredWriteDbCapable<Pick<SqliteTestDb, 'exec' | 'query' | 'read'>>
+      )[kovoDeclaredWriteDbHandle]({
+        dialect: 'sqlite',
+        tables: ['cart_items'],
+        touches: ['cart'],
+      });
+
+      writer.exec("insert into cart_items (product_id, qty) values ('p1', 2)");
+      expect(db.read<{ product_id: string; qty: number }>('cart_items')).toEqual([
+        { product_id: 'p1', qty: 2 },
+      ]);
+
+      expect(() => writer.exec("insert into audit_log (product_id) values ('p1')")).toThrow(
+        /KV406.*SQLite authorizer/s,
+      );
+      expect(() => writer.exec("update cart_items set qty = 3 where product_id = 'p1'")).toThrow(
+        /KV406.*SQLite authorizer/s,
+      );
+      expect(() => writer.exec('create table extra (id text primary key)')).toThrow(
+        /KV406.*SQLite authorizer/s,
+      );
+      expect(() => writer.exec('pragma user_version = 1')).toThrow(/KV406.*SQLite authorizer/s);
+
+      expect(db.read<{ product_id: string }>('audit_log')).toEqual([]);
+      expect(db.read<{ product_id: string; qty: number }>('cart_items')).toEqual([
+        { product_id: 'p1', qty: 2 },
+      ]);
+    } finally {
+      db.close();
+      rmSync(root, { force: true, recursive: true });
     }
   });
 
