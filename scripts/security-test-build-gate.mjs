@@ -24,7 +24,7 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'Production artifact security certification tests',
+    description: 'Production artifact security proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
   },
   {
@@ -44,7 +44,7 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'CLI build preflight security certification tests',
+    description: 'CLI build preflight security proof-scope enrollment tests',
     file: 'packages/cli/src/index.kovo-build.test.ts',
   },
 ];
@@ -442,7 +442,7 @@ export function securityTestBuildGateViolations({
     for (const claim of claims) {
       if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {
         violations.push(
-          `${formatClaimLabel(source.file, claim)}: security certification has no real kovo build proof`,
+          `${formatClaimLabel(source.file, claim)}: security proof-scope enrollment has no real kovo build proof`,
         );
       }
     }
@@ -499,10 +499,12 @@ function validateProof(
 ) {
   const label = formatProofLabel(proof);
   if (!enrolledSecurityCodes.has(proof.code)) {
-    violations.push(`${label}: proof code is not enrolled as a security certification code`);
+    violations.push(
+      `${label}: proof code is not enrolled as a security proof-scope enrollment code`,
+    );
   }
   if (!knownSources.has(proof.sourceFile)) {
-    violations.push(`${label}: proof references an unknown certification source`);
+    violations.push(`${label}: proof references an unknown proof-scope enrollment source`);
   }
   if (
     sourceClaims.has(proof.sourceFile) &&
@@ -510,7 +512,7 @@ function validateProof(
       .get(proof.sourceFile)
       .some((claim) => proofMatchesClaim(proof, proof.sourceFile, claim))
   ) {
-    violations.push(`${label}: proof is stale; source does not certify ${formatProofClaim(proof)}`);
+    violations.push(`${label}: proof is stale; source does not enroll ${formatProofClaim(proof)}`);
   }
 
   const proofPath = path.join(repoRoot, proof.proofFile);
@@ -564,7 +566,9 @@ function extractCertificationClaims(source, sourceText, violations) {
   if (extractor === 'security-certification-markers') {
     return extractSecurityCertificationMarkers(sourceText);
   }
-  violations.push(`${source.file}: unknown security certification claim extractor ${extractor}`);
+  violations.push(
+    `${source.file}: unknown security proof-scope enrollment claim extractor ${extractor}`,
+  );
   return [];
 }
 
@@ -629,7 +633,7 @@ function main() {
   }
 
   process.stdout.write(
-    `Security test build gate passed (${SECURITY_BUILD_PROOFS.length} real-build proofs).\n`,
+    `Security test build gate passed (${SECURITY_BUILD_PROOFS.length} build/runtime proof-scope entries).\n`,
   );
 }
 

@@ -68,6 +68,7 @@ export function enforce(verdict) {
       paranoidMode: true,
     });
     expect(result.summary).toContain('advisory under KOVO_PARANOID=1');
+    expect(result.summary).toContain('runtime chokes remain the proof boundary');
     expect(result.findings).toEqual([
       expect.stringContaining('closes proven-unsafe without an unproven companion branch'),
     ]);

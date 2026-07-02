@@ -94,6 +94,7 @@ export const terminal = securityClassifier('test.terminal', function (value: { o
       paranoidMode: true,
     });
     expect(result.summary).toContain('advisory under KOVO_PARANOID=1');
+    expect(result.summary).toContain('runtime chokes remain the proof boundary');
     expect(result.findings).toEqual([
       expect.stringContaining(
         'terminal (test.terminal) returns permissive `[]` from terminal fallback',

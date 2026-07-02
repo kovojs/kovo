@@ -17,7 +17,7 @@ const METAMORPHIC_CERTIFICATION_SOURCES = SECURITY_BUILD_CERTIFICATION_SOURCES.f
 );
 
 describe('security-test-build-gate', () => {
-  it('keeps the enrolled security certification corpus tied to real kovo build tests', () => {
+  it('keeps the enrolled security proof-scope enrollment corpus tied to real kovo build tests', () => {
     expect(securityTestBuildGateViolations()).toEqual([]);
   });
 
@@ -34,7 +34,7 @@ describe('security-test-build-gate', () => {
     ).toEqual(['KV330', 'KV426']);
   });
 
-  it('extracts explicit security certification markers without treating incidental KV mentions as certification', () => {
+  it('extracts explicit security proof-scope enrollment markers without treating incidental KV mentions as certification', () => {
     expect(
       extractSecurityCertificationMarkers(`
         expect(output).toContain('KV426');
@@ -47,7 +47,7 @@ describe('security-test-build-gate', () => {
     ]);
   });
 
-  it('requires real build proof for explicitly enrolled non-metamorphic security certifications', () => {
+  it('requires real build proof for explicitly enrolled non-metamorphic security proof-scope enrollments', () => {
     withTempRepo((repoRoot) => {
       writeUnitCertificationSource(
         repoRoot,
@@ -64,7 +64,7 @@ describe('security-test-build-gate', () => {
           certificationSources: [
             {
               claimExtractor: 'security-certification-markers',
-              description: 'unit security certification declarations',
+              description: 'unit security proof-scope enrollment declarations',
               file: 'packages/drizzle/src/unit-security.test.ts',
             },
           ],
@@ -72,7 +72,7 @@ describe('security-test-build-gate', () => {
           repoRoot,
         }),
       ).toContain(
-        'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-unit: security certification has no real kovo build proof',
+        'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-unit: security proof-scope enrollment has no real kovo build proof',
       );
     });
   });
@@ -93,7 +93,7 @@ describe('security-test-build-gate', () => {
           certificationSources: [
             {
               claimExtractor: 'security-certification-markers',
-              description: 'unit security certification declarations',
+              description: 'unit security proof-scope enrollment declarations',
               file: 'packages/drizzle/src/unit-security.test.ts',
             },
           ],
@@ -125,7 +125,7 @@ describe('security-test-build-gate', () => {
           certificationSources: [
             {
               claimExtractor: 'security-certification-markers',
-              description: 'unit security certification declarations',
+              description: 'unit security proof-scope enrollment declarations',
               file: 'packages/drizzle/src/unit-security.test.ts',
             },
           ],
@@ -143,8 +143,8 @@ describe('security-test-build-gate', () => {
         }),
       ).toEqual(
         expect.arrayContaining([
-          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-current: security certification has no real kovo build proof',
-          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-old -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not certify KV426/trusted-html-old',
+          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-current: security proof-scope enrollment has no real kovo build proof',
+          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-old -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not enroll KV426/trusted-html-old',
         ]),
       );
     });
@@ -161,7 +161,7 @@ describe('security-test-build-gate', () => {
           repoRoot,
         }),
       ).toContain(
-        'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security certification has no real kovo build proof',
+        'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security proof-scope enrollment has no real kovo build proof',
       );
     });
   });
@@ -327,7 +327,7 @@ describe('security-test-build-gate', () => {
           certificationSources: [
             {
               claimExtractor: 'security-certification-markers',
-              description: 'starter security certification declarations',
+              description: 'starter security proof-scope enrollment declarations',
               file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
             },
           ],
@@ -454,8 +454,8 @@ describe('security-test-build-gate', () => {
         }),
       ).toEqual(
         expect.arrayContaining([
-          'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security certification has no real kovo build proof',
-          'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV330 -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not certify KV330',
+          'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security proof-scope enrollment has no real kovo build proof',
+          'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV330 -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not enroll KV330',
         ]),
       );
     });

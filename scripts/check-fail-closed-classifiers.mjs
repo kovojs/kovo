@@ -49,10 +49,16 @@ export function checkFailClosedClassifiers(options = {}) {
       findings,
       scanned: files.length,
       cleanSummary: (scanned, paranoidMode) =>
-        `OK ${scanned} source file(s) scanned${paranoidMode ? ' (paranoid static classifiers advisory)' : ''}`,
+        `OK ${scanned} source file(s) scanned${
+          paranoidMode
+            ? ' (paranoid static classifiers advisory; runtime chokes are proof boundary)'
+            : ''
+        }`,
       violationSummary: (count, paranoidMode) =>
         `${count} fail-closed classifier violation(s)${
-          paranoidMode ? ' (advisory under KOVO_PARANOID=1)' : ''
+          paranoidMode
+            ? ' (advisory under KOVO_PARANOID=1; runtime chokes remain the proof boundary)'
+            : ''
         }`,
     },
     options,
