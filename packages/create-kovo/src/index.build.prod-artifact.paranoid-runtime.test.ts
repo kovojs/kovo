@@ -10,9 +10,14 @@ import {
   type ParanoidGeneratorAcceptanceCase,
 } from '../../../scripts/security-test-build-gate.mjs';
 import { writeKovoProject } from './index.js';
-import { buildParanoidProductionArtifact } from './index.build.test-support.js';
+import {
+  addRuntimeSecretBoundaryProof,
+  buildParanoidProductionArtifact,
+  signInDemoUser,
+} from './index.build.test-support.js';
 import {
   collectOutput,
+  cookieHeader,
   fetchTextWhenReady,
   linkStarterBuildDependencies,
   reservePort,
@@ -33,6 +38,8 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       const paranoidCases = generateParanoidGeneratorAcceptanceCases();
       writeKovoProject(root, { name: 'Paranoid Runtime Proof' });
       addParanoidRuntimeProofRoutes(root, paranoidCases);
+      addParanoidSqlRuntimeTwinProof(root);
+      addRuntimeSecretBoundaryProof(root);
       linkStarterBuildDependencies(root);
 
       buildParanoidProductionArtifact(root);
@@ -57,12 +64,63 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       for (const testCase of paranoidCases) {
         await expectParanoidRuntimeCase(origin, testCase);
       }
+      await expectParanoidRuntimeSqlClassifierTwin(origin);
+      await expectParanoidRuntimeKv435Twin(root, origin, output);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
     }
   }, 180_000);
 });
+
+async function expectParanoidRuntimeSqlClassifierTwin(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/paranoid-sql-runtime-twin`);
+  const body = (await response.json()) as {
+    legitimate: { ok: boolean; rows: number };
+    unsafe: { blocked: boolean; message: string };
+  };
+  expect(response.status).toBe(200);
+  expect(body.legitimate.ok).toBe(true);
+  expect(body.legitimate.rows).toBeGreaterThanOrEqual(0);
+  expect(body.unsafe.blocked).toBe(true);
+  expect(body.unsafe.message).toContain('KV422');
+}
+
+async function expectParanoidRuntimeKv435Twin(
+  root: string,
+  origin: string,
+  output: () => string,
+): Promise<void> {
+  const jar = new Map<string, string>();
+  await signInDemoUser(root, origin, jar, output);
+
+  for (const key of [
+    'runtime-secret-column-egress',
+    'runtime-secret-raw-egress',
+    'runtime-secret-opaque-raw-egress',
+    'runtime-secret-computed-egress',
+  ]) {
+    const response = await fetch(`${origin}/_q/${key}`, {
+      headers: { cookie: cookieHeader(jar) },
+    });
+    const body = await response.text();
+
+    expect(response.status, `${key}: ${body}`).toBe(500);
+    expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
+    expect(body).not.toContain('runtime-secret-value');
+  }
+  expect(output()).toContain('KV435');
+  expect(output()).toContain('Secret runtime value cannot cross');
+
+  const revealResponse = await fetch(`${origin}/_q/runtime-secret-reveal-egress`, {
+    headers: { cookie: cookieHeader(jar) },
+  });
+  const revealBody = await revealResponse.text();
+  expect(revealResponse.status, revealBody).toBe(200);
+  expect(revealBody).toContain('<kovo-query name="runtime-secret-reveal-egress"');
+  expect(revealBody).toContain('runtime-secret-value');
+  expect(revealBody).toContain('runtime-secret-value:computed');
+}
 
 function addParanoidRuntimeProofRoutes(
   root: string,
@@ -143,6 +201,66 @@ function addParanoidRuntimeProofRoutes(
     'paranoid runtime helper wrapper',
   );
   writeFileSync(appPath, withHelper, 'utf8');
+}
+
+function addParanoidSqlRuntimeTwinProof(root: string): void {
+  writeFileSync(
+    join(root, 'src/paranoid-sql-runtime-twin.ts'),
+    [
+      "import { endpoint, publicAccess } from '@kovojs/server';",
+      '',
+      "import { readonlyAppDb } from './db.js';",
+      "import { contacts } from './schema.js';",
+      '',
+      "export const paranoidSqlRuntimeTwinEndpoint = endpoint('/api/paranoid-sql-runtime-twin', {",
+      "  access: publicAccess('public paranoid SQL runtime twin proof'),",
+      "  auth: { justification: 'public paranoid SQL runtime twin proof', kind: 'none' },",
+      '  csrf: false,',
+      "  csrfJustification: 'read-only paranoid SQL runtime twin proof',",
+      '  async handler() {',
+      '    const legitimateRows = await readonlyAppDb',
+      '      .select({ id: contacts.id })',
+      '      .from(contacts)',
+      '      .limit(1);',
+      '    try {',
+      "      const method = 'execute' as string;",
+      '      const db = readonlyAppDb as unknown as Record<string, (statement: unknown) => Promise<unknown>>;',
+      "      await db[method]!('select * from contacts where id = \\'c1\\'');",
+      '      return Response.json({',
+      '        legitimate: { ok: true, rows: legitimateRows.length },',
+      "        unsafe: { blocked: false, message: 'raw SQL string reached managed DB handle' },",
+      "      }, { status: 500, headers: { 'Cache-Control': 'no-store' } });",
+      '    } catch (error) {',
+      '      const message = error instanceof Error ? error.message : String(error);',
+      '      return Response.json({',
+      '        legitimate: { ok: true, rows: legitimateRows.length },',
+      '        unsafe: { blocked: /KV422/u.test(message), message },',
+      "      }, { headers: { 'Cache-Control': 'no-store' } });",
+      '    }',
+      '  },',
+      "  method: 'GET',",
+      "  reason: 'paranoid SQL runtime twin proof',",
+      "  response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+      '});',
+      '',
+    ].join('\n'),
+    'utf8',
+  );
+
+  const appPath = join(root, 'src/app.tsx');
+  const app = readFileSync(appPath, 'utf8')
+    .replace(
+      "import { addContact } from './mutations.js';",
+      [
+        "import { addContact } from './mutations.js';",
+        "import { paranoidSqlRuntimeTwinEndpoint } from './paranoid-sql-runtime-twin.js';",
+      ].join('\n'),
+    )
+    .replace(
+      'endpoints: [healthEndpoint],',
+      'endpoints: [healthEndpoint, paranoidSqlRuntimeTwinEndpoint],',
+    );
+  writeFileSync(appPath, app, 'utf8');
 }
 
 async function expectParanoidRuntimeCase(
