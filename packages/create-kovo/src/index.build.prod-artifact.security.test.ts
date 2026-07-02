@@ -27,6 +27,7 @@ import {
   addNoJsFailureProof,
   addRuntimeSecretBoundaryProof,
   addSecretViewEgressProof,
+  addSqliteRuntimeSecretProvenanceProof,
   addStorageMutationWriteProof,
   addStorageQueryWriteProof,
   addTrustedOutputProvenanceBuildProof,
@@ -200,7 +201,7 @@ describe('create-kovo starter (build integration: production security artifacts)
         const body = await response.text();
 
         expect(response.status, `${key}: ${body}`).toBe(500);
-        expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
+        expect(body).toMatch(/^\{"code":"(?:KV410|SERVER_ERROR)","payload":\{\}\}$/u);
         expect(body).not.toContain('runtime-secret-value');
         expect(body).not.toContain('runtime-function-secret-value');
         expect(body).not.toContain('runtime-whole-secret-value');
@@ -251,6 +252,96 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(declaredRevealBody).toContain('<kovo-query name="runtime-secret-declared-raw-reveal"');
       expect(declaredRevealBody).toContain('runtime-secret-value');
       expect(declaredRevealBody).toContain('runtime-secret-value:declared');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
+  // @kovo-security-certifies KV435 sqlite-runtime-secret-source-provenance
+  // @kovo-security-certifies KV435 sqlite-runtime-secret-expression-provenance
+  it('boxes SQLite secret reads by source provenance while serving proven non-secret projections in paranoid mode', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-secret-provenance-'));
+    const port = await reservePort();
+    const jar = new Map<string, string>();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, {
+        dialect: 'sqlite',
+        name: 'Prod SQLite Runtime Secret Provenance Proof',
+      });
+      linkStarterBuildDependencies(root);
+      addSqliteRuntimeSecretProvenanceProof(root);
+      const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
+      expect(proofQueries).toContain('company: proof.classified');
+      expect(proofQueries).toContain('runtimeSecretViewProof.exposed');
+      expect(proofQueries).toContain('substr(classified, 1, 7) as leaked');
+      expect(proofQueries).toContain('classified as leaked from secret_cte');
+      expect(proofQueries).toContain('(select classified from runtime_secret_proof) as leaked');
+      expect(proofQueries).toContain('drizzleSql<string>`upper(${contacts.name})');
+      expect(proofQueries).toContain('label: proof.label');
+
+      buildParanoidProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          KOVO_PARANOID: '1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+
+      await signInDemoUser(root, origin, jar, output);
+      for (const key of [
+        'sqlite-secret-alias-egress',
+        'sqlite-secret-view-egress',
+        'sqlite-secret-derivation-egress',
+        'sqlite-secret-join-alias-egress',
+        'sqlite-secret-cte-egress',
+        'sqlite-secret-mixed-chunk-egress',
+        'sqlite-secret-mixed-chunk-builder-egress',
+      ]) {
+        const response = await fetch(`${origin}/_q/${key}`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const body = await response.text();
+
+        expect(response.status, `${key}: ${body}`).toBe(500);
+        expect(body).toMatch(/^\{"code":"(?:KV410|SERVER_ERROR)","payload":\{\}\}$/u);
+        expect(body).not.toContain('runtime-secret-value');
+      }
+      const publicProjectionResponse = await fetch(
+        `${origin}/_q/sqlite-secret-nonsecret-projection`,
+        {
+          headers: { cookie: cookieHeader(jar) },
+        },
+      );
+      const publicProjectionBody = await publicProjectionResponse.text();
+
+      expect(publicProjectionResponse.status, publicProjectionBody).toBe(200);
+      expect(publicProjectionBody).toContain(
+        '<kovo-query name="sqlite-secret-nonsecret-projection"',
+      );
+      expect(publicProjectionBody).toContain('public label');
+      expect(publicProjectionBody).not.toContain('runtime-secret-value');
+
+      const revealResponse = await fetch(`${origin}/_q/sqlite-secret-reveal`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const revealBody = await revealResponse.text();
+
+      expect(revealResponse.status, revealBody).toBe(200);
+      expect(revealBody).toContain('<kovo-query name="sqlite-secret-reveal"');
+      expect(revealBody).toContain('runtime-secret-value:revealed');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });

@@ -66,7 +66,7 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
     configurable: true,
     value: (policy: DeclaredWritePolicy) => declaredWriteDrizzleDb(db, policy),
   });
-  return { db, readonlyDb: readonlyDb(db), ready };
+  return { db, readonlyDb: secretReadDb, ready };
 }
 
 async function initializeAppDb(client: PGlite): Promise<void> {
