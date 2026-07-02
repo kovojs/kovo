@@ -138,9 +138,8 @@ return <allow/skip/empty/undefined>` where `<x>` is a recognizer/resolver call r
     `select now()`/arithmetic stays green; the generative SQL-function fuzzer (≥200 shapes: known-pure vs unknown/
     volatile wrappers) is 100% closed on the unknown class, green on the pure class; the 0.2 lint no longer flags
     `sql-safe-handle.ts`.
-- [ ] **B2 — Move the raw-HTML/URL soundness choke to the sink: unproven brand-provenance ⇒ KV426 (DEC3, N2/N5).**
-  - Partial evidence: `pnpm exec vitest run packages/compiler/src/trusted-html-provenance.test.ts --reporter=dot` passed, including generated hidden-callee coverage, and `pnpm run check:fail-closed-classifiers` no longer flags `trusted-html-provenance.ts`.
-  - Remaining gap: the integrated fix improves resolver coverage and makes the old skip explicit, but still needs a sink-provenance verdict that fails closed independent of resolver success for a typed trusted value reaching a raw sink.
+- [x] **B2 — Move the raw-HTML/URL soundness choke to the sink: unproven brand-provenance ⇒ KV426 (DEC3, N2/N5).**
+  - Evidence: `pnpm exec vitest run packages/compiler/src/trusted-html-provenance.test.ts --reporter=dot` passed, including the 210-case generated callee-shape corpus and unresolved `TrustedHtml`/`TrustedUrl` sink-provenance failures; `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts -t "fails hidden trustedHtml/trustedUrl callee shapes during production build preflight" --reporter=dot` passed for the real `kovo build --no-cache` path; `pnpm run check:fail-closed-classifiers` no longer flags `trusted-html-provenance.ts`.
   - Root: `packages/compiler/src/validate/trusted-html-provenance.ts:130-144` recognizes a trust sink only via the
     resolver / element-access / same-file-wrapper; an unresolved callee returns `null` and the call is SKIPPED at
     `:60-61` (fail-open). Resolver gaps: `packages/core/src/internal/framework-identity.ts:517,534-535,918-919` have
@@ -197,23 +196,22 @@ return <allow/skip/empty/undefined>` where `<x>` is a recognizer/resolver call r
 
 ## Phase 3 — Completeness meta-fixes (make the proofs sound, not enumerated)
 
-- [ ] **P2.1 — Reachability-derived brand denominator (DEC7, N6).**
-  - Partial evidence: `pnpm exec vitest --run scripts/check-security-brands.test.mjs scripts/fundamental-fixes-census-gate.test.mjs scripts/security-gate-mutations.test.mjs --reporter=dot`, `pnpm run check:security-brands`, and `pnpm run check:fundamental-fixes-census` passed with reachable canaries.
-  - Remaining gap: default roots still start from the declared security-decision list before reachability expansion; derive directly from raw enforcement primitives before closing this item.
+- [x] **P2.1 — Reachability-derived brand denominator (DEC7, N6).**
+  - Evidence: `pnpm exec vitest --run scripts/check-security-brands.test.mjs scripts/fundamental-fixes-census-gate.test.mjs scripts/security-gate-mutations.test.mjs --reporter=dot` and `pnpm run check:security-brands` passed after deriving default roots from raw primitive anchors (`emitToWire`, `enforceManagedSql`, enforcement sinks, and source-level chokes) with root-drift canaries.
   - Root: `scripts/check-security-brands.mjs` derives "must be branded" from name/import/file patterns, so a sink
     authored outside the pattern is invisible.
   - Fix: derive the required-branded set from call-graph reachability from the enforcement sinks / the driver-method
     choke (`enforceManagedSql`) / `emitToWire`. Commit a canary: an unbranded function reachable from an enforcement
     sink MUST fail the gate.
-- [ ] **P2.2 — Reachability-derived census denominator (DEC7, N6).**
-  - Partial evidence: `node scripts/fundamental-fixes-census-gate.mjs --require-complete` passed after enrolling newly discovered SQL classifier decisions.
-  - Remaining gap: same raw-root derivation gap as P2.1; leave open until the denominator is rooted only in enforcement sinks / driver-method choke / `emitToWire`.
+- [x] **P2.2 — Reachability-derived census denominator (DEC7, N6).**
+  - Evidence: `pnpm run check:fundamental-fixes-census` and `node scripts/fundamental-fixes-census-gate.mjs --require-complete` passed after the census canary discovered unenrolled sinks through raw `emitToWire` reachability.
   - Root: `scripts/fundamental-fixes-census-gate.mjs` `--require-complete` derives write-handle/wire-sink denominators
     from enumerated construction-call names.
   - Fix: derive from reachability (every value that reaches the driver-method choke = a write-capable handle; every
     value that reaches `emitToWire` = a wire sink). A source-discovered sink with no manifest row fails
     `--require-complete`; add a committed reachable-but-unenrolled canary.
-- [ ] **P3 — Runtime-twin deletion tests (N5) across all inverted gates.**
+- [x] **P3 — Runtime-twin deletion tests (N5) across all inverted gates.**
+  - Evidence: `pnpm exec vitest run packages/server/src/managed-db.test.ts packages/server/src/jsx-runtime.test.ts packages/server/src/wire-html.test.ts --reporter=dot` passed with P3 static-arm-bypass tests for the SQL read floor, SSR raw HTML/URL sinks, and query wire secret emission.
   - For each of B1/B2/B3, add a test that removes/stubs the static arm and asserts the runtime twin (SQL oracle/read
     floor; SSR sink; `emitToWire`) still closes — proving §11.2 `observed ⊆ static ∪ declared` is enforced at runtime,
     not only statically.
@@ -242,3 +240,4 @@ closed-classifiers` green on `trusted-html-provenance.ts`.
 
 - 2026-07-01 integrated verification: `pnpm run check:fail-closed-classifiers && pnpm run check:classifier-verdict-routing && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census` passed.
 - 2026-07-01 focused package verification: server SQL suite (`sql-write-allowlist.test.ts`, `sql-write-allowlist.oracle.test.ts`, `managed-db.test.ts`) passed 129 tests; compiler/Drizzle focused suite (`trusted-html-provenance.test.ts`, `index.query-offwire-prover.test.ts`, `index.query-shapes.test.ts`, `static-analysis-context.test.ts`) passed 147 tests; focused CLI KV310 build/check tests passed.
+- 2026-07-01 post-P2/B2/P3 verification: P2 reachability/census focused gates passed; B2 provenance and hidden-callee `kovo build --no-cache` focused tests passed; P3 runtime twin server tests passed; `git diff --check` passed.

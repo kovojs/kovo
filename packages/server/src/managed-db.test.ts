@@ -810,6 +810,30 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual([]);
   });
 
+  it('P3 runtime twin closes when static SQL classification is bypassed', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        query(statement: unknown) {
+          log.push('query');
+          return statement;
+        },
+      },
+      'read',
+      { sqlWritePolicy: { dialect: 'postgres' } },
+    ) as unknown as { query(statement: unknown): unknown };
+
+    expect(() =>
+      handle.query(
+        stampTrustedSql(
+          { text: "select setval('probe_seq', 1)" },
+          'P3 static-arm bypass volatile write',
+        ),
+      ),
+    ).toThrow(/KV433/);
+    expect(log).toEqual([]);
+  });
+
   it.each([
     {
       dialect: undefined,

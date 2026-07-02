@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { secret } from '@kovojs/core';
 import { generatedFragmentHtml } from './html.js';
 import {
   renderDoneWireHtml,
@@ -183,6 +184,24 @@ describe('wire codec — unserializable value normalization (bugs-part4 L3/L4/L5
     expect(renderQueryWireHtml({ name: 'q', value: { at: new Date('not-a-date') } })).toBe(
       '<kovo-query name="q">{"at":{"$kovo":"date","value":null}}</kovo-query>',
     );
+  });
+
+  it('P3 runtime twin refuses secret-tagged values before query wire emission', () => {
+    expect(() =>
+      renderQueryWireHtml({
+        name: 'session',
+        value: { token: secret('sk_live_p3_query_wire') },
+      }),
+    ).toThrow(/Secret runtime value cannot cross/);
+
+    try {
+      renderQueryWireHtml({
+        name: 'session',
+        value: { token: secret('sk_live_p3_query_wire') },
+      });
+    } catch (error) {
+      expect(String(error)).not.toContain('sk_live_p3_query_wire');
+    }
   });
 });
 
