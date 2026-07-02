@@ -158,6 +158,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofQueries).toContain('runtimeSecretDeclaredRawEgressQuery');
       expect(proofQueries).toContain('declareSecretReadCapability(');
       expect(proofQueries).toContain('runtimeSecretDeclaredRawRevealQuery');
+      expect(proofQueries).toContain('audited declared raw secret-read reveal acceptance proof');
       expect(proofQueries).toContain('runtimeSecretComputedEgressQuery');
       expect(proofQueries).toContain('leaked: row.classified');
       expect(proofQueries).toContain('trustedReveal(row.classified as unknown as Secret<string>');
