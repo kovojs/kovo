@@ -42,6 +42,7 @@ const CONSOLIDATED_VITEST_FILES = new Set([
   'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.headers.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
+  'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
   'packages/create-kovo/src/index.build.prod-artifact.runtime-contracts.test.ts',
