@@ -446,6 +446,10 @@ mattering.
       only; `sql.unsafe` as an explicit escape through the DEC-A/DEC-C chokes); require statically-resolvable trust-sink
       callees; extend `check:sound-subset` to the whole security surface. Acceptance: the round-7 raw-SQL leak shape is
       a build error on the common path and, via the escape hatch, still refused at the runtime choke.
+  - [x] **Common-path raw SQL and dynamic trust-sink narrowing.** Starter `check:sound-subset` rejects raw SQL helper
+        use inside query loaders and dynamically computed trusted helper callees, while preserving explicit
+        `trustedSql(...)` review paths and literal framework namespace trust helpers.
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts`.
 - [x] **6.2 Publish the guarantee statement + non-goals (DEC-M).** A `SECURITY.md`/SPEC section states the exact
       choke-backed invariants, threat model, and non-goals; a test proves every stated invariant names a TCB choke and a
       paranoid-mode proof, and that no claim lacks a backing choke.
