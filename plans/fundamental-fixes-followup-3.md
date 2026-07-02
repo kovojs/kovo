@@ -301,6 +301,10 @@ mattering.
         framework-owned managed write handles thread declared-table policy to engine-capable adapters before
         parser-blind builders run.
         Evidence: `vp exec vitest --run packages/server/src/managed-db.test.ts`.
+  - [x] **Starter/test adapter declared-write fallback.** Generated PGlite/SQLite starter runtimes and test DB adapters
+        expose declared-write handles that reject schema-qualified out-of-scope Drizzle helper writes before builder or
+        driver execution where native role/authorizer APIs are unavailable.
+        Evidence: `pnpm exec vitest run packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/server/src/managed-db.test.ts`.
   - [ ] **SQLite authorizer enforcement.** `sqlite3_set_authorizer` denies writes to non-declared tables/columns and
         denies DDL/pragma at the engine, not only at the parser/choke layer.
   - [ ] **Postgres declared-table engine enforcement.** Request-scoped role GRANTs, or the documented stat-delta
