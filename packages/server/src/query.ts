@@ -585,13 +585,14 @@ export const renderQueryEndpointResponse = wireEmitter(
       // SPEC §9.4:895: guard-failure responses (303 redirect, 403) also carry the private
       // cache posture — an anon 403 must not be cached and replayed to an authed user.
       if (authResponse) {
-        return withQueryBuildHeaders(
-          withQueryCacheHeaders({
-            ...authResponse,
-            body: frameworkWireBody(typeof authResponse.body === 'string' ? authResponse.body : ''),
-          }),
-          endpointRequest,
-        );
+        const queryAuthResponse = {
+          ...authResponse,
+          body: frameworkWireBody(typeof authResponse.body === 'string' ? authResponse.body : ''),
+        };
+        const markedAuthResponse = isBlessedRedirectResponse(authResponse)
+          ? blessRedirectResponse(queryAuthResponse)
+          : queryAuthResponse;
+        return withQueryBuildHeaders(withQueryCacheHeaders(markedAuthResponse), endpointRequest);
       }
 
       return {

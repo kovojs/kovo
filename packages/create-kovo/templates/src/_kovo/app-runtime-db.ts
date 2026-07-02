@@ -49,7 +49,7 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const ready = initializeAppDb(client);
   const db = drizzle({ client });
   const readDb = drizzle({ client: readonlyPgliteClient(client) });
-  const secretReadDb = secretBoxingReadDb(readDb, SECRET_READ_METADATA);
+  const secretReadDb = secretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA);
   Object.defineProperty(db, kovoReadonlyDbHandle, {
     configurable: true,
     value: () => secretReadDb,
@@ -387,36 +387,37 @@ function isColumnLike(value: unknown): value is { name: string } {
 }
 
 function secretBoxingReadDb<Db extends object>(db: Db, metadata: SecretReadMetadata): Db {
-  const readDb = {};
-  for (const prop of [
-    '$count',
-    '$with',
-    'all',
-    'execute',
-    'get',
-    'prepare',
-    'query',
-    'run',
-    'select',
-    'selectDistinct',
-    'sql',
-    'values',
-    'with',
-  ] as const) {
-    const item = Reflect.get(db, prop);
-    if (typeof item === 'function') {
-      Reflect.set(readDb, prop, (...args: unknown[]) =>
+  return new Proxy(db as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const item = Reflect.get(target, prop, receiver);
+      if (typeof item !== 'function') return item;
+      if (!isReadSurfaceMethod(prop)) return item.bind(target);
+      return (...args: unknown[]) =>
         wrapReadSurface(
           Reflect.apply(item, db, args),
           metadata,
           readBoundaryForArgs(args, metadata, isDirectSqlReadMethod(prop)),
-        ),
-      );
-    } else if (item !== undefined) {
-      Reflect.set(readDb, prop, item);
-    }
-  }
-  return Object.assign({}, db, readDb);
+        );
+    },
+  }) as Db;
+}
+
+function isReadSurfaceMethod(prop: PropertyKey): boolean {
+  return (
+    prop === '$count' ||
+    prop === '$with' ||
+    prop === 'all' ||
+    prop === 'execute' ||
+    prop === 'get' ||
+    prop === 'prepare' ||
+    prop === 'query' ||
+    prop === 'run' ||
+    prop === 'select' ||
+    prop === 'selectDistinct' ||
+    prop === 'sql' ||
+    prop === 'values' ||
+    prop === 'with'
+  );
 }
 
 function wrapReadSurface(

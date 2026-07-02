@@ -1585,8 +1585,8 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   );
   runtimeDb = replaceRequired(
     runtimeDb,
-    '  const secretReadDb = secretBoxingReadDb(readDb, SECRET_READ_METADATA);',
-    '  const secretReadDb = secretBoxingReadDb(opaqueSecretReadDb, SECRET_READ_METADATA);',
+    '  const secretReadDb = secretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA);',
+    '  const secretReadDb = secretBoxingReadDb(readonlyDb(opaqueSecretReadDb), SECRET_READ_METADATA);',
     'runtime secret proof opaque read boundary',
   );
   runtimeDb = replaceRequired(
