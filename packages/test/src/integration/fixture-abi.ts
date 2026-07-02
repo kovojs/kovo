@@ -17,10 +17,12 @@ export {
 } from '@kovojs/server/internal/html';
 export { runQuery } from '@kovojs/server/internal/execution';
 
+/** @internal Fixture-only static SQL carrier for framework-owned integration apps. */
 export interface FixtureStaticSql {
   readonly queryChunks: readonly [{ readonly value: readonly [string] }];
 }
 
+/** @internal Tag literal-only fixture SQL so strict managed-DB guards accept it. */
 export function staticSql(strings: TemplateStringsArray, ...values: never[]): FixtureStaticSql {
   if (values.length > 0) {
     throw new Error('fixture staticSql accepts literal-only SQL text.');
