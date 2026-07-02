@@ -3,7 +3,10 @@ export function isParanoidMode(env = process.env) {
   return value === '1' || value === 'true';
 }
 
-export function staticClassifierGateResult({ findings, scanned, cleanSummary, violationSummary }, options = {}) {
+export function staticClassifierGateResult(
+  { findings, scanned, cleanSummary, violationSummary },
+  options = {},
+) {
   const paranoidMode = options.paranoidMode ?? isParanoidMode(options.env);
   return {
     advisory: paranoidMode && findings.length > 0,

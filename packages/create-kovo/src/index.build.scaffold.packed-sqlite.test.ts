@@ -4,7 +4,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { expectPackedKovoPackageShape } from './index.build.scaffold-support.js';
-import { createStarterApp, installedPackageJson, runStarterTypecheck } from './index.test-support.js';
+import {
+  createStarterApp,
+  installedPackageJson,
+  runStarterTypecheck,
+} from './index.test-support.js';
 
 describe('create-kovo starter (build integration: packed SQLite scaffold)', () => {
   it('installs the packed sqlite starter from published-shape tarballs', () => {

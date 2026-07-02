@@ -44,16 +44,19 @@ export function checkFailClosedClassifiers(options = {}) {
     findings.push(...classifySourceFile(sourceFile));
   }
 
-  return staticClassifierGateResult({
-    findings,
-    scanned: files.length,
-    cleanSummary: (scanned, paranoidMode) =>
-      `OK ${scanned} source file(s) scanned${paranoidMode ? ' (paranoid static classifiers advisory)' : ''}`,
-    violationSummary: (count, paranoidMode) =>
-      `${count} fail-closed classifier violation(s)${
-        paranoidMode ? ' (advisory under KOVO_PARANOID=1)' : ''
-      }`,
-  }, options);
+  return staticClassifierGateResult(
+    {
+      findings,
+      scanned: files.length,
+      cleanSummary: (scanned, paranoidMode) =>
+        `OK ${scanned} source file(s) scanned${paranoidMode ? ' (paranoid static classifiers advisory)' : ''}`,
+      violationSummary: (count, paranoidMode) =>
+        `${count} fail-closed classifier violation(s)${
+          paranoidMode ? ' (advisory under KOVO_PARANOID=1)' : ''
+        }`,
+    },
+    options,
+  );
 }
 
 export function main(options = {}) {
