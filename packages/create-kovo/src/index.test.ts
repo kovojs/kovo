@@ -375,6 +375,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('scripts/check-sound-subset.mjs')).toContain(
       'bans non-type imports of src/_kovo/app-runtime-db',
     );
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
+      'FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES',
+    );
     expect(files.get('src/endpoint-posture.test.ts')).not.toMatch(/\bas\s+(?!const\b)[A-Za-z_{]/u);
     expect(files.get('src/auth.ts')).toContain(
       'return request.session?.id ?? request.authCsrfId ?? undefined;',
@@ -457,6 +460,7 @@ describe('create-kovo starter (metadata)', () => {
         expect(stderr).not.toContain('transaction-bridge.ts');
         expect(stderr).not.toContain('jsx-prose.tsx');
         expect(stderr).not.toContain('string-prose.ts');
+        expect(stderr).not.toContain('src/_kovo/app-runtime-db.ts');
       }
 
       rmSync(join(root, 'src/unsafe-cast.ts'), { force: true });

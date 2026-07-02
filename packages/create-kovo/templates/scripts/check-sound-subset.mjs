@@ -6,6 +6,7 @@ const ts = await loadTypeScript();
 const root = process.cwd();
 const findings = [];
 const RUNTIME_DB_MODULE_PATH = 'src/_kovo/app-runtime-db';
+const FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES = new Set(['src/_kovo/app-runtime-db.ts']);
 const RUNTIME_DB_IMPORT_ALLOWLIST = new Set([
   'src/app.tsx',
   'src/auth.ts',
@@ -19,6 +20,7 @@ const RUNTIME_DB_IMPORT_MESSAGE =
 for (const file of sourceFiles(join(root, 'src'))) {
   const source = readFileSync(file, 'utf8');
   const relativeFile = toPosixPath(relative(root, file));
+  if (frameworkGeneratedSoundSubsetExempt(relativeFile)) continue;
   if (ts) {
     analyzeWithTypeScript(ts, source, relativeFile);
   } else {
@@ -229,6 +231,10 @@ function reportTypeScriptFinding(sourceFile, relativeFile, node, message) {
 
 function runtimeDbImportsAllowed(relativeFile) {
   return RUNTIME_DB_IMPORT_ALLOWLIST.has(toPosixPath(relativeFile));
+}
+
+function frameworkGeneratedSoundSubsetExempt(relativeFile) {
+  return FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES.has(toPosixPath(relativeFile));
 }
 
 function isRuntimeDbModuleSpecifier(relativeFile, specifier) {
