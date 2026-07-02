@@ -11,10 +11,7 @@ export const repoRoot = findRepoRoot();
 export const defaultManifestPath = 'security/TCB.md';
 export const tcbClassification = 'tcb';
 export const generatedTemplateRoots = ['packages/create-kovo/templates'];
-export const legacyGeneratedTemplateDecisionFiles = new Set([
-  'packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts',
-  'packages/create-kovo/templates/src/_kovo/app-runtime-db.ts',
-]);
+export const legacyGeneratedTemplateDecisionFiles = new Set();
 export const allowedClassifications = new Set([
   tcbClassification,
   'advisory-static-classifier',
@@ -26,6 +23,21 @@ const wrapperKindByName = {
   securityClassifier: 'classifier',
   wireEmitter: 'wire-emitter',
 };
+const generatedTemplateSecurityDecisionNames = new Set([
+  'DeclaredWriteSqliteAuthorizer',
+  'assertDeclaredDrizzleTableAllowed',
+  'declaredWriteDrizzleDb',
+  'isDirectSqlWriteMethod',
+  'isDrizzleWriteMethod',
+  'readonlyPgliteClient',
+  'readonlyPgliteExec',
+  'readonlyPgliteQuery',
+  'runPgliteReadOnlyTransactionControl',
+  'sqlCarrierFromValue',
+  'sqliteAuthorizerDdlActions',
+  'sqliteAuthorizerWriteActions',
+  'sqlTextFromValue',
+]);
 
 export function checkTcbBoundary(options = {}) {
   const root = options.repoRoot ?? repoRoot;
@@ -451,6 +463,15 @@ function generatedTemplateSecurityDecisionUses(sourceFile) {
     if (ts.isCallExpression(node)) {
       const wrapper = callWrapperName(node);
       if (wrapper) record(node, `${wrapper}() security decision wrapper`);
+    }
+    if (
+      ((ts.isFunctionDeclaration(node) || ts.isClassDeclaration(node)) && node.name) ||
+      (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name))
+    ) {
+      const name = node.name.text;
+      if (generatedTemplateSecurityDecisionNames.has(name)) {
+        record(node.name, `${name} generated DB security decision`);
+      }
     }
     ts.forEachChild(node, visit);
   };

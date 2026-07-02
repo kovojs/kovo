@@ -1,6 +1,8 @@
 import { PGlite } from '@electric-sql/pglite';
 import {
   createSecretBoxingReadDb,
+  createDeclaredWriteDb,
+  createPostgresReadonlyClient,
   declareSecretReadCapability,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
@@ -55,9 +57,11 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const client = new PGlite(process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR);
   const ready = initializeAppDb(client);
   const db = drizzle({ client });
-  const readDb = drizzle({ client: readonlyPgliteClient(client, { readerRole: true }) });
+  const readDb = drizzle({
+    client: createPostgresReadonlyClient(client, { readerRole: READER_ROLE }),
+  });
   const privilegedReadDb = drizzle({
-    client: readonlyPgliteClient(client, { readerRole: false }),
+    client: createPostgresReadonlyClient(client, { readerRole: false }),
   });
   const secretReadDb = createSecretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA, {
     privilegedDb: readonlyDb(privilegedReadDb),
@@ -69,7 +73,12 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   });
   Object.defineProperty(db, kovoDeclaredWriteDbHandle, {
     configurable: true,
-    value: (policy: DeclaredWritePolicy) => declaredWriteDrizzleDb(db, policy),
+    value: (policy: DeclaredWritePolicy) =>
+      createDeclaredWriteDb(db, policy, {
+        dialectLabel: 'PGlite',
+        normalizeTableName: normalizePolicyTable,
+        tableNames: pgTablePolicyNames,
+      }),
   });
   return { db, readonlyDb: secretReadDb, ready };
 }
@@ -206,49 +215,6 @@ function quoteLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
-function declaredWriteDrizzleDb<Db extends object>(db: Db, policy: DeclaredWritePolicy): Db {
-  // PGlite gives this runtime one embedded handle, not a request-scoped GRANT/ROLE sandbox. This
-  // adapter fallback enforces declared tables on Drizzle's parser-blind builder boundary; managedDb
-  // still guards executable raw SQL sinks before they reach the engine (SPEC §10.3/§11.2).
-  return new Proxy(db as Record<PropertyKey, unknown>, {
-    get(target, prop, receiver) {
-      const value = Reflect.get(target, prop, receiver);
-      if (isDrizzleWriteMethod(prop) && typeof value === 'function') {
-        return (table: unknown, ...args: unknown[]) => {
-          assertDeclaredDrizzleTableAllowed(table, policy);
-          return Reflect.apply(value, target, [table, ...args]);
-        };
-      }
-      if (prop === 'transaction' && typeof value === 'function') {
-        return (callback: (tx: unknown) => unknown, ...args: unknown[]) =>
-          Reflect.apply(value, target, [
-            (tx: unknown) => callback(declaredWriteDrizzleDb(tx as object, policy)),
-            ...args,
-          ]);
-      }
-      return typeof value === 'function' ? value.bind(target) : value;
-    },
-  }) as Db;
-}
-
-function isDrizzleWriteMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
-  return prop === 'delete' || prop === 'insert' || prop === 'update';
-}
-
-function assertDeclaredDrizzleTableAllowed(table: unknown, policy: DeclaredWritePolicy): void {
-  const allowed = new Set((policy.tables ?? []).map((name) => normalizePolicyTable(name)));
-  const tableNames = pgTablePolicyNames(table);
-  if (tableNames.some((name) => allowed.has(name))) return;
-
-  throw new Error(
-    [
-      `KV406: PGlite adapter declared-write fallback rejected table ${tableNames[0] ?? '<unknown>'} outside the mutation registry tables (SPEC §10.3/§11.2).`,
-      `  declared tables: ${[...new Set(policy.tables ?? [])].sort().join(', ')}`,
-      `  touches: ${[...new Set(policy.touches ?? [])].sort().join(', ') || '<none>'}`,
-    ].join('\n'),
-  );
-}
-
 function pgTablePolicyNames(table: unknown): string[] {
   try {
     const config = getTableConfig(table as PgTable);
@@ -296,59 +262,6 @@ async function applyPgliteReaderColumnPrivileges(
       );
     }
   }
-}
-
-function readonlyPgliteClient(client: PGlite, options: { readerRole: boolean }): PGlite {
-  return new Proxy(client, {
-    get(target, prop, receiver) {
-      if (prop === 'query') {
-        return readonlyPgliteQuery.bind(undefined, target, options);
-      }
-      if (prop === 'exec') {
-        return readonlyPgliteExec.bind(undefined, target, options);
-      }
-      return Reflect.get(target, prop, receiver);
-    },
-  }) as PGlite;
-}
-
-function readonlyPgliteQuery(
-  client: PGlite,
-  roleOptions: { readerRole: boolean },
-  query: string,
-  params?: unknown[],
-  queryOptions?: Parameters<PGlite['query']>[2],
-): Promise<unknown> {
-  return client.transaction(async (tx) => {
-    await runPgliteReadOnlyTransactionControl(tx, roleOptions.readerRole);
-    return Reflect.apply(tx.query, tx, [query, params, queryOptions]) as Promise<unknown>;
-  });
-}
-
-function readonlyPgliteExec(
-  client: PGlite,
-  options: { readerRole: boolean },
-  query: string,
-  execOptions?: Parameters<PGlite['exec']>[1],
-): ReturnType<PGlite['exec']> {
-  return client.transaction(async (tx) => {
-    await runPgliteReadOnlyTransactionControl(tx, options.readerRole);
-    return Reflect.apply(tx.exec, tx, [query, execOptions]) as ReturnType<PGlite['exec']>;
-  });
-}
-
-function runPgliteReadOnlyTransactionControl(
-  tx: Parameters<Parameters<PGlite['transaction']>[0]>[0],
-  readerRole: boolean,
-): Promise<unknown> {
-  return (async () => {
-    await (Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY']) as Promise<unknown>);
-    if (readerRole) {
-      await (Reflect.apply(tx.exec, tx, [
-        `SET LOCAL ROLE ${quoteIdent(READER_ROLE)}`,
-      ]) as Promise<unknown>);
-    }
-  })();
 }
 
 const appDatabase = createAppRuntimeDb();

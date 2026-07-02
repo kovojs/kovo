@@ -260,7 +260,7 @@ export function appRuntimeDb(db) {
     expect(result.ok).toBe(true);
   });
 
-  it('keeps the current generated DB adapter exception explicit until relocation lands', () => {
+  it('rejects generated DB adapter security decisions after relocation', () => {
     const result = run(
       {
         'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
@@ -269,6 +269,9 @@ import { wireEmitter } from '@kovojs/core/internal/security-markers';
 export const legacyGeneratedDecision = wireEmitter('template.legacy', function (value) {
   return value;
 });
+function declaredWriteDrizzleDb(db) {
+  return db;
+}
 `,
       },
       [entry({ kind: 'function' })],
@@ -278,7 +281,12 @@ export const legacyGeneratedDecision = wireEmitter('template.legacy', function (
     expect(result.findings.join('\n')).toContain(
       'legacyGeneratedDecision uses wireEmitter() but is not listed',
     );
-    expect(result.findings.join('\n')).not.toContain('generated templates may only wire');
+    expect(result.findings.join('\n')).toContain(
+      'generated templates may only wire framework-provided security metadata/chokes; security marker import belongs in a manifested framework TCB entry',
+    );
+    expect(result.findings.join('\n')).toContain(
+      'declaredWriteDrizzleDb generated DB security decision belongs in a manifested framework TCB entry',
+    );
   });
 
   it('rejects a planned TCB declaration until it is enrolled with a budgeted entry', () => {

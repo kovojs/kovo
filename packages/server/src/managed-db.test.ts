@@ -6,6 +6,8 @@ import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import {
   KovoReadonlyHandleError,
+  createDeclaredWriteDb,
+  createPostgresReadonlyClient,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
   managedDb,
@@ -540,6 +542,13 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 
   it('binds allowed read methods to the wrapped DB target', async () => {
     const log: string[] = [];
+    let authorize = (
+      _action: number,
+      _objectName: string | null,
+      _columnName: string | null,
+      _databaseName: string | null,
+      _triggerOrView: string | null,
+    ) => constants.SQLITE_OK;
     const raw = {
       select() {
         if (this !== raw) throw new Error('select this binding was not preserved');
@@ -1265,6 +1274,129 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/KV406/);
     expect(log).toEqual(['engine-policy:']);
+  });
+
+  it('server-owned declared-write helper enforces tables only for Drizzle builders', async () => {
+    const log: string[] = [];
+    const raw = {
+      insert(table: { name: string }) {
+        log.push(`insert:${table.name}`);
+        return { values: () => Promise.resolve() };
+      },
+    };
+    const handle = createDeclaredWriteDb(
+      raw,
+      { tables: ['public.contacts'], touches: ['userx'] },
+      {
+        dialectLabel: 'PGlite',
+        normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+        tableNames: (table) => [(table as { name: string }).name],
+      },
+    );
+
+    await expect(handle.insert({ name: 'contacts' }).values()).resolves.toBeUndefined();
+    expect(() => handle.insert({ name: 'userx' }).values()).toThrow(/KV406/);
+    expect(log).toEqual(['insert:contacts']);
+  });
+
+  it('server-owned declared-write helper denies SQLite direct SQL outside tables', () => {
+    const constants = {
+      SQLITE_ALTER_TABLE: 1,
+      SQLITE_ATTACH: 2,
+      SQLITE_CREATE_INDEX: 3,
+      SQLITE_CREATE_TABLE: 4,
+      SQLITE_CREATE_TEMP_INDEX: 5,
+      SQLITE_CREATE_TEMP_TABLE: 6,
+      SQLITE_CREATE_TEMP_TRIGGER: 7,
+      SQLITE_CREATE_TEMP_VIEW: 8,
+      SQLITE_CREATE_TRIGGER: 9,
+      SQLITE_CREATE_VIEW: 10,
+      SQLITE_CREATE_VTABLE: 11,
+      SQLITE_DELETE: 12,
+      SQLITE_DENY: 13,
+      SQLITE_DETACH: 14,
+      SQLITE_DROP_INDEX: 15,
+      SQLITE_DROP_TABLE: 16,
+      SQLITE_DROP_TEMP_INDEX: 17,
+      SQLITE_DROP_TEMP_TABLE: 18,
+      SQLITE_DROP_TEMP_TRIGGER: 19,
+      SQLITE_DROP_TEMP_VIEW: 20,
+      SQLITE_DROP_TRIGGER: 21,
+      SQLITE_DROP_VIEW: 22,
+      SQLITE_DROP_VTABLE: 23,
+      SQLITE_INSERT: 24,
+      SQLITE_OK: 25,
+      SQLITE_PRAGMA: 26,
+      SQLITE_REINDEX: 27,
+      SQLITE_UPDATE: 28,
+    };
+    let authorize = (
+      _action: number,
+      _objectName: string | null,
+      _columnName: string | null,
+      _databaseName: string | null,
+      _triggerOrView: string | null,
+    ) => constants.SQLITE_OK;
+    let attemptedSql = '';
+    const raw = {
+      run(statement: unknown) {
+        attemptedSql = String(statement);
+        return undefined;
+      },
+    };
+    const handle = createDeclaredWriteDb(
+      raw,
+      { tables: ['contacts'], touches: ['userx'] },
+      {
+        dialectLabel: 'SQLite',
+        normalizeTableName: (table) => (table.includes('.') ? table : `main.${table}`),
+        sqliteAuthorizer: {
+          constants,
+          openDatabase: () => ({
+            close() {},
+            prepare(statement: string) {
+              const table = statement.includes('userx') ? 'userx' : 'contacts';
+              const decision = authorize(constants.SQLITE_INSERT, table, null, 'main', null);
+              if (decision === constants.SQLITE_DENY) throw new Error('not authorized');
+            },
+            setAuthorizer(callback) {
+              authorize = callback;
+            },
+          }),
+        },
+        tableNames: () => ['contacts'],
+      },
+    ) as { run(statement: string): void };
+
+    expect(() => handle.run('insert into userx (id) values (?)')).toThrow(/KV406/);
+    expect(attemptedSql).toBe('');
+  });
+
+  it('server-owned Postgres read-only client sets transaction read-only before queries', async () => {
+    const log: string[] = [];
+    const client = {
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        log.push('transaction');
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: string) {
+        log.push(`query:${statement}`);
+        return Promise.resolve([{ id: 'c1' }]);
+      },
+    };
+    const reader = createPostgresReadonlyClient(client, { readerRole: 'kovo_reader' });
+
+    await expect(reader.query('select id from contacts')).resolves.toEqual([{ id: 'c1' }]);
+    expect(log).toEqual([
+      'transaction',
+      'exec:SET TRANSACTION READ ONLY',
+      'exec:SET LOCAL ROLE "kovo_reader"',
+      'query:select id from contacts',
+    ]);
   });
 
   it('refuses Secret boxes at builder values and set write boundaries', () => {
