@@ -6,6 +6,15 @@ export { createElement } from './jsx-runtime.js';
 // the committed-secret heuristic.
 export { committedSecretWaiver, CreateAppBootError, isCreateAppBootError } from './env.js';
 export type { EnvValidationIssue } from './env.js';
+export { createSecretBoxingReadDb, declareSecretReadCapability } from './secret-read-boundary.js';
+export type {
+  DeclaredSecretReadCapability,
+  SecretReadBoundaryOptions,
+  SecretReadColumnSource,
+  SecretReadMetadata,
+  SecretReadSqliteColumnOrigin,
+  SecretReadSqliteColumnOriginClient,
+} from './secret-read-boundary.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
 export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';

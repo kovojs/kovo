@@ -810,9 +810,12 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ready: Promise.resolve()');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES)',
+      'const SECRET_READ_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const secretReadDb = createSecretBoxingReadDb(readonlyDb(db), SECRET_READ_METADATA',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'function secretBoxingReadDb<Db extends object>',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(

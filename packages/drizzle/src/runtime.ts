@@ -29,6 +29,12 @@ export type {
   KovoViewExtraConfigAnnotation,
 } from './drizzle-surface.js';
 export { kovo, kovoAnalyzerSummary } from './drizzle-surface.js';
+export { extractKovoRuntimeDbMetadata } from './runtime-metadata.js';
+export type {
+  KovoRuntimeDbColumnSource,
+  KovoRuntimeDbMetadata,
+  KovoRuntimeDbTable,
+} from './runtime-metadata.js';
 // KV429 (SPEC §10.3/§11.1): compare-and-set helper — folds check+act into one UPDATE…WHERE
 // so a lost-update race is impossible by construction. Zero rowsAffected → CasConflict;
 // ≥1 rowsAffected → CasSuccess. Pair with StaleVersionError from @kovojs/server.
