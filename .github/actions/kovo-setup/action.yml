@@ -5,6 +5,9 @@ inputs:
   node-version:
     description: Node.js version for voidzero setup-vp.
     default: 22.15.0
+  vp-version:
+    description: Vite+ version for voidzero setup-vp.
+    default: 0.1.24
   rebuild-better-sqlite3:
     description: Run the better-sqlite3 native rebuild after install.
     default: 'false'
@@ -15,6 +18,7 @@ runs:
     - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
       with:
         node-version: ${{ inputs.node-version }}
+        version: ${{ inputs.vp-version }}
     - run: vp install
       shell: bash
     - id: compiler-cache-key
