@@ -6,7 +6,11 @@ import {
   type HmacSignatureVerifier,
   type WebhookPayload,
 } from '@kovojs/core';
-import { createMemoryMutationReplayStore, type MutationReplayStore } from '@kovojs/server';
+import {
+  createMemoryMutationReplayStore,
+  replayMutationWireBody,
+  type MutationReplayStore,
+} from '@kovojs/server';
 import type { MutationWireResponse } from '@kovojs/server/internal/wire';
 
 const stripePayload =
@@ -216,7 +220,9 @@ async function runStripeWebhookSpike(
     options.state.changes.push(change);
 
     const response = {
-      body: 'ok',
+      body: replayMutationWireBody('ok', {
+        reason: 'webhook spike stores an audited text replay response',
+      }),
       headers: {
         'Content-Type': 'text/plain; charset=utf-8',
         'Kovo-Changes': JSON.stringify([change]),
