@@ -100,7 +100,7 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 
 - [ ] CI wall-clock time improves by at least 25% on two consecutive comparable runs.
   - Evidence to add: before/after run URLs and wall-clock durations for the full CI workflow.
-  - Current evidence: optimized run `28562997661` for `f0faf34f4` succeeded in 13m08s (`2026-07-02T03:21:19Z` to `03:34:27Z`) versus baseline `28554909799` at 13m36s, which was green but not sufficient. After duplicate removal, run `28563692587` for `af6ecc78f` succeeded in 9m26s (`2026-07-02T03:40:58Z` to `03:50:24Z`), clearing the 25% target once; second consecutive comparable run still pending.
+  - Current evidence: optimized run `28562997661` for `f0faf34f4` succeeded in 13m08s (`2026-07-02T03:21:19Z` to `03:34:27Z`) versus baseline `28554909799` at 13m36s, which was green but not sufficient. After duplicate removal, run `28563692587` for `af6ecc78f` succeeded in 9m26s (`2026-07-02T03:40:58Z` to `03:50:24Z`), clearing the 25% target once. Run `28564111336` for `5640ed47a` reached 9m23s-equivalent timing but failed because `integration (2, 3)` reported flaky `tests/integration/specs/hmr-dev-client.spec.ts`; it does not count toward green-run acceptance. Second consecutive comparable green run still pending.
 - [ ] No required proof disappears.
   - Evidence to add: checklist mapping every pre-plan CI job/step to an optimized job/step that still runs on pull requests and `main` pushes.
 - [ ] Cache hits are visible and keyed safely.
