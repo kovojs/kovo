@@ -55,6 +55,7 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 - [ ] Avoid duplicate artifact downloads inside matrix jobs.
   - Implementation notes: starter shards should download `kovo-packed-starter` only when `starter-needs-packed` is true, as today; verify no unconditional artifact downloads were introduced by refactoring.
   - Evidence to add: one non-packed starter shard log shows no artifact download, and one packed starter shard log shows the artifact download.
+  - Current implementation: `.github/workflows/ci.yml` now keeps the eight `starter` shards on `--mode unpacked` with no `starter-packages` dependency and no `actions/download-artifact` step. A new three-shard `starter-packed` job runs `--mode packed`, depends on `starter-packages`, and downloads `kovo-packed-starter`. Local proof: `vp exec vitest --run scripts/ci-shards.test.mjs`; `vp exec node scripts/ci-shards.mjs generate-starter --mode unpacked --shards 8 --index 1 --outDir /tmp/kovo-fast-ci-unpacked`; `vp exec node scripts/ci-shards.mjs generate-starter --mode packed --shards 3 --index 1 --outDir /tmp/kovo-fast-ci-packed`; `starter-needs-packed` returned 1 for the unpacked shard and 0 for the packed shard.
 
 ## Phase 3 - Reuse Build Artifacts Without Skipping Tests
 
@@ -76,6 +77,7 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 - [ ] Refresh starter shard timing weights from a post-cache successful run.
   - Implementation notes: do not reduce the eight starter shards or hide any starter proof. Only rebalance which proofs land in which shard.
   - Evidence to add: before/after starter shard duration table with all eight shards still present.
+  - Current implementation: no proof was removed; `scripts/ci-shards.mjs` filters the same starter entry list into `all`, `unpacked`, and `packed` modes. The normal `starter` job still has eight shards, and the packed-only proofs are covered by a separate three-shard `starter-packed` job so unpacked proofs no longer wait for packed package artifact creation.
 - [ ] Audit integration shard balance after Playwright cache lands.
   - Implementation notes: keep all three integration shards and all browsers. Rebalance only if one shard remains the long pole after browser install time is removed.
   - Evidence to add: before/after integration shard duration table with all three shards still present.
@@ -102,3 +104,4 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
   - Evidence to add: logs showing Playwright and compiler cache restores, with keys including OS and relevant tool/package versions.
 - [ ] Local and workflow syntax checks pass.
   - Evidence to add: `pnpm run check:vp`, `git diff --check`, and a successful GitHub Actions run for the optimized commit.
+  - Current evidence: for the starter split, `vp exec vitest --run scripts/ci-shards.test.mjs` passed with 14 tests; `pnpm run check:vp` passed; `git diff --check` passed; Ruby YAML parse passed for `.github/workflows/ci.yml`, `.github/workflows/pages.yml`, `.github/workflows/race-repeat.yml`, `.github/actions/kovo-setup/action.yml`, and `.github/actions/playwright-install/action.yml`. GitHub Actions evidence still pending.
