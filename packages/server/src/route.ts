@@ -1,4 +1,10 @@
-import type { JsonValue, Redirect, RouteSearchValue } from '@kovojs/core';
+import {
+  isUntrusted,
+  revealUntrusted,
+  type JsonValue,
+  type Redirect,
+  type RouteSearchValue,
+} from '@kovojs/core';
 import { kovoTrustedHtmlContent } from '@kovojs/browser/internal/output';
 import { substituteRoutePatternParams } from '@kovojs/core/internal/route-pattern';
 import { isBlessedSink } from '@kovojs/core/internal/sink-policy';
@@ -469,10 +475,10 @@ export function parseRouteRequest<
   const rawSearch = tagUntrustedRequestValue(input.search ?? {});
   const params = definition.params
     ? definition.params.parse(rawParams)
-    : (rawParams as RouteParamsFor<Path, ParamsSchema>);
+    : (revealRouteRequestValue(rawParams) as RouteParamsFor<Path, ParamsSchema>);
   const search = definition.search
     ? definition.search.parse(rawSearch)
-    : (rawSearch as RouteSearchFor<SearchSchema>);
+    : (revealRouteRequestValue(rawSearch) as RouteSearchFor<SearchSchema>);
 
   return {
     params: params as RouteParamsFor<Path, ParamsSchema>,
@@ -481,6 +487,26 @@ export function parseRouteRequest<
     // Thread `ctx.signUrl` onto the page context when the dispatcher supplied it (SPEC §6.6 / §9.1).
     ...(input.signUrl === undefined ? {} : { signUrl: input.signUrl }),
   };
+}
+
+function revealRouteRequestValue(value: unknown): unknown {
+  // SPEC §5.2 rule 11 / §9.1: path params and URL search values are request-derived, so the
+  // parser tags them before validation. Routes without explicit schemas retain Kovo's historical
+  // typed-string fallback; reveal only after route matching has selected this declaration.
+  if (isUntrusted(value)) {
+    return revealRouteRequestValue(
+      revealUntrusted(value, 'matched route request value without explicit schema'),
+    );
+  }
+  if (Array.isArray(value)) return value.map((entry) => revealRouteRequestValue(entry));
+  if (typeof value === 'object' && value !== null) {
+    const record = Object.create(null) as Record<string, unknown>;
+    for (const [key, entry] of Object.entries(value)) {
+      record[key] = revealRouteRequestValue(entry);
+    }
+    return record;
+  }
+  return value;
 }
 
 /**
@@ -1314,6 +1340,9 @@ function appendSearchParams(params: URLSearchParams, key: string, value: unknown
 }
 
 function searchParamValue(value: unknown): string {
+  if (isUntrusted(value)) {
+    return searchParamValue(revealUntrusted(value, 'matched route request URL reconstruction'));
+  }
   if (value === undefined || value === null) return '';
   if (typeof value === 'string') return value;
   if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {

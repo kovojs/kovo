@@ -9,6 +9,7 @@ import { renderMutationEndpointResponse, renderNoJsMutationResponse } from './mu
 import { createMemoryMutationReplayStore } from './replay.js';
 import { s } from './schema.js';
 import { testMutation as mutation } from './test-fixtures.js';
+import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 
 describe('no-JS mutation responses', () => {
   it('renders no-JS mutation success as POST-redirect-GET', async () => {
@@ -489,5 +490,37 @@ describe('no-JS mutation responses', () => {
     expect(second.status).toBe(422);
     expect(second.body).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
     expect(writes).toEqual(['silent-a@example.test']);
+  });
+
+  it('rejects no-JS Kovo-Idem collisions when parsed FormData fields are tagged untrusted', async () => {
+    const writes: string[] = [];
+    const addContact = mutation('contacts/add-tagged', {
+      input: s.object({ email: s.string() }),
+      handler(input) {
+        writes.push(input.email);
+        return input;
+      },
+    });
+    const replayStore = createMemoryMutationReplayStore();
+    const submit = (email: string) => {
+      const form = new FormData();
+      form.set('email', email);
+      form.set(KOVO_IDEM_FIELD_NAME, 'idem_nojs_tagged_conflict_01');
+      return renderMutationEndpointResponse(addContact, {
+        headers: new Headers(),
+        rawInput: tagUntrustedRequestValue(form),
+        redirectTo: '/contacts',
+        replayStore,
+        request: { sessionId: 's1' },
+      });
+    };
+
+    const first = await submit('tagged-a@example.test');
+    const second = await submit('tagged-b@example.test');
+
+    expect(first.status).toBe(303);
+    expect(second.status).toBe(422);
+    expect(second.body).toContain('data-error-code="IDEMPOTENCY_CONFLICT"');
+    expect(writes).toEqual(['tagged-a@example.test']);
   });
 });

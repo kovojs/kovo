@@ -23,7 +23,10 @@ import { isSchemaValidationError } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
 import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { reserveReplayBeforeRun } from './replay.js';
-import { parseUntrustedJsonBodyBytes } from './untrusted-request-body.js';
+import {
+  parseUntrustedJsonBodyBytes,
+  revealUntrustedRequestValue,
+} from './untrusted-request-body.js';
 
 const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
 
@@ -792,8 +795,9 @@ async function parseLooseWebhookInput<InputSchema extends Schema<unknown>>(
 > {
   try {
     const parsed = await parseSchema(schema, rawInput);
+    const looseInput = revealUntrustedRequestValue(rawInput, 'verified loose webhook input');
     const value =
-      isPlainRecord(rawInput) && isPlainRecord(parsed) ? { ...rawInput, ...parsed } : parsed;
+      isPlainRecord(looseInput) && isPlainRecord(parsed) ? { ...looseInput, ...parsed } : parsed;
 
     return { ok: true, value: value as WebhookInputFor<InputSchema> };
   } catch (error) {

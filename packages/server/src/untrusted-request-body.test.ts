@@ -88,12 +88,12 @@ describe('untrusted request body parser', () => {
     });
   });
 
-  it('keeps unschematized route params tagged for DX provenance', () => {
+  it('reveals unschematized route params after route matching fallback validation', () => {
     const productRoute = route('/products/:id');
     const parsed = parseRouteRequest(productRoute, { params: { id: 'p1' } });
 
-    expect(isUntrusted(parsed.params.id)).toBe(true);
-    expect(() => `${parsed.params.id}`).toThrow(/KV426/);
+    expect(isUntrusted(parsed.params.id)).toBe(false);
+    expect(parsed.params.id).toBe('p1');
   });
 
   it('tags query search input and lets declared args schemas reveal it', async () => {

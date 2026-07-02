@@ -1,4 +1,4 @@
-import { untrusted } from '@kovojs/core';
+import { isUntrusted, revealUntrusted, untrusted } from '@kovojs/core';
 
 export type UntrustedRequestBodyCarrier = 'json' | 'form';
 
@@ -109,6 +109,21 @@ export function tagUntrustedRequestValue(value: unknown): unknown {
   }
   if (value === undefined) return value;
   return untrusted(value);
+}
+
+/** @internal SPEC §5.2 rule 11: reveal request provenance tags only after a validating choke. */
+export function revealUntrustedRequestValue(value: unknown, reason: string): unknown {
+  if (isUntrusted(value))
+    return revealUntrustedRequestValue(revealUntrusted(value, reason), reason);
+  if (Array.isArray(value)) return value.map((entry) => revealUntrustedRequestValue(entry, reason));
+  if (isPlainRecord(value)) {
+    const revealed: Record<string, unknown> = {};
+    for (const [key, entry] of Object.entries(value)) {
+      revealed[key] = revealUntrustedRequestValue(entry, reason);
+    }
+    return revealed;
+  }
+  return value;
 }
 
 function isPlainRecord(value: unknown): value is Record<string, unknown> {

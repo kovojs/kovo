@@ -405,9 +405,9 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,
   rawInput: unknown,
   request: Request,
-  options: RequestLifecycleOptions<Request> = {},
+  options: RequestLifecycleOptions<Request> & { trustedInput?: boolean } = {},
 ): Promise<QueryEndpointResult<Value, Input>> {
-  const argsResult = parseQueryInput(definition, rawInput);
+  const argsResult = parseQueryInput(definition, rawInput, options.trustedInput === true);
   if (!argsResult.ok) return argsResult.failure;
 
   // SPEC §9.4/§10.3 (MARQUEE): the framework owns the handle threaded into the loader. A
@@ -689,8 +689,9 @@ export function readQueryVersion<const Key extends string, Value, Input, Request
 function parseQueryInput<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,
   rawInput: unknown,
+  trustedInput = false,
 ): { ok: true; value: Input } | { failure: QueryEndpointFailure; ok: false } {
-  rawInput = tagUntrustedRequestValue(rawInput);
+  rawInput = trustedInput ? rawInput : tagUntrustedRequestValue(rawInput);
   if (!definition.args) return { ok: true, value: rawInput as Input };
 
   try {
