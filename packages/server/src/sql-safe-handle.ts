@@ -578,8 +578,10 @@ const assertSqlWriteTablesAllowed = securityClassifier(
 
     const writeTableNames = writeTables
       .filter(isParsedSqlTableName)
-      .map(normalizeManagedSqlTableName);
-    const allowed = new Set(declaredTables.map(normalizeManagedSqlTableName));
+      .map((table) => normalizeManagedSqlTableName(table, writePolicy?.dialect));
+    const allowed = new Set(
+      declaredTables.map((table) => normalizeManagedSqlTableName(table, writePolicy?.dialect)),
+    );
     const unexpected = writeTableNames.filter((table) => !allowed.has(table));
     if (unexpected.length === 0) return;
 
@@ -637,8 +639,12 @@ function formatSqlWriteTargets(targets: readonly ParsedSqlWriteTarget[]): string
     .join(', ');
 }
 
-function normalizeManagedSqlTableName(table: string): string {
-  return table.includes('.') ? table : `public.${table}`;
+function normalizeManagedSqlTableName(
+  table: string,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
+): string {
+  if (table.includes('.')) return table;
+  return `${dialect === 'sqlite' ? 'main' : 'public'}.${table}`;
 }
 
 function isParsedSqlTableName(target: ParsedSqlWriteTarget): target is string {

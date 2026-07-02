@@ -1149,6 +1149,14 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         ),
       ),
     ).resolves.toMatchObject({ sql: 'update products set name = ? where id = ?' });
+    await expect(
+      handle.run(
+        stampTrustedSql(
+          { sql: 'update main.products set name = ? where id = ?', values: ['Ada', 'p1'] },
+          'audited SQLite main-schema product update',
+        ),
+      ),
+    ).resolves.toMatchObject({ sql: 'update main.products set name = ? where id = ?' });
     expect(() =>
       handle.values(
         stampTrustedSql(
@@ -1157,7 +1165,15 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         ),
       ),
     ).toThrow(/KV406/);
-    expect(log).toEqual(['get', 'run']);
+    expect(() =>
+      handle.values(
+        stampTrustedSql(
+          { sql: 'update otherschema.products set name = ? where id = ?', values: ['Ada', 'p1'] },
+          'drifted SQLite attached-schema product update',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['get', 'run', 'run']);
   });
 
   it('write mode denies raw driver escape properties before exposing child handles', () => {

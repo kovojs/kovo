@@ -162,13 +162,25 @@ const classifyParsedStatement = securityClassifier(
   ): SqlClassifierVerdict<SqlWriteTargets> {
     switch (statement.type) {
       case 'insert':
-        return writeVerdict(writeTablesForInsert(statement, cteAliases));
+        return writeVerdict(
+          statement,
+          writeTablesForInsert(statement, cteAliases, dialect),
+          dialect,
+        );
       case 'update':
-        return writeVerdict(writeTablesForUpdate(statement, cteAliases));
+        return writeVerdict(
+          statement,
+          writeTablesForUpdate(statement, cteAliases, dialect),
+          dialect,
+        );
       case 'delete':
-        return writeVerdict(writeTablesForDelete(statement, cteAliases));
+        return writeVerdict(
+          statement,
+          writeTablesForDelete(statement, cteAliases, dialect),
+          dialect,
+        );
       case 'truncate table':
-        return writeVerdict(writeTablesForTruncate(statement));
+        return writeVerdict(statement, writeTablesForTruncate(statement), dialect);
       case 'with':
         return classifyWith(statement, cteAliases, dialect);
       case 'with recursive':
@@ -227,7 +239,19 @@ const classifyParsedStatement = securityClassifier(
   },
 );
 
-function writeVerdict(targets: ParsedSqlWriteTarget[]): SqlClassifierVerdict<SqlWriteTargets> {
+function writeVerdict(
+  statement: Statement | WithStatementBinding,
+  targets: ParsedSqlWriteTarget[],
+  dialect: ParseSqlWriteTablesOptions['dialect'],
+): SqlClassifierVerdict<SqlWriteTargets> {
+  const unprovenCalls = unprovenSqlFunctionCalls(statement, dialect);
+  if (unprovenCalls.length > 0) {
+    return {
+      kind: 'unproven',
+      reason: `SQL write contains non-allowlisted function call(s): ${unprovenCalls.join(', ')}`,
+    };
+  }
+
   if (targets.length === 0 || targets.includes(UNTABLED_SQL_WRITE)) {
     return {
       kind: 'unproven',
@@ -254,12 +278,14 @@ function classifyReadStatement(
 function writeTablesForInsert(
   statement: InsertStatement,
   cteAliases: ReadonlySet<string>,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
   return [
     tableName(statement.into),
     ...writeTablesForNestedStatements(
       [statement.insert, statement.onConflict, statement.returning],
       cteAliases,
+      dialect,
     ),
   ];
 }
@@ -267,12 +293,14 @@ function writeTablesForInsert(
 function writeTablesForUpdate(
   statement: UpdateStatement,
   cteAliases: ReadonlySet<string>,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
   return [
     tableName(statement.table),
     ...writeTablesForNestedStatements(
       [statement.from, statement.sets, statement.where, statement.returning],
       cteAliases,
+      dialect,
     ),
   ];
 }
@@ -280,10 +308,11 @@ function writeTablesForUpdate(
 function writeTablesForDelete(
   statement: DeleteStatement,
   cteAliases: ReadonlySet<string>,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
   return [
     tableName(statement.from),
-    ...writeTablesForNestedStatements([statement.where, statement.returning], cteAliases),
+    ...writeTablesForNestedStatements([statement.where, statement.returning], cteAliases, dialect),
   ];
 }
 
@@ -337,30 +366,37 @@ function withAliases(
 function writeTablesForNestedStatements(
   values: readonly unknown[],
   cteAliases: ReadonlySet<string>,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
-  return values.flatMap((value) => writeTablesForNestedStatement(value, cteAliases));
+  return values.flatMap((value) => writeTablesForNestedStatement(value, cteAliases, dialect));
 }
 
 function writeTablesForNestedStatement(
   value: unknown,
   cteAliases: ReadonlySet<string>,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
 ): ParsedSqlWriteTarget[] {
   if (Array.isArray(value)) {
-    return value.flatMap((item) => writeTablesForNestedStatement(item, cteAliases));
+    return value.flatMap((item) => writeTablesForNestedStatement(item, cteAliases, dialect));
   }
   if (!value || typeof value !== 'object') return [];
 
   if (isStatement(value)) {
-    const verdict = classifyParsedStatement(value, cteAliases, undefined);
+    const verdict = classifyParsedStatement(value, cteAliases, dialect);
     return verdict.kind === 'proven-unsafe' ? [...verdict.detail] : [];
   }
 
-  return Object.values(value).flatMap((item) => writeTablesForNestedStatement(item, cteAliases));
+  return Object.values(value).flatMap((item) =>
+    writeTablesForNestedStatement(item, cteAliases, dialect),
+  );
 }
 
 function combineStatementVerdicts(
   verdicts: readonly SqlClassifierVerdict<SqlWriteTargets>[],
 ): SqlClassifierVerdict<SqlWriteTargets> {
+  const unproven = verdicts.find((verdict) => verdict.kind === 'unproven');
+  if (unproven) return unproven;
+
   const unsafeTargets = verdicts.flatMap((verdict) =>
     verdict.kind === 'proven-unsafe' ? [...verdict.detail] : [],
   );
@@ -370,9 +406,6 @@ function combineStatementVerdicts(
       detail: [...new Set(unsafeTargets)].sort(compareSqlWriteTargets),
     };
   }
-
-  const unproven = verdicts.find((verdict) => verdict.kind === 'unproven');
-  if (unproven) return unproven;
 
   return { kind: 'proven-safe' };
 }
