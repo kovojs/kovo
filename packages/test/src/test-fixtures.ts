@@ -8,7 +8,7 @@ import type { DbVerificationConfig, ObservedDbOperation } from './verifier-obser
 
 export interface FakeDb {
   read(table: string, options?: { branch?: string; rowKey?: string }): unknown[];
-  sql(statement: string): unknown[];
+  sql(statement: unknown): unknown[];
   write(table: string, value: unknown, options?: { branch?: string; rowKey?: string }): void;
 }
 

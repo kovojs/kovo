@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { domain, mutation, s } from '@kovojs/server';
 
 import { createKovoTestHarness } from './harness.js';
@@ -11,22 +12,28 @@ import {
   type FakeDb,
 } from './test-fixtures.js';
 
+const staticVerifierSql = (text: string) =>
+  stampTrustedSql({ text }, 'static SQL verifier fixture');
+
 describe('@kovojs/test SQL verifier integration', () => {
   it('verifies insert-select SQL as a target write plus source reads', async () => {
     const productImport = mutation('product/import', {
       csrf: false,
       input: s.object({ productId: s.string() }),
       registry: {
+        tables: ['product_snapshots'],
         touches: [domain('product')],
       },
       handler(_input, request: { db: FakeDb }) {
         request.db.sql(
-          [
-            'insert into product_snapshots (product_id, name)',
-            'select products.id, products.name',
-            'from products',
-            'join vendors on vendors.id = products.vendor_id',
-          ].join(' '),
+          staticVerifierSql(
+            [
+              'insert into product_snapshots (product_id, name)',
+              'select products.id, products.name',
+              'from products',
+              'join vendors on vendors.id = products.vendor_id',
+            ].join(' '),
+          ),
         );
         return 'ok';
       },
@@ -97,16 +104,19 @@ describe('@kovojs/test SQL verifier integration', () => {
       csrf: false,
       input: s.object({ productId: s.string() }),
       registry: {
+        tables: ['product_snapshots'],
         touches: [domain('product')],
       },
       handler(_input, request: { db: FakeDb }) {
         request.db.sql(
-          [
-            'insert into product_snapshots (product_id, name)',
-            'select products.id, products.name',
-            'from products',
-            'join vendors on vendors.id = products.vendor_id',
-          ].join(' '),
+          staticVerifierSql(
+            [
+              'insert into product_snapshots (product_id, name)',
+              'select products.id, products.name',
+              'from products',
+              'join vendors on vendors.id = products.vendor_id',
+            ].join(' '),
+          ),
         );
         return 'ok';
       },
@@ -148,14 +158,17 @@ describe('@kovojs/test SQL verifier integration', () => {
     const productImport = mutation('product/import', {
       csrf: false,
       input: s.object({ productId: s.string() }),
+      registry: { tables: ['product_snapshots'] },
       handler(_input, request: { db: FakeDb }) {
         request.db.sql(
-          [
-            'insert into product_snapshots (product_id, name)',
-            'select products.id, vendors.name',
-            'from products',
-            'join vendors on vendors.id = products.vendor_id',
-          ].join(' '),
+          staticVerifierSql(
+            [
+              'insert into product_snapshots (product_id, name)',
+              'select products.id, vendors.name',
+              'from products',
+              'join vendors on vendors.id = products.vendor_id',
+            ].join(' '),
+          ),
         );
         return 'ok';
       },
@@ -203,14 +216,17 @@ describe('@kovojs/test SQL verifier integration', () => {
     const productImport = mutation('product/import', {
       csrf: false,
       input: s.object({ productId: s.string() }),
+      registry: { tables: ['product_snapshots'] },
       handler(_input, request: { db: FakeDb }) {
         request.db.sql(
-          [
-            'insert into product_snapshots (product_id, name)',
-            'select products.id, vendors.name',
-            'from products',
-            'join vendors on vendors.id = products.vendor_id',
-          ].join(' '),
+          staticVerifierSql(
+            [
+              'insert into product_snapshots (product_id, name)',
+              'select products.id, vendors.name',
+              'from products',
+              'join vendors on vendors.id = products.vendor_id',
+            ].join(' '),
+          ),
         );
         return 'ok';
       },

@@ -266,12 +266,15 @@ describe('@kovojs/test PGlite harness integration', () => {
     }
   });
 
-  it('verifies direct db.query calls against the static touch graph', async () => {
+  it('rejects direct db.query SQL writes without registry tables before touch graph verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
       async handler(input, request: { db: Pick<PgliteTestDb, 'query'> }) {
-        await request.db.query('insert into audit_log (product_id) values ($1)', [input.productId]);
+        await request.db.query({
+          text: 'insert into audit_log (product_id) values ($1)',
+          values: [input.productId],
+        });
         return input.productId;
       },
     });
@@ -296,21 +299,23 @@ describe('@kovojs/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('KV402', 'audit'),
+        /KV406: raw-SQL write touched table\(s\) outside the declared mutation registry tables[\s\S]*public\.audit_log/,
       );
     } finally {
       await db.close();
     }
   });
 
-  it('verifies direct db.exec calls against the static touch graph', async () => {
+  it('verifies separated db.query carriers against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
-      async handler(input, request: { db: Pick<PgliteTestDb, 'exec'> }) {
-        await request.db.exec(
-          `insert into cart_items (product_id, qty) values ('${input.productId}', 1)`,
-        );
+      registry: { tables: ['cart_items'] },
+      async handler(input, request: { db: Pick<PgliteTestDb, 'query'> }) {
+        await request.db.query({
+          text: 'insert into cart_items (product_id, qty) values ($1, 1)',
+          values: [input.productId],
+        });
         return input.productId;
       },
     });
@@ -346,6 +351,7 @@ describe('@kovojs/test PGlite harness integration', () => {
     const cancelOrder = mutation('order/cancel', {
       csrf: false,
       input: s.object({ id: s.string() }),
+      registry: { tables: ['orders'] },
       async handler(
         input,
         request: {
@@ -353,14 +359,14 @@ describe('@kovojs/test PGlite harness integration', () => {
           session: { user: { id: string } };
         },
       ) {
-        await request.db.query('update orders set status = $1 where id = $2', [
-          'cancelled',
-          input.id,
-        ]);
-        return request.db.query<{ id: string; userId: string }>(
-          'select id, user_id as "userId" from orders where id = $1',
-          [input.id],
-        );
+        await request.db.query({
+          text: 'update orders set status = $1 where id = $2',
+          values: ['cancelled', input.id],
+        });
+        return request.db.query<{ id: string; userId: string }>({
+          text: 'select id, user_id as "userId" from orders where id = $1',
+          values: [input.id],
+        });
       },
     });
     const db = await createPgliteTestDb();
@@ -410,12 +416,16 @@ describe('@kovojs/test PGlite harness integration', () => {
     }
   });
 
-  it('verifies engine-side cascade writes against the static touch graph', async () => {
+  it('rejects engine-side PGlite cascade writes with the declared-write stat fallback', async () => {
     const deleteProduct = mutation('product/delete', {
       csrf: false,
       input: s.object({ productId: s.string() }),
-      async handler(input, request: { db: Pick<PgliteTestDb, 'exec'> }) {
-        await request.db.exec(`delete from products where id = '${input.productId}'`);
+      registry: { tables: ['products'] },
+      async handler(input, request: { db: Pick<PgliteTestDb, 'query'> }) {
+        await request.db.query({
+          text: 'delete from products where id = $1',
+          values: [input.productId],
+        });
         return input.productId;
       },
     });
@@ -447,14 +457,14 @@ describe('@kovojs/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(deleteProduct, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('KV402', 'cart'),
+        /KV406: PGlite declared-write stat-delta fallback[\s\S]*public\.cart_items/,
       );
     } finally {
       await db.close();
     }
   });
 
-  it('verifies raw pglite handle calls against the static touch graph', async () => {
+  it('rejects raw pglite handle SQL strings before touch graph verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -486,14 +496,14 @@ describe('@kovojs/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('KV402', 'audit'),
+        /KV422: SQL text injection risk/,
       );
     } finally {
       await db.close();
     }
   });
 
-  it('verifies raw pglite transaction handle calls against the static touch graph', async () => {
+  it('rejects raw pglite transaction SQL strings before touch graph verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -525,7 +535,7 @@ describe('@kovojs/test PGlite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('KV402', 'audit'),
+        /KV422: SQL text injection risk/,
       );
     } finally {
       await db.close();
@@ -545,7 +555,7 @@ describe('@kovojs/test PGlite harness integration', () => {
       const verifier = createDbVerifier({}, { domainByTable: { products: 'product' } });
       const wrapped = verifier.wrap(db);
 
-      await wrapped.sql('truncate products');
+      await wrapped.sql(stampTrustedSql({ text: 'truncate products' }, 'static truncate test'));
 
       expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'product'));
     } finally {
@@ -570,7 +580,12 @@ describe('@kovojs/test PGlite harness integration', () => {
 
       // pgsql-ast-parser rejects `DELETE … USING`, so the explicit parse drops to
       // [] (fail-open). The count delta on `products` is the only signal.
-      await wrapped.sql('delete from products using archived where products.id = archived.id');
+      await wrapped.sql(
+        stampTrustedSql(
+          { text: 'delete from products using archived where products.id = archived.id' },
+          'static delete-using test',
+        ),
+      );
 
       expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'product'));
     } finally {

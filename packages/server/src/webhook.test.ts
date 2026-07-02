@@ -826,10 +826,7 @@ describe('server webhook primitive', () => {
     const wh = webhook('/webhooks/durable-charge', {
       async handler(input, context) {
         enteredTotal += 1;
-        (context.tx as unknown as { execute(statement: unknown): void }).execute({
-          text: 'insert into ledger_h9 (id) values ($1)',
-          values: [input.id],
-        });
+        (context.tx as unknown as { insert(): void }).insert();
         context.recordChange(ledger, { keys: [input.id] });
         if (enteredTotal === 1) {
           resolveAEntered();
@@ -841,7 +838,7 @@ describe('server webhook primitive', () => {
       input: s.object({ id: s.string() }),
       replayStore: durable,
       async transaction(_context, run) {
-        return run({ execute: () => (sideEffects += 1) });
+        return run({ insert: () => (sideEffects += 1) });
       },
       verify: 'none',
       verifyJustification: 'fixture-only webhook test',

@@ -11,6 +11,9 @@ import {
   verificationLayerKovoCheckDiagnosticsFact,
 } from './verification-fixtures.js';
 
+const rawSqlFailureMessage =
+  'KV422: SQL text injection risk. raw string statements are not accepted on Kovo-managed DB handles; use sql`...`, staticSql`...`, or a separated { text, values } carrier.';
+
 describe('@kovojs/test verification fixtures', () => {
   it('provides a fake DB fixture for verifier and harness tests', () => {
     const db = createVerificationFakeDb();
@@ -67,8 +70,8 @@ describe('@kovojs/test verification fixtures', () => {
         writeMutation: { changes: [], ok: true, rerunQueries: [], value: 'p1' },
       },
       pglite: {
-        rawMutationFailure: 'KV402 Write touched an undeclared domain: audit',
-        transactionFailure: 'KV402 Write touched an undeclared domain: audit',
+        rawMutationFailure: rawSqlFailureMessage,
+        transactionFailure: rawSqlFailureMessage,
       },
       sqlite: {
         libsqlRowKey: 'id',

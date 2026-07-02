@@ -631,6 +631,14 @@ describe('server build-time deployment API', () => {
         node().inspect!(build, {
           declaredEnv: [],
           readServerHandlerSource() {
+            return "import { sqliteTable } from 'drizzle-orm/sqlite-core';\n";
+          },
+        }),
+      ).toEqual([]);
+      expect(
+        node().inspect!(build, {
+          declaredEnv: [],
+          readServerHandlerSource() {
             return "import Database from 'better-sqlite3';\n";
           },
         }),

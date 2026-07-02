@@ -525,7 +525,7 @@ function isPromiseLike<T>(value: T | PromiseLike<T>): value is PromiseLike<T> {
 }
 
 function serverHandlerUsesSqliteDurableIncompatibleStore(source: string): boolean {
-  return /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:better-sqlite3|drizzle-orm\/better-sqlite3|drizzle-orm\/sqlite-core)["']/.test(
+  return /(?:\bfrom\s*|\bimport\s*\(\s*|\brequire\s*\(\s*)["'](?:better-sqlite3|drizzle-orm\/better-sqlite3)["']/.test(
     source,
   );
 }

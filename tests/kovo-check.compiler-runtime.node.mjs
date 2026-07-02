@@ -839,8 +839,10 @@ void test('P9 verification layer evidence remains represented', async () => {
       },
     },
     pglite: {
-      rawMutationFailure: 'KV402 Write touched an undeclared domain: audit',
-      transactionFailure: 'KV402 Write touched an undeclared domain: audit',
+      rawMutationFailure:
+        'KV422: SQL text injection risk. raw string statements are not accepted on Kovo-managed DB handles; use sql`...`, staticSql`...`, or a separated { text, values } carrier.',
+      transactionFailure:
+        'KV422: SQL text injection risk. raw string statements are not accepted on Kovo-managed DB handles; use sql`...`, staticSql`...`, or a separated { text, values } carrier.',
     },
     sqlite: {
       mutationReadCovered: true,

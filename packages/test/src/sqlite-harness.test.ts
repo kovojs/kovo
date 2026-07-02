@@ -186,7 +186,7 @@ describe('@kovojs/test SQLite harness integration', () => {
     }
   });
 
-  it('verifies raw better-sqlite3 handle calls against the static touch graph', async () => {
+  it('rejects raw better-sqlite3 handle SQL strings before touch graph verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -219,14 +219,14 @@ describe('@kovojs/test SQLite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('KV402', 'audit'),
+        /KV422: SQL text injection risk/,
       );
     } finally {
       db.close();
     }
   });
 
-  it('verifies parser-rejected prepared SQLite writes at execution time', async () => {
+  it('rejects parser-rejected prepared SQLite raw strings before execution-time verification', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -259,14 +259,14 @@ describe('@kovojs/test SQLite harness integration', () => {
       });
 
       await expect(harness.exec(cartMutation, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('KV402', 'audit'),
+        /KV422: SQL text injection risk/,
       );
     } finally {
       db.close();
     }
   });
 
-  it('verifies SQLite trigger count side effects against the static touch graph', async () => {
+  it('rejects raw SQLite trigger SQL strings before touch graph verification', async () => {
     const deleteProduct = mutation('product/delete', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -309,14 +309,14 @@ describe('@kovojs/test SQLite harness integration', () => {
       });
 
       await expect(harness.exec(deleteProduct, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('KV402', 'cart'),
+        /KV422: SQL text injection risk/,
       );
     } finally {
       db.close();
     }
   });
 
-  it('verifies prepared SQLite trigger fingerprint side effects at execution time', async () => {
+  it('rejects raw prepared SQLite trigger SQL strings before execution-time verification', async () => {
     const repriceProduct = mutation('product/reprice', {
       csrf: false,
       input: s.object({ productId: s.string() }),
@@ -361,7 +361,7 @@ describe('@kovojs/test SQLite harness integration', () => {
       });
 
       await expect(harness.exec(repriceProduct, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('KV402', 'inventory'),
+        /KV422: SQL text injection risk/,
       );
     } finally {
       db.close();
@@ -411,7 +411,7 @@ describe('@kovojs/test SQLite harness integration', () => {
       });
 
       await expect(harness.exec(repriceProduct, { productId: 'p1' })).rejects.toThrow(
-        expectedDiagnostic('KV402', 'inventory'),
+        /KV422: SQL text injection risk/,
       );
     } finally {
       db.close();

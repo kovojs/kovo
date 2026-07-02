@@ -99,12 +99,16 @@ describe('@kovojs/test harness verifier integration', () => {
     ]);
   });
 
-  it('verifies raw SQL writes against the static touch graph', async () => {
+  it('verifies structured SQL writes against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
+      registry: { tables: ['cart_items'] },
       handler(input, request: { db: FakeDb }) {
-        request.db.sql(`insert into cart_items (product_id) values ('${input.productId}')`);
+        request.db.sql({
+          text: 'insert into cart_items (product_id) values (?)',
+          values: [input.productId],
+        });
         return input.productId;
       },
     });
@@ -129,12 +133,12 @@ describe('@kovojs/test harness verifier integration', () => {
     expect(harness.dbHandle().read('cart_items')).toEqual([]);
   });
 
-  it('fails verification when raw SQL writes outside KV406 coverage', async () => {
+  it('fails verification when observed writes land outside touch graph coverage', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,
       input: s.object({ productId: s.string() }),
       handler(input, request: { db: FakeDb }) {
-        request.db.sql(`update audit_log set product_id = '${input.productId}' where id = 'a1'`);
+        request.db.write('audit_log', input.productId);
         return input.productId;
       },
     });

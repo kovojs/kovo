@@ -393,14 +393,7 @@ export function addRawSqlOwnerWriteProof(
     ].join('\n'),
     'raw SQL proof domain declaration',
   );
-  mutations = replaceRequired(
-    mutations,
-    'registry: { touches: [contact] },',
-    declareTables
-      ? "registry: { touches: [contact, rawOwner], tables: ['raw_owners'] },"
-      : 'registry: { touches: [contact, rawOwner] },',
-    'raw SQL proof mutation registry',
-  );
+  mutations = patchRawSqlProofMutationRegistry(mutations, declareTables);
   mutations = replaceRequired(
     mutations,
     [
@@ -421,6 +414,60 @@ export function addRawSqlOwnerWriteProof(
     'raw SQL proof contact insert anchor',
   );
   writeFileSync(mutationsPath, mutations, 'utf8');
+}
+
+function patchRawSqlProofMutationRegistry(source: string, declareTables: boolean): string {
+  const compactRegistryPattern =
+    /registry: \{ (?<body>[^{}]*touches: \[[^\]]*\bcontact\b[^\]]*\][^{}]*) \},/;
+  const compactMatch = compactRegistryPattern.exec(source);
+  if (compactMatch?.groups?.body !== undefined) {
+    return source.replace(
+      compactRegistryPattern,
+      (_match: string, body: string) =>
+        `registry: { ${patchRawSqlRegistryBody(body, declareTables, 'compact')} },`,
+    );
+  }
+
+  const registryBlockPattern = /  registry: \{\n(?<body>(?:    .*\n)+?)  \},/g;
+  let patched = false;
+  const result = source.replace(registryBlockPattern, (match: string, body: string) => {
+    if (patched || !body.includes('touches: [contact],')) return match;
+
+    patched = true;
+    const nextBody = patchRawSqlRegistryBody(body, declareTables, 'multiline');
+    return `  registry: {\n${nextBody}  },`;
+  });
+
+  if (!patched) throw new Error('Expected scaffold anchor for raw SQL proof mutation registry.');
+  return result;
+}
+
+function patchRawSqlRegistryBody(
+  body: string,
+  declareTables: boolean,
+  layout: 'compact' | 'multiline',
+): string {
+  let nextBody = appendArrayEntry(body, 'touches', 'rawOwner');
+  if (!declareTables) return nextBody;
+
+  if (/tables: \[[^\]]*\]/.test(nextBody)) {
+    return appendArrayEntry(nextBody, 'tables', "'raw_owners'");
+  }
+
+  if (layout === 'compact') return `tables: ['raw_owners'], ${nextBody}`;
+  return nextBody.replace(/^(\s*)touches: \[/m, "$1tables: ['raw_owners'],\n$1touches: [");
+}
+
+function appendArrayEntry(body: string, property: string, entry: string): string {
+  const pattern = new RegExp(`${property}: \\[([^\\]]*)\\]`);
+  return body.replace(pattern, (match: string, existing: string) => {
+    const entries = existing
+      .split(',')
+      .map((part) => part.trim())
+      .filter(Boolean);
+    if (entries.includes(entry)) return match;
+    return `${property}: [${[...entries, entry].join(', ')}]`;
+  });
 }
 
 export function addStarterMutationDbScopeProof(root: string): void {

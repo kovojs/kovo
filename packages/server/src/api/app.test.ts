@@ -57,6 +57,7 @@ import * as renderingApi from './rendering.js';
 import * as routingApi from './routing.js';
 import * as responseApi from '../response.js';
 import * as routeApi from '../route.js';
+import * as secretReadBoundaryApi from '../secret-read-boundary.js';
 import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
@@ -467,6 +468,8 @@ describe('server app-shell public API barrels', () => {
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       createDurableTaskSqlExecutor: taskQueueApi.createDurableTaskSqlExecutor,
       createDurableTaskStatus: taskObservabilityApi.createDurableTaskStatus,
+      createSecretBoxingReadDb: secretReadBoundaryApi.createSecretBoxingReadDb,
+      declareSecretReadCapability: secretReadBoundaryApi.declareSecretReadCapability,
       kovoReadonlyDbHandle: dataApi.kovoReadonlyDbHandle,
       toNodeHandler: nodeSourceApi.toNodeHandler,
     }).filter((key) => !renderingSubpathOnlyValues.has(key));
@@ -515,6 +518,10 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.webhook).toBe(routingApi.webhook);
     expect(publicApi.createDeclaredWriteDb).toBe(dataApi.createDeclaredWriteDb);
     expect(publicApi.createPostgresReadonlyClient).toBe(dataApi.createPostgresReadonlyClient);
+    expect(publicApi.createSecretBoxingReadDb).toBe(secretReadBoundaryApi.createSecretBoxingReadDb);
+    expect(publicApi.declareSecretReadCapability).toBe(
+      secretReadBoundaryApi.declareSecretReadCapability,
+    );
     expect(publicApi.kovoReadonlyDbHandle).toBe(dataApi.kovoReadonlyDbHandle);
     expect(publicApi.readonlyDb).toBe(dataApi.readonlyDb);
     expect(publicApi.customVerifier).toBe(coreCustomVerifier);

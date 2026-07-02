@@ -1391,7 +1391,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "help": "Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.
       Blocked reason: the projected query shape contains a secret-classified field, or an opaque/unresolved projection reads a table carrying secret columns, so rendering this query could serialize confidential data onto the client wire.
       Fixes: remove the secret field or opaque projection, select explicit non-secret columns, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.
-      SPEC §6.2/§10.2/§11.3 and fundamental-fixes-followup-3 DEC-C/DEC-F: KV435 is static defense-in-depth for client-wire confidentiality; the non-coercible Secret tag and every egress choke are the security boundary when static source classification is incomplete.",
+      SPEC §6.2/§10.2/§11.3 and fundamental-fixes-followup-3 DEC-C/DEC-F: KV435 is static defense-in-depth for client-wire confidentiality; the active runtime boundary is the Secret provenance box plus the egress choke that throws at the wire, and on dialects that install reader-role revocation the database engine can add its own REVOKE floor.",
           "length": null,
           "message": "Secret query value reaches the client wire. query="user" path="user.passwordHash"",
           "severity": "error",
