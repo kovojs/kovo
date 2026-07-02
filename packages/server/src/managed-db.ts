@@ -25,10 +25,23 @@ declare const readerDbBrand: unique symbol;
 export const kovoReadonlyDbHandle: unique symbol = Symbol('kovo.readonly-db-handle');
 
 /**
+ * @internal Adapter hook for providing a framework-owned write DB handle whose underlying engine
+ * enforces the mutation's declared write table policy.
+ */
+export const kovoDeclaredWriteDbHandle: unique symbol = Symbol('kovo.declared-write-db-handle');
+
+/**
  * @internal Adapter contract for a DB value that can vend a dedicated/read-only reader.
  */
 export interface KovoReadonlyDbCapable<ReadDb = unknown> {
   [kovoReadonlyDbHandle](): ReadDb;
+}
+
+/**
+ * @internal Adapter contract for a DB value that can vend an engine-scoped declared-write handle.
+ */
+export interface KovoDeclaredWriteDbCapable<WriteDb = unknown> {
+  [kovoDeclaredWriteDbHandle](policy: ManagedSqlWritePolicy): WriteDb;
 }
 
 const READ_CAPABILITY_PROPERTIES = new Set<string>([
@@ -186,7 +199,8 @@ export function managedDb<Db>(
   mode: ManagedDbMode,
   options: ManagedDbOptions = {},
 ): Db | Reader<Db> {
-  const target = mode === 'read' ? readonlyDbTarget(raw) : raw;
+  const target =
+    mode === 'read' ? readonlyDbTarget(raw) : declaredWriteDbTarget(raw, options.sqlWritePolicy);
   const safe = wrapManagedDbForSqlSafety(target, undefined, {
     ...options.sqlWritePolicy,
     capability: mode,
@@ -202,6 +216,20 @@ function readonlyDbTarget<Db>(raw: Db): Db {
   const createReadonly = raw[kovoReadonlyDbHandle];
   if (typeof createReadonly !== 'function') return raw;
   return createReadonly.call(raw) as Db;
+}
+
+function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy | undefined): Db {
+  if (
+    writePolicy === undefined ||
+    writePolicy.tables === undefined ||
+    writePolicy.tables.length === 0
+  ) {
+    return raw;
+  }
+  if (!isRecord(raw)) return raw;
+  const createDeclaredWrite = raw[kovoDeclaredWriteDbHandle];
+  if (typeof createDeclaredWrite !== 'function') return raw;
+  return createDeclaredWrite.call(raw, writePolicy) as Db;
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {

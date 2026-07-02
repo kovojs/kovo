@@ -3,7 +3,12 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
-import { KovoReadonlyHandleError, managedDb, readonlyDb } from './managed-db.js';
+import {
+  KovoReadonlyHandleError,
+  kovoDeclaredWriteDbHandle,
+  managedDb,
+  readonlyDb,
+} from './managed-db.js';
 import type { Reader } from './managed-db.js';
 import { kovoAsyncMutationTransaction, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { runQuery } from './query.js';
@@ -976,6 +981,43 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/KV406/);
     expect(log).toEqual(['execute']);
+  });
+
+  it('threads declared write policy to engine-capable adapters before parser-blind builders run', async () => {
+    const log: string[] = [];
+    const raw = {
+      [kovoDeclaredWriteDbHandle](policy: { tables?: readonly string[] }) {
+        log.push(`engine-policy:${policy.tables?.join(',') ?? '<none>'}`);
+        const allowed = new Set(policy.tables ?? []);
+        return {
+          insert(table: string) {
+            return {
+              values() {
+                if (!allowed.has(table)) {
+                  throw new Error(`KV406: engine declared-write policy rejected ${table}`);
+                }
+                log.push(`engine-insert:${table}`);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+      },
+      insert(table: string) {
+        log.push(`raw-insert:${table}`);
+        return { values: () => Promise.resolve() };
+      },
+    };
+    const handle = managedDb(raw, 'write', {
+      sqlWritePolicy: {
+        tables: ['contacts'],
+        touches: ['contact'],
+      },
+    }) as { insert(table: string): { values(): Promise<void> } };
+
+    await expect(handle.insert('contacts').values()).resolves.toBeUndefined();
+    expect(() => handle.insert('userx').values()).toThrow(/KV406/);
+    expect(log).toEqual(['engine-policy:contacts', 'engine-insert:contacts']);
   });
 
   it('write mode declared-table allowlist fails closed on unproven read-shaped SQL functions', () => {
