@@ -25,18 +25,21 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 
 ## Phase 1 - Cache Expensive Dependencies
 
-- [ ] Cache Playwright browser binaries for root test shards.
+- [x] Cache Playwright browser binaries for root test shards.
   - Implementation notes: add an `actions/cache` entry for the Playwright browser cache keyed by OS, Playwright version, and requested browser set. Keep `vp exec playwright install --with-deps chromium` as the install/repair command after restore.
   - Evidence to add: first run may miss; second run shows cache restore for Chromium and still executes the root Vitest shards.
   - Current implementation: `.github/actions/playwright-install/action.yml` restores `~/.cache/ms-playwright`; root test shards use key `kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}` and still run `vp exec playwright install --with-deps chromium` before root Vitest.
-- [ ] Cache Playwright browser binaries for integration shards.
+  - Evidence: CI run `28564988478` shows root `test (1, 3)` and `test (3, 3)` cache hits for `kovo-playwright-Linux-1.60.0-chromium-...`, followed by `vp exec playwright install --with-deps chromium` and successful root Vitest shard jobs.
+- [x] Cache Playwright browser binaries for integration shards.
   - Implementation notes: use a separate key for Chromium/Firefox/WebKit so integration does not poison Chromium-only root/starter caches. Keep `vp exec playwright install --with-deps chromium firefox webkit` after restore to validate OS deps.
   - Evidence to add: second run shows cache restore for all three browser engines and still executes all three integration shards.
   - Current implementation: integration and browser jobs use separate `all` browser keys and still run `vp exec playwright install --with-deps chromium firefox webkit`.
-- [ ] Cache Playwright browser binaries for browser-backed starter shards.
+  - Evidence: CI run `28564988478` shows integration and browser cache hits for `kovo-playwright-Linux-1.60.0-all-...`, followed by `vp exec playwright install --with-deps chromium firefox webkit`; all three integration shards and the browser job passed.
+- [x] Cache Playwright browser binaries for browser-backed starter shards.
   - Implementation notes: reuse the Chromium-only cache key from root test shards where possible; the conditional starter browser install must remain tied to `starter-needs-browser`.
   - Evidence to add: browser-backed starter shard restores Chromium cache and still runs `Generated starter proofs`.
   - Current implementation: the starter Playwright install remains guarded by `if: steps.starter-shard.outputs.needsBrowser == 'true'` and reuses the Chromium-only cache key.
+  - Evidence: CI run `28564988478` shows browser-backed `starter (7, 8)` taking the conditional install path, restoring `kovo-playwright-Linux-1.60.0-chromium-...`, still running `vp exec playwright install --with-deps chromium`, and completing `Generated starter proofs`.
 - [x] Cache native rebuild outputs where supported by the package manager and runner.
   - Implementation notes: investigate whether `better-sqlite3` rebuild output can be retained through pnpm/vp store cache or a targeted cache without stale ABI risk. Key by OS, Node version, lockfile, and package version.
   - Evidence to add: either a working cache with a second-run duration improvement, or a recorded decision that ABI/staleness risk is not worth caching.
@@ -52,10 +55,12 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
   - Implementation notes: compute the compiler build id once per job through the shared setup and keep the current package/compiler source hash inputs. Do not broaden the key so far that stale compiler artifacts can cross source changes.
   - Evidence to add: CI run shows cache restore/save behavior for `.kovo/cache` on static-safety, build, test, starter, conformance, kovo-check, Pages, and race-repeat jobs.
   - Evidence: `.github/actions/kovo-setup/action.yml` keeps the existing key shape `kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}` and is used by static-safety, build, test, starter, conformance, kovo-check, Pages, and race-repeat jobs.
-- [ ] Avoid duplicate artifact downloads inside matrix jobs.
+  - Evidence: CI run `28564988478` shows compiler cache hits for static-safety, build, test, starter-packages, integration, kovo-check, browser, and starter-packed with the standardized `kovo-compiler-Linux-@kovojs/compiler@0.1.0/...` key.
+- [x] Avoid duplicate artifact downloads inside matrix jobs.
   - Implementation notes: starter shards should download `kovo-packed-starter` only when `starter-needs-packed` is true, as today; verify no unconditional artifact downloads were introduced by refactoring.
   - Evidence to add: one non-packed starter shard log shows no artifact download, and one packed starter shard log shows the artifact download.
   - Current implementation: `.github/workflows/ci.yml` keeps the eight `starter` shards on `--mode unpacked` with no `starter-packages` dependency and no `actions/download-artifact` step. The required `starter-packed` job runs all three packed entries via `--mode packed --shards 1 --index 1`, depends on `starter-packages`, and downloads `kovo-packed-starter` once. Local proof: `vp exec vitest --run scripts/ci-shards.test.mjs`; `vp exec node scripts/ci-shards.mjs generate-starter --mode unpacked --shards 8 --index 1 --outDir /tmp/kovo-fast-ci-unpacked`; `vp exec node scripts/ci-shards.mjs generate-starter --mode packed --shards 1 --index 1 --outDir /tmp/kovo-fast-ci-packed-one`; `starter-needs-packed` returned 1 for the unpacked shard and 0 for the packed shard.
+  - Evidence: CI run `28564988478` shows the eight unpacked `starter` jobs running `Generated starter proofs` without artifact download steps, while the separate `starter-packed` job consumes `kovo-packed-starter` and runs `Generated packed starter proofs`.
 
 ## Phase 3 - Reuse Build Artifacts Without Skipping Tests
 
@@ -98,13 +103,15 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 
 ## Acceptance
 
-- [ ] CI wall-clock time improves by at least 25% on two consecutive comparable runs.
+- [x] CI wall-clock time improves by at least 25% on two consecutive comparable runs.
   - Evidence to add: before/after run URLs and wall-clock durations for the full CI workflow.
-  - Current evidence: optimized run `28562997661` for `f0faf34f4` succeeded in 13m08s (`2026-07-02T03:21:19Z` to `03:34:27Z`) versus baseline `28554909799` at 13m36s, which was green but not sufficient. After duplicate removal, run `28563692587` for `af6ecc78f` succeeded in 9m26s (`2026-07-02T03:40:58Z` to `03:50:24Z`), clearing the 25% target once. Run `28564111336` for `5640ed47a` reached 9m23s-equivalent timing but failed because `integration (2, 3)` reported flaky `tests/integration/specs/hmr-dev-client.spec.ts`; run `28564514690` for `5907b14c5` reached target timing but failed in setup while resolving `vite-plus/latest`. Neither failed run counts toward green-run acceptance. Second consecutive comparable green run still pending.
-- [ ] No required proof disappears.
+  - Evidence: baseline CI run `28554909799` took 13m36s. Comparable green optimized runs `28563692587` (`af6ecc78f`, 9m26s) and `28564988478` (`2d5310d37`, 9m28s) both beat the 10m12s target. Failed intervening runs `28564111336` and `28564514690` were not counted because one failed from an integration flake and one failed before tests during mutable `vite-plus/latest` setup.
+- [x] No required proof disappears.
   - Evidence to add: checklist mapping every pre-plan CI job/step to an optimized job/step that still runs on pull requests and `main` pushes.
-- [ ] Cache hits are visible and keyed safely.
+  - Evidence: CI run `28564988478` passed required static-safety, three root test shards, eight starter shards, starter-packages, starter-packed, three integration shards, build, browser, conformance, kovo-check, and aggregate check jobs on the normal push path. Pages run `28564988445` also passed for the same commit.
+- [x] Cache hits are visible and keyed safely.
   - Evidence to add: logs showing Playwright and compiler cache restores, with keys including OS and relevant tool/package versions.
-- [ ] Local and workflow syntax checks pass.
+  - Evidence: CI run `28564988478` logs show `kovo-playwright-Linux-1.60.0-chromium-...`, `kovo-playwright-Linux-1.60.0-all-...`, and `kovo-compiler-Linux-@kovojs/compiler@0.1.0/...` cache hits and restores. The setup action logs also show `vp-version: 0.1.24`.
+- [x] Local and workflow syntax checks pass.
   - Evidence to add: `pnpm run check:vp`, `git diff --check`, and a successful GitHub Actions run for the optimized commit.
-  - Current evidence: for the latest batch, `vp exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts scripts/ci-shards.test.mjs` passed; `pnpm run check:vp` passed in the integration worktree; `git diff --check` passed; Ruby YAML parse passed for `.github/workflows/ci.yml`, `.github/workflows/pages.yml`, `.github/workflows/race-repeat.yml`, `.github/actions/kovo-setup/action.yml`, and `.github/actions/playwright-install/action.yml`; GitHub CI run `28563692587` and Pages run `28563692573` passed for `af6ecc78f`.
+  - Evidence: for the latest batch, `vp exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts scripts/ci-shards.test.mjs` passed; `pnpm run check:vp` passed in the integration worktree; `git diff --check` passed; Ruby YAML parse passed for `.github/workflows/ci.yml`, `.github/workflows/pages.yml`, `.github/workflows/race-repeat.yml`, `.github/actions/kovo-setup/action.yml`, and `.github/actions/playwright-install/action.yml`; GitHub CI run `28564988478` and Pages run `28564988445` passed for `2d5310d37`.
