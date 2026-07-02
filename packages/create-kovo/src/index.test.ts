@@ -268,7 +268,7 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const readDb = drizzle({ client: readonlyPgliteClient(client, { readerRole: true }) });',
+      'client: createPostgresReadonlyClient(client, { readerRole: READER_ROLE })',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb(privilegedReadDb)');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("const READER_ROLE = 'kovo_reader'");
@@ -281,13 +281,14 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'return { db, readonlyDb: secretReadDb, ready }',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      '(tx: unknown) => callback(declaredWriteDrizzleDb(tx as object, policy))',
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createDeclaredWriteDb(db, policy');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("dialectLabel: 'PGlite'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('readonlyPgliteClient');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'declaredWriteDrizzleDb<Db extends object>',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY'])",
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('SET LOCAL ROLE');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('SET TRANSACTION READ ONLY');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('SET LOCAL ROLE');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'const SECRET_READ_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES)',
     );
@@ -810,6 +811,17 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: secretReadDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'Object.defineProperty(db, kovoReadonlyDbHandle',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createDeclaredWriteDb(db, policy');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("dialectLabel: 'SQLite'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile)',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'class DeclaredWriteSqliteAuthorizer',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'assertDeclaredDrizzleTableAllowed',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ready: Promise.resolve()');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(

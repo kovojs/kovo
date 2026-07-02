@@ -114,12 +114,22 @@ export type {
 // `kovoDeclaredWriteDbHandle` lets framework-owned adapters vend a declared-table-scoped writer;
 // `KovoReadonlyHandleError` is the fail-closed runtime throw a read-surface write verb raises.
 export {
+  createDeclaredWriteDb,
+  createPostgresReadonlyClient,
   KovoReadonlyHandleError,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
   readonlyDb,
 } from '../managed-db.js';
-export type { Reader, Writer } from '../managed-db.js';
+export type {
+  DeclaredWriteDbOptions,
+  DeclaredWriteSqliteAuthorizerConstants,
+  DeclaredWriteSqliteAuthorizerDatabase,
+  DeclaredWriteSqliteAuthorizerOptions,
+  PostgresReadonlyClientOptions,
+  Reader,
+  Writer,
+} from '../managed-db.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {
   FileLike,

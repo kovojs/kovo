@@ -230,6 +230,46 @@ they are not claimed as the verified TCB.
       "lineBudget": 30
     },
     {
+      "id": "server.managed-db.declared-write-db",
+      "file": "packages/server/src/managed-db.ts",
+      "name": "createDeclaredWriteDb",
+      "kind": "db-declared-write-wrapper",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.managed-db.declared-write-db",
+      "lineBudget": 55
+    },
+    {
+      "id": "server.managed-db.declared-write-tables",
+      "file": "packages/server/src/managed-db.ts",
+      "name": "assertDeclaredWriteTablesAllowed",
+      "kind": "db-declared-write-classifier",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.managed-db.declared-write-tables",
+      "lineBudget": 30
+    },
+    {
+      "id": "server.managed-db.sqlite-declared-write-authorizer",
+      "file": "packages/server/src/managed-db.ts",
+      "name": "assertSqliteDeclaredWriteStatementAllowed",
+      "kind": "db-declared-write-authorizer",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.managed-db.sqlite-declared-write-authorizer",
+      "lineBudget": 70
+    },
+    {
+      "id": "server.managed-db.postgres-readonly-client",
+      "file": "packages/server/src/managed-db.ts",
+      "name": "createPostgresReadonlyClient",
+      "kind": "db-read-only-wrapper",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.managed-db.postgres-readonly-client",
+      "lineBudget": 20
+    },
+    {
       "id": "server.sql-safe-handle.enforce-managed-sql",
       "file": "packages/server/src/sql-safe-handle.ts",
       "name": "enforceManagedSql",

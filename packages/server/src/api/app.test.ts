@@ -513,6 +513,8 @@ describe('server app-shell public API barrels', () => {
       routingApi.createMemoryWebhookReplayStore,
     );
     expect(publicApi.webhook).toBe(routingApi.webhook);
+    expect(publicApi.createDeclaredWriteDb).toBe(dataApi.createDeclaredWriteDb);
+    expect(publicApi.createPostgresReadonlyClient).toBe(dataApi.createPostgresReadonlyClient);
     expect(publicApi.kovoReadonlyDbHandle).toBe(dataApi.kovoReadonlyDbHandle);
     expect(publicApi.readonlyDb).toBe(dataApi.readonlyDb);
     expect(publicApi.customVerifier).toBe(coreCustomVerifier);

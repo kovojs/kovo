@@ -248,7 +248,9 @@ export type {
 // ./api/rendering.js, and ./api/routing.js.
 export {
   accept,
+  createDeclaredWriteDb,
   createMemoryMutationReplayStore,
+  createPostgresReadonlyClient,
   csrfField,
   csrfToken,
   domain,
