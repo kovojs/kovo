@@ -234,48 +234,85 @@ mattering.
       legitimate read incl. `group_concat`/`string_agg`/`date_trunc`/raw-SQL read succeeds with the static allowlist
       stubbed off. Connection-lifecycle test: a reader connection returned to the pool never leaks read-only state to a
       writer.
-      Progress: focused read-only tests prove SQLite file-backed readers use a separate `readonly`/`query_only` connection
-      and PGlite readers use serialized `BEGIN READ ONLY` transactions, with write/DDL/lock rejection and legitimate
-      read-function coverage. Full Postgres/PGlite dedicated read-only pool enforcement remains open.
+  - [x] **SQLite file-backed reader enforcement.** Separate `readonly`/`query_only` connection rejects write/DDL/lock
+        attempts and allows legitimate read functions.
+        Evidence: `vp exec vitest --run packages/server/src/managed-db.test.ts`.
+  - [x] **PGlite read transaction enforcement.** Serialized `BEGIN READ ONLY` transactions reject write/DDL/lock
+        attempts and allow legitimate read functions.
+        Evidence: `vp exec vitest --run packages/server/src/managed-db.test.ts`.
+  - [ ] **Dedicated Postgres/PGlite read-only pool.** Sessions set `default_transaction_read_only = on` on a dedicated
+        reader pool rather than relying on a per-request toggle on a shared writer-capable connection.
+  - [ ] **Reader/writer lifecycle no-leak proof.** A reader connection returned to the pool must not leak read-only state
+        to a later writer, and writers must remain write-capable.
 - [ ] **1.2 Engine-enforced declared-table writes (DEC-B).** SQLite authorizer; Postgres request-scoped role
       (primary) or stat-delta rollback (fallback, residual documented). Acceptance (paranoid mode): a mutation
       `tables:['contacts']` writing `userx` / `otherschema.contacts` / via DDL is engine-rejected (schema-qualified); an
       in-scope write succeeds.
-      Progress: focused managed-write tests prove the current runtime choke rejects undeclared `userx`,
-      `otherschema.contacts`, DDL/pragma-style writes, and unproven SQL-function side effects before driver execution.
-      `vp exec vitest --run packages/server/src/managed-db.test.ts` also proves framework-owned managed write handles
-      thread declared-table policy to engine-capable adapters before parser-blind builders run. SQLite authorizer and
-      Postgres role/stat-delta enforcement remain open.
+  - [x] **Managed write runtime choke and policy threading.** The current runtime choke rejects undeclared `userx`,
+        `otherschema.contacts`, DDL/pragma-style writes, and unproven SQL-function side effects before driver execution;
+        framework-owned managed write handles thread declared-table policy to engine-capable adapters before
+        parser-blind builders run.
+        Evidence: `vp exec vitest --run packages/server/src/managed-db.test.ts`.
+  - [ ] **SQLite authorizer enforcement.** `sqlite3_set_authorizer` denies writes to non-declared tables/columns and
+        denies DDL/pragma at the engine, not only at the parser/choke layer.
+  - [ ] **Postgres declared-table engine enforcement.** Request-scoped role GRANTs, or the documented stat-delta
+        fallback, reject schema-qualified out-of-scope writes and allow in-scope writes.
 - [ ] **1.3 Static SQL classifier → advisory (DEC-F, gated by A7).** Only after 1.1/1.2 pass paranoid mode. A
       runtime-twin deletion test proves the round-6/7 SQL corpus is enforced with the static classifier stubbed.
+  - [ ] **Runtime SQL chokes live under paranoid mode.** 1.1 and 1.2 must pass their paranoid-mode acceptance before
+        static SQL diagnostics stop being treated as load-bearing proof.
+  - [ ] **Runtime-twin deletion proof.** The round-6/7 SQL corpus must still fail at runtime with the static classifier
+        stubbed to `proven-safe`.
 
 ### Phase 2 — Confidentiality via non-coercible tags + engine lockdown
 
 - [ ] **2.1 Tag secret values at the DB-read boundary (DEC-C 1/3).** Query-builder + view + computed + raw-SQL reads
       all produce `Secret` (raw-SQL fail-closed by table reference; parse-fail → tag).
-      Progress: `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`
-      proves the starter `readonlyAppDb` read boundary boxes declared auth secret-key projections and refuses a
-      Drizzle-view-surfaced `Secret` at query-wire egress. General `kovo({ secret })` metadata extraction for every
-      `context.db`/raw-SQL/computed path remains open.
+  - [x] **Starter `readonlyAppDb` secret boxing for declared auth projections.** The starter read boundary boxes
+        declared auth secret-key projections and refuses a Drizzle-view-surfaced `Secret` at query-wire egress.
+        Evidence: `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`.
+  - [ ] **General `kovo({ secret })` runtime metadata extraction.** Every `context.db` query-builder, view, and computed
+        read path must box secret-classified columns as `Secret` at the DB-read boundary.
+  - [ ] **Raw-SQL secret fail-closed tagging.** Raw SQL that references a secret table tags the whole result `Secret`;
+        parse-fail must also tag rather than depend on parser completeness.
 - [ ] **2.2 Engine column-lockdown for the reader role (DEC-C 2).** Reader role `REVOKE` on secret columns; reading a
       secret column requires a declared capability. Acceptance: the reader role cannot `SELECT` a secret column via raw SQL.
+  - [ ] **Reader role column-level `REVOKE`.** Default reader role cannot `SELECT` secret columns, including through raw
+        SQL.
+  - [ ] **Declared secret-read capability.** Legitimate server-side reads that need the secret use a declared capability
+        and still route egress through `Secret`/`reveal` policy.
 - [ ] **2.3 Every egress choke refuses `Secret` (DEC-C 4, DEC-J).** Wire, headers, redirect, static export, logs,
       error reporter, task status. Acceptance (paranoid mode): `bugz-28` B1 raw-SQL leak throws at the wire with static
       KV435 stubbed; `reveal('reason')` passes; a secret in a log/error/status is refused/redacted (`papercuts-25` O.1).
-      Progress: focused egress tests prove runtime `Secret` refusal/redaction at wire JSON, framework headers, redirect
-      `Location`, static export headers, logs, error reporting, and task status. DB-read boundary secret boxing from 2.1
-      is still required for the raw-SQL/view/computed leak acceptance.
+  - [x] **Current external-egress choke inventory refuses or redacts runtime `Secret`.** Wire JSON, framework headers,
+        redirect `Location`, static export headers, logs, error reporting, and task status are covered at their runtime
+        egress sinks.
+        Evidence: `packages/server/src/secret-egress.ts` plus the focused `query-endpoint`, `response-posture`,
+        `static-export-headers`, `logging`, `diagnostics`, and `task-observability` tests.
+  - [ ] **Raw-SQL/view/computed leak acceptance.** `bugz-28` B1-style raw-SQL leaks must throw at wire egress with
+        static KV435 stubbed; blocked on 2.1 DB-read boundary boxing.
+  - [ ] **Audited reveal acceptance.** `reveal('reason')` must pass through the relevant egress choke with audit-grade
+        provenance.
 - [ ] **2.4 Static KV435 → advisory (DEC-F, gated by A7).**
+  - [ ] **Confidentiality runtime chokes live under paranoid mode.** 2.1/2.2/2.3 must prove no property is enforced by
+        neither layer before KV435 incompleteness degrades to runtime.
+  - [ ] **KV435 runtime-twin deletion proof.** The confidentiality corpus must still fail at runtime with static KV435
+        stubbed to `proven-safe`.
 
 ### Phase 3 — Injection via a contextual default-deny renderer
 
 - [ ] **3.1 `Untrusted` request tags (DEC-D, DX-only).** Accessors return tags; used for error messages, not soundness.
-      Progress: focused request tests prove Kovo-owned parsed JSON/FormData leaves, route params/search, and query search
-      inputs are tagged with `Untrusted` and schema/CSRF validation reveals with framework-owned reasons. Kovo-owned
-      request header/cookie accessors tag values, and CSRF Origin/anonymous-cookie validation reveals them with
-      framework-owned reasons (`vp exec vitest --run packages/server/src/untrusted-request-body.test.ts` and
-      `vp exec vitest --run packages/server/src/csrf.test.ts -t 'origin|anonymous|cookie|CSRF'`). Native
-      `Request.headers` remains the plain platform API by design.
+  - [x] **Body, route, and query request values are tagged and revealed by validation.** Parsed JSON/FormData leaves,
+        route params/search, and query search inputs are tagged with `Untrusted`; schema/CSRF validation reveals with
+        framework-owned reasons.
+        Evidence: `vp exec vitest --run packages/server/src/untrusted-request-body.test.ts`.
+  - [x] **Kovo-owned header/cookie accessors tag values.** Request header/cookie accessors tag values, and CSRF
+        Origin/anonymous-cookie validation reveals them with framework-owned reasons.
+        Evidence: `vp exec vitest --run packages/server/src/untrusted-request-body.test.ts` and
+        `vp exec vitest --run packages/server/src/csrf.test.ts -t 'origin|anonymous|cookie|CSRF'`.
+  - [ ] **Request-shell accessor contract is explicit.** Native `Request.headers` remains the plain platform API by
+        design; the supported Kovo-owned request accessor surface should be documented/covered as DX provenance, not a
+        soundness dependency.
 - [x] **3.2 Contextual default-deny renderer over the final attribute set (DEC-D).** Escape-by-position; refuse at
       non-inert positions unless a proven trusted brand; spread-aware; unknown→escape, executable→refuse. Acceptance
       (paranoid mode): `meta http-equiv=refresh content`, spread-delivered sinks, `<style>`, event handlers,
@@ -284,10 +321,30 @@ mattering.
       event/srcdoc/style/URL sinks, final `meta http-equiv=refresh content`, script/style element text, and a synthetic
       future attribute fail closed or escape at the runtime renderer; `pnpm run check:sink-policy` remains green.
 - [ ] **3.3 Static KV426 → advisory (DEC-F, gated by A7).**
+  - [x] **Runtime renderer choke is live under paranoid mode.** Spread-delivered executable sinks, `meta refresh`,
+        script/style text, and synthetic future attributes fail closed or escape with static KV426 stubbed.
+        Evidence: `KOVO_PARANOID=1 vp exec vitest --run packages/server/src/jsx-runtime.test.ts`.
+  - [x] **KV426 diagnostic/proof-scope wording is honest.** Static KV426 is described as advisory/defense-in-depth and
+        names runtime chokes as the security boundary.
+        Evidence: `pnpm exec vitest --run packages/core/src/diagnostics.test.ts scripts/check-classifier-verdict-routing.test.mjs scripts/check-fail-closed-classifiers.test.mjs`.
+  - [ ] **KV426 runtime-twin deletion proof.** The trusted-output/sink corpus must still fail at runtime with static
+        KV426 stubbed to `proven-safe`.
 
 ### Phase 4 — Unrepresentability + honest static + total proofs
 
 - [ ] **4.1 Choke unrepresentability (DEC-E).** Brand the constructors; reachability gate replaces shape recognition.
+  - [x] **Current egress/DB-exec denominator has a sole-door reachability gate.** The DEC-J inventory and classified
+        sole-door gates are green for the current denominator.
+        Evidence: `pnpm run check:single-choke && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census`.
+  - [x] **`Secret`/`Untrusted` brands are module-private and non-coercible.** Forged structural brands fail and
+        accidental coercion does not launder the runtime tag.
+        Evidence: `packages/core/src/secret.test.ts`.
+  - [ ] **Response/wire-body constructor unrepresentability.** A response or wire body should be constructible only
+        through the framework choke or an audited escape path.
+  - [ ] **DB exec constructor unrepresentability.** DB execution paths should reach managed read/write chokes by type and
+        reachability, not by curated shape recognition.
+  - [ ] **Escape-hatch forgery rejection.** Shadowed `reveal`, `declareOffWire`, fake trusted brands, and bare casts must
+        be rejected or fail to satisfy the validating constructor path.
 - [x] **4.2 Reword static gates as advisory + fix proof scope (DEC-F/G).** Diagnostics name their choke; scanned roots
       derived from marker-imports (fixes `papercuts-26` P4).
       Evidence: `pnpm exec vitest --run packages/core/src/diagnostics.test.ts scripts/check-classifier-verdict-routing.test.mjs scripts/check-fail-closed-classifiers.test.mjs scripts/security-test-build-gate.test.mjs scripts/lib/source-files.test.mjs`
@@ -296,11 +353,16 @@ mattering.
       security-marker imports, including compiler sources.
 - [ ] **4.3 Property-based generators (DEC-G).** Replace index enumerators with seeded grammar generators varying
       read-SOURCE / SINK-position / wrapping (`papercuts-26` P5).
-      Progress: the KV426 trusted-output production proof surface now consumes deterministic seeded SINK-position
-      grammar needles varying sink/source/wrapping shapes, and the mutation harness kills deletion of that generated
-      enrollment (`pnpm exec vitest --run scripts/security-test-build-gate.test.mjs scripts/security-gate-mutations.test.mjs`
-      and `pnpm run check:security-test-builds && pnpm run check:security-gate-mutations`). Broader read-SOURCE and
-      wrapping grammar expansion remains open.
+  - [x] **KV426 trusted-output SINK-position generator.** The production proof surface consumes deterministic seeded
+        grammar needles varying sink/source/wrapping shapes, and the mutation harness kills deletion of that generated
+        enrollment.
+        Evidence: `pnpm exec vitest --run scripts/security-test-build-gate.test.mjs scripts/security-gate-mutations.test.mjs`
+        and `pnpm run check:security-test-builds && pnpm run check:security-gate-mutations`.
+  - [ ] **Read-SOURCE generator.** Seeded cases vary request/query/db-read source families rather than a curated index.
+  - [ ] **General wrapping grammar generator.** Seeded cases vary aliases, helpers, local wrappers, component props, and
+        other wrapping forms across the security proof surfaces.
+  - [ ] **Round-8 paranoid generator acceptance.** Generated adversarial cases run with static classifiers stubbed and
+        prove unsafe cases hit runtime chokes while legitimate cases stay green.
 
 ### Phase 5 — Robustness cleanups surfaced by round 7 (independent)
 
