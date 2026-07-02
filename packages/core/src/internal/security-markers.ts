@@ -203,13 +203,15 @@ export const SECURITY_CODE_REGISTRY = {
 } as const satisfies Readonly<Record<string, SecurityCodeRegistryEntry>>;
 
 /** @internal Security codes that paranoid mode must downgrade to advisory findings. */
-export const PARANOID_SECURITY_ADVISORY_CODES = Object.freeze(
+export const PARANOID_SECURITY_ADVISORY_CODES: readonly string[] = Object.freeze(
   Object.values(SECURITY_CODE_REGISTRY)
-    .filter(
-      (entry) =>
-        entry.enforcement === 'runtime-choke' ||
-        (entry.enforcement === 'by-construction' && entry.paranoidAdvisory === true),
-    )
+    .filter((entry) => {
+      const registryEntry = entry as SecurityCodeRegistryEntry;
+      return (
+        registryEntry.enforcement === 'runtime-choke' ||
+        (registryEntry.enforcement === 'by-construction' && registryEntry.paranoidAdvisory === true)
+      );
+    })
     .map((entry) => entry.code)
     .sort(),
 );

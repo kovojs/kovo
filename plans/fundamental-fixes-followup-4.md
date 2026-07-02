@@ -177,13 +177,14 @@ exactly where an irreducible author-time obligation remains.
 
 ### Phase 0 — Real paranoid mode FIRST (the forcing function)
 
-- [ ] **0.1 Security-code registry + paranoid advisory set derived from it (DEC-D, B2, §2.1).** Build the
+- [x] **0.1 Security-code registry + paranoid advisory set derived from it (DEC-D, B2, §2.1).** Build the
       `code → { property, enforcement, chokeId? }` registry; the three paranoid sites (`graph-output.ts:630`,
       `build-export.ts:465`, `vite.ts:568`) import the advisory set = `runtime-choke` ∪ proven `by-construction` codes.
       Tests: advisory set equals that derivation; no member is build-fatal under `KOVO_PARANOID=1`; every code a security
       classifier emits has a registry entry (drift guard); every `runtime-choke` entry names a live choke;
       `escape-hatch-audit`/build-only codes are NOT in the advisory set. (Reconciles with the brand from plan-2 DEC1, but
       the registry — not brand-inference — is the source of truth, since the brand carries no codes.)
+  - Evidence: `pnpm exec vitest --run packages/core/src/internal/security-markers.test.ts packages/cli/src/index.kovo-check.test.ts packages/server/src/vite-data-plane-gate.test.ts scripts/check-tcb-boundary.test.mjs` (140 tests) plus `pnpm run check:api-surface`, `node scripts/check-tcb-boundary.mjs`, and `node scripts/check-security-guarantee.mjs`.
 - [ ] **0.2 Confirm the round-8 bugs now surface (B4).** With 0.1 landed, `KOVO_PARANOID=1` builds of the `bugz-29`
       B1/B2/B3 shapes MUST reproduce the leak/write (static no longer masks them). Capture these as failing acceptance
       fixtures — they are the Phase 2/3 targets. Re-open the affected followup-3 checkboxes (DEC-F).
@@ -197,6 +198,9 @@ exactly where an irreducible author-time obligation remains.
 - [ ] **1.2 TCB manifest + boundary lint cover the relocated chokes (DEC-E, A10).** Enroll them in `security/TCB.md`;
       extend `check:tcb-boundary` to fail on any security decision inside `packages/create-kovo/templates/**` or outside
       the manifest, and to enforce the budget on the relocated chokes.
+  - Partial: `check:tcb-boundary` now scans generated templates and reserves planned server/drizzle choke entries, but
+    the current generated DB adapters remain in an explicit temporary exception until 1.1/2.1/3.1 relocate their
+    security decisions.
 
 ### Phase 2 — Provenance-sound confidentiality
 
