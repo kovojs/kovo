@@ -1164,6 +1164,44 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['engine-policy:contacts', 'engine-insert:contacts']);
   });
 
+  it('threads declared write policy through an already managed writer without guarding the adapter hook', async () => {
+    const log: string[] = [];
+    const raw = {
+      [kovoDeclaredWriteDbHandle](policy: { tables?: readonly string[] }) {
+        log.push(`engine-policy:${policy.tables?.join(',') ?? '<none>'}`);
+        const allowed = new Set(policy.tables ?? []);
+        return {
+          insert(table: string) {
+            return {
+              values() {
+                if (!allowed.has(table)) {
+                  throw new Error(`KV406: engine declared-write policy rejected ${table}`);
+                }
+                log.push(`engine-insert:${table}`);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+      },
+      insert(table: string) {
+        log.push(`raw-insert:${table}`);
+        return { values: () => Promise.resolve() };
+      },
+    };
+    const alreadyManaged = managedDb(raw, 'write');
+    const handle = managedDb(alreadyManaged, 'write', {
+      sqlWritePolicy: {
+        tables: ['contacts'],
+        touches: ['contact'],
+      },
+    }) as { insert(table: string): { values(): Promise<void> } };
+
+    await expect(handle.insert('contacts').values()).resolves.toBeUndefined();
+    expect(() => handle.insert('userx').values()).toThrow(/KV406/);
+    expect(log).toEqual(['engine-policy:contacts', 'engine-insert:contacts']);
+  });
+
   it('scopes declared-write engine policy to one writer without leaking to later writers', async () => {
     const log: string[] = [];
     const raw = {

@@ -15,7 +15,11 @@
 // summary work is still residue (SPEC §6.6/§10.3: proxies are defense-in-depth, never sold as the
 // proof).
 
-import { wrapManagedDbForSqlSafety, type ManagedSqlWritePolicy } from './sql-safe-handle.js';
+import {
+  frameworkManagedDbRawTarget,
+  wrapManagedDbForSqlSafety,
+  type ManagedSqlWritePolicy,
+} from './sql-safe-handle.js';
 
 declare const readerDbBrand: unique symbol;
 declare const writerDbBrand: unique symbol;
@@ -247,10 +251,11 @@ function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy |
   ) {
     return raw;
   }
-  if (!isRecord(raw)) return raw;
-  const createDeclaredWrite = raw[kovoDeclaredWriteDbHandle];
+  const target = frameworkManagedDbRawTarget(raw) ?? raw;
+  if (!isRecord(target)) return raw;
+  const createDeclaredWrite = target[kovoDeclaredWriteDbHandle];
   if (typeof createDeclaredWrite !== 'function') return raw;
-  return createDeclaredWrite.call(raw, writePolicy) as Db;
+  return createDeclaredWrite.call(target, writePolicy) as Db;
 }
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
