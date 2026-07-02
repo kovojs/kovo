@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -25,6 +26,25 @@ describe('create-kovo starter (build integration: scaffold SQLite)', () => {
       app.cleanup();
     }
   }, 90_000);
+
+  it('declares pgsql-ast-parser in the generated SQLite app package', () => {
+    const app = createStarterApp({
+      dialect: 'sqlite',
+      install: 'link-local',
+      name: 'Sqlite Parser Dependency Proof',
+      tempParent: join(process.cwd(), 'node_modules/.tmp'),
+      tempPrefix: 'create-kovo-sqlite-parser-dep-',
+    });
+
+    try {
+      const packageJson = JSON.parse(readFileSync(join(app.root, 'package.json'), 'utf8')) as {
+        dependencies?: Record<string, string>;
+      };
+      expect(packageJson.dependencies?.['pgsql-ast-parser']).toBe('^12.0.2');
+    } finally {
+      app.cleanup();
+    }
+  });
 
   it('fails production build when a SQLite app registers durable tasks', () => {
     const app = createStarterApp({
