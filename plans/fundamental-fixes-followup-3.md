@@ -318,7 +318,7 @@ mattering.
 
 ### Phase 2 — Confidentiality via non-coercible tags + engine lockdown
 
-- [ ] **2.1 Tag secret values at the DB-read boundary (DEC-C 1/3).** Query-builder + view + computed + raw-SQL reads
+- [x] **2.1 Tag secret values at the DB-read boundary (DEC-C 1/3).** Query-builder + view + computed + raw-SQL reads
       all produce `Secret` (raw-SQL fail-closed by table reference; parse-fail → tag).
   - [x] **Starter `readonlyAppDb` secret boxing for declared auth projections.** The starter read boundary boxes
         declared auth secret-key projections and refuses a Drizzle-view-surfaced `Secret` at query-wire egress.
@@ -331,8 +331,9 @@ mattering.
   - [x] **Computed secret value runtime twin.** A value computed from a runtime `Secret` read is still refused at
         query-wire egress with static KV435 stubbed.
         Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'runtime Secret|schema-declared secret reads' --reporter=dot`.
-  - [ ] **General `kovo({ secret })` runtime metadata extraction.** Every `context.db` query-builder, view, and computed
+  - [x] **General `kovo({ secret })` runtime metadata extraction.** Every `context.db` query-builder, view, and computed
         read path must box secret-classified columns as `Secret` at the DB-read boundary.
+        Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`.
   - [x] **Raw-SQL secret fail-closed tagging.** Raw SQL that references a secret table tags the whole result `Secret`;
         parse-fail also tags an opaque direct-SQL result instead of depending on parser completeness.
         Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`.
@@ -359,8 +360,9 @@ mattering.
 - [ ] **2.4 Static KV435 → advisory (DEC-F, gated by A7).**
   - [ ] **Confidentiality runtime chokes live under paranoid mode.** 2.1/2.2/2.3 must prove no property is enforced by
         neither layer before KV435 incompleteness degrades to runtime.
-  - [ ] **KV435 runtime-twin deletion proof.** The confidentiality corpus must still fail at runtime with static KV435
+  - [x] **KV435 runtime-twin deletion proof.** The confidentiality corpus must still fail at runtime with static KV435
         stubbed to `proven-safe`.
+        Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --reporter=dot`.
 
 ### Phase 3 — Injection via a contextual default-deny renderer
 
@@ -399,7 +401,7 @@ mattering.
 
 ### Phase 4 — Unrepresentability + honest static + total proofs
 
-- [ ] **4.1 Choke unrepresentability (DEC-E).** Brand the constructors; reachability gate replaces shape recognition.
+- [x] **4.1 Choke unrepresentability (DEC-E).** Brand the constructors; reachability gate replaces shape recognition.
   - [x] **Current egress/DB-exec denominator has a sole-door reachability gate.** The DEC-J inventory and classified
         sole-door gates are green for the current denominator.
         Evidence: `pnpm run check:single-choke && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census`.
@@ -409,8 +411,9 @@ mattering.
   - [x] **Response/wire-body constructor unrepresentability.** Query/mutation wire bodies require the framework-owned
         wire-body brand, with durable replay using a reason-bearing audited rehydration path.
         Evidence: `vp exec vitest --run packages/server/src/wire-body-unrepresentable.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/replay.test.ts`.
-  - [ ] **DB exec constructor unrepresentability.** DB execution paths should reach managed read/write chokes by type and
+  - [x] **DB exec constructor unrepresentability.** DB execution paths should reach managed read/write chokes by type and
         reachability, not by curated shape recognition.
+        Evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/webhook.test.ts --reporter=dot`.
   - [x] **Escape-hatch forgery rejection.** Shadowed `reveal`, `declareOffWire`, fake trusted brands, and bare casts must
         be rejected or fail to satisfy the validating constructor path.
         Evidence: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/browser/src/security-output.test.ts`.
@@ -463,6 +466,9 @@ mattering.
         Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts`.
   - [x] **Alias-laundered trust-sink narrowing.** Starter `check:sound-subset` rejects trusted helper calls laundered
         through local aliases of dynamically computed framework namespace members on the TypeScript common path.
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts --reporter=dot`.
+  - [x] **Whole starter security surface enrollment.** Starter `check:sound-subset` fails if any enrolled security
+        surface file disappears from the generated project scan.
         Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts --reporter=dot`.
 - [x] **6.2 Publish the guarantee statement + non-goals (DEC-M).** A `SECURITY.md`/SPEC section states the exact
       choke-backed invariants, threat model, and non-goals; a test proves every stated invariant names a TCB choke and a
