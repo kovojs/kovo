@@ -279,7 +279,10 @@ describe('create-kovo starter (metadata)', () => {
       'Object.defineProperty(db, kovoReadonlyDbHandle',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'return { db, readonlyDb: readonlyDb(db), ready }',
+      'return { db, readonlyDb: secretReadDb, ready }',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      '(tx: unknown) => callback(declaredWriteDrizzleDb(tx as object, policy))',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY'])",
@@ -801,7 +804,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'readonlyDb(db).exec(SCHEMA_DDL)',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: readonlyDb(db)');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: secretReadDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'Object.defineProperty(db, kovoReadonlyDbHandle',
     );

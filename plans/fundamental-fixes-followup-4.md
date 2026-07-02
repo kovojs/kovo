@@ -245,7 +245,7 @@ exactly where an irreducible author-time obligation remains.
 
 ### Phase 3 — Integrity for the default mutation shape
 
-- [ ] **3.1 Declared-write scope = `tables:`, fail-closed (DEC-C, B3).** Scope on `tables:` only; deny all writes
+- [x] **3.1 Declared-write scope = `tables:`, fail-closed (DEC-C, B3).** Scope on `tables:` only; deny all writes
       absent a declared `tables:`; `touches:` grants no write access. **SQLite:** `sqlite3_set_authorizer` (engine, all
       shapes). **Postgres:** bind the write to the Drizzle builder's known target(s); a raw-SQL (`sql.unsafe`) out-of-scope
       write fails closed. App-defined trigger side-effects are a non-goal (§6). Scaffold declares `tables:` for every
@@ -253,8 +253,7 @@ exactly where an irreducible author-time obligation remains.
       starter declares only `touches:`, `mutations.ts:71`). Acceptance (full paranoid): the default mutation writing an
       out-of-scope table (auth `user`/`session`) is rejected; an in-scope `contacts` write succeeds; a raw-SQL out-of-scope
       write fails closed; an absent-`tables:` mutation is write-denied.
-  - Status: framework raw-SQL allowlist, absent-`tables:` denial, scaffold `tables: ['contacts']`, and managed builder
-    target checks are implemented; this stays open until the exact default-starter out-of-scope `auth`/`session` proof is added.
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "starter mutation DB table scope"` proves default starter `contacts` succeeds while auth `user`, auth `session`, raw-SQL auth, and absent-`tables:` writes are rejected and leave no rows.
 - [x] **3.2 A `Secret` box written into a non-secret column is refused; raw-SQL write params fail closed; `reveal` is
       audited (DEC-C.2).** Builder writes inspect `.values()`/`.set()` for boxes; a raw-SQL write with a `Secret` bind
       param is refused outright; `reveal(reason)` records an audit event so a reveal-then-write is traceable. Acceptance
@@ -360,4 +359,4 @@ self-catching rather than self-deceiving.
   `app-runtime-db.sqlite.ts` per-key `secretColumnNames.has(key)`), B2 (view regex), B3 (`touches:` write choke
   dormant); `papercuts-27` P1 (advisory set = `{KV406,KV422,KV438}` at `graph-output.ts:630`/`build-export.ts:465`/
   `vite.ts:568`; `KOVO_PARANOID=1` still KV435-fatal), P2 (`app-runtime-db.sqlite.ts` 683 lines, not in TCB/boundary lint).
-- Current integrated gates: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance|boxes schema-declared secret reads"`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
+- Current integrated gates: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance|boxes schema-declared secret reads"`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "starter mutation DB table scope"`, `pnpm exec vitest --run packages/create-kovo/src/index.test.ts -t "keeps Postgres as the default scaffold dialect|emits the SQLite scaffold variant when requested"`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
