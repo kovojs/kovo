@@ -136,7 +136,7 @@ export const wireJsonRoundTripCorpus: readonly KovoWireJsonCorpusEntry[] = [
 export function jsonSafeWireValue(value: unknown): unknown {
   if (isSecret(value)) {
     throw new Error(
-      'Secret runtime value cannot cross the Kovo client wire; reveal or redact it explicitly before returning it.',
+      'KV435 Secret runtime value cannot cross the Kovo client wire; reveal or redact it explicitly before returning it.',
     );
   }
   if (typeof value === 'bigint') {

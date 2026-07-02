@@ -16,6 +16,7 @@ import {
   type WebResponseBody,
 } from './response.js';
 import { forwardSetCookie } from './cookies.js';
+import { assertNoSecretEgressValue } from './secret-egress.js';
 import type {
   EndpointDeclaration,
   EndpointMethod,
@@ -432,6 +433,7 @@ function assertSafeResponseHeaderName(name: string): void {
 }
 
 function assertSafeResponseHeaderValue(name: string, value: string): void {
+  assertNoSecretEgressValue(value, `response header "${name}"`);
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
     if (code > 0x1f && code !== 0x7f) continue;

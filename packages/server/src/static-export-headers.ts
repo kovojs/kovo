@@ -1,4 +1,6 @@
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
+
+import { assertNoSecretEgressValue } from './secret-egress.js';
 import { StaticExportError, staticExportDiagnostic } from './static-export-diagnostics.js';
 
 interface StaticExportHeaderSinkOptions {
@@ -6,8 +8,8 @@ interface StaticExportHeaderSinkOptions {
 }
 
 interface StaticExportHeaderSink {
-  append(name: string, value: string): void;
-  set(name: string, value: string): void;
+  append(name: unknown, value: unknown): void;
+  set(name: unknown, value: unknown): void;
   toJSON(): Record<string, string>;
 }
 
@@ -69,7 +71,7 @@ export const staticExportHeaders = wireEmitter(
 function* staticExportHeaderEntries(
   source: Headers | HeadersInit,
   options: StaticExportHeaderSinkOptions,
-): Generator<readonly [string, string]> {
+): Generator<readonly [string, unknown]> {
   if (source instanceof Headers) {
     yield* source.entries();
     return;
@@ -83,28 +85,30 @@ function* staticExportHeaderEntries(
           'static export header entries must be [name, value] pairs.',
         );
       }
-      yield [String(entry[0]), String(entry[1])];
+      yield [entry[0], entry[1]];
     }
     return;
   }
 
   for (const [name, value] of Object.entries(source)) {
-    yield [name, String(value)];
+    yield [name, value];
   }
 }
 
 function normalizeStaticExportHeaderName(
-  name: string,
+  name: unknown,
   options: StaticExportHeaderSinkOptions,
 ): string {
-  if (name === '' || hasHeaderControlCharacter(name) || !HEADER_NAME_PATTERN.test(name)) {
+  assertNoSecretEgressValue(name, 'static export header name');
+  const text = String(name);
+  if (text === '' || hasHeaderControlCharacter(text) || !HEADER_NAME_PATTERN.test(text)) {
     throw staticExportHeaderError(
       options,
-      `static export header name '${printableStaticExportHeaderToken(name)}' is not a valid HTTP header token.`,
+      `static export header name '${printableStaticExportHeaderToken(text)}' is not a valid HTTP header token.`,
     );
   }
 
-  const normalizedName = name.toLowerCase();
+  const normalizedName = text.toLowerCase();
   if (normalizedName === 'set-cookie') {
     throw staticExportHeaderError(
       options,
@@ -115,7 +119,7 @@ function normalizeStaticExportHeaderName(
   if (normalizedName.startsWith('kovo-')) {
     throw staticExportHeaderError(
       options,
-      `static export artifacts cannot carry framework-reserved '${name}' headers.`,
+      `static export artifacts cannot carry framework-reserved '${text}' headers.`,
     );
   }
 
@@ -124,17 +128,19 @@ function normalizeStaticExportHeaderName(
 
 function normalizeStaticExportHeaderValue(
   name: string,
-  value: string,
+  value: unknown,
   options: StaticExportHeaderSinkOptions,
 ): string {
-  if (hasHeaderControlCharacter(value)) {
+  assertNoSecretEgressValue(value, `static export header "${name}"`);
+  const text = String(value);
+  if (hasHeaderControlCharacter(text)) {
     throw staticExportHeaderError(
       options,
       `static export header '${name}' contains a control character and cannot be represented safely.`,
     );
   }
 
-  return value;
+  return text;
 }
 
 function hasHeaderControlCharacter(value: string): boolean {

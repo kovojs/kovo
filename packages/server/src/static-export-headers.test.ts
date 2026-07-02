@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { secret } from '@kovojs/core';
 
 import { createStaticExportHeaderSink, staticExportHeaders } from './static-export-headers.js';
 
@@ -24,6 +25,21 @@ describe('server static export header sink', () => {
     expect(() =>
       staticExportHeaders({ 'X-Asset': 'ok\r\nX-Injected: yes' }, { path: '/assets/app.css' }),
     ).toThrow(/contains a control character/);
+  });
+
+  it('refuses Secret runtime values before static export header coercion', () => {
+    expect(() =>
+      staticExportHeaders(
+        { 'X-Asset': secret('sk_live_q5_static_value') as unknown as string },
+        { path: '/assets/app.css' },
+      ),
+    ).toThrow(/KV435 Secret query value reaches the client wire/);
+
+    expect(() =>
+      staticExportHeaders([[secret('X-Secret-Name') as unknown as string, 'ok']], {
+        path: '/assets/app.css',
+      }),
+    ).toThrow(/KV435 Secret query value reaches the client wire/);
   });
 
   it('rejects Set-Cookie and framework-reserved Kovo headers', () => {

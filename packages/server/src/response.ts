@@ -9,6 +9,7 @@ import {
 
 import { InlineUnverifiedUploadError, sniffUploadBytes } from './upload-sniff.js';
 import { finalizeServerResponse } from './response-posture.js';
+import { assertNoSecretEgressValue } from './secret-egress.js';
 
 /** A single header value: one string or a list of strings. */
 export type ResponseHeaderValue = string | string[];
@@ -469,6 +470,7 @@ export const serverResponseToWebResponse = wireEmitter(
 export const redirectLocationHeader = wireEmitter(
   'server.wire.redirect-location-header',
   function (target: string, options: RedirectLocationOptions = {}): string {
+    assertNoSecretEgressValue(target, 'redirect Location header');
     return sanitizeRedirectLocation(target, options);
   },
 );
@@ -491,6 +493,7 @@ export const blessRedirectResponse = wireEmitter('server.wire.bless-redirect-res
 export const redirectLocationHeaderValue = wireEmitter(
   'server.wire.redirect-location-header-value',
   function (value: ResponseHeaderValue, blessed: boolean): string {
+    assertNoSecretEgressValue(value, 'redirect Location header');
     if (blessed) {
       const location = Array.isArray(value) ? (value[0] ?? '/') : value;
       return redirectLocationHeader(location);
