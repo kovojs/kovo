@@ -414,14 +414,14 @@ function assertAmbiguousSqlMethodArguments(
   }
   if (statements.length > 0) return;
   if (writePolicy === undefined || !strictSqlTarget) return;
-  if (!isSuspiciousSqlMethodName(prop)) return;
+  if (!isSqlCapabilityMethodName(prop)) return;
 
   throw new Error(
     `KV422: unknown managed DB method ${describeSqlMethod(prop)} is not a proven SQL builder/read capability and did not receive a recognizable SQL carrier (SPEC §10.2/§10.3).`,
   );
 }
 
-function isSuspiciousSqlMethodName(prop: PropertyKey): boolean {
+function isSqlCapabilityMethodName(prop: PropertyKey): boolean {
   if (typeof prop !== 'string') return true;
   return /sql|query|execute|statement|prepare|insert|update|delete|run|exec|all|get|values/i.test(
     prop,
