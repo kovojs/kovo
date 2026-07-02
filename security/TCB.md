@@ -26,6 +26,43 @@ they are not claimed as the verified TCB.
     "entryMaxLines": 150,
     "totalTcbMaxLines": 600
   },
+  "plannedEntries": [
+    {
+      "id": "drizzle.runtime-metadata.extract",
+      "file": "packages/drizzle/src/runtime-metadata.ts",
+      "name": "extractKovoRuntimeDbMetadata",
+      "kind": "metadata-extractor",
+      "classification": "inventory-classifier",
+      "decision": "drizzle.runtime.extract-kovo-runtime-db-metadata"
+    },
+    {
+      "id": "server.secret-read.box-rows",
+      "file": "packages/server/src/secret-read-boundary.ts",
+      "name": "boxSecretReadRows",
+      "kind": "secret-read-refusal",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.secret-read.box-rows"
+    },
+    {
+      "id": "server.declared-write.authorize",
+      "file": "packages/server/src/declared-write-boundary.ts",
+      "name": "assertDeclaredWriteAllowed",
+      "kind": "db-write-scope-refusal",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.declared-write.authorize"
+    },
+    {
+      "id": "server.readonly-query.assert",
+      "file": "packages/server/src/readonly-query-boundary.ts",
+      "name": "assertReadonlyQueryAllowed",
+      "kind": "db-read-only-refusal",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.readonly-query.assert"
+    }
+  ],
   "entries": [
     {
       "id": "core.security-markers.security-classifier",

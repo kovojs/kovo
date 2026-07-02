@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkTcbBoundary } from './check-tcb-boundary.mjs';
+import { checkTcbBoundary, collectTcbBoundarySourceFiles } from './check-tcb-boundary.mjs';
 
 const manifestPath = 'security/TCB.md';
 
-function manifest(entries, budgets = { entryMaxLines: 20, totalTcbMaxLines: 50 }) {
+function manifestWithOptions({
+  budgets = { entryMaxLines: 20, totalTcbMaxLines: 50 },
+  entries,
+  plannedEntries,
+}) {
   return `# Test TCB
 
 \`\`\`json tcb-manifest
@@ -13,6 +17,7 @@ ${JSON.stringify(
     schema: 'kovo.security.tcb/v1',
     source: 'test',
     budgets,
+    ...(plannedEntries === undefined ? {} : { plannedEntries }),
     entries,
   },
   null,
@@ -36,7 +41,11 @@ function entry(overrides = {}) {
 
 function run(files, entries, options = {}) {
   const all = {
-    [manifestPath]: manifest(entries, options.budgets),
+    [manifestPath]: manifestWithOptions({
+      budgets: options.budgets,
+      entries,
+      plannedEntries: options.plannedEntries,
+    }),
     ...files,
   };
   return checkTcbBoundary({
@@ -209,5 +218,116 @@ export const emitChoke = wireEmitter('test.actual', function (value) {
     expect(result.findings).toContain(
       `${manifestPath}: test.choke is TCB but has no positive integer lineBudget`,
     );
+  });
+
+  it('rejects security decision wrappers in generated templates', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/create-kovo/templates/src/_kovo/new-runtime.ts': `
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
+export const classifyGenerated = securityClassifier('template.generated', function (value) {
+  return value;
+});
+`,
+      },
+      [entry({ kind: 'function' })],
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      'packages/create-kovo/templates/src/_kovo/new-runtime.ts:2: generated templates may only wire framework-provided security metadata/chokes; security marker import belongs in a manifested framework TCB entry',
+    );
+    expect(result.findings.join('\n')).toContain(
+      'packages/create-kovo/templates/src/_kovo/new-runtime.ts:3: generated templates may only wire framework-provided security metadata/chokes; securityClassifier() security decision wrapper belongs in a manifested framework TCB entry',
+    );
+  });
+
+  it('allows generated templates to wire imported framework chokes', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/create-kovo/templates/src/_kovo/runtime-wiring.ts': `
+import { readonlyDb } from '@kovojs/server';
+export function appRuntimeDb(db) {
+  return { readonlyDb: readonlyDb(db) };
+}
+`,
+      },
+      [entry({ kind: 'function' })],
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('keeps the current generated DB adapter exception explicit until relocation lands', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts': `
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
+export const legacyGeneratedDecision = wireEmitter('template.legacy', function (value) {
+  return value;
+});
+`,
+      },
+      [entry({ kind: 'function' })],
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      'legacyGeneratedDecision uses wireEmitter() but is not listed',
+    );
+    expect(result.findings.join('\n')).not.toContain('generated templates may only wire');
+  });
+
+  it('rejects a planned TCB declaration until it is enrolled with a budgeted entry', () => {
+    const result = run(
+      {
+        'packages/server/src/choke.ts': 'export function emitChoke(value) { return value; }',
+        'packages/server/src/secret-read-boundary.ts': `
+export function boxSecretReadRows(rows) {
+  return rows;
+}
+`,
+      },
+      [entry({ kind: 'function' })],
+      {
+        plannedEntries: [
+          {
+            classification: 'tcb',
+            file: 'packages/server/src/secret-read-boundary.ts',
+            id: 'server.secret-read.box-rows',
+            kind: 'secret-read-refusal',
+            name: 'boxSecretReadRows',
+          },
+        ],
+      },
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.findings.join('\n')).toContain(
+      'planned TCB entry server.secret-read.box-rows declaration boxSecretReadRows exists but is still only reserved in plannedEntries',
+    );
+  });
+
+  it('includes generated templates in the default TCB boundary source set', async () => {
+    const { mkdir, writeFile } = await import('node:fs/promises');
+    const { tmpdir } = await import('node:os');
+    const path = await import('node:path');
+    const root = await mkdir(
+      path.join(tmpdir(), `kovo-tcb-boundary-${process.pid}-${Date.now()}`),
+      {
+        recursive: true,
+      },
+    );
+    const template = 'packages/create-kovo/templates/src/_kovo/runtime-wiring.ts';
+    const server = 'packages/server/src/choke.ts';
+    for (const file of [template, server]) {
+      await mkdir(path.dirname(path.join(root, file)), { recursive: true });
+      await writeFile(path.join(root, file), 'export {};\n');
+    }
+
+    expect(collectTcbBoundarySourceFiles(root)).toEqual([template, server]);
   });
 });
