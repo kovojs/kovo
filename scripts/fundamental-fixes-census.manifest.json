@@ -178,9 +178,10 @@
         "mutationGate": "pnpm run check:security-gate-mutations kills the managed DB throw/escape ordering mutants and the M4 dialect-matrix requirement mutant"
       },
       "sourceDecisions": [
+        "server.sql.classify-managed-sql",
+        "server.sql.classify-statement",
         "server.sql.enforce-managed-sql",
         "server.sql.managed-safety-mode",
-        "server.sql.parse-managed-write-tables",
         "server.sql.write-table-allowlist"
       ]
     },

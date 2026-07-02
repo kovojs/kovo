@@ -29,11 +29,15 @@ export interface FrameworkIdentityOptions {
 export type FrameworkIdentityTypeScript = Pick<
   typeof TypeScript,
   | 'forEachChild'
+  | 'isArrayLiteralExpression'
+  | 'isArrowFunction'
   | 'isAsExpression'
   | 'isBindingElement'
   | 'isBlock'
   | 'isCallExpression'
   | 'isClassDeclaration'
+  | 'isClassExpression'
+  | 'isFunctionLike'
   | 'isExportDeclaration'
   | 'isExportSpecifier'
   | 'isExpressionStatement'
@@ -48,15 +52,20 @@ export type FrameworkIdentityTypeScript = Pick<
   | 'isNamedExports'
   | 'isNamedImports'
   | 'isNamespaceImport'
+  | 'isNewExpression'
   | 'isNonNullExpression'
+  | 'isNumericLiteral'
   | 'isObjectBindingPattern'
   | 'isObjectLiteralExpression'
   | 'isParameter'
   | 'isParenthesizedExpression'
   | 'isPropertyAccessExpression'
   | 'isPropertyAssignment'
+  | 'isPropertyDeclaration'
+  | 'isReturnStatement'
   | 'isSatisfiesExpression'
   | 'isSourceFile'
+  | 'isSpreadAssignment'
   | 'isStringLiteralLike'
   | 'isTypeAliasDeclaration'
   | 'isTypeAssertionExpression'
@@ -68,8 +77,10 @@ export type FrameworkIdentityTypeScript = Pick<
 /** @internal Resolver behavior for an expression syntax kind. */
 export type FrameworkIdentityExpressionKindResolution =
   | 'fail-closed'
+  | 'resolve-call-expression'
   | 'resolve-element-access'
   | 'resolve-identifier'
+  | 'resolve-new-expression'
   | 'resolve-property-access'
   | 'unwrap-expression';
 
@@ -365,6 +376,16 @@ function canonicalExpression(
         : undefined;
     }
 
+    case 'resolve-call-expression': {
+      if (!ts.isCallExpression(node)) return undefined;
+      return callReturnIdentity(ts, sourceFile, node, options, seen, depth + 1);
+    }
+
+    case 'resolve-new-expression': {
+      if (!ts.isNewExpression(node)) return undefined;
+      return newExpressionIdentity(ts, sourceFile, node, options, seen, depth + 1);
+    }
+
     case 'fail-closed':
     case 'unwrap-expression':
       return undefined;
@@ -514,6 +535,22 @@ function namespaceMemberIdentity(
     );
   }
 
+  if (ts.isArrayLiteralExpression(expression)) {
+    return arrayLiteralMemberIdentity(ts, sourceFile, expression, member, options, seen, depth + 1);
+  }
+
+  if (ts.isNewExpression(expression)) {
+    return newExpressionMemberIdentity(
+      ts,
+      sourceFile,
+      expression,
+      member,
+      options,
+      seen,
+      depth + 1,
+    );
+  }
+
   return undefined;
 }
 
@@ -531,14 +568,164 @@ function objectLiteralMemberIdentity(
   if (seen.has(key)) return undefined;
   seen.add(key);
 
-  for (const property of object.properties) {
-    if (!ts.isPropertyAssignment(property)) continue;
-    const propertyName = propertyNameText(ts, property.name);
-    if (propertyName !== member) continue;
-    return canonicalExpression(ts, sourceFile, property.initializer, options, seen, depth + 1);
+  for (let index = object.properties.length - 1; index >= 0; index -= 1) {
+    const property = object.properties[index];
+    if (property === undefined) continue;
+    if (ts.isPropertyAssignment(property)) {
+      const propertyName = propertyNameText(ts, property.name);
+      if (propertyName !== member) continue;
+      return canonicalExpression(ts, sourceFile, property.initializer, options, seen, depth + 1);
+    }
+    if (ts.isSpreadAssignment(property)) {
+      const spreadIdentity = namespaceMemberIdentity(
+        ts,
+        sourceFile,
+        property.expression,
+        member,
+        options,
+        seen,
+        depth + 1,
+      );
+      if (spreadIdentity) return spreadIdentity;
+    }
   }
 
   return undefined;
+}
+
+function arrayLiteralMemberIdentity(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  array: TypeScript.ArrayLiteralExpression,
+  member: string,
+  options: FrameworkIdentityOptions,
+  seen: Set<string>,
+  depth: number,
+): FrameworkExportIdentity | undefined {
+  if (depth > MAX_RESOLUTION_DEPTH) return undefined;
+  const index = Number(member);
+  if (!Number.isInteger(index) || index < 0) return undefined;
+  const element = array.elements[index];
+  if (element === undefined) return undefined;
+  const key = `array:${array.getStart(sourceFile)}:${member}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+  return canonicalExpression(ts, sourceFile, element, options, seen, depth + 1);
+}
+
+function callReturnIdentity(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  call: TypeScript.CallExpression,
+  options: FrameworkIdentityOptions,
+  seen: Set<string>,
+  depth: number,
+): FrameworkExportIdentity | undefined {
+  if (depth > MAX_RESOLUTION_DEPTH) return undefined;
+  const key = `call:${call.getStart(sourceFile)}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+
+  const callee = unwrapExpression(ts, call.expression);
+  if (ts.isArrowFunction(callee) || ts.isFunctionExpression(callee)) {
+    return functionReturnIdentity(ts, sourceFile, callee, options, seen, depth + 1);
+  }
+  if (!ts.isIdentifier(callee)) return undefined;
+  const declaration = declarationForIdentifier(ts, sourceFile, callee);
+  if (declaration === undefined) return undefined;
+  if (ts.isFunctionDeclaration(declaration)) {
+    return functionReturnIdentity(ts, sourceFile, declaration, options, seen, depth + 1);
+  }
+  if (!ts.isVariableDeclaration(declaration) || declaration.initializer === undefined) {
+    return undefined;
+  }
+  const initializer = unwrapExpression(ts, declaration.initializer);
+  if (!ts.isArrowFunction(initializer) && !ts.isFunctionExpression(initializer)) return undefined;
+  return functionReturnIdentity(ts, sourceFile, initializer, options, seen, depth + 1);
+}
+
+function functionReturnIdentity(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  fn: TypeScript.ArrowFunction | TypeScript.FunctionDeclaration | TypeScript.FunctionExpression,
+  options: FrameworkIdentityOptions,
+  seen: Set<string>,
+  depth: number,
+): FrameworkExportIdentity | undefined {
+  if (depth > MAX_RESOLUTION_DEPTH || fn.body === undefined) return undefined;
+  if (!ts.isBlock(fn.body)) {
+    return canonicalExpression(ts, sourceFile, fn.body, options, seen, depth + 1);
+  }
+  for (const statement of fn.body.statements) {
+    if (ts.isReturnStatement(statement) && statement.expression !== undefined) {
+      return canonicalExpression(ts, sourceFile, statement.expression, options, seen, depth + 1);
+    }
+  }
+  return undefined;
+}
+
+function newExpressionIdentity(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  expression: TypeScript.NewExpression,
+  options: FrameworkIdentityOptions,
+  seen: Set<string>,
+  depth: number,
+): FrameworkExportIdentity | undefined {
+  if (depth > MAX_RESOLUTION_DEPTH) return undefined;
+  return canonicalExpression(ts, sourceFile, expression.expression, options, seen, depth + 1);
+}
+
+function newExpressionMemberIdentity(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  expression: TypeScript.NewExpression,
+  member: string,
+  options: FrameworkIdentityOptions,
+  seen: Set<string>,
+  depth: number,
+): FrameworkExportIdentity | undefined {
+  if (depth > MAX_RESOLUTION_DEPTH) return undefined;
+  const classDeclaration = classLikeForNewExpression(
+    ts,
+    sourceFile,
+    expression,
+    options,
+    seen,
+    depth + 1,
+  );
+  if (classDeclaration === undefined) return undefined;
+  const key = `new-member:${classDeclaration.getStart(sourceFile)}:${member}`;
+  if (seen.has(key)) return undefined;
+  seen.add(key);
+  for (const classMember of classDeclaration.members) {
+    if (!ts.isPropertyDeclaration(classMember) || classMember.initializer === undefined) continue;
+    if (propertyNameText(ts, classMember.name) !== member) continue;
+    return canonicalExpression(ts, sourceFile, classMember.initializer, options, seen, depth + 1);
+  }
+  return undefined;
+}
+
+function classLikeForNewExpression(
+  ts: FrameworkIdentityTypeScript,
+  sourceFile: TypeScript.SourceFile,
+  expression: TypeScript.NewExpression,
+  options: FrameworkIdentityOptions,
+  seen: Set<string>,
+  depth: number,
+): TypeScript.ClassDeclaration | TypeScript.ClassExpression | undefined {
+  if (depth > MAX_RESOLUTION_DEPTH) return undefined;
+  const callee = unwrapExpression(ts, expression.expression);
+  if (ts.isClassExpression(callee)) return callee;
+  if (!ts.isIdentifier(callee)) return undefined;
+  const declaration = declarationForIdentifier(ts, sourceFile, callee);
+  if (declaration === undefined) return undefined;
+  if (ts.isClassDeclaration(declaration)) return declaration;
+  if (!ts.isVariableDeclaration(declaration) || declaration.initializer === undefined) {
+    return undefined;
+  }
+  const initializer = unwrapExpression(ts, declaration.initializer);
+  return ts.isClassExpression(initializer) ? initializer : undefined;
 }
 
 function declarationForIdentifier(
@@ -909,6 +1096,10 @@ function frameworkIdentityExpressionKindResolution(
       return 'resolve-property-access';
     case ts.SyntaxKind.ElementAccessExpression:
       return 'resolve-element-access';
+    case ts.SyntaxKind.CallExpression:
+      return 'resolve-call-expression';
+    case ts.SyntaxKind.NewExpression:
+      return 'resolve-new-expression';
     case ts.SyntaxKind.ParenthesizedExpression:
     case ts.SyntaxKind.AsExpression:
     case ts.SyntaxKind.SatisfiesExpression:
@@ -1000,7 +1191,9 @@ function elementAccessMemberName(
   ts: FrameworkIdentityTypeScript,
   node: TypeScript.ElementAccessExpression,
 ): string | undefined {
-  return ts.isStringLiteralLike(node.argumentExpression) ? node.argumentExpression.text : undefined;
+  if (ts.isStringLiteralLike(node.argumentExpression)) return node.argumentExpression.text;
+  if (ts.isNumericLiteral(node.argumentExpression)) return node.argumentExpression.text;
+  return undefined;
 }
 
 function unwrapExpression(

@@ -18,10 +18,12 @@ import {
 } from '@kovojs/core/internal/sql-safety';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import {
-  parseSqlWriteTables,
+  classifyStatement,
   UNTABLED_SQL_WRITE,
   type ParsedSqlWriteTarget,
   type ParseSqlWriteTablesOptions,
+  type SqlClassifierVerdict,
+  type SqlWriteTargets,
 } from './sql-write-allowlist.js';
 
 /** Runtime raw-SQL write table policy enforced on mutation managed DB handles. */
@@ -556,24 +558,28 @@ const assertSqlWriteTablesAllowed = securityClassifier(
     const sql = sqlStatementText(statement);
     if (sql === undefined) return;
 
-    let writeTables: ParsedSqlWriteTarget[];
-    try {
-      writeTables = parseManagedSqlWriteTables(sql, writePolicy?.dialect);
-    } catch (error) {
+    const verdict = classifyManagedSql(sql, writePolicy?.dialect);
+    if (verdict.kind === 'proven-safe') return;
+    if (verdict.kind === 'unproven') {
       throw new Error(
-        'KV406: raw-SQL write table allowlist could not parse an executable statement on a managed mutation DB handle (SPEC §10.3/§11.2).',
-        { cause: error },
+        [
+          'KV406: raw-SQL write table allowlist could not prove an executable statement read-only or table-resolved on a managed mutation DB handle (SPEC §10.3/§11.2).',
+          `  reason: ${verdict.reason}`,
+        ].join('\n'),
       );
     }
-    if (writeTables.length === 0) return;
+
+    const writeTables = verdict.detail;
     if (writeTables.includes(UNTABLED_SQL_WRITE)) {
       throw new Error(
         'KV406: raw-SQL write table allowlist encountered a write with no provable table allowlist target on a managed mutation DB handle (SPEC §10.3/§11.2).',
       );
     }
 
-    const writeTableNames = writeTables.filter(isParsedSqlTableName);
-    const allowed = new Set(declaredTables);
+    const writeTableNames = writeTables
+      .filter(isParsedSqlTableName)
+      .map(normalizeManagedSqlTableName);
+    const allowed = new Set(declaredTables.map(normalizeManagedSqlTableName));
     const unexpected = writeTableNames.filter((table) => !allowed.has(table));
     if (unexpected.length === 0) return;
 
@@ -594,35 +600,34 @@ const assertReadSqlStatement = securityClassifier(
     const sql = sqlStatementText(statement);
     if (sql === undefined) return;
 
-    let writeTables: ParsedSqlWriteTarget[];
-    try {
-      writeTables = parseManagedSqlWriteTables(sql, dialect);
-    } catch (error) {
-      throw new Error(
-        'KV433: read-only SQL capability could not parse an executable statement on a managed query DB handle (SPEC §10.3/§11.2).',
-        { cause: error },
-      );
-    }
-    if (writeTables.length === 0) return;
+    const verdict = classifyManagedSql(sql, dialect);
+    if (verdict.kind === 'proven-safe') return;
 
     throw new Error(
       [
-        'KV433: read-only SQL capability attempted to mutate table(s) from a query loader (SPEC §10.3/§11.2).',
-        `  tables: ${formatSqlWriteTargets(writeTables)}`,
+        verdict.kind === 'unproven'
+          ? 'KV433: read-only SQL capability could not prove an executable statement read-only on a managed query DB handle (SPEC §10.3/§11.2).'
+          : 'KV433: read-only SQL capability attempted to mutate table(s) from a query loader (SPEC §10.3/§11.2).',
+        verdict.kind === 'unproven'
+          ? `  reason: ${verdict.reason}`
+          : `  tables: ${formatSqlWriteTargets(verdict.detail)}`,
       ].join('\n'),
     );
   },
 );
 
-const parseManagedSqlWriteTables = securityClassifier(
-  'server.sql.parse-managed-write-tables',
-  function (sql: string, dialect: ParseSqlWriteTablesOptions['dialect']): ParsedSqlWriteTarget[] {
-    try {
-      return parseSqlWriteTables(sql, { dialect });
-    } catch (error) {
-      if (dialect !== undefined) throw error;
-      return parseSqlWriteTables(sql, { dialect: 'sqlite' });
-    }
+const classifyManagedSql = securityClassifier(
+  'server.sql.classify-managed-sql',
+  function (
+    sql: string,
+    dialect: ParseSqlWriteTablesOptions['dialect'],
+  ): SqlClassifierVerdict<SqlWriteTargets> {
+    const primary = classifyStatement(sql, { dialect });
+    if (primary.kind !== 'unproven' || dialect !== undefined) return primary;
+
+    const sqlite = classifyStatement(sql, { dialect: 'sqlite' });
+    if (sqlite.kind !== 'unproven') return sqlite;
+    return primary;
   },
 );
 
@@ -630,6 +635,10 @@ function formatSqlWriteTargets(targets: readonly ParsedSqlWriteTarget[]): string
   return targets
     .map((target) => (target === UNTABLED_SQL_WRITE ? '<untabled write>' : target))
     .join(', ');
+}
+
+function normalizeManagedSqlTableName(table: string): string {
+  return table.includes('.') ? table : `public.${table}`;
 }
 
 function isParsedSqlTableName(target: ParsedSqlWriteTarget): target is string {

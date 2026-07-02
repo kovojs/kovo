@@ -1,12 +1,20 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import {
+  PROVEN_SAFE,
+  type ClassifierVerdict,
+  provenUnsafe,
+  unproven,
+} from '@kovojs/core/internal/classifier-verdict';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import * as ts from 'typescript';
 
 import { type CompilerDiagnostic, type DiagnosticFactory } from '../diagnostics.js';
 import {
+  expressionResolvesToTrustedHtmlBrand,
   expressionResolvesToRenderedHtmlRawSink,
   expressionResolvesToTrustedHtmlPureBrand,
   expressionResolvesToTrustedUrlPureBrand,
+  isUrlAttribute,
 } from '../output-context-facts.js';
 import { propertyNameText } from '../scan/ast.js';
 import type { ComponentModuleModel } from '../scan/parse.js';
@@ -57,20 +65,26 @@ export const validateTrustedHtmlProvenance = securityClassifier(
       if (ts.isCallExpression(node)) {
         const sink = rawTrustSinkForCall(sourceFile, node);
         const value = node.arguments[0];
-        if (
-          sink !== null &&
-          value !== undefined &&
-          !(sink.auditedReasonAllowed && hasAuditedReason(node))
-        ) {
+        if (sink === null) {
+          // Not a raw/trusted sink call; ordinary calls are outside KV426.
+        } else if (value !== undefined && !(sink.auditedReasonAllowed && hasAuditedReason(node))) {
           const provenance = classifyExpression(value, {
             ...enclosingRenderProvenanceBindings(node, bindingsByRender),
             depth: 0,
+            trustedTypeNames: trustedTypeLocalNames(sourceFile),
             visited: new Set<ts.Node>(),
           });
-          if (provenance !== null) {
+          if (provenance === null) {
+            // Proven local/static-clean value.
+          } else {
             found.push(rawTrustProvenanceDiagnostic(diagnostics, value, provenance, sink));
           }
         }
+      }
+      if (ts.isJsxAttribute(node)) {
+        found.push(
+          ...validateJsxAttributeTrustedProvenance(diagnostics, sourceFile, node, bindingsByRender),
+        );
       }
       ts.forEachChild(node, visit);
     };
@@ -80,11 +94,27 @@ export const validateTrustedHtmlProvenance = securityClassifier(
 );
 
 type Provenance = 'query' | 'request' | 'unprovable';
+type TrustedSinkVerdict = ClassifierVerdict<Provenance>;
+type TrustedSinkExpectedBrand = 'trustedHtml' | 'trustedUrl';
+
+interface TrustedTypeLocalNames {
+  readonly trustedHtml: ReadonlySet<string>;
+  readonly trustedUrl: ReadonlySet<string>;
+}
 
 interface RawTrustSink {
   readonly auditedReasonAllowed: boolean;
-  readonly label: 'renderedHtml' | 'trustedHtml' | 'trustedUrl';
+  readonly expectedBrand: TrustedSinkExpectedBrand;
+  readonly label:
+    | 'dangerouslySetInnerHTML'
+    | 'html'
+    | 'innerHTML'
+    | 'renderedHtml'
+    | 'trustedHtml'
+    | 'trustedUrl'
+    | 'rawHtml';
   readonly rawSink: 'raw HTML' | 'trusted URL';
+  readonly syntax: 'call' | 'value';
 }
 
 interface ClassifyContext {
@@ -94,6 +124,7 @@ interface ClassifyContext {
   readonly requestBindings: ReadonlySet<string>;
   readonly requestSlotRoots: ReadonlySet<string>;
   readonly depth: number;
+  readonly trustedTypeNames: TrustedTypeLocalNames;
   readonly visited: Set<ts.Node>;
 }
 
@@ -117,6 +148,8 @@ const RENDER_PROPERTY = 'render';
 const BROWSER_MODULE_SPECIFIER = '@kovojs/browser';
 const SERVER_MODULE_SPECIFIER = '@kovojs/server';
 const SERVER_INTERNAL_HTML_MODULE_SPECIFIER = '@kovojs/server/internal/html';
+const TRUSTED_HTML_TYPE_EXPORT = 'TrustedHtml';
+const TRUSTED_URL_TYPE_EXPORT = 'TrustedUrl';
 
 const rawTrustSinkForCall = securityClassifier(
   'compiler.trusted-html.raw-trust-call',
@@ -131,17 +164,57 @@ const rawTrustSinkForExpression = securityClassifier(
   'compiler.trusted-html.raw-trust-expression',
   function (sourceFile: ts.SourceFile, expression: ts.Expression): RawTrustSink | null {
     if (expressionResolvesToTrustedHtmlPureBrand(sourceFile, expression)) {
-      return { auditedReasonAllowed: true, label: 'trustedHtml', rawSink: 'raw HTML' };
+      return {
+        auditedReasonAllowed: true,
+        expectedBrand: 'trustedHtml',
+        label: 'trustedHtml',
+        rawSink: 'raw HTML',
+        syntax: 'call',
+      };
     }
     if (expressionResolvesToTrustedUrlPureBrand(sourceFile, expression)) {
-      return { auditedReasonAllowed: true, label: 'trustedUrl', rawSink: 'trusted URL' };
+      return {
+        auditedReasonAllowed: true,
+        expectedBrand: 'trustedUrl',
+        label: 'trustedUrl',
+        rawSink: 'trusted URL',
+        syntax: 'call',
+      };
     }
     if (expressionResolvesToRenderedHtmlRawSink(sourceFile, expression)) {
-      return { auditedReasonAllowed: false, label: 'renderedHtml', rawSink: 'raw HTML' };
+      return {
+        auditedReasonAllowed: false,
+        expectedBrand: 'trustedHtml',
+        label: 'renderedHtml',
+        rawSink: 'raw HTML',
+        syntax: 'call',
+      };
     }
     return dynamicNamespaceRawTrustSink(sourceFile, expression);
   },
 );
+
+function validateJsxAttributeTrustedProvenance(
+  diagnostics: DiagnosticFactory,
+  sourceFile: ts.SourceFile,
+  attribute: ts.JsxAttribute,
+  bindingsByRender: ReadonlyMap<ts.Node, RenderProvenanceBindings>,
+): CompilerDiagnostic[] {
+  const target = rawTrustSinkForJsxAttribute(sourceFile, attribute);
+  const value = jsxAttributeExpression(attribute);
+  if (target === null || value === undefined) return [];
+
+  const bindings = enclosingRenderProvenanceBindings(attribute, bindingsByRender);
+  const verdict = classifyTrustedSinkValue(sourceFile, value, target, {
+    ...bindings,
+    depth: 0,
+    trustedTypeNames: trustedTypeLocalNames(sourceFile),
+    visited: new Set<ts.Node>(),
+  });
+  if (verdict.kind === 'proven-safe') return [];
+  const provenance = verdict.kind === 'proven-unsafe' ? verdict.detail : 'unprovable';
+  return [rawTrustProvenanceDiagnostic(diagnostics, value, provenance, target)];
+}
 
 type TrustNamespaceModule =
   | typeof BROWSER_MODULE_SPECIFIER
@@ -174,29 +247,59 @@ function trustNamespaceMemberSink(
     (moduleSpecifier === BROWSER_MODULE_SPECIFIER || moduleSpecifier === SERVER_MODULE_SPECIFIER) &&
     member === 'trustedHtml'
   ) {
-    return { auditedReasonAllowed: true, label: 'trustedHtml', rawSink: 'raw HTML' };
+    return {
+      auditedReasonAllowed: true,
+      expectedBrand: 'trustedHtml',
+      label: 'trustedHtml',
+      rawSink: 'raw HTML',
+      syntax: 'call',
+    };
   }
   if (
     (moduleSpecifier === BROWSER_MODULE_SPECIFIER || moduleSpecifier === SERVER_MODULE_SPECIFIER) &&
     member === 'trustedUrl'
   ) {
-    return { auditedReasonAllowed: true, label: 'trustedUrl', rawSink: 'trusted URL' };
+    return {
+      auditedReasonAllowed: true,
+      expectedBrand: 'trustedUrl',
+      label: 'trustedUrl',
+      rawSink: 'trusted URL',
+      syntax: 'call',
+    };
   }
   if (
     (moduleSpecifier === SERVER_MODULE_SPECIFIER ||
       moduleSpecifier === SERVER_INTERNAL_HTML_MODULE_SPECIFIER) &&
     member === 'renderedHtml'
   ) {
-    return { auditedReasonAllowed: false, label: 'renderedHtml', rawSink: 'raw HTML' };
+    return {
+      auditedReasonAllowed: false,
+      expectedBrand: 'trustedHtml',
+      label: 'renderedHtml',
+      rawSink: 'raw HTML',
+      syntax: 'call',
+    };
   }
   return null;
 }
 
 function unknownTrustNamespaceMemberSink(moduleSpecifier: TrustNamespaceModule): RawTrustSink {
   if (moduleSpecifier === SERVER_INTERNAL_HTML_MODULE_SPECIFIER) {
-    return { auditedReasonAllowed: false, label: 'renderedHtml', rawSink: 'raw HTML' };
+    return {
+      auditedReasonAllowed: false,
+      expectedBrand: 'trustedHtml',
+      label: 'renderedHtml',
+      rawSink: 'raw HTML',
+      syntax: 'call',
+    };
   }
-  return { auditedReasonAllowed: true, label: 'trustedHtml', rawSink: 'raw HTML' };
+  return {
+    auditedReasonAllowed: true,
+    expectedBrand: 'trustedHtml',
+    label: 'trustedHtml',
+    rawSink: 'raw HTML',
+    syntax: 'call',
+  };
 }
 
 function trustNamespaceImportModule(
@@ -298,6 +401,114 @@ function wrapperHelperRawTrustSink(
   if (brandedValue === undefined || ts.isSpreadElement(brandedValue)) return null;
   const unwrappedValue = unwrap(brandedValue);
   return ts.isIdentifier(unwrappedValue) && unwrappedValue.text === parameterName ? sink : null;
+}
+
+function rawTrustSinkForJsxAttribute(
+  sourceFile: ts.SourceFile,
+  attribute: ts.JsxAttribute,
+): RawTrustSink | null {
+  const name = jsxAttributeName(attribute);
+  if (name === null) return null;
+  const value = jsxAttributeExpression(attribute);
+  if (value !== undefined) {
+    const directCall = unwrap(value);
+    if (ts.isCallExpression(directCall) && rawTrustSinkForCall(sourceFile, directCall) !== null) {
+      return null;
+    }
+  }
+  if (isRawHtmlAttributeName(name)) {
+    return {
+      auditedReasonAllowed: true,
+      expectedBrand: 'trustedHtml',
+      label: name,
+      rawSink: 'raw HTML',
+      syntax: 'value',
+    };
+  }
+  if (!isUrlAttribute(name)) return null;
+  if (value === undefined || !mayBeTrustedUrlSinkValue(sourceFile, value)) return null;
+  return {
+    auditedReasonAllowed: true,
+    expectedBrand: 'trustedUrl',
+    label: 'trustedUrl',
+    rawSink: 'trusted URL',
+    syntax: 'value',
+  };
+}
+
+function classifyTrustedSinkValue(
+  sourceFile: ts.SourceFile,
+  node: ts.Expression,
+  sink: RawTrustSink,
+  ctx: ClassifyContext,
+): TrustedSinkVerdict {
+  const expr = unwrap(node);
+  if (ts.isCallExpression(expr)) {
+    const callSink = rawTrustSinkForCall(sourceFile, expr);
+    if (callSink !== null && callSink.expectedBrand === sink.expectedBrand) {
+      if (callSink.auditedReasonAllowed && hasAuditedReason(expr)) return PROVEN_SAFE;
+      const value = expr.arguments[0];
+      if (value === undefined) return unproven(`${callSink.label}() has no value argument`);
+      const provenance = classifyExpression(value, {
+        ...ctx,
+        depth: ctx.depth + 1,
+        visited: new Set(ctx.visited),
+      });
+      return provenance === null ? PROVEN_SAFE : provenUnsafe(provenance);
+    }
+    if (
+      sink.expectedBrand === 'trustedHtml' &&
+      expressionResolvesToTrustedHtmlBrand(sourceFile, expr.expression)
+    ) {
+      return PROVEN_SAFE;
+    }
+    return unproven('trusted sink value is produced by an unresolved call');
+  }
+
+  if (ts.isIdentifier(expr)) {
+    const local = localBinding(expr, identifierName(expr));
+    if (local?.initializer !== undefined && ctx.depth < MAX_ALIAS_DEPTH) {
+      return classifyTrustedSinkValue(sourceFile, local.initializer, sink, {
+        ...ctx,
+        depth: ctx.depth + 1,
+        visited: new Set(ctx.visited),
+      });
+    }
+    if (local?.binding !== undefined && bindingHasTrustedType(local.binding, sink, ctx)) {
+      return unproven(`untraceable ${sink.expectedBrand} typed value reaches ${sink.label}`);
+    }
+    if (sink.expectedBrand === 'trustedHtml') {
+      return unproven(`untraceable raw HTML value reaches ${sink.label}`);
+    }
+    return PROVEN_SAFE;
+  }
+
+  if (expressionHasTrustedType(node, sink, ctx)) {
+    return unproven(`untraceable ${sink.expectedBrand} typed expression reaches ${sink.label}`);
+  }
+  if (sink.expectedBrand === 'trustedHtml') {
+    return unproven(`untraceable raw HTML expression reaches ${sink.label}`);
+  }
+  return PROVEN_SAFE;
+}
+
+function mayBeTrustedUrlSinkValue(
+  sourceFile: ts.SourceFile,
+  node: ts.Expression,
+  visited = new Set<ts.Node>(),
+): boolean {
+  const expr = unwrap(node);
+  if (ts.isCallExpression(expr)) {
+    return rawTrustSinkForCall(sourceFile, expr)?.expectedBrand === 'trustedUrl';
+  }
+  if (expressionHasTrustedUrlType(sourceFile, node)) return true;
+  if (!ts.isIdentifier(expr)) return false;
+  const local = localBinding(expr, identifierName(expr));
+  if (local === undefined) return false;
+  if (bindingHasTrustedUrlType(sourceFile, local.binding)) return true;
+  if (local.initializer === undefined || visited.has(local.initializer)) return false;
+  visited.add(local.initializer);
+  return mayBeTrustedUrlSinkValue(sourceFile, local.initializer, visited);
 }
 
 /**
@@ -693,6 +904,132 @@ function elementAccessName(argument: ts.Expression | undefined): string | null {
   return null;
 }
 
+function jsxAttributeName(attribute: ts.JsxAttribute): string | null {
+  return ts.isIdentifier(attribute.name) ? identifierName(attribute.name) : null;
+}
+
+function jsxAttributeExpression(attribute: ts.JsxAttribute): ts.Expression | undefined {
+  const initializer = attribute.initializer;
+  if (initializer === undefined || !ts.isJsxExpression(initializer)) return undefined;
+  return initializer.expression;
+}
+
+function isRawHtmlAttributeName(name: string): name is RawTrustSink['label'] {
+  return (
+    name === 'dangerouslySetInnerHTML' ||
+    name === 'innerHTML' ||
+    name === 'rawHtml' ||
+    name === 'html'
+  );
+}
+
+function trustedTypeLocalNames(sourceFile: ts.SourceFile): TrustedTypeLocalNames {
+  const trustedHtml = new Set<string>();
+  const trustedUrl = new Set<string>();
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    if (!ts.isStringLiteralLike(statement.moduleSpecifier)) continue;
+    if (literalText(statement.moduleSpecifier) !== BROWSER_MODULE_SPECIFIER) continue;
+    const bindings = statement.importClause?.namedBindings;
+    if (!bindings || !ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      const importedName = element.propertyName
+        ? moduleExportNameText(element.propertyName)
+        : identifierName(element.name);
+      if (importedName === TRUSTED_HTML_TYPE_EXPORT) trustedHtml.add(identifierName(element.name));
+      if (importedName === TRUSTED_URL_TYPE_EXPORT) trustedUrl.add(identifierName(element.name));
+    }
+  }
+  return { trustedHtml, trustedUrl };
+}
+
+function bindingHasTrustedType(
+  binding: ts.Node,
+  sink: RawTrustSink,
+  ctx: ClassifyContext,
+): boolean {
+  const typeNode =
+    ts.isParameter(binding) || ts.isVariableDeclaration(binding) ? binding.type : undefined;
+  return typeNode !== undefined && typeNodeHasTrustedBrand(typeNode, sink.expectedBrand, ctx);
+}
+
+function expressionHasTrustedType(
+  expression: ts.Expression,
+  sink: RawTrustSink,
+  ctx: ClassifyContext,
+): boolean {
+  let cursor: ts.Expression = expression;
+  while (ts.isParenthesizedExpression(cursor) || ts.isNonNullExpression(cursor)) {
+    cursor = cursor.expression;
+  }
+  if (ts.isAsExpression(cursor) || ts.isTypeAssertionExpression(cursor)) {
+    return typeNodeHasTrustedBrand(cursor.type, sink.expectedBrand, ctx);
+  }
+  if (ts.isSatisfiesExpression(cursor)) {
+    return typeNodeHasTrustedBrand(cursor.type, sink.expectedBrand, ctx);
+  }
+  return false;
+}
+
+function expressionHasTrustedUrlType(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+): boolean {
+  const sink: RawTrustSink = {
+    auditedReasonAllowed: true,
+    expectedBrand: 'trustedUrl',
+    label: 'trustedUrl',
+    rawSink: 'trusted URL',
+    syntax: 'value',
+  };
+  const ctx: ClassifyContext = {
+    ...EMPTY_RENDER_BINDINGS,
+    depth: 0,
+    trustedTypeNames: trustedTypeLocalNames(sourceFile),
+    visited: new Set<ts.Node>(),
+  };
+  return expressionHasTrustedType(expression, sink, ctx);
+}
+
+function bindingHasTrustedUrlType(sourceFile: ts.SourceFile, binding: ts.Node): boolean {
+  const sink: RawTrustSink = {
+    auditedReasonAllowed: true,
+    expectedBrand: 'trustedUrl',
+    label: 'trustedUrl',
+    rawSink: 'trusted URL',
+    syntax: 'value',
+  };
+  const ctx: ClassifyContext = {
+    ...EMPTY_RENDER_BINDINGS,
+    depth: 0,
+    trustedTypeNames: trustedTypeLocalNames(sourceFile),
+    visited: new Set<ts.Node>(),
+  };
+  return bindingHasTrustedType(binding, sink, ctx);
+}
+
+function typeNodeHasTrustedBrand(
+  typeNode: ts.TypeNode,
+  expectedBrand: TrustedSinkExpectedBrand,
+  ctx: ClassifyContext,
+): boolean {
+  const expectedNames =
+    expectedBrand === 'trustedHtml'
+      ? ctx.trustedTypeNames.trustedHtml
+      : ctx.trustedTypeNames.trustedUrl;
+  let found = false;
+  const visit = (node: ts.Node): void => {
+    if (found) return;
+    if (ts.isIdentifier(node) && expectedNames.has(identifierName(node))) {
+      found = true;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(typeNode);
+  return found;
+}
+
 function staticStringValue(
   argument: ts.Expression | undefined,
   visited = new Set<ts.Node>(),
@@ -943,11 +1280,12 @@ function rawTrustProvenanceDiagnostic(
     provenance === 'unprovable'
       ? 'data whose provenance cannot be proven locally'
       : `${provenance}-derived data`;
+  const sinkLabel = sink.syntax === 'call' ? `${sink.label}()` : `${sink.label} value`;
   const detail =
-    `${sink.label}() sends ${source} to a ${sink.rawSink} sink without sanitization or an audited ` +
+    `${sinkLabel} sends ${source} to a ${sink.rawSink} sink without sanitization or an audited ` +
     'justification.';
   const publicFix = sink.auditedReasonAllowed
-    ? `or, for a value you assert is not request/query data, use the audited escape ${sink.label}(value, "<justification>") so it is surfaced in kovo explain --trust.`
+    ? `or, for a value you assert is not request/query data, use the audited escape ${sink.expectedBrand}(value, "<justification>") so it is surfaced in kovo explain --trust.`
     : 'or route the value through a public trustedHtml()/safeRichHtml() boundary with an audited reason before it reaches the internal renderedHtml sink.';
   return {
     ...diagnostics.at('KV426', { start: value.getStart(), length: value.getWidth() }, detail),

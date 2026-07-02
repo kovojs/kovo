@@ -11,6 +11,7 @@
         "generated": ["./generated"],
         "internal": [
           "./internal/agent-docs",
+          "./internal/classifier-verdict",
           "./internal/derivation",
           "./internal/client-module-url",
           "./internal/diagnostics",

@@ -889,42 +889,54 @@ export const marker = sql.raw('select 1');
     }
   });
 
-  it('counts inline optimistic query entries without registry query duplication', async () => {
-    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-inline-optimistic-'));
-    const appPath = join(root, 'app.mjs');
+  it('treats fragment-only component consumers as dead hand-written optimistic transforms in build preflight', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-fragment-only-optimistic-'));
+    const appPath = join(root, 'src/app.tsx');
     const outDir = join(root, 'dist');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
     const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
 
     try {
       mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/core'), join(root, 'node_modules/@kovojs/core'));
       symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
       symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
       writeClientEntry(root);
       writeFileSync(
         appPath,
         `
-import { createApp, domain, mutation, publicAccess, query, route, s, trustedHtml } from '@kovojs/server';
+/** @jsxImportSource @kovojs/server */
+import { component } from '@kovojs/core';
+import { createApp, domain, mutation, query, route, s } from '@kovojs/server';
 
-const contactDomain = domain('contact');
-
+const contactDomain = domain();
+const contactsDb = { count: 0 };
 const contactsQuery = query('contacts', {
-  access: publicAccess('inline optimistic fixture'),
+  access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
+  load: () => ({ count: contactsDb.count }),
+  output: s.object({ count: s.number() }),
   reads: [contactDomain],
-  load() {
-    return { items: [] };
-  },
+});
+
+const ContactsRegion = component({
+  queries: { contacts: contactsQuery },
+  render: ({ contacts }: { contacts: { count: number } }) => (
+    <section>{contacts.count > 0 ? 'Loaded' : 'Empty'}</section>
+  ),
 });
 
 const addContact = mutation('contacts/add', {
-  access: publicAccess('inline optimistic fixture'),
+  access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
   csrf: false,
-  csrfJustification: 'non-browser regression fixture',
-  input: s.object({ name: s.string() }),
-  optimistic: { contacts: 'await-fragment' },
-  registry: { touches: [contactDomain] },
+  input: s.object({}),
+  optimistic: { contacts: (draft) => draft },
+  registry: {
+    queries: [contactsQuery],
+    touches: [contactDomain],
+  },
   handler() {
-    return { ok: true };
+    contactsDb.count += 1;
+    return {};
   },
 });
 
@@ -932,9 +944,9 @@ export default createApp({
   mutations: [addContact],
   queries: [contactsQuery],
   routes: [
-    route('/contacts', {
-      access: publicAccess('inline optimistic fixture'),
-      page: () => trustedHtml('<main>Contacts</main>', 'inline optimistic fixture'),
+    route('/', {
+      access: { kind: 'public', reason: 'fragment-only optimistic fixture' },
+      page: () => <main><ContactsRegion /></main>,
     }),
   ],
 });
@@ -942,11 +954,14 @@ export default createApp({
         'utf8',
       );
 
-      const exitCode = await mainAsync(['build', appPath, '--out', outDir]);
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './src/app.tsx', '--out', './dist']),
+      );
       const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
-      expect(exitCode, errorOutput).toBe(0);
-      expect(errorOutput).not.toContain('KV310');
-      expect(existsSync(outDir)).toBe(true);
+      expect(exitCode, errorOutput).toBe(1);
+      expect(errorOutput).toContain('ERROR BUILD_FATAL KV310 contacts/add -> contacts');
+      expect(errorOutput).toContain('WARN KV310 contacts/add -> contacts');
+      expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
       stderr.mockRestore();
@@ -1389,6 +1404,42 @@ export default createApp({
       expect(errorOutput).toContain('kovo build check preflight failed');
       expect(errorOutput).toMatch(/ERROR KV426 promo\.tsx:\d+:\d+/);
       expect(errorOutput.match(/ERROR KV426 promo\.tsx/g) ?? []).toHaveLength(4);
+      expect(existsSync(outDir)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 90_000);
+
+  it('fails hidden trustedHtml/trustedUrl callee shapes during production build preflight', async () => {
+    const root = mkdtempSync(join(repoRoot, '.tmp-kovo-build-trustedhtml-hidden-callee-'));
+    const appPath = join(root, 'app.ts');
+    const outDir = join(root, 'dist');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      mkdirSync(join(root, 'node_modules/@kovojs'), { recursive: true });
+      symlinkSync(join(repoRoot, 'packages/server'), join(root, 'node_modules/@kovojs/server'));
+      symlinkSync(join(repoRoot, 'packages/browser'), join(root, 'node_modules/@kovojs/browser'));
+      writeClientEntry(root);
+      writeFileSync(appPath, trustedHtmlBarrelPreflightAppModuleSource(), 'utf8');
+      writeFileSync(
+        join(root, 'promo.tsx'),
+        trustedHtmlHiddenCalleePreflightComponentSource(),
+        'utf8',
+      );
+
+      const exitCode = await withCwd(root, () =>
+        mainAsync(['build', './app.ts', '--out', './dist', '--no-cache']),
+      );
+      const errorOutput = stderr.mock.calls.map(([chunk]) => String(chunk)).join('');
+      expect(exitCode).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(errorOutput).toContain('kovo build check preflight failed');
+      expect(errorOutput).toMatch(/ERROR KV426 promo\.tsx:\d+:\d+/);
+      expect(errorOutput.match(/ERROR KV426 promo\.tsx/g) ?? []).toHaveLength(5);
       expect(existsSync(outDir)).toBe(false);
     } finally {
       stdout.mockRestore();
@@ -3129,6 +3180,35 @@ export const Promo = component({
       <a href={browser['trustedUrl'](post.href)}>browser</a>
       {safeHtml['trustedHtml'](post.body)}
       <a href={safeHtml['trustedUrl'](post.href)}>safe</a>
+    </article>
+  ),
+});
+`;
+}
+
+function trustedHtmlHiddenCalleePreflightComponentSource(): string {
+  return `
+import { component, publicAccess, query, s } from '@kovojs/server';
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+
+const trust = { html: trustedHtml, url: trustedUrl };
+class R { html = trustedHtml; }
+
+export const postQuery = query('post', {
+  access: publicAccess('trustedHtml hidden callee build preflight fixture'),
+  load: () => ({ body: '<img src=x onerror=alert(1)>', href: '/promo' }),
+  output: s.object({ body: s.string(), href: s.string() }),
+});
+
+export const Promo = component({
+  queries: { post: postQuery },
+  render: ({ post }) => (
+    <article>
+      {({ ...trust }).html(post.body)}
+      {[trustedHtml][0](post.body)}
+      {(() => trustedHtml)()(post.body)}
+      {new R().html(post.body)}
+      <a href={({ ...trust }).url(post.href)}>read</a>
     </article>
   ),
 });

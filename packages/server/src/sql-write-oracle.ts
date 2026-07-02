@@ -101,6 +101,22 @@ async function metadataSnapshot(
   executor: SqlWriteOracleExecutor,
   dialect: SqlWriteOracleDialect,
 ): Promise<[string, string][]> {
+  if (dialect === 'postgres') {
+    const rows = await queryRows(
+      executor,
+      `
+        select sequencename as name, last_value as value
+        from pg_sequences
+        where schemaname = 'public'
+        order by sequencename
+      `,
+    );
+    return rows.map((row) => [
+      `sequence:${String(row.name)}`,
+      stableFingerprint(row.value ?? null),
+    ]);
+  }
+
   if (dialect !== 'sqlite') return [];
 
   const rows = await queryRows(executor, 'pragma user_version');

@@ -554,6 +554,25 @@ describe('server jsx runtime', () => {
     expect(html(jsx('section', { html: '<b>not trusted</b>' }))).toBe('<section></section>');
   });
 
+  it('P3 runtime twin refuses raw HTML and URL sink values when static provenance is bypassed', () => {
+    const forgedTrustedHtml = {
+      [Symbol.for('kovo.trustedHtml')]: true,
+      toString: () => '<img src=x onerror=alert(1)>',
+      value: '<img src=x onerror=alert(1)>',
+    };
+    const forgedTrustedUrl = {
+      [Symbol.for('kovo.trustedUrl')]: true,
+      value: 'javascript:alert(1)',
+    };
+
+    expect(html(jsx('section', { rawHtml: forgedTrustedHtml as never }))).toBe(
+      '<section></section>',
+    );
+    expect(html(jsx('a', { href: forgedTrustedUrl as never, children: 'read' }))).not.toContain(
+      'href="javascript:alert(1)"',
+    );
+  });
+
   it('renders trusted HTML child values without escaping', () => {
     expect(html(jsx('section', { children: trustedHtml('<kovo-defer></kovo-defer>') }))).toBe(
       '<section><kovo-defer></kovo-defer></section>',

@@ -14,6 +14,11 @@ import {
   type VariableDeclaration,
 } from 'ts-morph';
 import {
+  PROVEN_SAFE,
+  type ClassifierVerdict,
+  unproven,
+} from '@kovojs/core/internal/classifier-verdict';
+import {
   expressionResolvesToFrameworkExport,
   frameworkExport,
   type FrameworkExportIdentity,
@@ -383,27 +388,48 @@ function selectResultProvenOffWire(
   receiverReferences: QueryReceiverReferences,
   mode: 'project' | 'source',
 ): boolean {
-  if (call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) return false;
+  return classifySelectResultOffWire(call, body, receiverReferences, mode).kind === 'proven-safe';
+}
+
+type OffWireProof = ClassifierVerdict<never>;
+
+function classifySelectResultOffWire(
+  call: CallExpression,
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  mode: 'project' | 'source',
+): OffWireProof {
+  if (call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) {
+    return unproven('direct-return');
+  }
 
   const callbackBody = queryCallbackBodies(body, mode).find((candidate) =>
     nodeContainsNode(candidate, call),
   );
-  if (!callbackBody || !Node.isBlock(callbackBody)) return false;
+  if (!callbackBody || !Node.isBlock(callbackBody)) {
+    return unproven('missing-callback-body');
+  }
 
   const declaration = selectResultVariableDeclaration(call);
   if (!declaration)
-    return call.getFirstAncestorByKind(SyntaxKind.ExpressionStatement) !== undefined;
+    return call.getFirstAncestorByKind(SyntaxKind.ExpressionStatement) !== undefined
+      ? PROVEN_SAFE
+      : unproven('unbound-select-result');
 
   const name = declaration.getNameNode();
-  if (!Node.isIdentifier(name)) return false;
+  if (!Node.isIdentifier(name)) return unproven('binding-pattern');
 
   const list = declaration.getParent();
-  if (!Node.isVariableDeclarationList(list) || list.getDeclarationKind() !== 'const') return false;
+  if (!Node.isVariableDeclarationList(list) || list.getDeclarationKind() !== 'const') {
+    return unproven('mutable-select-result');
+  }
 
   const selectedKey = localSymbolKey(name);
-  if (!selectedKey) return false;
+  if (!selectedKey) return unproven('unresolved-select-symbol');
 
-  return !taintedValueReachesTopLevelReturn(callbackBody, selectedKey);
+  return taintedValueReachesTopLevelReturn(callbackBody, selectedKey)
+    ? unproven('select-result-may-reach-wire')
+    : PROVEN_SAFE;
 }
 
 function selectResultVariableDeclaration(call: CallExpression): VariableDeclaration | undefined {
@@ -418,6 +444,7 @@ function taintedValueReachesTopLevelReturn(body: Node, selectedKey: string): boo
   const returnExpressions = topLevelReturnExpressions(body);
   const wireRoots = returnedValueRootKeys(body, returnExpressions);
   const elementAliases = wireElementAliasRoots(body, wireRoots);
+  if (elementAliases === undefined) return true;
   const tainted = new Set<string>([selectedKey]);
 
   return taintedValueReachesWire(body, tainted, wireRoots, elementAliases, returnExpressions);
@@ -790,17 +817,20 @@ function returnedValueRootKeys(body: Node, returnExpressions: readonly Node[]): 
   return roots;
 }
 
-function wireElementAliasRoots(body: Node, wireRoots: ReadonlySet<string>): Set<string> {
+function wireElementAliasRoots(
+  body: Node,
+  wireRoots: ReadonlySet<string>,
+): Set<string> | undefined {
   const aliases = new Set<string>();
 
   for (const declaration of body.getDescendantsOfKind(SyntaxKind.VariableDeclaration)) {
     if (!topLevelDescendant(body, declaration)) continue;
-    const name = declaration.getNameNode();
-    if (!Node.isIdentifier(name)) continue;
     const initializer = declaration.getInitializer();
     if (!initializer) continue;
     const receiverRoot = receiverRootKey(initializer) ?? expressionRootKey(initializer);
     if (!receiverRoot || !wireRoots.has(receiverRoot)) continue;
+    const name = declaration.getNameNode();
+    if (!Node.isIdentifier(name)) return undefined;
     const key = localSymbolKey(name);
     if (key) aliases.add(key);
   }
@@ -810,11 +840,11 @@ function wireElementAliasRoots(body: Node, wireRoots: ReadonlySet<string>): Set<
     const expressionRoot = expressionRootKey(statement.getExpression());
     if (!expressionRoot || !wireRoots.has(expressionRoot)) continue;
     const initializer = statement.getInitializer();
-    if (!Node.isVariableDeclarationList(initializer)) continue;
+    if (!Node.isVariableDeclarationList(initializer)) return undefined;
     const declarations = initializer.getDeclarations();
     for (const declaration of declarations) {
       const name = declaration.getNameNode();
-      if (!Node.isIdentifier(name)) continue;
+      if (!Node.isIdentifier(name)) return undefined;
       const key = localSymbolKey(name);
       if (key) aliases.add(key);
     }

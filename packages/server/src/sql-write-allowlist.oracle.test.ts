@@ -98,10 +98,26 @@ describe('sqlWriteOracle', () => {
       }
     },
   );
+
+  it.each(generatedPostgresVolatileSelects())(
+    'matches the parser for generated volatile Postgres SELECT: %s',
+    async (sql) => {
+      const db = await createPgliteTestDb();
+      try {
+        await seedPostgres(db);
+        const oracle = await sqlWriteOracle(db, sql, { dialect: 'postgres' });
+        expect(oracle.changed).toBe(true);
+        expect(parserSaysWrite(sql, 'postgres')).toBe(true);
+      } finally {
+        await db.close();
+      }
+    },
+  );
 });
 
 async function seedPostgres(db: SqlWriteOracleExecutor): Promise<void> {
   await db.exec('create table contacts (id text primary key, name text not null)');
+  await db.exec('create sequence probe_seq');
   await db.exec("insert into contacts (id, name) values ('c1', 'Ada')");
 }
 
@@ -112,4 +128,26 @@ function seedSqlite(db: SqlWriteOracleExecutor): void {
 
 function parserSaysWrite(sql: string, dialect: 'postgres' | 'sqlite'): boolean {
   return parseSqlWriteTables(sql, { dialect }).length > 0;
+}
+
+function generatedPostgresVolatileSelects(): string[] {
+  const calls = ["nextval('probe_seq')", "setval('probe_seq', 10)"] as const;
+  return Array.from({ length: 24 }, (_, index) => wrapVolatileCall(calls[index % 2]!, index));
+}
+
+function wrapVolatileCall(call: string, index: number): string {
+  switch (index % 6) {
+    case 0:
+      return `select ${call}`;
+    case 1:
+      return `select coalesce(${call}, 0)`;
+    case 2:
+      return `values (${call})`;
+    case 3:
+      return `with probe as (select ${call} as value) select value from probe`;
+    case 4:
+      return `select 1 where ${call} is not null`;
+    default:
+      return `select abs(${call})`;
+  }
 }

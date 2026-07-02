@@ -778,6 +778,62 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual([]);
   });
 
+  it('read capability fails closed on unproven read-shaped SQL functions before execution', () => {
+    const log: string[] = [];
+    const handle = wrapManagedDbForSqlSafety(
+      {
+        query(statement: unknown) {
+          log.push('query');
+          return statement;
+        },
+      },
+      undefined,
+      { capability: 'read' },
+    ) as { query(statement: unknown): unknown };
+
+    expect(() =>
+      handle.query(
+        stampTrustedSql(
+          { text: "select setval('probe_seq', 1)" },
+          'read-handle volatile function attempt',
+        ),
+      ),
+    ).toThrow(/KV433/);
+    expect(() =>
+      handle.query(
+        stampTrustedSql(
+          { text: "select nextval('probe_seq')" },
+          'read-handle sequence function attempt',
+        ),
+      ),
+    ).toThrow(/KV433/);
+    expect(log).toEqual([]);
+  });
+
+  it('P3 runtime twin closes when static SQL classification is bypassed', () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        query(statement: unknown) {
+          log.push('query');
+          return statement;
+        },
+      },
+      'read',
+      { sqlWritePolicy: { dialect: 'postgres' } },
+    ) as unknown as { query(statement: unknown): unknown };
+
+    expect(() =>
+      handle.query(
+        stampTrustedSql(
+          { text: "select setval('probe_seq', 1)" },
+          'P3 static-arm bypass volatile write',
+        ),
+      ),
+    ).toThrow(/KV433/);
+    expect(log).toEqual([]);
+  });
+
   it.each([
     {
       dialect: undefined,
@@ -922,6 +978,26 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['execute']);
   });
 
+  it('write mode declared-table allowlist fails closed on unproven read-shaped SQL functions', () => {
+    const log: string[] = [];
+    const handle = managedDb(fakeDb(log), 'write', {
+      sqlWritePolicy: {
+        tables: ['contacts'],
+        touches: ['contact'],
+      },
+    });
+
+    expect(() =>
+      (handle as { execute(statement: unknown): unknown }).execute(
+        stampTrustedSql(
+          { text: "select setval('probe_seq', 1)" },
+          'declared-table volatile function attempt',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual([]);
+  });
+
   it('write mode fails closed on raw SQL DDL even when the table is declared', () => {
     const log: string[] = [];
     const handle = wrapManagedDbForSqlSafety(
@@ -944,6 +1020,51 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       handle.run(stampTrustedSql({ sql: 'DROP TABLE contacts' }, 'managed write DDL attempt')),
     ).toThrow(/KV406/);
     expect(log).toEqual([]);
+  });
+
+  it('write mode requires schema-qualified matches for declared raw-SQL tables on pglite handles', async () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        query(statement: unknown) {
+          log.push('pglite.query');
+          return Promise.resolve(statement);
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          tables: ['contacts'],
+          touches: ['contact'],
+        },
+      },
+    ) as { query(statement: unknown): Promise<unknown> };
+
+    await expect(
+      handle.query(
+        stampTrustedSql(
+          {
+            text: 'update public.contacts set name = $1 where id = $2',
+            values: ['Ada', 'c1'],
+          },
+          'declared public contact update',
+        ),
+      ),
+    ).resolves.toMatchObject({ text: 'update public.contacts set name = $1 where id = $2' });
+    expect(log).toEqual(['pglite.query']);
+
+    expect(() =>
+      handle.query(
+        stampTrustedSql(
+          {
+            text: 'update otherschema.contacts set name = $1 where id = $2',
+            values: ['Ada', 'c1'],
+          },
+          'cross-schema contact update',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['pglite.query']);
   });
 
   it('write mode enforces the raw-SQL table allowlist inside transactions', async () => {

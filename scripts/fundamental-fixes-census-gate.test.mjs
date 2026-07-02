@@ -11,6 +11,7 @@ import {
   extractSourceDecisionRows,
   loadCensusManifest,
 } from './fundamental-fixes-census-gate.mjs';
+import { deriveRequiredSecurityDecisions } from './check-security-brands.mjs';
 
 const planText = readFileSync('plans/fundamental-fixes-followup.md', 'utf8');
 
@@ -47,7 +48,7 @@ describe('fundamental-fixes-census-gate', () => {
       outputWireSinkRows: 39,
       resolverExpressionKindRows: REQUIRED_RESOLVER_EXPRESSION_KINDS.length,
       sourceOutputWireSinkRows: 27,
-      sourceWriteCapableHandleRows: 8,
+      sourceWriteCapableHandleRows: 9,
       writeCapableHandleRows: 23,
     });
     expect(report.openRows).toEqual([]);
@@ -63,9 +64,9 @@ describe('fundamental-fixes-census-gate', () => {
     );
   });
 
-  it('derives source sink/handle denominator rows from branded source decisions', () => {
+  it('derives source sink/handle denominator rows from reachable source decisions', () => {
     const sourceRows = extractSourceDecisionRows();
-    expect(sourceRows.filter((row) => row.kind === 'write-capable-handle')).toHaveLength(8);
+    expect(sourceRows.filter((row) => row.kind === 'write-capable-handle')).toHaveLength(9);
     expect(sourceRows.filter((row) => row.kind === 'output-wire-sink')).toHaveLength(27);
     expect(sourceRows.map((row) => row.sourceDecision)).toContain('server.sql.enforce-managed-sql');
     expect(sourceRows.map((row) => row.sourceDecision)).toContain('server.wire.mutation-stream');
@@ -80,6 +81,58 @@ describe('fundamental-fixes-census-gate', () => {
 
     expect(evaluateFundamentalFixesCensus({ manifest, planText }).violations).toContain(
       'scripts/fundamental-fixes-census.manifest.json: missing manifest enrollment for output-wire-sink source decision server.wire.ssr-document (packages/server/src/document-core.ts:226)',
+    );
+  });
+
+  it('fails when a reachable source-discovered sink canary has no manifest enrollment', () => {
+    const files = {
+      'packages/server/src/response-posture.ts': `
+export function emitToWire(value) {
+  return value;
+}
+`,
+      'packages/server/src/canary.ts': `
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
+import { emitToWire } from './response-posture.js';
+export const emitRoot = wireEmitter('canary.root', function (value) {
+  return emitToWire(emitReachableCanary(value));
+});
+export const emitReachableCanary = wireEmitter('canary.reachable-wire-sink', function (value) {
+  return String(value);
+});
+`,
+    };
+    const decisions = deriveRequiredSecurityDecisions({
+      exists: (relativePath) => Object.hasOwn(files, relativePath),
+      files: Object.keys(files),
+      readText: (relativePath) => files[relativePath] ?? '',
+      roots: [
+        {
+          direction: 'callers',
+          file: 'packages/server/src/response-posture.ts',
+          kind: 'wire-emitter',
+          name: 'emitToWire',
+        },
+      ],
+    });
+    const canaryRows = extractSourceDecisionRows({
+      decisions,
+      readText: (relativePath) => files[relativePath] ?? '',
+      scopes: [
+        {
+          files: ['packages/server/src/canary.ts'],
+          kind: 'output-wire-sink',
+          wrapper: 'wireEmitter',
+        },
+      ],
+    });
+    const sourceRows = [
+      ...extractSourceDecisionRows(),
+      ...canaryRows.filter((row) => row.sourceDecision === 'canary.reachable-wire-sink'),
+    ];
+
+    expect(evaluateFundamentalFixesCensus({ sourceRows, planText }).violations).toContain(
+      'scripts/fundamental-fixes-census.manifest.json: missing manifest enrollment for output-wire-sink source decision canary.reachable-wire-sink (packages/server/src/canary.ts:7)',
     );
   });
 
