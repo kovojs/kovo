@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { mutation, s } from '@kovojs/server';
-import { managedDb } from '@kovojs/server/internal/execution';
+import { kovoDeclaredWriteDbHandle, managedDb } from '@kovojs/server/internal/execution';
 
 import { createKovoTestHarness } from './harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
@@ -143,6 +143,49 @@ describe('@kovojs/test PGlite harness integration', () => {
         /KV406.*PGlite adapter declared-write fallback/s,
       );
       await expect(db.read('audit_log')).resolves.toEqual([]);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('rejects schema-qualified out-of-scope PGlite writes with the stat-delta fallback', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create schema otherschema');
+      await db.exec('create table public.cart_items (product_id text primary key, qty integer)');
+      await db.exec('create table otherschema.audit_log (product_id text primary key)');
+
+      const declaredWriteDb = db as unknown as {
+        [kovoDeclaredWriteDbHandle](policy: {
+          dialect: 'postgres';
+          tables: readonly string[];
+          touches: readonly string[];
+        }): unknown;
+      };
+      const writer = declaredWriteDb[kovoDeclaredWriteDbHandle]({
+        dialect: 'postgres',
+        tables: ['public.cart_items'],
+        touches: ['cart'],
+      }) as Pick<PgliteTestDb, 'query'>;
+
+      await expect(
+        writer.query({
+          text: 'insert into public.cart_items (product_id, qty) values ($1, $2)',
+          values: ['p1', 2],
+        }),
+      ).resolves.toEqual([]);
+      await expect(db.read<{ product_id: string }>('public.cart_items')).resolves.toEqual([
+        { product_id: 'p1', qty: 2 },
+      ]);
+
+      await expect(
+        writer.query({
+          text: 'insert into otherschema.audit_log (product_id) values ($1)',
+          values: ['p1'],
+        }),
+      ).rejects.toThrow(/KV406.*stat-delta fallback[\s\S]*otherschema\.audit_log/);
+      await expect(db.read('otherschema.audit_log')).resolves.toEqual([]);
     } finally {
       await db.close();
     }
