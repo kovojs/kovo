@@ -18,6 +18,20 @@ const html = (value: unknown): string => renderHtmlValue(value);
 const asyncHtml = async (value: unknown): Promise<string> => renderHtmlValue(await value);
 const TEST_CSRF_SECRET = 'test-csrf-secret-0123456789abcdef012345';
 
+function withParanoidStaticClassifiersStubbed<T>(callback: () => T): T {
+  const previous = process.env.KOVO_PARANOID;
+  process.env.KOVO_PARANOID = '1';
+  try {
+    return callback();
+  } finally {
+    if (previous === undefined) {
+      delete process.env.KOVO_PARANOID;
+    } else {
+      process.env.KOVO_PARANOID = previous;
+    }
+  }
+}
+
 function hiddenInputValue(rendered: string, name: string): string {
   const match = new RegExp(`name="${name}" value="([^"]+)"`).exec(rendered);
   if (!match?.[1]) throw new Error(`expected hidden input ${name} in ${rendered}`);
@@ -522,6 +536,65 @@ describe('server jsx runtime', () => {
         }),
       ),
     ).toBe('<div future-nav-target="&lt;script&gt;alert(1)&lt;/script&gt;">safe</div>');
+  });
+
+  it('P3 KV426 runtime twin removes or escapes the sink corpus in paranoid mode', () => {
+    withParanoidStaticClassifiersStubbed(() => {
+      const events: RuntimeSinkSecurityEvent[] = [];
+      const restore = setRuntimeSinkSecurityEventHandler((event) => events.push(event));
+      try {
+        const rendered = [
+          html(
+            jsx('iframe', {
+              onclick: 'alert(1)',
+              srcdoc: '<script>alert(1)</script>',
+              style: 'background:url(javascript:alert(1))',
+              title: 'safe',
+            }),
+          ),
+          html(
+            jsx('meta', {
+              'http-equiv': 'refresh',
+              content: '0; url=javascript:alert(1)',
+            }),
+          ),
+          html(jsx('script', { children: 'alert(1)' })),
+          html(
+            jsx('img', {
+              srcset: '/ok.png 1x, javascript:alert(1) 2x',
+            }),
+          ),
+          html(
+            jsx('div', {
+              'future-nav-target': '<script>alert(1)</script>',
+              children: 'safe',
+            }),
+          ),
+        ];
+
+        expect(process.env.KOVO_PARANOID).toBe('1');
+        expect(rendered).toEqual([
+          '<iframe title="safe"></iframe>',
+          '<meta http-equiv="refresh">',
+          '<script></script>',
+          '<img srcset="/ok.png 1x">',
+          '<div future-nav-target="&lt;script&gt;alert(1)&lt;/script&gt;">safe</div>',
+        ]);
+      } finally {
+        restore();
+      }
+
+      expect(events.map(({ action, family, sink }) => ({ action, family, sink }))).toEqual([
+        { action: 'remove', family: 'event-handler', sink: 'onclick' },
+        { action: 'remove', family: 'srcdoc', sink: 'srcdoc' },
+        { action: 'remove', family: 'css-text', sink: 'style' },
+        { action: 'remove', family: 'url', sink: 'meta[http-equiv=refresh] content' },
+        { action: 'remove', family: 'raw-html', sink: 'script' },
+        { action: 'neutralize', family: 'srcset', sink: 'srcset' },
+      ]);
+      expect(JSON.stringify(events)).not.toContain('alert(1)');
+      expect(JSON.stringify(events)).not.toContain('<script>');
+    });
   });
 
   it('refuses plain script and style element text while preserving trusted raw HTML escapes', () => {

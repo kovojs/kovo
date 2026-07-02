@@ -371,8 +371,11 @@ mattering.
   - [x] **KV426 diagnostic/proof-scope wording is honest.** Static KV426 is described as advisory/defense-in-depth and
         names runtime chokes as the security boundary.
         Evidence: `pnpm exec vitest --run packages/core/src/diagnostics.test.ts scripts/check-classifier-verdict-routing.test.mjs scripts/check-fail-closed-classifiers.test.mjs`.
-  - [ ] **KV426 runtime-twin deletion proof.** The trusted-output/sink corpus must still fail at runtime with static
+  - [x] **KV426 runtime-twin deletion proof.** The trusted-output/sink corpus must still fail at runtime with static
         KV426 stubbed to `proven-safe`.
+        Evidence: `KOVO_PARANOID=1 vp exec vitest --run packages/server/src/jsx-runtime.test.ts` runs the P3 KV426
+        runtime-twin corpus and observes runtime removal/neutralization or escaping for event-handler, `srcdoc`, CSS,
+        meta-refresh URL, script text, `srcset`, and synthetic future-attribute sinks.
 
 ### Phase 4 — Unrepresentability + honest static + total proofs
 
