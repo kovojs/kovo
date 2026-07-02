@@ -57,17 +57,17 @@ export const validateTrustedHtmlProvenance = securityClassifier(
       if (ts.isCallExpression(node)) {
         const sink = rawTrustSinkForCall(sourceFile, node);
         const value = node.arguments[0];
-        if (
-          sink !== null &&
-          value !== undefined &&
-          !(sink.auditedReasonAllowed && hasAuditedReason(node))
-        ) {
+        if (sink === null) {
+          // Not a raw/trusted sink call; ordinary calls are outside KV426.
+        } else if (value !== undefined && !(sink.auditedReasonAllowed && hasAuditedReason(node))) {
           const provenance = classifyExpression(value, {
             ...enclosingRenderProvenanceBindings(node, bindingsByRender),
             depth: 0,
             visited: new Set<ts.Node>(),
           });
-          if (provenance !== null) {
+          if (provenance === null) {
+            // Proven local/static-clean value.
+          } else {
             found.push(rawTrustProvenanceDiagnostic(diagnostics, value, provenance, sink));
           }
         }
