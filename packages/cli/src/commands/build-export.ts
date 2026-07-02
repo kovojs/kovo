@@ -469,6 +469,7 @@ type SourceComponentGraphFacts = Pick<
   | 'handlerWriteSinkFacts'
   | 'publishToClientFacts'
   | 'taskGraphFacts'
+  | 'updateCoverage'
 >;
 
 type SourceRoutePageFacts = Pick<CompileRouteModuleResult, 'routePageFacts'>;
@@ -583,6 +584,16 @@ async function staticBuildCheckGraph(
     app.routes,
     sourceGraphFacts.routeOutcomes,
   );
+  const updateCoverage = sourceGraphFacts.components.flatMap((component) =>
+    component.updateCoverage.map((fact) => ({
+      component: fact.componentName,
+      ...(fact.detail === undefined ? {} : { detail: fact.detail }),
+      position: fact.position,
+      query: fact.query,
+      ...(fact.source === undefined ? {} : { source: fact.source }),
+      status: fact.status,
+    })),
+  );
 
   return {
     components: sourceGraphFacts.components,
@@ -607,6 +618,7 @@ async function staticBuildCheckGraph(
       optimistic: app.mutations.flatMap(mutationOptimisticCheckFacts),
       pages: app.routes.map(routeCheckFact),
       queries: queryReadSets,
+      ...(updateCoverage.length === 0 ? {} : { updateCoverage }),
     },
     queryShapeFacts,
     routePages: sourceGraphFacts.routePages,
@@ -643,7 +655,8 @@ async function sourceGraphFactsFromFiles(
       component.diagnostics.length > 0 ||
       component.handlerWriteSinkFacts.length > 0 ||
       component.publishToClientFacts.length > 0 ||
-      component.taskGraphFacts.length > 0
+      component.taskGraphFacts.length > 0 ||
+      component.updateCoverage.length > 0
     ) {
       components.push(component);
     }

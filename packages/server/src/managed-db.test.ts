@@ -998,6 +998,51 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual([]);
   });
 
+  it('write mode requires schema-qualified matches for declared raw-SQL tables on pglite handles', async () => {
+    const log: string[] = [];
+    const handle = managedDb(
+      {
+        query(statement: unknown) {
+          log.push('pglite.query');
+          return Promise.resolve(statement);
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: {
+          tables: ['contacts'],
+          touches: ['contact'],
+        },
+      },
+    ) as { query(statement: unknown): Promise<unknown> };
+
+    await expect(
+      handle.query(
+        stampTrustedSql(
+          {
+            text: 'update public.contacts set name = $1 where id = $2',
+            values: ['Ada', 'c1'],
+          },
+          'declared public contact update',
+        ),
+      ),
+    ).resolves.toMatchObject({ text: 'update public.contacts set name = $1 where id = $2' });
+    expect(log).toEqual(['pglite.query']);
+
+    expect(() =>
+      handle.query(
+        stampTrustedSql(
+          {
+            text: 'update otherschema.contacts set name = $1 where id = $2',
+            values: ['Ada', 'c1'],
+          },
+          'cross-schema contact update',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['pglite.query']);
+  });
+
   it('write mode enforces the raw-SQL table allowlist inside transactions', async () => {
     const log: string[] = [];
     const handle = managedDb(fakeDb(log), 'write', {

@@ -42,6 +42,14 @@ describe('parseSqlWriteTables', () => {
       UNTABLED_SQL_WRITE,
     ]);
   });
+
+  it('preserves schema-qualified table names for write enforcement', () => {
+    expect(
+      parseSqlWriteTables('UPDATE otherschema.contacts SET name = ? WHERE id = ?', {
+        dialect: 'sqlite',
+      }),
+    ).toEqual(['otherschema.contacts']);
+  });
 });
 
 describe('classifyStatement', () => {

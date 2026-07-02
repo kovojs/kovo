@@ -1152,7 +1152,26 @@ export function optimisticClientQueryConsumers(
     ...components.flatMap((component) => component.queries ?? []),
     ...pages.flatMap((page) => page.queries ?? []),
   ]);
-  if (updateCoverage.length === 0) return clientQueries;
+  if (updateCoverage.length === 0) {
+    const fragmentOnlyComponentQueries = new Set<string>();
+    const liveComponentQueries = new Set<string>();
+
+    for (const component of components) {
+      const queries = component.queries ?? [];
+      if (queries.length === 0) continue;
+      if ((component.fragments?.length ?? 0) > 0) {
+        for (const query of queries) fragmentOnlyComponentQueries.add(query);
+        continue;
+      }
+      for (const query of queries) liveComponentQueries.add(query);
+    }
+
+    for (const query of fragmentOnlyComponentQueries) {
+      if (!liveComponentQueries.has(query)) clientQueries.delete(query);
+    }
+
+    return clientQueries;
+  }
 
   const statusesByQuery = new Map<string, Set<CoreGraph.UpdateCoverageFact['status']>>();
   for (const fact of updateCoverage) {

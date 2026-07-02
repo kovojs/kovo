@@ -576,8 +576,10 @@ const assertSqlWriteTablesAllowed = securityClassifier(
       );
     }
 
-    const writeTableNames = writeTables.filter(isParsedSqlTableName);
-    const allowed = new Set(declaredTables);
+    const writeTableNames = writeTables
+      .filter(isParsedSqlTableName)
+      .map(normalizeManagedSqlTableName);
+    const allowed = new Set(declaredTables.map(normalizeManagedSqlTableName));
     const unexpected = writeTableNames.filter((table) => !allowed.has(table));
     if (unexpected.length === 0) return;
 
@@ -633,6 +635,10 @@ function formatSqlWriteTargets(targets: readonly ParsedSqlWriteTarget[]): string
   return targets
     .map((target) => (target === UNTABLED_SQL_WRITE ? '<untabled write>' : target))
     .join(', ');
+}
+
+function normalizeManagedSqlTableName(table: string): string {
+  return table.includes('.') ? table : `public.${table}`;
 }
 
 function isParsedSqlTableName(target: ParsedSqlWriteTarget): target is string {
