@@ -8,13 +8,18 @@ interface BetterSqliteConstructor {
   new (filename: string, options?: SqliteTestDbOptions): SqliteNativeHandle;
 }
 
-interface SqliteStatementCarrier {
+/** SQL statement object accepted by `SqliteTestDb` helpers. */
+export interface SqliteStatementCarrier {
+  /** SQL text, matching common driver carrier shape. */
   sql?: string;
+  /** SQL text, matching common driver carrier shape. */
   text?: string;
+  /** Bound statement values. */
   values?: readonly unknown[];
 }
 
-type SqliteStatementInput = string | SqliteStatementCarrier;
+/** SQL statement input accepted by `SqliteTestDb` helpers. */
+export type SqliteStatementInput = string | SqliteStatementCarrier;
 
 /** Minimal better-sqlite3 statement handle surfaced by `SqliteTestDb.sqlite`. */
 export interface SqliteNativeStatement<Row = unknown> {

@@ -4,13 +4,18 @@ import {
   type KovoReadonlyDbCapable,
 } from '@kovojs/server/internal/execution';
 
-interface PgliteStatementCarrier {
+/** SQL statement object accepted by `PgliteTestDb` helpers. */
+export interface PgliteStatementCarrier {
+  /** SQL text, matching common driver carrier shape. */
   sql?: string;
+  /** SQL text, matching common driver carrier shape. */
   text?: string;
+  /** Bound statement values. */
   values?: readonly unknown[];
 }
 
-type PgliteStatementInput = string | PgliteStatementCarrier;
+/** SQL statement input accepted by `PgliteTestDb` helpers. */
+export type PgliteStatementInput = string | PgliteStatementCarrier;
 
 /** A PGlite-backed test database handle: `exec`/`query`/`sql` SQL helpers plus `read`/`write` and `close`. */
 export interface PgliteTestDb {

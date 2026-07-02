@@ -19,8 +19,14 @@ import { wrapManagedDbForSqlSafety, type ManagedSqlWritePolicy } from './sql-saf
 
 declare const readerDbBrand: unique symbol;
 
+/**
+ * @internal Adapter hook for providing a framework-owned engine read-only DB handle.
+ */
 export const kovoReadonlyDbHandle: unique symbol = Symbol('kovo.readonly-db-handle');
 
+/**
+ * @internal Adapter contract for a DB value that can vend a dedicated/read-only reader.
+ */
 export interface KovoReadonlyDbCapable<ReadDb = unknown> {
   [kovoReadonlyDbHandle](): ReadDb;
 }
