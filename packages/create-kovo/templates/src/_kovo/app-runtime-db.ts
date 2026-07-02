@@ -30,6 +30,7 @@ const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([
 ] as const);
 const SCHEMA_DDL = schemaDdl(SCHEMA_TABLES);
 const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES);
+const READER_ROLE = 'kovo_reader';
 interface DeclaredWritePolicy {
   tables?: readonly string[];
   touches?: readonly string[];
@@ -48,8 +49,15 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const client = new PGlite(process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR);
   const ready = initializeAppDb(client);
   const db = drizzle({ client });
-  const readDb = drizzle({ client: readonlyPgliteClient(client) });
-  const secretReadDb = secretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA);
+  const readDb = drizzle({ client: readonlyPgliteClient(client, { readerRole: true }) });
+  const privilegedReadDb = drizzle({
+    client: readonlyPgliteClient(client, { readerRole: false }),
+  });
+  const secretReadDb = secretBoxingReadDb(
+    readonlyDb(readDb),
+    SECRET_READ_METADATA,
+    readonlyDb(privilegedReadDb),
+  );
   Object.defineProperty(db, kovoReadonlyDbHandle, {
     configurable: true,
     value: () => secretReadDb,
@@ -62,7 +70,9 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
 }
 
 async function initializeAppDb(client: PGlite): Promise<void> {
+  await ensurePgliteRole(client, READER_ROLE);
   await client.exec(SCHEMA_DDL);
+  await applyPgliteReaderColumnPrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA);
   await client.exec(SEED_CONTACTS);
 }
 
@@ -246,14 +256,44 @@ function normalizePolicyTable(table: string): string {
   return table.includes('.') ? table : `public.${table}`;
 }
 
-function readonlyPgliteClient(client: PGlite): PGlite {
+async function ensurePgliteRole(client: PGlite, role: string): Promise<void> {
+  const result = await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [role]);
+  if (result.rows.length === 0) await client.exec(`CREATE ROLE ${quoteIdent(role)}`);
+}
+
+async function applyPgliteReaderColumnPrivileges(
+  client: PGlite,
+  tables: readonly PgTable[],
+  metadata: SecretReadMetadata,
+): Promise<void> {
+  for (const table of tables) {
+    const config = getTableConfig(table);
+    const secretColumns = metadata.secretColumnNamesByTable.get(config.name) ?? new Set<string>();
+    const publicColumns = config.columns
+      .map((column) => column.name)
+      .filter((column) => !secretColumns.has(column));
+    await client.exec(`REVOKE ALL ON TABLE ${quoteIdent(config.name)} FROM PUBLIC`);
+    await client.exec(
+      `REVOKE ALL ON TABLE ${quoteIdent(config.name)} FROM ${quoteIdent(READER_ROLE)}`,
+    );
+    if (publicColumns.length > 0) {
+      await client.exec(
+        `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteIdent(
+          config.name,
+        )} TO ${quoteIdent(READER_ROLE)}`,
+      );
+    }
+  }
+}
+
+function readonlyPgliteClient(client: PGlite, options: { readerRole: boolean }): PGlite {
   return new Proxy(client, {
     get(target, prop, receiver) {
       if (prop === 'query') {
-        return readonlyPgliteQuery.bind(undefined, target);
+        return readonlyPgliteQuery.bind(undefined, target, options);
       }
       if (prop === 'exec') {
-        return readonlyPgliteExec.bind(undefined, target);
+        return readonlyPgliteExec.bind(undefined, target, options);
       }
       return Reflect.get(target, prop, receiver);
     },
@@ -262,31 +302,41 @@ function readonlyPgliteClient(client: PGlite): PGlite {
 
 function readonlyPgliteQuery(
   client: PGlite,
+  roleOptions: { readerRole: boolean },
   query: string,
   params?: unknown[],
-  options?: Parameters<PGlite['query']>[2],
+  queryOptions?: Parameters<PGlite['query']>[2],
 ): Promise<unknown> {
   return client.transaction(async (tx) => {
-    await runPgliteReadOnlyTransactionControl(tx);
-    return Reflect.apply(tx.query, tx, [query, params, options]) as Promise<unknown>;
+    await runPgliteReadOnlyTransactionControl(tx, roleOptions.readerRole);
+    return Reflect.apply(tx.query, tx, [query, params, queryOptions]) as Promise<unknown>;
   });
 }
 
 function readonlyPgliteExec(
   client: PGlite,
+  options: { readerRole: boolean },
   query: string,
-  options?: Parameters<PGlite['exec']>[1],
+  execOptions?: Parameters<PGlite['exec']>[1],
 ): ReturnType<PGlite['exec']> {
   return client.transaction(async (tx) => {
-    await runPgliteReadOnlyTransactionControl(tx);
-    return Reflect.apply(tx.exec, tx, [query, options]) as ReturnType<PGlite['exec']>;
+    await runPgliteReadOnlyTransactionControl(tx, options.readerRole);
+    return Reflect.apply(tx.exec, tx, [query, execOptions]) as ReturnType<PGlite['exec']>;
   });
 }
 
 function runPgliteReadOnlyTransactionControl(
   tx: Parameters<Parameters<PGlite['transaction']>[0]>[0],
+  readerRole: boolean,
 ): Promise<unknown> {
-  return Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY']) as Promise<unknown>;
+  return (async () => {
+    await (Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY']) as Promise<unknown>);
+    if (readerRole) {
+      await (Reflect.apply(tx.exec, tx, [
+        `SET LOCAL ROLE ${quoteIdent(READER_ROLE)}`,
+      ]) as Promise<unknown>);
+    }
+  })();
 }
 
 interface SecretReadMetadata {
@@ -300,6 +350,7 @@ interface SecretReadMetadata {
 
 interface SecretReadBoundary {
   builderSecretTableRead: boolean;
+  declaredSecretRead: boolean;
   rawWholeRowSecret: boolean;
   secretColumnKeys: ReadonlySet<string>;
   secretColumnNames: ReadonlySet<string>;
@@ -439,18 +490,31 @@ function isColumnLike(value: unknown): value is { name: string } {
   );
 }
 
-function secretBoxingReadDb<Db extends object>(db: Db, metadata: SecretReadMetadata): Db {
+function secretBoxingReadDb<Db extends object>(
+  db: Db,
+  metadata: SecretReadMetadata,
+  privilegedDb?: Db,
+): Db {
   return new Proxy(db as Record<PropertyKey, unknown>, {
     get(target, prop, receiver) {
       const item = Reflect.get(target, prop, receiver);
       if (typeof item !== 'function') return item;
       if (!isReadSurfaceMethod(prop)) return item.bind(target);
-      return (...args: unknown[]) =>
-        wrapReadSurface(
-          Reflect.apply(item, db, args),
+      return (...args: unknown[]) => {
+        const boundary = readBoundaryForArgs(args, metadata, isDirectSqlReadMethod(prop));
+        const readTarget =
+          boundary.declaredSecretRead && privilegedDb !== undefined
+            ? (privilegedDb as Record<PropertyKey, unknown>)
+            : target;
+        const readMethod = Reflect.get(readTarget, prop, receiver);
+        if (typeof readMethod !== 'function') return readMethod;
+        return wrapReadSurface(
+          Reflect.apply(readMethod, readTarget, args),
           metadata,
-          readBoundaryForArgs(args, metadata, isDirectSqlReadMethod(prop)),
+          boundary,
+          privilegedDb,
         );
+      };
     },
   }) as Db;
 }
@@ -477,6 +541,7 @@ function wrapReadSurface(
   value: unknown,
   metadata: SecretReadMetadata,
   inheritedBoundary: SecretReadBoundary = emptyReadBoundary(),
+  privilegedDb?: object,
 ): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (value instanceof Promise) {
@@ -505,6 +570,7 @@ function wrapReadSurface(
           Reflect.apply(item, target, args),
           metadata,
           mergeReadBoundaries(inheritedBoundary, readBoundaryForArgs(args, metadata, false)),
+          privilegedDb,
         );
     },
   });
@@ -518,6 +584,7 @@ function readBoundaryForQuery(value: unknown, metadata: SecretReadMetadata): Sec
     if (!sqlReferencesTable(sql, table)) continue;
     boundary = mergeReadBoundaries(boundary, {
       builderSecretTableRead: true,
+      declaredSecretRead: false,
       rawWholeRowSecret: false,
       secretColumnKeys: metadata.secretColumnKeysByTable.get(table) ?? new Set<string>(),
       secretColumnNames: metadata.secretColumnNamesByTable.get(table) ?? new Set<string>(),
@@ -537,15 +604,12 @@ function readBoundaryForArgs(
     const sql = querySqlText(arg) ?? sqlTextFromValue(arg);
     if (sql === undefined) return { ...emptyReadBoundary(), rawWholeRowSecret: true };
     if (sqlReferencesSecretTable(sql, metadata.secretTableNames)) {
-      if (!hasDeclaredSecretReadCapability(arg, metadata)) {
-        throw new Error(
-          'KV435: reader raw SQL secret-column read requires a declared secret-read capability (SPEC §10.3).',
-        );
-      }
-      return {
+      const declaredSecretRead = hasDeclaredSecretReadCapability(arg, metadata);
+      return mergeReadBoundaries(secretBoundaryForSql(sql, metadata), {
         ...emptyReadBoundary(),
-        rawWholeRowSecret: true,
-      };
+        declaredSecretRead,
+        rawWholeRowSecret: declaredSecretRead,
+      });
     }
   }
   return { ...emptyReadBoundary(), secretColumnScopeKnown: true };
@@ -572,6 +636,7 @@ function mergeReadBoundaries(
 ): SecretReadBoundary {
   return {
     builderSecretTableRead: left.builderSecretTableRead || right.builderSecretTableRead,
+    declaredSecretRead: left.declaredSecretRead || right.declaredSecretRead,
     rawWholeRowSecret: left.rawWholeRowSecret || right.rawWholeRowSecret,
     secretColumnKeys: unionSets(left.secretColumnKeys, right.secretColumnKeys),
     secretColumnNames: unionSets(left.secretColumnNames, right.secretColumnNames),
@@ -582,11 +647,28 @@ function mergeReadBoundaries(
 function emptyReadBoundary(): SecretReadBoundary {
   return {
     builderSecretTableRead: false,
+    declaredSecretRead: false,
     rawWholeRowSecret: false,
     secretColumnKeys: new Set<string>(),
     secretColumnNames: new Set<string>(),
     secretColumnScopeKnown: false,
   };
+}
+
+function secretBoundaryForSql(sql: string, metadata: SecretReadMetadata): SecretReadBoundary {
+  let boundary = { ...emptyReadBoundary(), secretColumnScopeKnown: true };
+  for (const table of metadata.secretTableNames) {
+    if (!sqlReferencesTable(sql, table)) continue;
+    boundary = mergeReadBoundaries(boundary, {
+      builderSecretTableRead: false,
+      declaredSecretRead: false,
+      rawWholeRowSecret: false,
+      secretColumnKeys: metadata.secretColumnKeysByTable.get(table) ?? new Set<string>(),
+      secretColumnNames: metadata.secretColumnNamesByTable.get(table) ?? new Set<string>(),
+      secretColumnScopeKnown: true,
+    });
+  }
+  return boundary;
 }
 
 function unionSets(left: ReadonlySet<string>, right: ReadonlySet<string>): ReadonlySet<string> {

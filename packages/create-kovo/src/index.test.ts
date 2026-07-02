@@ -265,10 +265,12 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const readDb = drizzle({ client: readonlyPgliteClient(client) });',
+      'const readDb = drizzle({ client: readonlyPgliteClient(client, { readerRole: true }) });',
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb(privilegedReadDb)');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("const READER_ROLE = 'kovo_reader'");
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const secretReadDb = secretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA);',
+      'applyPgliteReaderColumnPrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'Object.defineProperty(db, kovoReadonlyDbHandle',
@@ -279,6 +281,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY'])",
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('SET LOCAL ROLE');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES)',
     );

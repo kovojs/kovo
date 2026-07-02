@@ -155,13 +155,17 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofQueries).toContain('opaque raw SQL parse-fail secret boundary proof');
       expect(proofQueries).toContain('runtimeSecretDefaultRawRefusalQuery');
       expect(proofQueries).toContain('default reader raw secret-column refusal proof');
+      expect(proofQueries).toContain('runtimeSecretDefaultRawPublicQuery');
+      expect(proofQueries).toContain('default reader raw public-column proof');
       expect(proofQueries).toContain('runtimeSecretDeclaredRawEgressQuery');
       expect(proofQueries).toContain('declareSecretReadCapability(');
       expect(proofQueries).toContain('runtimeSecretDeclaredRawRevealQuery');
       expect(proofQueries).toContain('audited declared raw secret-read reveal acceptance proof');
       expect(proofQueries).toContain('runtimeSecretComputedEgressQuery');
       expect(proofQueries).toContain('leaked: row.classified');
-      expect(proofQueries).toContain('trustedReveal(row.classified as unknown as Secret<string>');
+      expect(proofQueries).toContain(
+        'trustedReveal(row as unknown as Secret<{ classified: string; id: string }>',
+      );
       expect(proofQueries).toContain('audited runtime query-wire reveal acceptance proof');
 
       buildParanoidProductionArtifact(root);
@@ -212,8 +216,18 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(refusalResponse.status, refusalBody).toBe(200);
       expect(refusalBody).toContain('default-reader-raw-secret-refusal');
       expect(refusalBody).toContain('blocked');
-      expect(refusalBody).toContain('declared secret-read capability');
+      expect(refusalBody).toContain('KV433');
       expect(refusalBody).not.toContain('runtime-secret-value');
+
+      const publicRawResponse = await fetch(`${origin}/_q/runtime-secret-default-raw-public`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const publicRawBody = await publicRawResponse.text();
+
+      expect(publicRawResponse.status, publicRawBody).toBe(200);
+      expect(publicRawBody).toContain('<kovo-query name="runtime-secret-default-raw-public"');
+      expect(publicRawBody).toContain('public label');
+      expect(publicRawBody).not.toContain('runtime-secret-value');
 
       const revealResponse = await fetch(`${origin}/_q/runtime-secret-reveal-egress`, {
         headers: { cookie: cookieHeader(jar) },
