@@ -77,6 +77,11 @@ interface SecretReadMetadata {
   secretTableNames: ReadonlySet<string>;
 }
 
+interface SecretReadBoundary {
+  builderSecretTableRead: boolean;
+  rawWholeRowSecret: boolean;
+}
+
 function secretReadMetadata(tables: readonly SqliteTable[]): SecretReadMetadata {
   const allColumnKeys = new Set<string>();
   const secretColumnKeys = new Set<string>();
@@ -224,11 +229,29 @@ function isColumnLike(value: unknown): value is { name: string } {
 
 function secretBoxingReadDb<Db extends object>(db: Db, metadata: SecretReadMetadata): Db {
   const readDb = {};
-  for (const prop of ['$count', '$with', 'query', 'select', 'selectDistinct', 'with'] as const) {
+  for (const prop of [
+    '$count',
+    '$with',
+    'all',
+    'execute',
+    'get',
+    'prepare',
+    'query',
+    'run',
+    'select',
+    'selectDistinct',
+    'sql',
+    'values',
+    'with',
+  ] as const) {
     const item = Reflect.get(db, prop);
     if (typeof item === 'function') {
       Reflect.set(readDb, prop, (...args: unknown[]) =>
-        wrapReadSurface(Reflect.apply(item, db, args), metadata),
+        wrapReadSurface(
+          Reflect.apply(item, db, args),
+          metadata,
+          readBoundaryForArgs(args, metadata, isDirectSqlReadMethod(prop)),
+        ),
       );
     } else if (item !== undefined) {
       Reflect.set(readDb, prop, item);
@@ -240,7 +263,7 @@ function secretBoxingReadDb<Db extends object>(db: Db, metadata: SecretReadMetad
 function wrapReadSurface(
   value: unknown,
   metadata: SecretReadMetadata,
-  inheritedBoundary: { wholeRowSecret: boolean } = { wholeRowSecret: false },
+  inheritedBoundary: SecretReadBoundary = emptyReadBoundary(),
 ): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (value instanceof Promise) {
@@ -268,38 +291,62 @@ function wrapReadSurface(
         wrapReadSurface(
           Reflect.apply(item, target, args),
           metadata,
-          mergeReadBoundaries(inheritedBoundary, readBoundaryForArgs(args, metadata)),
+          mergeReadBoundaries(inheritedBoundary, readBoundaryForArgs(args, metadata, false)),
         );
     },
   });
 }
 
-function readBoundaryForQuery(
-  value: unknown,
-  metadata: SecretReadMetadata,
-): { wholeRowSecret: boolean } {
+function readBoundaryForQuery(value: unknown, metadata: SecretReadMetadata): SecretReadBoundary {
   const sql = querySqlText(value);
-  if (sql === undefined) return { wholeRowSecret: false };
-  return { wholeRowSecret: sqlReferencesSecretTable(sql, metadata.secretTableNames) };
+  if (sql === undefined) return emptyReadBoundary();
+  return {
+    builderSecretTableRead: sqlReferencesSecretTable(sql, metadata.secretTableNames),
+    rawWholeRowSecret: false,
+  };
 }
 
 function readBoundaryForArgs(
   args: readonly unknown[],
   metadata: SecretReadMetadata,
-): { wholeRowSecret: boolean } {
+  directSqlRead: boolean,
+): SecretReadBoundary {
+  if (!directSqlRead) return emptyReadBoundary();
   for (const arg of args) {
     const sql = querySqlText(arg) ?? sqlTextFromValue(arg);
-    if (sql === undefined) continue;
-    if (sqlReferencesSecretTable(sql, metadata.secretTableNames)) return { wholeRowSecret: true };
+    if (sql === undefined) return { builderSecretTableRead: false, rawWholeRowSecret: true };
+    if (sqlReferencesSecretTable(sql, metadata.secretTableNames)) {
+      return { builderSecretTableRead: false, rawWholeRowSecret: true };
+    }
   }
-  return { wholeRowSecret: false };
+  return emptyReadBoundary();
 }
 
 function mergeReadBoundaries(
-  left: { wholeRowSecret: boolean },
-  right: { wholeRowSecret: boolean },
-): { wholeRowSecret: boolean } {
-  return { wholeRowSecret: left.wholeRowSecret || right.wholeRowSecret };
+  left: SecretReadBoundary,
+  right: SecretReadBoundary,
+): SecretReadBoundary {
+  return {
+    builderSecretTableRead: left.builderSecretTableRead || right.builderSecretTableRead,
+    rawWholeRowSecret: left.rawWholeRowSecret || right.rawWholeRowSecret,
+  };
+}
+
+function emptyReadBoundary(): SecretReadBoundary {
+  return { builderSecretTableRead: false, rawWholeRowSecret: false };
+}
+
+function isDirectSqlReadMethod(prop: PropertyKey): boolean {
+  return (
+    prop === 'all' ||
+    prop === 'execute' ||
+    prop === 'get' ||
+    prop === 'prepare' ||
+    prop === 'query' ||
+    prop === 'run' ||
+    prop === 'sql' ||
+    prop === 'values'
+  );
 }
 
 function querySqlText(value: unknown): string | undefined {
@@ -346,11 +393,22 @@ function sqlReferencesSecretTable(sql: string, secretTableNames: ReadonlySet<str
 function boxSecretRows(
   value: unknown,
   metadata: SecretReadMetadata,
-  boundary: { wholeRowSecret: boolean } = { wholeRowSecret: false },
+  boundary: SecretReadBoundary = emptyReadBoundary(),
 ): unknown {
   if (Array.isArray(value)) return value.map((entry) => boxSecretRows(entry, metadata, boundary));
   if (value === null || typeof value !== 'object') return value;
-  if (boundary.wholeRowSecret && hasUnclassifiedReadKey(value, metadata)) return secret(value);
+  if (boundary.rawWholeRowSecret && Array.isArray((value as { rows?: unknown }).rows)) {
+    return {
+      ...value,
+      rows: (value as { rows: unknown[] }).rows.map((row) =>
+        row !== null && typeof row === 'object' ? secret(row) : row,
+      ),
+    };
+  }
+  if (boundary.rawWholeRowSecret) return secret(value);
+  if (boundary.builderSecretTableRead && hasUnclassifiedReadKey(value, metadata)) {
+    return secret(value);
+  }
   const boxed: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
     boxed[key] =

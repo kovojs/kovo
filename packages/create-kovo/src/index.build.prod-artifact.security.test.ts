@@ -148,6 +148,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
       expect(proofQueries).toContain('classified: runtimeSecretProof.classified');
       expect(proofQueries).toContain('classified as leaked from "runtime_secret_proof"');
+      expect(proofQueries).toContain('opaque raw SQL parse-fail secret boundary proof');
       expect(proofQueries).toContain('runtimeSecretComputedEgressQuery');
       expect(proofQueries).toContain('leaked: row.classified');
       expect(proofQueries).toContain('trustedReveal(row.classified as unknown as Secret<string>');
@@ -173,6 +174,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       for (const key of [
         'runtime-secret-column-egress',
         'runtime-secret-raw-egress',
+        'runtime-secret-opaque-raw-egress',
         'runtime-secret-computed-egress',
       ]) {
         const response = await fetch(`${origin}/_q/${key}`, {

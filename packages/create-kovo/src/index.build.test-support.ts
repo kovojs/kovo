@@ -1565,6 +1565,32 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   );
   runtimeDb = replaceRequired(
     runtimeDb,
+    '  const readDb = drizzle({ client: readonlyPgliteClient(client) });',
+    [
+      '  const readDb = drizzle({ client: readonlyPgliteClient(client) });',
+      '  const readDbExecute = (readDb as { execute(statement: unknown): unknown }).execute;',
+      '  const opaqueSecretReadDb = Object.create(readDb) as typeof readDb;',
+      '  (opaqueSecretReadDb as { execute(statement: unknown): unknown }).execute = (statement: unknown) => {',
+      '    if (',
+      "      typeof statement === 'object' &&",
+      '      statement !== null &&',
+      '      (statement as { __kovoOpaqueSecretReadProof?: unknown }).__kovoOpaqueSecretReadProof === true',
+      '    ) {',
+      "      return Promise.resolve([{ id: 's1', leaked: 'runtime-secret-value' }]);",
+      '    }',
+      '    return Reflect.apply(readDbExecute, readDb, [statement]);',
+      '  };',
+    ].join('\n'),
+    'runtime secret proof opaque read DB',
+  );
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    '  const secretReadDb = secretBoxingReadDb(readDb, SECRET_READ_METADATA);',
+    '  const secretReadDb = secretBoxingReadDb(opaqueSecretReadDb, SECRET_READ_METADATA);',
+    'runtime secret proof opaque read boundary',
+  );
+  runtimeDb = replaceRequired(
+    runtimeDb,
     '  await client.exec(SEED_CONTACTS);',
     [
       '  await client.exec(SEED_CONTACTS);',
@@ -1647,6 +1673,21 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
       '});',
       "(runtimeSecretRawEgressQuery as { key: string }).key = 'runtime-secret-raw-egress';",
       '',
+      'export const runtimeSecretOpaqueRawEgressQuery = query({',
+      "  access: { guards: [{ guard: appAuthed, name: 'appAuthed' }], kind: 'guard-chain' },",
+      '  guard: appAuthed,',
+      '  reads: [],',
+      '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<RuntimeSecretBoundaryResult> {',
+      '    const db = requireDb(context);',
+      '    const statement = trustedSql({ __kovoOpaqueSecretReadProof: true } as never, {',
+      "      justification: 'opaque raw SQL parse-fail secret boundary proof',",
+      '    });',
+      '    const items = (await (db as unknown as { execute(value: unknown): Promise<RuntimeSecretBoundaryResult["items"]> }).execute(statement)) as RuntimeSecretBoundaryResult["items"];',
+      '    return { items };',
+      '  },',
+      '});',
+      "(runtimeSecretOpaqueRawEgressQuery as { key: string }).key = 'runtime-secret-opaque-raw-egress';",
+      '',
       'export const runtimeSecretComputedEgressQuery = query({',
       "  access: { guards: [{ guard: appAuthed, name: 'appAuthed' }], kind: 'guard-chain' },",
       '  guard: appAuthed,',
@@ -1711,13 +1752,13 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   app = replaceRequired(
     app,
     "import { contactsQuery } from './queries.js';",
-    "import { contactsQuery, runtimeSecretColumnEgressQuery, runtimeSecretComputedEgressQuery, runtimeSecretRawEgressQuery, runtimeSecretRevealEgressQuery } from './queries.js';",
+    "import { contactsQuery, runtimeSecretColumnEgressQuery, runtimeSecretComputedEgressQuery, runtimeSecretOpaqueRawEgressQuery, runtimeSecretRawEgressQuery, runtimeSecretRevealEgressQuery } from './queries.js';",
     'runtime secret proof app import',
   );
   app = replaceRequired(
     app,
     '  queries: [contactsQuery],',
-    '  queries: [contactsQuery, runtimeSecretColumnEgressQuery, runtimeSecretComputedEgressQuery, runtimeSecretRawEgressQuery, runtimeSecretRevealEgressQuery],',
+    '  queries: [contactsQuery, runtimeSecretColumnEgressQuery, runtimeSecretComputedEgressQuery, runtimeSecretOpaqueRawEgressQuery, runtimeSecretRawEgressQuery, runtimeSecretRevealEgressQuery],',
     'runtime secret proof app registration',
   );
   writeFileSync(appPath, app, 'utf8');
