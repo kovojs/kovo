@@ -268,7 +268,7 @@ describe('create-kovo starter (metadata)', () => {
       'const readDb = drizzle({ client: readonlyPgliteClient(client) });',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const secretReadDb = secretBoxingReadDb(readDb, SECRET_READ_METADATA);',
+      'const secretReadDb = secretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA);',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'Object.defineProperty(db, kovoReadonlyDbHandle',
