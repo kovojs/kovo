@@ -232,10 +232,16 @@ mattering.
       legitimate read incl. `group_concat`/`string_agg`/`date_trunc`/raw-SQL read succeeds with the static allowlist
       stubbed off. Connection-lifecycle test: a reader connection returned to the pool never leaks read-only state to a
       writer.
+      Progress: focused read-only tests prove SQLite file-backed readers use a separate `readonly`/`query_only` connection
+      and PGlite readers use serialized `BEGIN READ ONLY` transactions, with write/DDL/lock rejection and legitimate
+      read-function coverage. Full Postgres/PGlite dedicated read-only pool enforcement remains open.
 - [ ] **1.2 Engine-enforced declared-table writes (DEC-B).** SQLite authorizer; Postgres request-scoped role
       (primary) or stat-delta rollback (fallback, residual documented). Acceptance (paranoid mode): a mutation
       `tables:['contacts']` writing `userx` / `otherschema.contacts` / via DDL is engine-rejected (schema-qualified); an
       in-scope write succeeds.
+      Progress: focused managed-write tests prove the current runtime choke rejects undeclared `userx`,
+      `otherschema.contacts`, DDL/pragma-style writes, and unproven SQL-function side effects before driver execution.
+      SQLite authorizer and Postgres role/stat-delta enforcement remain open.
 - [ ] **1.3 Static SQL classifier → advisory (DEC-F, gated by A7).** Only after 1.1/1.2 pass paranoid mode. A
       runtime-twin deletion test proves the round-6/7 SQL corpus is enforced with the static classifier stubbed.
 
@@ -248,11 +254,17 @@ mattering.
 - [ ] **2.3 Every egress choke refuses `Secret` (DEC-C 4, DEC-J).** Wire, headers, redirect, static export, logs,
       error reporter, task status. Acceptance (paranoid mode): `bugz-28` B1 raw-SQL leak throws at the wire with static
       KV435 stubbed; `reveal('reason')` passes; a secret in a log/error/status is refused/redacted (`papercuts-25` O.1).
+      Progress: focused egress tests prove runtime `Secret` refusal/redaction at wire JSON, framework headers, redirect
+      `Location`, static export headers, logs, error reporting, and task status. DB-read boundary secret boxing from 2.1
+      is still required for the raw-SQL/view/computed leak acceptance.
 - [ ] **2.4 Static KV435 → advisory (DEC-F, gated by A7).**
 
 ### Phase 3 — Injection via a contextual default-deny renderer
 
 - [ ] **3.1 `Untrusted` request tags (DEC-D, DX-only).** Accessors return tags; used for error messages, not soundness.
+      Progress: focused request tests prove Kovo-owned parsed JSON/FormData leaves, route params/search, and query search
+      inputs are tagged with `Untrusted` and schema/CSRF validation reveals with framework-owned reasons. Native
+      `Request.headers`/cookie reads remain plain platform APIs.
 - [ ] **3.2 Contextual default-deny renderer over the final attribute set (DEC-D).** Escape-by-position; refuse at
       non-inert positions unless a proven trusted brand; spread-aware; unknown→escape, executable→refuse. Acceptance
       (paranoid mode): `meta http-equiv=refresh content`, spread-delivered sinks, `<style>`, event handlers,
