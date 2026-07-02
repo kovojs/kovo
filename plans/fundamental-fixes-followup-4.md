@@ -241,6 +241,9 @@ over-block for`sql`-expression projections — discharged via the DEC-B capabili
       **per-mutation restricted role** (`SET LOCAL ROLE` + GRANTs = `tables:`) so trigger/function side-effects outside the
       grant are engine-rejected (audit: `SET LOCAL ROLE` works on PGlite). If per-mutation roles are infeasible in a
       deployment, app-defined triggers are **forbidden / pre-audited** as a narrow-waist restriction (record which).
+  - Partial: mutation write policies now fail closed for missing/empty `tables:` and app-defined trigger DDL is denied
+    at the managed raw-SQL write boundary; true per-mutation Postgres/PGlite role/grant enforcement for pre-existing
+    external triggers remains open.
 - [ ] **3.1 Declared-write scope = `tables:`, fail-closed, ENGINE-enforced (DEC-C, B3).** Scope on `tables:` only;
       deny all writes absent a declared `tables:`; `touches:` grants no write access. Enforcement is the engine (SQLite
       authorizer / Postgres per-mutation role), so **trigger side-effects** outside scope are caught (a framework parse
@@ -249,16 +252,19 @@ over-block for`sql`-expression projections — discharged via the DEC-B capabili
       Acceptance (full paranoid): the default mutation writing an out-of-scope table (auth `user`/`session`) is rejected,
       **including via a trigger side-effect write**; an in-scope `contacts` write succeeds; an absent-`tables:` mutation is
       write-denied.
-- [ ] **3.2 A `Secret` box written into a non-secret column is refused; raw-SQL write params fail closed; `reveal` is
+- [x] **3.2 A `Secret` box written into a non-secret column is refused; raw-SQL write params fail closed; `reveal` is
       audited (DEC-C.2).** Builder writes inspect `.values()`/`.set()` for boxes; a raw-SQL write with a `Secret` bind
       param is refused outright; `reveal(reason)` records an audit event so a reveal-then-write is traceable. Acceptance
       (full paranoid): a boxed secret written into a non-secret column (builder AND raw-SQL) is refused; a
       `reveal(reason)` write emits an audit record.
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/core/src/secret.test.ts packages/server/src/managed-db.test.ts packages/server/src/mutation.test.ts packages/compiler/src/style.test.ts packages/compiler/src/output-context-security.test.ts packages/core/src/diagnostics.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/response-posture.test.ts` (244 tests).
 
 ### Phase 4 — Honesty + DX cleanups
 
-- [ ] **4.1 Honest KV433/KV435 diagnostics (DEC-G).** Each names the actual enforcing layer.
-- [ ] **4.2 Inline `style` object serialized safely or diagnosed (DEC-H).**
+- [x] **4.1 Honest KV433/KV435 diagnostics (DEC-G).** Each names the actual enforcing layer.
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/core/src/diagnostics.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/response-posture.test.ts` in the 244-test focused full-paranoid run above.
+- [x] **4.2 Inline `style` object serialized safely or diagnosed (DEC-H).**
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/compiler/src/style.test.ts packages/compiler/src/output-context-security.test.ts` in the 244-test focused full-paranoid run above.
 
 ### Phase 5 — Prove it (round-9 acceptance)
 
