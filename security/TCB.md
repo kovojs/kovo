@@ -28,23 +28,6 @@ they are not claimed as the verified TCB.
   },
   "plannedEntries": [
     {
-      "id": "drizzle.runtime-metadata.extract",
-      "file": "packages/drizzle/src/runtime-metadata.ts",
-      "name": "extractKovoRuntimeDbMetadata",
-      "kind": "metadata-extractor",
-      "classification": "inventory-classifier",
-      "decision": "drizzle.runtime.extract-kovo-runtime-db-metadata"
-    },
-    {
-      "id": "server.secret-read.box-rows",
-      "file": "packages/server/src/secret-read-boundary.ts",
-      "name": "boxSecretReadRows",
-      "kind": "secret-read-refusal",
-      "classification": "tcb",
-      "wrapper": "securityClassifier",
-      "decision": "server.secret-read.box-rows"
-    },
-    {
       "id": "server.declared-write.authorize",
       "file": "packages/server/src/declared-write-boundary.ts",
       "name": "assertDeclaredWriteAllowed",
@@ -183,6 +166,34 @@ they are not claimed as the verified TCB.
       "kind": "secret-egress-refusal",
       "classification": "tcb",
       "lineBudget": 20
+    },
+    {
+      "id": "server.secret-read.box-rows",
+      "file": "packages/server/src/secret-read-boundary.ts",
+      "name": "boxSecretReadRows",
+      "kind": "secret-read-refusal",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.secret-read.box-rows",
+      "lineBudget": 60
+    },
+    {
+      "id": "server.secret-read.sqlite-boundary",
+      "file": "packages/server/src/secret-read-boundary.ts",
+      "name": "sqliteSecretReadBoundaryForStatement",
+      "kind": "secret-read-refusal",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.secret-read.sqlite-boundary",
+      "lineBudget": 80
+    },
+    {
+      "id": "drizzle.runtime-metadata.extract",
+      "file": "packages/drizzle/src/runtime-metadata.ts",
+      "name": "extractKovoRuntimeDbMetadata",
+      "kind": "metadata-extractor",
+      "classification": "inventory-classifier",
+      "decision": "drizzle.runtime.extract-kovo-runtime-db-metadata"
     },
     {
       "id": "server.response-posture.emit-to-wire",
