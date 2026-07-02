@@ -14,6 +14,7 @@ import {
   includeVitest,
   mergeDurationHistory,
   starterEntries,
+  starterEntriesForMode,
   starterGroupVitestArgs,
   starterShardNeedsPacked,
   unknownDurationSeconds,
@@ -224,6 +225,33 @@ describe('ci-shards', () => {
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
     expect(shards.map((shard) => shard.seconds)).toEqual([549, 513, 551, 551, 551, 550, 517, 518]);
+  });
+
+  it('splits starter entries into packed and unpacked shard modes', () => {
+    const packedEntries = starterEntriesForMode('packed');
+    const unpackedEntries = starterEntriesForMode('unpacked');
+    const allEntries = starterEntries();
+    const packedIds = packedEntries.map((entry) => entry.id);
+    const unpackedIds = unpackedEntries.map((entry) => entry.id);
+
+    expect(packedIds.toSorted(compareStrings)).toEqual([
+      'starter-packed-postgres',
+      'starter-packed-runtime',
+      'starter-packed-sqlite',
+    ]);
+    expect(unpackedEntries.every((entry) => !entry.needsPacked)).toBe(true);
+    expect([...packedIds, ...unpackedIds].toSorted(compareStrings)).toEqual(
+      allEntries.map((entry) => entry.id).toSorted(compareStrings),
+    );
+    expect(balanceStarterShards(8, unpackedEntries).flatMap((shard) => shard.entries)).toHaveLength(
+      unpackedEntries.length,
+    );
+    expect(balanceStarterShards(3, packedEntries).map((shard) => shard.entries)).toEqual([
+      [{ ...packedEntries.find((entry) => entry.id === 'starter-packed-runtime') }],
+      [{ ...packedEntries.find((entry) => entry.id === 'starter-packed-postgres') }],
+      [{ ...packedEntries.find((entry) => entry.id === 'starter-packed-sqlite') }],
+    ]);
+    expect(() => starterEntriesForMode('other')).toThrow(/Unknown starter mode: other/);
   });
 
   it('keeps browser-backed starter entries isolated to the shard that needs Chromium', () => {

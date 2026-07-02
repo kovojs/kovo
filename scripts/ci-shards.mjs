@@ -337,6 +337,14 @@ export function starterEntries() {
   return STARTER_ENTRIES.map((entry) => ({ ...entry }));
 }
 
+export function starterEntriesForMode(mode = 'all') {
+  const entries = starterEntries();
+  if (mode === 'all') return entries;
+  if (mode === 'packed') return entries.filter((entry) => entry.needsPacked);
+  if (mode === 'unpacked') return entries.filter((entry) => !entry.needsPacked);
+  throw new Error(`Unknown starter mode: ${mode}`);
+}
+
 export function balanceStarterShards(shardCount = STARTER_SHARD_COUNT, entries = starterEntries()) {
   if (!Number.isInteger(shardCount) || shardCount < 1) {
     throw new Error(`shardCount must be a positive integer, received ${String(shardCount)}`);
@@ -485,16 +493,26 @@ export async function writeShardManifests({
   return { files, selectedPath, selected, shards };
 }
 
-export async function writeStarterShardManifest({ shardCount, shardIndex, outputDir }) {
-  const shards = balanceStarterShards(shardCount);
+export async function writeStarterShardManifest({
+  shardCount,
+  shardIndex,
+  outputDir,
+  mode = 'all',
+}) {
+  const entries = starterEntriesForMode(mode);
+  const shards = balanceStarterShards(shardCount, entries);
   const root =
     outputDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-starter-shards');
   assertRunnerTempScoped(root);
   await mkdir(root, { recursive: true });
   for (let index = 0; index < shards.length; index += 1) {
-    const file = path.join(root, `starter-${index + 1}-of-${shards.length}.json`);
+    const file = path.join(
+      root,
+      starterManifestName({ mode, index: index + 1, count: shards.length }),
+    );
     await writeJson(file, {
       kind: 'starter',
+      mode,
       shardIndex: index + 1,
       shardCount: shards.length,
       seconds: shards[index].seconds,
@@ -503,8 +521,11 @@ export async function writeStarterShardManifest({ shardCount, shardIndex, output
   }
   const selected = shards[shardIndex - 1];
   if (!selected) throw new Error(`Shard index ${shardIndex} is outside 1..${shards.length}`);
-  const selectedPath = path.join(root, `starter-${shardIndex}-of-${shards.length}.json`);
-  return { selectedPath, selected, shards };
+  const selectedPath = path.join(
+    root,
+    starterManifestName({ mode, index: shardIndex, count: shards.length }),
+  );
+  return { entries, mode, selectedPath, selected, shards };
 }
 
 export async function readStarterShardManifest(file) {
@@ -599,6 +620,11 @@ export function starterGroupVitestArgs(group) {
 function starterTestNamePattern(testNames) {
   if (testNames.length === 1) return testNames[0];
   return testNames.map(escapeRegExp).join('|');
+}
+
+function starterManifestName({ mode, index, count }) {
+  const modePrefix = mode === 'all' ? 'starter' : `starter-${mode}`;
+  return `${modePrefix}-${index}-of-${count}.json`;
 }
 
 function escapeRegExp(value) {
@@ -751,13 +777,14 @@ async function main(argv) {
   if (command === 'generate-starter') {
     const shardCount = Number(args.shards ?? STARTER_SHARD_COUNT);
     const shardIndex = Number(args.index);
+    const mode = String(args.mode ?? 'all');
     const outputDir = String(
       args.outDir ?? path.join(process.env.RUNNER_TEMP ?? process.cwd(), 'kovo-starter-shards'),
     );
-    const result = await writeStarterShardManifest({ shardCount, shardIndex, outputDir });
+    const result = await writeStarterShardManifest({ shardCount, shardIndex, outputDir, mode });
     process.stdout.write(`${result.selectedPath}\n`);
     process.stderr.write(
-      `Generated starter shard ${shardIndex}/${shardCount}: ${result.selected.entries.length}/${STARTER_ENTRIES.length} entries, estimate ${result.selected.seconds}s\n`,
+      `Generated starter ${result.mode} shard ${shardIndex}/${shardCount}: ${result.selected.entries.length}/${result.entries.length} entries, estimate ${result.selected.seconds}s\n`,
     );
     return;
   }
@@ -799,7 +826,7 @@ async function main(argv) {
 
   throw new Error(`Usage:
   node scripts/ci-shards.mjs generate --kind vitest|integration --shards N --index N --outDir "$RUNNER_TEMP/kovo-shards" [--history file]
-  node scripts/ci-shards.mjs generate-starter --shards N --index N --outDir "$RUNNER_TEMP/kovo-starter-shards"
+  node scripts/ci-shards.mjs generate-starter --mode all|packed|unpacked --shards N --index N --outDir "$RUNNER_TEMP/kovo-starter-shards"
   node scripts/ci-shards.mjs starter-needs-browser --manifest starter-shard.json
   node scripts/ci-shards.mjs starter-needs-packed --manifest starter-shard.json
   node scripts/ci-shards.mjs pack-starter --outDir "$RUNNER_TEMP/kovo-packed-starter"
