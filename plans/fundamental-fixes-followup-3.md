@@ -316,7 +316,7 @@ rejects it, if it's pure it runs. The incomplete allowlist stops mattering.
   - [x] **Reader/writer lifecycle no-leak proof.** Returned reader state does not poison later writers, and writers
     remain write-capable.
     Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts -t "rolls back default mutation transactions"`
-- [ ] **1.2 Engine-enforced declared-table writes (DEC-B).** SQLite authorizer; Postgres request-scoped role
+- [x] **1.2 Engine-enforced declared-table writes (DEC-B).** SQLite authorizer; Postgres request-scoped role
   (primary) or stat-delta rollback (fallback, residual documented). Acceptance (paranoid mode): a mutation
   `tables:['contacts']` writing `userx` / `otherschema.contacts` / via DDL is engine-rejected (schema-qualified); an
   in-scope write succeeds.
@@ -337,17 +337,21 @@ rejects it, if it's pure it runs. The incomplete allowlist stops mattering.
   - [x] **Postgres declared-table engine enforcement.** Request-scoped role GRANTs, or the documented stat-delta
     fallback, reject schema-qualified out-of-scope writes and allow in-scope writes.
     Evidence: `pnpm exec vitest --run packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts packages/server/src/managed-db.test.ts --reporter=dot`
-  - [ ] **Paranoid-mode declared-table acceptance.** With static SQL checks advisory, a generated mutation declaring
+  - [x] **Paranoid-mode declared-table acceptance.** With static SQL checks advisory, a generated mutation declaring
     `tables: ['contacts']` must reject `userx`, `otherschema.contacts`, and DDL/pragma write attempts while allowing
     an in-scope `contacts` write.
-- [ ] **1.3 Static SQL classifier → advisory (DEC-F, gated by A7).** Only after 1.1/1.2 pass paranoid mode. A
+    Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --reporter=dot`
+- [x] **1.3 Static SQL classifier → advisory (DEC-F, gated by A7).** Only after 1.1/1.2 pass paranoid mode. A
   runtime-twin deletion test proves the round-6/7 SQL corpus is enforced with the static classifier stubbed.
-  - [ ] **A7 declared-write precondition.** 1.2 must have a paranoid-mode declared-table acceptance proof before static
+  - [x] **A7 declared-write precondition.** 1.2 must have a paranoid-mode declared-table acceptance proof before static
     SQL diagnostics stop being treated as load-bearing proof.
-  - [ ] **Runtime SQL chokes live under paranoid mode.** 1.1 and 1.2 must pass their paranoid-mode acceptance before
+    Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --reporter=dot`
+  - [x] **Runtime SQL chokes live under paranoid mode.** 1.1 and 1.2 must pass their paranoid-mode acceptance before
     static SQL diagnostics stop being treated as load-bearing proof.
-  - [ ] **Runtime-twin SQL corpus proof.** The round-6/7 SQL corpus must still fail at runtime with the static classifier
+    Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --reporter=dot`
+  - [x] **Runtime-twin SQL corpus proof.** The round-6/7 SQL corpus must still fail at runtime with the static classifier
     stubbed to `proven-safe`.
+    Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --reporter=dot`
   - [x] **Diagnostic wording.** KV433/KV406-style static diagnostics name the runtime DB choke as the boundary.
     Evidence: `pnpm exec vitest --run packages/core/src/diagnostics.test.ts scripts/check-classifier-verdict-routing.test.mjs scripts/check-fail-closed-classifiers.test.mjs`
 
