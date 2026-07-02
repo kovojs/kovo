@@ -1884,9 +1884,15 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   );
   runtimeDb = replaceRequired(
     runtimeDb,
-    '  const readDb = drizzle({ client: readonlyPgliteClient(client, { readerRole: true }) });',
     [
-      '  const readDb = drizzle({ client: readonlyPgliteClient(client, { readerRole: true }) });',
+      '  const readDb = drizzle({',
+      '    client: createPostgresReadonlyClient(client, { readerRole: READER_ROLE }),',
+      '  });',
+    ].join('\n'),
+    [
+      '  const readDb = drizzle({',
+      '    client: createPostgresReadonlyClient(client, { readerRole: READER_ROLE }),',
+      '  });',
       '  const readDbExecute = (readDb as { execute(statement: unknown): unknown }).execute;',
       '  const opaqueSecretReadDb = Object.create(readDb) as typeof readDb;',
       '  (opaqueSecretReadDb as { execute(statement: unknown): unknown }).execute = (statement: unknown) => {',
