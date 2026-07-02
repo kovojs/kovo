@@ -52,6 +52,16 @@ At the choke the incompleteness that plagued static analysis **disappears**, bec
 concrete value / the platform's own model, not the syntactic shape. Raw SQL, subqueries, views, spreads, `as any`
 casts — none matter to a read-only transaction, a non-coercible secret tag, or a default-escaping renderer.
 
+**The reduction this buys — a tiny, verified trusted computing base (TCB).** The seven rounds recurred because the
+enforcement is smeared across compiler recognizers, Drizzle analysis, and server runtime code; a bug anywhere in that
+surface is a fail-open. Confinement collapses the TCB to a handful of small choke functions: one DB read-only wrapper,
+one declared-table writer, one non-coercible `Secret` box, one egress refusal, one renderer emit, plus their brand
+constructors. Everything else — app code, compiler code, and static analysis — is untrusted: it may be arbitrarily
+buggy or hostile and the property still holds, because it cannot reach egress/exec except through a choke. So "is Kovo
+sound?" collapses from "did we recognize all authoring shapes?" to "are these small choke functions correct, and are
+they the sole door?" The choke inventory (DEC-J) proves the sole door; the TCB manifest + verification bar
+(A10/DEC-K) proves the door is correct. Both are required.
+
 ## 3. This plan does NOT loosen enforcement — it makes the real boundary sound
 
 This is the crux, because "downgrade static to advisory" can be misread as _weakening_. It is not, **provided** two
@@ -136,6 +146,12 @@ mattering.
   build/serve green. A phase is "done" only when it passes paranoid mode. (b) A `Secret` value is **non-coercible**:
   `toString`/`valueOf`/`Symbol.toPrimitive`/`toJSON` throw a KV, so string/JSON coercion (`` `${s}` ``, `s + ''`,
   `JSON.stringify(obj)`) cannot silently launder the tag off — the tag can only be removed by audited `reveal(reason)`.
+- **A10 — The security TCB is small, explicit, budgeted, and exhaustively verified.** All enforcement lives in an
+  enumerated set of choke functions (the TCB manifest, DEC-K) with a hard size budget; no security decision is made
+  outside it (a lint fails on enforcement logic elsewhere). The TCB is verified to a higher bar than ordinary code:
+  exhaustive property tests over every coercion/refusal path, plus model-checking or a proof-assistant obligation for
+  the box non-coercibility and the egress refusal. Framework soundness reduces to correctness of the TCB (A10) plus
+  the sole-door proof (A2/DEC-J). Growing the TCB past budget, or enforcing outside it, is a build failure.
 
 ## 5. Decisions register (made here; no deferral)
 
@@ -204,6 +220,22 @@ mattering.
   write of a foreign secret) and every DB-exec path (query/mutation/webhook Tx/storage/durable-task executor/
   `.transaction`/`.batch`/`.query`), assign each to its choke, and prove via type-unrepresentability + reachability
   that nothing reaches egress/exec except through a choke. "One choke per property" is only sound once "one" is proven.
+- **DEC-K — The TCB manifest + verification bar (A10).** Maintain `security/TCB.md` listing every function in the
+  security TCB: the read-only-connection wrapper, declared-table writer wrapper, `Secret`/`Untrusted` boxes + `reveal`,
+  `emitToWire` + egress-refusal helper, renderer emit + escape, and brand constructors. Budget: each choke should stay
+  around 150 lines or less, and the whole TCB around 600 lines or less. Verification bar: exhaustive property tests for
+  every JS coercion path on the boxes and every value shape into `emitToWire`; model-checking or proof-assistant
+  obligation for non-coercibility and egress refusal; and a `check:tcb-boundary` lint that fails if a security decision
+  appears outside the manifest, or if the TCB exceeds budget.
+- **DEC-L — Narrow the authoring surface so the common path is statically sound and the chokes stay small.** Restrict
+  static-blind channels in security-relevant positions so most apps are analyzable by construction at zero runtime cost,
+  shrinking what the chokes must handle to explicit escape hatches. Raw SQL is not permitted in a query loader on the
+  common path (typed builder only); `sql.unsafe(...)` is an explicit, reviewed escape routed through the DEC-A/DEC-C
+  runtime chokes. A trust-sink callee must be a statically-resolvable reference. Extend `check:sound-subset` to the
+  whole security surface, failing closed on un-analyzable code, not un-analyzable values.
+- **DEC-M — Publish a precise guarantee statement + explicit non-goals.** Replace broad "proven secure" language with
+  exact choke-backed invariants, threat model, and explicit non-goals. Every published claim must be narrower than or
+  equal to what the TCB provably enforces; a claim with no backing choke is a documentation bug.
 
 ## 6. Phases (each independently ships and collapses a class; every phase gated by paranoid mode)
 
@@ -226,6 +258,11 @@ mattering.
       downgraded in later phases (A7).
       Evidence: `pnpm run check:single-choke && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census`
       proves the current DEC-J egress/DB exec denominator and classified sole-door gates are green.
+- [ ] **0.4 TCB manifest + boundary lint + verification harness (A10, DEC-K).** Create `security/TCB.md`, the
+      `check:tcb-boundary` lint (fails on any enforcement outside the manifest or a TCB over budget), and the exhaustive
+      property-test + model-check harness for the `Secret`/`Untrusted` boxes and `emitToWire`. Makes "the chokes are the
+      whole TCB and they are verified" a mechanically checked standing invariant. As each phase adds a choke, it is
+      enrolled in the manifest and must pass the bar before that phase is "done."
 
 ### Phase 1 — Integrity via the engine (biggest win, smallest change)
 
@@ -389,6 +426,19 @@ mattering.
       `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`
       proves a Drizzle-view-surfaced runtime `Secret` is refused at query-wire egress.
 
+### Phase 6 — Narrow waist, honest claims, external validation (complementary; land alongside 1–3)
+
+- [ ] **6.1 Narrow the security surface (DEC-L).** Disallow raw SQL in query loaders on the common path (typed builder
+      only; `sql.unsafe` as an explicit escape through the DEC-A/DEC-C chokes); require statically-resolvable trust-sink
+      callees; extend `check:sound-subset` to the whole security surface. Acceptance: the round-7 raw-SQL leak shape is
+      a build error on the common path and, via the escape hatch, still refused at the runtime choke.
+- [ ] **6.2 Publish the guarantee statement + non-goals (DEC-M).** A `SECURITY.md`/SPEC section states the exact
+      choke-backed invariants, threat model, and non-goals; a test proves every stated invariant names a TCB choke and a
+      paranoid-mode proof, and that no claim lacks a backing choke.
+- [ ] **6.3 External adversarial audit + generative fuzzing.** A non-implementer audit against the guarantee statement,
+      plus the DEC-G property-based generators run under `KOVO_PARANOID=1`. This validates that the TCB + sole-door hold;
+      it does not replace them as the soundness proof.
+
 ## 7. Pre-mortem — what round-8 will attack, and which item closes it
 
 The plan is self-auditing: each anticipated next-boundary attack is named with the item that closes it and the
@@ -404,6 +454,10 @@ paranoid-mode test that proves it.
 | A forged escape hatch (shadowed `reveal`/`declareOffWire`/fake brand)                                | escape hatch becomes the next shadow (bugz-21 B2 history) | module-private symbols + validating constructors (DEC-E) + audit log | reachability gate rejects a non-framework discharge |
 | Author disables/routes around a painful choke                                                        | usability failure = soundness failure with a delay        | DEC-I ergonomics + safe server ops + dev-first-request diagnostics   | legit-app corpus stays green in paranoid mode       |
 | Column-level REVOKE breaks a legitimate secret read                                                  | over-lockdown                                             | DEC-C fallback tag + declared capability + `reveal`                  | 2.2 legit-declared-read test                        |
+| Enforcement logic added outside the TCB                                                              | TCB stops being the whole boundary                        | A10 + `check:tcb-boundary` lint (0.4, DEC-K)                         | 0.4 lint fails on out-of-manifest enforcement       |
+| TCB grows until it is no longer verifiable                                                           | soundness stops being tractable to prove                  | A10 size budget + DEC-K verification bar                             | 0.4 budget check + exhaustive TCB property tests    |
+| Un-analyzable code in a security position on the common path                                          | un-analyzable and un-confined bucket returns              | DEC-L narrow waist (6.1)                                             | 6.1 build error on common path + choke on escape    |
+| A claim in docs with no backing choke                                                                | public claim outruns enforcement                          | DEC-M guarantee statement (6.2)                                      | 6.2 invariant-to-choke/proof test                   |
 
 ## 8. Honest tradeoffs and non-goals
 
@@ -417,6 +471,10 @@ paranoid-mode test that proves it.
 - **Static is not deleted.** It remains fast author feedback + the perf optimization; only its _load-bearing security
   role_ is removed (A4/A7/A8). This honors SPEC §11.2 (`observed ⊆ declared` is a runtime cross-check) and the
   framework thesis (verify the running artifact, not the source shape).
+- **The narrow waist costs expressiveness.** DEC-L forbids raw SQL in loaders and dynamically-computed trust callees
+  on the common path. That is intentional: the un-analyzable thing must be explicit and runtime-confined.
+- **The TCB has a real maintenance discipline.** A hard size budget + boundary lint means new features cannot smear
+  enforcement back across the codebase; a genuinely new sink category costs a new enrolled and verified choke.
 - **Non-goal:** sandboxing the app author from their own server code (`fs`/`child_process` in their endpoint —
   `papercuts-25` refuted). The chokes protect the framework's data/rendering/egress boundaries, not the author from
   themselves.
@@ -430,6 +488,10 @@ app in the corpus still builds and serves green (no over-block). The explicit th
 enforced by neither layer** — with static disabled, the runtime chokes alone must hold. If a novel shape still leaks
 with static off, a runtime choke is missing or bypassable (A1/A2 violated) — a concrete, bounded bug, not another
 point on an endless enumeration.
+
+Two standing conditions make that acceptance durable: the TCB stays within budget and exhaustively verified
+(A10/DEC-K), and an external adversarial audit against the published guarantee statement (DEC-M/6.3) finds nothing the
+TCB does not already refuse.
 
 ## Latest verification
 
