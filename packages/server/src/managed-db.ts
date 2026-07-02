@@ -191,7 +191,7 @@ function readonlyCapabilityDb<Db extends object>(db: Db): Reader<Db> {
 function readonlyCapabilityError(prop: string): () => never {
   return () => {
     throw new KovoReadonlyHandleError(
-      `A query() loader cannot access db.${prop} — loaders receive a read-only DB capability (KV433). Move writes to a mutation(), domain write, or endpoint().`,
+      `KV433: framework read-only DB capability proxy blocked db.${prop} in a query() loader. Move writes to a mutation(), domain write, or endpoint().`,
     );
   };
 }

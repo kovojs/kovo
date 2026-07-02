@@ -803,4 +803,26 @@ export const NavLink = component({
     expect(result.updateCoverage).toEqual([]);
     expect(() => assertFixpoint(result)).not.toThrow();
   });
+
+  it('serializes static inline style objects instead of dropping them', () => {
+    const result = compileComponentModule({
+      fileName: 'components/inline-style.tsx',
+      source: `
+import { component } from '@kovojs/core';
+
+export const InlineStyle = component({
+  render: () => <span style={{ color: 'red', background: '#eee' }}>Hello</span>,
+});
+`,
+    });
+
+    const serverSource = result.files.find((file) => file.kind === 'server')?.source ?? '';
+
+    expect(serverSource).toContain('<span style="');
+    expect(serverSource).toContain('color:red');
+    expect(serverSource).toContain('background:#eee');
+    expect(serverSource).not.toContain("style={{ color: 'red'");
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.severity === 'error')).toEqual([]);
+    expect(() => assertFixpoint(result)).not.toThrow();
+  });
 });

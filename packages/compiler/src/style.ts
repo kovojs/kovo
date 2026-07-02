@@ -203,7 +203,8 @@ export function extractKovoStyles(
   if (
     styleImports.namespaces.size === 0 &&
     styleImports.publicTokenNames.size === 0 &&
-    importedStaticValues.size === 0
+    importedStaticValues.size === 0 &&
+    !hasInlineStyleExpressions(model)
   ) {
     return emptyStyleExtraction();
   }
@@ -216,29 +217,22 @@ export function extractKovoStyles(
     importedStaticValues,
     options.defaultStyleIdentity,
   );
+  const lowered = styleAttributeReplacements(model, environment.bindings, componentName, {
+    ...options,
+    fileName,
+    source,
+    themeClassBindings: environment.themeClassBindings,
+  });
   if (
     environment.bindings.size === 0 &&
     environment.rules.length === 0 &&
     environment.keyframes.length === 0 &&
-    environment.diagnostics.length === 0
+    environment.diagnostics.length === 0 &&
+    lowered.replacements.length === 0 &&
+    lowered.dynamic.length === 0
   ) {
     return emptyStyleExtraction();
   }
-
-  const lowered =
-    environment.bindings.size > 0
-      ? styleAttributeReplacements(model, environment.bindings, componentName, {
-          ...options,
-          fileName,
-          source,
-          themeClassBindings: environment.themeClassBindings,
-        })
-      : {
-          diagnostics: [],
-          dynamic: [],
-          handledSpans: [],
-          replacements: [],
-        };
   // Thread any `style.keyframes` blocks into the extracted CSS alongside the
   // atomic rules. `emitAtomicCss` dedupes them by name (so a keyframe used by
   // several rules emits once) and leads with them, outside `@layer`. SPEC.md §13.1.
@@ -267,6 +261,12 @@ export function extractKovoStyles(
     stateDerives: lowered.dynamic.flatMap((entry) => entry.stateDerive ?? []),
     updateCoverage: lowered.dynamic.flatMap((entry) => entry.coverage),
   };
+}
+
+function hasInlineStyleExpressions(model: ComponentModuleModel): boolean {
+  return model.jsxElements.some((element) =>
+    element.attributes.some((attribute) => attribute.name === 'style' && attribute.expression),
+  );
 }
 
 function emptyStyleExtraction(): KovoStyleExtraction {
@@ -943,6 +943,18 @@ function styleAttributeReplacements(
       if (!expression) continue;
       const resolved = resolveStyleBindings(expression.expression, bindings);
       if (!resolved) {
+        const inlineStatic = staticInlineStyleAttributeReplacement(element, attribute, expression);
+        if (inlineStatic) {
+          diagnostics.push(...inlineStatic.diagnostics);
+          if (!inlineStatic.styleReplacement) continue;
+          replacements.push(...inlineStatic.extraReplacements);
+          replacements.push({
+            end: attribute.end,
+            replacement: inlineStatic.styleReplacement,
+            start: attribute.start,
+          });
+          continue;
+        }
         const lowered = dynamicStyleAttributeLowering(
           attribute,
           expression.expression,
@@ -972,6 +984,53 @@ function styleAttributeReplacements(
   }
 
   return { diagnostics, dynamic, handledSpans, replacements };
+}
+
+function staticInlineStyleAttributeReplacement(
+  element: ComponentModuleModel['jsxElements'][number],
+  styleAttribute: JsxAttributeModel,
+  expression: ParsedExpression,
+): {
+  diagnostics: readonly CompilerDiagnostic[];
+  extraReplacements: readonly SourceReplacement[];
+  styleReplacement: string | null;
+} | null {
+  if (!ts.isObjectLiteralExpression(expression.expression)) return null;
+  const style = inlineStyleObjectFromObject(expression.expression);
+  if (!style) return null;
+  return staticStyleAttributeReplacement(
+    element,
+    styleAttribute,
+    { style: serializeInlineStyleObject(style) },
+    {
+      fileName: expression.sourceFile.fileName,
+      source: expression.sourceFile.text,
+      themeClassBindings: new Map(),
+    },
+  );
+}
+
+function inlineStyleObjectFromObject(
+  node: ts.ObjectLiteralExpression,
+): Record<string, string | number> | null {
+  const style: Record<string, string | number> = {};
+
+  for (const property of node.properties) {
+    if (!ts.isPropertyAssignment(property)) return null;
+    const key = propertyNameText(property.name);
+    if (!key) return null;
+    const value = primitiveValue(property.initializer);
+    if (typeof value !== 'string' && typeof value !== 'number') return null;
+    style[looseKebabCase(key)] = value;
+  }
+
+  return style;
+}
+
+function serializeInlineStyleObject(style: Readonly<Record<string, string | number>>): string {
+  return Object.entries(style)
+    .map(([property, value]) => `${property}:${String(value)}`)
+    .join(';');
 }
 
 function staticStyleAttributeReplacement(

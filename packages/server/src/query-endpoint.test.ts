@@ -189,7 +189,7 @@ describe('query endpoints', () => {
       load(_input, context?: { request: { db: typeof db } }) {
         expect(context?.request.db.select()).toBe('ok');
         expect(() => context?.request.db.insert()).toThrow(
-          /loaders receive a read-only DB capability|cannot insert/,
+          /framework read-only DB capability proxy blocked db\.insert|cannot insert/,
         );
         return { ok: true };
       },
