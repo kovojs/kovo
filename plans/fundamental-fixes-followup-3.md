@@ -272,6 +272,11 @@ mattering.
   - [x] **Starter `readonlyAppDb` secret boxing for declared auth projections.** The starter read boundary boxes
         declared auth secret-key projections and refuses a Drizzle-view-surfaced `Secret` at query-wire egress.
         Evidence: `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`.
+  - [x] **Scaffold-declared custom secret columns and raw-SQL aliases.** Generated PGlite and SQLite runtime DB
+        templates derive `kovo({ secret })` metadata, attach the Kovo-owned read-boundary hook for query-loader
+        `context.db`, box custom secret columns, and fail closed when raw SQL against a secret table returns an
+        unclassified alias to query wire.
+        Evidence: `pnpm exec vitest run packages/create-kovo/src/index.build.prod-artifact.security.test.ts --testNamePattern "boxes schema-declared secret reads"`.
   - [ ] **General `kovo({ secret })` runtime metadata extraction.** Every `context.db` query-builder, view, and computed
         read path must box secret-classified columns as `Secret` at the DB-read boundary.
   - [ ] **Raw-SQL secret fail-closed tagging.** Raw SQL that references a secret table tags the whole result `Secret`;
