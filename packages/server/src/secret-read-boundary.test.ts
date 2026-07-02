@@ -38,6 +38,9 @@ function readDb(rows: readonly Record<string, unknown>[]) {
     all() {
       return rows;
     },
+    query() {
+      return rows;
+    },
   };
 }
 
@@ -163,6 +166,72 @@ describe('secret read boundary', () => {
 
     const [row] = db.all(statement);
 
+    expect(isSecret(row)).toBe(true);
+    expect(revealSecret(row, 'test')).toEqual({ classified: 'runtime-secret-value' });
+  });
+
+  it('lets engine-backed readers reject raw secret table reads before boxing', () => {
+    const calls: string[] = [];
+    const db = createSecretBoxingReadDb(
+      {
+        query(statement: unknown) {
+          calls.push(`reader:${String(statement)}`);
+          throw new Error('permission denied for table secrets');
+        },
+      },
+      metadata(),
+      { rawSecretTableRead: 'engine' },
+    );
+
+    expect(() => db.query('select classified from secrets')).toThrow(/permission denied/);
+    expect(calls).toEqual(['reader:select classified from secrets']);
+  });
+
+  it('lets engine-backed readers serve raw public columns from secret-bearing tables', () => {
+    const db = createSecretBoxingReadDb(
+      {
+        query() {
+          return [{ label: 'public' }];
+        },
+      },
+      metadata(),
+      { rawSecretTableRead: 'engine' },
+    );
+
+    expect(db.query('select label from secrets')).toEqual([{ label: 'public' }]);
+  });
+
+  it('routes declared raw secret reads through the privileged handle and keeps rows boxed', () => {
+    const calls: string[] = [];
+    const reader = {
+      query(statement: unknown) {
+        calls.push(`reader:${String(statement)}`);
+        throw new Error('permission denied for table secrets');
+      },
+    };
+    const privilegedDb = {
+      query() {
+        calls.push('privileged');
+        return [{ classified: 'runtime-secret-value' }];
+      },
+    };
+    const db = createSecretBoxingReadDb(reader, metadata(), {
+      privilegedDb,
+      rawSecretTableRead: 'engine',
+    });
+    const statement = declareSecretReadCapability(
+      { toSQL: () => ({ sql: 'select classified from secrets' }) },
+      {
+        columns: ['classified'],
+        justification: 'test privileged secret-read path',
+        source: 'test',
+        table: 'secrets',
+      },
+    );
+
+    const [row] = db.query(statement);
+
+    expect(calls).toEqual(['privileged']);
     expect(isSecret(row)).toBe(true);
     expect(revealSecret(row, 'test')).toEqual({ classified: 'runtime-secret-value' });
   });

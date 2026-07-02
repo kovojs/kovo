@@ -289,10 +289,13 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('SET LOCAL ROLE');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES)',
+      'const SECRET_READ_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'function secretBoxingReadDb<Db extends object>',
+      "import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle'",
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const secretReadDb = createSecretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA',
     );
     expect(files.get('src/db.ts')).not.toContain('PgliteDatabase<typeof schema>');
     expect(files.get('src/db.ts')).not.toContain('drizzle({ client, schema })');

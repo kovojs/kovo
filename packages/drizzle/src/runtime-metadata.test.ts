@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { pgTable, text as pgText } from 'drizzle-orm/pg-core';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { kovo } from './runtime.js';
 import { extractKovoRuntimeDbMetadata } from './runtime-metadata.js';
@@ -56,5 +57,39 @@ describe('runtime metadata extraction', () => {
 
     expect(metadata.secretColumnKeysByTable.get('vault')).toEqual(new Set(['id', 'contents']));
     expect(metadata.secretColumnNamesByTable.get('vault')).toEqual(new Set(['id', 'contents']));
+  });
+
+  it('extracts Postgres table metadata for PGlite runtime wiring', () => {
+    const account = pgTable(
+      'account',
+      {
+        id: pgText('id').primaryKey(),
+        accessToken: pgText('accessToken'),
+        providerId: pgText('providerId').notNull(),
+      },
+      kovo({
+        domain: 'auth',
+        key: 'id',
+        secret: ['accessToken'],
+      }),
+    );
+
+    const metadata = extractKovoRuntimeDbMetadata([account]);
+
+    expect(metadata.secretTableNames).toEqual(new Set(['account']));
+    expect(metadata.secretColumnKeysByTable.get('account')).toEqual(new Set(['accessToken']));
+    expect(metadata.secretColumnNamesByTable.get('account')).toEqual(new Set(['accessToken']));
+    expect(metadata.columnSources.get(account.accessToken)).toEqual({
+      column: 'accessToken',
+      key: 'accessToken',
+      secret: true,
+      table: 'account',
+    });
+    expect(metadata.columnSources.get(account.providerId)).toEqual({
+      column: 'providerId',
+      key: 'providerId',
+      secret: false,
+      table: 'account',
+    });
   });
 });

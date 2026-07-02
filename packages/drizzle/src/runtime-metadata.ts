@@ -1,9 +1,17 @@
-import { getTableConfig } from 'drizzle-orm/sqlite-core';
+import { getTableConfig as getPgTableConfig } from 'drizzle-orm/pg-core';
+import { getTableConfig as getSqliteTableConfig } from 'drizzle-orm/sqlite-core';
 
-/** Drizzle SQLite table object accepted by `extractKovoRuntimeDbMetadata`. */
-export type KovoRuntimeDbTable = Parameters<typeof getTableConfig>[0];
-type KovoRuntimeDbTableConfig = ReturnType<typeof getTableConfig>;
-type KovoRuntimeDbColumn = KovoRuntimeDbTableConfig['columns'][number];
+/** Drizzle table object accepted by `extractKovoRuntimeDbMetadata`. */
+export type KovoRuntimeDbTable =
+  | Parameters<typeof getPgTableConfig>[0]
+  | Parameters<typeof getSqliteTableConfig>[0];
+type KovoRuntimeDbColumn = {
+  name: string;
+};
+type KovoRuntimeDbTableConfig = {
+  columns: readonly KovoRuntimeDbColumn[];
+  name: string;
+};
 
 /** Drizzle-derived runtime source metadata for one physical database column. */
 export interface KovoRuntimeDbColumnSource {
@@ -36,7 +44,7 @@ export interface KovoRuntimeDbMetadata {
 }
 
 /**
- * Extract Kovo runtime database metadata from Drizzle SQLite table objects.
+ * Extract Kovo runtime database metadata from Drizzle table objects.
  *
  * The returned table/column facts are data consumed by `@kovojs/server` read-boundary helpers;
  * the security decision itself stays in the server package (SPEC §10.3/§11.2).
@@ -51,7 +59,7 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
   const secretTableNames = new Set<string>();
 
   for (const table of tables) {
-    const config = getTableConfig(table as KovoRuntimeDbTable);
+    const config = getRuntimeTableConfig(table);
     const columnKeys = columnKeysByDbName(table as KovoRuntimeDbTable, config.columns);
     for (const key of columnKeys.values()) allColumnKeys.add(key);
 
@@ -101,6 +109,14 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
     secretColumnNamesByTable,
     secretTableNames,
   };
+}
+
+function getRuntimeTableConfig(table: unknown): KovoRuntimeDbTableConfig {
+  try {
+    return getSqliteTableConfig(table as Parameters<typeof getSqliteTableConfig>[0]);
+  } catch {
+    return getPgTableConfig(table as Parameters<typeof getPgTableConfig>[0]);
+  }
 }
 
 function columnKeysByDbName(

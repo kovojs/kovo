@@ -54,6 +54,10 @@ export interface SecretReadSqliteColumnOriginClient {
 
 /** Options for the server-owned read-confidentiality boundary wrapper. */
 export interface SecretReadBoundaryOptions {
+  /** Optional privileged read handle for audited raw secret-read capabilities. */
+  privilegedDb?: object;
+  /** How to handle raw SQL referencing a secret table without a declared capability. */
+  rawSecretTableRead?: 'engine' | 'throw';
   /** Optional SQLite column-origin source; absence falls back to fail-closed raw-row boxing. */
   sqliteColumnOrigins?: SecretReadSqliteColumnOriginClient;
 }
@@ -76,6 +80,7 @@ interface SqlCarrier {
 }
 
 interface SecretReadBoundary {
+  declaredSecretRead: boolean;
   opaqueResultKeys: ReadonlySet<string>;
   rawWholeRowSecret: boolean;
   secretResultKeys: ReadonlySet<string>;
@@ -131,13 +136,21 @@ export function createSecretBoxingReadDb<Db extends object>(
       const item = Reflect.get(target, prop, receiver);
       if (typeof item !== 'function') return item;
       if (!isReadSurfaceMethod(prop)) return item.bind(target);
-      return (...args: unknown[]) =>
-        wrapReadSurface(
-          Reflect.apply(item, db, args),
+      return (...args: unknown[]) => {
+        const boundary = readBoundaryForArgs(args, metadata, isDirectSqlReadMethod(prop), options);
+        const readTarget =
+          boundary.declaredSecretRead && options.privilegedDb !== undefined
+            ? (options.privilegedDb as Record<PropertyKey, unknown>)
+            : target;
+        const readMethod = Reflect.get(readTarget, prop, receiver);
+        if (typeof readMethod !== 'function') return readMethod;
+        return wrapReadSurface(
+          Reflect.apply(readMethod, readTarget, args),
           metadata,
-          readBoundaryForArgs(args, metadata, isDirectSqlReadMethod(prop), options),
+          boundary,
           options,
         );
+      };
     },
   }) as Db;
 }
@@ -235,6 +248,7 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
 
     return {
       ...emptyReadBoundary(),
+      declaredSecretRead: false,
       opaqueResultKeys,
       secretResultKeys,
       secretColumnScopeKnown: true,
@@ -337,11 +351,14 @@ function readBoundaryForArgs(
         : sqliteSecretReadBoundaryForStatement(arg, sql, metadata, options.sqliteColumnOrigins);
     if (sqlReferencesSecretTable(sql, metadata.secretTableNames)) {
       if (!hasDeclaredSecretReadCapability(arg, metadata)) {
-        throw new Error(
-          'KV435: reader raw SQL secret-column read requires a declared secret-read capability (SPEC §10.3).',
-        );
+        if (options.rawSecretTableRead !== 'engine') {
+          throw new Error(
+            'KV435: reader raw SQL secret-column read requires a declared secret-read capability (SPEC §10.3).',
+          );
+        }
+        return { ...emptyReadBoundary(), secretColumnScopeKnown: true };
       }
-      return { ...boundary, rawWholeRowSecret: true };
+      return { ...boundary, declaredSecretRead: true, rawWholeRowSecret: true };
     }
     return boundary;
   }
@@ -375,6 +392,7 @@ function mergeReadBoundaries(
   right: SecretReadBoundary,
 ): SecretReadBoundary {
   return {
+    declaredSecretRead: left.declaredSecretRead || right.declaredSecretRead,
     opaqueResultKeys: unionSets(left.opaqueResultKeys, right.opaqueResultKeys),
     rawWholeRowSecret: left.rawWholeRowSecret || right.rawWholeRowSecret,
     secretResultKeys: unionSets(left.secretResultKeys, right.secretResultKeys),
@@ -386,6 +404,7 @@ function mergeReadBoundaries(
 
 function emptyReadBoundary(): SecretReadBoundary {
   return {
+    declaredSecretRead: false,
     opaqueResultKeys: new Set<string>(),
     rawWholeRowSecret: false,
     secretResultKeys: new Set<string>(),

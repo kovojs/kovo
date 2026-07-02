@@ -1905,18 +1905,16 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   runtimeDb = replaceRequired(
     runtimeDb,
     [
-      '  const secretReadDb = secretBoxingReadDb(',
-      '    readonlyDb(readDb),',
-      '    SECRET_READ_METADATA,',
-      '    readonlyDb(privilegedReadDb),',
-      '  );',
+      '  const secretReadDb = createSecretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA, {',
+      '    privilegedDb: readonlyDb(privilegedReadDb),',
+      "    rawSecretTableRead: 'engine',",
+      '  });',
     ].join('\n'),
     [
-      '  const secretReadDb = secretBoxingReadDb(',
-      '    readonlyDb(opaqueSecretReadDb),',
-      '    SECRET_READ_METADATA,',
-      '    readonlyDb(privilegedReadDb),',
-      '  );',
+      '  const secretReadDb = createSecretBoxingReadDb(readonlyDb(opaqueSecretReadDb), SECRET_READ_METADATA, {',
+      '    privilegedDb: readonlyDb(privilegedReadDb),',
+      "    rawSecretTableRead: 'engine',",
+      '  });',
     ].join('\n'),
     'runtime secret proof opaque read boundary',
   );

@@ -202,20 +202,27 @@ exactly where an irreducible author-time obligation remains.
       Move boxing / declared-write / read-only decisions out of the generated adapter into `@kovojs/server` (no Drizzle
       dep); the Drizzle-specific schema→metadata extraction lives in `@kovojs/drizzle` and emits pure, verified metadata;
       the generated adapter only passes that metadata + config.
+  - Status: SQLite and PGlite read-confidentiality decisions now live in `@kovojs/server` with Drizzle table metadata
+    extraction in `@kovojs/drizzle`; the generated adapters wire metadata/config. This stays open until the generated
+    declared-write and read-only decisions are also relocated.
 - [ ] **1.2 TCB manifest + boundary lint cover the relocated chokes (DEC-E, A10).** Enroll them in `security/TCB.md`;
       extend `check:tcb-boundary` to fail on any security decision inside `packages/create-kovo/templates/**` or outside
       the manifest, and to enforce the budget on the relocated chokes.
-  - Status: `scripts/check-tcb-boundary.mjs` now scans generated templates and reserves planned server/drizzle choke
-    entries in `security/TCB.md`; this stays open until the generated adapter decisions are fully relocated and enrolled.
+  - Status: `scripts/check-tcb-boundary.mjs` scans generated templates, and `security/TCB.md` enrolls the relocated
+    server/drizzle read-confidentiality chokes. This stays open until generated declared-write and read-only decisions
+    are fully relocated and enrolled.
 
 ### Phase 2 — Provenance-sound confidentiality
 
-- [ ] **2.0 Record driver column-origin availability per dialect (DEC-A).** SQLite: confirmed — better-sqlite3
+- [x] **2.0 Record driver column-origin availability per dialect (DEC-A).** SQLite: confirmed — better-sqlite3
       `@12.11.1` has `ENABLE_COLUMN_METADATA`, `Statement.columns()` preserves alias/view/CTE origins (audit-probed); this
       is SQLite's front line. Postgres/PGlite: the current Drizzle result API exposes only `{ name, dataTypeID }` — NOT
       `tableID`/`columnID` — and views report the view column origin, not the base table; so provenance boxing on Postgres
       needs a **new raw-protocol read path** and is only optional defense-in-depth. The Postgres confidentiality boundary
       is engine `REVOKE` (DEC-B), not boxing. Record the decision; do not assume PG provenance.
+  - Evidence: `packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts` wires SQLite `sqliteColumnOrigins`
+    into the server read-boundary, `packages/create-kovo/templates/src/_kovo/app-runtime-db.ts` wires PGlite
+    `rawSecretTableRead: 'engine'`, and the current prod-artifact security tests below prove the dialect split.
 - [x] **2.0b Verify the builder exposes interpolated column refs for `sql` expressions (DEC-A sub-case 2).** Confirm
       Drizzle's SQL-template object exposes chunk metadata so the framework can enumerate interpolated `Column`
       instances in builder SQL expressions, resolve each to `table.column`, and distinguish a plain-string chunk
@@ -360,4 +367,4 @@ self-catching rather than self-deceiving.
   `app-runtime-db.sqlite.ts` per-key `secretColumnNames.has(key)`), B2 (view regex), B3 (`touches:` write choke
   dormant); `papercuts-27` P1 (advisory set = `{KV406,KV422,KV438}` at `graph-output.ts:630`/`build-export.ts:465`/
   `vite.ts:568`; `KOVO_PARANOID=1` still KV435-fatal), P2 (`app-runtime-db.sqlite.ts` 683 lines, not in TCB/boundary lint).
-- Current integrated gates: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance|boxes schema-declared secret reads"`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "runtime Secret read through a Drizzle view"`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "starter mutation DB table scope"`, `pnpm exec vitest --run packages/create-kovo/src/index.test.ts -t "keeps Postgres as the default scaffold dialect|emits the SQLite scaffold variant when requested"`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
+- Current integrated gates: `pnpm exec vitest --run packages/server/src/secret-read-boundary.test.ts packages/drizzle/src/runtime-metadata.test.ts`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes schema-declared secret reads|runtime Secret read through a Drizzle view"`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance"`, `pnpm exec vitest --run packages/create-kovo/src/index.test.ts -t "keeps Postgres as the default scaffold dialect|emits the SQLite scaffold variant when requested"`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
