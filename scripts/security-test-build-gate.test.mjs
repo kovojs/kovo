@@ -7,10 +7,16 @@ import { describe, expect, it } from 'vitest';
 import {
   SECURITY_BUILD_CERTIFICATION_SOURCES,
   SECURITY_BUILD_PROOFS,
+  generateParanoidGeneratorAcceptanceCases,
+  generateReadSourceFamilyCases,
+  generateSecurityWrappingCases,
   generateTrustedOutputSinkPositionCases,
   extractMetamorphicSeedCodes,
   extractSecurityCertificationMarkers,
+  paranoidGeneratorAcceptanceProofNeedles,
+  readSourceFamilyProofNeedles,
   securityTestBuildGateViolations,
+  securityWrappingProofNeedles,
   trustedOutputSinkPositionProofNeedles,
 } from './security-test-build-gate.mjs';
 
@@ -73,6 +79,63 @@ describe('security-test-build-gate', () => {
       'renderedHtml() sends query-derived data',
       'trustedHtml() sends request-derived data',
       'trustedUrl() sends query-derived data',
+    ]);
+  });
+
+  it('generates deterministic read-SOURCE proof cases across request query and DB-read families', () => {
+    const defaultCases = generateReadSourceFamilyCases();
+    const sameSeedCases = generateReadSourceFamilyCases({ seed: 'dec-g:read-source:v1' });
+    const alternateSeedCases = generateReadSourceFamilyCases({ seed: 'b' });
+
+    expect(defaultCases).toEqual(sameSeedCases);
+    expect(defaultCases).not.toEqual(alternateSeedCases);
+    expect(new Set(defaultCases.map((testCase) => testCase.family))).toEqual(
+      new Set(['request', 'query', 'db-read']),
+    );
+    expect(readSourceFamilyProofNeedles().sort()).toEqual([
+      'queries/auth-secret-direct-leak-query.accessToken',
+      'trustedHtml() sends request-derived data',
+      'trustedUrl() sends query-derived data',
+    ]);
+  });
+
+  it('generates deterministic wrapping proof cases across security surfaces', () => {
+    const defaultCases = generateSecurityWrappingCases();
+    const sameSeedCases = generateSecurityWrappingCases({ seed: 'dec-g:wrapping:v1' });
+    const alternateSeedCases = generateSecurityWrappingCases({
+      seed: 'dec-g:wrapping:order-a',
+    });
+
+    expect(defaultCases).toEqual(sameSeedCases);
+    expect(defaultCases).not.toEqual(alternateSeedCases);
+    expect(new Set(defaultCases.map((testCase) => testCase.form))).toEqual(
+      new Set(['alias', 'component-prop', 'direct', 'helper', 'local-wrapper']),
+    );
+    expect(securityWrappingProofNeedles().sort()).toEqual([
+      'queries/auth-secret-direct-leak-query.accessToken',
+      'queries/auth-secret-leak-query.accessToken',
+      'queries/auth-secret-transformed-leak-query.password',
+      'renderedHtml() sends query-derived data',
+      'trustedHtml() sends request-derived data',
+    ]);
+  });
+
+  it('generates deterministic paranoid acceptance cases for unsafe and legitimate paths', () => {
+    const defaultCases = generateParanoidGeneratorAcceptanceCases();
+    const sameSeedCases = generateParanoidGeneratorAcceptanceCases({
+      seed: 'dec-h:round-8:paranoid:v1',
+    });
+    const alternateSeedCases = generateParanoidGeneratorAcceptanceCases({ seed: 'a' });
+
+    expect(defaultCases).toEqual(sameSeedCases);
+    expect(defaultCases).not.toEqual(alternateSeedCases);
+    expect(new Set(defaultCases.map((testCase) => testCase.expectation))).toEqual(
+      new Set(['unsafe-runtime-choke', 'static-classifiers-stubbed', 'legitimate-build-green']),
+    );
+    expect(paranoidGeneratorAcceptanceProofNeedles().sort()).toEqual([
+      "KOVO_PARANOID: '1'",
+      'Secret runtime value cannot cross',
+      'buildParanoidProductionArtifact(root)',
     ]);
   });
 

@@ -178,6 +178,24 @@ const kv426TrustedOutputGeneratedSinkNeedles = `      ...trustedOutputSinkPositi
 
 const removedKv426TrustedOutputGeneratedSinkNeedles = `      // generated SINK-position proof needles removed by mutant`;
 
+const readSourceGeneratedNeedles = `      ...readSourceFamilyProofNeedles().filter((needle) => needle.includes('derived data')),`;
+
+const removedReadSourceGeneratedNeedles = `      // generated read-SOURCE proof needles removed by mutant`;
+
+const wrappingGeneratedNeedles = `      ...securityWrappingProofNeedles().filter((needle) => needle.includes('derived data')),`;
+
+const removedWrappingGeneratedNeedles = `      // generated wrapping proof needles removed by mutant`;
+
+const paranoidAcceptanceGeneratedNeedles = [
+  '      ...paranoidGeneratorAcceptanceProofNeedles().filter(',
+  '        (needle) => needle !== "KOVO_PARANOID: \'1\'",',
+  '      ),',
+].join('\n');
+
+const removedParanoidAcceptanceGeneratedNeedles = [
+  '      // generated paranoid acceptance proof needles removed by mutant',
+].join('\n');
+
 const kv426TrustedUrlAttributeProofNeedle = `      'addTrustedUrlAttributeTypeGateProof(root)',`;
 
 const weakenedKv426TrustedUrlAttributeProofNeedle = `      'TrustedUrl',`;
@@ -592,7 +610,45 @@ export const SECURITY_GATE_MUTANTS = [
     replacement: removedKv426TrustedOutputGeneratedSinkNeedles,
     search: kv426TrustedOutputGeneratedSinkNeedles,
     sourceFile: securityTestBuildGatePath,
+    sourceOnly: true,
     test: assertKv426TrustedOutputGeneratedSinkPositionProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description: 'Deletes the generated read-SOURCE proof evidence from the real-build gate.',
+    expectedKiller:
+      'security proof enrollment must consume DEC-G generated read-SOURCE family needles',
+    name: 'security-test-build-gate/drop-generated-read-source-proof-enrollment',
+    replacement: removedReadSourceGeneratedNeedles,
+    search: readSourceGeneratedNeedles,
+    sourceFile: securityTestBuildGatePath,
+    sourceOnly: true,
+    test: assertGeneratedReadSourceProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description: 'Deletes the generated wrapping grammar proof evidence from the real-build gate.',
+    expectedKiller:
+      'security proof enrollment must consume DEC-G generated wrapping grammar needles',
+    name: 'security-test-build-gate/drop-generated-wrapping-proof-enrollment',
+    replacement: removedWrappingGeneratedNeedles,
+    search: wrappingGeneratedNeedles,
+    sourceFile: securityTestBuildGatePath,
+    sourceOnly: true,
+    test: assertGeneratedWrappingProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Deletes the generated round-8 paranoid acceptance evidence from the real-build gate.',
+    expectedKiller:
+      'paranoid runtime proof enrollment must consume generated unsafe and legitimate acceptance needles',
+    name: 'security-test-build-gate/drop-generated-paranoid-acceptance-proof-enrollment',
+    replacement: removedParanoidAcceptanceGeneratedNeedles,
+    search: paranoidAcceptanceGeneratedNeedles,
+    sourceFile: securityTestBuildGatePath,
+    sourceOnly: true,
+    test: assertGeneratedParanoidAcceptanceProofEnrollmentIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -1227,7 +1283,11 @@ async function assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned(module
 
 async function assertKv426TrustedOutputGeneratedSinkPositionProofEnrollmentIsPinned(
   moduleUnderTest,
+  { sourceText } = {},
 ) {
+  if (sourceText && !sourceText.includes(kv426TrustedOutputGeneratedSinkNeedles)) {
+    throw new Error('KV426 trusted-output proof must consume the generated SINK-position spread');
+  }
   const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
     (candidate) =>
       candidate.code === 'KV426' &&
@@ -1239,6 +1299,83 @@ async function assertKv426TrustedOutputGeneratedSinkPositionProofEnrollmentIsPin
     if (!proof.requiredNeedles?.includes(needle)) {
       throw new Error(
         `KV426 trusted-output proof must require generated SINK-position evidence ${JSON.stringify(
+          needle,
+        )}`,
+      );
+    }
+  }
+}
+
+async function assertGeneratedReadSourceProofEnrollmentIsPinned(
+  moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (sourceText && !sourceText.includes(readSourceGeneratedNeedles)) {
+    throw new Error('security proof must consume the generated read-SOURCE spread');
+  }
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV426' &&
+      candidate.claimId === 'trusted-output-prod-artifact' &&
+      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  );
+  if (!proof) throw new Error('KV426 trusted-output production build proof is not enrolled');
+  for (const needle of moduleUnderTest
+    .readSourceFamilyProofNeedles()
+    .filter((candidate) => candidate.includes('derived data'))) {
+    if (!proof.requiredNeedles?.includes(needle)) {
+      throw new Error(
+        `security proof must require generated read-SOURCE evidence ${JSON.stringify(needle)}`,
+      );
+    }
+  }
+}
+
+async function assertGeneratedWrappingProofEnrollmentIsPinned(
+  moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (sourceText && !sourceText.includes(wrappingGeneratedNeedles)) {
+    throw new Error('security proof must consume the generated wrapping grammar spread');
+  }
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV426' &&
+      candidate.claimId === 'trusted-output-prod-artifact' &&
+      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  );
+  if (!proof) throw new Error('KV426 trusted-output production build proof is not enrolled');
+  for (const needle of moduleUnderTest
+    .securityWrappingProofNeedles()
+    .filter((candidate) => candidate.includes('derived data'))) {
+    if (!proof.requiredNeedles?.includes(needle)) {
+      throw new Error(
+        `security proof must require generated wrapping evidence ${JSON.stringify(needle)}`,
+      );
+    }
+  }
+}
+
+async function assertGeneratedParanoidAcceptanceProofEnrollmentIsPinned(
+  moduleUnderTest,
+  { sourceText } = {},
+) {
+  if (sourceText && !sourceText.includes(paranoidAcceptanceGeneratedNeedles)) {
+    throw new Error('paranoid proof must consume the generated round-8 acceptance spread');
+  }
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV435' &&
+      candidate.claimId === 'runtime-secret-view-egress' &&
+      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  );
+  if (!proof) throw new Error('KV435 paranoid runtime proof is not enrolled');
+  for (const needle of moduleUnderTest.paranoidGeneratorAcceptanceProofNeedles()) {
+    const enrolled =
+      proof.requiredNeedles?.includes(needle) || proof.requiredProofFileNeedles?.includes(needle);
+    if (!enrolled) {
+      throw new Error(
+        `paranoid proof must require generated round-8 acceptance evidence ${JSON.stringify(
           needle,
         )}`,
       );
