@@ -195,6 +195,10 @@ exactly where an irreducible author-time obligation remains.
 - [ ] **0.2 Confirm the round-8 bugs now surface (B4).** With 0.1 landed, `KOVO_PARANOID=1` builds of the `bugz-29`
       B1/B2/B3 shapes MUST reproduce the leak/write (static no longer masks them). Capture these as failing acceptance
       fixtures — they are the Phase 2/3 targets. Re-open the affected followup-3 checkboxes (DEC-F).
+  - Status: left open. Red-window audit found a real post-0.1/pre-fix ancestry point at `5dd52b252`, but no preserved
+    replayable B1/B2/B3 fixture: `e1adf95e0` does not build, and reconstructing the exact SQLite shapes at `5dd52b252`
+    trips then-current unrelated preflight gates (`KV410`/`KV310`/`KV422`) before the runtime leak/write. Checking this
+    off now would overstate the surviving evidence.
 
 ### Phase 1 — Put enforcement in the verified TCB
 
@@ -274,12 +278,13 @@ exactly where an irreducible author-time obligation remains.
 
 ### Phase 5 — Prove it (round-9 acceptance)
 
-- [ ] **5.1 Full-paranoid generative dogfood (B2/B4).** Property generators vary the read SOURCE shape (alias,
+- [x] **5.1 Full-paranoid generative dogfood (B2/B4).** Property generators vary the read SOURCE shape (alias,
       derivation, view, computed, JOIN, CTE, subquery) and the write shape (out-of-scope `tables:`, absent-`tables:`, DDL,
       raw-SQL escape, boxed-secret-into-nonsecret-column), run under `KOVO_PARANOID=1` with the runtime-enforced security
       codes stubbed. (App-defined triggers are a non-goal, not asserted; SQLite's authorizer may catch them as a bonus.)
       Acceptance: zero secret-to-egress leaks, zero out-of-scope writes, zero over-blocks; the relocated chokes are in the
       manifest and within budget.
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts -t "Phase 5.1 full-paranoid dogfood acceptance" --reporter=dot` proves alias/view/derivation/computed/JOIN/CTE/subquery reads, public projection/no-overblock cases, in-scope write success, and out-of-scope/absent-`tables:`/DDL/raw/boxed-secret write refusals under `KOVO_PARANOID=1`.
 
 ## 5. Pre-mortem — what round-9 will attack, and which item closes it
 
@@ -363,4 +368,4 @@ self-catching rather than self-deceiving.
   `app-runtime-db.sqlite.ts` per-key `secretColumnNames.has(key)`), B2 (view regex), B3 (`touches:` write choke
   dormant); `papercuts-27` P1 (advisory set = `{KV406,KV422,KV438}` at `graph-output.ts:630`/`build-export.ts:465`/
   `vite.ts:568`; `KOVO_PARANOID=1` still KV435-fatal), P2 (`app-runtime-db.sqlite.ts` 683 lines, not in TCB/boundary lint).
-- Current integrated gates: `pnpm exec vitest --run packages/server/src/managed-db.test.ts scripts/check-tcb-boundary.test.mjs packages/create-kovo/src/index.test.ts --reporter=dot`, `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "starter mutation DB table scope" --reporter=dot`, `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts -t "keeps SQLite readonly handles isolated" --reporter=dot`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
+- Current integrated gates: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts -t "Phase 5.1 full-paranoid dogfood acceptance" --reporter=dot`, `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes schema-declared secret reads" --reporter=dot`, `pnpm exec vitest --run packages/server/src/managed-db.test.ts scripts/check-tcb-boundary.test.mjs packages/create-kovo/src/index.test.ts --reporter=dot`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
