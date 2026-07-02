@@ -383,27 +383,52 @@ function selectResultProvenOffWire(
   receiverReferences: QueryReceiverReferences,
   mode: 'project' | 'source',
 ): boolean {
-  if (call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) return false;
+  return (
+    classifySelectResultOffWire(call, body, receiverReferences, mode).kind === 'proven-off-wire'
+  );
+}
+
+type OffWireProof =
+  | { readonly kind: 'proven-off-wire' }
+  | { readonly kind: 'unproven'; readonly reason: string };
+
+function classifySelectResultOffWire(
+  call: CallExpression,
+  body: ObjectLiteralExpression,
+  receiverReferences: QueryReceiverReferences,
+  mode: 'project' | 'source',
+): OffWireProof {
+  if (call.getFirstAncestorByKind(SyntaxKind.ReturnStatement)) {
+    return { kind: 'unproven', reason: 'direct-return' };
+  }
 
   const callbackBody = queryCallbackBodies(body, mode).find((candidate) =>
     nodeContainsNode(candidate, call),
   );
-  if (!callbackBody || !Node.isBlock(callbackBody)) return false;
+  if (!callbackBody || !Node.isBlock(callbackBody)) {
+    return { kind: 'unproven', reason: 'missing-callback-body' };
+  }
 
   const declaration = selectResultVariableDeclaration(call);
   if (!declaration)
-    return call.getFirstAncestorByKind(SyntaxKind.ExpressionStatement) !== undefined;
+    return call.getFirstAncestorByKind(SyntaxKind.ExpressionStatement) !== undefined
+      ? { kind: 'proven-off-wire' }
+      : { kind: 'unproven', reason: 'unbound-select-result' };
 
   const name = declaration.getNameNode();
-  if (!Node.isIdentifier(name)) return false;
+  if (!Node.isIdentifier(name)) return { kind: 'unproven', reason: 'binding-pattern' };
 
   const list = declaration.getParent();
-  if (!Node.isVariableDeclarationList(list) || list.getDeclarationKind() !== 'const') return false;
+  if (!Node.isVariableDeclarationList(list) || list.getDeclarationKind() !== 'const') {
+    return { kind: 'unproven', reason: 'mutable-select-result' };
+  }
 
   const selectedKey = localSymbolKey(name);
-  if (!selectedKey) return false;
+  if (!selectedKey) return { kind: 'unproven', reason: 'unresolved-select-symbol' };
 
-  return !taintedValueReachesTopLevelReturn(callbackBody, selectedKey);
+  return taintedValueReachesTopLevelReturn(callbackBody, selectedKey)
+    ? { kind: 'unproven', reason: 'select-result-may-reach-wire' }
+    : { kind: 'proven-off-wire' };
 }
 
 function selectResultVariableDeclaration(call: CallExpression): VariableDeclaration | undefined {
