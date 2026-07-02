@@ -122,8 +122,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(response.status).toBe(500);
       expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
       expect(body).not.toContain('demo@example.com');
-      expect(output()).toContain('KV435');
-      expect(output()).toContain('Secret runtime value cannot cross');
+      expect(output()).toContain('permission denied');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
@@ -156,6 +155,12 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(proofQueries).toContain('opaque raw SQL parse-fail secret boundary proof');
       expect(proofQueries).toContain('runtimeSecretDefaultRawRefusalQuery');
       expect(proofQueries).toContain('default reader raw secret-column refusal proof');
+      expect(proofQueries).toContain('runtimeSecretDirectRawRefusalQuery');
+      expect(proofQueries).toContain('default reader direct raw secret-column refusal proof');
+      expect(proofQueries).toContain('runtimeSecretViewRawRefusalQuery');
+      expect(proofQueries).toContain('security-invoker view secret-column refusal proof');
+      expect(proofQueries).toContain('runtimeSecretReaderRoleProofQuery');
+      expect(proofQueries).toContain('PGlite non-superuser reader role assumption proof');
       expect(proofQueries).toContain('runtimeSecretDefaultRawPublicQuery');
       expect(proofQueries).toContain('default reader raw public-column proof');
       expect(proofQueries).toContain('runtimeSecretDeclaredRawEgressQuery');
@@ -219,6 +224,37 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(refusalBody).toContain('blocked');
       expect(refusalBody).toContain('KV433');
       expect(refusalBody).not.toContain('runtime-secret-value');
+
+      const directRefusalResponse = await fetch(`${origin}/_q/runtime-secret-direct-raw-refusal`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const directRefusalBody = await directRefusalResponse.text();
+
+      expect(directRefusalResponse.status, directRefusalBody).toBe(200);
+      expect(directRefusalBody).toContain('default-reader-direct-raw-secret-refusal');
+      expect(directRefusalBody).toContain('blocked');
+      expect(directRefusalBody).toContain('KV433');
+      expect(directRefusalBody).not.toContain('runtime-secret-value');
+
+      const viewRefusalResponse = await fetch(`${origin}/_q/runtime-secret-view-raw-refusal`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const viewRefusalBody = await viewRefusalResponse.text();
+
+      expect(viewRefusalResponse.status, viewRefusalBody).toBe(200);
+      expect(viewRefusalBody).toContain('default-reader-view-secret-refusal');
+      expect(viewRefusalBody).toContain('blocked');
+      expect(viewRefusalBody).toContain('KV433');
+      expect(viewRefusalBody).not.toContain('runtime-secret-value');
+
+      const readerRoleResponse = await fetch(`${origin}/_q/runtime-secret-reader-role-proof`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const readerRoleBody = await readerRoleResponse.text();
+
+      expect(readerRoleResponse.status, readerRoleBody).toBe(200);
+      expect(readerRoleBody).toContain('reader-role');
+      expect(readerRoleBody).toContain('kovo_reader');
 
       const publicRawResponse = await fetch(`${origin}/_q/runtime-secret-default-raw-public`, {
         headers: { cookie: cookieHeader(jar) },
