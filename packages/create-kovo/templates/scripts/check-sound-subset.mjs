@@ -189,6 +189,10 @@ function visitQueryConfigObject(ts, object, sourceFile, relativeFile, bindings, 
 
 function reportTrustSinkCalleeIfNeeded(ts, call, sourceFile, relativeFile, bindings) {
   const callee = call.expression;
+  if (ts.isIdentifier(callee) && bindings.dynamicTrustAliases.has(callee.text)) {
+    reportTypeScriptFinding(sourceFile, relativeFile, callee, TRUST_SINK_CALLEE_MESSAGE);
+    return;
+  }
   if (!isDynamicFrameworkTrustMember(ts, callee, bindings)) return;
   reportTypeScriptFinding(sourceFile, relativeFile, callee, TRUST_SINK_CALLEE_MESSAGE);
 }
@@ -325,6 +329,7 @@ function isInsideTransactionDefinition(ts, node) {
 }
 
 function frameworkBindingsForSourceFile(ts, sourceFile) {
+  const dynamicTrustAliases = new Set();
   const namedImports = new Map();
   const namespaceImports = new Map();
   const localAliases = new Map();
@@ -350,11 +355,22 @@ function frameworkBindingsForSourceFile(ts, sourceFile) {
     }
   }
 
-  const bindings = { localAliases, namedImports, namespaceImports };
+  const bindings = { dynamicTrustAliases, localAliases, namedImports, namespaceImports };
   for (const statement of sourceFile.statements) {
     if (!ts.isVariableStatement(statement)) continue;
     for (const declaration of statement.declarationList.declarations) {
       if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
+      if (isDynamicFrameworkTrustMember(ts, declaration.initializer, bindings)) {
+        dynamicTrustAliases.add(declaration.name.text);
+        continue;
+      }
+      if (
+        ts.isIdentifier(declaration.initializer) &&
+        dynamicTrustAliases.has(declaration.initializer.text)
+      ) {
+        dynamicTrustAliases.add(declaration.name.text);
+        continue;
+      }
       const resolved = resolvedFrameworkMember(ts, declaration.initializer, bindings);
       if (resolved) localAliases.set(declaration.name.text, resolved);
     }
