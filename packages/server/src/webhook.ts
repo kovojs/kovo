@@ -21,7 +21,7 @@ import {
 } from './response.js';
 import { isSchemaValidationError } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
-import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
+import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { reserveReplayBeforeRun } from './replay.js';
 import {
   parseUntrustedJsonBodyBytes,
@@ -883,7 +883,11 @@ function webhookMutationRequest<Tx>(request: EndpointRequest, tx: Tx): EndpointR
 }
 
 function webhookManagedTransactionDb<Tx>(tx: Tx): Tx {
-  return wrapManagedDbForSqlSafety(tx, undefined, { capability: 'write' });
+  return wrapManagedDbForSqlSafety(
+    tx,
+    undefined,
+    managedSqlExecutionPolicy({ capability: 'write' }),
+  );
 }
 
 function assertDeclaredWebhookChangeDomain(

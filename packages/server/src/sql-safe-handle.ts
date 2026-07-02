@@ -35,6 +35,21 @@ export interface ManagedSqlWritePolicy {
   touches?: readonly string[];
 }
 
+declare const managedSqlExecutionPolicyBrand: unique symbol;
+
+/**
+ * Framework-owned DB execution policy for the managed SQL choke (SPEC §10.2/§10.3/§11.2, DEC-E).
+ * The public shape is intentionally not enough: direct SQL execution wrapping requires a value
+ * minted by {@link managedSqlExecutionPolicy}, and the runtime WeakSet check rejects bare casts.
+ *
+ * @internal
+ */
+export type ManagedSqlExecutionPolicy = ManagedSqlWritePolicy & {
+  readonly [managedSqlExecutionPolicyBrand]: {
+    readonly scope: 'framework-managed-sql-execution-policy';
+  };
+};
+
 export const kovoAsyncMutationTransaction = Symbol('kovo.async-mutation-transaction');
 
 export type AsyncMutationTransactionCapableDb = {
@@ -60,6 +75,20 @@ const WRITE_SQL_BUILDER_FAST_PATH_METHODS = new Set<PropertyKey>([
   'with',
 ]);
 const frameworkManagedDbRawTargets = new WeakMap<object, object>();
+const managedSqlExecutionPolicies = new WeakSet<object>();
+
+/**
+ * Mint the module-private execution policy required by {@link wrapManagedDbForSqlSafety}.
+ *
+ * @internal
+ */
+export function managedSqlExecutionPolicy(
+  policy: ManagedSqlWritePolicy,
+): ManagedSqlExecutionPolicy {
+  const minted = Object.freeze({ ...policy }) as ManagedSqlExecutionPolicy;
+  managedSqlExecutionPolicies.add(minted);
+  return minted;
+}
 
 /**
  * Resolve the managed-SQL guard mode (SPEC §10.2/§744). The fail-closed default — in every
@@ -86,9 +115,10 @@ export const managedSqlSafetyMode = securityClassifier(
 export function wrapManagedDbForSqlSafety<DbValue>(
   db: DbValue,
   mode: SqlSafetyMode = managedSqlSafetyMode(),
-  writePolicy?: ManagedSqlWritePolicy,
+  writePolicy?: ManagedSqlExecutionPolicy,
 ): DbValue {
   if (!isRecord(db)) return db;
+  assertManagedSqlExecutionPolicy(writePolicy);
   if (writePolicy === undefined && !isManagedDbAdapterLike(db)) return db;
 
   const proxyCache = new WeakMap<object, object>();
@@ -101,6 +131,18 @@ export function wrapManagedDbForSqlSafety<DbValue>(
     writePolicy,
     writePolicy !== undefined || isManagedDbAdapterLike(db),
   ) as DbValue;
+}
+
+function assertManagedSqlExecutionPolicy(
+  policy: ManagedSqlExecutionPolicy | undefined,
+): asserts policy is ManagedSqlExecutionPolicy | undefined {
+  if (policy === undefined) return;
+  if (typeof policy === 'object' && policy !== null && managedSqlExecutionPolicies.has(policy)) {
+    return;
+  }
+  throw new Error(
+    'KV422: managed DB SQL execution policy was not created by the framework-owned constructor (SPEC §10.2/§10.3/§11.2). Route DB execution through managedDb()/readonlyDb() so the read/write choke remains the sole door.',
+  );
 }
 
 /**

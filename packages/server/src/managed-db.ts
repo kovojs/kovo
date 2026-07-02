@@ -17,6 +17,7 @@
 
 import {
   frameworkManagedDbRawTarget,
+  managedSqlExecutionPolicy,
   wrapManagedDbForSqlSafety,
   type ManagedSqlWritePolicy,
 } from './sql-safe-handle.js';
@@ -153,10 +154,14 @@ export type ManagedDbMode = 'read' | 'write';
  */
 export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
   const readDb = readonlyDbTarget(db);
-  const safe = wrapManagedDbForSqlSafety(readDb, undefined, {
-    capability: 'read',
-    engineReadonly: readDb !== db,
-  });
+  const safe = wrapManagedDbForSqlSafety(
+    readDb,
+    undefined,
+    managedSqlExecutionPolicy({
+      capability: 'read',
+      engineReadonly: readDb !== db,
+    }),
+  );
   return readonlyCapabilityDb(safe as object) as Reader<Db>;
 }
 
@@ -220,11 +225,15 @@ export function managedDb<Db>(
 ): Reader<Db> | Writer<Db> {
   const target =
     mode === 'read' ? readonlyDbTarget(raw) : declaredWriteDbTarget(raw, options.sqlWritePolicy);
-  const safe = wrapManagedDbForSqlSafety(target, undefined, {
-    ...options.sqlWritePolicy,
-    capability: mode,
-    engineReadonly: mode === 'read' && target !== raw,
-  });
+  const safe = wrapManagedDbForSqlSafety(
+    target,
+    undefined,
+    managedSqlExecutionPolicy({
+      ...options.sqlWritePolicy,
+      capability: mode,
+      engineReadonly: mode === 'read' && target !== raw,
+    }),
+  );
   if (mode === 'write') return safe as Writer<Db>;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
   return readonlyCapabilityDb(safe as unknown as object) as Reader<Db>;

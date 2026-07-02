@@ -11,7 +11,11 @@ import {
   readonlyDb,
 } from './managed-db.js';
 import type { Reader, Writer } from './managed-db.js';
-import { kovoAsyncMutationTransaction, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
+import {
+  kovoAsyncMutationTransaction,
+  managedSqlExecutionPolicy,
+  wrapManagedDbForSqlSafety,
+} from './sql-safe-handle.js';
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
 import { domain } from './domain.js';
@@ -336,6 +340,7 @@ reader.with('active').update('products');
         join(root, 'writer-type-proof.ts'),
         `
 import { managedDb, type Writer } from '../src/managed-db.js';
+import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from '../src/sql-safe-handle.js';
 
 type FakeDb = {
   execute(statement: unknown): Promise<unknown>;
@@ -349,14 +354,18 @@ declare const raw: FakeDb;
 const writer = managedDb(raw, 'write');
 const acceptsWriter = (db: Writer<FakeDb>) => db;
 const acceptsRawSurface = (db: FakeDb) => db;
+const executionPolicy = managedSqlExecutionPolicy({ capability: 'write' });
 
 acceptsWriter(writer);
 acceptsRawSurface(writer);
 writer.insert('products');
 writer.update('products');
+wrapManagedDbForSqlSafety(raw, undefined, executionPolicy);
 
 // @ts-expect-error SPEC §10.3/§11.2 DEC-E: raw provider handles lack the Writer brand.
 acceptsWriter(raw);
+// @ts-expect-error SPEC §10.2/§10.3/§11.2 DEC-E: plain structural policy objects cannot reach DB exec wrapping.
+wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 
 `,
         'utf8',
@@ -554,6 +563,38 @@ acceptsWriter(raw);
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
+  it('rejects forged direct SQL wrapper policies before exposing DB exec', () => {
+    const log: string[] = [];
+    const raw = {
+      execute(statement: unknown) {
+        log.push('execute');
+        return statement;
+      },
+    };
+
+    expect(() =>
+      wrapManagedDbForSqlSafety(raw, undefined, {
+        capability: 'write',
+      } as never),
+    ).toThrow(/framework-owned constructor/);
+    expect(log).toEqual([]);
+
+    const minted = managedSqlExecutionPolicy({ capability: 'write' });
+    expect(() => wrapManagedDbForSqlSafety(raw, undefined, { ...minted } as never)).toThrow(
+      /framework-owned constructor/,
+    );
+    expect(log).toEqual([]);
+
+    const handle = wrapManagedDbForSqlSafety(raw, undefined, minted);
+    expect(
+      (handle as { execute(statement: unknown): unknown }).execute({
+        text: 'select $1',
+        values: [1],
+      }),
+    ).toMatchObject({ text: 'select $1' });
+    expect(log).toEqual(['execute']);
+  });
+
   it('read mode rejects writes AND raw-string SQL (the unification)', () => {
     const handle = managedDb(fakeDb([]), 'read');
     // KV433: write verb throws the readonly error.
@@ -874,10 +915,14 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         };
       },
     };
-    const handle = wrapManagedDbForSqlSafety(raw, undefined, {
-      capability: 'read',
-      dialect: 'sqlite',
-    });
+    const handle = wrapManagedDbForSqlSafety(
+      raw,
+      undefined,
+      managedSqlExecutionPolicy({
+        capability: 'read',
+        dialect: 'sqlite',
+      }),
+    );
 
     expect(() => handle.insert('products')).toThrow(/unknown managed DB method db\.insert|KV422/);
     expect(() => handle.update('products')).toThrow(/unknown managed DB method db\.update|KV422/);
@@ -918,7 +963,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         },
       },
       undefined,
-      { capability: 'read', dialect: 'sqlite' },
+      managedSqlExecutionPolicy({ capability: 'read', dialect: 'sqlite' }),
     ) as { run(statement: unknown): unknown };
 
     expect(() =>
@@ -937,7 +982,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         },
       },
       undefined,
-      { capability: 'read' },
+      managedSqlExecutionPolicy({ capability: 'read' }),
     ) as { query(statement: unknown): unknown };
 
     expect(() =>
@@ -1284,12 +1329,12 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         },
       },
       undefined,
-      {
+      managedSqlExecutionPolicy({
         capability: 'write',
         dialect: 'sqlite',
         tables: ['contacts'],
         touches: ['contact'],
-      },
+      }),
     ) as { run(statement: unknown): unknown };
 
     expect(() =>
@@ -1512,11 +1557,15 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         },
       },
     );
-    const outer = wrapManagedDbForSqlSafety(inner, undefined, {
-      capability: 'write',
-      tables: ['products'],
-      touches: ['product'],
-    });
+    const outer = wrapManagedDbForSqlSafety(
+      inner,
+      undefined,
+      managedSqlExecutionPolicy({
+        capability: 'write',
+        tables: ['products'],
+        touches: ['product'],
+      }),
+    );
 
     expect(() => void outer.$client).toThrow(/raw driver escape db\.\$client|KV422/);
     expect(
