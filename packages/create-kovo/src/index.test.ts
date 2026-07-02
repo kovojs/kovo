@@ -378,6 +378,10 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('scripts/check-sound-subset.mjs')).toContain(
       'FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES',
     );
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain('SECURITY_SURFACE_FILES');
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
+      'must enroll the whole starter security surface',
+    );
     expect(files.get('src/endpoint-posture.test.ts')).not.toMatch(/\bas\s+(?!const\b)[A-Za-z_{]/u);
     expect(files.get('src/auth.ts')).toContain(
       'return request.session?.id ?? request.authCsrfId ?? undefined;',
@@ -563,12 +567,66 @@ describe('create-kovo starter (metadata)', () => {
         join(root, 'src/raw-sql-query.ts'),
         [
           "import { query } from '@kovojs/server';",
+          "import { sql } from '@kovojs/drizzle';",
+          '',
+          'export const aliasedRawQuery = query({',
+          '  async load(_input, context) {',
+          '    const rawSql = sql.raw;',
+          "    const statement = rawSql('select token from session limit 1');",
+          '    return context.db.execute(statement);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /raw-sql-query\.ts:7: SPEC\.md §6\.6\/§10\.2 sound subset bans raw SQL in query loaders/,
+      );
+
+      writeFileSync(
+        join(root, 'src/raw-sql-query.ts'),
+        [
+          "import { query } from '@kovojs/server';",
+          "import { sql } from '@kovojs/drizzle';",
+          '',
+          'const rawSql = sql;',
+          '',
+          'export const aliasedTagQuery = query({',
+          '  async load(_input, context) {',
+          '    return context.db.execute(rawSql`select token from session limit 1`);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /raw-sql-query\.ts:8: SPEC\.md §6\.6\/§10\.2 sound subset bans raw SQL in query loaders/,
+      );
+
+      writeFileSync(
+        join(root, 'src/raw-sql-query.ts'),
+        [
+          "import { query } from '@kovojs/server';",
           "import { sql, trustedSql } from '@kovojs/drizzle';",
           '',
           'export const reviewedQuery = query({',
           '  async load(_input, context) {',
           '    return context.db.execute(',
-          '      trustedSql(sql`select id from contacts`, { justification: "reviewed raw read path" }),',
+          '      trustedSql(sql.raw("select id from contacts"), { justification: "reviewed raw read path" }),',
           '    );',
           '  },',
           '});',
@@ -598,9 +656,11 @@ describe('create-kovo starter (metadata)', () => {
         join(root, 'src/dynamic-trust.ts'),
         [
           "import * as browser from '@kovojs/browser';",
+          "import * as server from '@kovojs/server';",
           '',
-          "const helper = 'trustedHtml';",
-          "export const trusted = browser[helper]('<strong>reviewed</strong>');",
+          'export function renderTrusted(helper: string) {',
+          "  return server[helper]('<strong>reviewed</strong>');",
+          '}',
           '',
         ].join('\n'),
         'utf8',
@@ -612,7 +672,7 @@ describe('create-kovo starter (metadata)', () => {
           stdio: 'pipe',
         }),
       ).toThrowError(
-        /dynamic-trust\.ts:4: SPEC\.md §6\.6 sound subset requires trustedHtml\/trustedUrl\/trustedSql callees/,
+        /dynamic-trust\.ts:5: SPEC\.md §6\.6 sound subset requires trustedHtml\/trustedUrl\/trustedSql callees/,
       );
 
       writeFileSync(
@@ -621,13 +681,13 @@ describe('create-kovo starter (metadata)', () => {
           "import * as browser from '@kovojs/browser';",
           "import * as drizzle from '@kovojs/drizzle';",
           '',
-          "const helper = 'trustedHtml';",
-          "const sqlHelper = 'trustedSql';",
-          'const trustedMarkup = browser[helper];',
-          'const reviewedSql = drizzle[sqlHelper];',
-          '',
-          "export const trusted = trustedMarkup('<strong>reviewed</strong>');",
-          "export const statement = reviewedSql(drizzle.sql.raw('select 1'), { justification: 'reviewed' });",
+          'export function renderTrusted(helper: string, sqlHelper: string) {',
+          '  const trustedMarkup = browser[helper];',
+          '  const reviewedSql = drizzle[sqlHelper];',
+          "  const trusted = trustedMarkup('<strong>reviewed</strong>');",
+          "  const statement = reviewedSql(drizzle.sql.raw('select 1'), { justification: 'reviewed' });",
+          '  return { statement, trusted };',
+          '}',
           '',
         ].join('\n'),
         'utf8',
@@ -639,7 +699,7 @@ describe('create-kovo starter (metadata)', () => {
           stdio: 'pipe',
         }),
       ).toThrowError(
-        /dynamic-trust\.ts:9: SPEC\.md §6\.6 sound subset requires trustedHtml\/trustedUrl\/trustedSql callees/,
+        /dynamic-trust\.ts:7: SPEC\.md §6\.6 sound subset requires trustedHtml\/trustedUrl\/trustedSql callees/,
       );
 
       try {
@@ -650,7 +710,7 @@ describe('create-kovo starter (metadata)', () => {
       } catch (error) {
         const stderr = (error as { stderr?: Buffer }).stderr?.toString('utf8') ?? '';
         expect(stderr).toContain(
-          'dynamic-trust.ts:10: SPEC.md §6.6 sound subset requires trustedHtml/trustedUrl/trustedSql callees',
+          'dynamic-trust.ts:8: SPEC.md §6.6 sound subset requires trustedHtml/trustedUrl/trustedSql callees',
         );
       }
 
@@ -673,6 +733,27 @@ describe('create-kovo starter (metadata)', () => {
           stdio: 'pipe',
         }),
       ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails check:sound-subset when the starter security surface is not fully enrolled', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-enrollment-'));
+
+    try {
+      writeKovoProject(root, { name: 'Security Surface Enrollment Proof' });
+      linkStarterBuildDependencies(root);
+      rmSync(join(root, 'src/endpoint-posture.test.ts'), { force: true });
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /endpoint-posture\.test\.ts:1: SPEC\.md §6\.6\/§10\.2\/§10\.3 sound subset must enroll the whole starter security surface/,
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

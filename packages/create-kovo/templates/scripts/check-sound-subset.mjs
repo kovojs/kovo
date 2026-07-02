@@ -7,6 +7,21 @@ const root = process.cwd();
 const findings = [];
 const RUNTIME_DB_MODULE_PATH = 'src/_kovo/app-runtime-db';
 const FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES = new Set(['src/_kovo/app-runtime-db.ts']);
+const SECURITY_SURFACE_FILES = new Set([
+  'src/app.test.ts',
+  'src/app.tsx',
+  'src/auth.ts',
+  'src/components/auth-forms.tsx',
+  'src/components/contacts.tsx',
+  'src/db.ts',
+  'src/endpoint-posture.test.ts',
+  'src/model.ts',
+  'src/mutations.ts',
+  'src/queries.ts',
+  'src/schema.ts',
+]);
+const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
+  'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole starter security surface';
 const RUNTIME_DB_IMPORT_ALLOWLIST = new Set([
   'src/app.tsx',
   'src/auth.ts',
@@ -33,7 +48,10 @@ const SQL_EXPORTS = new Map([
 ]);
 const SQL_METHODS = new Set(['allow', 'identifier', 'join', 'raw']);
 
-for (const file of sourceFiles(join(root, 'src'))) {
+const enrolledSourceFiles = sourceFiles(join(root, 'src'));
+reportMissingSecuritySurfaceFiles(enrolledSourceFiles);
+
+for (const file of enrolledSourceFiles) {
   const source = readFileSync(file, 'utf8');
   const relativeFile = toPosixPath(relative(root, file));
   if (frameworkGeneratedSoundSubsetExempt(relativeFile)) continue;
@@ -356,27 +374,70 @@ function frameworkBindingsForSourceFile(ts, sourceFile) {
   }
 
   const bindings = { dynamicTrustAliases, localAliases, namedImports, namespaceImports };
-  for (const statement of sourceFile.statements) {
-    if (!ts.isVariableStatement(statement)) continue;
-    for (const declaration of statement.declarationList.declarations) {
-      if (!ts.isIdentifier(declaration.name) || !declaration.initializer) continue;
-      if (isDynamicFrameworkTrustMember(ts, declaration.initializer, bindings)) {
-        dynamicTrustAliases.add(declaration.name.text);
-        continue;
-      }
-      if (
-        ts.isIdentifier(declaration.initializer) &&
-        dynamicTrustAliases.has(declaration.initializer.text)
-      ) {
-        dynamicTrustAliases.add(declaration.name.text);
-        continue;
-      }
-      const resolved = resolvedFrameworkMember(ts, declaration.initializer, bindings);
-      if (resolved) localAliases.set(declaration.name.text, resolved);
-    }
-  }
+  collectFrameworkAliases(ts, sourceFile, bindings);
 
   return bindings;
+}
+
+function collectFrameworkAliases(ts, sourceFile, bindings) {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visit = (node) => {
+      if (ts.isVariableDeclaration(node) && node.initializer) {
+        changed =
+          collectFrameworkAliasFromBinding(ts, node.name, node.initializer, bindings) || changed;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+}
+
+function collectFrameworkAliasFromBinding(ts, name, initializer, bindings) {
+  if (ts.isIdentifier(name)) {
+    if (isDynamicFrameworkTrustMember(ts, initializer, bindings)) {
+      const size = bindings.dynamicTrustAliases.size;
+      bindings.dynamicTrustAliases.add(name.text);
+      return bindings.dynamicTrustAliases.size !== size;
+    }
+    if (ts.isIdentifier(initializer) && bindings.dynamicTrustAliases.has(initializer.text)) {
+      const size = bindings.dynamicTrustAliases.size;
+      bindings.dynamicTrustAliases.add(name.text);
+      return bindings.dynamicTrustAliases.size !== size;
+    }
+    const resolved = resolvedFrameworkMember(ts, initializer, bindings);
+    if (!resolved) return false;
+    const previous = bindings.localAliases.get(name.text);
+    bindings.localAliases.set(name.text, resolved);
+    return !sameResolvedFrameworkMember(previous, resolved);
+  }
+
+  if (!ts.isObjectBindingPattern(name)) return false;
+  const resolved = resolvedFrameworkMember(ts, initializer, bindings);
+  if (!resolved || resolved.member) return false;
+
+  let changed = false;
+  for (const element of name.elements) {
+    if (!ts.isIdentifier(element.name)) continue;
+    const property = element.propertyName
+      ? propertyNameText(ts, element.propertyName)
+      : element.name.text;
+    if (!property) continue;
+    const member = { ...resolved, member: property };
+    const previous = bindings.localAliases.get(element.name.text);
+    bindings.localAliases.set(element.name.text, member);
+    changed = !sameResolvedFrameworkMember(previous, member) || changed;
+  }
+  return changed;
+}
+
+function sameResolvedFrameworkMember(left, right) {
+  return (
+    left?.module === right.module &&
+    left.exported === right.exported &&
+    left.member === right.member
+  );
 }
 
 function isQueryCall(ts, expression, bindings) {
@@ -436,7 +497,7 @@ function resolvedFrameworkMember(ts, expression, bindings) {
   if (ts.isIdentifier(expression)) {
     const named =
       bindings.localAliases.get(expression.text) ?? bindings.namedImports.get(expression.text);
-    return named ? { module: named.module, exported: named.exported } : null;
+    return named ? { ...named } : null;
   }
 
   if (ts.isPropertyAccessExpression(expression)) {
@@ -468,6 +529,14 @@ function resolvedFrameworkMember(ts, expression, bindings) {
   }
 
   return null;
+}
+
+function reportMissingSecuritySurfaceFiles(files) {
+  const enrolled = new Set(files.map((file) => toPosixPath(relative(root, file))));
+  for (const file of SECURITY_SURFACE_FILES) {
+    if (enrolled.has(file)) continue;
+    findings.push(`${file}:1: ${SECURITY_SURFACE_ENROLLMENT_MESSAGE}; missing from src/ scan`);
+  }
 }
 
 function propertyNameText(ts, name) {
