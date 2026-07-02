@@ -13,7 +13,7 @@ const SECURITY_MARKERS_MODULE = '@kovojs/core/internal/security-markers';
 const SECURITY_CLASSIFIER_EXPORT = 'securityClassifier';
 const PERMISSIVE_STRING_VALUES = new Set(['', 'allow', 'allowed', 'ok', 'pass', 'safe', 'clean']);
 const RECOGNIZER_NAME_PATTERN =
-  /(?:recogn|resolv|parse|classif|sink|lookup|find|detect|match|write.*tables?|^is[A-Z])/u;
+  /(?:recogn|resolv|parse|classif|sink|lookup|detect|match|write.*tables?)/iu;
 const DEFAULT_EXTRA_SOURCE_FILES = ['packages/compiler/src/validate/trusted-html-provenance.ts'];
 
 export function checkFailClosedClassifiers(options = {}) {
