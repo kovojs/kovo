@@ -728,6 +728,7 @@ describe('server app-shell public API barrels', () => {
       'accessFactsFromApp',
       'createMemoryMutationReplayStore',
       'endpointMatches',
+      'frameworkManagedDbRawTarget',
       'invalidate',
       'kovoDeclaredWriteDbHandle',
       'kovoReadonlyDbHandle',

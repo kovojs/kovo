@@ -30,6 +30,14 @@ const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
     '@kovojs/server/internal/wire':
       'HMR integration test needs the live-target renderer ABI used by the dev server.',
   },
+  'tests/integration/fixtures/mutation-handler-failure-rollback/app.tsx': {
+    '@kovojs/server/internal/execution':
+      'Rollback fixture unwraps the framework-managed transaction proxy to drive PGlite transaction rollback semantics.',
+  },
+  'tests/integration/fixtures/pg-constraint-failure/app.tsx': {
+    '@kovojs/server/internal/execution':
+      'Constraint fixture unwraps the framework-managed transaction proxy to drive PGlite transaction rollback semantics.',
+  },
 };
 
 const EXPECTED_ALLOWED_INTERNAL_IMPORTS = Object.entries(ALLOWED_INTERNAL_IMPORTS).flatMap(
