@@ -129,7 +129,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(response.status).toBe(500);
       expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
       expect(body).not.toContain('demo@example.com');
-      expect(output()).toMatch(/KV435|permission denied for view/u);
+      expect(output()).toMatch(/KV435|permission denied for (?:table|view)/u);
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });

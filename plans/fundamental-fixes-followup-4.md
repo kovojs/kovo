@@ -235,13 +235,14 @@ exactly where an irreducible author-time obligation remains.
       serves (`papercuts-27` P3, no over-block); a raw-SQL opaque secret fragment boxes fail-closed. (The
       secret-copied-to-nonsecret-column case is 3.2, not here.)
   - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance|boxes schema-declared secret reads"` (2 tests) covers alias, view, derivation, JOIN alias, CTE/subquery, mixed raw SQL, mixed builder SQL, safe non-secret projection, and audited reveal without served secret leakage.
-- [ ] **2.2 Engine column-`REVOKE` primary on Postgres + declared secret-read capability (DEC-B).** Reader role cannot
+- [x] **2.2 Engine column-`REVOKE` primary on Postgres + declared secret-read capability (DEC-B).** Reader role cannot
       `SELECT` secret columns (raw SQL, alias, and view included); views run `security_invoker` (or the owner is also
       revoked) so a view cannot bypass the reader grant; confirm a non-superuser reader role is assumable via `SET ROLE`
       on PGlite (else DEC-A boxing is the PGlite front line — record which). The privileged capability reads the secret
       and the value stays boxed to egress. Acceptance (full paranoid): a reader secret read that is direct, aliased, AND
       through a view is engine-rejected; the declared capability reads + the value is refused at the wire without
       `reveal(reason)`.
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes schema-declared secret reads"` and `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "runtime Secret read through a Drizzle view"` prove direct/raw alias/view refusals, `security_invoker` view behavior, `SET LOCAL ROLE` to `kovo_reader`, and declared capability values still boxed to egress without reveal.
 
 ### Phase 3 — Integrity for the default mutation shape
 
@@ -359,4 +360,4 @@ self-catching rather than self-deceiving.
   `app-runtime-db.sqlite.ts` per-key `secretColumnNames.has(key)`), B2 (view regex), B3 (`touches:` write choke
   dormant); `papercuts-27` P1 (advisory set = `{KV406,KV422,KV438}` at `graph-output.ts:630`/`build-export.ts:465`/
   `vite.ts:568`; `KOVO_PARANOID=1` still KV435-fatal), P2 (`app-runtime-db.sqlite.ts` 683 lines, not in TCB/boundary lint).
-- Current integrated gates: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance|boxes schema-declared secret reads"`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "starter mutation DB table scope"`, `pnpm exec vitest --run packages/create-kovo/src/index.test.ts -t "keeps Postgres as the default scaffold dialect|emits the SQLite scaffold variant when requested"`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
+- Current integrated gates: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance|boxes schema-declared secret reads"`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "runtime Secret read through a Drizzle view"`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "starter mutation DB table scope"`, `pnpm exec vitest --run packages/create-kovo/src/index.test.ts -t "keeps Postgres as the default scaffold dialect|emits the SQLite scaffold variant when requested"`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
