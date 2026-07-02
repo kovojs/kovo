@@ -155,6 +155,19 @@ export function buildReusableProductionArtifact(root: string): void {
   });
 }
 
+export function buildParanoidProductionArtifact(root: string): void {
+  rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
+  execFileSync(join(root, 'node_modules/.bin/kovo'), ['build', './src/app.tsx', '--no-cache'], {
+    cwd: root,
+    env: {
+      ...withStarterBinOnPath(root),
+      KOVO_PARANOID: '1',
+      NODE_OPTIONS: '--max-old-space-size=8192',
+    },
+    stdio: 'pipe',
+  });
+}
+
 export function addStorageQueryWriteProof(root: string): void {
   const queriesPath = join(root, 'src/queries.ts');
   let queries = readFileSync(queriesPath, 'utf8');
@@ -1415,6 +1428,99 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
     ].join('\n'),
     'utf8',
   );
+}
+
+export function addSecretViewEgressProof(root: string): void {
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  const runtimeDb = replaceRequired(
+    readFileSync(runtimeDbPath, 'utf8'),
+    '  await client.exec(SEED_CONTACTS);',
+    [
+      '  await client.exec(SEED_CONTACTS);',
+      '  await client.exec(',
+      '    \'CREATE OR REPLACE VIEW "account_secret_view" AS SELECT id, "userId", password FROM "account";\',',
+      '  );',
+    ].join('\n'),
+    'secret view proof runtime view DDL',
+  );
+  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
+
+  const queriesPath = join(root, 'src/queries.ts');
+  let queries = readFileSync(queriesPath, 'utf8');
+  queries = replaceRequired(
+    queries,
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    [
+      "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { pgView } from 'drizzle-orm/pg-core';",
+    ].join('\n'),
+    'secret view proof imports',
+  );
+  queries = replaceRequired(
+    queries,
+    "import { contacts } from './schema.js';",
+    [
+      "import { account, contacts } from './schema.js';",
+      "import { readonlyAppDb } from './db.js';",
+    ].join('\n'),
+    'secret view proof imports',
+  );
+  queries = replaceRequired(
+    queries,
+    'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+    [
+      'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+      '',
+      'export const accountSecretView = pgView("account_secret_view").as((qb) =>',
+      '  qb',
+      '    .select({',
+      '      id: account.id,',
+      '      token: account.password,',
+      '      userId: account.userId,',
+      '    })',
+      '    .from(account),',
+      ');',
+      '',
+      'export interface SecretViewEgressResult {',
+      '  items: { id: string | null; token: string | null }[];',
+      '}',
+      '',
+      'export const secretViewEgressQuery = query({',
+      "  access: { guards: [{ guard: appAuthed, name: 'appAuthed' }], kind: 'guard-chain' },",
+      '  guard: appAuthed,',
+      '  reads: [],',
+      '  async load(): Promise<SecretViewEgressResult> {',
+      '    const db = readonlyAppDb as unknown as { select: typeof readonlyAppDb.select };',
+      '    const items = await db',
+      '      .select({',
+      '        id: accountSecretView.id,',
+      '        token: accountSecretView.token,',
+      '      })',
+      '      .from(accountSecretView);',
+      '    return { items };',
+      '  },',
+      '});',
+      "(secretViewEgressQuery as { key: string }).key = 'secret-view-egress';",
+    ].join('\n'),
+    'secret view proof query',
+  );
+  writeFileSync(queriesPath, queries, 'utf8');
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { contactsQuery } from './queries.js';",
+    "import { contactsQuery, secretViewEgressQuery } from './queries.js';",
+    'secret view proof app import',
+  );
+  app = replaceRequired(
+    app,
+    '  queries: [contactsQuery],',
+    '  queries: [contactsQuery, secretViewEgressQuery],',
+    'secret view proof app registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
 }
 
 export async function signInDemoUser(

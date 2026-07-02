@@ -25,16 +25,19 @@ import {
   addEscapedAttackerTextProof,
   addInternalHtmlImportProof,
   addNoJsFailureProof,
+  addSecretViewEgressProof,
   addStorageMutationWriteProof,
   addStorageQueryWriteProof,
   addTrustedOutputProvenanceBuildProof,
   addTrustedUrlAttributeTypeGateProof,
   attributeValue,
+  buildParanoidProductionArtifact,
   buildProductionArtifact,
   buildReusableProductionArtifact,
   execFileSyncErrorOutput,
   fieldValue,
   firstFormHtml,
+  signInDemoUser,
 } from './index.build.test-support.js';
 
 describe('create-kovo starter (build integration: production security artifacts)', () => {
@@ -75,6 +78,53 @@ describe('create-kovo starter (build integration: production security artifacts)
     } finally {
       rmSync(unsafeRoot, { force: true, recursive: true });
       rmSync(safeRoot, { force: true, recursive: true });
+    }
+  }, 240_000);
+
+  // @kovo-security-certifies KV435 runtime-secret-view-egress
+  it('refuses a runtime Secret read through a Drizzle view at query-wire egress in paranoid mode', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-secret-view-egress-'));
+    const port = await reservePort();
+    const jar = new Map<string, string>();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod Secret View Egress Proof' });
+      linkStarterBuildDependencies(root);
+      addSecretViewEgressProof(root);
+
+      buildParanoidProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          KOVO_PARANOID: '1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+
+      await signInDemoUser(root, origin, jar, output);
+      const response = await fetch(`${origin}/_q/secret-view-egress`, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const body = await response.text();
+
+      expect(response.status).toBe(500);
+      expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
+      expect(body).not.toContain('demo@example.com');
+      expect(output()).toContain('KV435');
+      expect(output()).toContain('Secret runtime value cannot cross');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
     }
   }, 240_000);
 

@@ -1,4 +1,5 @@
 import { PGlite } from '@electric-sql/pglite';
+import { secret } from '@kovojs/core';
 import { readonlyDb } from '@kovojs/server';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle } from 'drizzle-orm/pglite';
@@ -28,6 +29,7 @@ const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([
   verification,
 ] as const);
 const SCHEMA_DDL = schemaDdl(SCHEMA_TABLES);
+const SECRET_COLUMN_KEYS = new Set(['accessToken', 'idToken', 'password', 'refreshToken', 'token']);
 
 const SEED_CONTACTS =
   'INSERT INTO contacts (id, name, email, company) VALUES ' +
@@ -42,7 +44,7 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const client = new PGlite(process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR);
   const ready = initializeAppDb(client);
   const db = drizzle({ client });
-  return { db, readonlyDb: readonlyDb(db), ready };
+  return { db, readonlyDb: readonlyDb(secretBoxingReadDb(db, SECRET_COLUMN_KEYS)), ready };
 }
 
 async function initializeAppDb(client: PGlite): Promise<void> {
@@ -171,6 +173,57 @@ function quoteIdent(value: string): string {
 
 function quoteLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
+}
+
+function secretBoxingReadDb<Db extends object>(db: Db, secretKeys: ReadonlySet<string>): Db {
+  const readDb: Record<PropertyKey, unknown> = {};
+  for (const prop of ['$count', '$with', 'query', 'select', 'selectDistinct', 'with'] as const) {
+    const item = (db as Record<PropertyKey, unknown>)[prop];
+    if (typeof item === 'function') {
+      readDb[prop] = (...args: unknown[]) => wrapReadSurface(item.apply(db, args), secretKeys);
+    } else if (item !== undefined) {
+      readDb[prop] = item;
+    }
+  }
+  return readDb as Db;
+}
+
+function wrapReadSurface(value: unknown, secretKeys: ReadonlySet<string>): unknown {
+  if (value === null || typeof value !== 'object') return value;
+  if (value instanceof Promise) return value.then((result) => boxSecretRows(result, secretKeys));
+  return new Proxy(value as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const item = Reflect.get(target, prop, receiver);
+      if (prop === 'then' && typeof item === 'function') {
+        return (
+          onFulfilled?: (value: unknown) => unknown,
+          onRejected?: (reason: unknown) => unknown,
+        ) =>
+          item.call(
+            target,
+            (result: unknown) => onFulfilled?.(boxSecretRows(result, secretKeys)),
+            onRejected,
+          );
+      }
+      if (typeof item !== 'function') return item;
+      return (...args: unknown[]) => wrapReadSurface(item.apply(target, args), secretKeys);
+    },
+  });
+}
+
+function boxSecretRows(value: unknown, secretKeys: ReadonlySet<string>): unknown {
+  if (Array.isArray(value)) return value.map((entry) => boxSecretRows(entry, secretKeys));
+  if (value === null || typeof value !== 'object') return value;
+  const boxed: Record<string, unknown> = {};
+  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+    boxed[key] =
+      item === null || item === undefined
+        ? item
+        : secretKeys.has(key)
+          ? secret(item)
+          : boxSecretRows(item, secretKeys);
+  }
+  return boxed;
 }
 
 const appDatabase = createAppRuntimeDb();
