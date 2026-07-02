@@ -430,6 +430,43 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-db-read-boundary',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addRuntimeSecretBoundaryProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'KV435',
+      'Secret runtime value cannot cross',
+      'runtime-secret-column-egress',
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'", 'classified: runtimeSecretProof.classified'],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes schema-declared secret reads and raw SQL aliases before query-wire egress in paranoid mode',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-raw-sql-read-boundary',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addRuntimeSecretBoundaryProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'KV435',
+      'Secret runtime value cannot cross',
+      'runtime-secret-raw-egress',
+    ],
+    requiredProofFileNeedles: [
+      "KOVO_PARANOID: '1'",
+      'classified as leaked from "runtime_secret_proof"',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes schema-declared secret reads and raw SQL aliases before query-wire egress in paranoid mode',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
     claimId: 'readonly-managed-handle-prod-artifact',
     code: 'KV433',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',

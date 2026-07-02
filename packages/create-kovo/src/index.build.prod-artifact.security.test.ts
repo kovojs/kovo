@@ -143,6 +143,9 @@ describe('create-kovo starter (build integration: production security artifacts)
       writeKovoProject(root, { name: 'Prod Runtime Secret Boundary Proof' });
       linkStarterBuildDependencies(root);
       addRuntimeSecretBoundaryProof(root);
+      const proofQueries = readFileSync(join(root, 'src/queries.ts'), 'utf8');
+      expect(proofQueries).toContain('classified: runtimeSecretProof.classified');
+      expect(proofQueries).toContain('classified as leaked from "runtime_secret_proof"');
 
       buildParanoidProductionArtifact(root);
 
