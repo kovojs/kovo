@@ -522,6 +522,121 @@ describe('create-kovo starter (metadata)', () => {
     }
   });
 
+  it('rejects raw SQL in query loaders while preserving explicit trustedSql escapes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-raw-sql-waist-'));
+
+    try {
+      writeKovoProject(root, { name: 'Raw Sql Waist Proof' });
+      linkStarterBuildDependencies(root);
+      writeFileSync(
+        join(root, 'src/raw-sql-query.ts'),
+        [
+          "import { query } from '@kovojs/server';",
+          "import { sql } from '@kovojs/drizzle';",
+          "import { contacts } from './schema.js';",
+          '',
+          'export const leakedQuery = query({',
+          '  async load(_input, context) {',
+          '    return context.db',
+          '      .select({',
+          '        id: contacts.id,',
+          '        detail: sql<string>`(select token from session limit 1)`,',
+          '      })',
+          '      .from(contacts);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /raw-sql-query\.ts:10: SPEC\.md §6\.6\/§10\.2 sound subset bans raw SQL in query loaders/,
+      );
+
+      writeFileSync(
+        join(root, 'src/raw-sql-query.ts'),
+        [
+          "import { query } from '@kovojs/server';",
+          "import { sql, trustedSql } from '@kovojs/drizzle';",
+          '',
+          'export const reviewedQuery = query({',
+          '  async load(_input, context) {',
+          '    return context.db.execute(',
+          '      trustedSql(sql`select id from contacts`, { justification: "reviewed raw read path" }),',
+          '    );',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects dynamically computed framework trust-sink callees', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-trust-waist-'));
+
+    try {
+      writeKovoProject(root, { name: 'Trust Waist Proof' });
+      linkStarterBuildDependencies(root);
+      writeFileSync(
+        join(root, 'src/dynamic-trust.ts'),
+        [
+          "import * as browser from '@kovojs/browser';",
+          '',
+          "const helper = 'trustedHtml';",
+          "export const trusted = browser[helper]('<strong>reviewed</strong>');",
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /dynamic-trust\.ts:4: SPEC\.md §6\.6 sound subset requires trustedHtml\/trustedUrl\/trustedSql callees/,
+      );
+
+      writeFileSync(
+        join(root, 'src/dynamic-trust.ts'),
+        [
+          "import * as browser from '@kovojs/browser';",
+          '',
+          "export const trusted = browser['trustedHtml']('<strong>reviewed</strong>');",
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('emits the SQLite scaffold variant when requested', () => {
     const project = createKovoProject({ dialect: 'sqlite', name: 'Sqlite App' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));
