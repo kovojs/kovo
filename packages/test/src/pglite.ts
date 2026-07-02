@@ -59,6 +59,8 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
   await pglite.waitReady;
   let readonlyQueue = Promise.resolve();
   let readonlyDb: ReadonlyPgliteTestDb | null = null;
+  let readonlyPglite: PGlite | null = null;
+  let readonlyPgliteReady: Promise<PGlite> | null = null;
 
   const runReadonly = async <Result>(callback: () => Promise<Result>): Promise<Result> => {
     const previous = readonlyQueue;
@@ -87,8 +89,32 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
   };
 
   const readonlyHandle = (): ReadonlyPgliteTestDb => {
-    // PGlite exposes one embedded engine handle here, not a pool. Use serialized read-only
-    // transactions so the engine enforces DEC-A without leaking state to the writer helpers.
+    const readonlyDataDir = pgliteReadonlyDataDir(options);
+    if (readonlyDataDir !== undefined) {
+      readonlyDb ??= pgliteTestDbFromOperations(
+        pglite,
+        async (statement) => {
+          const reader = await readonlyPgliteSession(readonlyDataDir);
+          return reader.exec(pgliteStatementText(statement));
+        },
+        async <Row extends Record<string, unknown>>(
+          statement: PgliteStatementInput,
+          params: readonly unknown[] = [],
+        ) => {
+          const reader = await readonlyPgliteSession(readonlyDataDir);
+          const carrier = pgliteStatement(statement, params);
+          return (await reader.query<Row>(carrier.text, [...carrier.values])).rows;
+        },
+        true,
+        undefined,
+        () => readonlyPglite ?? pglite,
+      );
+      return readonlyDb;
+    }
+
+    // PGlite documents its in-memory mode as single-user/single-connection. Without a dataDir
+    // there is no second engine session to pool, so keep DEC-A engine enforcement as serialized
+    // read-only transactions and avoid setting a default that would poison the writer handle.
     readonlyDb ??= pgliteTestDbFromOperations(
       pglite,
       async (statement) => runReadonly(() => pglite.exec(pgliteStatementText(statement))),
@@ -105,10 +131,32 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
     return readonlyDb;
   };
 
+  const readonlyPgliteSession = async (dataDir: string): Promise<PGlite> => {
+    if (readonlyPglite !== null) return readonlyPglite;
+    readonlyPgliteReady ??= (async () => {
+      try {
+        const reader = new PGlite({ ...options, dataDir });
+        await reader.waitReady;
+        await reader.exec('set default_transaction_read_only = on');
+        readonlyPglite = reader;
+        return reader;
+      } catch (error) {
+        readonlyPgliteReady = null;
+        throw error;
+      }
+    })();
+    return readonlyPgliteReady;
+  };
+
   const db: PgliteTestDb &
     KovoDeclaredWriteDbCapable<DeclaredWritePgliteTestDb> &
     KovoReadonlyDbCapable<ReadonlyPgliteTestDb> = {
     async close() {
+      if (readonlyPglite !== null) {
+        await readonlyPglite.close();
+        readonlyPglite = null;
+        readonlyPgliteReady = null;
+      }
       await pglite.close();
     },
     async exec(statement) {
@@ -200,6 +248,7 @@ function pgliteTestDbFromOperations(
   ) => Promise<Row[]>,
   readonly: boolean,
   declaredWritePolicy?: DeclaredWritePolicy,
+  pgliteHandle: () => PGlite = () => pglite,
 ): ReadonlyPgliteTestDb {
   return {
     async close() {
@@ -218,7 +267,9 @@ function pgliteTestDbFromOperations(
         },
       };
     },
-    pglite,
+    get pglite() {
+      return pgliteHandle();
+    },
     async query<Row extends Record<string, unknown> = Record<string, unknown>>(
       statement: string,
       params: readonly unknown[] = [],
@@ -241,6 +292,12 @@ function pgliteTestDbFromOperations(
       await insertPgliteRow(execStatement, queryRows, table, value);
     },
   };
+}
+
+function pgliteReadonlyDataDir(options: PGliteOptions): string | undefined {
+  if (typeof options.dataDir !== 'string') return undefined;
+  if (options.dataDir === '' || options.dataDir.startsWith('memory://')) return undefined;
+  return options.dataDir;
 }
 
 async function insertPgliteRow(
