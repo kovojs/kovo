@@ -209,14 +209,21 @@ mattering.
 
 ### Phase 0 — Substrate (land FIRST; forces the rest, like plan-2's Phase 0)
 
-- [ ] **0.1 Non-coercible `Secret<T>` + `Untrusted<T>` (A9b, DEC-C/DEC-I).** Module-private brands; coercion throws;
+- [x] **0.1 Non-coercible `Secret<T>` + `Untrusted<T>` (A9b, DEC-C/DEC-I).** Module-private brands; coercion throws;
       `util.inspect.custom` redacts; audited `reveal(reason)`; the allowed server-side ops (DEC-I). Unit tests: `` `${s}` ``,
       `s+''`, `String(s)`, `JSON.stringify({s})`, `console.log(s)` all throw/redact; `reveal('reason')` returns the value.
+      Evidence: focused Vitest batch over `packages/core/src/secret.test.ts`, `wire-json`, `logging`, and
+      `task-observability` tests proves non-coercion, audited reveal, unforgeable `Secret`/`Untrusted`, wire refusal, and
+      log/status redaction.
 - [ ] **0.2 Paranoid mode harness (A9a, DEC-H).** `KOVO_PARANOID=1` stubs all static security classifiers to
       `proven-safe`; a CI job scaffolds the app + adversarial suites and asserts (i) unsafe→runtime-throw, (ii) legit→green.
-- [ ] **0.3 Choke inventory + sole-door reachability gate (DEC-J/DEC-E).** The enumerated egress/exec sinks, each
+      Progress: `pnpm run check:paranoid-classifiers` verifies the static classifier gate harness runs advisory under
+      `KOVO_PARANOID=1`; app/adversarial runtime-choke suites still need to be wired before this checkbox can close.
+- [x] **0.3 Choke inventory + sole-door reachability gate (DEC-J/DEC-E).** The enumerated egress/exec sinks, each
       mapped to a choke, with a reachability test that nothing bypasses. This gate must be GREEN before any static gate is
       downgraded in later phases (A7).
+      Evidence: `pnpm run check:single-choke && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census`
+      proves the current DEC-J egress/DB exec denominator and classified sole-door gates are green.
 
 ### Phase 1 — Integrity via the engine (biggest win, smallest change)
 
@@ -262,10 +269,15 @@ mattering.
 
 ### Phase 5 — Robustness cleanups surfaced by round 7 (independent)
 
-- [ ] **5.1** SQLite scaffold declares/bundles `pgsql-ast-parser` (or the choke resolves it from `@kovojs/server`) so
+- [x] **5.1** SQLite scaffold declares/bundles `pgsql-ast-parser` (or the choke resolves it from `@kovojs/server`) so
       the now-advisory static SQL check loads (`papercuts-26` P1). With Phase 1 shipped this is DX-only, not security.
+      Evidence: `packages/create-kovo/src/index.build.scaffold.sqlite.test.ts` and packed-SQLite scaffold tests prove
+      generated and packed SQLite apps declare and install `pgsql-ast-parser`.
 - [ ] **5.2** Drizzle view relation fixpoint terminates in bounded memory (`papercuts-26` P3); a `sqliteView`/`pgView`
       build completes and (with Phase 2) a secret surfaced through a view is refused at egress.
+      Progress: `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts` proves cyclic `sqliteView`/`pgView`
+      relation read derivation terminates and converges to the base read domain. The Phase 2-dependent secret-through-view
+      egress assertion remains open.
 
 ## 7. Pre-mortem — what round-8 will attack, and which item closes it
 
