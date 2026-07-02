@@ -271,8 +271,11 @@ mattering.
 
 - [ ] **3.1 `Untrusted` request tags (DEC-D, DX-only).** Accessors return tags; used for error messages, not soundness.
       Progress: focused request tests prove Kovo-owned parsed JSON/FormData leaves, route params/search, and query search
-      inputs are tagged with `Untrusted` and schema/CSRF validation reveals with framework-owned reasons. Native
-      `Request.headers`/cookie reads remain plain platform APIs.
+      inputs are tagged with `Untrusted` and schema/CSRF validation reveals with framework-owned reasons. Kovo-owned
+      request header/cookie accessors tag values, and CSRF Origin/anonymous-cookie validation reveals them with
+      framework-owned reasons (`vp exec vitest --run packages/server/src/untrusted-request-body.test.ts` and
+      `vp exec vitest --run packages/server/src/csrf.test.ts -t 'origin|anonymous|cookie|CSRF'`). Native
+      `Request.headers` remains the plain platform API by design.
 - [x] **3.2 Contextual default-deny renderer over the final attribute set (DEC-D).** Escape-by-position; refuse at
       non-inert positions unless a proven trusted brand; spread-aware; unknown→escape, executable→refuse. Acceptance
       (paranoid mode): `meta http-equiv=refresh content`, spread-delivered sinks, `<style>`, event handlers,
@@ -349,6 +352,7 @@ point on an endless enumeration.
 
 - `vp exec vitest --run packages/server/src/managed-db.test.ts`
 - `KOVO_PARANOID=1 vp exec vitest --run packages/server/src/jsx-runtime.test.ts`
+- `vp exec vitest --run packages/server/src/untrusted-request-body.test.ts`
 - `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`
 - `vp exec vitest --run packages/create-kovo/src/index.test.ts && vp exec vitest --run packages/create-kovo/src/index.build.scaffold.sqlite.test.ts -t 'runs vp check'`
 - `pnpm run check:paranoid-classifiers && pnpm run check:paranoid-runtime`

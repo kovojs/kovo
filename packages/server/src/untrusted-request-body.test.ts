@@ -5,9 +5,37 @@ import { isUntrusted, revealUntrusted } from '@kovojs/core';
 import { query, renderQueryEndpointResponse } from './query.js';
 import { parseRouteRequest, route } from './route.js';
 import { s } from './schema.js';
-import { parseUntrustedJsonBodyBytes, readUntrustedRequestBody } from './untrusted-request-body.js';
+import {
+  parseUntrustedJsonBodyBytes,
+  readUntrustedCookieValue,
+  readUntrustedRequestBody,
+  readUntrustedRequestHeader,
+  revealUntrustedRequestValue,
+} from './untrusted-request-body.js';
 
 describe('untrusted request body parser', () => {
+  it('tags Kovo-owned request header and cookie accessors for validation provenance', () => {
+    const request = new Request('https://kovo.test/m', {
+      headers: {
+        Cookie: 'session=abc%20123; theme=dark',
+        Origin: 'https://shop.example',
+      },
+      method: 'POST',
+    });
+
+    const origin = readUntrustedRequestHeader(request, 'origin');
+    const session = readUntrustedCookieValue(request, 'session');
+
+    expect(isUntrusted(origin)).toBe(true);
+    expect(isUntrusted(session)).toBe(true);
+    expect(() => String(origin)).toThrow(/KV426/);
+    expect(revealUntrustedRequestValue(origin, 'test validates Origin header')).toBe(
+      'https://shop.example',
+    );
+    expect(revealUntrustedRequestValue(session, 'test validates cookie binding')).toBe('abc 123');
+    expect(readUntrustedCookieValue(request, 'missing')).toBeUndefined();
+  });
+
   it('decodes webhook raw JSON bytes only through the parser choke', () => {
     const body = new TextEncoder().encode('{"id":"evt_1","nested":{"ok":true}}');
     const parsed = parseUntrustedJsonBodyBytes(body);

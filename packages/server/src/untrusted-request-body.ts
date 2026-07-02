@@ -16,6 +16,38 @@ export type UntrustedJsonBodyResult =
   | { ok: false; reason: 'invalid-json' };
 
 /**
+ * @internal SPEC §5.2 rule 11 / fundamental-fixes-followup-3 DEC-D: request header
+ * values are attacker-controlled provenance for diagnostics. Native `Request.headers`
+ * remains the platform API; Kovo-owned accessors tag the value before validation reveals it.
+ */
+export function readUntrustedRequestHeader(request: Request, name: string): unknown | undefined {
+  const value = request.headers.get(name);
+  return value === null ? undefined : untrusted(value);
+}
+
+/**
+ * @internal Read a request cookie through Kovo's DX-only untrusted provenance tag.
+ * The returned value must be revealed only by the validation choke that consumes it.
+ */
+export function readUntrustedCookieValue(request: Request, name: string): unknown | undefined {
+  const header = request.headers.get('cookie');
+  if (!header) return undefined;
+
+  for (const cookie of header.split(';')) {
+    const [rawName, ...rawValue] = cookie.trim().split('=');
+    if (rawName !== name) continue;
+    const value = rawValue.join('=');
+    try {
+      return untrusted(decodeURIComponent(value));
+    } catch {
+      return untrusted(value);
+    }
+  }
+
+  return undefined;
+}
+
+/**
  * SPEC §9.2: attacker-controlled mutation/endpoint bodies are expected client
  * input. Parse failures return typed outcomes so callers can choose their local
  * fail-closed response shape without routing malformed bodies through onError.
