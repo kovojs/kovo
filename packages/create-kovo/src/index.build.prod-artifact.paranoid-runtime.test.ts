@@ -99,6 +99,8 @@ async function expectParanoidRuntimeKv435Twin(
     'runtime-secret-raw-egress',
     'runtime-secret-opaque-raw-egress',
     'runtime-secret-computed-egress',
+    'runtime-secret-function-egress',
+    'runtime-secret-whole-table-egress',
   ]) {
     const response = await fetch(`${origin}/_q/${key}`, {
       headers: { cookie: cookieHeader(jar) },
