@@ -17,7 +17,6 @@ import {
   pnpmFilterTestCommands,
   pnpmRunScriptName,
   pnpmRunScriptNames,
-  kovoCheckSecurityMatrixRows,
   p10PerfAcceptanceGateFact,
   p10PerfAcceptanceModulePath,
   p10PerfAcceptanceProjectFact,
@@ -30,9 +29,7 @@ import {
   vpRunTaskName,
   workflowVpRunTaskNames,
   workflowStepCommands,
-  type KovoCheckSecurityMatrixRow,
 } from './command-fixtures.js';
-import { DEC8_SECURITY_MATRIX } from './gate-adversary-map.js';
 
 describe('@kovojs/test command fixtures', () => {
   it('turns shell-free command sequences into argv facts', () => {
@@ -192,18 +189,17 @@ describe('@kovojs/test command fixtures', () => {
     ]);
   });
 
-  it('projects the DEC8 kovo-check security matrix from CI wiring', async () => {
+  it('keeps kovo-check as one required full-suite CI proof without inert env fan-out', async () => {
     const workflow = await readFile('.github/workflows/ci.yml', 'utf8');
-    const rows = kovoCheckSecurityMatrixRows(workflow);
+    const commands = workflowStepCommands(workflow)
+      .map((step) => step.run)
+      .filter((command): command is string => Boolean(command));
 
-    expect(rowMatrixKeys(rows)).toEqual(
-      DEC8_SECURITY_MATRIX.map((row) => `${row.preset}/${row.dialect}`),
-    );
-    expect(rows.map((row) => row.suites)).toEqual(
-      DEC8_SECURITY_MATRIX.map(() => 'compiler-runtime server-browser project'),
-    );
-    expect(workflow).toContain('KOVO_SECURITY_PRESET: ${{ matrix.preset }}');
-    expect(workflow).toContain('KOVO_SECURITY_DIALECT: ${{ matrix.dialect }}');
+    expect(commands.filter((command) => command.includes('scripts/kovo-check.mjs'))).toEqual([
+      'vp exec node scripts/kovo-check.mjs compiler-runtime server-browser project',
+    ]);
+    expect(workflow).not.toContain('KOVO_SECURITY_PRESET');
+    expect(workflow).not.toContain('KOVO_SECURITY_DIALECT');
   });
 
   it('loads Vite+ task configs through the fixture seam', async () => {
@@ -678,7 +674,3 @@ describe('@kovojs/test command fixtures', () => {
     ]);
   });
 });
-
-function rowMatrixKeys(rows: readonly KovoCheckSecurityMatrixRow[]): string[] {
-  return rows.map((row) => `${row.preset}/${row.dialect}`);
-}

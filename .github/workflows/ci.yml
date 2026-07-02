@@ -149,11 +149,6 @@ jobs:
   starter-packed:
     needs: starter-packages
     runs-on: ubuntu-latest
-    strategy:
-      fail-fast: false
-      matrix:
-        shard: [1, 2, 3]
-        total: [3]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup
@@ -162,7 +157,7 @@ jobs:
       - id: starter-shard
         name: Generate packed starter shard
         run: |
-          manifest="$(vp exec node scripts/ci-shards.mjs generate-starter --mode packed --shards ${{ matrix.total }} --index ${{ matrix.shard }} --outDir "$RUNNER_TEMP/kovo-starter-shards")"
+          manifest="$(vp exec node scripts/ci-shards.mjs generate-starter --mode packed --shards 1 --index 1 --outDir "$RUNNER_TEMP/kovo-starter-shards")"
           echo "manifest=$manifest" >> "$GITHUB_OUTPUT"
           if vp exec node scripts/ci-shards.mjs starter-needs-browser --manifest "$manifest"; then
             echo "needsBrowser=true" >> "$GITHUB_OUTPUT"
@@ -180,7 +175,7 @@ jobs:
         with:
           name: kovo-packed-starter
           path: ${{ runner.temp }}/kovo-packed-starter
-      - name: Generated packed starter proofs (${{ matrix.shard }})
+      - name: Generated packed starter proofs
         env:
           KOVO_PACKED_PACKAGES_DIR: ${{ runner.temp }}/kovo-packed-starter
         run: vp exec node scripts/ci-shards.mjs run-starter --manifest "${{ steps.starter-shard.outputs.manifest }}"
@@ -277,38 +272,9 @@ jobs:
         run: vp exec pnpm --filter @kovojs/conformance-app-shell-spike test
 
   kovo-check:
-    name: kovo-check (${{ matrix.preset }}, ${{ matrix.dialect }})
     runs-on: ubuntu-latest
     needs:
       - build
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - shard: node-pglite
-            suites: compiler-runtime server-browser project
-            preset: node
-            dialect: pglite
-          - shard: node-better-sqlite3
-            suites: compiler-runtime server-browser project
-            preset: node
-            dialect: better-sqlite3
-          - shard: cloudflare-pglite
-            suites: compiler-runtime server-browser project
-            preset: cloudflare
-            dialect: pglite
-          - shard: cloudflare-better-sqlite3
-            suites: compiler-runtime server-browser project
-            preset: cloudflare
-            dialect: better-sqlite3
-          - shard: vercel-pglite
-            suites: compiler-runtime server-browser project
-            preset: vercel
-            dialect: pglite
-          - shard: vercel-better-sqlite3
-            suites: compiler-runtime server-browser project
-            preset: vercel
-            dialect: better-sqlite3
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
       - uses: ./.github/actions/kovo-setup
@@ -317,10 +283,7 @@ jobs:
           name: kovo-dist
           path: dist
       - name: Kovo check suite
-        run: vp exec node scripts/kovo-check.mjs ${{ matrix.suites }}
-        env:
-          KOVO_SECURITY_PRESET: ${{ matrix.preset }}
-          KOVO_SECURITY_DIALECT: ${{ matrix.dialect }}
+        run: vp exec node scripts/kovo-check.mjs compiler-runtime server-browser project
 
   check:
     runs-on: ubuntu-latest
