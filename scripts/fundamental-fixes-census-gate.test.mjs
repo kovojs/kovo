@@ -48,7 +48,7 @@ describe('fundamental-fixes-census-gate', () => {
       outputWireSinkRows: 39,
       resolverExpressionKindRows: REQUIRED_RESOLVER_EXPRESSION_KINDS.length,
       sourceOutputWireSinkRows: 27,
-      sourceWriteCapableHandleRows: 8,
+      sourceWriteCapableHandleRows: 9,
       writeCapableHandleRows: 23,
     });
     expect(report.openRows).toEqual([]);
@@ -66,7 +66,7 @@ describe('fundamental-fixes-census-gate', () => {
 
   it('derives source sink/handle denominator rows from reachable source decisions', () => {
     const sourceRows = extractSourceDecisionRows();
-    expect(sourceRows.filter((row) => row.kind === 'write-capable-handle')).toHaveLength(8);
+    expect(sourceRows.filter((row) => row.kind === 'write-capable-handle')).toHaveLength(9);
     expect(sourceRows.filter((row) => row.kind === 'output-wire-sink')).toHaveLength(27);
     expect(sourceRows.map((row) => row.sourceDecision)).toContain('server.sql.enforce-managed-sql');
     expect(sourceRows.map((row) => row.sourceDecision)).toContain('server.wire.mutation-stream');
