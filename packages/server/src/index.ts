@@ -247,6 +247,7 @@ export {
   drainUnverifiedMimeFacts,
   errorBoundary,
   InlineUnverifiedUploadError,
+  kovoReadonlyDbHandle,
   KovoReadonlyHandleError,
   mutation,
   mintCsrfField,

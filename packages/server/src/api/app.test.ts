@@ -467,6 +467,7 @@ describe('server app-shell public API barrels', () => {
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       createDurableTaskSqlExecutor: taskQueueApi.createDurableTaskSqlExecutor,
       createDurableTaskStatus: taskObservabilityApi.createDurableTaskStatus,
+      kovoReadonlyDbHandle: dataApi.kovoReadonlyDbHandle,
       toNodeHandler: nodeSourceApi.toNodeHandler,
     }).filter((key) => !renderingSubpathOnlyValues.has(key));
 
@@ -512,6 +513,7 @@ describe('server app-shell public API barrels', () => {
       routingApi.createMemoryWebhookReplayStore,
     );
     expect(publicApi.webhook).toBe(routingApi.webhook);
+    expect(publicApi.kovoReadonlyDbHandle).toBe(dataApi.kovoReadonlyDbHandle);
     expect(publicApi.readonlyDb).toBe(dataApi.readonlyDb);
     expect(publicApi.customVerifier).toBe(coreCustomVerifier);
     expect(publicApi.hmacSignature).toBe(coreHmacSignature);

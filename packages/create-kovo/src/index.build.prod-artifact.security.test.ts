@@ -25,6 +25,7 @@ import {
   addEscapedAttackerTextProof,
   addInternalHtmlImportProof,
   addNoJsFailureProof,
+  addRuntimeSecretBoundaryProof,
   addSecretViewEgressProof,
   addStorageMutationWriteProof,
   addStorageQueryWriteProof,
@@ -120,6 +121,56 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(response.status).toBe(500);
       expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
       expect(body).not.toContain('demo@example.com');
+      expect(output()).toContain('KV435');
+      expect(output()).toContain('Secret runtime value cannot cross');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
+  // @kovo-security-certifies KV435 runtime-secret-db-read-boundary
+  // @kovo-security-certifies KV435 runtime-secret-raw-sql-read-boundary
+  it('boxes schema-declared secret reads and raw SQL aliases before query-wire egress in paranoid mode', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-runtime-secret-boundary-'));
+    const port = await reservePort();
+    const jar = new Map<string, string>();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod Runtime Secret Boundary Proof' });
+      linkStarterBuildDependencies(root);
+      addRuntimeSecretBoundaryProof(root);
+
+      buildParanoidProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          KOVO_PARANOID: '1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+
+      await signInDemoUser(root, origin, jar, output);
+      for (const key of ['runtime-secret-column-egress', 'runtime-secret-raw-egress']) {
+        const response = await fetch(`${origin}/_q/${key}`, {
+          headers: { cookie: cookieHeader(jar) },
+        });
+        const body = await response.text();
+
+        expect(response.status, `${key}: ${body}`).toBe(500);
+        expect(body).toBe('{"code":"SERVER_ERROR","payload":{}}');
+        expect(body).not.toContain('runtime-secret-value');
+      }
       expect(output()).toContain('KV435');
       expect(output()).toContain('Secret runtime value cannot cross');
     } finally {

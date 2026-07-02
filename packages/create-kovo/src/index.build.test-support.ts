@@ -1524,6 +1524,143 @@ export function addSecretViewEgressProof(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
+export function addRuntimeSecretBoundaryProof(root: string): void {
+  const schemaPath = join(root, 'src/schema.ts');
+  const schemaSource = readFileSync(schemaPath, 'utf8');
+  const withRuntimeSecretTable = replaceRequired(
+    schemaSource,
+    "/** Tables Better Auth's Drizzle adapter binds to (see `src/auth.ts`). */",
+    [
+      'export const runtimeSecretProof = pgTable(',
+      "  'runtime_secret_proof',",
+      '  {',
+      "    id: text('id').primaryKey(),",
+      "    label: text('label').notNull(),",
+      "    classified: text('classified').notNull(),",
+      '  },',
+      "  kovo({ domain: 'runtime-secret-proof', key: 'id', secret: ['classified'] }),",
+      ');',
+      '',
+      "/** Tables Better Auth's Drizzle adapter binds to (see `src/auth.ts`). */",
+    ].join('\n'),
+    'runtime secret proof schema table',
+  );
+  writeFileSync(schemaPath, withRuntimeSecretTable, 'utf8');
+
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    "import { account, contacts, session, user, verification } from '../schema.js';",
+    "import { account, contacts, runtimeSecretProof, session, user, verification } from '../schema.js';",
+    'runtime secret proof runtime schema import',
+  );
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    '  session,\n  account,\n  verification,',
+    '  session,\n  account,\n  verification,\n  runtimeSecretProof,',
+    'runtime secret proof runtime schema table list',
+  );
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    '  await client.exec(SEED_CONTACTS);',
+    [
+      '  await client.exec(SEED_CONTACTS);',
+      '  await client.exec(',
+      "    'INSERT INTO \"runtime_secret_proof\" (id, label, classified) VALUES (\\'s1\\', \\'public label\\', \\'runtime-secret-value\\') ON CONFLICT (id) DO NOTHING;',",
+      '  );',
+    ].join('\n'),
+    'runtime secret proof seed',
+  );
+  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
+
+  const queriesPath = join(root, 'src/queries.ts');
+  let queries = readFileSync(queriesPath, 'utf8');
+  queries = replaceRequired(
+    queries,
+    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    [
+      "import { sql, trustedSql } from '@kovojs/drizzle';",
+      "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    ].join('\n'),
+    'runtime secret proof query imports',
+  );
+  queries = replaceRequired(
+    queries,
+    "import { contacts } from './schema.js';",
+    "import { contacts, runtimeSecretProof } from './schema.js';",
+    'runtime secret proof schema import',
+  );
+  queries = replaceRequired(
+    queries,
+    'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+    [
+      'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
+      '',
+      'export interface RuntimeSecretBoundaryResult {',
+      '  items: { id: string; classified?: string; leaked?: string; label?: string }[];',
+      '}',
+      '',
+      'interface RawRuntimeSecretRows {',
+      '  rows?: RuntimeSecretBoundaryResult["items"];',
+      '}',
+      '',
+      'export const runtimeSecretColumnEgressQuery = query({',
+      "  access: { guards: [{ guard: appAuthed, name: 'appAuthed' }], kind: 'guard-chain' },",
+      '  guard: appAuthed,',
+      '  reads: [],',
+      '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<RuntimeSecretBoundaryResult> {',
+      '    const db = requireDb(context);',
+      '    const items = await db',
+      '      .select({',
+      '        id: runtimeSecretProof.id,',
+      '        classified: runtimeSecretProof.classified,',
+      '      })',
+      '      .from(runtimeSecretProof);',
+      '    return { items };',
+      '  },',
+      '});',
+      "(runtimeSecretColumnEgressQuery as { key: string }).key = 'runtime-secret-column-egress';",
+      '',
+      'export const runtimeSecretRawEgressQuery = query({',
+      "  access: { guards: [{ guard: appAuthed, name: 'appAuthed' }], kind: 'guard-chain' },",
+      '  guard: appAuthed,',
+      '  reads: [],',
+      '  async load(_input: unknown, context?: AppQueryLoadContext): Promise<RuntimeSecretBoundaryResult> {',
+      '    const db = requireDb(context);',
+      '    const statement = trustedSql(',
+      '      sql.raw<RuntimeSecretBoundaryResult["items"][number]>(',
+      '        \'select id, classified as leaked from "runtime_secret_proof"\',',
+      '      ),',
+      "      { justification: 'runtime raw secret boundary proof' },",
+      '    );',
+      '    const result = (await (db as unknown as { execute(value: unknown): Promise<RawRuntimeSecretRows> }).execute(statement)) as RawRuntimeSecretRows;',
+      '    return { items: result.rows ?? [] };',
+      '  },',
+      '});',
+      "(runtimeSecretRawEgressQuery as { key: string }).key = 'runtime-secret-raw-egress';",
+    ].join('\n'),
+    'runtime secret proof queries',
+  );
+  writeFileSync(queriesPath, queries, 'utf8');
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { contactsQuery } from './queries.js';",
+    "import { contactsQuery, runtimeSecretColumnEgressQuery, runtimeSecretRawEgressQuery } from './queries.js';",
+    'runtime secret proof app import',
+  );
+  app = replaceRequired(
+    app,
+    '  queries: [contactsQuery],',
+    '  queries: [contactsQuery, runtimeSecretColumnEgressQuery, runtimeSecretRawEgressQuery],',
+    'runtime secret proof app registration',
+  );
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export async function signInDemoUser(
   root: string,
   origin: string,

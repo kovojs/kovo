@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { secret } from '@kovojs/core';
-import { readonlyDb } from '@kovojs/server';
+import { kovoReadonlyDbHandle, readonlyDb } from '@kovojs/server';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle } from 'drizzle-orm/pglite';
 
@@ -29,7 +29,7 @@ const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([
   verification,
 ] as const);
 const SCHEMA_DDL = schemaDdl(SCHEMA_TABLES);
-const SECRET_COLUMN_KEYS = new Set(['accessToken', 'idToken', 'password', 'refreshToken', 'token']);
+const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES);
 
 const SEED_CONTACTS =
   'INSERT INTO contacts (id, name, email, company) VALUES ' +
@@ -45,7 +45,12 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const ready = initializeAppDb(client);
   const db = drizzle({ client });
   const readDb = drizzle({ client: readonlyPgliteClient(client) });
-  return { db, readonlyDb: readonlyDb(secretBoxingReadDb(readDb, SECRET_COLUMN_KEYS)), ready };
+  const secretReadDb = secretBoxingReadDb(readDb, SECRET_READ_METADATA);
+  Object.defineProperty(db, kovoReadonlyDbHandle, {
+    configurable: true,
+    value: () => secretReadDb,
+  });
+  return { db, readonlyDb: readonlyDb(db), ready };
 }
 
 async function initializeAppDb(client: PGlite): Promise<void> {
@@ -219,13 +224,105 @@ function runPgliteReadOnlyTransactionControl(
   return Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY']) as Promise<unknown>;
 }
 
-function secretBoxingReadDb<Db extends object>(db: Db, secretKeys: ReadonlySet<string>): Db {
+interface SecretReadMetadata {
+  allColumnKeys: ReadonlySet<string>;
+  secretColumnKeys: ReadonlySet<string>;
+  secretColumnNames: ReadonlySet<string>;
+  secretTableNames: ReadonlySet<string>;
+}
+
+function secretReadMetadata(tables: readonly PgTable[]): SecretReadMetadata {
+  const allColumnKeys = new Set<string>();
+  const secretColumnKeys = new Set<string>();
+  const secretColumnNames = new Set<string>();
+  const secretTableNames = new Set<string>();
+
+  for (const table of tables) {
+    const config = getTableConfig(table);
+    const columnKeys = columnKeysByDbName(table, config.columns);
+    for (const key of columnKeys.values()) allColumnKeys.add(key);
+    const secretAnnotation = kovoSecretAnnotation(table);
+    if (secretAnnotation === undefined) continue;
+
+    secretTableNames.add(config.name);
+    const secretKeys =
+      secretAnnotation === true
+        ? [...columnKeys.values()]
+        : kovoSecretColumnKeys(secretAnnotation, table, columnKeys);
+    for (const key of secretKeys) {
+      secretColumnKeys.add(key);
+      const column = Reflect.get(table, key);
+      const dbName = isColumnLike(column) ? column.name : key;
+      secretColumnNames.add(dbName);
+    }
+  }
+
+  return { allColumnKeys, secretColumnKeys, secretColumnNames, secretTableNames };
+}
+
+function columnKeysByDbName(table: PgTable, columns: readonly PgColumn[]): Map<string, string> {
+  const keys = new Map<string, string>();
+  for (const [key, value] of Object.entries(table as unknown as Record<string, unknown>)) {
+    if (isColumnLike(value)) keys.set(value.name, key);
+  }
+  for (const column of columns) {
+    if (!keys.has(column.name)) keys.set(column.name, column.name);
+  }
+  return keys;
+}
+
+function kovoSecretAnnotation(table: PgTable): true | string | readonly unknown[] | undefined {
+  for (const value of [
+    ...Object.values(table as unknown as Record<string, unknown>),
+    ...Object.getOwnPropertySymbols(table).map((symbol) => Reflect.get(table as object, symbol)),
+  ]) {
+    if (
+      value !== null &&
+      (typeof value === 'object' || typeof value === 'function') &&
+      'secret' in value
+    ) {
+      const secretValue = (value as { secret?: unknown }).secret;
+      if (secretValue === true || typeof secretValue === 'string' || Array.isArray(secretValue)) {
+        return secretValue;
+      }
+    }
+  }
+  return undefined;
+}
+
+function kovoSecretColumnKeys(
+  annotation: string | readonly unknown[],
+  table: PgTable,
+  columnKeys: ReadonlyMap<string, string>,
+): string[] {
+  const refs = Array.isArray(annotation) ? annotation : [annotation];
+  return refs.flatMap((ref) => {
+    if (typeof ref === 'string') return [columnKeys.get(ref) ?? ref];
+    if (typeof ref !== 'function') return [];
+    try {
+      const selected = ref(table);
+      return isColumnLike(selected) ? [columnKeys.get(selected.name) ?? selected.name] : [];
+    } catch {
+      return [];
+    }
+  });
+}
+
+function isColumnLike(value: unknown): value is { name: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { name?: unknown }).name === 'string'
+  );
+}
+
+function secretBoxingReadDb<Db extends object>(db: Db, metadata: SecretReadMetadata): Db {
   const readDb = {};
   for (const prop of ['$count', '$with', 'query', 'select', 'selectDistinct', 'with'] as const) {
     const item = Reflect.get(db, prop);
     if (typeof item === 'function') {
       Reflect.set(readDb, prop, (...args: unknown[]) =>
-        wrapReadSurface(Reflect.apply(item, db, args), secretKeys),
+        wrapReadSurface(Reflect.apply(item, db, args), metadata),
       );
     } else if (item !== undefined) {
       Reflect.set(readDb, prop, item);
@@ -234,41 +331,137 @@ function secretBoxingReadDb<Db extends object>(db: Db, secretKeys: ReadonlySet<s
   return Object.assign({}, db, readDb);
 }
 
-function wrapReadSurface(value: unknown, secretKeys: ReadonlySet<string>): unknown {
+function wrapReadSurface(
+  value: unknown,
+  metadata: SecretReadMetadata,
+  inheritedBoundary: { wholeRowSecret: boolean } = { wholeRowSecret: false },
+): unknown {
   if (value === null || typeof value !== 'object') return value;
-  if (value instanceof Promise) return value.then((result) => boxSecretRows(result, secretKeys));
+  if (value instanceof Promise) {
+    return value.then((result) => boxSecretRows(result, metadata, inheritedBoundary));
+  }
   return new Proxy(value, {
     get(target, prop, receiver) {
       const item = Reflect.get(target, prop, receiver);
       if (prop === 'then' && typeof item === 'function') {
+        const boundary = mergeReadBoundaries(
+          inheritedBoundary,
+          readBoundaryForQuery(target, metadata),
+        );
         return (
           onFulfilled?: (value: unknown) => unknown,
           onRejected?: (reason: unknown) => unknown,
         ) =>
           Reflect.apply(item, target, [
-            (result: unknown) => onFulfilled?.(boxSecretRows(result, secretKeys)),
+            (result: unknown) => onFulfilled?.(boxSecretRows(result, metadata, boundary)),
             onRejected,
           ]);
       }
       if (typeof item !== 'function') return item;
-      return (...args: unknown[]) => wrapReadSurface(Reflect.apply(item, target, args), secretKeys);
+      return (...args: unknown[]) =>
+        wrapReadSurface(
+          Reflect.apply(item, target, args),
+          metadata,
+          mergeReadBoundaries(inheritedBoundary, readBoundaryForArgs(args, metadata)),
+        );
     },
   });
 }
 
-function boxSecretRows(value: unknown, secretKeys: ReadonlySet<string>): unknown {
-  if (Array.isArray(value)) return value.map((entry) => boxSecretRows(entry, secretKeys));
+function readBoundaryForQuery(
+  value: unknown,
+  metadata: SecretReadMetadata,
+): { wholeRowSecret: boolean } {
+  const sql = querySqlText(value);
+  if (sql === undefined) return { wholeRowSecret: false };
+  return { wholeRowSecret: sqlReferencesSecretTable(sql, metadata.secretTableNames) };
+}
+
+function readBoundaryForArgs(
+  args: readonly unknown[],
+  metadata: SecretReadMetadata,
+): { wholeRowSecret: boolean } {
+  for (const arg of args) {
+    const sql = querySqlText(arg) ?? sqlTextFromValue(arg);
+    if (sql === undefined) continue;
+    if (sqlReferencesSecretTable(sql, metadata.secretTableNames)) return { wholeRowSecret: true };
+  }
+  return { wholeRowSecret: false };
+}
+
+function mergeReadBoundaries(
+  left: { wholeRowSecret: boolean },
+  right: { wholeRowSecret: boolean },
+): { wholeRowSecret: boolean } {
+  return { wholeRowSecret: left.wholeRowSecret || right.wholeRowSecret };
+}
+
+function querySqlText(value: unknown): string | undefined {
+  const toSQL = (value as { toSQL?: unknown }).toSQL;
+  if (typeof toSQL !== 'function') return undefined;
+  try {
+    const result = toSQL.call(value) as { sql?: unknown };
+    return typeof result?.sql === 'string' ? result.sql : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function sqlTextFromValue(value: unknown): string | undefined {
+  if (typeof value === 'string') return value;
+  if (value === null || typeof value !== 'object') return undefined;
+  const sql = (value as { sql?: unknown }).sql;
+  if (typeof sql === 'string') return sql;
+  const chunks = (value as { queryChunks?: unknown }).queryChunks;
+  if (Array.isArray(chunks)) {
+    const text = chunks
+      .flatMap((chunk) => {
+        const part = (chunk as { value?: unknown }).value;
+        return Array.isArray(part)
+          ? part.filter((item): item is string => typeof item === 'string')
+          : [];
+      })
+      .join('');
+    return text || undefined;
+  }
+  return undefined;
+}
+
+function sqlReferencesSecretTable(sql: string, secretTableNames: ReadonlySet<string>): boolean {
+  for (const table of secretTableNames) {
+    const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    if (new RegExp(`(?:^|[^A-Za-z0-9_])"?${escaped}"?(?:$|[^A-Za-z0-9_])`, 'i').test(sql)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function boxSecretRows(
+  value: unknown,
+  metadata: SecretReadMetadata,
+  boundary: { wholeRowSecret: boolean } = { wholeRowSecret: false },
+): unknown {
+  if (Array.isArray(value)) return value.map((entry) => boxSecretRows(entry, metadata, boundary));
   if (value === null || typeof value !== 'object') return value;
+  if (boundary.wholeRowSecret && hasUnclassifiedReadKey(value, metadata)) return secret(value);
   const boxed: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
     boxed[key] =
       item === null || item === undefined
         ? item
-        : secretKeys.has(key)
+        : metadata.secretColumnKeys.has(key) || metadata.secretColumnNames.has(key)
           ? secret(item)
-          : boxSecretRows(item, secretKeys);
+          : boxSecretRows(item, metadata, boundary);
   }
   return boxed;
+}
+
+function hasUnclassifiedReadKey(value: object, metadata: SecretReadMetadata): boolean {
+  for (const key of Object.keys(value)) {
+    if (!metadata.allColumnKeys.has(key)) return true;
+  }
+  return false;
 }
 
 const appDatabase = createAppRuntimeDb();

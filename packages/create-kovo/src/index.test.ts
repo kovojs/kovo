@@ -268,13 +268,19 @@ describe('create-kovo starter (metadata)', () => {
       'const readDb = drizzle({ client: readonlyPgliteClient(client) });',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'return { db, readonlyDb: readonlyDb(secretBoxingReadDb(readDb, SECRET_COLUMN_KEYS)), ready }',
+      'const secretReadDb = secretBoxingReadDb(readDb, SECRET_READ_METADATA);',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'Object.defineProperty(db, kovoReadonlyDbHandle',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'return { db, readonlyDb: readonlyDb(db), ready }',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY'])",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "const SECRET_COLUMN_KEYS = new Set(['accessToken', 'idToken', 'password', 'refreshToken', 'token'])",
+      'const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'function secretBoxingReadDb<Db extends object>',
@@ -548,12 +554,13 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'readonlyDb(db).exec(SCHEMA_DDL)',
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: readonlyDb(db)');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'readonlyDb: readonlyDb(secretBoxingReadDb(db, SECRET_COLUMN_KEYS))',
+      'Object.defineProperty(db, kovoReadonlyDbHandle',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ready: Promise.resolve()');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "const SECRET_COLUMN_KEYS = new Set(['accessToken', 'idToken', 'password', 'refreshToken', 'token'])",
+      'const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'function secretBoxingReadDb<Db extends object>',
