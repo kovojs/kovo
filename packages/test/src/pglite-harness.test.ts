@@ -1,8 +1,17 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { mutation, s } from '@kovojs/server';
-import { managedDb } from '@kovojs/server/internal/execution';
+import {
+  kovoDeclaredWriteDbHandle,
+  kovoReadonlyDbHandle,
+  managedDb,
+  type KovoDeclaredWriteDbCapable,
+  type KovoReadonlyDbCapable,
+} from '@kovojs/server/internal/execution';
 
 import { createKovoTestHarness } from './harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
@@ -11,7 +20,8 @@ import { assertOwnerWritesScoped, createDbVerifier } from './verifier.js';
 
 describe('@kovojs/test PGlite harness integration', () => {
   it('backs managed readers with read-only PGlite transactions', async () => {
-    const db = await createPgliteTestDb();
+    const root = mkdtempSync(join(tmpdir(), 'kovo-pglite-readonly-'));
+    const db = await createPgliteTestDb({ dataDir: root });
 
     try {
       await db.exec('create table products (id text primary key, qty integer not null)');
@@ -73,6 +83,71 @@ describe('@kovojs/test PGlite harness integration', () => {
       ]);
     } finally {
       await db.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps the dedicated PGlite reader session read-only without poisoning writer paths', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-pglite-readonly-pool-'));
+    const db = await createPgliteTestDb({ dataDir: root });
+
+    try {
+      await db.exec('create table products (id text primary key, qty integer not null)');
+      await db.write('products', { id: 'p1', qty: 1 });
+
+      const rawReader = (
+        db as PgliteTestDb &
+          KovoReadonlyDbCapable<Pick<PgliteTestDb, 'exec' | 'pglite' | 'query' | 'write'>>
+      )[kovoReadonlyDbHandle]();
+
+      await expect(
+        rawReader.query<{ default_transaction_read_only: string }>(
+          'show default_transaction_read_only',
+        ),
+      ).resolves.toEqual([{ default_transaction_read_only: 'on' }]);
+      expect(rawReader.pglite).not.toBe(db.pglite);
+      await expect(
+        rawReader.query<{ transaction_read_only: string }>('show transaction_read_only'),
+      ).resolves.toEqual([{ transaction_read_only: 'on' }]);
+      await expect(rawReader.write('products', { id: 'blocked', qty: 0 })).rejects.toThrow(
+        /read-only transaction/,
+      );
+
+      await expect(
+        db.query<{ default_transaction_read_only: string }>('show default_transaction_read_only'),
+      ).resolves.toEqual([{ default_transaction_read_only: 'off' }]);
+      await expect(
+        db.query<{ transaction_read_only: string }>('show transaction_read_only'),
+      ).resolves.toEqual([{ transaction_read_only: 'off' }]);
+      await db.write('products', { id: 'p2', qty: 2 });
+
+      const declaredWriter = (
+        db as PgliteTestDb & KovoDeclaredWriteDbCapable<Pick<PgliteTestDb, 'query' | 'write'>>
+      )[kovoDeclaredWriteDbHandle]({
+        dialect: 'postgres',
+        tables: ['products'],
+        touches: ['product'],
+      });
+      await expect(
+        declaredWriter.query<{ default_transaction_read_only: string }>(
+          'show default_transaction_read_only',
+        ),
+      ).resolves.toEqual([{ default_transaction_read_only: 'off' }]);
+      await declaredWriter.write('products', { id: 'p3', qty: 3 });
+
+      await expect(
+        rawReader.query<{ default_transaction_read_only: string }>(
+          'show default_transaction_read_only',
+        ),
+      ).resolves.toEqual([{ default_transaction_read_only: 'on' }]);
+      await expect(db.read<{ id: string }>('products')).resolves.toMatchObject([
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 'p3' },
+      ]);
+    } finally {
+      await db.close();
+      rmSync(root, { force: true, recursive: true });
     }
   });
 
