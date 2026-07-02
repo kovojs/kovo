@@ -187,6 +187,9 @@ describe('@kovojs/test command fixtures', () => {
     expect(workflowVpRunTaskNames('steps:\n  - run: vp exec pnpm run check:build')).toEqual([
       'build',
     ]);
+    expect(workflowVpRunTaskNames('steps:\n  - run: vp exec pnpm run check:build:ci')).toEqual([
+      'build',
+    ]);
   });
 
   it('keeps kovo-check as one required full-suite CI proof without inert env fan-out', async () => {

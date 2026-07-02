@@ -82,11 +82,18 @@ describe('ci-shards', () => {
           { filepath: '/repo/packages/a/src/a.test.ts', duration: 1000 },
           { filepath: '/repo/packages/a/src/a.test.ts', duration: 1200 },
           { file: '/repo/packages/b/src/b.test.ts', duration: 2500 },
+          {
+            name: '/repo/packages/c/src/c.test.ts',
+            assertionResults: [{ duration: 1600 }, { duration: 3000 }],
+            startTime: 100,
+            endTime: 4700,
+          },
         ],
       }),
     ).toEqual({
       '/repo/packages/a/src/a.test.ts': { seconds: 1.2 },
       '/repo/packages/b/src/b.test.ts': { seconds: 2.5 },
+      '/repo/packages/c/src/c.test.ts': { seconds: 4.6 },
     });
   });
 
@@ -224,7 +231,7 @@ describe('ci-shards', () => {
     expect(assigned.toSorted(compareStrings)).toEqual(
       entries.map((entry) => entry.id).toSorted(compareStrings),
     );
-    expect(shards.map((shard) => shard.seconds)).toEqual([549, 513, 551, 551, 551, 550, 517, 518]);
+    expect(shards.map((shard) => shard.seconds)).toEqual([476, 481, 443, 468, 460, 496, 440, 476]);
   });
 
   it('splits starter entries into packed and unpacked shard modes', () => {
@@ -262,7 +269,7 @@ describe('ci-shards', () => {
       }))
       .filter((shard) => shard.entries.length > 0);
 
-    expect(browserShards).toEqual([{ index: 6, entries: ['island-derive-artifacts'] }]);
+    expect(browserShards).toEqual([{ index: 8, entries: ['island-derive-artifacts'] }]);
   });
 
   it('marks only packed starter shards as needing the packed package artifact', async () => {

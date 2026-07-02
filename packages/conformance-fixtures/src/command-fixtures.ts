@@ -302,7 +302,7 @@ function workflowTaskName(command: string): string | undefined {
     return vpTaskName;
   }
 
-  if (/^vp exec pnpm run check:build(?:\s|$)/.test(command)) {
+  if (/^vp exec pnpm run check:build(?::ci)?(?:\s|$)/.test(command)) {
     return 'build';
   }
 
