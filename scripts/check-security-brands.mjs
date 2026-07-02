@@ -9,6 +9,7 @@ import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 export const repoRoot = findRepoRoot();
 
 export const defaultReachabilityFiles = [
+  'packages/server/src/response-posture.ts',
   'packages/server/src/sql-safe-handle.ts',
   'packages/server/src/sql-write-allowlist.ts',
   'packages/server/src/response.ts',
@@ -147,9 +148,160 @@ export const requiredSecurityDecisions = [
   },
 ];
 
-export const defaultReachabilityRoots = requiredSecurityDecisions.flatMap((decision) =>
-  decision.names.map((name) => ({ file: decision.file, kind: decision.kind, name })),
-);
+export const rawSecurityPrimitiveRoots = [
+  {
+    direction: 'callees',
+    file: 'packages/server/src/sql-safe-handle.ts',
+    kind: 'classifier',
+    name: 'enforceManagedSql',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/sql-safe-handle.ts',
+    kind: 'classifier',
+    name: 'managedSqlSafetyMode',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/sql-write-allowlist.ts',
+    kind: 'classifier',
+    name: 'parseSqlWriteTables',
+  },
+  {
+    direction: 'callers',
+    file: 'packages/server/src/response-posture.ts',
+    kind: 'wire-emitter',
+    name: 'emitToWire',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/response.ts',
+    kind: 'wire-emitter',
+    name: 'htmlServerErrorResponse',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/response.ts',
+    kind: 'wire-emitter',
+    name: 'routeOutcomeResponse',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/response.ts',
+    kind: 'wire-emitter',
+    name: 'routeResponseToDocumentResponse',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/query.ts',
+    kind: 'wire-emitter',
+    name: 'renderQueryEndpointResponse',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/query.ts',
+    kind: 'wire-emitter',
+    name: 'renderQueryRegistryEndpointResponse',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/mutation/wire-response.ts',
+    kind: 'wire-emitter',
+    name: 'renderMutationWireLifecycleResponse',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/document-core.ts',
+    kind: 'wire-emitter',
+    name: 'renderRouteDocumentResponse',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/document-core.ts',
+    kind: 'wire-emitter',
+    name: 'renderErrorDocument',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/app-system-response.ts',
+    kind: 'wire-emitter',
+    name: 'appSystemResponse',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/capability-url.ts',
+    kind: 'classifier',
+    name: 'verifyCapability',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/capability-url.ts',
+    kind: 'wire-emitter',
+    name: 'signCapability',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/server/src/static-export-headers.ts',
+    kind: 'wire-emitter',
+    name: 'staticExportHeaders',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/compiler/src/validate/trusted-html-provenance.ts',
+    kind: 'classifier',
+    name: 'validateTrustedHtmlProvenance',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/compiler/src/validate/confidentiality.ts',
+    kind: 'classifier',
+    name: 'validateSecretQueryWire',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/drizzle/src/static/query-shapes.ts',
+    kind: 'classifier',
+    name: 'isQueryShapeWrapper',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/drizzle/src/static/query-shapes.ts',
+    kind: 'classifier',
+    name: 'selectShapeFromQueryBody',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/drizzle/src/static/query-shapes.ts',
+    kind: 'classifier',
+    name: 'sourceDestructuredQueryReceiverDiagnostics',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/drizzle/src/static/query-shapes.ts',
+    kind: 'classifier',
+    name: 'isOpaqueProjection',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/drizzle/src/static/query-shapes.ts',
+    kind: 'classifier',
+    name: 'typedSqlProjectionShape',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/drizzle/src/static/framework-identity.ts',
+    kind: 'classifier',
+    name: 'canonicalFrameworkExportForExpression',
+  },
+  {
+    direction: 'callees',
+    file: 'packages/drizzle/src/static/framework-identity.ts',
+    kind: 'classifier',
+    name: 'frameworkIdentityExpressionKindResolution',
+  },
+];
+
+export const defaultReachabilityRoots = rawSecurityPrimitiveRoots;
 
 const wrapperByKind = {
   classifier: 'securityClassifier',
@@ -171,6 +323,16 @@ export function checkSecurityBrands(options = {}) {
       roots: options.reachabilityRoots,
     });
   const findings = [];
+  if (options.decisions === undefined) {
+    findings.push(
+      ...validateReachabilityRoots({
+        exists,
+        files: options.reachabilityFiles,
+        readText,
+        roots: options.reachabilityRoots,
+      }),
+    );
+  }
 
   for (const decision of decisions) {
     if (!exists(decision.file)) {
@@ -220,8 +382,7 @@ export function deriveRequiredSecurityDecisions(options = {}) {
   const required = new Map();
 
   for (const root of roots) {
-    const rootKey = functionKey(root.file, root.name);
-    const reachable = reachableFunctionKeys(graph, rootKey);
+    const reachable = reachableFunctionKeysForRoot(graph, root);
     for (const key of reachable) {
       const fn = graph.functions.get(key);
       if (!fn) continue;
@@ -239,6 +400,28 @@ export function deriveRequiredSecurityDecisions(options = {}) {
     .sort((left, right) =>
       `${left.file}\0${left.kind}`.localeCompare(`${right.file}\0${right.kind}`),
     );
+}
+
+export function validateReachabilityRoots(options = {}) {
+  const files = options.files ?? defaultReachabilityFiles;
+  const roots = options.roots ?? defaultReachabilityRoots;
+  const readText =
+    options.readText ?? ((relativePath) => readFileSync(path.join(repoRoot, relativePath), 'utf8'));
+  const exists =
+    options.exists ?? ((relativePath) => existsSync(path.join(repoRoot, relativePath)));
+  const graph = buildLocalCallGraph({ exists, files, readText });
+  const findings = [];
+
+  for (const root of roots) {
+    const key = functionKey(root.file, root.name);
+    if (!graph.functions.has(key)) {
+      findings.push(
+        `${root.file}: raw security primitive root ${root.name} is missing from the reachability graph`,
+      );
+    }
+  }
+
+  return findings;
 }
 
 export function main(options = {}) {
@@ -361,6 +544,40 @@ function reachableFunctionKeys(graph, rootKey) {
     const fn = graph.functions.get(key);
     if (!fn) continue;
     for (const called of fn.calls) pending.push(called);
+  }
+  return seen;
+}
+
+function reachableFunctionKeysForRoot(graph, root) {
+  const rootKey = functionKey(root.file, root.name);
+  if (root.direction === 'callers') {
+    const reverseReachable = reverseReachableFunctionKeys(graph, rootKey);
+    const expanded = new Set(reverseReachable);
+    for (const key of reverseReachable) {
+      for (const reachable of reachableFunctionKeys(graph, key)) expanded.add(reachable);
+    }
+    return expanded;
+  }
+  return reachableFunctionKeys(graph, rootKey);
+}
+
+function reverseReachableFunctionKeys(graph, rootKey) {
+  const callers = new Map();
+  for (const [key, fn] of graph.functions.entries()) {
+    for (const called of fn.calls) {
+      const list = callers.get(called) ?? [];
+      list.push(key);
+      callers.set(called, list);
+    }
+  }
+
+  const seen = new Set();
+  const pending = [rootKey];
+  while (pending.length > 0) {
+    const key = pending.pop();
+    if (seen.has(key)) continue;
+    seen.add(key);
+    for (const caller of callers.get(key) ?? []) pending.push(caller);
   }
   return seen;
 }

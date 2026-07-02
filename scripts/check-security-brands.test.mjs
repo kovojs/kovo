@@ -1,6 +1,13 @@
 import { describe, expect, it } from 'vitest';
 
-import { checkSecurityBrands, deriveRequiredSecurityDecisions } from './check-security-brands.mjs';
+import {
+  checkSecurityBrands,
+  defaultReachabilityRoots,
+  deriveRequiredSecurityDecisions,
+  rawSecurityPrimitiveRoots,
+  requiredSecurityDecisions,
+  validateReachabilityRoots,
+} from './check-security-brands.mjs';
 
 function runFixture(files, decisions) {
   return checkSecurityBrands({
@@ -108,6 +115,46 @@ export function reachableUnbrandedCanary(value) {
 
     expect(result.findings).toContain(
       'packages/server/src/canary.ts:6: reachableUnbrandedCanary is an unbranded security-decision function; wrap it with securityClassifier()',
+    );
+  });
+
+  it('uses raw primitive roots instead of the declared security-decision list by default', () => {
+    const declaredRoots = requiredSecurityDecisions.flatMap((decision) =>
+      decision.names.map((name) => ({ file: decision.file, kind: decision.kind, name })),
+    );
+
+    expect(defaultReachabilityRoots).toBe(rawSecurityPrimitiveRoots);
+    expect(rawSecurityPrimitiveRoots).not.toEqual(declaredRoots);
+    expect(rawSecurityPrimitiveRoots.map((root) => `${root.file}#${root.name}`)).toContain(
+      'packages/server/src/response-posture.ts#emitToWire',
+    );
+  });
+
+  it('fails when an encoded raw primitive root drifts out of the graph', () => {
+    const files = {
+      'packages/server/src/response-posture.ts': `
+export function renamedEmitToWire(value) {
+  return value;
+}
+`,
+    };
+
+    expect(
+      validateReachabilityRoots({
+        exists: (relativePath) => Object.hasOwn(files, relativePath),
+        files: ['packages/server/src/response-posture.ts'],
+        readText: (relativePath) => files[relativePath] ?? '',
+        roots: [
+          {
+            direction: 'callers',
+            file: 'packages/server/src/response-posture.ts',
+            kind: 'wire-emitter',
+            name: 'emitToWire',
+          },
+        ],
+      }),
+    ).toContain(
+      'packages/server/src/response-posture.ts: raw security primitive root emitToWire is missing from the reachability graph',
     );
   });
 
