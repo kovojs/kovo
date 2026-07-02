@@ -242,8 +242,9 @@ mattering.
         Evidence: `vp exec vitest --run packages/server/src/managed-db.test.ts`.
   - [ ] **Dedicated Postgres/PGlite read-only pool.** Sessions set `default_transaction_read_only = on` on a dedicated
         reader pool rather than relying on a per-request toggle on a shared writer-capable connection.
-  - [ ] **Reader/writer lifecycle no-leak proof.** A reader connection returned to the pool must not leak read-only state
+  - [x] **Reader/writer lifecycle no-leak proof.** A reader connection returned to the pool must not leak read-only state
         to a later writer, and writers must remain write-capable.
+        Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts -t "rolls back default mutation transactions"`.
 - [ ] **1.2 Engine-enforced declared-table writes (DEC-B).** SQLite authorizer; Postgres request-scoped role
       (primary) or stat-delta rollback (fallback, residual documented). Acceptance (paranoid mode): a mutation
       `tables:['contacts']` writing `userx` / `otherschema.contacts` / via DDL is engine-rejected (schema-qualified); an
