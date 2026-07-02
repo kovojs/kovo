@@ -105,6 +105,33 @@ describe('@kovojs/test SQLite harness integration', () => {
     }
   });
 
+  it('enforces declared tables on SQLite adapter helper writes with schema-qualified names', () => {
+    const db = createSqliteTestDb();
+
+    try {
+      db.exec('create table cart_items (product_id text primary key, qty integer not null)');
+      db.exec('create table audit_log (product_id text primary key)');
+
+      const writer = managedDb(db, 'write', {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['cart_items'],
+          touches: ['cart'],
+        },
+      }) as unknown as Pick<SqliteTestDb, 'insert'>;
+
+      writer.insert('main.cart_items').values({ product_id: 'p1', qty: 2 });
+      expect(db.read<{ product_id: string }>('cart_items')).toMatchObject([{ product_id: 'p1' }]);
+
+      expect(() => writer.insert('main.audit_log').values({ product_id: 'p1' })).toThrow(
+        /KV406.*SQLite adapter declared-write fallback/s,
+      );
+      expect(db.read('audit_log')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
   it('verifies raw better-sqlite3 handle calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,

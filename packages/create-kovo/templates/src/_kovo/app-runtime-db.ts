@@ -1,6 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import { secret } from '@kovojs/core';
-import { kovoReadonlyDbHandle, readonlyDb } from '@kovojs/server';
+import { kovoDeclaredWriteDbHandle, kovoReadonlyDbHandle, readonlyDb } from '@kovojs/server';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle } from 'drizzle-orm/pglite';
 
@@ -30,6 +30,10 @@ const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([
 ] as const);
 const SCHEMA_DDL = schemaDdl(SCHEMA_TABLES);
 const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES);
+interface DeclaredWritePolicy {
+  tables?: readonly string[];
+  touches?: readonly string[];
+}
 
 const SEED_CONTACTS =
   'INSERT INTO contacts (id, name, email, company) VALUES ' +
@@ -49,6 +53,10 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   Object.defineProperty(db, kovoReadonlyDbHandle, {
     configurable: true,
     value: () => secretReadDb,
+  });
+  Object.defineProperty(db, kovoDeclaredWriteDbHandle, {
+    configurable: true,
+    value: (policy: DeclaredWritePolicy) => declaredWriteDrizzleDb(db, policy),
   });
   return { db, readonlyDb: readonlyDb(db), ready };
 }
@@ -179,6 +187,63 @@ function quoteIdent(value: string): string {
 
 function quoteLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
+}
+
+function declaredWriteDrizzleDb<Db extends object>(db: Db, policy: DeclaredWritePolicy): Db {
+  // PGlite gives this runtime one embedded handle, not a request-scoped GRANT/ROLE sandbox. This
+  // adapter fallback enforces declared tables on Drizzle's parser-blind builder boundary; managedDb
+  // still guards executable raw SQL sinks before they reach the engine (SPEC §10.3/§11.2).
+  return new Proxy(db as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (isDrizzleWriteMethod(prop) && typeof value === 'function') {
+        return (table: unknown, ...args: unknown[]) => {
+          assertDeclaredDrizzleTableAllowed(table, policy);
+          return Reflect.apply(value, target, [table, ...args]);
+        };
+      }
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as Db;
+}
+
+function isDrizzleWriteMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
+  return prop === 'delete' || prop === 'insert' || prop === 'update';
+}
+
+function assertDeclaredDrizzleTableAllowed(table: unknown, policy: DeclaredWritePolicy): void {
+  const allowed = new Set((policy.tables ?? []).map((name) => normalizePolicyTable(name)));
+  if (allowed.size === 0) return;
+
+  const tableNames = pgTablePolicyNames(table);
+  if (tableNames.some((name) => allowed.has(name))) return;
+
+  throw new Error(
+    [
+      `KV406: PGlite adapter declared-write fallback rejected table ${tableNames[0] ?? '<unknown>'} outside the mutation registry tables (SPEC §10.3/§11.2).`,
+      `  declared tables: ${[...new Set(policy.tables ?? [])].sort().join(', ')}`,
+      `  touches: ${[...new Set(policy.touches ?? [])].sort().join(', ') || '<none>'}`,
+    ].join('\n'),
+  );
+}
+
+function pgTablePolicyNames(table: unknown): string[] {
+  try {
+    const config = getTableConfig(table as PgTable);
+    const schema = (config as { schema?: unknown }).schema;
+    const schemaName = typeof schema === 'string' ? schema : undefined;
+    const names = [normalizePolicyTable(config.name)];
+    if (schemaName !== undefined) names.push(`${schemaName}.${config.name}`);
+    return [...new Set(names)];
+  } catch {
+    throw new Error(
+      'KV406: PGlite adapter declared-write fallback could not resolve a Drizzle write table (SPEC §10.3/§11.2).',
+    );
+  }
+}
+
+function normalizePolicyTable(table: string): string {
+  return table.includes('.') ? table : `public.${table}`;
 }
 
 function readonlyPgliteClient(client: PGlite): PGlite {

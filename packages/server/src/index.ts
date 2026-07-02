@@ -247,6 +247,7 @@ export {
   drainUnverifiedMimeFacts,
   errorBoundary,
   InlineUnverifiedUploadError,
+  kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
   KovoReadonlyHandleError,
   mutation,

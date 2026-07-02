@@ -24,8 +24,10 @@ declare const writerDbBrand: unique symbol;
 export const kovoReadonlyDbHandle: unique symbol = Symbol('kovo.readonly-db-handle');
 
 /**
- * @internal Adapter hook for providing a framework-owned write DB handle whose underlying engine
- * enforces the mutation's declared write table policy.
+ * Adapter hook for providing a framework-owned write DB handle whose underlying engine or
+ * adapter-enforced boundary applies the mutation's declared write table policy (SPEC §10.3/§11.2).
+ * Generated starter runtimes attach this symbol to their Drizzle handle so `managedDb(...,
+ * 'write')` can resolve a request-scoped writer before raw SQL provenance guards are layered on.
  */
 export const kovoDeclaredWriteDbHandle: unique symbol = Symbol('kovo.declared-write-db-handle');
 

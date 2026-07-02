@@ -119,6 +119,35 @@ describe('@kovojs/test PGlite harness integration', () => {
     }
   });
 
+  it('enforces declared tables on PGlite adapter helper writes with schema-qualified names', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table cart_items (product_id text primary key, qty integer not null)');
+      await db.exec('create table audit_log (product_id text primary key)');
+
+      const writer = managedDb(db, 'write', {
+        sqlWritePolicy: {
+          dialect: 'postgres',
+          tables: ['cart_items'],
+          touches: ['cart'],
+        },
+      }) as unknown as Pick<PgliteTestDb, 'insert'>;
+
+      await writer.insert('public.cart_items').values({ product_id: 'p1', qty: 2 });
+      await expect(db.read<{ product_id: string }>('cart_items')).resolves.toMatchObject([
+        { product_id: 'p1' },
+      ]);
+
+      expect(() => writer.insert('public.audit_log').values({ product_id: 'p1' })).toThrow(
+        /KV406.*PGlite adapter declared-write fallback/s,
+      );
+      await expect(db.read('audit_log')).resolves.toEqual([]);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('verifies direct db.query calls against the static touch graph', async () => {
     const cartMutation = mutation('cart/add', {
       csrf: false,

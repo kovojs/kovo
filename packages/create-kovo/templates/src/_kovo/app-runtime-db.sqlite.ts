@@ -1,6 +1,6 @@
 import Database from 'better-sqlite3';
 import { secret } from '@kovojs/core';
-import { kovoReadonlyDbHandle, readonlyDb } from '@kovojs/server';
+import { kovoDeclaredWriteDbHandle, kovoReadonlyDbHandle, readonlyDb } from '@kovojs/server';
 import { getTableConfig } from 'drizzle-orm/sqlite-core';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 
@@ -40,6 +40,10 @@ const SCHEMA_TABLES = [
   schema.verification,
 ] as const;
 const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES);
+interface DeclaredWritePolicy {
+  tables?: readonly string[];
+  touches?: readonly string[];
+}
 
 function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const client = new Database(':memory:');
@@ -50,6 +54,10 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   Object.defineProperty(db, kovoReadonlyDbHandle, {
     configurable: true,
     value: () => secretReadDb,
+  });
+  Object.defineProperty(db, kovoDeclaredWriteDbHandle, {
+    configurable: true,
+    value: (policy: DeclaredWritePolicy) => declaredWriteDrizzleDb(db, policy),
   });
   return {
     db,
@@ -110,6 +118,63 @@ function columnKeysByDbName(
     if (!keys.has(column.name)) keys.set(column.name, column.name);
   }
   return keys;
+}
+
+function declaredWriteDrizzleDb<Db extends object>(db: Db, policy: DeclaredWritePolicy): Db {
+  // better-sqlite3 12 does not expose SQLite's native authorizer callback in its JS API. This
+  // adapter-level fallback enforces declared tables on Drizzle's parser-blind builder boundary;
+  // managedDb still guards executable raw SQL sinks before they reach the driver (SPEC §10.3/§11.2).
+  return new Proxy(db as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (isDrizzleWriteMethod(prop) && typeof value === 'function') {
+        return (table: unknown, ...args: unknown[]) => {
+          assertDeclaredDrizzleTableAllowed(table, policy);
+          return Reflect.apply(value, target, [table, ...args]);
+        };
+      }
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as Db;
+}
+
+function isDrizzleWriteMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
+  return prop === 'delete' || prop === 'insert' || prop === 'update';
+}
+
+function assertDeclaredDrizzleTableAllowed(table: unknown, policy: DeclaredWritePolicy): void {
+  const allowed = new Set((policy.tables ?? []).map((name) => normalizePolicyTable(name)));
+  if (allowed.size === 0) return;
+
+  const tableNames = sqliteTablePolicyNames(table);
+  if (tableNames.some((name) => allowed.has(name))) return;
+
+  throw new Error(
+    [
+      `KV406: SQLite adapter declared-write fallback rejected table ${tableNames[0] ?? '<unknown>'} outside the mutation registry tables (SPEC §10.3/§11.2).`,
+      `  declared tables: ${[...new Set(policy.tables ?? [])].sort().join(', ')}`,
+      `  touches: ${[...new Set(policy.touches ?? [])].sort().join(', ') || '<none>'}`,
+    ].join('\n'),
+  );
+}
+
+function sqliteTablePolicyNames(table: unknown): string[] {
+  try {
+    const config = getTableConfig(table as SqliteTable);
+    const schema = (config as { schema?: unknown }).schema;
+    const schemaName = typeof schema === 'string' ? schema : undefined;
+    const names = [normalizePolicyTable(config.name)];
+    if (schemaName !== undefined) names.push(`${schemaName}.${config.name}`);
+    return [...new Set(names)];
+  } catch {
+    throw new Error(
+      'KV406: SQLite adapter declared-write fallback could not resolve a Drizzle write table (SPEC §10.3/§11.2).',
+    );
+  }
+}
+
+function normalizePolicyTable(table: string): string {
+  return table.includes('.') ? table : `main.${table}`;
 }
 
 function kovoSecretAnnotation(table: SqliteTable): true | string | readonly unknown[] | undefined {
