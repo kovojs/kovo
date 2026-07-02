@@ -56,6 +56,7 @@ import type {
   CompiledRoutePageFunction,
   CompiledRoutePageMetadata,
 } from './route-ir.js';
+import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 
 // Public signatures cannot reference internal subpath types. Keep this type-level
 // mirror local while runtime URL construction consumes `internal/route-pattern`.
@@ -464,12 +465,14 @@ export function parseRouteRequest<
   definition: RouteDeclaration<Path, ParamsSchema, SearchSchema, Request, Page>,
   input: RouteRequestInput = {},
 ): RouteRequest<Path, ParamsSchema, SearchSchema> {
+  const rawParams = tagUntrustedRequestValue(input.params ?? {});
+  const rawSearch = tagUntrustedRequestValue(input.search ?? {});
   const params = definition.params
-    ? definition.params.parse(input.params ?? {})
-    : ((input.params ?? {}) as RouteParamsFor<Path, ParamsSchema>);
+    ? definition.params.parse(rawParams)
+    : (rawParams as RouteParamsFor<Path, ParamsSchema>);
   const search = definition.search
-    ? definition.search.parse(input.search ?? {})
-    : ((input.search ?? {}) as RouteSearchFor<SearchSchema>);
+    ? definition.search.parse(rawSearch)
+    : (rawSearch as RouteSearchFor<SearchSchema>);
 
   return {
     params: params as RouteParamsFor<Path, ParamsSchema>,

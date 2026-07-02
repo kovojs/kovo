@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
 import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
@@ -327,7 +328,7 @@ export function validateCsrfToken<Request>(
   const binding = resolveCsrfBinding(request, options);
   if (!binding) return false;
 
-  const submitted = formLikeToRecord(rawInput)[options.field ?? 'kovo-csrf'];
+  const submitted = revealCsrfInput(formLikeToRecord(rawInput)[options.field ?? 'kovo-csrf']);
   if (typeof submitted !== 'string') return false;
 
   const submittedMac = unmaskCsrfToken(submitted);
@@ -341,6 +342,12 @@ export function validateCsrfToken<Request>(
       signature: submittedMac,
     }).ok === true
   );
+}
+
+function revealCsrfInput(input: unknown): unknown {
+  return isUntrusted(input)
+    ? revealUntrusted(input, 'validated request-derived CSRF token')
+    : input;
 }
 
 export function mutationCsrfOptions<Request>(

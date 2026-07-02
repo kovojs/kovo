@@ -1,3 +1,5 @@
+import { untrusted } from '@kovojs/core';
+
 export type UntrustedRequestBodyCarrier = 'json' | 'form';
 
 export type UntrustedRequestBodyFailureReason =
@@ -25,7 +27,7 @@ export async function readUntrustedRequestBody(
 
   if (carrier === 'json') {
     try {
-      return { carrier, ok: true, value: await request.json() };
+      return { carrier, ok: true, value: tagUntrustedRequestValue(await request.json()) };
     } catch {
       return { ok: false, reason: 'invalid-json' };
     }
@@ -33,7 +35,7 @@ export async function readUntrustedRequestBody(
 
   if (carrier === 'form') {
     try {
-      return { carrier, ok: true, value: await request.formData() };
+      return { carrier, ok: true, value: tagUntrustedRequestValue(await request.formData()) };
     } catch {
       return { ok: false, reason: 'invalid-form' };
     }
@@ -51,7 +53,10 @@ export function parseUntrustedJsonBodyBytes(rawBody: Uint8Array): UntrustedJsonB
   if (rawBody.byteLength === 0) return { ok: true, value: {} };
 
   try {
-    return { ok: true, value: JSON.parse(new TextDecoder().decode(rawBody)) };
+    return {
+      ok: true,
+      value: tagUntrustedRequestValue(JSON.parse(new TextDecoder().decode(rawBody))),
+    };
   } catch {
     return { ok: false, reason: 'invalid-json' };
   }
@@ -87,4 +92,62 @@ function requestBodyCarrier(
 
 function isObjectLike(value: unknown): value is object {
   return typeof value === 'object' && value !== null;
+}
+
+/** @internal SPEC §5.2 rule 11 / DEC-D: request input tags are DX provenance, not enforcement. */
+export function tagUntrustedRequestValue(value: unknown): unknown {
+  if (value instanceof FormData) {
+    return tagUntrustedFormData(value);
+  }
+  if (Array.isArray(value)) return value.map((item) => tagUntrustedRequestValue(item));
+  if (isPlainRecord(value)) {
+    const tagged = Object.create(null) as Record<string, unknown>;
+    for (const [key, entry] of Object.entries(value)) {
+      tagged[key] = tagUntrustedRequestValue(entry);
+    }
+    return tagged;
+  }
+  if (value === undefined) return value;
+  return untrusted(value);
+}
+
+function isPlainRecord(value: unknown): value is Record<string, unknown> {
+  if (typeof value !== 'object' || value === null) return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function tagUntrustedFormData(form: FormData): FormData {
+  return new Proxy(form, {
+    get(target, property, receiver) {
+      if (property === 'get') {
+        return (name: string) => tagUntrustedFormEntry(target.get(name));
+      }
+      if (property === 'getAll') {
+        return (name: string) => target.getAll(name).map(tagUntrustedFormEntry);
+      }
+      if (property === 'entries' || property === Symbol.iterator) {
+        return function* entries(): IterableIterator<[string, FormDataEntryValue]> {
+          for (const [key, entry] of target.entries()) {
+            yield [key, tagUntrustedFormEntry(entry) as FormDataEntryValue];
+          }
+        };
+      }
+      if (property === 'values') {
+        return function* values(): IterableIterator<FormDataEntryValue> {
+          for (const entry of target.values()) {
+            yield tagUntrustedFormEntry(entry) as FormDataEntryValue;
+          }
+        };
+      }
+
+      const member = Reflect.get(target, property, receiver);
+      return typeof member === 'function' ? member.bind(target) : member;
+    },
+  });
+}
+
+function tagUntrustedFormEntry(entry: FormDataEntryValue | null): FormDataEntryValue | null {
+  if (entry === null || entry instanceof File) return entry;
+  return untrusted(entry) as unknown as FormDataEntryValue;
 }

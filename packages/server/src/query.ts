@@ -32,6 +32,7 @@ import {
 import { renderQueryWireHtml } from './wire-html.js';
 import type { JsonSerializable } from './json-boundary.js';
 import type { Reader } from './managed-db.js';
+import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 
 interface QueryDeltaListMeta {
   domain: string;
@@ -533,7 +534,9 @@ export const renderQueryEndpointResponse = wireEmitter(
     definition: QueryDefinition<Key, Value, Input, Request>,
     endpointRequest: QueryEndpointRequest<Request>,
   ): Promise<QueryEndpointResponse> {
-    const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
+    const rawInput = tagUntrustedRequestValue(
+      querySearchInputToRecord(endpointRequest.search ?? {}),
+    );
     let result: QueryEndpointResult<Value, Input>;
     let lifecycleRequest: Request = endpointRequest.request;
     try {
@@ -687,6 +690,7 @@ function parseQueryInput<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,
   rawInput: unknown,
 ): { ok: true; value: Input } | { failure: QueryEndpointFailure; ok: false } {
+  rawInput = tagUntrustedRequestValue(rawInput);
   if (!definition.args) return { ok: true, value: rawInput as Input };
 
   try {
