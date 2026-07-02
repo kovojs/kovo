@@ -6,7 +6,7 @@ export class SecretEgressError extends Error {
 
   constructor(channel: string) {
     super(
-      `KV435 ${diagnosticDefinitions.KV435.message} Secret runtime value cannot cross ${channel}; reveal or redact it explicitly before egress.`,
+      `KV435 ${diagnosticDefinitions.KV435.message} Secret provenance box blocked runtime egress: Secret runtime value cannot cross ${channel}; reveal or redact it explicitly before egress.`,
     );
     this.name = 'SecretEgressError';
   }

@@ -437,7 +437,12 @@ function validateStyleAttribute(
   attribute: JsxAttributeModel,
 ): CompilerDiagnostic[] {
   if (attribute.expression === undefined) return validateStaticCssText(diagnostics, attribute);
-  if (attribute.expressionObjectEntries) return [];
+  if (attribute.expressionObjectEntries) {
+    return validateStaticStyleObjectAttribute(diagnostics, attribute.expressionObjectEntries, {
+      start: attribute.start,
+      end: attribute.end,
+    });
+  }
 
   return [
     outputContextDiagnostic(diagnostics, 'dynamic style text', {
@@ -445,6 +450,26 @@ function validateStyleAttribute(
       length: attribute.end - attribute.start,
     }),
   ];
+}
+
+function validateStaticStyleObjectAttribute(
+  diagnostics: DiagnosticFactory,
+  entries: readonly ObjectLiteralEntry[],
+  span: SourceSpan,
+): CompilerDiagnostic[] {
+  for (const entry of entries) {
+    if (entry.objectEntries) continue;
+    if (entry.value === undefined) continue;
+    const literal = literalStringValue(entry.value);
+    if (literal === null || !cssTextHasUnsafeUrl(literal)) continue;
+    return [
+      outputContextDiagnostic(diagnostics, 'style attribute contains an unsafe CSS url()', {
+        start: span.start,
+        length: span.end - span.start,
+      }),
+    ];
+  }
+  return [];
 }
 
 function validateStaticCssText(

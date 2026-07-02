@@ -960,7 +960,7 @@ export const diagnosticDefinitions = {
       'Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.',
       'Blocked reason: the projected query shape contains a secret-classified field, or an opaque/unresolved projection reads a table carrying secret columns, so rendering this query could serialize confidential data onto the client wire.',
       'Fixes: remove the secret field or opaque projection, select explicit non-secret columns, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.',
-      'SPEC §6.2/§10.2/§11.3 and fundamental-fixes-followup-3 DEC-C/DEC-F: KV435 is static defense-in-depth for client-wire confidentiality; the non-coercible Secret tag and every egress choke are the security boundary when static source classification is incomplete.',
+      'SPEC §6.2/§10.2/§11.3 and fundamental-fixes-followup-3 DEC-C/DEC-F: KV435 is static defense-in-depth for client-wire confidentiality; the active runtime boundary is the Secret provenance box plus the egress choke that throws at the wire, and on dialects that install reader-role revocation the database engine can add its own REVOKE floor.',
     ].join('\n'),
     severity: 'error',
     message: 'Secret query value reaches the client wire.',
@@ -1034,10 +1034,10 @@ export const diagnosticDefinitions = {
   KV433: {
     code: 'KV433',
     help: [
-      'Would lower to: a read-only query() loader handle whose runtime DB/storage choke rejects writes, with a static reachability check as defense-in-depth.',
+      'Would lower to: a read-only query() loader handle enforced by the actual runtime layer in play — either a dedicated engine read-only connection/role where the adapter provides one, or the framework-owned read-only capability proxy plus managed SQL/storage choke otherwise — with a static reachability check as defense-in-depth.',
       'Blocked reason: a query() loader that reaches a write — directly or via an imported domain() function called with a captured handle — is a state change on an idempotent read surface (the confused-deputy case).',
       'Fixes: move the write to a mutation()/domain write, or use endpoint() for an explicitly side-effecting machine/API path.',
-      'SPEC §6.6/§9.4 and fundamental-fixes-followup-3 DEC-A/DEC-F: the runtime read-only DB/storage choke is the security boundary; static no-write reachability is advisory/defense-in-depth and must not be treated as a static-only security proof.',
+      'SPEC §6.6/§9.4 and fundamental-fixes-followup-3 DEC-A/DEC-F: KV433 names the real runtime enforcement layer for this path; static no-write reachability is advisory/defense-in-depth and must not be treated as a static-only security proof.',
     ].join('\n'),
     severity: 'error',
     message: 'query() loader reaches a write.',

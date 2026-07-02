@@ -208,6 +208,24 @@ export const SliderDemo = component({
     expect(() => assertFixpoint(result)).not.toThrow();
   });
 
+  it('flags unsafe CSS urls inside inline style objects with KV236', () => {
+    const result = compileComponentModule({
+      fileName: 'inline-style-object-unsafe.tsx',
+      source: `
+export const InlineStyleUnsafe = component({
+  render: () => <div style={{ background: "url('javascript:alert(1)')" }}>Unsafe</div>,
+});
+`,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV236')).toEqual([
+      expect.objectContaining({
+        code: 'KV236',
+        message: `${kv236} style attribute contains an unsafe CSS url()`,
+      }),
+    ]);
+  });
+
   it('escapes list template stamps in the client HTML-fragment path', () => {
     const result = compileComponentModule({
       fileName: 'cart-list.tsx',

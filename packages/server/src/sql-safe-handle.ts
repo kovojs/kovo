@@ -525,7 +525,7 @@ function readonlyEngineError(error: unknown): Error {
   const message = error instanceof Error ? error.message : String(error);
   return new Error(
     [
-      'KV433: database engine rejected a read-only SQL capability statement from a query loader (SPEC §10.3/§11.2).',
+      'KV433: database engine read-only enforcement rejected a query-loader SQL statement (SPEC §10.3/§11.2).',
       `  engine: ${message}`,
     ].join('\n'),
   );
@@ -704,8 +704,8 @@ const assertReadSqlStatement = securityClassifier(
     throw new Error(
       [
         verdict.kind === 'unproven'
-          ? 'KV433: read-only SQL capability could not prove an executable statement read-only on a managed query DB handle (SPEC §10.3/§11.2).'
-          : 'KV433: read-only SQL capability attempted to mutate table(s) from a query loader (SPEC §10.3/§11.2).',
+          ? 'KV433: framework read-only SQL choke could not prove an executable statement read-only on a managed query DB handle (SPEC §10.3/§11.2).'
+          : 'KV433: framework read-only SQL choke rejected a mutating statement from a query loader (SPEC §10.3/§11.2).',
         verdict.kind === 'unproven'
           ? `  reason: ${verdict.reason}`
           : `  tables: ${formatSqlWriteTargets(verdict.detail)}`,

@@ -254,7 +254,7 @@ describe('central response posture finalization', () => {
     expect(documentRequest.session).toEqual({ user: { id: 'u1' } });
     expect(documentRequest.db.select()).toBe('read');
     expect(() => documentRequest.db.insert()).toThrow(
-      /loaders receive a read-only DB capability|cannot insert/,
+      /framework read-only DB capability proxy blocked db\.insert|cannot insert/,
     );
 
     const mutationRequest = await resolveKovoLifecycleRequest(
