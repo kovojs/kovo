@@ -276,7 +276,7 @@ mattering.
 
 ### Phase 1 — Integrity via the engine (biggest win, smallest change)
 
-- [ ] **1.1 DB read-only readers on a dedicated read-only pool (DEC-A).** Acceptance (paranoid mode): both dialects,
+- [x] **1.1 DB read-only readers on a dedicated read-only pool (DEC-A).** Acceptance (paranoid mode): both dialects,
       a reader running `setval`/`nextval`/`DROP`/`FOR UPDATE`/raw-SQL-write throws at the engine (KV433 wrapper); a
       legitimate read incl. `group_concat`/`string_agg`/`date_trunc`/raw-SQL read succeeds with the static allowlist
       stubbed off. Connection-lifecycle test: a reader connection returned to the pool never leaks read-only state to a
@@ -287,8 +287,9 @@ mattering.
   - [x] **PGlite read transaction enforcement.** Serialized `BEGIN READ ONLY` transactions reject write/DDL/lock
         attempts and allow legitimate read functions.
         Evidence: `vp exec vitest --run packages/server/src/managed-db.test.ts`.
-  - [ ] **Dedicated Postgres/PGlite read-only pool.** Sessions set `default_transaction_read_only = on` on a dedicated
+  - [x] **Dedicated Postgres/PGlite read-only pool.** Sessions set `default_transaction_read_only = on` on a dedicated
         reader pool rather than relying on a per-request toggle on a shared writer-capable connection.
+        Evidence: `pnpm exec vitest --run packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts packages/server/src/managed-db.test.ts --reporter=dot`.
   - [x] **Reader/writer lifecycle no-leak proof.** A reader connection returned to the pool must not leak read-only state
         to a later writer, and writers must remain write-capable.
         Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts -t "rolls back default mutation transactions"`.
@@ -307,8 +308,9 @@ mattering.
         Evidence: `pnpm exec vitest run packages/test/src/sqlite-harness.test.ts packages/test/src/pglite-harness.test.ts packages/server/src/managed-db.test.ts`.
   - [ ] **SQLite authorizer enforcement.** `sqlite3_set_authorizer` denies writes to non-declared tables/columns and
         denies DDL/pragma at the engine, not only at the parser/choke layer.
-  - [ ] **Postgres declared-table engine enforcement.** Request-scoped role GRANTs, or the documented stat-delta
+  - [x] **Postgres declared-table engine enforcement.** Request-scoped role GRANTs, or the documented stat-delta
         fallback, reject schema-qualified out-of-scope writes and allow in-scope writes.
+        Evidence: `pnpm exec vitest --run packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts packages/server/src/managed-db.test.ts --reporter=dot`.
 - [ ] **1.3 Static SQL classifier → advisory (DEC-F, gated by A7).** Only after 1.1/1.2 pass paranoid mode. A
       runtime-twin deletion test proves the round-6/7 SQL corpus is enforced with the static classifier stubbed.
   - [ ] **Runtime SQL chokes live under paranoid mode.** 1.1 and 1.2 must pass their paranoid-mode acceptance before
