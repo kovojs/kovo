@@ -212,6 +212,13 @@ function declaredWriteDrizzleDb<Db extends object>(db: Db, policy: DeclaredWrite
           return Reflect.apply(value, target, [table, ...args]);
         };
       }
+      if (prop === 'transaction' && typeof value === 'function') {
+        return (callback: (tx: unknown) => unknown, ...args: unknown[]) =>
+          Reflect.apply(value, target, [
+            (tx: unknown) => callback(declaredWriteDrizzleDb(tx as object, policy)),
+            ...args,
+          ]);
+      }
       return typeof value === 'function' ? value.bind(target) : value;
     },
   }) as Db;

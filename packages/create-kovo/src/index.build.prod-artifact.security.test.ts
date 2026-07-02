@@ -28,6 +28,7 @@ import {
   addRuntimeSecretBoundaryProof,
   addSecretViewEgressProof,
   addSqliteRuntimeSecretProvenanceProof,
+  addStarterMutationDbScopeProof,
   addStorageMutationWriteProof,
   addStorageQueryWriteProof,
   addTrustedOutputProvenanceBuildProof,
@@ -39,6 +40,7 @@ import {
   execFileSyncErrorOutput,
   fieldValue,
   firstFormHtml,
+  formHtmlByAction,
   signInDemoUser,
 } from './index.build.test-support.js';
 
@@ -252,6 +254,114 @@ describe('create-kovo starter (build integration: production security artifacts)
       expect(declaredRevealBody).toContain('<kovo-query name="runtime-secret-declared-raw-reveal"');
       expect(declaredRevealBody).toContain('runtime-secret-value');
       expect(declaredRevealBody).toContain('runtime-secret-value:declared');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
+  // @kovo-security-certifies KV406 starter-mutation-db-scope-prod-artifact
+  it('enforces starter mutation DB table scope in paranoid production artifacts', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-prod-starter-db-scope-'));
+    const port = await reservePort();
+    const jar = new Map<string, string>();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, { name: 'Prod Starter DB Scope Proof' });
+      linkStarterBuildDependencies(root);
+      addStarterMutationDbScopeProof(root);
+
+      buildParanoidProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          KOVO_PARANOID: '1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+      const marker = `starter-scope-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+      const contactEmail = `${marker}-contact@example.com`;
+
+      await signInDemoUser(root, origin, jar, output);
+
+      const homeHtml = await fetchTextWhenReady(`${origin}/`, output, {
+        headers: { cookie: cookieHeader(jar) },
+      });
+      const addForm = formHtmlByAction(homeHtml, '/_m/mutations/add-contact');
+      const addContact = await fetch(`${origin}/_m/mutations/add-contact`, {
+        body: new URLSearchParams({
+          company: 'Scope Proof',
+          csrf: fieldValue(addForm, 'csrf'),
+          email: contactEmail,
+          'Kovo-Idem': fieldValue(addForm, 'Kovo-Idem'),
+          name: 'Starter Scope Proof',
+        }),
+        headers: {
+          'content-type': 'application/x-www-form-urlencoded',
+          cookie: cookieHeader(jar),
+          origin,
+        },
+        method: 'POST',
+        redirect: 'manual',
+      });
+      await addContact.text();
+      expect(addContact.status).toBe(303);
+
+      const blockedMutations = [
+        'starter-db-scope/auth-user-table-write',
+        'starter-db-scope/auth-session-table-write',
+        'starter-db-scope/raw-auth-table-write',
+        'starter-db-scope/absent-tables-contact-write',
+      ] as const;
+      for (const key of blockedMutations) {
+        const response = await fetch(`${origin}/_m/${key}`, {
+          body: new URLSearchParams({ marker }),
+          headers: {
+            'content-type': 'application/x-www-form-urlencoded',
+            origin,
+          },
+          method: 'POST',
+          redirect: 'manual',
+        });
+        const body = await response.text();
+        expect(response.status, `${key}: ${body}`).toBe(500);
+        expect(body).not.toContain(marker);
+      }
+
+      const statusResponse = await fetch(
+        `${origin}/api/starter-db-scope-proof?marker=${encodeURIComponent(
+          marker,
+        )}&contactEmail=${encodeURIComponent(contactEmail)}`,
+      );
+      const statusBody = await statusResponse.text();
+      expect(statusResponse.status, statusBody).toBe(200);
+      const status = JSON.parse(statusBody) as {
+        absentContactRows: number;
+        authSessionRows: number;
+        authUserRows: number;
+        contactRows: number;
+        rawAuthUserRows: number;
+      };
+
+      expect(status).toEqual({
+        absentContactRows: 0,
+        authSessionRows: 0,
+        authUserRows: 0,
+        contactRows: 1,
+        rawAuthUserRows: 0,
+      });
+      expect(output()).toContain('KV406');
+      expect(output()).toContain('declared mutation registry tables');
     } finally {
       await stopProcess(server);
       rmSync(root, { force: true, recursive: true });
