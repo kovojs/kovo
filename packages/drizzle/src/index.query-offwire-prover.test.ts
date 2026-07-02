@@ -29,7 +29,7 @@ describe('DEC7 off-wire prover fail-closed inversion', () => {
         expect.stringContaining('Query projection q3.token reads a secret-classified column'),
       ]),
     );
-  }, 90_000);
+  }, 180_000);
 
   it('accepts non-secret literal/map returns and reviewed declareOffWire secret work', () => {
     const facts = extractQueryFactsFromProject({

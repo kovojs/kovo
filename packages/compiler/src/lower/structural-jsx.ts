@@ -90,6 +90,7 @@ interface InlineStateTextDerive {
   baseName: string;
   expression: string;
   expressionNode: JsxIrExpression;
+  sourcePaths: readonly string[];
   sourceSpan: SourceSpan;
   wrapper?: JsxIrElement;
 }
@@ -1507,9 +1508,8 @@ function inlineTextDerive(
   componentName: string,
 ): InlineStateTextDerive | null {
   if (element.selfClosing || hasTextBindingAttribute(element) || !expression) return null;
-  if (
-    !isStateOnlyExpression(reactivePropertyAccessesForJsxExpression(expression.expression, model))
-  ) {
+  const accesses = reactivePropertyAccessesForJsxExpression(expression.expression, model);
+  if (!isStateOnlyExpression(accesses)) {
     return null;
   }
   const deriveExpression = reactiveExpressionForJsxExpression(expression.expression, model);
@@ -1518,6 +1518,7 @@ function inlineTextDerive(
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
     expression: deriveExpression,
     expressionNode: expression,
+    sourcePaths: stateDeriveSourcePaths(accesses),
     sourceSpan: { end: expression.expression.end, start: expression.expression.start },
     wrapper: element,
   };
@@ -1564,9 +1565,8 @@ function inlineMixedTextDerive(
   model: ComponentModuleModel,
   componentName: string,
 ): InlineStateTextDerive | null {
-  if (
-    !isStateOnlyExpression(reactivePropertyAccessesForJsxExpression(expression.expression, model))
-  ) {
+  const accesses = reactivePropertyAccessesForJsxExpression(expression.expression, model);
+  if (!isStateOnlyExpression(accesses)) {
     return null;
   }
   if (isJsxAttributeExpression(expression.expression, model)) return null;
@@ -1580,6 +1580,7 @@ function inlineMixedTextDerive(
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
     expression: deriveExpression,
     expressionNode: expression,
+    sourcePaths: stateDeriveSourcePaths(accesses),
     sourceSpan: { end: expression.expression.end, start: expression.expression.start },
   };
 }
@@ -1658,6 +1659,7 @@ function recordStateDerive(
       }),
       param: 'state',
       placeholder: `state.${exportName}`,
+      sourcePaths: derive.sourcePaths,
       sourceSpan: derive.sourceSpan,
     }),
     stateDerives,
@@ -1946,6 +1948,10 @@ function isStateOnlyExpression(paths: readonly { path: string }[]): boolean {
       .filter((root): root is string => root !== null),
   );
   return roots.size > 0 && [...roots].every((root) => root === 'state');
+}
+
+function stateDeriveSourcePaths(paths: readonly { path: string }[]): readonly string[] {
+  return [...new Set(paths.map((path) => path.path))].sort();
 }
 
 function viewTransitionNameStyleExpression(

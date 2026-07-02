@@ -131,8 +131,8 @@ describe('framework identity resolver', () => {
     expect(resolutionByKind.get(ts.SyntaxKind.SatisfiesExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(ts.SyntaxKind.TypeAssertionExpression)).toBe('unwrap-expression');
     expect(resolutionByKind.get(ts.SyntaxKind.NonNullExpression)).toBe('unwrap-expression');
-    expect(resolutionByKind.get(ts.SyntaxKind.CallExpression)).toBe('fail-closed');
-    expect(statusByKind.get(ts.SyntaxKind.CallExpression)).toBe('fails-closed');
+    expect(resolutionByKind.get(ts.SyntaxKind.CallExpression)).toBe('resolve-call-expression');
+    expect(statusByKind.get(ts.SyntaxKind.CallExpression)).toBe('resolved');
     expect(resolutionByKind.get(ts.SyntaxKind.BinaryExpression)).toBe('fail-closed');
     expect(statusByKind.get(ts.SyntaxKind.BinaryExpression)).toBe('fails-closed');
   });

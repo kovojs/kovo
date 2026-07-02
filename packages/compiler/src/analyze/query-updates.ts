@@ -345,7 +345,7 @@ function stateExpressionCoveredByGeneratedDerive(
   return stateDerives.some(
     (derive) =>
       derive.sourceSpan !== undefined &&
-      deriveExpressionReferencesPath(derive.expression, expression.path) &&
+      deriveSourcePathsCoverExpression(derive.sourcePaths, expression.path) &&
       derive.sourceSpan.start >= span.start &&
       derive.sourceSpan.end <= span.end,
   );
@@ -373,11 +373,19 @@ function endOffsetAfterMappedLastCharacter(
   return previous === undefined ? undefined : previous + 1;
 }
 
-function deriveExpressionReferencesPath(expression: string, path: string): boolean {
-  const start = expression.indexOf(path);
-  if (start === -1) return false;
-  const next = expression[start + path.length];
-  return next === undefined || !/[$\w]/u.test(next);
+function deriveSourcePathsCoverExpression(
+  sourcePaths: readonly string[] | undefined,
+  path: string,
+): boolean {
+  return sourcePaths?.some((sourcePath) => statePathCovers(sourcePath, path)) === true;
+}
+
+function statePathCovers(sourcePath: string, path: string): boolean {
+  return (
+    sourcePath === path ||
+    sourcePath.startsWith(`${path}.`) ||
+    sourcePath.startsWith(`${path}[`)
+  );
 }
 
 function componentForSpan(
