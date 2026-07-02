@@ -333,8 +333,9 @@ mattering.
         Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'runtime Secret|schema-declared secret reads' --reporter=dot`.
   - [ ] **General `kovo({ secret })` runtime metadata extraction.** Every `context.db` query-builder, view, and computed
         read path must box secret-classified columns as `Secret` at the DB-read boundary.
-  - [ ] **Raw-SQL secret fail-closed tagging.** Raw SQL that references a secret table tags the whole result `Secret`;
-        parse-fail must also tag rather than depend on parser completeness.
+  - [x] **Raw-SQL secret fail-closed tagging.** Raw SQL that references a secret table tags the whole result `Secret`;
+        parse-fail also tags an opaque direct-SQL result instead of depending on parser completeness.
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`.
 - [ ] **2.2 Engine column-lockdown for the reader role (DEC-C 2).** Reader role `REVOKE` on secret columns; reading a
       secret column requires a declared capability. Acceptance: the reader role cannot `SELECT` a secret column via raw SQL.
   - [ ] **Reader role column-level `REVOKE`.** Default reader role cannot `SELECT` secret columns, including through raw
@@ -405,8 +406,9 @@ mattering.
   - [x] **`Secret`/`Untrusted` brands are module-private and non-coercible.** Forged structural brands fail and
         accidental coercion does not launder the runtime tag.
         Evidence: `packages/core/src/secret.test.ts`.
-  - [ ] **Response/wire-body constructor unrepresentability.** A response or wire body should be constructible only
-        through the framework choke or an audited escape path.
+  - [x] **Response/wire-body constructor unrepresentability.** Query/mutation wire bodies require the framework-owned
+        wire-body brand, with durable replay using a reason-bearing audited rehydration path.
+        Evidence: `vp exec vitest --run packages/server/src/wire-body-unrepresentable.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/mutation-response.test.ts packages/server/src/mutation-no-js.test.ts packages/server/src/replay.test.ts`.
   - [ ] **DB exec constructor unrepresentability.** DB execution paths should reach managed read/write chokes by type and
         reachability, not by curated shape recognition.
   - [x] **Escape-hatch forgery rejection.** Shadowed `reveal`, `declareOffWire`, fake trusted brands, and bare casts must
@@ -459,6 +461,9 @@ mattering.
         use inside query loaders and dynamically computed trusted helper callees, while preserving explicit
         `trustedSql(...)` review paths and literal framework namespace trust helpers.
         Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts`.
+  - [x] **Alias-laundered trust-sink narrowing.** Starter `check:sound-subset` rejects trusted helper calls laundered
+        through local aliases of dynamically computed framework namespace members on the TypeScript common path.
+        Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts --reporter=dot`.
 - [x] **6.2 Publish the guarantee statement + non-goals (DEC-M).** A `SECURITY.md`/SPEC section states the exact
       choke-backed invariants, threat model, and non-goals; a test proves every stated invariant names a TCB choke and a
       paranoid-mode proof, and that no claim lacks a backing choke.
