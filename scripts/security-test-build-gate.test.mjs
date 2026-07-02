@@ -132,10 +132,28 @@ describe('security-test-build-gate', () => {
     expect(new Set(defaultCases.map((testCase) => testCase.expectation))).toEqual(
       new Set(['unsafe-runtime-choke', 'static-classifiers-stubbed', 'legitimate-build-green']),
     );
+    expect(
+      new Set(
+        defaultCases
+          .filter((testCase) => testCase.kind === 'runtime-route')
+          .map((testCase) => testCase.route),
+      ),
+    ).toEqual(
+      new Set([
+        '/paranoid-runtime-safe.txt',
+        '/paranoid-runtime-unsafe-header.txt',
+        '/paranoid-runtime-unsafe-helper.txt',
+      ]),
+    );
+    expect(
+      defaultCases.filter((testCase) => testCase.expectation === 'unsafe-runtime-choke'),
+    ).toHaveLength(2);
     expect(paranoidGeneratorAcceptanceProofNeedles().sort()).toEqual([
       "KOVO_PARANOID: '1'",
-      'Secret runtime value cannot cross',
+      'addParanoidRuntimeProofRoutes(root, paranoidCases)',
       'buildParanoidProductionArtifact(root)',
+      'expectParanoidRuntimeCase(origin, testCase)',
+      'generateParanoidGeneratorAcceptanceCases()',
     ]);
   });
 

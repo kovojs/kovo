@@ -187,9 +187,9 @@ const wrappingGeneratedNeedles = `      ...securityWrappingProofNeedles().filter
 const removedWrappingGeneratedNeedles = `      // generated wrapping proof needles removed by mutant`;
 
 const paranoidAcceptanceGeneratedNeedles = [
-  '      ...paranoidGeneratorAcceptanceProofNeedles().filter(',
-  '        (needle) => needle !== "KOVO_PARANOID: \'1\'",',
-  '      ),',
+  '    requiredNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(',
+  '      (needle) => needle !== "KOVO_PARANOID: \'1\'",',
+  '    ),',
 ].join('\n');
 
 const removedParanoidAcceptanceGeneratedNeedles = [
@@ -1366,10 +1366,11 @@ async function assertGeneratedParanoidAcceptanceProofEnrollmentIsPinned(
   const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
     (candidate) =>
       candidate.code === 'KV435' &&
-      candidate.claimId === 'runtime-secret-view-egress' &&
-      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+      candidate.claimId === 'round-8-paranoid-generator-acceptance' &&
+      candidate.proofFile ===
+        'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
   );
-  if (!proof) throw new Error('KV435 paranoid runtime proof is not enrolled');
+  if (!proof) throw new Error('round-8 paranoid generated runtime proof is not enrolled');
   for (const needle of moduleUnderTest.paranoidGeneratorAcceptanceProofNeedles()) {
     const enrolled =
       proof.requiredNeedles?.includes(needle) || proof.requiredProofFileNeedles?.includes(needle);

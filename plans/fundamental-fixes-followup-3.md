@@ -409,7 +409,7 @@ mattering.
       and `pnpm run check:fail-closed-classifiers && pnpm run check:classifier-verdict-routing && pnpm run check:security-test-builds`
       prove static diagnostics name runtime chokes/proof scope and classifier gates derive scanned package roots from
       security-marker imports, including compiler sources.
-- [ ] **4.3 Property-based generators (DEC-G).** Replace index enumerators with seeded grammar generators varying
+- [x] **4.3 Property-based generators (DEC-G).** Replace index enumerators with seeded grammar generators varying
       read-SOURCE / SINK-position / wrapping (`papercuts-26` P5).
   - [x] **KV426 trusted-output SINK-position generator.** The production proof surface consumes deterministic seeded
         grammar needles varying sink/source/wrapping shapes, and the mutation harness kills deletion of that generated
@@ -423,8 +423,9 @@ mattering.
         other wrapping forms across the security proof surfaces.
         Evidence: `pnpm exec vitest --run scripts/security-test-build-gate.test.mjs scripts/security-gate-mutations.test.mjs`
         and `pnpm run check:security-test-builds && pnpm run check:security-gate-mutations`.
-  - [ ] **Round-8 paranoid generator acceptance.** Generated adversarial cases run with static classifiers stubbed and
+  - [x] **Round-8 paranoid generator acceptance.** Generated adversarial cases run with static classifiers stubbed and
         prove unsafe cases hit runtime chokes while legitimate cases stay green.
+        Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --reporter=dot`.
 
 ### Phase 5 — Robustness cleanups surfaced by round 7 (independent)
 
@@ -518,6 +519,7 @@ TCB does not already refuse.
 - `pnpm exec vitest --run scripts/lib/source-files.test.mjs scripts/check-fail-closed-classifiers.test.mjs scripts/check-classifier-verdict-routing.test.mjs`
 - `pnpm exec vitest --run scripts/security-test-build-gate.test.mjs scripts/security-gate-mutations.test.mjs`
 - `pnpm exec vitest --run packages/core/src/secret.tcb-proof.test.ts packages/core/src/internal/wire-json.tcb-proof.test.ts scripts/tcb-proof-harness.test.ts packages/core/src/secret.test.ts packages/core/src/internal/wire-json.test.ts --reporter=dot`
+- `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --reporter=dot`
 - `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`
 - `vp exec vitest --run packages/create-kovo/src/index.test.ts && vp exec vitest --run packages/create-kovo/src/index.build.scaffold.sqlite.test.ts -t 'runs vp check'`
 - `pnpm run check:paranoid-classifiers && pnpm run check:paranoid-runtime`

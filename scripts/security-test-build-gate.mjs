@@ -120,19 +120,30 @@ export const SECURITY_WRAPPING_GRAMMAR = Object.freeze({
 export const PARANOID_GENERATOR_ACCEPTANCE_GRAMMAR = Object.freeze({
   cases: Object.freeze([
     {
-      expectation: 'unsafe-runtime-choke',
-      needle: 'Secret runtime value cannot cross',
-      surface: 'KV435 runtime secret egress refusal',
+      expectation: 'legitimate-build-green',
+      kind: 'runtime-route',
+      route: '/paranoid-runtime-safe.txt',
+      sink: 'respond.file header',
+      surface: 'legitimate response-file route stays green',
     },
     {
       expectation: 'static-classifiers-stubbed',
-      needle: 'buildParanoidProductionArtifact(root)',
+      kind: 'build-env',
       surface: 'KOVO_PARANOID production artifact build',
     },
     {
-      expectation: 'legitimate-build-green',
-      needle: "KOVO_PARANOID: '1'",
-      surface: 'paranoid helper keeps legitimate starter build path green',
+      expectation: 'unsafe-runtime-choke',
+      kind: 'runtime-route',
+      route: '/paranoid-runtime-unsafe-header.txt',
+      sink: 'response header CRLF direct',
+      surface: 'direct response header runtime choke',
+    },
+    {
+      expectation: 'unsafe-runtime-choke',
+      kind: 'runtime-route',
+      route: '/paranoid-runtime-unsafe-helper.txt',
+      sink: 'response header CRLF helper',
+      surface: 'helper-wrapped response header runtime choke',
     },
   ]),
 });
@@ -199,14 +210,21 @@ export function generateParanoidGeneratorAcceptanceCases({
   return seededGrammarCases(
     seed,
     PARANOID_GENERATOR_ACCEPTANCE_GRAMMAR.cases,
-    (testCase) => testCase.expectation,
+    (testCase) => `${testCase.expectation}:${testCase.sink ?? testCase.kind}`,
   );
 }
 
 export function paranoidGeneratorAcceptanceProofNeedles(options) {
   // DEC-H/A9: round-8 acceptance is a generated unsafe/legit/paranoid-mode
   // proof shape, not a single hand-enrolled adversarial fixture.
-  return generateParanoidGeneratorAcceptanceCases(options).map((testCase) => testCase.needle);
+  void options;
+  return [
+    'generateParanoidGeneratorAcceptanceCases()',
+    'addParanoidRuntimeProofRoutes(root, paranoidCases)',
+    'expectParanoidRuntimeCase(origin, testCase)',
+    'buildParanoidProductionArtifact(root)',
+    "KOVO_PARANOID: '1'",
+  ];
 }
 
 function seededGrammarCases(seed, cases, idForCase) {
@@ -252,6 +270,11 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
     claimExtractor: 'security-certification-markers',
     description: 'Production artifact raw SQL proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
+  },
+  {
+    claimExtractor: 'security-certification-markers',
+    description: 'Production artifact paranoid runtime generated acceptance tests',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
   },
   {
     claimExtractor: 'security-certification-markers',
@@ -417,16 +440,25 @@ export const SECURITY_BUILD_PROOFS = [
       'buildParanoidProductionArtifact(root)',
       'KV435',
       '/_q/secret-view-egress',
-      ...paranoidGeneratorAcceptanceProofNeedles().filter(
-        (needle) => needle !== "KOVO_PARANOID: '1'",
-      ),
     ],
-    requiredProofFileNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
-      (needle) => needle === "KOVO_PARANOID: '1'",
-    ),
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
       'refuses a runtime Secret read through a Drizzle view at query-wire egress in paranoid mode',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'round-8-paranoid-generator-acceptance',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    requiredNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
+      (needle) => needle !== "KOVO_PARANOID: '1'",
+    ),
+    requiredProofFileNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
+      (needle) => needle === "KOVO_PARANOID: '1'",
+    ),
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    testName: 'runs generated paranoid acceptance cases with static classifiers advisory',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
