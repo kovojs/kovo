@@ -18,6 +18,7 @@ import type {
   MutationLiveTargetDescriptor,
   MutationWireRequest,
 } from '../mutation-wire.js';
+import { revealUntrustedRequestValue } from '../untrusted-request-body.js';
 import type { QueryRerun } from './definition.js';
 
 export function queriesToRerun(
@@ -25,18 +26,19 @@ export function queriesToRerun(
   changes: readonly ChangeRecord[],
   input: unknown,
 ): QueryRerun[] {
+  const queryInput = mutationTargetInput(input);
   return queries
     .filter((queryDefinition) =>
-      changes.some((change) => queryTouchedByChange(queryDefinition, change, input)),
+      changes.some((change) => queryTouchedByChange(queryDefinition, change, queryInput)),
     )
     .map((queryDefinition) => {
-      const instanceKey = readQueryInstanceKey(queryDefinition, input);
+      const instanceKey = readQueryInstanceKey(queryDefinition, queryInput);
       return {
         ...(instanceKey === undefined ? {} : { instanceKey }),
         key: queryDefinition.key,
         ...(instanceKey !== undefined &&
         changes.some((change) =>
-          queryChangeInvalidatesWholeQueryInstance(queryDefinition, change, input),
+          queryChangeInvalidatesWholeQueryInstance(queryDefinition, change, queryInput),
         )
           ? { whole: true }
           : {}),
@@ -106,21 +108,17 @@ export async function renderQueryChunks(
       continue;
     }
 
-    const input = rerunQuery.input ?? defaultInput;
-    const result = await runQuery(
-      queryDefinition,
-      input,
-      request,
-      maxListItems === undefined ? {} : { maxListItems },
-    );
+    const input = mutationTargetInput(rerunQuery.input ?? defaultInput);
+    const result = await runQuery(queryDefinition, input, request, {
+      ...(maxListItems === undefined ? {} : { maxListItems }),
+      trustedInput: true,
+    });
     if (!result.ok) {
       throw new Error(`Rerun query failed: ${queryDefinition.key}`, { cause: result });
     }
     recordQueryRuntimeWarnings(request, result.warnings);
 
-    chunks.push(
-      renderQueryRerunChunk(queryDefinition, result.input, result.value, affectedKeysByDomain),
-    );
+    chunks.push(renderQueryRerunChunk(queryDefinition, input, result.value, affectedKeysByDomain));
   }
 
   return chunks;
@@ -133,7 +131,7 @@ function queryMatchesRerun(
 ): boolean {
   if (queryDefinition.key !== target.key) return false;
 
-  const input = target.input ?? defaultInput;
+  const input = mutationTargetInput(target.input ?? defaultInput);
   return readQueryInstanceKey(queryDefinition, input) === target.instanceKey;
 }
 
@@ -395,7 +393,8 @@ function liveTargetDescriptorQueryReruns<Request>(
   const reruns: QueryRerun[] = [];
 
   for (const binding of bindings) {
-    const queryInput = binding.args ? binding.args(descriptor.props) : undefined;
+    const props = mutationTargetInput(descriptor.props) as Record<string, unknown>;
+    const queryInput = mutationTargetInput(binding.args ? binding.args(props) : undefined);
     if (!changes.some((change) => queryTouchedByChange(binding.query, change, queryInput))) {
       continue;
     }
@@ -415,6 +414,10 @@ function liveTargetDescriptorQueryReruns<Request>(
   }
 
   return mergeQueryReruns(reruns);
+}
+
+function mutationTargetInput(value: unknown): unknown {
+  return revealUntrustedRequestValue(value, 'validated mutation target query input');
 }
 
 function mergeQueryReruns(queries: readonly QueryRerun[]): QueryRerun[] {

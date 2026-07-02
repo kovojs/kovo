@@ -3,9 +3,19 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
-import { KovoReadonlyHandleError, managedDb, readonlyDb } from './managed-db.js';
-import type { Reader } from './managed-db.js';
-import { kovoAsyncMutationTransaction, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
+import {
+  KovoReadonlyHandleError,
+  kovoDeclaredWriteDbHandle,
+  kovoReadonlyDbHandle,
+  managedDb,
+  readonlyDb,
+} from './managed-db.js';
+import type { Reader, Writer } from './managed-db.js';
+import {
+  kovoAsyncMutationTransaction,
+  managedSqlExecutionPolicy,
+  wrapManagedDbForSqlSafety,
+} from './sql-safe-handle.js';
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
 import { domain } from './domain.js';
@@ -323,6 +333,78 @@ reader.with('active').update('products');
     }
   });
 
+  it('typechecks Writer<Db> as a framework-managed write capability surface', () => {
+    const root = mkdtempSync(join(process.cwd(), 'packages/server/.tmp-writer-types-'));
+    try {
+      writeFileSync(
+        join(root, 'writer-type-proof.ts'),
+        `
+import { managedDb, type Writer } from '../src/managed-db.js';
+import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from '../src/sql-safe-handle.js';
+
+type FakeDb = {
+  execute(statement: unknown): Promise<unknown>;
+  insert(table: string): { values(value: unknown): Promise<void> };
+  select(): { from(table: string): Promise<unknown[]> };
+  update(table: string): { set(value: unknown): { where(value: unknown): Promise<void> } };
+};
+
+declare const raw: FakeDb;
+
+const writer = managedDb(raw, 'write');
+const acceptsWriter = (db: Writer<FakeDb>) => db;
+const acceptsRawSurface = (db: FakeDb) => db;
+const executionPolicy = managedSqlExecutionPolicy({ capability: 'write' });
+
+acceptsWriter(writer);
+acceptsRawSurface(writer);
+writer.insert('products');
+writer.update('products');
+wrapManagedDbForSqlSafety(raw, undefined, executionPolicy);
+
+// @ts-expect-error SPEC §10.3/§11.2 DEC-E: raw provider handles lack the Writer brand.
+acceptsWriter(raw);
+// @ts-expect-error SPEC §10.2/§10.3/§11.2 DEC-E: plain structural policy objects cannot reach DB exec wrapping.
+wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
+
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'tsconfig.json'),
+        JSON.stringify(
+          {
+            compilerOptions: {
+              exactOptionalPropertyTypes: true,
+              module: 'NodeNext',
+              moduleResolution: 'NodeNext',
+              noEmit: true,
+              noUncheckedIndexedAccess: true,
+              skipLibCheck: true,
+              strict: true,
+              target: 'ES2024',
+              types: ['node'],
+              verbatimModuleSyntax: true,
+            },
+            include: ['writer-type-proof.ts'],
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSyncWithDiagnostics(resolveBin('tsc'), ['-p', join(root, 'tsconfig.json')], {
+          cwd: process.cwd(),
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('brands Reader<Db> so raw write handles are not casually assignable', () => {
     type FakeDb = ReturnType<typeof fakeDb>;
     const raw = fakeDb([]);
@@ -371,7 +453,11 @@ reader.with('active').update('products');
       // @ts-expect-error managedDb(..., 'read') does not expose raw driver escape handles.
       void readHandle.$client;
       const writeHandle = managedDb(raw, 'write');
+      const acceptsWriter = (db: Writer<FakeDb>) => db;
+      acceptsWriter(writeHandle);
       writeHandle.insert('products');
+      // @ts-expect-error raw provider handles lack the module-private Writer brand.
+      acceptsWriter(raw);
     };
     void compileOnly;
   });
@@ -477,6 +563,38 @@ reader.with('active').update('products');
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
+  it('rejects forged direct SQL wrapper policies before exposing DB exec', () => {
+    const log: string[] = [];
+    const raw = {
+      execute(statement: unknown) {
+        log.push('execute');
+        return statement;
+      },
+    };
+
+    expect(() =>
+      wrapManagedDbForSqlSafety(raw, undefined, {
+        capability: 'write',
+      } as never),
+    ).toThrow(/framework-owned constructor/);
+    expect(log).toEqual([]);
+
+    const minted = managedSqlExecutionPolicy({ capability: 'write' });
+    expect(() => wrapManagedDbForSqlSafety(raw, undefined, { ...minted } as never)).toThrow(
+      /framework-owned constructor/,
+    );
+    expect(log).toEqual([]);
+
+    const handle = wrapManagedDbForSqlSafety(raw, undefined, minted);
+    expect(
+      (handle as { execute(statement: unknown): unknown }).execute({
+        text: 'select $1',
+        values: [1],
+      }),
+    ).toMatchObject({ text: 'select $1' });
+    expect(log).toEqual(['execute']);
+  });
+
   it('read mode rejects writes AND raw-string SQL (the unification)', () => {
     const handle = managedDb(fakeDb([]), 'read');
     // KV433: write verb throws the readonly error.
@@ -507,6 +625,78 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         values: ['p1'],
       }),
     ).not.toThrow();
+  });
+
+  it('uses a dedicated engine read-only target and keeps writer lifecycle isolated', async () => {
+    const log: string[] = [];
+    const raw = {
+      readonlyState: false,
+      [kovoReadonlyDbHandle]() {
+        log.push('readonly-target-created');
+        return {
+          query(statement: unknown) {
+            log.push('readonly.query');
+            if (
+              typeof statement === 'object' &&
+              statement !== null &&
+              'text' in statement &&
+              String((statement as { text: unknown }).text).includes('setval')
+            ) {
+              throw new Error('cannot execute setval in a read-only transaction');
+            }
+            return Promise.resolve(statement);
+          },
+        };
+      },
+      insert(table: string) {
+        log.push(`writer.insert:${table}:readonly=${String(this.readonlyState)}`);
+        return { values: () => Promise.resolve() };
+      },
+      query(statement: unknown) {
+        log.push('writer.query');
+        return Promise.resolve(statement);
+      },
+    };
+
+    const reader = managedDb(raw, 'read') as unknown as {
+      query(statement: unknown): Promise<unknown>;
+    };
+    await expect(
+      reader.query({
+        text: "select string_agg(name, ',') from contacts where created_at < date_trunc('day', now()) and id <> $1",
+        values: ['archived'],
+      }),
+    ).resolves.toMatchObject({ text: expect.stringContaining('string_agg') });
+    expect(() =>
+      reader.query(
+        stampTrustedSql({ text: "select setval('contact_id_seq', 1)" }, 'engine-readonly setval'),
+      ),
+    ).toThrow(/KV433[\s\S]*read-only transaction/);
+
+    const writer = managedDb(raw, 'write') as unknown as {
+      insert(table: string): { values(): Promise<void> };
+    };
+    await expect(writer.insert('contacts').values()).resolves.toBeUndefined();
+
+    expect(log).toEqual([
+      'readonly-target-created',
+      'readonly.query',
+      'readonly.query',
+      'writer.insert:contacts:readonly=false',
+    ]);
+  });
+
+  it('fails closed when an engine read-only hook returns the writer handle', () => {
+    const raw = {
+      [kovoReadonlyDbHandle]() {
+        return raw;
+      },
+      query(statement: unknown) {
+        return statement;
+      },
+    };
+
+    expect(() => managedDb(raw, 'read')).toThrow(/KV433[\s\S]*dedicated engine read-only handle/);
   });
 
   it('read mode parses SQLite sinks and blocks mutating statements before execution', async () => {
@@ -725,10 +915,14 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         };
       },
     };
-    const handle = wrapManagedDbForSqlSafety(raw, undefined, {
-      capability: 'read',
-      dialect: 'sqlite',
-    });
+    const handle = wrapManagedDbForSqlSafety(
+      raw,
+      undefined,
+      managedSqlExecutionPolicy({
+        capability: 'read',
+        dialect: 'sqlite',
+      }),
+    );
 
     expect(() => handle.insert('products')).toThrow(/unknown managed DB method db\.insert|KV422/);
     expect(() => handle.update('products')).toThrow(/unknown managed DB method db\.update|KV422/);
@@ -769,7 +963,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         },
       },
       undefined,
-      { capability: 'read', dialect: 'sqlite' },
+      managedSqlExecutionPolicy({ capability: 'read', dialect: 'sqlite' }),
     ) as { run(statement: unknown): unknown };
 
     expect(() =>
@@ -788,7 +982,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         },
       },
       undefined,
-      { capability: 'read' },
+      managedSqlExecutionPolicy({ capability: 'read' }),
     ) as { query(statement: unknown): unknown };
 
     expect(() =>
@@ -978,6 +1172,133 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['execute']);
   });
 
+  it('threads declared write policy to engine-capable adapters before parser-blind builders run', async () => {
+    const log: string[] = [];
+    const raw = {
+      [kovoDeclaredWriteDbHandle](policy: { tables?: readonly string[] }) {
+        log.push(`engine-policy:${policy.tables?.join(',') ?? '<none>'}`);
+        const allowed = new Set(policy.tables ?? []);
+        return {
+          insert(table: string) {
+            return {
+              values() {
+                if (!allowed.has(table)) {
+                  throw new Error(`KV406: engine declared-write policy rejected ${table}`);
+                }
+                log.push(`engine-insert:${table}`);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+      },
+      insert(table: string) {
+        log.push(`raw-insert:${table}`);
+        return { values: () => Promise.resolve() };
+      },
+    };
+    const handle = managedDb(raw, 'write', {
+      sqlWritePolicy: {
+        tables: ['contacts'],
+        touches: ['contact'],
+      },
+    }) as { insert(table: string): { values(): Promise<void> } };
+
+    await expect(handle.insert('contacts').values()).resolves.toBeUndefined();
+    expect(() => handle.insert('userx').values()).toThrow(/KV406/);
+    expect(log).toEqual(['engine-policy:contacts', 'engine-insert:contacts']);
+  });
+
+  it('threads declared write policy through an already managed writer without guarding the adapter hook', async () => {
+    const log: string[] = [];
+    const raw = {
+      [kovoDeclaredWriteDbHandle](policy: { tables?: readonly string[] }) {
+        log.push(`engine-policy:${policy.tables?.join(',') ?? '<none>'}`);
+        const allowed = new Set(policy.tables ?? []);
+        return {
+          insert(table: string) {
+            return {
+              values() {
+                if (!allowed.has(table)) {
+                  throw new Error(`KV406: engine declared-write policy rejected ${table}`);
+                }
+                log.push(`engine-insert:${table}`);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+      },
+      insert(table: string) {
+        log.push(`raw-insert:${table}`);
+        return { values: () => Promise.resolve() };
+      },
+    };
+    const alreadyManaged = managedDb(raw, 'write');
+    const handle = managedDb(alreadyManaged, 'write', {
+      sqlWritePolicy: {
+        tables: ['contacts'],
+        touches: ['contact'],
+      },
+    }) as { insert(table: string): { values(): Promise<void> } };
+
+    await expect(handle.insert('contacts').values()).resolves.toBeUndefined();
+    expect(() => handle.insert('userx').values()).toThrow(/KV406/);
+    expect(log).toEqual(['engine-policy:contacts', 'engine-insert:contacts']);
+  });
+
+  it('scopes declared-write engine policy to one writer without leaking to later writers', async () => {
+    const log: string[] = [];
+    const raw = {
+      [kovoDeclaredWriteDbHandle](policy: { tables?: readonly string[] }) {
+        const allowed = new Set(policy.tables ?? []);
+        log.push(`engine-policy:${[...allowed].join(',')}`);
+        return {
+          insert(table: string) {
+            return {
+              values() {
+                if (!allowed.has(table)) {
+                  throw new Error(`KV406: engine declared-write policy rejected ${table}`);
+                }
+                log.push(`engine-insert:${table}`);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+      },
+      insert(table: string) {
+        log.push(`raw-insert:${table}`);
+        return { values: () => Promise.resolve() };
+      },
+    };
+
+    const contactsWriter = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['contacts'], touches: ['contact'] },
+    }) as { insert(table: string): { values(): Promise<void> } };
+    await expect(contactsWriter.insert('contacts').values()).resolves.toBeUndefined();
+    expect(() => contactsWriter.insert('userx').values()).toThrow(/KV406/);
+
+    const userWriter = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['userx'], touches: ['user'] },
+    }) as { insert(table: string): { values(): Promise<void> } };
+    await expect(userWriter.insert('userx').values()).resolves.toBeUndefined();
+    expect(() => userWriter.insert('contacts').values()).toThrow(/KV406/);
+
+    const broadWriter = managedDb(raw, 'write') as {
+      insert(table: string): { values(): Promise<void> };
+    };
+    await expect(broadWriter.insert('contacts').values()).resolves.toBeUndefined();
+
+    expect(log).toEqual([
+      'engine-policy:contacts',
+      'engine-insert:contacts',
+      'engine-policy:userx',
+      'engine-insert:userx',
+      'raw-insert:contacts',
+    ]);
+  });
+
   it('write mode declared-table allowlist fails closed on unproven read-shaped SQL functions', () => {
     const log: string[] = [];
     const handle = managedDb(fakeDb(log), 'write', {
@@ -1008,12 +1329,12 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         },
       },
       undefined,
-      {
+      managedSqlExecutionPolicy({
         capability: 'write',
         dialect: 'sqlite',
         tables: ['contacts'],
         touches: ['contact'],
-      },
+      }),
     ) as { run(statement: unknown): unknown };
 
     expect(() =>
@@ -1149,6 +1470,14 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         ),
       ),
     ).resolves.toMatchObject({ sql: 'update products set name = ? where id = ?' });
+    await expect(
+      handle.run(
+        stampTrustedSql(
+          { sql: 'update main.products set name = ? where id = ?', values: ['Ada', 'p1'] },
+          'audited SQLite main-schema product update',
+        ),
+      ),
+    ).resolves.toMatchObject({ sql: 'update main.products set name = ? where id = ?' });
     expect(() =>
       handle.values(
         stampTrustedSql(
@@ -1157,7 +1486,15 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         ),
       ),
     ).toThrow(/KV406/);
-    expect(log).toEqual(['get', 'run']);
+    expect(() =>
+      handle.values(
+        stampTrustedSql(
+          { sql: 'update otherschema.products set name = ? where id = ?', values: ['Ada', 'p1'] },
+          'drifted SQLite attached-schema product update',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['get', 'run', 'run']);
   });
 
   it('write mode denies raw driver escape properties before exposing child handles', () => {
@@ -1220,11 +1557,15 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         },
       },
     );
-    const outer = wrapManagedDbForSqlSafety(inner, undefined, {
-      capability: 'write',
-      tables: ['products'],
-      touches: ['product'],
-    });
+    const outer = wrapManagedDbForSqlSafety(
+      inner,
+      undefined,
+      managedSqlExecutionPolicy({
+        capability: 'write',
+        tables: ['products'],
+        touches: ['product'],
+      }),
+    );
 
     expect(() => void outer.$client).toThrow(/raw driver escape db\.\$client|KV422/);
     expect(

@@ -1,12 +1,70 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { mutation, s } from '@kovojs/server';
+import {
+  kovoDeclaredWriteDbHandle,
+  managedDb,
+  type KovoDeclaredWriteDbCapable,
+} from '@kovojs/server/internal/execution';
 
 import { createKovoTestHarness } from './harness.js';
 import { createSqliteTestDb, type SqliteTestDb } from './sqlite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 
 describe('@kovojs/test SQLite harness integration', () => {
+  it('backs managed readers with a dedicated readonly/query_only SQLite handle', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sqlite-readonly-'));
+    const db = createSqliteTestDb({ filename: join(root, 'app.sqlite') });
+
+    try {
+      db.exec('create table products (id text primary key, qty integer not null)');
+      db.write('products', { id: 'p1', qty: 1 });
+      db.write('products', { id: 'p2', qty: 2 });
+
+      const reader = managedDb(db, 'read', {
+        sqlWritePolicy: { dialect: 'sqlite' },
+      }) as unknown as Pick<SqliteTestDb, 'exec' | 'query' | 'sql'>;
+
+      expect(
+        reader.query<{ ids: string }>({
+          sql: 'select group_concat(id, ?) as ids from products',
+          values: [','],
+        }),
+      ).toEqual([{ ids: 'p1,p2' }]);
+      expect(
+        reader.sql<{ today: string }>(
+          stampTrustedSql({ sql: "select date('2020-01-02') as today" }, 'static SQLite date read'),
+        ),
+      ).toEqual([{ today: '2020-01-02' }]);
+
+      for (const statement of [
+        { sql: 'insert into products (id, qty) values (?, ?)', values: ['p3', 3] },
+        { sql: 'update products set qty = ? where id = ?', values: [4, 'p1'] },
+        { sql: 'delete from products where id = ?', values: ['p1'] },
+      ]) {
+        expect(() => reader.query(statement)).toThrow(/KV433.*engine/s);
+      }
+      expect(() =>
+        reader.exec(stampTrustedSql({ sql: 'drop table products' }, 'read-surface DDL attempt')),
+      ).toThrow(/KV433.*engine/s);
+      expect(() =>
+        reader.query(
+          stampTrustedSql({ sql: 'select * from products for update' }, 'read lock attempt'),
+        ),
+      ).toThrow(/KV433.*engine/s);
+
+      db.write('products', { id: 'p3', qty: 3 });
+      expect(db.read<{ id: string }>('products').map((row) => row.id)).toEqual(['p1', 'p2', 'p3']);
+    } finally {
+      db.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('runs mutation suites against an in-memory SQLite database', async () => {
     const db = createSqliteTestDb();
 
@@ -48,6 +106,83 @@ describe('@kovojs/test SQLite harness integration', () => {
       });
     } finally {
       db.close();
+    }
+  });
+
+  it('enforces declared tables on SQLite adapter helper writes with schema-qualified names', () => {
+    const db = createSqliteTestDb();
+
+    try {
+      db.exec('create table cart_items (product_id text primary key, qty integer not null)');
+      db.exec('create table audit_log (product_id text primary key)');
+
+      const writer = managedDb(db, 'write', {
+        sqlWritePolicy: {
+          dialect: 'sqlite',
+          tables: ['cart_items'],
+          touches: ['cart'],
+        },
+      }) as unknown as Pick<SqliteTestDb, 'insert'>;
+
+      writer.insert('main.cart_items').values({ product_id: 'p1', qty: 2 });
+      expect(db.read<{ product_id: string }>('cart_items')).toMatchObject([{ product_id: 'p1' }]);
+
+      expect(() => writer.insert('main.audit_log').values({ product_id: 'p1' })).toThrow(
+        /KV406.*SQLite adapter declared-write fallback/s,
+      );
+      expect(db.read('audit_log')).toEqual([]);
+    } finally {
+      db.close();
+    }
+  });
+
+  it('backs file SQLite declared writers with sqlite3_set_authorizer enforcement', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sqlite-authorizer-'));
+    const db = createSqliteTestDb({ filename: join(root, 'app.sqlite') });
+
+    try {
+      db.exec('create table cart_items (product_id text primary key, qty integer not null)');
+      db.exec('create table audit_log (product_id text primary key)');
+      db.exec(`
+        create trigger cart_audit
+        after update on cart_items
+        begin
+          insert into audit_log (product_id) values (new.product_id);
+        end
+      `);
+
+      const writer = (
+        db as SqliteTestDb &
+          KovoDeclaredWriteDbCapable<Pick<SqliteTestDb, 'exec' | 'query' | 'read'>>
+      )[kovoDeclaredWriteDbHandle]({
+        dialect: 'sqlite',
+        tables: ['cart_items'],
+        touches: ['cart'],
+      });
+
+      writer.exec("insert into cart_items (product_id, qty) values ('p1', 2)");
+      expect(db.read<{ product_id: string; qty: number }>('cart_items')).toEqual([
+        { product_id: 'p1', qty: 2 },
+      ]);
+
+      expect(() => writer.exec("insert into audit_log (product_id) values ('p1')")).toThrow(
+        /KV406.*SQLite authorizer/s,
+      );
+      expect(() => writer.exec("update cart_items set qty = 3 where product_id = 'p1'")).toThrow(
+        /KV406.*SQLite authorizer/s,
+      );
+      expect(() => writer.exec('create table extra (id text primary key)')).toThrow(
+        /KV406.*SQLite authorizer/s,
+      );
+      expect(() => writer.exec('pragma user_version = 1')).toThrow(/KV406.*SQLite authorizer/s);
+
+      expect(db.read<{ product_id: string }>('audit_log')).toEqual([]);
+      expect(db.read<{ product_id: string; qty: number }>('cart_items')).toEqual([
+        { product_id: 'p1', qty: 2 },
+      ]);
+    } finally {
+      db.close();
+      rmSync(root, { force: true, recursive: true });
     }
   });
 

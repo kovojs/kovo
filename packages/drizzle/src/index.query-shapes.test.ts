@@ -881,6 +881,96 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('terminates cyclic pgView read-set derivation at the base table domain', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "product", key: "id" }));
+          export const productSearchA = pgView("product_search_a").as((qb) =>
+            qb.select({ id: products.id, name: products.name })
+              .from(products)
+              .leftJoin(productSearchB, eq(productSearchB.id, products.id)));
+          export const productSearchB = pgView("product_search_b").as((qb) =>
+            qb.select({ id: productSearchA.id, name: productSearchA.name }).from(productSearchA));
+
+          export const searchQuery = query("search/view-cycle", {
+            output: s.object({ name: s.string() }),
+            reads: [productSearchB],
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.select({ name: sql<string>\`name\` }).from(productSearchB);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'search/view-cycle',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:13',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('terminates cyclic sqliteView read-set derivation at the base table domain', () => {
+    const facts = extractQueryFactsFromProjectBase({
+      files: [
+        sqliteDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        ]),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          import { sqliteTable, sqliteView, text } from "drizzle-orm/sqlite-core";
+
+          export const products = sqliteTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "product", key: "id" }));
+          export const productSearchA = sqliteView("product_search_a").as((qb) =>
+            qb.select({ id: products.id, name: products.name })
+              .from(products)
+              .leftJoin(productSearchB, eq(productSearchB.id, products.id)));
+          export const productSearchB = sqliteView("product_search_b").as((qb) =>
+            qb.select({ id: productSearchA.id, name: productSearchA.name }).from(productSearchA));
+
+          export const searchQuery = query("search/sqlite-view-cycle", {
+            output: s.object({ name: s.string() }),
+            reads: [productSearchB],
+            load(_input, db: BaseSQLiteDatabase) {
+              return db.select({ name: sql<string>\`name\` }).from(productSearchB);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'search/sqlite-view-cycle',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:16',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('uses declared materialized-view metadata as a query read domain', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -1967,6 +2057,48 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ).toEqual([]);
   });
 
+  it('does not let a shadowed declareOffWire hide a server-only secret helper', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'contact.queries.ts',
+          source: `
+          function declareOffWire(run: () => void, _options: { justification: string }): void {
+            run();
+          }
+
+          export const contacts = pgTable("contacts", {
+            company: text("company").notNull(),
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "contact", key: "id", secret: ["company"] }));
+
+          export const contactList = query("contacts", {
+            async load(_input, db: PgAsyncDatabase<any, any>) {
+              const items = await db.select({ id: contacts.id, name: contacts.name }).from(contacts);
+              const secretRows = await db.select({ id: contacts.id, secret: contacts.company }).from(contacts);
+              const inspectSecret = () => {
+                for (const row of secretRows) void row.secret;
+              };
+              declareOffWire(() => {
+                inspectSecret();
+              }, { justification: "fake local wrapper" });
+              return items;
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        code: 'KV435',
+        message: expect.stringContaining('reads a secret-classified'),
+      }),
+    ]);
+  });
+
   it('does not let declareOffWire hide secret writes to the returned query shape', () => {
     const facts = extractQueryFactsFromProject({
       files: [
@@ -2337,6 +2469,110 @@ describe('@kovojs/drizzle touch graph helpers', () => {
       passwordDigest: { kind: 'revealed' },
     });
     expect(revealFactsFromQueryFacts(facts)).toEqual([]);
+  });
+
+  it('does not treat shadowed reveal aliases as audited reveal calls', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import { trustedReveal as realReveal } from "@kovojs/core";',
+            '',
+            'function reveal<T>(value: T): T { return value; }',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userDetail = query("user", {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({',
+            '      fakeDigest: reveal(users.passwordHash),',
+            '      realDigest: realReveal(users.passwordHash, { justification: "real reveal", source: "users.passwordHash" }),',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV435',
+          message: expect.stringContaining(
+            'Query projection user.fakeDigest reads a secret-classified',
+          ),
+        }),
+        expect.objectContaining({
+          code: 'KV406',
+          message: expect.stringContaining(
+            'Query projection user.fakeDigest could not be resolved',
+          ),
+        }),
+      ]),
+    );
+    expect(facts[0]?.shape).toMatchObject({
+      realDigest: { kind: 'revealed' },
+    });
+    expect(revealFactsFromQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        justification: 'real reveal',
+        path: 'realDigest',
+      }),
+    ]);
+  });
+
+  it('does not let bare casts reveal secret query projections', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import type { Secret } from "@kovojs/core";',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userDetail = query("user", {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({',
+            '      castString: users.passwordHash as unknown as string,',
+            '      castSecret: users.passwordHash as unknown as Secret<string>,',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(revealFactsFromQueryFacts(facts)).toEqual([]);
+    expect(facts[0]?.shape).toMatchObject({
+      castSecret: { kind: 'secret', shape: 'string' },
+      castString: { kind: 'secret', shape: 'string' },
+    });
+    expect(diagnosticsForQueryFacts(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV435',
+          message: expect.stringContaining(
+            'Query projection user.castString reads a secret-classified',
+          ),
+        }),
+        expect.objectContaining({
+          code: 'KV435',
+          message: expect.stringContaining(
+            'Query projection user.castSecret reads a secret-classified',
+          ),
+        }),
+      ]),
+    );
   });
 
   it('requires a non-empty static trustedReveal justification before emitting reveal facts', () => {

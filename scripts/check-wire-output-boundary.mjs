@@ -51,7 +51,7 @@ export function checkWireOutputBoundary(options = {}) {
     findings.push(`${wireChokeFile}: DEC5 emitToWire() choke file is missing`);
   } else {
     const text = readText(wireChokeFile);
-    if (!/\bexport\s+function\s+emitToWire\s*\(/u.test(stripCommentsAndStrings(text))) {
+    if (!hasExportedEmitToWireChoke(stripCommentsAndStrings(text))) {
       findings.push(`${wireChokeFile}: exported emitToWire() choke is missing`);
     }
   }
@@ -87,6 +87,13 @@ export function checkWireOutputBoundary(options = {}) {
         ? 'OK framework response constructors route through the DEC5 wire-output choke'
         : `${findings.length} wire-output boundary violation(s)`,
   };
+}
+
+function hasExportedEmitToWireChoke(scanText) {
+  return (
+    /\bexport\s+function\s+emitToWire\s*\(/u.test(scanText) ||
+    /\bexport\s+const\s+emitToWire\s*=\s*wireEmitter\s*\(/u.test(scanText)
+  );
 }
 
 export function main() {

@@ -1062,6 +1062,81 @@ describe('server mutation lifecycle', () => {
     expect(calls).toEqual([]);
   });
 
+  it('accepts only the mutation registry declared raw-SQL tables at the managed write choke', async () => {
+    const contact = domain('contact-declared-write-choke');
+    const calls: unknown[] = [];
+    const runContactWrite = (name: string, statement: unknown) =>
+      runMutation(
+        mutation(`contacts/${name}`, {
+          input: s.object({}),
+          registry: {
+            tables: ['contacts'],
+            touches: [contact],
+          },
+          handler(_input, request) {
+            return (request as { db: { execute(statement: unknown): unknown } }).db.execute(
+              statement,
+            );
+          },
+        }),
+        {},
+        {},
+        {
+          db: () => ({
+            execute(executed: unknown) {
+              calls.push(executed);
+              return 'ok';
+            },
+          }),
+        },
+      );
+
+    await expect(
+      runContactWrite(
+        'declared-table',
+        stampTrustedSql(
+          { text: 'update contacts set name = $1 where id = $2', values: ['Ada', 'c1'] },
+          'declared contact update',
+        ),
+      ),
+    ).resolves.toEqual({
+      changes: [{ domain: 'contact-declared-write-choke', input: {} }],
+      ok: true,
+      rerunQueries: [],
+      value: 'ok',
+    });
+    expect(calls).toHaveLength(1);
+
+    await expect(
+      runContactWrite(
+        'userx-drift',
+        stampTrustedSql(
+          { text: 'update userx set name = $1 where id = $2', values: ['Ada', 'u1'] },
+          'drifted userx update',
+        ),
+      ),
+    ).rejects.toThrow(/KV406/);
+    await expect(
+      runContactWrite(
+        'schema-drift',
+        stampTrustedSql(
+          {
+            text: 'update otherschema.contacts set name = $1 where id = $2',
+            values: ['Ada', 'c1'],
+          },
+          'drifted schema-qualified contact update',
+        ),
+      ),
+    ).rejects.toThrow(/KV406/);
+    await expect(
+      runContactWrite(
+        'pragma-drift',
+        stampTrustedSql({ text: 'pragma user_version = 1' }, 'drifted pragma write'),
+      ),
+    ).rejects.toThrow(/KV406/);
+    expect(calls).toHaveLength(1);
+  });
+
   it('enforces declared raw-SQL tables inside the default transaction wrapper', async () => {
     const calls: unknown[] = [];
     const chunk = (value: string) => ({ value: [value] });

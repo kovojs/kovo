@@ -1,4 +1,11 @@
-import type { JsonValue, Secret, StorageObjectInfo, StoragePutCapability } from '@kovojs/core';
+import {
+  isUntrusted,
+  revealUntrusted,
+  type JsonValue,
+  type Secret,
+  type StorageObjectInfo,
+  type StoragePutCapability,
+} from '@kovojs/core';
 
 import {
   type UnverifiedAcceptance,
@@ -161,6 +168,7 @@ export const s = {
   boolean(): Schema<boolean> {
     return {
       parse(input: unknown): boolean {
+        input = revealSchemaInput(input);
         if (typeof input === 'boolean') return input;
         if (input === undefined || input === null || input === '') return false;
         if (typeof input === 'number' && (input === 0 || input === 1)) return Boolean(input);
@@ -190,6 +198,7 @@ export const s = {
   json<Value extends JsonValue = JsonValue>(): Schema<Value> {
     return {
       parse(input: unknown): Value {
+        input = revealSchemaInput(input);
         const value = typeof input === 'string' ? parseJsonInput(input) : input;
         if (!isJsonValue(value)) throw validationError('Expected JSON value');
         return value as Value;
@@ -205,6 +214,7 @@ export const s = {
   secret<Value>(schema: Schema<Value>): Schema<Secret<Value>> {
     return {
       parse(input: unknown): Secret<Value> {
+        input = revealSchemaInput(input);
         return schema.parse(input) as Secret<Value>;
       },
     };
@@ -454,6 +464,7 @@ class DecimalSchemaImpl implements DecimalSchema {
   }
 
   parse(input: unknown): string {
+    input = revealSchemaInput(input);
     const value =
       input === undefined || input === null || input === '' ? this.#defaultValue : input;
     if (typeof value !== 'string') throw validationError('Expected decimal string');
@@ -485,6 +496,7 @@ class DateSchemaImpl implements DateSchema {
   }
 
   parse(input: unknown): Date {
+    input = revealSchemaInput(input);
     const value =
       input === undefined || input === null || input === '' ? this.#defaultValue : input;
     return parseDateInput(value, this.#kind);
@@ -552,6 +564,7 @@ class NumberSchemaImpl implements NumberSchema {
   }
 
   parse(input: unknown): number {
+    input = revealSchemaInput(input);
     const value =
       input === undefined || input === null || input === '' ? this.#defaultValue : input;
     const number = typeof value === 'number' ? value : Number(value);
@@ -628,6 +641,7 @@ class StringSchemaImpl implements StringSchema {
   }
 
   parse(input: unknown): string {
+    input = revealSchemaInput(input);
     if (isMissingStringInput(input) && this.#defaultValue !== undefined) {
       input = this.#defaultValue;
     }
@@ -828,6 +842,7 @@ function createFileOptions(
 }
 
 function arrayValues(input: unknown): unknown[] {
+  input = revealSchemaInput(input);
   if (input === undefined || input === null) return [];
   return Array.isArray(input) ? input : [input];
 }
@@ -838,6 +853,7 @@ function optionalSchema<Value>(
 ): Schema<Value | undefined> {
   return {
     parse(input: unknown): Value | undefined {
+      input = revealSchemaInput(input);
       return isMissing(input) ? undefined : schema.parse(input);
     },
   };
@@ -923,6 +939,7 @@ async function parseVerifiedFileLike(
 }
 
 function parseFileLikeShape(input: unknown, options: FileSchemaOptions): FileLike {
+  input = revealSchemaInput(input);
   if (!isFileLike(input)) throw validationError('Expected file');
   if (options.maxBytes !== undefined && input.size > options.maxBytes) {
     throw validationError(`Expected file <= ${options.maxBytes} bytes`);
@@ -947,6 +964,7 @@ function isFileLike(value: unknown): value is FileLike {
 }
 
 export function formLikeToRecord(input: unknown): Record<string, unknown> {
+  input = revealSchemaInput(input);
   if (input instanceof FormData) {
     return entriesToRecord(input.entries());
   }
@@ -1047,6 +1065,7 @@ export function assertShapeWithinBudget(
   input: unknown,
   budget: ShapeBudget = activeShapeBudget,
 ): void {
+  input = revealSchemaInput(input);
   if (input === null || typeof input !== 'object') return;
   let nodes = 1;
   const stack: Array<readonly [value: object, depth: number]> = [[input, 0]];
@@ -1074,6 +1093,14 @@ export function assertShapeWithinBudget(
   }
 }
 
+const SCHEMA_UNTRUSTED_REVEAL_REASON =
+  'validated request-derived input through Kovo schema parsing';
+
+function revealSchemaInput(input: unknown): unknown {
+  if (isUntrusted(input)) return revealUntrusted(input, SCHEMA_UNTRUSTED_REVEAL_REASON);
+  return input;
+}
+
 export async function parseSchemaAsync<T>(
   schema: Schema<T>,
   input: unknown,
@@ -1082,6 +1109,7 @@ export async function parseSchemaAsync<T>(
   skipShapeBudget = false,
 ): Promise<T> {
   if (!skipShapeBudget) assertShapeWithinBudget(input);
+  input = revealSchemaInput(input);
   return isAsyncSchema(schema) ? schema.parseAsync(input) : schema.parse(input);
 }
 

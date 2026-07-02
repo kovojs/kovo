@@ -18,6 +18,7 @@ import { renderServerRenderable } from './renderable.js';
 import { recordQueryRuntimeWarnings, runQuery, type QueryDefinition } from './query.js';
 import type { LiveTargetRenderContext, LiveTargetRenderer } from './mutation-wire.js';
 import type { ErrorBoundaryRenderer } from './mutation-wire.js';
+import { revealUntrustedRequestValue } from './untrusted-request-body.js';
 
 /** @internal Generated component query binding used by live-target renderers (SPEC §9.1). */
 export interface ComponentLiveTargetQueryBinding<Request = unknown> {
@@ -191,13 +192,12 @@ async function loadLiveTargetQueries<Request>(
   const values: Record<string, unknown> = {};
 
   for (const binding of bindings) {
-    const input = binding.args ? binding.args(context.props) : undefined;
-    const result = await runQuery(
-      binding.query,
-      input,
-      context.request,
-      context.maxListItems === undefined ? {} : { maxListItems: context.maxListItems },
-    );
+    const props = revealLiveTargetValue(context.props) as Record<string, unknown>;
+    const input = revealLiveTargetValue(binding.args ? binding.args(props) : undefined);
+    const result = await runQuery(binding.query, input, context.request, {
+      ...(context.maxListItems === undefined ? {} : { maxListItems: context.maxListItems }),
+      trustedInput: true,
+    });
     if (!result.ok) {
       throw new Error(`Live target query failed: ${binding.query.key}`);
     }
@@ -206,6 +206,10 @@ async function loadLiveTargetQueries<Request>(
   }
 
   return values;
+}
+
+function revealLiveTargetValue(value: unknown): unknown {
+  return revealUntrustedRequestValue(value, 'verified live-target descriptor input');
 }
 
 async function componentLiveTargetRenderOptions<

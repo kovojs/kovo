@@ -28,6 +28,10 @@ jobs:
           rebuild-better-sqlite3: 'true'
       - name: Format, type, and import checks
         run: vp exec pnpm run check
+      - name: Paranoid static classifier harness
+        run: vp exec pnpm run check:paranoid-classifiers
+      - name: Paranoid production runtime chokes
+        run: vp exec pnpm run check:paranoid-runtime
       - name: API surface
         run: vp exec pnpm run check:api-surface
       - name: SQL safety

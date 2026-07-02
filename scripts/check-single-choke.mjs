@@ -9,15 +9,29 @@ import { collectSourceFiles } from './lib/source-files.mjs';
 export const repoRoot = findRepoRoot();
 
 export const defaultSourceRoots = ['packages/server/src'];
+export const defaultAllowedExternalEgressFiles = [
+  'packages/server/src/app-load-shed.ts',
+  'packages/server/src/app-system-response.ts',
+  'packages/server/src/build.ts',
+  'packages/server/src/capability-route.ts',
+  'packages/server/src/deferred-stream.ts',
+  'packages/server/src/file.ts',
+  'packages/server/src/mutation/streaming.ts',
+  'packages/server/src/node.ts',
+  'packages/server/src/response-posture.ts',
+  'packages/server/src/vite-dev.ts',
+];
 export const defaultAllowedDriverFiles = [
   'packages/server/src/sql-safe-handle.ts',
   'packages/server/src/sql-write-oracle.ts',
+  'packages/server/src/mutation.ts',
   'packages/server/src/task-observability.ts',
   'packages/server/src/task-queue.ts',
   'packages/server/src/task-cron.ts',
 ];
 export const defaultAllowedRawTargetFiles = [
   'packages/server/src/sql-safe-handle.ts',
+  'packages/server/src/managed-db.ts',
   'packages/server/src/task-queue.ts',
   'packages/server/src/mutation.ts',
 ];
@@ -25,6 +39,7 @@ export const defaultAllowedRawTargetFiles = [
 const driverMethodNames = new Set([
   '$client',
   'all',
+  'batch',
   'exec',
   'execute',
   'get',
@@ -32,11 +47,43 @@ const driverMethodNames = new Set([
   'query',
   'run',
   'session',
+  'transaction',
   'values',
+  'with',
 ]);
 const sqlReceiverPattern =
   /(?:^|\.)(?:db|database|client|handle|session|tx|transaction|executor|sql|driver)$/iu;
 const managedHandleFactories = new Set(['managedDb', 'readonlyDb', 'wrapManagedDbForSqlSafety']);
+const externalEgressSinkPatterns = [
+  {
+    label: 'Response constructor',
+    pattern: /\bnew\s+Response\s*\(/gu,
+  },
+  {
+    label: 'Response.json',
+    pattern: /\bResponse\.json\s*\(/gu,
+  },
+  {
+    label: 'Headers constructor',
+    pattern: /\bnew\s+Headers\s*\(/gu,
+  },
+  {
+    label: 'response header mutation',
+    pattern: /\.headers\.(?:append|delete|set)\s*\(/gu,
+  },
+  {
+    label: 'ReadableStream constructor',
+    pattern: /\bnew\s+ReadableStream\s*\(/gu,
+  },
+  {
+    label: 'TransformStream constructor',
+    pattern: /\bnew\s+TransformStream\s*\(/gu,
+  },
+  {
+    label: 'route binary/stream response outcome',
+    pattern: /\brespond\.(?:file|json|storedFile|stream)\s*\(/gu,
+  },
+];
 
 export function checkSingleChoke(options = {}) {
   const root = options.repoRoot ?? repoRoot;
@@ -44,6 +91,9 @@ export function checkSingleChoke(options = {}) {
   const sourceFiles =
     options.sourceFiles ?? collectSourceFiles(root, sourceRoots, { productionRoots: sourceRoots });
   const allowedDriverFiles = new Set(options.allowedDriverFiles ?? defaultAllowedDriverFiles);
+  const allowedExternalEgressFiles = new Set(
+    options.allowedExternalEgressFiles ?? defaultAllowedExternalEgressFiles,
+  );
   const allowedRawTargetFiles = new Set(
     options.allowedRawTargetFiles ?? defaultAllowedRawTargetFiles,
   );
@@ -69,12 +119,21 @@ export function checkSingleChoke(options = {}) {
     const sourceText = readText(filePath);
     const scanText = stripCommentsAndStrings(sourceText);
     const allowedDriverFile = allowedDriverFiles.has(filePath);
+    const allowedExternalEgressFile = allowedExternalEgressFiles.has(filePath);
     const allowedRawTargetFile = allowedRawTargetFiles.has(filePath);
 
     for (const match of sqlDriverPropertyUses(scanText)) {
       if (!allowedDriverFile) {
         findings.push(
           `${filePath}:${lineOf(sourceText, match.index)}: driver method/property .${match.name} must route through enforceManagedSql() in sql-safe-handle.ts or an audited durable-task internal SQL executor`,
+        );
+      }
+    }
+
+    for (const match of externalEgressSinkUses(scanText)) {
+      if (!allowedExternalEgressFile) {
+        findings.push(
+          `${filePath}:${lineOf(sourceText, match.index)}: ${match.label} is an external egress sink and must be classified in the DEC-J sole-door inventory or route through emitToWire()`,
         );
       }
     }
@@ -101,8 +160,8 @@ export function checkSingleChoke(options = {}) {
     ok: findings.length === 0,
     summary:
       findings.length === 0
-        ? 'OK managed DB write-capable handles route through the single SQL choke'
-        : `${findings.length} managed DB single-choke violation(s)`,
+        ? 'OK DEC-J egress/DB exec sinks route through classified sole-door chokes'
+        : `${findings.length} DEC-J sole-door violation(s)`,
   };
 }
 
@@ -143,6 +202,14 @@ function* sqlDriverPropertyUses(sourceText) {
     if (!driverMethodNames.has(name)) continue;
     if (!looksLikeSqlReceiver(receiver)) continue;
     yield { index: match.index ?? 0, name };
+  }
+}
+
+function* externalEgressSinkUses(sourceText) {
+  for (const sink of externalEgressSinkPatterns) {
+    for (const match of sourceText.matchAll(sink.pattern)) {
+      yield { index: match.index ?? 0, label: sink.label };
+    }
   }
 }
 

@@ -34,15 +34,19 @@ async function expectReadonlyAttemptBlocked(origin: string): Promise<void> {
 
   expect(readonlyAttempt).toMatchObject({ blocked: true });
   expect(readonlyAttempt.message).toMatch(/read-only|readonly|KV433|loader cannot access/iu);
-  expect(readonlyAttempt.results).toEqual([
-    expect.objectContaining({ blocked: true, method: 'all' }),
-    expect.objectContaining({ blocked: true, method: 'get' }),
-    expect.objectContaining({ blocked: true, method: 'values' }),
-    expect.objectContaining({ blocked: true, method: 'transaction' }),
-    expect.objectContaining({ blocked: true, method: '$client' }),
-    expect.objectContaining({ blocked: true, method: 'session' }),
-    expect.objectContaining({ blocked: true, method: 'futureStatement' }),
-  ]);
+  expect(readonlyAttempt.results).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({ blocked: true, method: expect.stringMatching(/^(execute|run)$/u) }),
+      expect.objectContaining({ blocked: true, method: 'all' }),
+      expect.objectContaining({ blocked: true, method: 'get' }),
+      expect.objectContaining({ blocked: true, method: 'values' }),
+      expect.objectContaining({ blocked: true, method: 'transaction' }),
+      expect.objectContaining({ blocked: true, method: '$client' }),
+      expect.objectContaining({ blocked: true, method: 'session' }),
+      expect.objectContaining({ blocked: true, method: 'futureStatement' }),
+    ]),
+  );
+  expect(readonlyAttempt.results).toHaveLength(8);
 }
 
 describe('create-kovo starter (build integration: production transaction artifacts)', () => {

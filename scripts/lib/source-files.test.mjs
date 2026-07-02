@@ -4,7 +4,12 @@ import path from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { collectFiles, collectSourceFiles, isProductionSourceFile } from './source-files.mjs';
+import {
+  collectFiles,
+  collectSourceFiles,
+  isProductionSourceFile,
+  securityMarkerSourceRoots,
+} from './source-files.mjs';
 
 describe('source file collection', () => {
   it('classifies production TypeScript source without tests or declarations', () => {
@@ -45,6 +50,32 @@ describe('source file collection', () => {
         skipDirectory: ({ name }) => name === 'node_modules' || name === 'dist',
       }),
     ).toEqual(['src/app.test.ts', 'src/app.ts']);
+  });
+
+  it('derives security classifier scan roots from packages importing security markers', async () => {
+    const root = await fixtureRoot();
+    await writeFixture(
+      root,
+      'packages/compiler/src/validate/trusted-html-provenance.ts',
+      "import { securityClassifier } from '@kovojs/core/internal/security-markers';\n",
+    );
+    await writeFixture(root, 'packages/browser/src/client.ts', 'export {};\n');
+    await writeFixture(
+      root,
+      'packages/server/src/runtime.ts',
+      "import { wireEmitter } from '@kovojs/core/internal/security-markers';\n",
+    );
+    await writeFixture(
+      root,
+      'packages/conformance-fixtures/src/canary.ts',
+      "import { securityClassifier } from '@kovojs/core/internal/security-markers';\n",
+    );
+
+    expect(securityMarkerSourceRoots(root, { baseRoots: ['packages/core/src'] })).toEqual([
+      'packages/compiler/src',
+      'packages/core/src',
+      'packages/server/src',
+    ]);
   });
 });
 

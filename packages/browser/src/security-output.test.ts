@@ -102,6 +102,17 @@ describe('runtime output-context helpers', () => {
     expect(kovoSafeUrl(literal).startsWith('data:')).toBe(false);
   });
 
+  it('does not let bare casts mint trusted output brands', () => {
+    const castHtml = { value: '<img src=x onerror=alert(1)>' } as unknown as TrustedHtml;
+    const castUrl = { value: 'javascript:alert(document.cookie)' } as unknown as TrustedUrl;
+
+    expect(isKovoTrustedHtml(castHtml)).toBe(false);
+    expect(isKovoTrustedUrl(castUrl)).toBe(false);
+    expect(kovoTrustedHtmlContent(castHtml)).toBe('');
+    expect(kovoSafeUrl(castUrl)).not.toBe('javascript:alert(document.cookie)');
+    expect(kovoSafeUrl(castUrl).startsWith('javascript:')).toBe(false);
+  });
+
   it('sanitizes generated CSS property values', () => {
     expect(kovoStyleProperty('view-transition-name', 'product hero')).toBe(
       'view-transition-name: product-hero',

@@ -1,6 +1,17 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { mutation, s } from '@kovojs/server';
+import {
+  kovoDeclaredWriteDbHandle,
+  kovoReadonlyDbHandle,
+  managedDb,
+  type KovoDeclaredWriteDbCapable,
+  type KovoReadonlyDbCapable,
+} from '@kovojs/server/internal/execution';
 
 import { createKovoTestHarness } from './harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
@@ -8,6 +19,138 @@ import { expectedDiagnostic } from './test-fixtures.js';
 import { assertOwnerWritesScoped, createDbVerifier } from './verifier.js';
 
 describe('@kovojs/test PGlite harness integration', () => {
+  it('backs managed readers with read-only PGlite transactions', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-pglite-readonly-'));
+    const db = await createPgliteTestDb({ dataDir: root });
+
+    try {
+      await db.exec('create table products (id text primary key, qty integer not null)');
+      await db.exec('create sequence products_id_seq');
+      await db.write('products', { id: 'p1', qty: 1 });
+      await db.write('products', { id: 'p2', qty: 2 });
+
+      const reader = managedDb(db, 'read') as unknown as Pick<
+        PgliteTestDb,
+        'exec' | 'query' | 'sql'
+      >;
+
+      await expect(
+        reader.query<{ ids: string }>(
+          stampTrustedSql(
+            { text: "select string_agg(id, ',' order by id) as ids from products" },
+            'static Postgres string_agg read',
+          ),
+        ),
+      ).resolves.toEqual([{ ids: 'p1,p2' }]);
+      await expect(
+        reader.sql<{ day: Date | string }>(
+          stampTrustedSql(
+            { text: "select date_trunc('day', timestamp '2020-01-02 03:04:05') as day" },
+            'static Postgres date_trunc read',
+          ),
+        ),
+      ).resolves.toHaveLength(1);
+
+      for (const statement of [
+        { text: 'insert into products (id, qty) values ($1, $2)', values: ['p3', 3] },
+        { text: 'update products set qty = $1 where id = $2', values: [4, 'p1'] },
+        { text: 'delete from products where id = $1', values: ['p1'] },
+      ]) {
+        await expect(reader.query(statement)).rejects.toThrow(/KV433.*engine/s);
+      }
+      await expect(
+        reader.exec(stampTrustedSql({ text: 'drop table products' }, 'read-surface DDL attempt')),
+      ).rejects.toThrow(/KV433.*engine/s);
+      await expect(
+        reader.query(stampTrustedSql({ text: 'select * from products for update' }, 'read lock')),
+      ).rejects.toThrow(/KV433.*engine/s);
+      await expect(
+        reader.query(
+          stampTrustedSql({ text: "select nextval('products_id_seq')" }, 'sequence write'),
+        ),
+      ).rejects.toThrow(/KV433.*engine/s);
+      await expect(
+        reader.query(
+          stampTrustedSql({ text: "select setval('products_id_seq', 10)" }, 'sequence write'),
+        ),
+      ).rejects.toThrow(/KV433.*engine/s);
+
+      await db.write('products', { id: 'p3', qty: 3 });
+      await expect(db.read<{ id: string }>('products')).resolves.toMatchObject([
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 'p3' },
+      ]);
+    } finally {
+      await db.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('keeps the dedicated PGlite reader session read-only without poisoning writer paths', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-pglite-readonly-pool-'));
+    const db = await createPgliteTestDb({ dataDir: root });
+
+    try {
+      await db.exec('create table products (id text primary key, qty integer not null)');
+      await db.write('products', { id: 'p1', qty: 1 });
+
+      const rawReader = (
+        db as PgliteTestDb &
+          KovoReadonlyDbCapable<Pick<PgliteTestDb, 'exec' | 'pglite' | 'query' | 'write'>>
+      )[kovoReadonlyDbHandle]();
+
+      await expect(
+        rawReader.query<{ default_transaction_read_only: string }>(
+          'show default_transaction_read_only',
+        ),
+      ).resolves.toEqual([{ default_transaction_read_only: 'on' }]);
+      expect(rawReader.pglite).not.toBe(db.pglite);
+      await expect(
+        rawReader.query<{ transaction_read_only: string }>('show transaction_read_only'),
+      ).resolves.toEqual([{ transaction_read_only: 'on' }]);
+      await expect(rawReader.write('products', { id: 'blocked', qty: 0 })).rejects.toThrow(
+        /read-only transaction/,
+      );
+
+      await expect(
+        db.query<{ default_transaction_read_only: string }>('show default_transaction_read_only'),
+      ).resolves.toEqual([{ default_transaction_read_only: 'off' }]);
+      await expect(
+        db.query<{ transaction_read_only: string }>('show transaction_read_only'),
+      ).resolves.toEqual([{ transaction_read_only: 'off' }]);
+      await db.write('products', { id: 'p2', qty: 2 });
+
+      const declaredWriter = (
+        db as PgliteTestDb & KovoDeclaredWriteDbCapable<Pick<PgliteTestDb, 'query' | 'write'>>
+      )[kovoDeclaredWriteDbHandle]({
+        dialect: 'postgres',
+        tables: ['products'],
+        touches: ['product'],
+      });
+      await expect(
+        declaredWriter.query<{ default_transaction_read_only: string }>(
+          'show default_transaction_read_only',
+        ),
+      ).resolves.toEqual([{ default_transaction_read_only: 'off' }]);
+      await declaredWriter.write('products', { id: 'p3', qty: 3 });
+
+      await expect(
+        rawReader.query<{ default_transaction_read_only: string }>(
+          'show default_transaction_read_only',
+        ),
+      ).resolves.toEqual([{ default_transaction_read_only: 'on' }]);
+      await expect(db.read<{ id: string }>('products')).resolves.toMatchObject([
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 'p3' },
+      ]);
+    } finally {
+      await db.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('runs mutation suites against an in-memory pglite database', async () => {
     const db = await createPgliteTestDb();
 
@@ -46,6 +189,78 @@ describe('@kovojs/test PGlite harness integration', () => {
         ok: true,
         value: [{ product_id: 'p1', qty: 2 }],
       });
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('enforces declared tables on PGlite adapter helper writes with schema-qualified names', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table cart_items (product_id text primary key, qty integer not null)');
+      await db.exec('create table audit_log (product_id text primary key)');
+
+      const writer = managedDb(db, 'write', {
+        sqlWritePolicy: {
+          dialect: 'postgres',
+          tables: ['cart_items'],
+          touches: ['cart'],
+        },
+      }) as unknown as Pick<PgliteTestDb, 'insert'>;
+
+      await writer.insert('public.cart_items').values({ product_id: 'p1', qty: 2 });
+      await expect(db.read<{ product_id: string }>('cart_items')).resolves.toMatchObject([
+        { product_id: 'p1' },
+      ]);
+
+      expect(() => writer.insert('public.audit_log').values({ product_id: 'p1' })).toThrow(
+        /KV406.*PGlite adapter declared-write fallback/s,
+      );
+      await expect(db.read('audit_log')).resolves.toEqual([]);
+    } finally {
+      await db.close();
+    }
+  });
+
+  it('rejects schema-qualified out-of-scope PGlite writes with the stat-delta fallback', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create schema otherschema');
+      await db.exec('create table public.cart_items (product_id text primary key, qty integer)');
+      await db.exec('create table otherschema.audit_log (product_id text primary key)');
+
+      const declaredWriteDb = db as unknown as {
+        [kovoDeclaredWriteDbHandle](policy: {
+          dialect: 'postgres';
+          tables: readonly string[];
+          touches: readonly string[];
+        }): unknown;
+      };
+      const writer = declaredWriteDb[kovoDeclaredWriteDbHandle]({
+        dialect: 'postgres',
+        tables: ['public.cart_items'],
+        touches: ['cart'],
+      }) as Pick<PgliteTestDb, 'query'>;
+
+      await expect(
+        writer.query({
+          text: 'insert into public.cart_items (product_id, qty) values ($1, $2)',
+          values: ['p1', 2],
+        }),
+      ).resolves.toEqual([]);
+      await expect(db.read<{ product_id: string }>('public.cart_items')).resolves.toEqual([
+        { product_id: 'p1', qty: 2 },
+      ]);
+
+      await expect(
+        writer.query({
+          text: 'insert into otherschema.audit_log (product_id) values ($1)',
+          values: ['p1'],
+        }),
+      ).rejects.toThrow(/KV406.*stat-delta fallback[\s\S]*otherschema\.audit_log/);
+      await expect(db.read('otherschema.audit_log')).resolves.toEqual([]);
     } finally {
       await db.close();
     }

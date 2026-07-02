@@ -1,10 +1,10 @@
 declare const secretBrand: unique symbol;
+declare const untrustedBrand: unique symbol;
 
 /**
- * Type-level marker for values classified as confidential. `Secret<T>` is
- * intentionally not assignable to `JsonValue`, so client-bound sinks reject it
- * before a secret reaches query JSON, island state, or typed failure payloads
- * (SPEC §6.2/§9.2/§10.2).
+ * Type-level marker for values classified as confidential. `Secret<T>` is an
+ * author-time guardrail; runtime egress chokes and non-coercible boxes own the
+ * enforcement boundary (SPEC §10.2/§11.2).
  */
 export interface Secret<T> {
   readonly [secretBrand]: {
@@ -17,26 +17,17 @@ export interface Secret<T> {
 
 /**
  * Runtime confidential value produced by {@link secret}. A `SecretValue<T>` is a
- * {@link Secret} (so the type system rejects it at every `JsonValue`-bounded
- * client boundary), and is additionally a real runtime box whose accidental-egress
- * paths are poisoned: `toString`, `JSON.stringify`/`toJSON`, template-literal and
- * arithmetic coercion, `valueOf`, and `console.log`/`util.inspect` all yield
- * `"[secret]"` rather than the wrapped value.
- *
- * This is **defense-in-depth, not a proof** (SPEC §6.6): the poison stops a value
- * leaking _accidentally_ into a log line, error payload, or serialized response;
- * it does not track values _derived_ via {@link SecretValue.reveal} (a revealed
- * string is an ordinary primitive again). The by-construction confidentiality
- * guarantee remains the static KV435 query-wire analysis.
+ * non-coercible runtime box: string conversion, JSON conversion, numeric
+ * conversion, template literals, and accidental concatenation throw instead of
+ * laundering the tag off. `util.inspect` renders a fixed redaction marker so
+ * `console.log(secret(...))` stays non-leaking.
  */
 export interface SecretValue<T> extends Secret<T> {
   /**
-   * Returns the wrapped value. This is the explicit, intentional un-poisoning step
-   * — the analogue of `expose_secret()`. Reach for it only at the real sink (an SDK
-   * call, an HMAC). The returned value is a plain primitive with no further
-   * protection, so do not stash it in a long-lived variable or log it.
+   * Returns the wrapped value after a reviewable justification. The returned value
+   * is an ordinary primitive/object with no further runtime tag.
    */
-  reveal(): T;
+  reveal(reason: SecretRevealReason): T;
   /**
    * Derives a new secret from this one _without_ un-poisoning. `apiKey.map(k =>
    * k.slice(0, 4))` yields a `SecretValue<string>` for the prefix, so the derived
@@ -52,8 +43,36 @@ export interface SecretValue<T> extends Secret<T> {
   equals(other: T | Secret<T>): boolean;
 }
 
+/** Reviewable reason text for explicitly unboxing a confidential value. */
+export type SecretRevealReason = string | { readonly justification: string };
+
+/**
+ * Type-level marker for request-derived or otherwise untrusted values. This tag
+ * is DX/provenance only; contextual render and protocol chokes remain the
+ * enforcement boundary (SPEC §5.2 rule 11).
+ */
+export interface Untrusted<T> {
+  readonly [untrustedBrand]: {
+    readonly kind: 'untrusted';
+    readonly value: T;
+  };
+  /** Keeps `Untrusted<T>` outside JsonValue until it is validated or escaped. */
+  readonly __kovoUntrustedJsonBoundary?: undefined;
+}
+
+/** Runtime non-coercible value produced by {@link untrusted}. */
+export interface UntrustedValue<T> extends Untrusted<T> {
+  /** Returns the wrapped value after a reviewable validation/escaping reason. */
+  reveal(reason: SecretRevealReason): T;
+  /** Derives another untrusted value without losing provenance. */
+  map<U>(fn: (value: T) => U): UntrustedValue<U>;
+  /** Constant-time equality for string/byte-like values where possible. */
+  equals(other: T | Untrusted<T>): boolean;
+}
+
 /** The redaction marker every poisoned coercion path yields. */
 const REDACTED = '[secret]';
+const UNTRUSTED_REDACTED = '[untrusted]';
 
 /**
  * Module-private runtime brand. Intentionally `Symbol()` and **not**
@@ -69,7 +88,7 @@ const inspectCustom = Symbol.for('nodejs.util.inspect.custom');
 /** Default poison output for {@link redacted} when no mask is supplied. */
 const REDACTED_MASK = '[redacted]';
 
-type PoisonKind = 'secret' | 'redacted';
+type PoisonKind = 'secret' | 'redacted' | 'untrusted';
 
 /**
  * Shared runtime poison box backing both {@link secret} and {@link redacted}. The
@@ -92,7 +111,8 @@ class KovoPoisonBox<T> {
     Object.defineProperty(this, secretBoxBrand, { value: kind, enumerable: false });
   }
 
-  reveal(): T {
+  reveal(reason?: SecretRevealReason): T {
+    if (this.#kind === 'secret' || this.#kind === 'untrusted') validateRevealReason(reason);
     return this.#value;
   }
 
@@ -108,7 +128,7 @@ class KovoPoisonBox<T> {
   }
 
   equals(other: unknown): boolean {
-    const right = isPoisonBox(other) ? (other as KovoPoisonBox<T>).reveal() : other;
+    const right = isPoisonBox(other) ? (other as KovoPoisonBox<T>).#value : other;
     const left = this.#value;
     const leftComparable = comparableBytes(left);
     const rightComparable = comparableBytes(right);
@@ -120,18 +140,22 @@ class KovoPoisonBox<T> {
   }
 
   toString(): string {
+    if (this.#kind !== 'redacted') throw nonCoercibleError(this.#kind, 'toString');
     return this.#poison;
   }
 
   toJSON(): string {
+    if (this.#kind !== 'redacted') throw nonCoercibleError(this.#kind, 'JSON.stringify');
     return this.#poison;
   }
 
   valueOf(): string {
+    if (this.#kind !== 'redacted') throw nonCoercibleError(this.#kind, 'valueOf');
     return this.#poison;
   }
 
   [Symbol.toPrimitive](): string {
+    if (this.#kind !== 'redacted') throw nonCoercibleError(this.#kind, 'coercion');
     return this.#poison;
   }
 
@@ -140,7 +164,9 @@ class KovoPoisonBox<T> {
   }
 
   get [Symbol.toStringTag](): string {
-    return this.#kind === 'secret' ? 'Secret' : 'Redacted';
+    if (this.#kind === 'secret') return 'Secret';
+    if (this.#kind === 'untrusted') return 'Untrusted';
+    return 'Redacted';
   }
 }
 
@@ -148,18 +174,12 @@ class KovoPoisonBox<T> {
 function isPoisonBox(value: unknown): value is KovoPoisonBox<unknown> {
   if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return false;
   const brand = (value as Record<symbol, unknown>)[secretBoxBrand];
-  return brand === 'secret' || brand === 'redacted';
+  return brand === 'secret' || brand === 'redacted' || brand === 'untrusted';
 }
 
 /**
- * Wraps a confidential server-side value (an API key, access token, password, or
- * any value that must never reach a log, error payload, or the client wire) in a
- * runtime {@link SecretValue}. Idempotent: `secret(secret(x))` returns the existing
- * box. The wrapper poisons every accidental-egress coercion (see {@link SecretValue});
- * read the value back only at its sink via `.reveal()`.
- *
- * Defense-in-depth, not a by-construction proof (SPEC §6.6) — pair it with the
- * static KV435 query-wire boundary, which is the real confidentiality guarantee.
+ * Wraps a confidential server-side value in a runtime {@link SecretValue}. The
+ * box is non-coercible and can be unboxed only through an audited reveal.
  */
 export function secret<T>(value: T): SecretValue<T> {
   if (isSecret(value)) return value as unknown as SecretValue<T>;
@@ -179,13 +199,32 @@ export function isSecret(value: unknown): value is SecretValue<unknown> {
 }
 
 /**
- * Explicitly un-poisons a {@link secret} box and returns its value. Equivalent to
- * `s.reveal()` as a free function. A value that is typed `Secret<T>` but is not a
- * runtime box (for example a Drizzle column the static analyzer classified secret)
- * is returned unchanged.
+ * Explicitly unboxes a {@link secret} box and returns its value. A value that is
+ * typed `Secret<T>` but is not a runtime box is returned unchanged.
  */
-export function revealSecret<T>(value: Secret<T>): T {
-  return isSecret(value) ? (value as SecretValue<T>).reveal() : (value as unknown as T);
+export function revealSecret<T>(value: Secret<T>, reason: SecretRevealReason): T {
+  return isSecret(value) ? (value as SecretValue<T>).reveal(reason) : (value as unknown as T);
+}
+
+/** Wraps a request-derived value in a non-coercible DX provenance tag. */
+export function untrusted<T>(value: T): UntrustedValue<T> {
+  if (isUntrusted(value)) return value as unknown as UntrustedValue<T>;
+  return Object.freeze(
+    new KovoPoisonBox(value, UNTRUSTED_REDACTED, 'untrusted'),
+  ) as unknown as UntrustedValue<T>;
+}
+
+/** Runtime guard recognizing an {@link untrusted} box. */
+export function isUntrusted(value: unknown): value is UntrustedValue<unknown> {
+  return (
+    isPoisonBox(value) &&
+    (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'untrusted'
+  );
+}
+
+/** Explicitly unboxes an {@link untrusted} value after a validation/escaping reason. */
+export function revealUntrusted<T>(value: Untrusted<T>, reason: SecretRevealReason): T {
+  return isUntrusted(value) ? (value as UntrustedValue<T>).reveal(reason) : (value as unknown as T);
 }
 
 declare const redactedBrand: unique symbol;
@@ -261,6 +300,20 @@ export function isRedacted(value: unknown): value is RedactedValue<unknown> {
   return (
     isPoisonBox(value) &&
     (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'redacted'
+  );
+}
+
+function validateRevealReason(reason: SecretRevealReason | undefined): void {
+  const text = typeof reason === 'string' ? reason : reason?.justification;
+  if (typeof text !== 'string' || text.trim() === '') {
+    throw new Error('Secret/Untrusted reveal requires a non-empty justification.');
+  }
+}
+
+function nonCoercibleError(kind: Exclude<PoisonKind, 'redacted'>, operation: string): Error {
+  const code = kind === 'secret' ? 'KV435' : 'KV426';
+  return new Error(
+    `${code}: ${kind} value cannot be coerced via ${operation}; reveal it explicitly.`,
   );
 }
 
@@ -422,5 +475,7 @@ export function trustedReveal<T>(value: T, options: TrustedRevealOptions): Trust
   }
   // Unwrap a runtime secret box so the reveal yields the value, not the poisoned
   // wrapper; a non-box value (e.g. a Drizzle column typed Secret) passes through.
-  return (isSecret(value) ? revealSecret(value) : value) as TrustedRevealValue<T>;
+  return (
+    isSecret(value) ? revealSecret(value, { justification: options.justification }) : value
+  ) as TrustedRevealValue<T>;
 }

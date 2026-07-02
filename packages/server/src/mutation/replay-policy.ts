@@ -1,3 +1,5 @@
+import { isUntrusted, revealUntrusted } from '@kovojs/core';
+
 import { KOVO_IDEM_FIELD_NAME, type CsrfValidationOptions } from '../csrf.js';
 import {
   canonicalRequestFingerprint,
@@ -224,7 +226,10 @@ function readNoJsIdemField(rawInput: unknown): string | undefined {
   } catch {
     return undefined;
   }
-  const value = record[KOVO_IDEM_FIELD_NAME];
+  const rawValue = record[KOVO_IDEM_FIELD_NAME];
+  const value = isUntrusted(rawValue)
+    ? revealUntrusted(rawValue, 'validated request-derived no-js idempotency token')
+    : rawValue;
   return typeof value === 'string' && value !== '' ? value : undefined;
 }
 

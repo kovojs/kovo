@@ -1,8 +1,15 @@
-import { cloneResponseHeaders, type ResponseHeaders, type ServerResponseBase } from './response.js';
+import { isUntrusted, revealUntrusted } from '@kovojs/core';
+
+import {
+  cloneResponseHeaders,
+  type FrameworkWireBody,
+  type ResponseHeaders,
+  type ServerResponseBase,
+} from './response.js';
 import { formLikeToRecord } from './schema.js';
 
 export type MutationReplayResponse = ServerResponseBase<
-  string,
+  FrameworkWireBody,
   ResponseHeaders,
   200 | 303 | 401 | 403 | 409 | 422 | 429 | 500
 >;
@@ -525,6 +532,12 @@ export function canonicalRequestFingerprint(value: unknown): string {
 }
 
 function canonicalJson(value: unknown): string {
+  // SPEC §5.2 rule 11 / §9.1: request provenance tags are author-time guardrails. The replay
+  // fingerprint compares the validated wire value, so reveal wrappers at this internal choke
+  // before structural canonicalization.
+  if (isUntrusted(value)) {
+    return canonicalJson(revealUntrusted(value, 'validated request-derived replay fingerprint'));
+  }
   // L3 (SPEC §9.1): a FormData body has no own-enumerable keys — canonicalize its entries to
   // a record (mirroring formLikeToRecord) before the structural walk so the fingerprint is
   // body-sensitive instead of always "{}".

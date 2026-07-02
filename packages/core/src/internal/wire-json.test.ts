@@ -38,7 +38,7 @@ describe('wire-json core contract', () => {
 
   it('refuses runtime secret boxes before JSON serialization reaches the wire', () => {
     expect(() => stringifyWireValue({ token: secret('sk_live_wire_json') })).toThrow(
-      /Secret runtime value cannot cross/,
+      /KV435 Secret runtime value cannot cross/,
     );
 
     try {

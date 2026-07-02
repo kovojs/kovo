@@ -23,6 +23,19 @@ describe('check-wire-output-boundary', () => {
     expect(run({}).ok).toBe(true);
   });
 
+  it('passes when the response choke is a branded wireEmitter export', () => {
+    expect(
+      run({
+        'packages/server/src/response-posture.ts': `
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
+export const emitToWire = wireEmitter('server.response.emit-to-wire', function (value) {
+  return new Response(value.body);
+});
+`,
+      }).ok,
+    ).toBe(true);
+  });
+
   it('rejects a planted direct Response canary outside the choke', () => {
     const result = run({
       'packages/server/src/canary.ts': `export function leak() { return new Response('secret'); }`,

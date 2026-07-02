@@ -17,8 +17,10 @@ import { resolveKovoLifecycleRequest } from './response-posture.js';
 import {
   blessRedirectResponse,
   isBlessedRedirectResponse,
+  frameworkWireBody,
   mergeResponseHeaders,
   retryAfterHeaders,
+  type FrameworkWireBody,
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
@@ -32,6 +34,7 @@ import {
 import { renderQueryWireHtml } from './wire-html.js';
 import type { JsonSerializable } from './json-boundary.js';
 import type { Reader } from './managed-db.js';
+import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 
 interface QueryDeltaListMeta {
   domain: string;
@@ -85,7 +88,7 @@ export type QuerySearchInput =
 
 /** @internal */
 export interface QueryEndpointResponse extends ServerResponseBase<
-  string,
+  FrameworkWireBody,
   ResponseHeaders,
   200 | 303 | 403 | 404 | 422 | 429 | 500
 > {}
@@ -404,9 +407,9 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,
   rawInput: unknown,
   request: Request,
-  options: RequestLifecycleOptions<Request> = {},
+  options: RequestLifecycleOptions<Request> & { trustedInput?: boolean } = {},
 ): Promise<QueryEndpointResult<Value, Input>> {
-  const argsResult = parseQueryInput(definition, rawInput);
+  const argsResult = parseQueryInput(definition, rawInput, options.trustedInput === true);
   if (!argsResult.ok) return argsResult.failure;
 
   // SPEC §9.4/§10.3 (MARQUEE): the framework owns the handle threaded into the loader. A
@@ -533,7 +536,9 @@ export const renderQueryEndpointResponse = wireEmitter(
     definition: QueryDefinition<Key, Value, Input, Request>,
     endpointRequest: QueryEndpointRequest<Request>,
   ): Promise<QueryEndpointResponse> {
-    const rawInput = querySearchInputToRecord(endpointRequest.search ?? {});
+    const rawInput = tagUntrustedRequestValue(
+      querySearchInputToRecord(endpointRequest.search ?? {}),
+    );
     let result: QueryEndpointResult<Value, Input>;
     let lifecycleRequest: Request = endpointRequest.request;
     try {
@@ -564,7 +569,7 @@ export const renderQueryEndpointResponse = wireEmitter(
       // including error responses, so a shared/intermediary cache cannot store and replay
       // any response (even an anon 403) to a different user.
       return {
-        body: JSON.stringify(serverErrorPayload()),
+        body: frameworkWireBody(JSON.stringify(serverErrorPayload())),
         headers: queryJsonHeaders(endpointRequest),
         status: 500,
       };
@@ -580,11 +585,18 @@ export const renderQueryEndpointResponse = wireEmitter(
       // SPEC §9.4:895: guard-failure responses (303 redirect, 403) also carry the private
       // cache posture — an anon 403 must not be cached and replayed to an authed user.
       if (authResponse) {
-        return withQueryBuildHeaders(withQueryCacheHeaders(authResponse), endpointRequest);
+        const queryAuthResponse = {
+          ...authResponse,
+          body: frameworkWireBody(typeof authResponse.body === 'string' ? authResponse.body : ''),
+        };
+        const markedAuthResponse = isBlessedRedirectResponse(authResponse)
+          ? blessRedirectResponse(queryAuthResponse)
+          : queryAuthResponse;
+        return withQueryBuildHeaders(withQueryCacheHeaders(markedAuthResponse), endpointRequest);
       }
 
       return {
-        body: JSON.stringify(result.error),
+        body: frameworkWireBody(JSON.stringify(result.error)),
         headers: mergeResponseHeaders(
           {
             'Cache-Control': 'private, no-store',
@@ -614,14 +626,14 @@ export const renderQueryEndpointResponse = wireEmitter(
         request: lifecycleRequest,
       });
       return {
-        body: JSON.stringify(serverErrorPayload()),
+        body: frameworkWireBody(JSON.stringify(serverErrorPayload())),
         headers: queryJsonHeaders(endpointRequest),
         status: 500,
       };
     }
 
     return {
-      body,
+      body: frameworkWireBody(body),
       headers: mergeResponseHeaders(
         { 'Content-Type': 'text/html; charset=utf-8' },
         querySuccessCacheHeaders(),
@@ -651,7 +663,7 @@ export const renderQueryRegistryEndpointResponse = wireEmitter(
 
     if (!definition) {
       return withQueryCacheHeaders({
-        body: 'Not Found',
+        body: frameworkWireBody('Not Found'),
         headers: mergeResponseHeaders(
           { 'Content-Type': 'text/plain; charset=utf-8' },
           queryBuildHeaders(endpointRequest),
@@ -686,7 +698,9 @@ export function readQueryVersion<const Key extends string, Value, Input, Request
 function parseQueryInput<const Key extends string, Value, Input, Request>(
   definition: QueryDefinition<Key, Value, Input, Request>,
   rawInput: unknown,
+  trustedInput = false,
 ): { ok: true; value: Input } | { failure: QueryEndpointFailure; ok: false } {
+  rawInput = trustedInput ? rawInput : tagUntrustedRequestValue(rawInput);
   if (!definition.args) return { ok: true, value: rawInput as Input };
 
   try {

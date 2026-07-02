@@ -7,9 +7,17 @@ import { describe, expect, it } from 'vitest';
 import {
   SECURITY_BUILD_CERTIFICATION_SOURCES,
   SECURITY_BUILD_PROOFS,
+  generateParanoidGeneratorAcceptanceCases,
+  generateReadSourceFamilyCases,
+  generateSecurityWrappingCases,
+  generateTrustedOutputSinkPositionCases,
   extractMetamorphicSeedCodes,
   extractSecurityCertificationMarkers,
+  paranoidGeneratorAcceptanceProofNeedles,
+  readSourceFamilyProofNeedles,
   securityTestBuildGateViolations,
+  securityWrappingProofNeedles,
+  trustedOutputSinkPositionProofNeedles,
 } from './security-test-build-gate.mjs';
 
 const METAMORPHIC_CERTIFICATION_SOURCES = SECURITY_BUILD_CERTIFICATION_SOURCES.filter(
@@ -17,7 +25,7 @@ const METAMORPHIC_CERTIFICATION_SOURCES = SECURITY_BUILD_CERTIFICATION_SOURCES.f
 );
 
 describe('security-test-build-gate', () => {
-  it('keeps the enrolled security certification corpus tied to real kovo build tests', () => {
+  it('keeps the enrolled security proof-scope enrollment corpus tied to real kovo build tests', () => {
     expect(securityTestBuildGateViolations()).toEqual([]);
   });
 
@@ -34,7 +42,7 @@ describe('security-test-build-gate', () => {
     ).toEqual(['KV330', 'KV426']);
   });
 
-  it('extracts explicit security certification markers without treating incidental KV mentions as certification', () => {
+  it('extracts explicit security proof-scope enrollment markers without treating incidental KV mentions as certification', () => {
     expect(
       extractSecurityCertificationMarkers(`
         expect(output).toContain('KV426');
@@ -47,7 +55,109 @@ describe('security-test-build-gate', () => {
     ]);
   });
 
-  it('requires real build proof for explicitly enrolled non-metamorphic security certifications', () => {
+  it('generates deterministic trusted-output SINK-position proof cases from a seeded grammar', () => {
+    const defaultCases = generateTrustedOutputSinkPositionCases();
+    const sameSeedCases = generateTrustedOutputSinkPositionCases({
+      seed: 'dec-g:kv426:trusted-output:v1',
+    });
+    const alternateSeedCases = generateTrustedOutputSinkPositionCases({
+      seed: 'dec-g:kv426:trusted-output:order-a',
+    });
+
+    expect(defaultCases).toEqual(sameSeedCases);
+    expect(defaultCases).not.toEqual(alternateSeedCases);
+    expect(new Set(defaultCases.map((testCase) => testCase.sink))).toEqual(
+      new Set(['trustedHtml', 'trustedUrl', 'renderedHtml']),
+    );
+    expect(new Set(defaultCases.map((testCase) => testCase.source))).toEqual(
+      new Set(['request', 'query']),
+    );
+    expect(new Set(defaultCases.map((testCase) => testCase.wrapping))).toEqual(
+      new Set(['direct-call', 'helper-call', 'component-prop']),
+    );
+    expect(trustedOutputSinkPositionProofNeedles().sort()).toEqual([
+      'renderedHtml() sends query-derived data',
+      'trustedHtml() sends request-derived data',
+      'trustedUrl() sends query-derived data',
+    ]);
+  });
+
+  it('generates deterministic read-SOURCE proof cases across request query and DB-read families', () => {
+    const defaultCases = generateReadSourceFamilyCases();
+    const sameSeedCases = generateReadSourceFamilyCases({ seed: 'dec-g:read-source:v1' });
+    const alternateSeedCases = generateReadSourceFamilyCases({ seed: 'b' });
+
+    expect(defaultCases).toEqual(sameSeedCases);
+    expect(defaultCases).not.toEqual(alternateSeedCases);
+    expect(new Set(defaultCases.map((testCase) => testCase.family))).toEqual(
+      new Set(['request', 'query', 'db-read']),
+    );
+    expect(readSourceFamilyProofNeedles().sort()).toEqual([
+      'queries/auth-secret-direct-leak-query.accessToken',
+      'trustedHtml() sends request-derived data',
+      'trustedUrl() sends query-derived data',
+    ]);
+  });
+
+  it('generates deterministic wrapping proof cases across security surfaces', () => {
+    const defaultCases = generateSecurityWrappingCases();
+    const sameSeedCases = generateSecurityWrappingCases({ seed: 'dec-g:wrapping:v1' });
+    const alternateSeedCases = generateSecurityWrappingCases({
+      seed: 'dec-g:wrapping:order-a',
+    });
+
+    expect(defaultCases).toEqual(sameSeedCases);
+    expect(defaultCases).not.toEqual(alternateSeedCases);
+    expect(new Set(defaultCases.map((testCase) => testCase.form))).toEqual(
+      new Set(['alias', 'component-prop', 'direct', 'helper', 'local-wrapper']),
+    );
+    expect(securityWrappingProofNeedles().sort()).toEqual([
+      'queries/auth-secret-direct-leak-query.accessToken',
+      'queries/auth-secret-leak-query.accessToken',
+      'queries/auth-secret-transformed-leak-query.password',
+      'renderedHtml() sends query-derived data',
+      'trustedHtml() sends request-derived data',
+    ]);
+  });
+
+  it('generates deterministic paranoid acceptance cases for unsafe and legitimate paths', () => {
+    const defaultCases = generateParanoidGeneratorAcceptanceCases();
+    const sameSeedCases = generateParanoidGeneratorAcceptanceCases({
+      seed: 'dec-h:round-8:paranoid:v1',
+    });
+    const alternateSeedCases = generateParanoidGeneratorAcceptanceCases({ seed: 'a' });
+
+    expect(defaultCases).toEqual(sameSeedCases);
+    expect(defaultCases).not.toEqual(alternateSeedCases);
+    expect(new Set(defaultCases.map((testCase) => testCase.expectation))).toEqual(
+      new Set(['unsafe-runtime-choke', 'static-classifiers-stubbed', 'legitimate-build-green']),
+    );
+    expect(
+      new Set(
+        defaultCases
+          .filter((testCase) => testCase.kind === 'runtime-route')
+          .map((testCase) => testCase.route),
+      ),
+    ).toEqual(
+      new Set([
+        '/paranoid-runtime-safe.txt',
+        '/paranoid-runtime-unsafe-header.txt',
+        '/paranoid-runtime-unsafe-helper.txt',
+      ]),
+    );
+    expect(
+      defaultCases.filter((testCase) => testCase.expectation === 'unsafe-runtime-choke'),
+    ).toHaveLength(2);
+    expect(paranoidGeneratorAcceptanceProofNeedles().sort()).toEqual([
+      "KOVO_PARANOID: '1'",
+      'addParanoidRuntimeProofRoutes(root, paranoidCases)',
+      'buildParanoidProductionArtifact(root)',
+      'expectParanoidRuntimeCase(origin, testCase)',
+      'generateParanoidGeneratorAcceptanceCases()',
+    ]);
+  });
+
+  it('requires real build proof for explicitly enrolled non-metamorphic security proof-scope enrollments', () => {
     withTempRepo((repoRoot) => {
       writeUnitCertificationSource(
         repoRoot,
@@ -64,7 +174,7 @@ describe('security-test-build-gate', () => {
           certificationSources: [
             {
               claimExtractor: 'security-certification-markers',
-              description: 'unit security certification declarations',
+              description: 'unit security proof-scope enrollment declarations',
               file: 'packages/drizzle/src/unit-security.test.ts',
             },
           ],
@@ -72,7 +182,7 @@ describe('security-test-build-gate', () => {
           repoRoot,
         }),
       ).toContain(
-        'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-unit: security certification has no real kovo build proof',
+        'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-unit: security proof-scope enrollment has no real kovo build proof',
       );
     });
   });
@@ -93,7 +203,7 @@ describe('security-test-build-gate', () => {
           certificationSources: [
             {
               claimExtractor: 'security-certification-markers',
-              description: 'unit security certification declarations',
+              description: 'unit security proof-scope enrollment declarations',
               file: 'packages/drizzle/src/unit-security.test.ts',
             },
           ],
@@ -125,7 +235,7 @@ describe('security-test-build-gate', () => {
           certificationSources: [
             {
               claimExtractor: 'security-certification-markers',
-              description: 'unit security certification declarations',
+              description: 'unit security proof-scope enrollment declarations',
               file: 'packages/drizzle/src/unit-security.test.ts',
             },
           ],
@@ -143,8 +253,8 @@ describe('security-test-build-gate', () => {
         }),
       ).toEqual(
         expect.arrayContaining([
-          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-current: security certification has no real kovo build proof',
-          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-old -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not certify KV426/trusted-html-old',
+          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-current: security proof-scope enrollment has no real kovo build proof',
+          'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-old -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not enroll KV426/trusted-html-old',
         ]),
       );
     });
@@ -161,7 +271,7 @@ describe('security-test-build-gate', () => {
           repoRoot,
         }),
       ).toContain(
-        'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security certification has no real kovo build proof',
+        'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security proof-scope enrollment has no real kovo build proof',
       );
     });
   });
@@ -305,6 +415,109 @@ describe('security-test-build-gate', () => {
     });
   });
 
+  it('consumes generated trusted-output SINK-position evidence in the proof gate', () => {
+    withTempRepo((repoRoot) => {
+      writeStarterProofFile(
+        repoRoot,
+        [
+          '// @kovo-security-certifies KV426 trusted-output-prod-artifact',
+          "it('trusted output proof', () => {",
+          '  addTrustedOutputProvenanceBuildProof(unsafeRoot);',
+          '  buildProductionArtifact(unsafeRoot);',
+          '  addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false });',
+          '  buildReusableProductionArtifact(safeRoot);',
+          "  expect(output).toContain('KV426');",
+          "  expect(output).toContain('trustedUrl() sends query-derived data');",
+          "  expect(output).toContain('trustedHtml() sends request-derived data');",
+          '});',
+        ].join('\n'),
+      );
+      writeStarterBuildHelper(repoRoot, validStarterBuildHelperSource());
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: [
+            {
+              claimExtractor: 'security-certification-markers',
+              description: 'starter security proof-scope enrollment declarations',
+              file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+            },
+          ],
+          proofs: [
+            {
+              buildInvocation: 'starter-build-production-artifact',
+              claimId: 'trusted-output-prod-artifact',
+              code: 'KV426',
+              proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+              requiredNeedles: [
+                'addTrustedOutputProvenanceBuildProof(unsafeRoot)',
+                'buildProductionArtifact(unsafeRoot)',
+                'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',
+                'buildReusableProductionArtifact(safeRoot)',
+                'KV426',
+                ...trustedOutputSinkPositionProofNeedles(),
+              ],
+              sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+              testName: 'trusted output proof',
+            },
+          ],
+          repoRoot,
+        }),
+      ).toContain(
+        'packages/create-kovo/src/index.build.prod-artifact.security.test.ts KV426/trusted-output-prod-artifact -> packages/create-kovo/src/index.build.prod-artifact.security.test.ts: proof test is missing required evidence "renderedHtml() sends query-derived data"',
+      );
+    });
+  });
+
+  it('recognizes paranoid starter production builds as real build proofs', () => {
+    withTempRepo((repoRoot) => {
+      writeStarterProofFile(
+        repoRoot,
+        [
+          '// @kovo-security-certifies KV435 runtime-secret-view-egress',
+          "it('paranoid secret view proof', () => {",
+          '  addSecretViewEgressProof(root);',
+          '  buildParanoidProductionArtifact(root);',
+          "  expect(output).toContain('KV435');",
+          "  expect(output).toContain('Secret runtime value cannot cross');",
+          '  await fetch(`${origin}/_q/secret-view-egress`);',
+          '});',
+        ].join('\n'),
+      );
+      writeStarterBuildHelper(repoRoot, validStarterBuildHelperSource());
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: [
+            {
+              claimExtractor: 'security-certification-markers',
+              description: 'starter security proof-scope enrollment declarations',
+              file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+            },
+          ],
+          proofs: [
+            {
+              buildInvocation: 'starter-build-production-artifact',
+              claimId: 'runtime-secret-view-egress',
+              code: 'KV435',
+              proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+              requiredNeedles: [
+                'addSecretViewEgressProof(root)',
+                'buildParanoidProductionArtifact(root)',
+                'KV435',
+                'Secret runtime value cannot cross',
+                '/_q/secret-view-egress',
+              ],
+              sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+              testName: 'paranoid secret view proof',
+            },
+          ],
+          repoRoot,
+        }),
+      ).toEqual([]);
+    });
+  });
+
   it('allows proof manifests to require evidence from helper sources outside the test block', () => {
     withTempRepo((repoRoot) => {
       writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV426' }];");
@@ -405,8 +618,8 @@ describe('security-test-build-gate', () => {
         }),
       ).toEqual(
         expect.arrayContaining([
-          'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security certification has no real kovo build proof',
-          'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV330 -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not certify KV330',
+          'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security proof-scope enrollment has no real kovo build proof',
+          'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV330 -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not enroll KV330',
         ]),
       );
     });
@@ -565,6 +778,12 @@ function validStarterBuildHelperSource() {
     '}',
     'export function buildReusableProductionArtifact(root) {',
     "  return execFileSync('kovo', ['build', './src/app.tsx'], { cwd: root });",
+    '}',
+    'export function buildParanoidProductionArtifact(root) {',
+    "  return execFileSync('kovo', ['build', './src/app.tsx', '--no-cache'], {",
+    '    cwd: root,',
+    "    env: { KOVO_PARANOID: '1' },",
+    '  });',
     '}',
   ].join('\n');
 }

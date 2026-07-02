@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { untrusted } from '@kovojs/core';
+
 import { csrfToken } from './csrf.js';
 import { domain } from './domain.js';
 import { renderMutationResponse as renderMutationResponseBase } from './mutation.js';
@@ -293,6 +295,15 @@ describe('server mutation response replay', () => {
     expect(first.status).toBe(200);
     expect(second.status).toBe(200);
     expect(second.body).toBe(first.body);
+  });
+
+  it('keeps replay fingerprints body-sensitive for untrusted tagged scalar fields', () => {
+    expect(canonicalRequestFingerprint({ productId: untrusted('p1') })).not.toBe(
+      canonicalRequestFingerprint({ productId: untrusted('p2') }),
+    );
+    expect(canonicalRequestFingerprint({ productId: untrusted('p1') })).toBe(
+      canonicalRequestFingerprint({ productId: 'p1' }),
+    );
   });
 
   it('neutralizes rotating CSRF tokens before comparing precomputed replay fingerprints (L5)', () => {

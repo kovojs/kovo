@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import {
   resolveLifecycleRequest,
   type RequestLifecycleOptions,
@@ -16,6 +17,7 @@ import {
   type WebResponseBody,
 } from './response.js';
 import { forwardSetCookie } from './cookies.js';
+import { assertNoSecretEgressValue } from './secret-egress.js';
 import type {
   EndpointDeclaration,
   EndpointMethod,
@@ -233,43 +235,46 @@ export function finalizeRawWebResponse(
  * reaches the Web `Response` constructor here, after status/body suppression and header safety
  * checks have run for the selected channel.
  */
-export function emitToWire(
-  value: Response | ServerResponseBase<WebResponseBody, ResponseHeaders>,
-  channel: WireOutputChannel,
-  provenance: WireOutputProvenance,
-): Response {
-  if (channel === 'raw-endpoint-response') {
-    if (!(value instanceof Response)) {
-      throw new TypeError('emitToWire raw-endpoint-response requires a Web Response.');
+export const emitToWire = wireEmitter(
+  'server.response.emit-to-wire',
+  function (
+    value: Response | ServerResponseBase<WebResponseBody, ResponseHeaders>,
+    channel: WireOutputChannel,
+    provenance: WireOutputProvenance,
+  ): Response {
+    if (channel === 'raw-endpoint-response') {
+      if (!(value instanceof Response)) {
+        throw new TypeError('emitToWire raw-endpoint-response requires a Web Response.');
+      }
+      const finalizedHeaders = finalizeRawResponseHeaders(
+        value,
+        provenance.redirectAllowlist === undefined
+          ? {}
+          : { redirectAllowlist: provenance.redirectAllowlist },
+      );
+      const suppressBody = provenance.method === 'HEAD' || value.status === 304;
+      if (!suppressBody && finalizedHeaders === value.headers) return value;
+
+      return new Response(suppressBody ? null : value.body, {
+        headers: finalizedHeaders,
+        status: value.status,
+        statusText: value.statusText,
+      });
     }
-    const finalizedHeaders = finalizeRawResponseHeaders(
-      value,
-      provenance.redirectAllowlist === undefined
-        ? {}
-        : { redirectAllowlist: provenance.redirectAllowlist },
-    );
-    const suppressBody = provenance.method === 'HEAD' || value.status === 304;
-    if (!suppressBody && finalizedHeaders === value.headers) return value;
 
-    return new Response(suppressBody ? null : value.body, {
-      headers: finalizedHeaders,
+    if (value instanceof Response) {
+      throw new TypeError('emitToWire framework-response requires a structured response.');
+    }
+
+    return new Response(webResponseBodyToBodyInit(value.body), {
+      headers: finalizeResponseHeaders(value.headers, {
+        blessedRedirect: provenance.blessedRedirect ?? false,
+        status: provenance.status ?? value.status,
+      }),
       status: value.status,
-      statusText: value.statusText,
     });
-  }
-
-  if (value instanceof Response) {
-    throw new TypeError('emitToWire framework-response requires a structured response.');
-  }
-
-  return new Response(webResponseBodyToBodyInit(value.body), {
-    headers: finalizeResponseHeaders(value.headers, {
-      blessedRedirect: provenance.blessedRedirect ?? false,
-      status: provenance.status ?? value.status,
-    }),
-    status: value.status,
-  });
-}
+  },
+);
 
 /** A request view that carries no app session and no ambient browser Cookie header. */
 export function endpointRequestWithoutSession(request: Request): EndpointRequest {
@@ -432,6 +437,7 @@ function assertSafeResponseHeaderName(name: string): void {
 }
 
 function assertSafeResponseHeaderValue(name: string, value: string): void {
+  assertNoSecretEgressValue(value, `response header "${name}"`);
   for (let index = 0; index < value.length; index += 1) {
     const code = value.charCodeAt(index);
     if (code > 0x1f && code !== 0x7f) continue;

@@ -21,9 +21,12 @@ import {
 } from './response.js';
 import { isSchemaValidationError } from './schema.js';
 import type { InferSchema, Schema, ValidationIssue } from './schema.js';
-import { wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
+import { managedSqlExecutionPolicy, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { reserveReplayBeforeRun } from './replay.js';
-import { parseUntrustedJsonBodyBytes } from './untrusted-request-body.js';
+import {
+  parseUntrustedJsonBodyBytes,
+  revealUntrustedRequestValue,
+} from './untrusted-request-body.js';
 
 const WEBHOOK_RESPONSE_RESERVED_HEADERS = ['Kovo-*'] as const;
 
@@ -792,8 +795,9 @@ async function parseLooseWebhookInput<InputSchema extends Schema<unknown>>(
 > {
   try {
     const parsed = await parseSchema(schema, rawInput);
+    const looseInput = revealUntrustedRequestValue(rawInput, 'verified loose webhook input');
     const value =
-      isPlainRecord(rawInput) && isPlainRecord(parsed) ? { ...rawInput, ...parsed } : parsed;
+      isPlainRecord(looseInput) && isPlainRecord(parsed) ? { ...looseInput, ...parsed } : parsed;
 
     return { ok: true, value: value as WebhookInputFor<InputSchema> };
   } catch (error) {
@@ -879,7 +883,11 @@ function webhookMutationRequest<Tx>(request: EndpointRequest, tx: Tx): EndpointR
 }
 
 function webhookManagedTransactionDb<Tx>(tx: Tx): Tx {
-  return wrapManagedDbForSqlSafety(tx, undefined, { capability: 'write' });
+  return wrapManagedDbForSqlSafety(
+    tx,
+    undefined,
+    managedSqlExecutionPolicy({ capability: 'write' }),
+  );
 }
 
 function assertDeclaredWebhookChangeDomain(

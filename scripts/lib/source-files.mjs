@@ -1,4 +1,4 @@
-import { existsSync, readdirSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { readdir } from 'node:fs/promises';
 import path from 'node:path';
 
@@ -9,6 +9,9 @@ export const productionSourceRoots = [
   'packages/cli/src',
 ];
 
+export const securityMarkersModule = '@kovojs/core/internal/security-markers';
+const workspacePackageRoot = 'packages';
+const defaultIgnoredSecurityMarkerPackages = new Set(['conformance-fixtures']);
 const productionSourcePattern = /\.[cm]?tsx?$/u;
 const productionTestPattern = /\.(?:test|spec)\.[cm]?tsx?$/u;
 
@@ -31,6 +34,20 @@ export function collectSourceFiles(root, roots, options = {}) {
   });
 }
 
+export function securityMarkerSourceRoots(root, options = {}) {
+  const packageRoot = options.packageRoot ?? workspacePackageRoot;
+  const ignoredPackages = options.ignoredPackages ?? defaultIgnoredSecurityMarkerPackages;
+  const roots = new Set(options.baseRoots ?? productionSourceRoots);
+  const sourceRoots = workspacePackageSourceRoots(root, packageRoot, ignoredPackages);
+  for (const sourceRoot of sourceRoots) {
+    const files = collectSourceFiles(root, [sourceRoot], { productionRoots: [sourceRoot] });
+    if (files.some((file) => sourceFileImportsSecurityMarkers(root, file))) {
+      roots.add(sourceRoot);
+    }
+  }
+  return sortFiles([...roots]);
+}
+
 export async function collectSourceFilesAsync(root, roots, options = {}) {
   return collectFilesAsync(root, roots, {
     ...options,
@@ -39,6 +56,34 @@ export async function collectSourceFilesAsync(root, roots, options = {}) {
       (({ relativePath }) =>
         isProductionSourceFile(relativePath, { roots: options.productionRoots ?? roots })),
   });
+}
+
+function workspacePackageSourceRoots(root, packageRoot, ignoredPackages) {
+  const absolutePackageRoot = path.resolve(root, packageRoot);
+  let entries;
+  try {
+    entries = readdirSync(absolutePackageRoot, { withFileTypes: true });
+  } catch (error) {
+    if (error?.code === 'ENOENT') return [];
+    throw error;
+  }
+
+  const roots = [];
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    if (ignoredPackages.has(entry.name)) continue;
+    const sourceRoot = slash(path.join(packageRoot, entry.name, 'src'));
+    if (existsSync(path.resolve(root, sourceRoot))) roots.push(sourceRoot);
+  }
+  return sortFiles(roots);
+}
+
+function sourceFileImportsSecurityMarkers(root, relativePath) {
+  const text = readFileSync(path.resolve(root, relativePath), 'utf8');
+  return (
+    text.includes(`from '${securityMarkersModule}'`) ||
+    text.includes(`from "${securityMarkersModule}"`)
+  );
 }
 
 export function collectFiles(root, roots, options = {}) {
