@@ -6,6 +6,7 @@ import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import {
   KovoReadonlyHandleError,
   kovoDeclaredWriteDbHandle,
+  kovoReadonlyDbHandle,
   managedDb,
   readonlyDb,
 } from './managed-db.js';
@@ -514,6 +515,78 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     ).not.toThrow();
   });
 
+  it('uses a dedicated engine read-only target and keeps writer lifecycle isolated', async () => {
+    const log: string[] = [];
+    const raw = {
+      readonlyState: false,
+      [kovoReadonlyDbHandle]() {
+        log.push('readonly-target-created');
+        return {
+          query(statement: unknown) {
+            log.push('readonly.query');
+            if (
+              typeof statement === 'object' &&
+              statement !== null &&
+              'text' in statement &&
+              String((statement as { text: unknown }).text).includes('setval')
+            ) {
+              throw new Error('cannot execute setval in a read-only transaction');
+            }
+            return Promise.resolve(statement);
+          },
+        };
+      },
+      insert(table: string) {
+        log.push(`writer.insert:${table}:readonly=${String(this.readonlyState)}`);
+        return { values: () => Promise.resolve() };
+      },
+      query(statement: unknown) {
+        log.push('writer.query');
+        return Promise.resolve(statement);
+      },
+    };
+
+    const reader = managedDb(raw, 'read') as unknown as {
+      query(statement: unknown): Promise<unknown>;
+    };
+    await expect(
+      reader.query({
+        text: "select string_agg(name, ',') from contacts where created_at < date_trunc('day', now()) and id <> $1",
+        values: ['archived'],
+      }),
+    ).resolves.toMatchObject({ text: expect.stringContaining('string_agg') });
+    expect(() =>
+      reader.query(
+        stampTrustedSql({ text: "select setval('contact_id_seq', 1)" }, 'engine-readonly setval'),
+      ),
+    ).toThrow(/KV433[\s\S]*read-only transaction/);
+
+    const writer = managedDb(raw, 'write') as unknown as {
+      insert(table: string): { values(): Promise<void> };
+    };
+    await expect(writer.insert('contacts').values()).resolves.toBeUndefined();
+
+    expect(log).toEqual([
+      'readonly-target-created',
+      'readonly.query',
+      'readonly.query',
+      'writer.insert:contacts:readonly=false',
+    ]);
+  });
+
+  it('fails closed when an engine read-only hook returns the writer handle', () => {
+    const raw = {
+      [kovoReadonlyDbHandle]() {
+        return raw;
+      },
+      query(statement: unknown) {
+        return statement;
+      },
+    };
+
+    expect(() => managedDb(raw, 'read')).toThrow(/KV433[\s\S]*dedicated engine read-only handle/);
+  });
+
   it('read mode parses SQLite sinks and blocks mutating statements before execution', async () => {
     const log: string[] = [];
     const handle = managedDb(fakeDb(log), 'read', {
@@ -1018,6 +1091,58 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     await expect(handle.insert('contacts').values()).resolves.toBeUndefined();
     expect(() => handle.insert('userx').values()).toThrow(/KV406/);
     expect(log).toEqual(['engine-policy:contacts', 'engine-insert:contacts']);
+  });
+
+  it('scopes declared-write engine policy to one writer without leaking to later writers', async () => {
+    const log: string[] = [];
+    const raw = {
+      [kovoDeclaredWriteDbHandle](policy: { tables?: readonly string[] }) {
+        const allowed = new Set(policy.tables ?? []);
+        log.push(`engine-policy:${[...allowed].join(',')}`);
+        return {
+          insert(table: string) {
+            return {
+              values() {
+                if (!allowed.has(table)) {
+                  throw new Error(`KV406: engine declared-write policy rejected ${table}`);
+                }
+                log.push(`engine-insert:${table}`);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+      },
+      insert(table: string) {
+        log.push(`raw-insert:${table}`);
+        return { values: () => Promise.resolve() };
+      },
+    };
+
+    const contactsWriter = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['contacts'], touches: ['contact'] },
+    }) as { insert(table: string): { values(): Promise<void> } };
+    await expect(contactsWriter.insert('contacts').values()).resolves.toBeUndefined();
+    expect(() => contactsWriter.insert('userx').values()).toThrow(/KV406/);
+
+    const userWriter = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['userx'], touches: ['user'] },
+    }) as { insert(table: string): { values(): Promise<void> } };
+    await expect(userWriter.insert('userx').values()).resolves.toBeUndefined();
+    expect(() => userWriter.insert('contacts').values()).toThrow(/KV406/);
+
+    const broadWriter = managedDb(raw, 'write') as {
+      insert(table: string): { values(): Promise<void> };
+    };
+    await expect(broadWriter.insert('contacts').values()).resolves.toBeUndefined();
+
+    expect(log).toEqual([
+      'engine-policy:contacts',
+      'engine-insert:contacts',
+      'engine-policy:userx',
+      'engine-insert:userx',
+      'raw-insert:contacts',
+    ]);
   });
 
   it('write mode declared-table allowlist fails closed on unproven read-shaped SQL functions', () => {

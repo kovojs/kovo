@@ -215,7 +215,13 @@ function readonlyDbTarget<Db>(raw: Db): Db {
   if (!isRecord(raw)) return raw;
   const createReadonly = raw[kovoReadonlyDbHandle];
   if (typeof createReadonly !== 'function') return raw;
-  return createReadonly.call(raw) as Db;
+  const readTarget = createReadonly.call(raw) as Db;
+  if (readTarget === raw) {
+    throw new KovoReadonlyHandleError(
+      'KV433: adapter read-only DB hook returned the mutable writer handle; managed readers require a dedicated engine read-only handle (SPEC §10.3/§11.2).',
+    );
+  }
+  return readTarget;
 }
 
 function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy | undefined): Db {
