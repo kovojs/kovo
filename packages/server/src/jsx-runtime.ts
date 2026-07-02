@@ -11,6 +11,10 @@ import type { TrustedHtml, TrustedUrl } from '@kovojs/browser';
 import { ErrorBoundary, FieldError, FormError } from '@kovojs/core';
 import { isUrlAttributeName } from '@kovojs/core/internal/security-url';
 import {
+  drainRuntimeSinkSecurityEvent,
+  type RuntimeSinkSecurityEvent,
+} from '@kovojs/core/internal/sink-policy';
+import {
   isKovoTrustedUrl,
   kovoStyleProperty,
   kovoTrustedHtmlContent,
@@ -158,7 +162,7 @@ export function jsx(
   const attributes = renderJsxAttributes(type, props, key);
   if (voidElements.has(type)) return renderedHtml(`<${type}${attributes}>`);
 
-  const children = renderJsxChildren(renderJsxContent(props));
+  const children = renderJsxElementChildren(type, renderJsxContent(props));
   const afterChildren = type === 'form' ? renderFormAfterChildrenContent(props, key) : '';
   return isPromiseLike(children)
     ? children.then((html) =>
@@ -340,10 +344,7 @@ function renderJsxAttributes(type: string, props: JsxProps, jsxKey?: unknown): s
     if (!safeRuntimeAttributeName(name)) continue;
     // URL values are scheme-checked, srcset candidate lists are filtered, and
     // executable sinks (`on*`, `srcdoc`, raw CSS/HTML text) are omitted.
-    const attributeValue =
-      isKovoTrustedUrl(value) && isUrlAttributeName(name)
-        ? escapeAttribute(value.value)
-        : safeRuntimeAttribute(name, attributeText(name, value));
+    const attributeValue = renderContextualAttributeValue(type, props, name, value);
     if (attributeValue === null) continue;
     rendered +=
       value === true && !isAriaAttribute(name) ? ` ${name}` : ` ${name}="${attributeValue}"`;
@@ -569,6 +570,91 @@ function submittedInputContainsValue(input: unknown, value: string): boolean {
 function renderJsxContent(props: JsxProps): JsxChild {
   const rawHtml = rawHtmlContent(props);
   return rawHtml === undefined ? props.children : renderedHtml(rawHtml);
+}
+
+function renderJsxElementChildren(type: string, children: JsxChild): MaybePromise<string> {
+  if (isExecutableTextElement(type) && plainExecutableElementText(children)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        type,
+        'raw-html',
+        executableElementTextValue(children),
+        'element text is executable',
+      ),
+    );
+    return '';
+  }
+  return renderJsxChildren(children);
+}
+
+function isExecutableTextElement(type: string): boolean {
+  const tag = type.toLowerCase();
+  return tag === 'script' || tag === 'style';
+}
+
+function plainExecutableElementText(children: JsxChild): boolean {
+  return (
+    typeof children === 'string' || typeof children === 'number' || typeof children === 'boolean'
+  );
+}
+
+function executableElementTextValue(children: JsxChild): string {
+  if (typeof children === 'string') return children;
+  if (typeof children === 'number') return children.toString();
+  if (typeof children === 'boolean') return children ? 'true' : 'false';
+  return '';
+}
+
+function renderContextualAttributeValue(
+  type: string,
+  props: JsxProps,
+  name: string,
+  value: unknown,
+): string | null {
+  if (isMetaRefreshContentAttribute(type, props, name)) {
+    drainRuntimeSinkSecurityEvent(
+      runtimeElementSinkEvent(
+        'meta[http-equiv=refresh] content',
+        'url',
+        attributeText(name, value),
+        'meta refresh content is an executable navigation sink',
+      ),
+    );
+    return null;
+  }
+  return isKovoTrustedUrl(value) && isUrlAttributeName(name)
+    ? escapeAttribute(value.value)
+    : safeRuntimeAttribute(name, attributeText(name, value));
+}
+
+function isMetaRefreshContentAttribute(type: string, props: JsxProps, name: string): boolean {
+  return (
+    type.toLowerCase() === 'meta' &&
+    name.toLowerCase() === 'content' &&
+    attributeText('http-equiv', props['http-equiv'] ?? props['httpEquiv']).toLowerCase() ===
+      'refresh'
+  );
+}
+
+function runtimeElementSinkEvent(
+  sink: string,
+  family: RuntimeSinkSecurityEvent['family'],
+  value: string,
+  reason: string,
+): RuntimeSinkSecurityEvent {
+  return {
+    action: 'remove',
+    code: 'KV236',
+    family,
+    message: `KV236 runtime remove for ${family} sink "${sink}": ${reason}`,
+    reason,
+    sink,
+    value: {
+      length: value.length,
+      preview: `<redacted:${value.length}>`,
+      redacted: true,
+    },
+  };
 }
 
 function attributeText(name: string, value: unknown): string {

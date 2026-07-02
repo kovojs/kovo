@@ -23,7 +23,7 @@ import { matchShellDispatch } from './shell.js';
 import { resolveRequestClientIp } from './app-load-shed.js';
 import { resolveKovoLifecycleRequest } from './response-posture.js';
 import { appTaskScheduler } from './task-runtime.js';
-import { readUntrustedRequestBody } from './untrusted-request-body.js';
+import { readUntrustedRequestBody, revealUntrustedRequestValue } from './untrusted-request-body.js';
 
 export async function handleAppMutationRequest(
   app: KovoApp,
@@ -89,11 +89,15 @@ export async function handleAppMutationRequest(
     );
   }
   const rawInput = bodyResult.value;
+  const responseRawInput = revealUntrustedRequestValue(
+    rawInput,
+    'validated app mutation response raw input',
+  );
   const mutationResponseOptions = await resolveAppMutationResponsePolicy(app, {
     currentUrl,
     key: mutation.key,
     mutation,
-    rawInput,
+    rawInput: responseRawInput,
     request: mutationRequest,
     url: new URL(url),
   });
@@ -107,7 +111,7 @@ export async function handleAppMutationRequest(
     mutationRequest,
     sourceUrl,
     mutation.key,
-    rawInput,
+    responseRawInput,
   );
   const requestMutation = mutation as unknown as MutationDefinition<
     string,

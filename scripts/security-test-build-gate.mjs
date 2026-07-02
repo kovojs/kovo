@@ -16,6 +16,235 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
   'KV330',
 ];
 
+export const DEFAULT_TRUSTED_OUTPUT_SINK_POSITION_SEED = 'dec-g:kv426:trusted-output:v1';
+export const DEFAULT_READ_SOURCE_FAMILY_SEED = 'dec-g:read-source:v1';
+export const DEFAULT_WRAPPING_GRAMMAR_SEED = 'dec-g:wrapping:v1';
+export const DEFAULT_PARANOID_GENERATOR_ACCEPTANCE_SEED = 'dec-h:round-8:paranoid:v1';
+
+export const TRUSTED_OUTPUT_SINK_POSITION_GRAMMAR = Object.freeze({
+  sinks: Object.freeze([
+    {
+      helper: 'trustedUrl',
+      position: 'url-brand',
+    },
+    {
+      helper: 'renderedHtml',
+      position: 'rendered-html-brand',
+    },
+    {
+      helper: 'trustedHtml',
+      position: 'html-brand',
+    },
+  ]),
+  sources: Object.freeze([
+    {
+      evidence: 'request-derived data',
+      source: 'request',
+    },
+    {
+      evidence: 'query-derived data',
+      source: 'query',
+    },
+  ]),
+  wrapping: Object.freeze(['direct-call', 'helper-call', 'component-prop']),
+});
+
+const TRUSTED_OUTPUT_CERTIFICATION_CASES = [
+  {
+    sink: 'trustedUrl',
+    source: 'query',
+    wrapping: 'direct-call',
+  },
+  {
+    sink: 'renderedHtml',
+    source: 'query',
+    wrapping: 'helper-call',
+  },
+  {
+    sink: 'trustedHtml',
+    source: 'request',
+    wrapping: 'component-prop',
+  },
+];
+
+export const READ_SOURCE_FAMILY_GRAMMAR = Object.freeze({
+  families: Object.freeze([
+    {
+      family: 'request',
+      needle: 'trustedHtml() sends request-derived data',
+      surface: 'KV426 trusted output request source',
+    },
+    {
+      family: 'query',
+      needle: 'trustedUrl() sends query-derived data',
+      surface: 'KV426 trusted output query source',
+    },
+    {
+      family: 'db-read',
+      needle: 'queries/auth-secret-direct-leak-query.accessToken',
+      surface: 'KV435 direct secret DB-read source',
+    },
+  ]),
+});
+
+export const SECURITY_WRAPPING_GRAMMAR = Object.freeze({
+  forms: Object.freeze([
+    {
+      form: 'alias',
+      needle: 'queries/auth-secret-leak-query.accessToken',
+      surface: 'KV435 cross-select alias/value merge',
+    },
+    {
+      form: 'component-prop',
+      needle: 'trustedHtml() sends request-derived data',
+      surface: 'KV426 component prop request slot',
+    },
+    {
+      form: 'direct',
+      needle: 'queries/auth-secret-direct-leak-query.accessToken',
+      surface: 'KV435 direct query projection',
+    },
+    {
+      form: 'helper',
+      needle: 'queries/auth-secret-transformed-leak-query.password',
+      surface: 'KV435 local helper transformation',
+    },
+    {
+      form: 'local-wrapper',
+      needle: 'renderedHtml() sends query-derived data',
+      surface: 'KV426 server wrapper renderedHtml',
+    },
+  ]),
+});
+
+export const PARANOID_GENERATOR_ACCEPTANCE_GRAMMAR = Object.freeze({
+  cases: Object.freeze([
+    {
+      expectation: 'legitimate-build-green',
+      kind: 'runtime-route',
+      route: '/paranoid-runtime-safe.txt',
+      sink: 'respond.file header',
+      surface: 'legitimate response-file route stays green',
+    },
+    {
+      expectation: 'static-classifiers-stubbed',
+      kind: 'build-env',
+      surface: 'KOVO_PARANOID production artifact build',
+    },
+    {
+      expectation: 'unsafe-runtime-choke',
+      kind: 'runtime-route',
+      route: '/paranoid-runtime-unsafe-header.txt',
+      sink: 'response header CRLF direct',
+      surface: 'direct response header runtime choke',
+    },
+    {
+      expectation: 'unsafe-runtime-choke',
+      kind: 'runtime-route',
+      route: '/paranoid-runtime-unsafe-helper.txt',
+      sink: 'response header CRLF helper',
+      surface: 'helper-wrapped response header runtime choke',
+    },
+  ]),
+});
+
+export function generateTrustedOutputSinkPositionCases({
+  seed = DEFAULT_TRUSTED_OUTPUT_SINK_POSITION_SEED,
+} = {}) {
+  const grammar = TRUSTED_OUTPUT_SINK_POSITION_GRAMMAR;
+  const sinkByHelper = new Map(grammar.sinks.map((sink) => [sink.helper, sink]));
+  const sourceByName = new Map(grammar.sources.map((source) => [source.source, source]));
+  const allowedWrapping = new Set(grammar.wrapping);
+
+  return TRUSTED_OUTPUT_CERTIFICATION_CASES.map((shape) => {
+    const sink = sinkByHelper.get(shape.sink);
+    const source = sourceByName.get(shape.source);
+    if (!sink || !source || !allowedWrapping.has(shape.wrapping)) {
+      throw new Error(`invalid trusted-output generator shape ${JSON.stringify(shape)}`);
+    }
+    return {
+      id: `${sink.helper}:${source.source}:${shape.wrapping}`,
+      needle: `${sink.helper}() sends ${source.evidence}`,
+      sink: sink.helper,
+      source: source.source,
+      sinkPosition: sink.position,
+      wrapping: shape.wrapping,
+    };
+  }).sort((left, right) => seededCaseOrder(seed, left.id) - seededCaseOrder(seed, right.id));
+}
+
+export function trustedOutputSinkPositionProofNeedles(options) {
+  // DEC-G/A6: this proof surface is intentionally produced from a deterministic
+  // grammar over sink position, source family, and wrapping shape rather than a
+  // hand-maintained index list. The seed only changes stable order, not coverage.
+  return generateTrustedOutputSinkPositionCases(options).map((testCase) => testCase.needle);
+}
+
+export function generateReadSourceFamilyCases({ seed = DEFAULT_READ_SOURCE_FAMILY_SEED } = {}) {
+  return seededGrammarCases(
+    seed,
+    READ_SOURCE_FAMILY_GRAMMAR.families,
+    (testCase) => testCase.family,
+  );
+}
+
+export function readSourceFamilyProofNeedles(options) {
+  // DEC-G/A6: read SOURCE proof coverage is generated over source families
+  // rather than maintained as a per-regression proof index.
+  return generateReadSourceFamilyCases(options).map((testCase) => testCase.needle);
+}
+
+export function generateSecurityWrappingCases({ seed = DEFAULT_WRAPPING_GRAMMAR_SEED } = {}) {
+  return seededGrammarCases(seed, SECURITY_WRAPPING_GRAMMAR.forms, (testCase) => testCase.form);
+}
+
+export function securityWrappingProofNeedles(options) {
+  // DEC-G/A6: wrapping coverage is generated across security proof surfaces so
+  // aliases/helpers/wrappers/component props cannot silently fall out of scope.
+  return generateSecurityWrappingCases(options).map((testCase) => testCase.needle);
+}
+
+export function generateParanoidGeneratorAcceptanceCases({
+  seed = DEFAULT_PARANOID_GENERATOR_ACCEPTANCE_SEED,
+} = {}) {
+  return seededGrammarCases(
+    seed,
+    PARANOID_GENERATOR_ACCEPTANCE_GRAMMAR.cases,
+    (testCase) => `${testCase.expectation}:${testCase.sink ?? testCase.kind}`,
+  );
+}
+
+export function paranoidGeneratorAcceptanceProofNeedles(options) {
+  // DEC-H/A9: round-8 acceptance is a generated unsafe/legit/paranoid-mode
+  // proof shape, not a single hand-enrolled adversarial fixture.
+  void options;
+  return [
+    'generateParanoidGeneratorAcceptanceCases()',
+    'addParanoidRuntimeProofRoutes(root, paranoidCases)',
+    'expectParanoidRuntimeCase(origin, testCase)',
+    'buildParanoidProductionArtifact(root)',
+    "KOVO_PARANOID: '1'",
+  ];
+}
+
+function seededGrammarCases(seed, cases, idForCase) {
+  return [...cases]
+    .map((testCase) => ({
+      ...testCase,
+      id: idForCase(testCase),
+    }))
+    .sort((left, right) => seededCaseOrder(seed, left.id) - seededCaseOrder(seed, right.id));
+}
+
+function seededCaseOrder(seed, id) {
+  let hash = 0x811c9dc5;
+  for (const character of `${seed}:${id}`) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
 export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   {
     claimExtractor: 'metamorphic-seed-codes',
@@ -24,27 +253,32 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'Production artifact security certification tests',
+    description: 'Production artifact security proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'Production artifact island derive certification tests',
+    description: 'Production artifact island derive proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'Production artifact transaction certification tests',
+    description: 'Production artifact transaction proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'Production artifact raw SQL certification tests',
+    description: 'Production artifact raw SQL proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'CLI build preflight security certification tests',
+    description: 'Production artifact paranoid runtime generated acceptance tests',
+    file: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+  },
+  {
+    claimExtractor: 'security-certification-markers',
+    description: 'CLI build preflight security proof-scope enrollment tests',
     file: 'packages/cli/src/index.kovo-build.test.ts',
   },
 ];
@@ -119,7 +353,9 @@ export const SECURITY_BUILD_PROOFS = [
       'buildProductionArtifact(unsafeRoot)',
       'KV435',
       'Secret query value reaches the client wire',
-      'queries/auth-secret-direct-leak-query.accessToken',
+      ...readSourceFamilyProofNeedles().filter((needle) =>
+        needle.startsWith('queries/auth-secret-direct-leak-query.'),
+      ),
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
@@ -135,7 +371,9 @@ export const SECURITY_BUILD_PROOFS = [
       'buildProductionArtifact(unsafeRoot)',
       'KV435',
       'Secret query value reaches the client wire',
-      'queries/auth-secret-transformed-leak-query.password',
+      ...securityWrappingProofNeedles().filter((needle) =>
+        needle.startsWith('queries/auth-secret-transformed-leak-query.'),
+      ),
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
@@ -167,7 +405,9 @@ export const SECURITY_BUILD_PROOFS = [
       'buildProductionArtifact(unsafeRoot)',
       'KV435',
       'Secret query value reaches the client wire',
-      'queries/auth-secret-leak-query.accessToken',
+      ...securityWrappingProofNeedles().filter((needle) =>
+        needle.startsWith('queries/auth-secret-leak-query.'),
+      ),
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
@@ -189,6 +429,148 @@ export const SECURITY_BUILD_PROOFS = [
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
       'blocks local-helper Better Auth credential laundering from the production build artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-view-egress',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addSecretViewEgressProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'KV435',
+      '/_q/secret-view-egress',
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'refuses a runtime Secret read through a Drizzle view at query-wire egress in paranoid mode',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'round-8-paranoid-generator-acceptance',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    requiredNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
+      (needle) => needle !== "KOVO_PARANOID: '1'",
+    ),
+    requiredProofFileNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
+      (needle) => needle === "KOVO_PARANOID: '1'",
+    ),
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    testName: 'runs generated paranoid acceptance cases with static classifiers advisory',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-db-read-boundary',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addRuntimeSecretBoundaryProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'KV435',
+      'Secret runtime value cannot cross',
+      'runtime-secret-column-egress',
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'", 'classified: runtimeSecretProof.classified'],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes schema-declared secret reads, raw SQL aliases, and computed values before query-wire egress in paranoid mode while allowing audited reveals',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-raw-sql-read-boundary',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addRuntimeSecretBoundaryProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'KV435',
+      'Secret runtime value cannot cross',
+      'runtime-secret-raw-egress',
+    ],
+    requiredProofFileNeedles: [
+      "KOVO_PARANOID: '1'",
+      'classified as leaked from "runtime_secret_proof"',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes schema-declared secret reads, raw SQL aliases, and computed values before query-wire egress in paranoid mode while allowing audited reveals',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-computed-read-boundary',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addRuntimeSecretBoundaryProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'KV435',
+      'Secret runtime value cannot cross',
+      'runtime-secret-computed-egress',
+      'leaked: row.classified',
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'", 'runtimeSecretComputedEgressQuery'],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes schema-declared secret reads, raw SQL aliases, and computed values before query-wire egress in paranoid mode while allowing audited reveals',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-reader-raw-sql-refusal',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addRuntimeSecretBoundaryProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'runtime-secret-default-raw-refusal',
+      'default reader raw secret-column refusal proof',
+      'KV433',
+      'expect(refusalResponse.status, refusalBody).toBe(200)',
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'", 'runtimeSecretDefaultRawRefusalQuery'],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes schema-declared secret reads, raw SQL aliases, and computed values before query-wire egress in paranoid mode while allowing audited reveals',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-declared-read-capability',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addRuntimeSecretBoundaryProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'runtime-secret-declared-raw-egress',
+      'runtime-secret-declared-raw-reveal',
+      'declareSecretReadCapability(',
+      'audited declared raw secret-read reveal acceptance proof',
+      'expect(declaredRevealResponse.status, declaredRevealBody).toBe(200)',
+      'runtime-secret-value:declared',
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'", 'runtimeSecretDeclaredRawEgressQuery'],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes schema-declared secret reads, raw SQL aliases, and computed values before query-wire egress in paranoid mode while allowing audited reveals',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-audited-reveal-egress',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addRuntimeSecretBoundaryProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'runtime-secret-reveal-egress',
+      'trustedReveal(row as unknown as Secret<{ classified: string; id: string }>',
+      'audited runtime query-wire reveal acceptance proof',
+      'expect(revealResponse.status, revealBody).toBe(200)',
+      'runtime-secret-value:computed',
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes schema-declared secret reads, raw SQL aliases, and computed values before query-wire egress in paranoid mode while allowing audited reveals',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -286,9 +668,9 @@ export const SECURITY_BUILD_PROOFS = [
       'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',
       'buildReusableProductionArtifact(safeRoot)',
       'KV426',
-      'trustedUrl() sends query-derived data',
-      'renderedHtml() sends query-derived data',
-      'trustedHtml() sends request-derived data',
+      ...trustedOutputSinkPositionProofNeedles(),
+      ...readSourceFamilyProofNeedles().filter((needle) => needle.includes('derived data')),
+      ...securityWrappingProofNeedles().filter((needle) => needle.includes('derived data')),
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName: 'blocks trusted output provenance leaks through the production build artifact',
@@ -383,9 +765,11 @@ export const PRODUCTION_BUILD_HELPERS = {
     requiredNeedles: [
       'export function buildProductionArtifact',
       'export function buildReusableProductionArtifact',
+      'export function buildParanoidProductionArtifact',
       'execFileSync',
       "['build', './src/app.tsx', '--no-cache']",
       "['build', './src/app.tsx']",
+      "KOVO_PARANOID: '1'",
     ],
   },
 };
@@ -395,6 +779,7 @@ const BUILD_INVOCATION_PATTERNS = {
   'starter-build-production-artifact': [
     /\bbuildProductionArtifact\(/,
     /\bbuildReusableProductionArtifact\(/,
+    /\bbuildParanoidProductionArtifact\(/,
   ],
 };
 
@@ -423,7 +808,7 @@ export function securityTestBuildGateViolations({
     for (const claim of claims) {
       if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {
         violations.push(
-          `${formatClaimLabel(source.file, claim)}: security certification has no real kovo build proof`,
+          `${formatClaimLabel(source.file, claim)}: security proof-scope enrollment has no real kovo build proof`,
         );
       }
     }
@@ -480,10 +865,12 @@ function validateProof(
 ) {
   const label = formatProofLabel(proof);
   if (!enrolledSecurityCodes.has(proof.code)) {
-    violations.push(`${label}: proof code is not enrolled as a security certification code`);
+    violations.push(
+      `${label}: proof code is not enrolled as a security proof-scope enrollment code`,
+    );
   }
   if (!knownSources.has(proof.sourceFile)) {
-    violations.push(`${label}: proof references an unknown certification source`);
+    violations.push(`${label}: proof references an unknown proof-scope enrollment source`);
   }
   if (
     sourceClaims.has(proof.sourceFile) &&
@@ -491,7 +878,7 @@ function validateProof(
       .get(proof.sourceFile)
       .some((claim) => proofMatchesClaim(proof, proof.sourceFile, claim))
   ) {
-    violations.push(`${label}: proof is stale; source does not certify ${formatProofClaim(proof)}`);
+    violations.push(`${label}: proof is stale; source does not enroll ${formatProofClaim(proof)}`);
   }
 
   const proofPath = path.join(repoRoot, proof.proofFile);
@@ -545,7 +932,9 @@ function extractCertificationClaims(source, sourceText, violations) {
   if (extractor === 'security-certification-markers') {
     return extractSecurityCertificationMarkers(sourceText);
   }
-  violations.push(`${source.file}: unknown security certification claim extractor ${extractor}`);
+  violations.push(
+    `${source.file}: unknown security proof-scope enrollment claim extractor ${extractor}`,
+  );
   return [];
 }
 
@@ -610,7 +999,7 @@ function main() {
   }
 
   process.stdout.write(
-    `Security test build gate passed (${SECURITY_BUILD_PROOFS.length} real-build proofs).\n`,
+    `Security test build gate passed (${SECURITY_BUILD_PROOFS.length} build/runtime proof-scope entries).\n`,
   );
 }
 

@@ -1,3 +1,5 @@
+import { isUntrusted, revealUntrusted } from '@kovojs/core';
+
 import {
   forwardSetCookie,
   serializeCookie,
@@ -1040,10 +1042,16 @@ function requestHasSessionUser(request: unknown): boolean {
 }
 
 function hasSubmittedCsrfTokenShape(rawInput: unknown, field: string): boolean {
-  const submitted = formLikeToRecord(rawInput)[field];
+  const submitted = revealCsrfTokenInput(formLikeToRecord(rawInput)[field]);
   return (
     typeof submitted === 'string' && /^v1\.[A-Za-z0-9_-]{43}\.[A-Za-z0-9_-]{43}$/u.test(submitted)
   );
+}
+
+function revealCsrfTokenInput(input: unknown): unknown {
+  return isUntrusted(input)
+    ? revealUntrusted(input, 'validated request-derived CSRF token shape')
+    : input;
 }
 
 function mutationGuardFailureToResult(guardFailure: ResolvedGuardFailure): MutationFail {

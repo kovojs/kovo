@@ -268,7 +268,9 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       }
       // Build disposition: fail-closed — any error-severity finding fails the build.
       const diagnostics = await collectDataPlaneErrorDiagnostics(root, app);
-      if (diagnostics.length > 0) throw dataPlaneGateError(diagnostics);
+      if (diagnostics.length > 0 && !paranoidDataPlaneDiagnosticsAreAdvisory(diagnostics)) {
+        throw dataPlaneGateError(diagnostics);
+      }
     },
     async configureServer(server: KovoViteDevServer) {
       root = server.config?.root ?? root;
@@ -557,6 +559,21 @@ function dataPlaneGateError(diagnostics: readonly DataPlaneDiagnostic[]): Error 
       'These by-construction findings mean request-derived data could reach SQL/IO unsafely. Fix them or use the audited escape hatch (sql`...`, staticSql`...`, trustedSql(...), compareAndSet) before building.',
     ].join('\n'),
   );
+}
+
+function paranoidDataPlaneDiagnosticsAreAdvisory(
+  diagnostics: readonly DataPlaneDiagnostic[],
+): boolean {
+  if (!isParanoidMode()) return false;
+  const advisoryCodes = new Set(['KV406', 'KV422', 'KV438']);
+  return (
+    diagnostics.length > 0 && diagnostics.every((diagnostic) => advisoryCodes.has(diagnostic.code))
+  );
+}
+
+function isParanoidMode(): boolean {
+  const value = process.env.KOVO_PARANOID;
+  return value === '1' || value === 'true';
 }
 
 /** Build a dev-ledger module-diagnostics report (teaching disposition) for one app file. */

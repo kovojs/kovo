@@ -527,6 +527,10 @@ function taintedValueReachesWire(
       const receiverTainted = receiverRoot !== undefined && tainted.has(receiverRoot);
       const taintedArgs = args.some((argument) => expressionContainsAnyKey(argument, tainted));
 
+      if (isDeclareOffWireNamedCall(call) && !hasCanonicalDeclareOffWireNamedImport(call)) {
+        return true;
+      }
+
       if (isDeclareOffWireCall(call)) {
         if (declareOffWireCallbackReachesWire(call, body, tainted, wireRoots, elementAliases)) {
           return true;
@@ -651,6 +655,26 @@ function isDeclareOffWireCall(call: CallExpression): boolean {
     call.getExpression().compilerNode,
     DECLARE_OFF_WIRE_IDENTITY,
   );
+}
+
+function isDeclareOffWireNamedCall(call: CallExpression): boolean {
+  return (
+    Node.isIdentifier(call.getExpression()) && call.getExpression().getText() === 'declareOffWire'
+  );
+}
+
+function hasCanonicalDeclareOffWireNamedImport(call: CallExpression): boolean {
+  return call
+    .getSourceFile()
+    .getImportDeclarations()
+    .some((declaration) => {
+      if (declaration.getModuleSpecifierValue() !== '@kovojs/core') return false;
+      return declaration.getNamedImports().some((specifier) => {
+        const imported = specifier.getNameNode().getText();
+        const local = specifier.getAliasNode()?.getText() ?? imported;
+        return imported === 'declareOffWire' && local === 'declareOffWire';
+      });
+    });
 }
 
 function localFunctionTouchesTaintedValue(

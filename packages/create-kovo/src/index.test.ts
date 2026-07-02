@@ -265,7 +265,28 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const readDb = drizzle({ client: readonlyPgliteClient(client, { readerRole: true }) });',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb(privilegedReadDb)');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("const READER_ROLE = 'kovo_reader'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'applyPgliteReaderColumnPrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA)',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'Object.defineProperty(db, kovoReadonlyDbHandle',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'return { db, readonlyDb: readonlyDb(db), ready }',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY'])",
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('SET LOCAL ROLE');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES)',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'function secretBoxingReadDb<Db extends object>',
     );
     expect(files.get('src/db.ts')).not.toContain('PgliteDatabase<typeof schema>');
     expect(files.get('src/db.ts')).not.toContain('drizzle({ client, schema })');
@@ -357,6 +378,13 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('scripts/check-sound-subset.mjs')).toContain(
       'bans non-type imports of src/_kovo/app-runtime-db',
     );
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
+      'FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES',
+    );
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain('SECURITY_SURFACE_FILES');
+    expect(files.get('scripts/check-sound-subset.mjs')).toContain(
+      'must enroll the whole starter security surface',
+    );
     expect(files.get('src/endpoint-posture.test.ts')).not.toMatch(/\bas\s+(?!const\b)[A-Za-z_{]/u);
     expect(files.get('src/auth.ts')).toContain(
       'return request.session?.id ?? request.authCsrfId ?? undefined;',
@@ -439,6 +467,7 @@ describe('create-kovo starter (metadata)', () => {
         expect(stderr).not.toContain('transaction-bridge.ts');
         expect(stderr).not.toContain('jsx-prose.tsx');
         expect(stderr).not.toContain('string-prose.ts');
+        expect(stderr).not.toContain('src/_kovo/app-runtime-db.ts');
       }
 
       rmSync(join(root, 'src/unsafe-cast.ts'), { force: true });
@@ -500,6 +529,239 @@ describe('create-kovo starter (metadata)', () => {
     }
   });
 
+  it('rejects raw SQL in query loaders while preserving explicit trustedSql escapes', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-raw-sql-waist-'));
+
+    try {
+      writeKovoProject(root, { name: 'Raw Sql Waist Proof' });
+      linkStarterBuildDependencies(root);
+      writeFileSync(
+        join(root, 'src/raw-sql-query.ts'),
+        [
+          "import { query } from '@kovojs/server';",
+          "import { sql } from '@kovojs/drizzle';",
+          "import { contacts } from './schema.js';",
+          '',
+          'export const leakedQuery = query({',
+          '  async load(_input, context) {',
+          '    return context.db',
+          '      .select({',
+          '        id: contacts.id,',
+          '        detail: sql<string>`(select token from session limit 1)`,',
+          '      })',
+          '      .from(contacts);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /raw-sql-query\.ts:10: SPEC\.md §6\.6\/§10\.2 sound subset bans raw SQL in query loaders/,
+      );
+
+      writeFileSync(
+        join(root, 'src/raw-sql-query.ts'),
+        [
+          "import { query } from '@kovojs/server';",
+          "import { sql } from '@kovojs/drizzle';",
+          '',
+          'export const aliasedRawQuery = query({',
+          '  async load(_input, context) {',
+          '    const rawSql = sql.raw;',
+          "    const statement = rawSql('select token from session limit 1');",
+          '    return context.db.execute(statement);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /raw-sql-query\.ts:7: SPEC\.md §6\.6\/§10\.2 sound subset bans raw SQL in query loaders/,
+      );
+
+      writeFileSync(
+        join(root, 'src/raw-sql-query.ts'),
+        [
+          "import { query } from '@kovojs/server';",
+          "import { sql } from '@kovojs/drizzle';",
+          '',
+          'const rawSql = sql;',
+          '',
+          'export const aliasedTagQuery = query({',
+          '  async load(_input, context) {',
+          '    return context.db.execute(rawSql`select token from session limit 1`);',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /raw-sql-query\.ts:8: SPEC\.md §6\.6\/§10\.2 sound subset bans raw SQL in query loaders/,
+      );
+
+      writeFileSync(
+        join(root, 'src/raw-sql-query.ts'),
+        [
+          "import { query } from '@kovojs/server';",
+          "import { sql, trustedSql } from '@kovojs/drizzle';",
+          '',
+          'export const reviewedQuery = query({',
+          '  async load(_input, context) {',
+          '    return context.db.execute(',
+          '      trustedSql(sql.raw("select id from contacts"), { justification: "reviewed raw read path" }),',
+          '    );',
+          '  },',
+          '});',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('rejects dynamically computed framework trust-sink callees', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-trust-waist-'));
+
+    try {
+      writeKovoProject(root, { name: 'Trust Waist Proof' });
+      linkStarterBuildDependencies(root);
+      writeFileSync(
+        join(root, 'src/dynamic-trust.ts'),
+        [
+          "import * as browser from '@kovojs/browser';",
+          "import * as server from '@kovojs/server';",
+          '',
+          'export function renderTrusted(helper: string) {',
+          "  return server[helper]('<strong>reviewed</strong>');",
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /dynamic-trust\.ts:5: SPEC\.md §6\.6 sound subset requires trustedHtml\/trustedUrl\/trustedSql callees/,
+      );
+
+      writeFileSync(
+        join(root, 'src/dynamic-trust.ts'),
+        [
+          "import * as browser from '@kovojs/browser';",
+          "import * as drizzle from '@kovojs/drizzle';",
+          '',
+          'export function renderTrusted(helper: string, sqlHelper: string) {',
+          '  const trustedMarkup = browser[helper];',
+          '  const reviewedSql = drizzle[sqlHelper];',
+          "  const trusted = trustedMarkup('<strong>reviewed</strong>');",
+          "  const statement = reviewedSql(drizzle.sql.raw('select 1'), { justification: 'reviewed' });",
+          '  return { statement, trusted };',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /dynamic-trust\.ts:7: SPEC\.md §6\.6 sound subset requires trustedHtml\/trustedUrl\/trustedSql callees/,
+      );
+
+      try {
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        });
+      } catch (error) {
+        const stderr = (error as { stderr?: Buffer }).stderr?.toString('utf8') ?? '';
+        expect(stderr).toContain(
+          'dynamic-trust.ts:8: SPEC.md §6.6 sound subset requires trustedHtml/trustedUrl/trustedSql callees',
+        );
+      }
+
+      writeFileSync(
+        join(root, 'src/dynamic-trust.ts'),
+        [
+          "import * as browser from '@kovojs/browser';",
+          "import * as drizzle from '@kovojs/drizzle';",
+          '',
+          "export const trusted = browser['trustedHtml']('<strong>reviewed</strong>');",
+          "export const statement = drizzle['trustedSql'](drizzle.sql.raw('select 1'), { justification: 'reviewed' });",
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
+  it('fails check:sound-subset when the starter security surface is not fully enrolled', () => {
+    const root = mkdtempSync(join(tmpdir(), 'create-kovo-security-surface-enrollment-'));
+
+    try {
+      writeKovoProject(root, { name: 'Security Surface Enrollment Proof' });
+      linkStarterBuildDependencies(root);
+      rmSync(join(root, 'src/endpoint-posture.test.ts'), { force: true });
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /endpoint-posture\.test\.ts:1: SPEC\.md §6\.6\/§10\.2\/§10\.3 sound subset must enroll the whole starter security surface/,
+      );
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('emits the SQLite scaffold variant when requested', () => {
     const project = createKovoProject({ dialect: 'sqlite', name: 'Sqlite App' });
     const files = new Map(project.files.map((file) => [file.path, file.source]));
@@ -536,8 +798,16 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'readonlyDb(db).exec(SCHEMA_DDL)',
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: readonlyDb(db)');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'return { db, readonlyDb: readonlyDb(db), ready: Promise.resolve() }',
+      'Object.defineProperty(db, kovoReadonlyDbHandle',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ready: Promise.resolve()');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const SECRET_READ_METADATA = secretReadMetadata(SCHEMA_TABLES)',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'function secretBoxingReadDb<Db extends object>',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb',

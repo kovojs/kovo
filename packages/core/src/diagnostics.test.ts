@@ -550,6 +550,10 @@ describe('diagnostic registry', () => {
         },
         "KV406": {
           "code": "KV406",
+          "help": "Would lower to: declared mutation touch metadata plus a managed write handle whose runtime DB policy rejects writes outside the declared tables.
+      Blocked reason: the static extractor could not prove the write touch set, so the advisory graph cannot explain which invalidation or declared-table policy the write belongs to.
+      Fixes: make the write analyzable, add the manual touch declaration, or route the operation through a managed mutation/write surface that carries declared-table policy.
+      SPEC §10.3/§11.2 and fundamental-fixes-followup-3 DEC-F: KV406 is a static defense-in-depth signal; the runtime declared-table write choke is the security boundary and must fail closed independently of static completeness.",
           "message": "Statically un-analyzable write site; manual touches required.",
           "severity": "error",
         },
@@ -708,7 +712,7 @@ describe('diagnostic registry', () => {
           "help": "Would lower to: a trust-audit row naming the escape hatch, source span, justification, and owning safe path or app review boundary.
       Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain --trust.
       Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.
-      SPEC §4.8 and §9.1 allow trust escape hatches only when they are explicit and auditable.",
+      SPEC §4.8/§9.1 and fundamental-fixes-followup-3 DEC-D/DEC-F: KV426 is an auditable static provenance signal; contextual renderer/header/URL runtime chokes and unforgeable trusted constructors remain the security boundary when static provenance is incomplete.",
           "message": "Trust escape hatch lacks auditable provenance.",
           "severity": "error",
         },
@@ -759,10 +763,10 @@ describe('diagnostic registry', () => {
         },
         "KV433": {
           "code": "KV433",
-          "help": "Would lower to: a read-only query() loader handle with no insert/update/delete/execute, and (Stage 2) a static proof that no write is reachable from the loader.
+          "help": "Would lower to: a read-only query() loader handle whose runtime DB/storage choke rejects writes, with a static reachability check as defense-in-depth.
       Blocked reason: a query() loader that reaches a write — directly or via an imported domain() function called with a captured handle — is a state change on an idempotent read surface (the confused-deputy case).
       Fixes: move the write to a mutation()/domain write, or use endpoint() for an explicitly side-effecting machine/API path.
-      SPEC §6.6/§9.4 and secure-framework Phase 5: the runtime read-only proxy is the safe-default backstop; the static no-write-reachable proof is the by-construction guarantee.",
+      SPEC §6.6/§9.4 and fundamental-fixes-followup-3 DEC-A/DEC-F: the runtime read-only DB/storage choke is the security boundary; static no-write reachability is advisory/defense-in-depth and must not be treated as a static-only security proof.",
           "message": "query() loader reaches a write.",
           "severity": "error",
         },
@@ -780,7 +784,7 @@ describe('diagnostic registry', () => {
           "help": "Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.
       Blocked reason: the projected query shape contains a secret-classified field, or an opaque/unresolved projection reads a table carrying secret columns, so rendering this query could serialize confidential data onto the client wire.
       Fixes: remove the secret field or opaque projection, select explicit non-secret columns, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.
-      SPEC §6.2, §10.2, and §11.3 make query results JsonValue-bounded client wire values; a secret-classified or unprovable secret-table projection is ineligible for that boundary.",
+      SPEC §6.2/§10.2/§11.3 and fundamental-fixes-followup-3 DEC-C/DEC-F: KV435 is static defense-in-depth for client-wire confidentiality; the non-coercible Secret tag and every egress choke are the security boundary when static source classification is incomplete.",
           "message": "Secret query value reaches the client wire.",
           "severity": "error",
         },

@@ -6,6 +6,22 @@ const ts = await loadTypeScript();
 const root = process.cwd();
 const findings = [];
 const RUNTIME_DB_MODULE_PATH = 'src/_kovo/app-runtime-db';
+const FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES = new Set(['src/_kovo/app-runtime-db.ts']);
+const SECURITY_SURFACE_FILES = new Set([
+  'src/app.test.ts',
+  'src/app.tsx',
+  'src/auth.ts',
+  'src/components/auth-forms.tsx',
+  'src/components/contacts.tsx',
+  'src/db.ts',
+  'src/endpoint-posture.test.ts',
+  'src/model.ts',
+  'src/mutations.ts',
+  'src/queries.ts',
+  'src/schema.ts',
+]);
+const SECURITY_SURFACE_ENROLLMENT_MESSAGE =
+  'SPEC.md §6.6/§10.2/§10.3 sound subset must enroll the whole starter security surface';
 const RUNTIME_DB_IMPORT_ALLOWLIST = new Set([
   'src/app.tsx',
   'src/auth.ts',
@@ -15,10 +31,30 @@ const RUNTIME_DB_IMPORT_ALLOWLIST = new Set([
 ]);
 const RUNTIME_DB_IMPORT_MESSAGE =
   'SPEC.md §6.6 sound subset bans non-type imports of src/_kovo/app-runtime-db outside framework-owned starter files';
+const QUERY_LOADER_RAW_SQL_MESSAGE =
+  'SPEC.md §6.6/§10.2 sound subset bans raw SQL in query loaders on the common path; ' +
+  'use Drizzle typed builders or route explicit raw SQL through trustedSql(...) so runtime chokes stay authoritative';
+const TRUST_SINK_CALLEE_MESSAGE =
+  'SPEC.md §6.6 sound subset requires trustedHtml/trustedUrl/trustedSql callees to be statically resolvable; ' +
+  'call the framework trust helper directly or through a literal namespace member';
+const TRUST_SINK_EXPORTS = new Map([
+  ['@kovojs/browser', new Set(['trustedHtml', 'trustedUrl'])],
+  ['@kovojs/server', new Set(['trustedHtml', 'trustedUrl'])],
+  ['@kovojs/drizzle', new Set(['trustedSql'])],
+]);
+const SQL_EXPORTS = new Map([
+  ['@kovojs/drizzle', new Set(['sql', 'staticSql'])],
+  ['drizzle-orm', new Set(['sql'])],
+]);
+const SQL_METHODS = new Set(['allow', 'identifier', 'join', 'raw']);
 
-for (const file of sourceFiles(join(root, 'src'))) {
+const enrolledSourceFiles = sourceFiles(join(root, 'src'));
+reportMissingSecuritySurfaceFiles(enrolledSourceFiles);
+
+for (const file of enrolledSourceFiles) {
   const source = readFileSync(file, 'utf8');
   const relativeFile = toPosixPath(relative(root, file));
+  if (frameworkGeneratedSoundSubsetExempt(relativeFile)) continue;
   if (ts) {
     analyzeWithTypeScript(ts, source, relativeFile);
   } else {
@@ -61,10 +97,14 @@ function analyzeWithTypeScript(ts, source, relativeFile) {
     true,
     scriptKind(ts, relativeFile),
   );
-  visitTypeScriptNode(ts, sourceFile, sourceFile, relativeFile);
+  const bindings = frameworkBindingsForSourceFile(ts, sourceFile);
+  visitTypeScriptNode(ts, sourceFile, sourceFile, relativeFile, bindings, {
+    insideQueryLoader: false,
+    insideTrustedSqlEscape: false,
+  });
 }
 
-function visitTypeScriptNode(ts, node, sourceFile, relativeFile) {
+function visitTypeScriptNode(ts, node, sourceFile, relativeFile, bindings, context) {
   reportRuntimeDbImportIfNeeded(ts, node, sourceFile, relativeFile);
 
   if (node.kind === ts.SyntaxKind.AnyKeyword) {
@@ -88,7 +128,91 @@ function visitTypeScriptNode(ts, node, sourceFile, relativeFile) {
       'SPEC.md §6.6 sound subset bans non-null assertions',
     );
   }
-  ts.forEachChild(node, (child) => visitTypeScriptNode(ts, child, sourceFile, relativeFile));
+
+  if (ts.isCallExpression(node)) {
+    reportTrustSinkCalleeIfNeeded(ts, node, sourceFile, relativeFile, bindings);
+
+    if (isQueryCall(ts, node.expression, bindings)) {
+      visitQueryCall(ts, node, sourceFile, relativeFile, bindings, context);
+      return;
+    }
+
+    if (isTrustedSqlCall(ts, node.expression, bindings)) {
+      ts.forEachChild(node, (child) =>
+        visitTypeScriptNode(ts, child, sourceFile, relativeFile, bindings, {
+          ...context,
+          insideTrustedSqlEscape: true,
+        }),
+      );
+      return;
+    }
+
+    if (
+      context.insideQueryLoader &&
+      !context.insideTrustedSqlEscape &&
+      isSqlHelperCall(ts, node.expression, bindings)
+    ) {
+      reportTypeScriptFinding(
+        sourceFile,
+        relativeFile,
+        node.expression,
+        QUERY_LOADER_RAW_SQL_MESSAGE,
+      );
+    }
+  } else if (
+    context.insideQueryLoader &&
+    !context.insideTrustedSqlEscape &&
+    ts.isTaggedTemplateExpression(node) &&
+    isSqlTag(ts, node.tag, bindings)
+  ) {
+    reportTypeScriptFinding(sourceFile, relativeFile, node.tag, QUERY_LOADER_RAW_SQL_MESSAGE);
+  }
+
+  ts.forEachChild(node, (child) =>
+    visitTypeScriptNode(ts, child, sourceFile, relativeFile, bindings, context),
+  );
+}
+
+function visitQueryCall(ts, call, sourceFile, relativeFile, bindings, context) {
+  for (const argument of call.arguments) {
+    if (ts.isObjectLiteralExpression(argument)) {
+      visitQueryConfigObject(ts, argument, sourceFile, relativeFile, bindings, context);
+    } else {
+      visitTypeScriptNode(ts, argument, sourceFile, relativeFile, bindings, context);
+    }
+  }
+}
+
+function visitQueryConfigObject(ts, object, sourceFile, relativeFile, bindings, context) {
+  for (const property of object.properties) {
+    const isLoad =
+      ts.isPropertyAssignment(property) && propertyNameText(ts, property.name) === 'load';
+    const isLoadMethod =
+      ts.isMethodDeclaration(property) && propertyNameText(ts, property.name) === 'load';
+    if (isLoad) {
+      visitTypeScriptNode(ts, property.initializer, sourceFile, relativeFile, bindings, {
+        ...context,
+        insideQueryLoader: true,
+      });
+    } else if (isLoadMethod) {
+      visitTypeScriptNode(ts, property, sourceFile, relativeFile, bindings, {
+        ...context,
+        insideQueryLoader: true,
+      });
+    } else {
+      visitTypeScriptNode(ts, property, sourceFile, relativeFile, bindings, context);
+    }
+  }
+}
+
+function reportTrustSinkCalleeIfNeeded(ts, call, sourceFile, relativeFile, bindings) {
+  const callee = call.expression;
+  if (ts.isIdentifier(callee) && bindings.dynamicTrustAliases.has(callee.text)) {
+    reportTypeScriptFinding(sourceFile, relativeFile, callee, TRUST_SINK_CALLEE_MESSAGE);
+    return;
+  }
+  if (!isDynamicFrameworkTrustMember(ts, callee, bindings)) return;
+  reportTypeScriptFinding(sourceFile, relativeFile, callee, TRUST_SINK_CALLEE_MESSAGE);
 }
 
 function reportRuntimeDbImportIfNeeded(ts, node, sourceFile, relativeFile) {
@@ -222,6 +346,210 @@ function isInsideTransactionDefinition(ts, node) {
   return false;
 }
 
+function frameworkBindingsForSourceFile(ts, sourceFile) {
+  const dynamicTrustAliases = new Set();
+  const namedImports = new Map();
+  const namespaceImports = new Map();
+  const localAliases = new Map();
+
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement)) continue;
+    const module = stringLiteralText(ts, statement.moduleSpecifier);
+    if (!module) continue;
+    const clause = statement.importClause;
+    if (!clause || clause.isTypeOnly) continue;
+
+    const bindings = clause.namedBindings;
+    if (!bindings) continue;
+    if (ts.isNamespaceImport(bindings)) {
+      namespaceImports.set(bindings.name.text, module);
+      continue;
+    }
+    if (!ts.isNamedImports(bindings)) continue;
+    for (const element of bindings.elements) {
+      if (element.isTypeOnly) continue;
+      const exported = element.propertyName?.text ?? element.name.text;
+      namedImports.set(element.name.text, { module, exported });
+    }
+  }
+
+  const bindings = { dynamicTrustAliases, localAliases, namedImports, namespaceImports };
+  collectFrameworkAliases(ts, sourceFile, bindings);
+
+  return bindings;
+}
+
+function collectFrameworkAliases(ts, sourceFile, bindings) {
+  let changed = true;
+  while (changed) {
+    changed = false;
+    const visit = (node) => {
+      if (ts.isVariableDeclaration(node) && node.initializer) {
+        changed =
+          collectFrameworkAliasFromBinding(ts, node.name, node.initializer, bindings) || changed;
+      }
+      ts.forEachChild(node, visit);
+    };
+    visit(sourceFile);
+  }
+}
+
+function collectFrameworkAliasFromBinding(ts, name, initializer, bindings) {
+  if (ts.isIdentifier(name)) {
+    if (isDynamicFrameworkTrustMember(ts, initializer, bindings)) {
+      const size = bindings.dynamicTrustAliases.size;
+      bindings.dynamicTrustAliases.add(name.text);
+      return bindings.dynamicTrustAliases.size !== size;
+    }
+    if (ts.isIdentifier(initializer) && bindings.dynamicTrustAliases.has(initializer.text)) {
+      const size = bindings.dynamicTrustAliases.size;
+      bindings.dynamicTrustAliases.add(name.text);
+      return bindings.dynamicTrustAliases.size !== size;
+    }
+    const resolved = resolvedFrameworkMember(ts, initializer, bindings);
+    if (!resolved) return false;
+    const previous = bindings.localAliases.get(name.text);
+    bindings.localAliases.set(name.text, resolved);
+    return !sameResolvedFrameworkMember(previous, resolved);
+  }
+
+  if (!ts.isObjectBindingPattern(name)) return false;
+  const resolved = resolvedFrameworkMember(ts, initializer, bindings);
+  if (!resolved || resolved.member) return false;
+
+  let changed = false;
+  for (const element of name.elements) {
+    if (!ts.isIdentifier(element.name)) continue;
+    const property = element.propertyName
+      ? propertyNameText(ts, element.propertyName)
+      : element.name.text;
+    if (!property) continue;
+    const member = { ...resolved, member: property };
+    const previous = bindings.localAliases.get(element.name.text);
+    bindings.localAliases.set(element.name.text, member);
+    changed = !sameResolvedFrameworkMember(previous, member) || changed;
+  }
+  return changed;
+}
+
+function sameResolvedFrameworkMember(left, right) {
+  return (
+    left?.module === right.module &&
+    left.exported === right.exported &&
+    left.member === right.member
+  );
+}
+
+function isQueryCall(ts, expression, bindings) {
+  return expressionResolvesToExport(ts, expression, bindings, '@kovojs/server', 'query');
+}
+
+function isTrustedSqlCall(ts, expression, bindings) {
+  return expressionResolvesToExport(ts, expression, bindings, '@kovojs/drizzle', 'trustedSql');
+}
+
+function isSqlTag(ts, tag, bindings) {
+  return (
+    expressionResolvesToAnyExport(ts, tag, bindings, SQL_EXPORTS) ||
+    (ts.isCallExpression(tag) &&
+      expressionResolvesToAnyExport(ts, tag.expression, bindings, SQL_EXPORTS))
+  );
+}
+
+function isSqlHelperCall(ts, expression, bindings) {
+  const resolved = resolvedFrameworkMember(ts, expression, bindings);
+  if (!resolved) return false;
+  if (!SQL_EXPORTS.get(resolved.module)?.has(resolved.exported)) return false;
+  return resolved.member ? SQL_METHODS.has(resolved.member) : false;
+}
+
+function isDynamicFrameworkTrustMember(ts, expression, bindings) {
+  if (!ts.isElementAccessExpression(expression)) return false;
+  if (stringLiteralText(ts, expression.argumentExpression)) return false;
+
+  const receiver = expression.expression;
+  if (ts.isIdentifier(receiver)) {
+    const module = bindings.namespaceImports.get(receiver.text);
+    return hasTrustExports(module);
+  }
+
+  const resolvedReceiver = resolvedFrameworkMember(ts, receiver, bindings);
+  return Boolean(
+    resolvedReceiver &&
+    TRUST_SINK_EXPORTS.get(resolvedReceiver.module)?.has(resolvedReceiver.exported),
+  );
+}
+
+function expressionResolvesToAnyExport(ts, expression, bindings, exportsByModule) {
+  const resolved = resolvedFrameworkMember(ts, expression, bindings);
+  if (!resolved || resolved.member) return false;
+  return exportsByModule.get(resolved.module)?.has(resolved.exported) === true;
+}
+
+function expressionResolvesToExport(ts, expression, bindings, module, exported) {
+  const resolved = resolvedFrameworkMember(ts, expression, bindings);
+  return (
+    resolved?.module === module && resolved.exported === exported && resolved.member === undefined
+  );
+}
+
+function resolvedFrameworkMember(ts, expression, bindings) {
+  if (ts.isIdentifier(expression)) {
+    const named =
+      bindings.localAliases.get(expression.text) ?? bindings.namedImports.get(expression.text);
+    return named ? { ...named } : null;
+  }
+
+  if (ts.isPropertyAccessExpression(expression)) {
+    const receiver = expression.expression;
+    const property = expression.name.text;
+    if (ts.isIdentifier(receiver)) {
+      const module = bindings.namespaceImports.get(receiver.text);
+      if (module) return { module, exported: property };
+    }
+    const resolvedReceiver = resolvedFrameworkMember(ts, receiver, bindings);
+    if (resolvedReceiver && !resolvedReceiver.member) {
+      return { ...resolvedReceiver, member: property };
+    }
+    return null;
+  }
+
+  if (ts.isElementAccessExpression(expression)) {
+    const property = stringLiteralText(ts, expression.argumentExpression);
+    if (!property) return null;
+    const receiver = expression.expression;
+    if (ts.isIdentifier(receiver)) {
+      const module = bindings.namespaceImports.get(receiver.text);
+      if (module) return { module, exported: property };
+    }
+    const resolvedReceiver = resolvedFrameworkMember(ts, receiver, bindings);
+    if (resolvedReceiver && !resolvedReceiver.member) {
+      return { ...resolvedReceiver, member: property };
+    }
+  }
+
+  return null;
+}
+
+function reportMissingSecuritySurfaceFiles(files) {
+  const enrolled = new Set(files.map((file) => toPosixPath(relative(root, file))));
+  for (const file of SECURITY_SURFACE_FILES) {
+    if (enrolled.has(file)) continue;
+    findings.push(`${file}:1: ${SECURITY_SURFACE_ENROLLMENT_MESSAGE}; missing from src/ scan`);
+  }
+}
+
+function propertyNameText(ts, name) {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return null;
+}
+
+function hasTrustExports(module) {
+  return Boolean(module && TRUST_SINK_EXPORTS.has(module));
+}
+
 function reportTypeScriptFinding(sourceFile, relativeFile, node, message) {
   const { line } = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
   findings.push(`${relativeFile}:${line + 1}: ${message}`);
@@ -229,6 +557,10 @@ function reportTypeScriptFinding(sourceFile, relativeFile, node, message) {
 
 function runtimeDbImportsAllowed(relativeFile) {
   return RUNTIME_DB_IMPORT_ALLOWLIST.has(toPosixPath(relativeFile));
+}
+
+function frameworkGeneratedSoundSubsetExempt(relativeFile) {
+  return FRAMEWORK_GENERATED_SOUND_SUBSET_EXEMPT_FILES.has(toPosixPath(relativeFile));
 }
 
 function isRuntimeDbModuleSpecifier(relativeFile, specifier) {

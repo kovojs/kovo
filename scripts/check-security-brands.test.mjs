@@ -130,6 +130,38 @@ export function reachableUnbrandedCanary(value) {
     );
   });
 
+  it('requires the response constructor choke itself to carry the wire-emitter brand', () => {
+    const files = {
+      'packages/server/src/response-posture.ts': `
+import { wireEmitter } from '@kovojs/core/internal/security-markers';
+export const emitToWire = wireEmitter('server.response.emit-to-wire', function (value) {
+  return new Response(value);
+});
+`,
+    };
+    const decisions = deriveRequiredSecurityDecisions({
+      exists: (relativePath) => Object.hasOwn(files, relativePath),
+      files: ['packages/server/src/response-posture.ts'],
+      readText: (relativePath) => files[relativePath] ?? '',
+      roots: [
+        {
+          direction: 'callers',
+          file: 'packages/server/src/response-posture.ts',
+          kind: 'wire-emitter',
+          name: 'emitToWire',
+        },
+      ],
+    });
+
+    expect(decisions).toEqual([
+      {
+        file: 'packages/server/src/response-posture.ts',
+        kind: 'wire-emitter',
+        names: ['emitToWire'],
+      },
+    ]);
+  });
+
   it('fails when an encoded raw primitive root drifts out of the graph', () => {
     const files = {
       'packages/server/src/response-posture.ts': `

@@ -977,7 +977,7 @@ function scrubConsoleValue(value, seen = new WeakMap()) {
 }
 
 function isSecretDisplayValue(value) {
-  return Object.prototype.toString.call(value) === '[object Secret]' && String(value) === '[secret]';
+  return Object.prototype.toString.call(value) === '[object Secret]';
 }
 
 function isPlainConsoleObject(value) {

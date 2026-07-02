@@ -43,6 +43,27 @@ describe('parseSqlWriteTables', () => {
     ]);
   });
 
+  it('fails closed when a declared-table write masks an unproven SQL function call', () => {
+    expect(
+      classifyStatement("update contacts set name = user_mutate(name) where id = 'c1'", {
+        dialect: 'postgres',
+      }),
+    ).toEqual({
+      kind: 'unproven',
+      reason: 'SQL write contains non-allowlisted function call(s): user_mutate',
+    });
+
+    expect(
+      classifyStatement(
+        "with bumped as (select setval('probe_seq', 1)) update contacts set name = 'Ada'",
+        { dialect: 'postgres' },
+      ),
+    ).toEqual({
+      kind: 'unproven',
+      reason: 'SQL read contains non-allowlisted function call(s): setval',
+    });
+  });
+
   it('preserves schema-qualified table names for write enforcement', () => {
     expect(
       parseSqlWriteTables('UPDATE otherschema.contacts SET name = ? WHERE id = ?', {

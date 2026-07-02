@@ -1,4 +1,5 @@
 import { randomBytes, randomUUID } from 'node:crypto';
+import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
 import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
@@ -13,6 +14,11 @@ import {
 } from './keyring.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import { formLikeToRecord } from './schema.js';
+import {
+  readUntrustedCookieValue,
+  readUntrustedRequestHeader,
+  revealUntrustedRequestValue,
+} from './untrusted-request-body.js';
 
 /**
  * Anonymous CSRF binding cookie settings for sessionless mutation forms (SPEC §6.6).
@@ -298,9 +304,14 @@ export function verifyCsrfRequestOriginFloor<Request>(
   if (!(request instanceof globalThis.Request)) return true;
   if (!isUnsafeVerb(request.method)) return true;
 
-  const origin = request.headers.get('origin');
+  const originInput = readUntrustedRequestHeader(request, 'origin');
 
-  if (origin === null || origin === '' || origin === 'null') return false;
+  if (originInput === undefined) return false;
+  const origin = revealUntrustedRequestValue(
+    originInput,
+    'validated request Origin header for CSRF origin floor',
+  );
+  if (typeof origin !== 'string' || origin === '' || origin === 'null') return false;
 
   let requestOrigin: string | undefined;
   try {
@@ -327,7 +338,7 @@ export function validateCsrfToken<Request>(
   const binding = resolveCsrfBinding(request, options);
   if (!binding) return false;
 
-  const submitted = formLikeToRecord(rawInput)[options.field ?? 'kovo-csrf'];
+  const submitted = revealCsrfInput(formLikeToRecord(rawInput)[options.field ?? 'kovo-csrf']);
   if (typeof submitted !== 'string') return false;
 
   const submittedMac = unmaskCsrfToken(submitted);
@@ -341,6 +352,12 @@ export function validateCsrfToken<Request>(
       signature: submittedMac,
     }).ok === true
   );
+}
+
+function revealCsrfInput(input: unknown): unknown {
+  return isUntrusted(input)
+    ? revealUntrusted(input, 'validated request-derived CSRF token')
+    : input;
 }
 
 export function mutationCsrfOptions<Request>(
@@ -462,21 +479,12 @@ function readAnonymousCsrfCookie(request: unknown, name: string): string | undef
 
 function readCookieValue(request: unknown, name: string): string | undefined {
   if (!(request instanceof Request)) return undefined;
-  const header = request.headers.get('cookie');
-  if (!header) return undefined;
-
-  for (const cookie of header.split(';')) {
-    const [rawName, ...rawValue] = cookie.trim().split('=');
-    if (rawName !== name) continue;
-    const value = rawValue.join('=');
-    try {
-      return decodeURIComponent(value);
-    } catch {
-      return value;
-    }
-  }
-
-  return undefined;
+  const value = readUntrustedCookieValue(request, name);
+  const revealed = revealUntrustedRequestValue(
+    value,
+    'validated anonymous CSRF cookie binding candidate',
+  );
+  return typeof revealed === 'string' ? revealed : undefined;
 }
 
 function isUsableAnonymousCsrfSecret(value: string | undefined): value is string {

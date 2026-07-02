@@ -161,6 +161,9 @@ describe('ci-shards', () => {
       includeVitest('packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts'),
     ).toBe(false);
     expect(
+      includeVitest('packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts'),
+    ).toBe(false);
+    expect(
       includeVitest(
         'packages/create-kovo/src/index.build.prod-artifact.redirect-capability.test.ts',
       ),

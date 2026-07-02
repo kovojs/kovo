@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
-import { trustedReveal, type Secret } from '@kovojs/core';
+import { secret, trustedReveal, type Secret } from '@kovojs/core';
 
 import { publicAccess } from './access.js';
 import { domain } from './domain.js';
@@ -149,6 +149,30 @@ describe('query endpoints', () => {
       ok: true,
       value: { id: 'p1' },
     });
+  });
+
+  it('refuses runtime Secret values at the query wire egress with KV435', async () => {
+    const onError = vi.fn();
+    const leakingQuery = query('leaking-secret-query', {
+      load: () => ({ passwordHash: secret('sk_live_q5_query_wire') }),
+      reads: [],
+    });
+
+    const response = await renderQueryEndpointResponse(leakingQuery, {
+      onError,
+      request: {},
+    });
+
+    expect(response.status).toBe(500);
+    expect(response.headers).toMatchObject({
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'application/json; charset=utf-8',
+      Vary: 'Cookie',
+    });
+    expect(response.body).toBe('{"code":"SERVER_ERROR","payload":{}}');
+    expect(JSON.stringify(response)).not.toContain('sk_live_q5_query_wire');
+    expect(onError).toHaveBeenCalledTimes(1);
+    expect(String(onError.mock.calls[0]?.[0])).toContain('Secret runtime value cannot cross');
   });
 
   it('runs ordinary query loaders with read-only lifecycle db handles', async () => {

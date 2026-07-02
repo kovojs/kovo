@@ -15,9 +15,40 @@
 // summary work is still residue (SPEC §6.6/§10.3: proxies are defense-in-depth, never sold as the
 // proof).
 
-import { wrapManagedDbForSqlSafety, type ManagedSqlWritePolicy } from './sql-safe-handle.js';
+import {
+  frameworkManagedDbRawTarget,
+  managedSqlExecutionPolicy,
+  wrapManagedDbForSqlSafety,
+  type ManagedSqlWritePolicy,
+} from './sql-safe-handle.js';
 
 declare const readerDbBrand: unique symbol;
+declare const writerDbBrand: unique symbol;
+
+/** Adapter hook for providing a framework-owned engine read-only DB handle. */
+export const kovoReadonlyDbHandle: unique symbol = Symbol('kovo.readonly-db-handle');
+
+/**
+ * Adapter hook for providing a framework-owned write DB handle whose underlying engine or
+ * adapter-enforced boundary applies the mutation's declared write table policy (SPEC §10.3/§11.2).
+ * Generated starter runtimes attach this symbol to their Drizzle handle so `managedDb(...,
+ * 'write')` can resolve a request-scoped writer before raw SQL provenance guards are layered on.
+ */
+export const kovoDeclaredWriteDbHandle: unique symbol = Symbol('kovo.declared-write-db-handle');
+
+/**
+ * @internal Adapter contract for a DB value that can vend a dedicated/read-only reader.
+ */
+export interface KovoReadonlyDbCapable<ReadDb = unknown> {
+  [kovoReadonlyDbHandle](): ReadDb;
+}
+
+/**
+ * @internal Adapter contract for a DB value that can vend an engine-scoped declared-write handle.
+ */
+export interface KovoDeclaredWriteDbCapable<WriteDb = unknown> {
+  [kovoDeclaredWriteDbHandle](policy: ManagedSqlWritePolicy): WriteDb;
+}
 
 const READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$count',
@@ -94,6 +125,20 @@ export type Reader<Db> = (Db extends object
   };
 };
 
+/**
+ * The compile-time mirror of a framework-threaded write handle (SPEC §10.3/§11.2, DEC-E).
+ * Unlike {@link Reader}, this keeps the underlying DB surface intact, but adds a private-symbol
+ * witness so APIs that require a managed write capability cannot be satisfied by a raw provider
+ * handle by accident. Runtime SQL/read-write enforcement still belongs to {@link managedDb} and
+ * {@link wrapManagedDbForSqlSafety}; this type is an author-time guardrail only.
+ */
+export type Writer<Db> = Db & {
+  readonly [writerDbBrand]: {
+    readonly db: Db;
+    readonly scope: 'framework-write-handle';
+  };
+};
+
 /** The mode a managed handle is resolved in: a read-only loader handle, or a read-write handle. */
 export type ManagedDbMode = 'read' | 'write';
 
@@ -108,7 +153,15 @@ export type ManagedDbMode = 'read' | 'write';
  * fail-closed runtime floor plus a branded type, not the SPEC §6.6 security proof.
  */
 export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
-  const safe = wrapManagedDbForSqlSafety(db, undefined, { capability: 'read' });
+  const readDb = readonlyDbTarget(db);
+  const safe = wrapManagedDbForSqlSafety(
+    readDb,
+    undefined,
+    managedSqlExecutionPolicy({
+      capability: 'read',
+      engineReadonly: readDb !== db,
+    }),
+  );
   return readonlyCapabilityDb(safe as object) as Reader<Db>;
 }
 
@@ -159,22 +212,61 @@ export interface ManagedDbOptions {
  * @internal
  */
 export function managedDb<Db>(raw: Db, mode: 'read', options?: ManagedDbOptions): Reader<Db>;
-export function managedDb<Db>(raw: Db, mode: 'write', options?: ManagedDbOptions): Db;
+export function managedDb<Db>(raw: Db, mode: 'write', options?: ManagedDbOptions): Writer<Db>;
 export function managedDb<Db>(
   raw: Db,
   mode: ManagedDbMode,
   options?: ManagedDbOptions,
-): Db | Reader<Db>;
+): Reader<Db> | Writer<Db>;
 export function managedDb<Db>(
   raw: Db,
   mode: ManagedDbMode,
   options: ManagedDbOptions = {},
-): Db | Reader<Db> {
-  const safe = wrapManagedDbForSqlSafety(raw, undefined, {
-    ...options.sqlWritePolicy,
-    capability: mode,
-  });
-  if (mode === 'write') return safe;
+): Reader<Db> | Writer<Db> {
+  const target =
+    mode === 'read' ? readonlyDbTarget(raw) : declaredWriteDbTarget(raw, options.sqlWritePolicy);
+  const safe = wrapManagedDbForSqlSafety(
+    target,
+    undefined,
+    managedSqlExecutionPolicy({
+      ...options.sqlWritePolicy,
+      capability: mode,
+      engineReadonly: mode === 'read' && target !== raw,
+    }),
+  );
+  if (mode === 'write') return safe as Writer<Db>;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
   return readonlyCapabilityDb(safe as unknown as object) as Reader<Db>;
+}
+
+function readonlyDbTarget<Db>(raw: Db): Db {
+  if (!isRecord(raw)) return raw;
+  const createReadonly = raw[kovoReadonlyDbHandle];
+  if (typeof createReadonly !== 'function') return raw;
+  const readTarget = createReadonly.call(raw) as Db;
+  if (readTarget === raw) {
+    throw new KovoReadonlyHandleError(
+      'KV433: adapter read-only DB hook returned the mutable writer handle; managed readers require a dedicated engine read-only handle (SPEC §10.3/§11.2).',
+    );
+  }
+  return readTarget;
+}
+
+function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy | undefined): Db {
+  if (
+    writePolicy === undefined ||
+    writePolicy.tables === undefined ||
+    writePolicy.tables.length === 0
+  ) {
+    return raw;
+  }
+  const target = frameworkManagedDbRawTarget(raw) ?? raw;
+  if (!isRecord(target)) return raw;
+  const createDeclaredWrite = target[kovoDeclaredWriteDbHandle];
+  if (typeof createDeclaredWrite !== 'function') return raw;
+  return createDeclaredWrite.call(target, writePolicy) as Db;
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === 'object' && value !== null;
 }

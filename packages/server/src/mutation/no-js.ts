@@ -3,6 +3,7 @@ import { guardFailureIsUnauthenticated, type ResolvedGuardFailure } from '../gua
 import { stampGuardFailureDocumentSecurityFloor } from '../document-core.js';
 import {
   blessRedirectResponse,
+  frameworkWireBody,
   mergeResponseHeaders,
   redirectLocationHeader,
   retryAfterHeaders,
@@ -93,7 +94,7 @@ export async function renderNoJsMutationLifecycleResponse<
   }
 
   const successResponse = blessRedirectResponse({
-    body: '',
+    body: frameworkWireBody(''),
     headers: mergeMutationResponseHeaders(
       {
         'Cache-Control': 'no-store',
@@ -117,7 +118,7 @@ export function noJsMutationReauthResponse<Request>(
   if (!mutationGuardFailureIsUnauthenticated(guardFailure, request)) return undefined;
 
   return blessRedirectResponse({
-    body: '',
+    body: frameworkWireBody(''),
     headers: {
       'Cache-Control': 'no-store',
       Location: redirectLocationHeader(loginLocation(options.currentUrl ?? '/')),
@@ -135,7 +136,7 @@ async function renderNoJsMutationFailureResponse<Request, Value>(
     : renderDefaultFailurePage(failure);
 
   return {
-    body,
+    body: frameworkWireBody(body),
     headers: stampNoJsMutationFailureHeaders(
       mergeMutationResponseHeaders(
         { 'Content-Type': 'text/html; charset=utf-8' },
@@ -151,9 +152,11 @@ async function renderNoJsReplayUnavailablePage<Request, Value>(
 ): Promise<NoJsMutationResponse> {
   const failure = replayUnavailableFailure();
   return {
-    body: noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
-      : renderDefaultFailurePage(failure),
+    body: frameworkWireBody(
+      noJsRequest.renderFailurePage
+        ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
+        : renderDefaultFailurePage(failure),
+    ),
     headers: stampNoJsMutationFailureHeaders({
       'Content-Type': 'text/html; charset=utf-8',
       'Retry-After': '1',
@@ -171,9 +174,11 @@ async function renderNoJsReplayConflictPage<Request, Value>(
     status: 422,
   };
   return {
-    body: noJsRequest.renderFailurePage
-      ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
-      : renderDefaultFailurePage(failure),
+    body: frameworkWireBody(
+      noJsRequest.renderFailurePage
+        ? await noJsRequest.renderFailurePage(failure, noJsRequest.rawInput)
+        : renderDefaultFailurePage(failure),
+    ),
     headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
     status: 422,
   };
@@ -181,7 +186,7 @@ async function renderNoJsReplayConflictPage<Request, Value>(
 
 function noJsMutationServerErrorResponse(): NoJsMutationResponse {
   return {
-    body: 'Internal Server Error',
+    body: frameworkWireBody('Internal Server Error'),
     headers: stampNoJsMutationFailureHeaders({ 'Content-Type': 'text/html; charset=utf-8' }),
     status: 500,
   };

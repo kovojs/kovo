@@ -615,7 +615,7 @@ export function kovoAudit(
  */
 export function kovoCheck(
   input: KovoCheckInput,
-  options: { family?: KovoCheckFamily } = {},
+  options: { family?: KovoCheckFamily; paranoidStaticAdvisory?: boolean } = {},
 ): KovoCheckResult {
   if (options.family === 'sources-sinks') return sourcesSinksCheckResult(outputVersion);
 
@@ -627,6 +627,9 @@ export function kovoCheck(
   const family = options.family ?? 'all';
   const includeAll = family === 'all';
   let failed = false;
+  const staticAdvisoryCodes = new Set(['KV406', 'KV422', 'KV438']);
+  const staticFindingFails = (code: string): boolean =>
+    !(options.paranoidStaticAdvisory === true && staticAdvisoryCodes.has(code));
 
   const pushFinding = (line: string, fail = false): void => {
     lines.push(line);
@@ -644,7 +647,10 @@ export function kovoCheck(
     }
 
     for (const diagnostic of graph.diagnostics ?? []) {
-      pushFinding(staticDiagnosticLine(diagnostic), diagnosticSeverity(diagnostic) === 'error');
+      pushFinding(
+        staticDiagnosticLine(diagnostic),
+        diagnosticSeverity(diagnostic) === 'error' && staticFindingFails(diagnostic.code),
+      );
     }
 
     // SPEC §10.2/§11.2: KV422 SQL-injection findings from the static analyzer
@@ -654,7 +660,10 @@ export function kovoCheck(
     // the check fails (nonzero exit). The diagnostics ride into the check graph as a
     // `sqlSafetyDiagnostics` field assembled by the compile/build pipeline.
     for (const diagnostic of sqlSafetyDiagnostics(graph)) {
-      pushFinding(sqlSafetyKv422Line(diagnostic), diagnosticSeverity(diagnostic) === 'error');
+      pushFinding(
+        sqlSafetyKv422Line(diagnostic),
+        diagnosticSeverity(diagnostic) === 'error' && staticFindingFails(diagnostic.code),
+      );
     }
 
     for (const diagnostic of graph.verificationDiagnostics ?? []) {
@@ -666,7 +675,7 @@ export function kovoCheck(
 
     if (!hasStaticHandlerWriteSinkDiagnostic(graph.diagnostics ?? [])) {
       for (const line of handlerWriteSinkCheckLines(graph.handlerWriteSinks ?? [])) {
-        pushFinding(line, true);
+        pushFinding(line, !line.startsWith('ERROR KV406 ') || staticFindingFails('KV406'));
       }
     }
 
@@ -747,14 +756,17 @@ export function kovoCheck(
     // request-input (or fail-closed unprovable) provenance is the blocking KV438
     // mass-assignment error. serverValue/adminAssign discharges never reach here.
     for (const finding of sortedMassAssignment(graph.massAssignmentFacts ?? [])) {
-      pushFinding(massAssignmentKv438Line(finding), true);
+      pushFinding(massAssignmentKv438Line(finding), staticFindingFails('KV438'));
     }
 
     // SPEC §6.6/§9.4 / secure-framework Phase 5: query write-reachability facts are the
     // canonical Drizzle-produced surface. Resolved direct writes are KV433; unresolved
     // write-shaped loader sites fail closed as KV406 instead of disappearing.
     for (const finding of sortedQueryWriteReachability(graph.queryWriteReachability ?? [])) {
-      pushFinding(queryWriteReachabilityLine(finding), true);
+      pushFinding(
+        queryWriteReachabilityLine(finding),
+        finding.unresolved?.code === 'KV406' ? staticFindingFails('KV406') : true,
+      );
     }
 
     // SPEC §10.3/§11.1 / secure-framework Phase 6: a single-row self-referential write to a

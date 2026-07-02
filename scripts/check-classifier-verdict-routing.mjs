@@ -4,14 +4,15 @@ import path from 'node:path';
 import ts from 'typescript';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { staticClassifierGateResult } from './lib/paranoid-mode.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
-import { collectSourceFiles, productionSourceRoots } from './lib/source-files.mjs';
+import { collectSourceFiles, securityMarkerSourceRoots } from './lib/source-files.mjs';
 
 export const repoRoot = findRepoRoot();
 
 export function checkClassifierVerdictRouting(options = {}) {
   const root = options.repoRoot ?? repoRoot;
-  const roots = options.roots ?? productionSourceRoots;
+  const roots = options.roots ?? securityMarkerSourceRoots(root);
   const files =
     options.files ??
     collectSourceFiles(root, roots, {
@@ -32,14 +33,25 @@ export function checkClassifierVerdictRouting(options = {}) {
     findings.push(...classifySourceFile(sourceFile));
   }
 
-  return {
-    findings,
-    ok: findings.length === 0,
-    summary:
-      findings.length === 0
-        ? `OK ${files.length} source file(s) scanned`
-        : `${findings.length} classifier verdict routing violation(s)`,
-  };
+  return staticClassifierGateResult(
+    {
+      findings,
+      scanned: files.length,
+      cleanSummary: (scanned, paranoidMode) =>
+        `OK ${scanned} source file(s) scanned${
+          paranoidMode
+            ? ' (paranoid static classifiers advisory; runtime chokes are proof boundary)'
+            : ''
+        }`,
+      violationSummary: (count, paranoidMode) =>
+        `${count} classifier verdict routing violation(s)${
+          paranoidMode
+            ? ' (advisory under KOVO_PARANOID=1; runtime chokes remain the proof boundary)'
+            : ''
+        }`,
+    },
+    options,
+  );
 }
 
 export function main(options = {}) {

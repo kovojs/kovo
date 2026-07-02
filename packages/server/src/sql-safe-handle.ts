@@ -30,9 +30,25 @@ import {
 export interface ManagedSqlWritePolicy {
   capability?: 'read' | 'write';
   dialect?: ParseSqlWriteTablesOptions['dialect'];
+  engineReadonly?: boolean;
   tables?: readonly string[];
   touches?: readonly string[];
 }
+
+declare const managedSqlExecutionPolicyBrand: unique symbol;
+
+/**
+ * Framework-owned DB execution policy for the managed SQL choke (SPEC §10.2/§10.3/§11.2, DEC-E).
+ * The public shape is intentionally not enough: direct SQL execution wrapping requires a value
+ * minted by {@link managedSqlExecutionPolicy}, and the runtime WeakSet check rejects bare casts.
+ *
+ * @internal
+ */
+export type ManagedSqlExecutionPolicy = ManagedSqlWritePolicy & {
+  readonly [managedSqlExecutionPolicyBrand]: {
+    readonly scope: 'framework-managed-sql-execution-policy';
+  };
+};
 
 export const kovoAsyncMutationTransaction = Symbol('kovo.async-mutation-transaction');
 
@@ -59,6 +75,20 @@ const WRITE_SQL_BUILDER_FAST_PATH_METHODS = new Set<PropertyKey>([
   'with',
 ]);
 const frameworkManagedDbRawTargets = new WeakMap<object, object>();
+const managedSqlExecutionPolicies = new WeakSet<object>();
+
+/**
+ * Mint the module-private execution policy required by {@link wrapManagedDbForSqlSafety}.
+ *
+ * @internal
+ */
+export function managedSqlExecutionPolicy(
+  policy: ManagedSqlWritePolicy,
+): ManagedSqlExecutionPolicy {
+  const minted = Object.freeze({ ...policy }) as ManagedSqlExecutionPolicy;
+  managedSqlExecutionPolicies.add(minted);
+  return minted;
+}
 
 /**
  * Resolve the managed-SQL guard mode (SPEC §10.2/§744). The fail-closed default — in every
@@ -85,9 +115,10 @@ export const managedSqlSafetyMode = securityClassifier(
 export function wrapManagedDbForSqlSafety<DbValue>(
   db: DbValue,
   mode: SqlSafetyMode = managedSqlSafetyMode(),
-  writePolicy?: ManagedSqlWritePolicy,
+  writePolicy?: ManagedSqlExecutionPolicy,
 ): DbValue {
   if (!isRecord(db)) return db;
+  assertManagedSqlExecutionPolicy(writePolicy);
   if (writePolicy === undefined && !isManagedDbAdapterLike(db)) return db;
 
   const proxyCache = new WeakMap<object, object>();
@@ -100,6 +131,18 @@ export function wrapManagedDbForSqlSafety<DbValue>(
     writePolicy,
     writePolicy !== undefined || isManagedDbAdapterLike(db),
   ) as DbValue;
+}
+
+function assertManagedSqlExecutionPolicy(
+  policy: ManagedSqlExecutionPolicy | undefined,
+): asserts policy is ManagedSqlExecutionPolicy | undefined {
+  if (policy === undefined) return;
+  if (typeof policy === 'object' && policy !== null && managedSqlExecutionPolicies.has(policy)) {
+    return;
+  }
+  throw new Error(
+    'KV422: managed DB SQL execution policy was not created by the framework-owned constructor (SPEC §10.2/§10.3/§11.2). Route DB execution through managedDb()/readonlyDb() so the read/write choke remains the sole door.',
+  );
 }
 
 /**
@@ -226,7 +269,7 @@ function guardedSqlMethod(
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
     enforceManagedSql(statement, mode, writePolicy);
-    return value.call(target, statement, ...args);
+    return wrapReadonlyEngineResult(() => value.call(target, statement, ...args), writePolicy);
   };
 }
 
@@ -304,7 +347,7 @@ function guardedUnknownSqlMethod(
 ): Function {
   return (...args: unknown[]) => {
     assertAmbiguousSqlMethodArguments(prop, args, mode, writePolicy, strictSqlTarget);
-    return value.apply(target, args);
+    return wrapReadonlyEngineResult(() => value.apply(target, args), writePolicy);
   };
 }
 
@@ -457,6 +500,46 @@ async function runQueuedManagedTransaction<Result>(
   }
 }
 
+function wrapReadonlyEngineResult<Result>(
+  execute: () => Result,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): Result {
+  if (writePolicy?.capability !== 'read' || writePolicy.engineReadonly !== true) {
+    return execute();
+  }
+
+  try {
+    const result = execute();
+    if (isPromiseLike(result)) {
+      return result.catch((error: unknown) => {
+        throw readonlyEngineError(error);
+      }) as Result;
+    }
+    return result;
+  } catch (error) {
+    throw readonlyEngineError(error);
+  }
+}
+
+function readonlyEngineError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(
+    [
+      'KV433: database engine rejected a read-only SQL capability statement from a query loader (SPEC §10.3/§11.2).',
+      `  engine: ${message}`,
+    ].join('\n'),
+  );
+}
+
+function isPromiseLike(value: unknown): value is Promise<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function' &&
+    typeof (value as { catch?: unknown }).catch === 'function'
+  );
+}
+
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -490,9 +573,12 @@ function guardedPrepareMethod(
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
     enforceManagedSql(statement, mode, writePolicy);
-    const prepared = value.call(target, statement, ...args);
+    const prepared = wrapReadonlyEngineResult(
+      () => value.call(target, statement, ...args),
+      writePolicy,
+    );
     return typeof prepared === 'object' && prepared !== null
-      ? wrapPreparedSqlStatement(prepared, mode, proxyCache, methodCache)
+      ? wrapPreparedSqlStatement(prepared, mode, proxyCache, methodCache, writePolicy)
       : prepared;
   };
 }
@@ -502,6 +588,7 @@ function wrapPreparedSqlStatement(
   mode: SqlSafetyMode,
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  writePolicy: ManagedSqlWritePolicy | undefined,
 ): object {
   const cached = proxyCache.get(statementHandle);
   if (cached) return cached;
@@ -510,7 +597,15 @@ function wrapPreparedSqlStatement(
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
       if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
-        return cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target));
+        return cachedSqlSafetyMethod(
+          target,
+          prop,
+          value,
+          methodCache,
+          () =>
+            (...args: unknown[]) =>
+              wrapReadonlyEngineResult(() => value.apply(target, args), writePolicy),
+        );
       }
 
       return typeof value === 'function'
@@ -548,6 +643,7 @@ const assertSqlWriteTablesAllowed = securityClassifier(
   'server.sql.write-table-allowlist',
   function (statement: unknown, writePolicy: ManagedSqlWritePolicy | undefined): void {
     if (writePolicy?.capability === 'read') {
+      if (writePolicy.engineReadonly === true) return;
       assertReadSqlStatement(statement, writePolicy?.dialect);
       return;
     }
@@ -578,8 +674,10 @@ const assertSqlWriteTablesAllowed = securityClassifier(
 
     const writeTableNames = writeTables
       .filter(isParsedSqlTableName)
-      .map(normalizeManagedSqlTableName);
-    const allowed = new Set(declaredTables.map(normalizeManagedSqlTableName));
+      .map((table) => normalizeManagedSqlTableName(table, writePolicy?.dialect));
+    const allowed = new Set(
+      declaredTables.map((table) => normalizeManagedSqlTableName(table, writePolicy?.dialect)),
+    );
     const unexpected = writeTableNames.filter((table) => !allowed.has(table));
     if (unexpected.length === 0) return;
 
@@ -637,8 +735,12 @@ function formatSqlWriteTargets(targets: readonly ParsedSqlWriteTarget[]): string
     .join(', ');
 }
 
-function normalizeManagedSqlTableName(table: string): string {
-  return table.includes('.') ? table : `public.${table}`;
+function normalizeManagedSqlTableName(
+  table: string,
+  dialect: ParseSqlWriteTablesOptions['dialect'],
+): string {
+  if (table.includes('.')) return table;
+  return `${dialect === 'sqlite' ? 'main' : 'public'}.${table}`;
 }
 
 function isParsedSqlTableName(target: ParsedSqlWriteTarget): target is string {

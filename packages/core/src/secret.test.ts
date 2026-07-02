@@ -5,40 +5,44 @@ import {
   declareOffWire,
   isRedacted,
   isSecret,
+  isUntrusted,
   redacted,
   revealRedacted,
   revealSecret,
+  revealUntrusted,
   secret,
   trustedReveal,
+  untrusted,
   type JsonValue,
   type Redacted,
   type RedactedValue,
   type Secret,
   type SecretValue,
+  type Untrusted,
+  type UntrustedValue,
 } from './index.js';
 
 const MARKER = '[secret]';
 
-describe('runtime Secret poison wrapper (SPEC §6.6 defense-in-depth)', () => {
-  it('poisons every accidental coercion path', () => {
+describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
+  it('throws on every accidental coercion path', () => {
     const s = secret('hunter2');
 
-    expect(String(s)).toBe(MARKER);
-    expect(`${s}`).toBe(MARKER);
-    expect('' + s).toBe(MARKER);
-    expect(s.toString()).toBe(MARKER);
-    expect(`${[s].join(',')}`).toBe(MARKER);
+    expect(() => String(s)).toThrow(/KV435/);
+    expect(() => `${s}`).toThrow(/KV435/);
+    expect(() => '' + s).toThrow(/KV435/);
+    expect(() => s.toString()).toThrow(/KV435/);
+    expect(() => `${[s].join(',')}`).toThrow(/KV435/);
     expect(Object.prototype.toString.call(s)).toBe('[object Secret]');
   });
 
-  it('does not leak through JSON.stringify, directly or nested', () => {
+  it('refuses JSON.stringify directly or nested', () => {
     const s = secret('hunter2');
 
-    expect(JSON.stringify(s)).toBe('"[secret]"');
-    expect(JSON.stringify({ password: s })).toBe('{"password":"[secret]"}');
-    expect(JSON.stringify({ creds: { token: s } })).toBe('{"creds":{"token":"[secret]"}}');
-    expect(JSON.stringify([s, s])).toBe('["[secret]","[secret]"]');
-    expect(JSON.stringify(s)).not.toContain('hunter2');
+    expect(() => JSON.stringify(s)).toThrow(/KV435/);
+    expect(() => JSON.stringify({ password: s })).toThrow(/KV435/);
+    expect(() => JSON.stringify({ creds: { token: s } })).toThrow(/KV435/);
+    expect(() => JSON.stringify([s, s])).toThrow(/KV435/);
   });
 
   it('does not leak through console.log / util.inspect', () => {
@@ -49,9 +53,8 @@ describe('runtime Secret poison wrapper (SPEC §6.6 defense-in-depth)', () => {
 
   it('does not leak through arithmetic/valueOf coercion', () => {
     const s = secret(42);
-    expect(Number(s)).toBeNaN();
-    // valueOf is overridden — `+s` cannot recover the number.
-    expect(s.valueOf()).toBe(MARKER);
+    expect(() => Number(s)).toThrow(/KV435/);
+    expect(() => s.valueOf()).toThrow(/KV435/);
   });
 
   it('keeps the value out of property enumeration and structuredClone', () => {
@@ -64,16 +67,19 @@ describe('runtime Secret poison wrapper (SPEC §6.6 defense-in-depth)', () => {
 
   it('reveals the value only on explicit reveal()/revealSecret()', () => {
     const s = secret('hunter2');
-    expect(s.reveal()).toBe('hunter2');
-    expect(revealSecret(s)).toBe('hunter2');
+    expect(() => s.reveal('')).toThrow(
+      'Secret/Untrusted reveal requires a non-empty justification.',
+    );
+    expect(s.reveal('needed for HMAC comparison')).toBe('hunter2');
+    expect(revealSecret(s, { justification: 'needed for HMAC comparison' })).toBe('hunter2');
   });
 
   it('derives via map() without un-poisoning', () => {
     const key = secret('sk_live_abcdef');
     const prefix = key.map((k) => k.slice(0, 7));
     expect(isSecret(prefix)).toBe(true);
-    expect(String(prefix)).toBe(MARKER);
-    expect(prefix.reveal()).toBe('sk_live');
+    expect(() => String(prefix)).toThrow(/KV435/);
+    expect(prefix.reveal('test assertion')).toBe('sk_live');
   });
 
   it('compares in constant time via equals(), accepting raw or wrapped operands', () => {
@@ -93,7 +99,7 @@ describe('runtime Secret poison wrapper (SPEC §6.6 defense-in-depth)', () => {
   it('is idempotent: secret(secret(x)) does not double-wrap', () => {
     const inner = secret('x');
     expect(secret(inner)).toBe(inner);
-    expect(secret(inner).reveal()).toBe('x');
+    expect(secret(inner).reveal('test assertion')).toBe('x');
   });
 
   it('isSecret recognizes a box and cannot be forged via Symbol.for', () => {
@@ -109,7 +115,7 @@ describe('runtime Secret poison wrapper (SPEC §6.6 defense-in-depth)', () => {
   it('revealSecret passes a non-box Secret-typed value through unchanged', () => {
     // A Drizzle column is typed Secret<T> but is a raw value at runtime.
     const rawColumn = 'plain-hash' as unknown as Secret<string>;
-    expect(revealSecret(rawColumn)).toBe('plain-hash');
+    expect(revealSecret(rawColumn, 'static column projection')).toBe('plain-hash');
   });
 
   it('trustedReveal unwraps a runtime box', () => {
@@ -121,7 +127,7 @@ describe('runtime Secret poison wrapper (SPEC §6.6 defense-in-depth)', () => {
     const calls: string[] = [];
     const result = declareOffWire(
       () => {
-        calls.push(revealSecret(secret('server-only-token')));
+        calls.push(revealSecret(secret('server-only-token'), 'server-only cache partition'));
       },
       { justification: 'used only to choose an internal cache partition' },
     );
@@ -146,8 +152,50 @@ describe('Secret type bound (type-only, defeated by any — SPEC §6.6)', () => 
       void forged;
     };
     void compileOnly;
-    // Runtime poison is the backstop when `any`/casts defeat the type bound.
-    expect(JSON.stringify(s)).toBe('"[secret]"');
+    // Runtime non-coercion is the backstop when `any`/casts defeat the type bound.
+    expect(() => JSON.stringify(s)).toThrow(/KV435/);
+  });
+});
+
+describe('runtime Untrusted provenance wrapper (SPEC §5.2 rule 11)', () => {
+  it('is non-coercible but inspect-redacted like Secret', () => {
+    const value = untrusted('<script>alert(1)</script>');
+    expect(() => String(value)).toThrow(/KV426/);
+    expect(() => `${value}`).toThrow(/KV426/);
+    expect(() => JSON.stringify({ value })).toThrow(/KV426/);
+    expect(inspect(value)).toBe('[untrusted]');
+    expect(Object.prototype.toString.call(value)).toBe('[object Untrusted]');
+  });
+
+  it('reveals only with a non-empty validation reason and maps without losing provenance', () => {
+    const value = untrusted('Ada Lovelace');
+    expect(() => value.reveal('')).toThrow(
+      'Secret/Untrusted reveal requires a non-empty justification.',
+    );
+    expect(value.reveal('validated as display name')).toBe('Ada Lovelace');
+    const first = value.map((name) => name.split(' ')[0]);
+    expect(isUntrusted(first)).toBe(true);
+    expect(first.reveal({ justification: 'validated as display name' })).toBe('Ada');
+    expect(revealUntrusted(first, 'validated as display name')).toBe('Ada');
+  });
+
+  it('is idempotent, unforgeable through Symbol.for, and not JsonValue', () => {
+    const value = untrusted('search');
+    expect(untrusted(value)).toBe(value);
+    expect(value.equals('search')).toBe(true);
+    expect(value.equals(untrusted('search'))).toBe(true);
+    expect(isUntrusted(value)).toBe(true);
+    expect(isUntrusted({ [Symbol.for('kovo.untrusted')]: true })).toBe(false);
+    const uv: UntrustedValue<string> = value;
+    // @ts-expect-error an untrusted value must validate/escape before JSON payloads.
+    const leak: JsonValue = uv;
+    void leak;
+    const compileOnly = () => {
+      // @ts-expect-error Untrusted<T> uses a module-private symbol brand, not a public structural key.
+      const forged: Untrusted<string> = { __kovoUntrustedBrand: Symbol('kovo.untrusted') };
+      void forged;
+    };
+    void compileOnly;
   });
 });
 

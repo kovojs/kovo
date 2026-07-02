@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { secret } from '@kovojs/core';
 
 import {
   blessRedirectResponse,
@@ -101,6 +102,19 @@ describe('central response posture finalization', () => {
     ).toThrow('forwardSetCookie requires a name=value Set-Cookie');
   });
 
+  it('refuses Secret runtime values in framework response headers with KV435', () => {
+    expect(() =>
+      finalizeServerResponse(
+        {
+          body: 'payload',
+          headers: { 'X-Token': secret('sk_live_q5_header') as unknown as string },
+          status: 200,
+        },
+        { method: 'GET' },
+      ),
+    ).toThrow(/KV435 Secret query value reaches the client wire/);
+  });
+
   it('sanitizes raw endpoint redirect Location headers without dropping safe bodies', async () => {
     const openRedirect = finalizeRawWebResponse(
       new Response(null, {
@@ -183,6 +197,19 @@ describe('central response posture finalization', () => {
         { method: 'GET' },
       ).headers.get('location'),
     ).toBe('/');
+  });
+
+  it('refuses Secret runtime values in redirect Location headers with KV435', () => {
+    expect(() =>
+      finalizeServerResponse(
+        {
+          body: null,
+          headers: { Location: secret('/account') as unknown as string },
+          status: 303,
+        },
+        { method: 'GET' },
+      ),
+    ).toThrow(/KV435 Secret query value reaches the client wire/);
   });
 
   it('strips ambient browser authority from endpoint request views and clones', () => {

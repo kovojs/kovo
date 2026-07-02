@@ -77,7 +77,8 @@ const secretQueryShapePaths = securityClassifier(
     }
 
     if (isArrayQueryShape(shape)) return secretQueryShapePaths(shape[0] ?? 'object', path);
-    if (!isQueryShapeObject(shape)) return [];
+    if (isQueryShapePrimitive(shape)) return [];
+    if (!isQueryShapeObject(shape)) return [path.join('.')];
 
     return Object.entries(shape).flatMap(([key, child]) =>
       secretQueryShapePaths(child, [...path, key]),
@@ -96,13 +97,24 @@ const tableRowQueryShapePaths = securityClassifier(
     }
 
     if (isArrayQueryShape(shape)) return tableRowQueryShapePaths(shape[0] ?? 'object', path);
-    if (!isQueryShapeObject(shape)) return [];
+    if (isQueryShapePrimitive(shape)) return [];
+    if (!isQueryShapeObject(shape)) return [path.join('.')];
 
     return Object.entries(shape).flatMap(([key, child]) =>
       tableRowQueryShapePaths(child, [...path, key]),
     );
   },
 );
+
+function isQueryShapePrimitive(shape: QueryShape): boolean {
+  return (
+    shape === 'array' ||
+    shape === 'boolean' ||
+    shape === 'number' ||
+    shape === 'object' ||
+    shape === 'string'
+  );
+}
 
 function malformedRevealInnerShape(shape: QueryShape): QueryShape | undefined {
   if (typeof shape !== 'object' || shape === null || Array.isArray(shape)) return undefined;
