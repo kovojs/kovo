@@ -457,9 +457,15 @@ mattering.
         confidentiality guarantees, threat model, and non-goals; `check:security-guarantee` rejects claims without TCB
         chokes or paranoid/runtime proof IDs.
         Evidence: `pnpm run check:security-guarantee`.
-- [ ] **6.3 External adversarial audit + generative fuzzing.** A non-implementer audit against the guarantee statement,
+- [x] **6.3 External adversarial audit + generative fuzzing.** A non-implementer audit against the guarantee statement,
       plus the DEC-G property-based generators run under `KOVO_PARANOID=1`. This validates that the TCB + sole-door hold;
       it does not replace them as the soundness proof.
+  - [x] **Non-implementer guarantee audit.** The audit found no blocking guarantee with no choke, no failed sole-door
+        gate for enrolled chokes, and no missing paranoid proof ID for the current published guarantees.
+        Evidence: `plans/phase-6-3-security-guarantee-audit-20260702.md`.
+  - [x] **Paranoid generator validation.** DEC-G proof enrollment and paranoid runtime generator acceptance are green in
+        the integration worktree.
+        Evidence: `pnpm run check:security-test-builds && pnpm run check:paranoid-runtime`.
 
 ## 7. Pre-mortem — what round-8 will attack, and which item closes it
 
