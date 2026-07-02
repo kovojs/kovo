@@ -46,22 +46,24 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
 }
 
 function secretBoxingReadDb<Db extends object>(db: Db, secretKeys: ReadonlySet<string>): Db {
-  const readDb: Record<PropertyKey, unknown> = {};
+  const readDb = {};
   for (const prop of ['$count', '$with', 'query', 'select', 'selectDistinct', 'with'] as const) {
-    const item = (db as Record<PropertyKey, unknown>)[prop];
+    const item = Reflect.get(db, prop);
     if (typeof item === 'function') {
-      readDb[prop] = (...args: unknown[]) => wrapReadSurface(item.apply(db, args), secretKeys);
+      Reflect.set(readDb, prop, (...args: unknown[]) =>
+        wrapReadSurface(Reflect.apply(item, db, args), secretKeys),
+      );
     } else if (item !== undefined) {
-      readDb[prop] = item;
+      Reflect.set(readDb, prop, item);
     }
   }
-  return readDb as Db;
+  return Object.assign({}, db, readDb);
 }
 
 function wrapReadSurface(value: unknown, secretKeys: ReadonlySet<string>): unknown {
   if (value === null || typeof value !== 'object') return value;
   if (value instanceof Promise) return value.then((result) => boxSecretRows(result, secretKeys));
-  return new Proxy(value as Record<PropertyKey, unknown>, {
+  return new Proxy(value, {
     get(target, prop, receiver) {
       const item = Reflect.get(target, prop, receiver);
       if (prop === 'then' && typeof item === 'function') {
@@ -69,14 +71,13 @@ function wrapReadSurface(value: unknown, secretKeys: ReadonlySet<string>): unkno
           onFulfilled?: (value: unknown) => unknown,
           onRejected?: (reason: unknown) => unknown,
         ) =>
-          item.call(
-            target,
+          Reflect.apply(item, target, [
             (result: unknown) => onFulfilled?.(boxSecretRows(result, secretKeys)),
             onRejected,
-          );
+          ]);
       }
       if (typeof item !== 'function') return item;
-      return (...args: unknown[]) => wrapReadSurface(item.apply(target, args), secretKeys);
+      return (...args: unknown[]) => wrapReadSurface(Reflect.apply(item, target, args), secretKeys);
     },
   });
 }
@@ -85,7 +86,7 @@ function boxSecretRows(value: unknown, secretKeys: ReadonlySet<string>): unknown
   if (Array.isArray(value)) return value.map((entry) => boxSecretRows(entry, secretKeys));
   if (value === null || typeof value !== 'object') return value;
   const boxed: Record<string, unknown> = {};
-  for (const [key, item] of Object.entries(value as Record<string, unknown>)) {
+  for (const [key, item] of Object.entries(value)) {
     boxed[key] =
       item === null || item === undefined
         ? item

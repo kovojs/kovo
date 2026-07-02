@@ -265,7 +265,13 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'return { db, readonlyDb: readonlyDb(db), ready }',
+      'return { db, readonlyDb: readonlyDb(secretBoxingReadDb(db, SECRET_COLUMN_KEYS)), ready }',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "const SECRET_COLUMN_KEYS = new Set(['accessToken', 'idToken', 'password', 'refreshToken', 'token'])",
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'function secretBoxingReadDb<Db extends object>',
     );
     expect(files.get('src/db.ts')).not.toContain('PgliteDatabase<typeof schema>');
     expect(files.get('src/db.ts')).not.toContain('drizzle({ client, schema })');
@@ -537,7 +543,14 @@ describe('create-kovo starter (metadata)', () => {
       'readonlyDb(db).exec(SCHEMA_DDL)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'return { db, readonlyDb: readonlyDb(db), ready: Promise.resolve() }',
+      'readonlyDb: readonlyDb(secretBoxingReadDb(db, SECRET_COLUMN_KEYS))',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ready: Promise.resolve()');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "const SECRET_COLUMN_KEYS = new Set(['accessToken', 'idToken', 'password', 'refreshToken', 'token'])",
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'function secretBoxingReadDb<Db extends object>',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb',

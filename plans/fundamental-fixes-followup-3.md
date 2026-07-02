@@ -253,6 +253,10 @@ mattering.
 
 - [ ] **2.1 Tag secret values at the DB-read boundary (DEC-C 1/3).** Query-builder + view + computed + raw-SQL reads
       all produce `Secret` (raw-SQL fail-closed by table reference; parse-fail → tag).
+      Progress: `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`
+      proves the starter `readonlyAppDb` read boundary boxes declared auth secret-key projections and refuses a
+      Drizzle-view-surfaced `Secret` at query-wire egress. General `kovo({ secret })` metadata extraction for every
+      `context.db`/raw-SQL/computed path remains open.
 - [ ] **2.2 Engine column-lockdown for the reader role (DEC-C 2).** Reader role `REVOKE` on secret columns; reading a
       secret column requires a declared capability. Acceptance: the reader role cannot `SELECT` a secret column via raw SQL.
 - [ ] **2.3 Every egress choke refuses `Secret` (DEC-C 4, DEC-J).** Wire, headers, redirect, static export, logs,
@@ -292,11 +296,12 @@ mattering.
       the now-advisory static SQL check loads (`papercuts-26` P1). With Phase 1 shipped this is DX-only, not security.
       Evidence: `packages/create-kovo/src/index.build.scaffold.sqlite.test.ts` and packed-SQLite scaffold tests prove
       generated and packed SQLite apps declare and install `pgsql-ast-parser`.
-- [ ] **5.2** Drizzle view relation fixpoint terminates in bounded memory (`papercuts-26` P3); a `sqliteView`/`pgView`
+- [x] **5.2** Drizzle view relation fixpoint terminates in bounded memory (`papercuts-26` P3); a `sqliteView`/`pgView`
       build completes and (with Phase 2) a secret surfaced through a view is refused at egress.
-      Progress: `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts` proves cyclic `sqliteView`/`pgView`
-      relation read derivation terminates and converges to the base read domain. The Phase 2-dependent secret-through-view
-      egress assertion remains open.
+      Evidence: `vp exec vitest --run packages/drizzle/src/index.query-shapes.test.ts -t 'terminates cyclic.*View|Drizzle view'`
+      proves cyclic `sqliteView`/`pgView` relation read derivation terminates and converges to the base read domain;
+      `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`
+      proves a Drizzle-view-surfaced runtime `Secret` is refused at query-wire egress.
 
 ## 7. Pre-mortem — what round-8 will attack, and which item closes it
 
@@ -344,6 +349,8 @@ point on an endless enumeration.
 
 - `vp exec vitest --run packages/server/src/managed-db.test.ts`
 - `KOVO_PARANOID=1 vp exec vitest --run packages/server/src/jsx-runtime.test.ts`
+- `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`
+- `vp exec vitest --run packages/create-kovo/src/index.test.ts && vp exec vitest --run packages/create-kovo/src/index.build.scaffold.sqlite.test.ts -t 'runs vp check'`
 - `pnpm run check:paranoid-classifiers && pnpm run check:paranoid-runtime`
 - `pnpm run check:api-surface && pnpm run check:single-choke && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census`
 - `pnpm run check:sink-policy && pnpm run check:vp && git diff --check`
