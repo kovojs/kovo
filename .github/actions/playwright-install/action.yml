@@ -1,0 +1,30 @@
+name: Playwright install with cache
+description: Restore Playwright browser binaries, then run Playwright's install/repair command.
+
+inputs:
+  browsers:
+    description: Space-separated browser list passed to playwright install.
+    required: true
+  cache-key:
+    description: Exact actions/cache key for the requested browser set.
+    required: true
+  restore-key:
+    description: Prefix restore key for the requested browser set.
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Remove transient Microsoft apt sources
+      run: |
+        grep -lR "packages.microsoft.com" /etc/apt/sources.list.d 2>/dev/null | xargs -r sudo rm -f
+      shell: bash
+    - name: Restore Playwright browser cache
+      uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+      with:
+        path: ~/.cache/ms-playwright
+        key: ${{ inputs['cache-key'] }}
+        restore-keys: ${{ inputs['restore-key'] }}
+    - name: Install Playwright browsers
+      run: vp exec playwright install --with-deps ${{ inputs.browsers }}
+      shell: bash

@@ -16,27 +16,16 @@ concurrency:
 
 env:
   NODE_OPTIONS: --experimental-transform-types --disable-warning=ExperimentalWarning
+  PLAYWRIGHT_VERSION: 1.60.0
 
 jobs:
   static-safety:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+      - uses: ./.github/actions/kovo-setup
         with:
-          node-version: 22.15.0
-      - run: vp install
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - run: vp exec pnpm rebuild better-sqlite3
+          rebuild-better-sqlite3: 'true'
       - name: Format, type, and import checks
         run: vp exec pnpm run check
       - name: API surface
@@ -71,25 +60,14 @@ jobs:
         total: [3]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+      - uses: ./.github/actions/kovo-setup
         with:
-          node-version: 22.15.0
-      - run: vp install
-      - run: vp exec pnpm rebuild better-sqlite3
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
+          rebuild-better-sqlite3: 'true'
+      - uses: ./.github/actions/playwright-install
         with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - name: Remove transient Microsoft apt sources
-        run: |
-          grep -lR "packages.microsoft.com" /etc/apt/sources.list.d 2>/dev/null | xargs -r sudo rm -f
-      - run: vp exec playwright install --with-deps chromium
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
       - name: Download previous timing history
         env:
           GH_TOKEN: ${{ github.token }}
@@ -123,10 +101,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 22.15.0
-      - run: vp install
+      - uses: ./.github/actions/kovo-setup
       - name: Pack starter workspace packages
         run: vp exec node scripts/ci-shards.mjs pack-starter --outDir "$RUNNER_TEMP/kovo-packed-starter"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -149,21 +124,9 @@ jobs:
         total: [8]
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+      - uses: ./.github/actions/kovo-setup
         with:
-          node-version: 22.15.0
-      - run: vp install
-      - run: vp exec pnpm rebuild better-sqlite3
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+          rebuild-better-sqlite3: 'true'
       - id: starter-shard
         name: Generate balanced starter shard
         run: |
@@ -181,7 +144,11 @@ jobs:
           fi
       - name: Install Chromium for browser-backed starter shard
         if: steps.starter-shard.outputs.needsBrowser == 'true'
-        run: vp exec playwright install --with-deps chromium
+        uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-chromium-
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         if: steps.starter-shard.outputs.needsPacked == 'true'
         with:
@@ -196,20 +163,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 22.15.0
-      - run: vp install
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - uses: ./.github/actions/kovo-setup
       - run: vp exec pnpm run check:build
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
@@ -223,28 +177,16 @@ jobs:
     needs: build
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 22.15.0
-      - run: vp install
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - uses: ./.github/actions/kovo-setup
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: kovo-dist
           path: dist
-      - name: Remove transient Microsoft apt sources
-        run: |
-          grep -lR "packages.microsoft.com" /etc/apt/sources.list.d 2>/dev/null | xargs -r sudo rm -f
-      - run: vp exec playwright install --with-deps chromium firefox webkit
+      - uses: ./.github/actions/playwright-install
+        with:
+          browsers: chromium firefox webkit
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-all-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-all-
       - name: Root browser suite
         run: vp run browser
       - name: Gallery browser suite
@@ -268,24 +210,12 @@ jobs:
       KOVO_FAIL_ON_FLAKY: '1'
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
+      - uses: ./.github/actions/kovo-setup
+      - uses: ./.github/actions/playwright-install
         with:
-          node-version: 22.15.0
-      - run: vp install
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
-      - name: Remove transient Microsoft apt sources
-        run: |
-          grep -lR "packages.microsoft.com" /etc/apt/sources.list.d 2>/dev/null | xargs -r sudo rm -f
-      - run: vp exec playwright install --with-deps chromium firefox webkit
+          browsers: chromium firefox webkit
+          cache-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-all-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-key: kovo-playwright-${{ runner.os }}-${{ env.PLAYWRIGHT_VERSION }}-all-
       - run: vp exec playwright test --config tests/integration/playwright.config.ts --shard=${{ matrix.shard }}/${{ matrix.total }}
         env:
           KOVO_PLAYWRIGHT_TIMING_JSON: ${{ runner.temp }}/kovo-integration-timing-history/timing-history.json
@@ -308,20 +238,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 22.15.0
-      - run: vp install
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - uses: ./.github/actions/kovo-setup
       - name: Drizzle pinned conformance
         run: vp exec pnpm --filter @kovojs/conformance-drizzle-pin test
       - name: Better Auth pinned conformance
@@ -368,20 +285,7 @@ jobs:
             dialect: better-sqlite3
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-      - uses: voidzero-dev/setup-vp@2dec1e33f4ab2c6d5bce1b0c4607961bb1a3f7a1
-        with:
-          node-version: 22.15.0
-      - run: vp install
-      - id: compiler-cache-key
-        run: echo "id=$(vp exec node scripts/compiler-build-id.mjs)" >> "$GITHUB_OUTPUT"
-      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830
-        with:
-          path: |
-            .kovo/cache
-            **/.kovo/cache
-          key: kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-${{ hashFiles('packages/compiler/src/**', 'packages/*/package.json', 'pnpm-lock.yaml') }}
-          restore-keys: |
-            kovo-compiler-${{ runner.os }}-${{ steps.compiler-cache-key.outputs.id }}-
+      - uses: ./.github/actions/kovo-setup
       - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093
         with:
           name: kovo-dist
