@@ -218,7 +218,8 @@ return <allow/skip/empty/undefined>` where `<x>` is a recognizer/resolver call r
 
 ## Phase 4 — Proof (round-7 adversarial dogfood is the acceptance gate)
 
-- [ ] **4.1 — Generative dogfood pass (N4, plan-1 M1).**
+- [x] **4.1 — Generative dogfood pass (N4, plan-1 M1).**
+  - Evidence: non-implementer dogfood in `/Users/mini/kovo-agent-fhr2-dogfood-20260701-183126` passed the B1/B2/B3/B4/P2 focused matrix, `check:security-gate-mutations`, and fresh local-package SQLite + default/Postgres starter `pnpm run build:prod` and `pnpm run check`; monorepo repair `pnpm install` plus dependency resolution passed afterward. Generator note: the DEC8 corpora are deterministic/seedless index-based enumerators (`generatedFunctionCases(240)`, `generatedPostgresVolatileSelects()` 24 cases, `generatedTrustSinkCases(210)`, `secretLaunderVariant` 200 cases), not random seeded fuzzers.
   - Run `/dogfood exhaustive` on the prod artifact, both dialects, by a non-implementer, driven by the DEC8
     generators (novel SQL-function / callee-shape / binding-shape / trust-URL shapes — NOT the fixed round-6 list).
     Acceptance: zero fail-opens in the B1/B2/B3/B4 classes; the three 0.2-lint sites are green; the census/brand
@@ -241,3 +242,4 @@ closed-classifiers` green on `trusted-html-provenance.ts`.
 - 2026-07-01 integrated verification: `pnpm run check:fail-closed-classifiers && pnpm run check:classifier-verdict-routing && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census` passed.
 - 2026-07-01 focused package verification: server SQL suite (`sql-write-allowlist.test.ts`, `sql-write-allowlist.oracle.test.ts`, `managed-db.test.ts`) passed 129 tests; compiler/Drizzle focused suite (`trusted-html-provenance.test.ts`, `index.query-offwire-prover.test.ts`, `index.query-shapes.test.ts`, `static-analysis-context.test.ts`) passed 147 tests; focused CLI KV310 build/check tests passed.
 - 2026-07-01 post-P2/B2/P3 verification: P2 reachability/census focused gates passed; B2 provenance and hidden-callee `kovo build --no-cache` focused tests passed; P3 runtime twin server tests passed; `git diff --check` passed.
+- 2026-07-01 non-implementer dogfood: focused B1/B2/B3/B4/P2 matrix, mutation gate, and fresh SQLite/default-Postgres starter prod builds/checks passed; no fail-opens observed.
