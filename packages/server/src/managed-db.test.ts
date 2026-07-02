@@ -778,6 +778,38 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual([]);
   });
 
+  it('read capability fails closed on unproven read-shaped SQL functions before execution', () => {
+    const log: string[] = [];
+    const handle = wrapManagedDbForSqlSafety(
+      {
+        query(statement: unknown) {
+          log.push('query');
+          return statement;
+        },
+      },
+      undefined,
+      { capability: 'read' },
+    ) as { query(statement: unknown): unknown };
+
+    expect(() =>
+      handle.query(
+        stampTrustedSql(
+          { text: "select setval('probe_seq', 1)" },
+          'read-handle volatile function attempt',
+        ),
+      ),
+    ).toThrow(/KV433/);
+    expect(() =>
+      handle.query(
+        stampTrustedSql(
+          { text: "select nextval('probe_seq')" },
+          'read-handle sequence function attempt',
+        ),
+      ),
+    ).toThrow(/KV433/);
+    expect(log).toEqual([]);
+  });
+
   it.each([
     {
       dialect: undefined,
@@ -920,6 +952,26 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ),
     ).toThrow(/KV406/);
     expect(log).toEqual(['execute']);
+  });
+
+  it('write mode declared-table allowlist fails closed on unproven read-shaped SQL functions', () => {
+    const log: string[] = [];
+    const handle = managedDb(fakeDb(log), 'write', {
+      sqlWritePolicy: {
+        tables: ['contacts'],
+        touches: ['contact'],
+      },
+    });
+
+    expect(() =>
+      (handle as { execute(statement: unknown): unknown }).execute(
+        stampTrustedSql(
+          { text: "select setval('probe_seq', 1)" },
+          'declared-table volatile function attempt',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual([]);
   });
 
   it('write mode fails closed on raw SQL DDL even when the table is declared', () => {
