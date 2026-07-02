@@ -306,6 +306,39 @@ interface SecretReadBoundary {
   secretColumnScopeKnown: boolean;
 }
 
+interface DeclaredSecretReadCapability {
+  columns: readonly string[];
+  justification: string;
+  source: string;
+  table: string;
+}
+
+const kovoDeclaredSecretReadCapability = Symbol('kovoDeclaredSecretReadCapability');
+
+export function declareSecretReadCapability<T extends object>(
+  statement: T,
+  declaration: DeclaredSecretReadCapability,
+): T {
+  if (declaration.justification.trim() === '') {
+    throw new Error('KV435: declared secret-read capability requires a justification.');
+  }
+  if (declaration.source.trim() === '' || declaration.table.trim() === '') {
+    throw new Error('KV435: declared secret-read capability requires a source table.');
+  }
+  if (
+    declaration.columns.length === 0 ||
+    declaration.columns.some((column) => column.trim() === '')
+  ) {
+    throw new Error('KV435: declared secret-read capability requires at least one secret column.');
+  }
+  Object.defineProperty(statement, kovoDeclaredSecretReadCapability, {
+    configurable: false,
+    enumerable: false,
+    value: { ...declaration, columns: [...declaration.columns] },
+  });
+  return statement;
+}
+
 function secretReadMetadata(tables: readonly PgTable[]): SecretReadMetadata {
   const allColumnKeys = new Set<string>();
   const secretColumnKeys = new Set<string>();
@@ -504,10 +537,33 @@ function readBoundaryForArgs(
     const sql = querySqlText(arg) ?? sqlTextFromValue(arg);
     if (sql === undefined) return { ...emptyReadBoundary(), rawWholeRowSecret: true };
     if (sqlReferencesSecretTable(sql, metadata.secretTableNames)) {
-      return { ...emptyReadBoundary(), rawWholeRowSecret: true };
+      if (!hasDeclaredSecretReadCapability(arg, metadata)) {
+        throw new Error(
+          'KV435: reader raw SQL secret-column read requires a declared secret-read capability (SPEC §10.3).',
+        );
+      }
+      return {
+        ...emptyReadBoundary(),
+        rawWholeRowSecret: true,
+      };
     }
   }
   return { ...emptyReadBoundary(), secretColumnScopeKnown: true };
+}
+
+function hasDeclaredSecretReadCapability(
+  statement: unknown,
+  metadata: SecretReadMetadata,
+): boolean {
+  if (statement === null || typeof statement !== 'object') return false;
+  const declaration = Reflect.get(statement, kovoDeclaredSecretReadCapability) as
+    | DeclaredSecretReadCapability
+    | undefined;
+  if (declaration === undefined) return false;
+  if (!metadata.secretTableNames.has(declaration.table)) return false;
+  const secretColumns =
+    metadata.secretColumnNamesByTable.get(declaration.table) ?? new Set<string>();
+  return declaration.columns.every((column) => secretColumns.has(column));
 }
 
 function mergeReadBoundaries(
