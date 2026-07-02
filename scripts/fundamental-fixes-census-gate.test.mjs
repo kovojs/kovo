@@ -86,10 +86,16 @@ describe('fundamental-fixes-census-gate', () => {
 
   it('fails when a reachable source-discovered sink canary has no manifest enrollment', () => {
     const files = {
+      'packages/server/src/response-posture.ts': `
+export function emitToWire(value) {
+  return value;
+}
+`,
       'packages/server/src/canary.ts': `
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
+import { emitToWire } from './response-posture.js';
 export const emitRoot = wireEmitter('canary.root', function (value) {
-  return emitReachableCanary(value);
+  return emitToWire(emitReachableCanary(value));
 });
 export const emitReachableCanary = wireEmitter('canary.reachable-wire-sink', function (value) {
   return String(value);
@@ -100,7 +106,14 @@ export const emitReachableCanary = wireEmitter('canary.reachable-wire-sink', fun
       exists: (relativePath) => Object.hasOwn(files, relativePath),
       files: Object.keys(files),
       readText: (relativePath) => files[relativePath] ?? '',
-      roots: [{ file: 'packages/server/src/canary.ts', kind: 'wire-emitter', name: 'emitRoot' }],
+      roots: [
+        {
+          direction: 'callers',
+          file: 'packages/server/src/response-posture.ts',
+          kind: 'wire-emitter',
+          name: 'emitToWire',
+        },
+      ],
     });
     const canaryRows = extractSourceDecisionRows({
       decisions,
@@ -119,7 +132,7 @@ export const emitReachableCanary = wireEmitter('canary.reachable-wire-sink', fun
     ];
 
     expect(evaluateFundamentalFixesCensus({ sourceRows, planText }).violations).toContain(
-      'scripts/fundamental-fixes-census.manifest.json: missing manifest enrollment for output-wire-sink source decision canary.reachable-wire-sink (packages/server/src/canary.ts:6)',
+      'scripts/fundamental-fixes-census.manifest.json: missing manifest enrollment for output-wire-sink source decision canary.reachable-wire-sink (packages/server/src/canary.ts:7)',
     );
   });
 
