@@ -24,6 +24,49 @@ function kv426(
     .map((diagnostic) => diagnostic.message);
 }
 
+interface GeneratedTrustSinkCase {
+  readonly brand: 'trustedHtml' | 'trustedUrl';
+  readonly expression: string;
+  readonly prelude: string;
+}
+
+function generatedTrustSinkCases(count = 210): readonly GeneratedTrustSinkCase[] {
+  const cases: GeneratedTrustSinkCase[] = [];
+  const brands = ['trustedHtml', 'trustedUrl'] as const;
+  for (let index = 0; cases.length < count; index += 1) {
+    for (const brand of brands) {
+      const member = brand === 'trustedHtml' ? 'html' : 'url';
+      const variant = index % 5;
+      const id = `${brand}_${index}`;
+      if (variant === 0) {
+        cases.push({
+          brand,
+          prelude: `const trust_${id} = { ${member}: ${brand} };`,
+          expression: `({ ...trust_${id} }).${member}`,
+        });
+      } else if (variant === 1) {
+        cases.push({ brand, prelude: '', expression: `([${brand}] as const)[0]` });
+      } else if (variant === 2) {
+        cases.push({ brand, prelude: '', expression: `(() => ${brand})()` });
+      } else if (variant === 3) {
+        cases.push({
+          brand,
+          prelude: `function pick_${id}() { return ${brand}; }`,
+          expression: `pick_${id}()`,
+        });
+      } else {
+        cases.push({
+          brand,
+          prelude: `class Trust_${id} { ${member} = ${brand}; }`,
+          expression: `new Trust_${id}().${member}`,
+        });
+      }
+      if (cases.length >= count) break;
+    }
+  }
+  return cases;
+}
+
 describe('KV426 trustedHtml request/query provenance gate (SPEC §9.1/§5.2 #10/§4.8)', () => {
   it('flags trustedHtml() over a direct query-result field access', () => {
     expect(
@@ -538,6 +581,112 @@ export const C = component({
 });
 `),
     ).toHaveLength(1);
+  });
+
+  it('flags the round-6 hidden trustedHtml/trustedUrl callee shapes at the sink', () => {
+    const cases = [
+      {
+        expected: 'trustedHtml() sends query-derived data',
+        source: `
+import { trustedHtml } from '@kovojs/browser';
+const trust = { html: trustedHtml };
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{({ ...trust }).html(post.body)}</article>,
+});
+`,
+      },
+      {
+        expected: 'trustedHtml() sends query-derived data',
+        source: `
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{[trustedHtml][0](post.body)}</article>,
+});
+`,
+      },
+      {
+        expected: 'trustedHtml() sends query-derived data',
+        source: `
+import { trustedHtml } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{(() => trustedHtml)()(post.body)}</article>,
+});
+`,
+      },
+      {
+        expected: 'trustedHtml() sends query-derived data',
+        source: `
+import { trustedHtml } from '@kovojs/browser';
+class R { h = trustedHtml; }
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <article>{new R().h(post.body)}</article>,
+});
+`,
+      },
+      {
+        expected: 'trustedUrl() sends query-derived data',
+        source: `
+import { trustedUrl } from '@kovojs/browser';
+const trust = { url: trustedUrl };
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => <a href={({ ...trust }).url(post.href)}>read</a>,
+});
+`,
+      },
+    ];
+
+    for (const item of cases) {
+      const messages = kv426(item.source);
+      expect(messages).toHaveLength(1);
+      expect(messages[0]).toContain(item.expected);
+    }
+  });
+
+  it('keeps resolver-traced literal trust sinks clean', () => {
+    expect(
+      kv426(`
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+const trust = { html: trustedHtml, url: trustedUrl };
+class R { html = trustedHtml; url = trustedUrl; }
+export const C = component({
+  render: () => (
+    <main>
+      {({ ...trust }).html('<b>safe</b>')}
+      {[trustedHtml][0]('<i>safe</i>')}
+      {(() => trustedHtml)()('<em>safe</em>')}
+      {new R().html('<strong>safe</strong>')}
+      <a href={new R().url('/docs')}>docs</a>
+    </main>
+  ),
+});
+`),
+    ).toHaveLength(0);
+  });
+
+  it('generates broad callee-shape coverage for hidden trustedHtml/trustedUrl sinks', () => {
+    const cases = generatedTrustSinkCases();
+    expect(cases).toHaveLength(210);
+
+    for (const item of cases) {
+      const expression =
+        item.brand === 'trustedHtml'
+          ? `<article>{${item.expression}(post.body)}</article>`
+          : `<a href={${item.expression}(post.href)}>read</a>`;
+      const messages = kv426(`
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+${item.prelude}
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => ${expression},
+});
+`);
+      expect(messages, `${item.brand} via ${item.expression}`).toHaveLength(1);
+    }
   });
 
   it('resolves literal element access and fails closed for computed Kovo namespace keys', () => {
