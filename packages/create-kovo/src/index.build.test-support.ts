@@ -10,6 +10,7 @@ import {
   cookieHeader,
   fetchTextWhenReady,
   mergeCookies,
+  resolveStarterBin,
   withStarterBinOnPath,
 } from './index.test-support.js';
 
@@ -140,30 +141,31 @@ export function addNoJsFailureProof(root: string): void {
 export function buildProductionArtifact(root: string): void {
   // CI restores **/.kovo/cache, so this prod-artifact gate must prove current source, not cache.
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
-  execFileSync(join(root, 'node_modules/.bin/kovo'), ['build', './src/app.tsx', '--no-cache'], {
-    cwd: root,
-    env: withStarterBinOnPath(root),
-    stdio: 'pipe',
-  });
+  execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], withStarterBinOnPath(root));
 }
 
 export function buildReusableProductionArtifact(root: string): void {
-  execFileSync(join(root, 'node_modules/.bin/kovo'), ['build', './src/app.tsx'], {
-    cwd: root,
-    env: withStarterBinOnPath(root),
-    stdio: 'pipe',
-  });
+  execKovoCli(root, ['build', './src/app.tsx'], withStarterBinOnPath(root));
 }
 
 export function buildParanoidProductionArtifact(root: string): void {
   rmSync(join(root, '.kovo/cache'), { force: true, recursive: true });
-  execFileSync(join(root, 'node_modules/.bin/kovo'), ['build', './src/app.tsx', '--no-cache'], {
+  execKovoCli(root, ['build', './src/app.tsx', '--no-cache'], {
+    ...withStarterBinOnPath(root),
+    KOVO_PARANOID: '1',
+    NODE_OPTIONS: '--max-old-space-size=8192',
+  });
+}
+
+function execKovoCli(root: string, args: readonly string[], env: NodeJS.ProcessEnv): void {
+  const bin = resolveStarterBin(root, 'kovo');
+  const command = bin.endsWith('.ts') ? process.execPath : bin;
+  const commandArgs = bin.endsWith('.ts')
+    ? ['--disable-warning=ExperimentalWarning', '--experimental-transform-types', bin, ...args]
+    : args;
+  execFileSync(command, commandArgs, {
     cwd: root,
-    env: {
-      ...withStarterBinOnPath(root),
-      KOVO_PARANOID: '1',
-      NODE_OPTIONS: '--max-old-space-size=8192',
-    },
+    env,
     stdio: 'pipe',
   });
 }
