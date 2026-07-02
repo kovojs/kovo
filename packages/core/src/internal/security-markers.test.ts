@@ -1,6 +1,17 @@
+import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+
 import { describe, expect, it } from 'vitest';
 
-import { securityClassifier, securityDecisionMetadata, wireEmitter } from './security-markers.js';
+import { diagnosticDefinitions } from '../diagnostics.js';
+import {
+  PARANOID_SECURITY_ADVISORY_CODES,
+  SECURITY_CODE_REGISTRY,
+  securityClassifier,
+  securityDecisionMetadata,
+  wireEmitter,
+} from './security-markers.js';
 
 describe('security decision markers', () => {
   it('preserves classifier call behavior while attaching non-enumerable metadata', () => {
@@ -25,3 +36,78 @@ describe('security decision markers', () => {
     });
   });
 });
+
+describe('DEC-D security code registry', () => {
+  it('derives the paranoid advisory set from runtime chokes plus proven by-construction entries', () => {
+    const derived = Object.values(SECURITY_CODE_REGISTRY)
+      .filter(
+        (entry) =>
+          entry.enforcement === 'runtime-choke' ||
+          (entry.enforcement === 'by-construction' && entry.paranoidAdvisory === true),
+      )
+      .map((entry) => entry.code)
+      .sort();
+
+    expect(PARANOID_SECURITY_ADVISORY_CODES).toEqual(derived);
+    expect(PARANOID_SECURITY_ADVISORY_CODES).toEqual(['KV406', 'KV422', 'KV433', 'KV435', 'KV438']);
+  });
+
+  it('does not stub escape-hatch-audit or build-only residual codes under paranoid mode', () => {
+    const advisoryCodes = new Set(PARANOID_SECURITY_ADVISORY_CODES);
+    const excluded = Object.values(SECURITY_CODE_REGISTRY)
+      .filter(
+        (entry) => entry.enforcement === 'escape-hatch-audit' || entry.enforcement === 'build-only',
+      )
+      .map((entry) => entry.code);
+
+    expect(excluded).toContain('KV426');
+    expect(excluded).toContain('KV423');
+    expect(excluded).toContain('KV429');
+    expect(excluded.every((code) => !advisoryCodes.has(code))).toBe(true);
+  });
+
+  it('covers every currently defined security diagnostic code in the checked 4xx family', () => {
+    const diagnosticSecurityCodes = Object.keys(diagnosticDefinitions).filter(
+      (code) => /^KV4/u.test(code) && code >= 'KV406' && code <= 'KV439',
+    );
+
+    expect(Object.keys(SECURITY_CODE_REGISTRY).sort()).toEqual(diagnosticSecurityCodes.sort());
+  });
+
+  it('keeps runtime-choke registry entries pointed at live branded security decisions', () => {
+    const source = [
+      'packages/server/src/sql-safe-handle.ts',
+      'packages/server/src/response-posture.ts',
+    ]
+      .map((relativePath) => readRepoFile(relativePath))
+      .join('\n');
+
+    for (const entry of Object.values(SECURITY_CODE_REGISTRY)) {
+      if (entry.enforcement !== 'runtime-choke') continue;
+      expect(entry.chokeId, `${entry.code} must name a choke id`).toBeDefined();
+      expect(source, `${entry.code} names a live choke ${entry.chokeId}`).toContain(
+        `'${entry.chokeId}'`,
+      );
+      expect(source, `${entry.code} choke ${entry.chokeId} is branded`).toMatch(
+        new RegExp(
+          String.raw`(?:securityClassifier|wireEmitter)\(\s*['"]${escapeRegExp(
+            entry.chokeId!,
+          )}['"]`,
+          'u',
+        ),
+      );
+    }
+  });
+});
+
+function readRepoFile(relativePath: string): string {
+  return readFileSync(resolve(repoRoot(), relativePath), 'utf8');
+}
+
+function repoRoot(): string {
+  return resolve(dirname(fileURLToPath(import.meta.url)), '../../../..');
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, String.raw`\$&`);
+}

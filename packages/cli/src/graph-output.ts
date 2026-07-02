@@ -2,6 +2,7 @@ import type * as CoreGraph from '@kovojs/core/internal/graph';
 import { diagnosticDefinitionText } from '@kovojs/core/internal/diagnostics';
 import { puntReasonLabel } from '@kovojs/core/internal/derivation';
 import { validateKovoExplainInput } from '@kovojs/core/internal/graph';
+import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 
 import type { KovoCheckFamily, KovoExplainOptions } from './graph-args.js';
 import {
@@ -627,9 +628,8 @@ export function kovoCheck(
   const family = options.family ?? 'all';
   const includeAll = family === 'all';
   let failed = false;
-  const staticAdvisoryCodes = new Set(['KV406', 'KV422', 'KV438']);
   const staticFindingFails = (code: string): boolean =>
-    !(options.paranoidStaticAdvisory === true && staticAdvisoryCodes.has(code));
+    !(options.paranoidStaticAdvisory === true && isParanoidSecurityAdvisoryCode(code));
 
   const pushFinding = (line: string, fail = false): void => {
     lines.push(line);

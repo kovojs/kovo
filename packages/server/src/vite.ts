@@ -5,6 +5,7 @@ import { dirname, isAbsolute, relative, resolve } from 'node:path';
 
 import type { DiagnosticDocumentDiagnostic } from './document-diagnostics.js';
 import type { StylesheetAsset } from './hints.js';
+import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 import type {
   DataPlaneDiagnostic,
   DataPlaneRuntimeRegistryFacts as RuntimeRegistryFacts,
@@ -565,9 +566,9 @@ function paranoidDataPlaneDiagnosticsAreAdvisory(
   diagnostics: readonly DataPlaneDiagnostic[],
 ): boolean {
   if (!isParanoidMode()) return false;
-  const advisoryCodes = new Set(['KV406', 'KV422', 'KV438']);
   return (
-    diagnostics.length > 0 && diagnostics.every((diagnostic) => advisoryCodes.has(diagnostic.code))
+    diagnostics.length > 0 &&
+    diagnostics.every((diagnostic) => isParanoidSecurityAdvisoryCode(diagnostic.code))
   );
 }
 

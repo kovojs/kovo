@@ -341,6 +341,18 @@ describe('kovo check', () => {
             severity: 'error',
             site: 'products.ts:8',
           },
+          {
+            code: 'KV433',
+            message: 'query() loader reaches a write.',
+            severity: 'error',
+            site: 'products.ts:10',
+          },
+          {
+            code: 'KV435',
+            message: 'Secret query value reaches the client wire.',
+            severity: 'error',
+            site: 'products.ts:11',
+          },
         ],
         sqlSafetyDiagnostics: [
           {
@@ -359,6 +371,27 @@ describe('kovo check', () => {
     expect(result.output).toContain('ERROR KV406 products.ts:7');
     expect(result.output).toContain('ERROR KV438 products.ts:8');
     expect(result.output).toContain('ERROR KV422 products.ts:9');
+    expect(result.output).toContain('ERROR KV433 products.ts:10');
+    expect(result.output).toContain('ERROR KV435 products.ts:11');
+  });
+
+  it('keeps escape-hatch-audit findings build-fatal under paranoid build preflight', () => {
+    const result = kovoCheck(
+      {
+        diagnostics: [
+          {
+            code: 'KV426',
+            message: 'Trust escape hatch lacks auditable provenance.',
+            severity: 'error',
+            site: 'trusted-html.ts:4',
+          },
+        ],
+      } as Parameters<typeof kovoCheck>[0],
+      { paranoidStaticAdvisory: true },
+    );
+
+    expect(result.exitCode).toBe(1);
+    expect(result.output).toContain('ERROR KV426 trusted-html.ts:4');
   });
 
   // SPEC §10.2/§11.2: end-to-end producer→graph merge. The KV422 producer
