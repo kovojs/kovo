@@ -10,7 +10,7 @@ import {
   managedDb,
   readonlyDb,
 } from './managed-db.js';
-import type { Reader } from './managed-db.js';
+import type { Reader, Writer } from './managed-db.js';
 import { kovoAsyncMutationTransaction, wrapManagedDbForSqlSafety } from './sql-safe-handle.js';
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
@@ -329,6 +329,73 @@ reader.with('active').update('products');
     }
   });
 
+  it('typechecks Writer<Db> as a framework-managed write capability surface', () => {
+    const root = mkdtempSync(join(process.cwd(), 'packages/server/.tmp-writer-types-'));
+    try {
+      writeFileSync(
+        join(root, 'writer-type-proof.ts'),
+        `
+import { managedDb, type Writer } from '../src/managed-db.js';
+
+type FakeDb = {
+  execute(statement: unknown): Promise<unknown>;
+  insert(table: string): { values(value: unknown): Promise<void> };
+  select(): { from(table: string): Promise<unknown[]> };
+  update(table: string): { set(value: unknown): { where(value: unknown): Promise<void> } };
+};
+
+declare const raw: FakeDb;
+
+const writer = managedDb(raw, 'write');
+const acceptsWriter = (db: Writer<FakeDb>) => db;
+const acceptsRawSurface = (db: FakeDb) => db;
+
+acceptsWriter(writer);
+acceptsRawSurface(writer);
+writer.insert('products');
+writer.update('products');
+
+// @ts-expect-error SPEC §10.3/§11.2 DEC-E: raw provider handles lack the Writer brand.
+acceptsWriter(raw);
+
+`,
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'tsconfig.json'),
+        JSON.stringify(
+          {
+            compilerOptions: {
+              exactOptionalPropertyTypes: true,
+              module: 'NodeNext',
+              moduleResolution: 'NodeNext',
+              noEmit: true,
+              noUncheckedIndexedAccess: true,
+              skipLibCheck: true,
+              strict: true,
+              target: 'ES2024',
+              types: ['node'],
+              verbatimModuleSyntax: true,
+            },
+            include: ['writer-type-proof.ts'],
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSyncWithDiagnostics(resolveBin('tsc'), ['-p', join(root, 'tsconfig.json')], {
+          cwd: process.cwd(),
+          stdio: 'pipe',
+        }),
+      ).not.toThrow();
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('brands Reader<Db> so raw write handles are not casually assignable', () => {
     type FakeDb = ReturnType<typeof fakeDb>;
     const raw = fakeDb([]);
@@ -377,7 +444,11 @@ reader.with('active').update('products');
       // @ts-expect-error managedDb(..., 'read') does not expose raw driver escape handles.
       void readHandle.$client;
       const writeHandle = managedDb(raw, 'write');
+      const acceptsWriter = (db: Writer<FakeDb>) => db;
+      acceptsWriter(writeHandle);
       writeHandle.insert('products');
+      // @ts-expect-error raw provider handles lack the module-private Writer brand.
+      acceptsWriter(raw);
     };
     void compileOnly;
   });

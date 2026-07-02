@@ -18,6 +18,7 @@
 import { wrapManagedDbForSqlSafety, type ManagedSqlWritePolicy } from './sql-safe-handle.js';
 
 declare const readerDbBrand: unique symbol;
+declare const writerDbBrand: unique symbol;
 
 /** Adapter hook for providing a framework-owned engine read-only DB handle. */
 export const kovoReadonlyDbHandle: unique symbol = Symbol('kovo.readonly-db-handle');
@@ -117,6 +118,20 @@ export type Reader<Db> = (Db extends object
   };
 };
 
+/**
+ * The compile-time mirror of a framework-threaded write handle (SPEC §10.3/§11.2, DEC-E).
+ * Unlike {@link Reader}, this keeps the underlying DB surface intact, but adds a private-symbol
+ * witness so APIs that require a managed write capability cannot be satisfied by a raw provider
+ * handle by accident. Runtime SQL/read-write enforcement still belongs to {@link managedDb} and
+ * {@link wrapManagedDbForSqlSafety}; this type is an author-time guardrail only.
+ */
+export type Writer<Db> = Db & {
+  readonly [writerDbBrand]: {
+    readonly db: Db;
+    readonly scope: 'framework-write-handle';
+  };
+};
+
 /** The mode a managed handle is resolved in: a read-only loader handle, or a read-write handle. */
 export type ManagedDbMode = 'read' | 'write';
 
@@ -186,17 +201,17 @@ export interface ManagedDbOptions {
  * @internal
  */
 export function managedDb<Db>(raw: Db, mode: 'read', options?: ManagedDbOptions): Reader<Db>;
-export function managedDb<Db>(raw: Db, mode: 'write', options?: ManagedDbOptions): Db;
+export function managedDb<Db>(raw: Db, mode: 'write', options?: ManagedDbOptions): Writer<Db>;
 export function managedDb<Db>(
   raw: Db,
   mode: ManagedDbMode,
   options?: ManagedDbOptions,
-): Db | Reader<Db>;
+): Reader<Db> | Writer<Db>;
 export function managedDb<Db>(
   raw: Db,
   mode: ManagedDbMode,
   options: ManagedDbOptions = {},
-): Db | Reader<Db> {
+): Reader<Db> | Writer<Db> {
   const target =
     mode === 'read' ? readonlyDbTarget(raw) : declaredWriteDbTarget(raw, options.sqlWritePolicy);
   const safe = wrapManagedDbForSqlSafety(target, undefined, {
@@ -204,7 +219,7 @@ export function managedDb<Db>(
     capability: mode,
     engineReadonly: mode === 'read' && target !== raw,
   });
-  if (mode === 'write') return safe;
+  if (mode === 'write') return safe as Writer<Db>;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
   return readonlyCapabilityDb(safe as unknown as object) as Reader<Db>;
 }
