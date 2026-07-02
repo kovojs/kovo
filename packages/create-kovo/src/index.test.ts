@@ -619,8 +619,49 @@ describe('create-kovo starter (metadata)', () => {
         join(root, 'src/dynamic-trust.ts'),
         [
           "import * as browser from '@kovojs/browser';",
+          "import * as drizzle from '@kovojs/drizzle';",
+          '',
+          "const helper = 'trustedHtml';",
+          "const sqlHelper = 'trustedSql';",
+          'const trustedMarkup = browser[helper];',
+          'const reviewedSql = drizzle[sqlHelper];',
+          '',
+          "export const trusted = trustedMarkup('<strong>reviewed</strong>');",
+          "export const statement = reviewedSql(drizzle.sql.raw('select 1'), { justification: 'reviewed' });",
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+
+      expect(() =>
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        }),
+      ).toThrowError(
+        /dynamic-trust\.ts:9: SPEC\.md §6\.6 sound subset requires trustedHtml\/trustedUrl\/trustedSql callees/,
+      );
+
+      try {
+        execFileSync(process.execPath, [join(root, 'scripts/check-sound-subset.mjs')], {
+          cwd: root,
+          stdio: 'pipe',
+        });
+      } catch (error) {
+        const stderr = (error as { stderr?: Buffer }).stderr?.toString('utf8') ?? '';
+        expect(stderr).toContain(
+          'dynamic-trust.ts:10: SPEC.md §6.6 sound subset requires trustedHtml/trustedUrl/trustedSql callees',
+        );
+      }
+
+      writeFileSync(
+        join(root, 'src/dynamic-trust.ts'),
+        [
+          "import * as browser from '@kovojs/browser';",
+          "import * as drizzle from '@kovojs/drizzle';",
           '',
           "export const trusted = browser['trustedHtml']('<strong>reviewed</strong>');",
+          "export const statement = drizzle['trustedSql'](drizzle.sql.raw('select 1'), { justification: 'reviewed' });",
           '',
         ].join('\n'),
         'utf8',
