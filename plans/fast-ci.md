@@ -55,7 +55,7 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 - [ ] Avoid duplicate artifact downloads inside matrix jobs.
   - Implementation notes: starter shards should download `kovo-packed-starter` only when `starter-needs-packed` is true, as today; verify no unconditional artifact downloads were introduced by refactoring.
   - Evidence to add: one non-packed starter shard log shows no artifact download, and one packed starter shard log shows the artifact download.
-  - Current implementation: `.github/workflows/ci.yml` now keeps the eight `starter` shards on `--mode unpacked` with no `starter-packages` dependency and no `actions/download-artifact` step. A new three-shard `starter-packed` job runs `--mode packed`, depends on `starter-packages`, and downloads `kovo-packed-starter`. Local proof: `vp exec vitest --run scripts/ci-shards.test.mjs`; `vp exec node scripts/ci-shards.mjs generate-starter --mode unpacked --shards 8 --index 1 --outDir /tmp/kovo-fast-ci-unpacked`; `vp exec node scripts/ci-shards.mjs generate-starter --mode packed --shards 3 --index 1 --outDir /tmp/kovo-fast-ci-packed`; `starter-needs-packed` returned 1 for the unpacked shard and 0 for the packed shard.
+  - Current implementation: `.github/workflows/ci.yml` keeps the eight `starter` shards on `--mode unpacked` with no `starter-packages` dependency and no `actions/download-artifact` step. The required `starter-packed` job runs all three packed entries via `--mode packed --shards 1 --index 1`, depends on `starter-packages`, and downloads `kovo-packed-starter` once. Local proof: `vp exec vitest --run scripts/ci-shards.test.mjs`; `vp exec node scripts/ci-shards.mjs generate-starter --mode unpacked --shards 8 --index 1 --outDir /tmp/kovo-fast-ci-unpacked`; `vp exec node scripts/ci-shards.mjs generate-starter --mode packed --shards 1 --index 1 --outDir /tmp/kovo-fast-ci-packed-one`; `starter-needs-packed` returned 1 for the unpacked shard and 0 for the packed shard.
 
 ## Phase 3 - Reuse Build Artifacts Without Skipping Tests
 
@@ -77,7 +77,7 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 - [ ] Refresh starter shard timing weights from a post-cache successful run.
   - Implementation notes: do not reduce the eight starter shards or hide any starter proof. Only rebalance which proofs land in which shard.
   - Evidence to add: before/after starter shard duration table with all eight shards still present.
-  - Current implementation: no proof was removed; `scripts/ci-shards.mjs` filters the same starter entry list into `all`, `unpacked`, and `packed` modes. The normal `starter` job still has eight shards, and the packed-only proofs are covered by a separate three-shard `starter-packed` job so unpacked proofs no longer wait for packed package artifact creation.
+  - Current implementation: no proof was removed; `scripts/ci-shards.mjs` filters the same starter entry list into `all`, `unpacked`, and `packed` modes. The normal `starter` job still has eight shards, and the packed-only proofs are covered by a separate required `starter-packed` job so unpacked proofs no longer wait for packed package artifact creation.
 - [ ] Audit integration shard balance after Playwright cache lands.
   - Implementation notes: keep all three integration shards and all browsers. Rebalance only if one shard remains the long pole after browser install time is removed.
   - Evidence to add: before/after integration shard duration table with all three shards still present.
@@ -93,11 +93,14 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 - [ ] Keep security and mutation gates on the normal path.
   - Implementation notes: do not move `check:security-test-builds`, `check:security-gate-mutations`, classifier gates, census, sink policy, or kovo-check to a slower tier.
   - Evidence to add: CI logs show those gates still ran on the optimized workflow.
+- [x] Remove inert `kovo-check` matrix fan-out while keeping the full `kovo-check` suite required.
+  - Evidence: `rg "KOVO_SECURITY_PRESET|KOVO_SECURITY_DIALECT" .github packages tests scripts -n` found no consumer except the new negative workflow assertion, so the six-row matrix was repeating the same full suite with inert environment variables. `.github/workflows/ci.yml` now runs one required `vp exec node scripts/kovo-check.mjs compiler-runtime server-browser project` job, still gated by `build` and still consuming `kovo-dist`. Local proof: `vp exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts`; Ruby YAML parse of `.github/workflows/ci.yml`.
 
 ## Acceptance
 
 - [ ] CI wall-clock time improves by at least 25% on two consecutive comparable runs.
   - Evidence to add: before/after run URLs and wall-clock durations for the full CI workflow.
+  - Current evidence: optimized run `28562997661` for `f0faf34f4` succeeded in 13m08s (`2026-07-02T03:21:19Z` to `03:34:27Z`) versus baseline `28554909799` at 13m36s. This proves the first two batches were green but not sufficient; the long pole was queued `kovo-check` jobs, with the last shard finishing at `03:34:22Z`.
 - [ ] No required proof disappears.
   - Evidence to add: checklist mapping every pre-plan CI job/step to an optimized job/step that still runs on pull requests and `main` pushes.
 - [ ] Cache hits are visible and keyed safely.
