@@ -29,4 +29,12 @@ describe('parseSqlWriteTables', () => {
   it('keeps positively proven reads empty', () => {
     expect(parseSqlWriteTables('SELECT id FROM contacts', { dialect: 'sqlite' })).toEqual([]);
   });
+
+  it('preserves schema-qualified table names for write enforcement', () => {
+    expect(
+      parseSqlWriteTables('UPDATE otherschema.contacts SET name = ? WHERE id = ?', {
+        dialect: 'sqlite',
+      }),
+    ).toEqual(['otherschema.contacts']);
+  });
 });

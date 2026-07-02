@@ -331,7 +331,7 @@ function isStatement(value: object): value is Statement {
 }
 
 function tableName(identifier: QName): string {
-  return identifier.name;
+  return identifier.schema ? `${identifier.schema}.${identifier.name}` : identifier.name;
 }
 
 function compareSqlWriteTargets(left: ParsedSqlWriteTarget, right: ParsedSqlWriteTarget): number {
