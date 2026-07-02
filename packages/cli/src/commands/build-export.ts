@@ -9,6 +9,7 @@ import { promisify } from 'node:util';
 
 import type { DiagnosticCode } from '@kovojs/core';
 import { isDiagnosticCode } from '@kovojs/core/internal/diagnostics';
+import { isParanoidSecurityAdvisoryCode } from '@kovojs/core/internal/security-markers';
 import type * as CoreGraph from '@kovojs/core/internal/graph';
 import type { CompileResult, CompileRouteModuleResult } from '@kovojs/compiler';
 import type {
@@ -462,13 +463,12 @@ function isParanoidMode(): boolean {
 }
 
 function paranoidBuildCheckMayProceed(output: string): boolean {
-  const advisoryCodes = new Set(['KV406', 'KV422', 'KV438']);
   const errorLines = output.split('\n').filter((line) => line.startsWith('ERROR '));
   return (
     errorLines.length > 0 &&
     errorLines.every((line) => {
       const code = /^ERROR\s+(\S+)/u.exec(line)?.[1];
-      return code !== undefined && advisoryCodes.has(code);
+      return code !== undefined && isParanoidSecurityAdvisoryCode(code);
     })
   );
 }
