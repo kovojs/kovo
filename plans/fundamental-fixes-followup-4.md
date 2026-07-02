@@ -2,13 +2,14 @@
 
 Created 2026-07-02. Self-standing. Source of truth for behavior is `SPEC.md`. This plan does NOT re-architect —
 `fundamental-fixes-followup-3.md`'s runtime-confinement principle is right. It fixes the three places where the
-*implementation* of followup-3 failed, proven by the round-8 dogfood (`plans/claude-bugz-29.md`,
+_implementation_ of followup-3 failed, proven by the round-8 dogfood (`plans/claude-bugz-29.md`,
 `plans/claude-papercuts-27.md`, all reproduced under `KOVO_PARANOID=1` with served leaks). Extends followup-3's
 invariants A1–A10 and decisions DEC-A…DEC-M.
 
 ## 1. Why this plan exists (round-8 diagnosis in one paragraph)
 
 followup-3 moved enforcement to runtime chokes — correct — but the implementation failed in three compounding ways:
+
 1. **Wrong placement.** The confidentiality choke decides secrecy by **matching the result column NAME** against the
    schema secret set (+ a literal table-name regex), not by the value's **source provenance**. So aliasing a secret
    onto a non-secret column name (`select token as company`), deriving it (`substr(token)`), or reading it through a
@@ -55,17 +56,17 @@ followup-3 over-claimed that **every** security property moves to a runtime chok
 otherwise is how DEC-D would have created A7 gaps. Security properties split in two, and each has its own sound
 enforcement — neither of which classifies the Turing-complete authoring surface:
 
-- **Value / effect properties** (confidentiality "no secret *value* reaches egress"; integrity "this *statement*
-  writes / this *reader* mutates"). The property is about a concrete runtime value or effect → **decidable at runtime
+- **Value / effect properties** (confidentiality "no secret _value_ reaches egress"; integrity "this _statement_
+  writes / this _reader_ mutates"). The property is about a concrete runtime value or effect → **decidable at runtime
   by the choke or the engine**. Static is advisory; paranoid stubs it. (This is what Phases 1–3 fix, correctly.)
-- **Provenance / intent properties** (XSS-trust "this HTML was *authored*-trusted, not laundered from untrusted
-  input"; mass-assignment "this field was *author*-permitted for client write"). The property is about the origin or
+- **Provenance / intent properties** (XSS-trust "this HTML was _authored_-trusted, not laundered from untrusted
+  input"; mass-assignment "this field was _author_-permitted for client write"). The property is about the origin or
   author-intent of data — an **author-time fact**, not a runtime value. Sound enforcement is an **unforgeable
   brand/typed constructor** at author time (a local, decidable "must go through the constructor" property — NOT a
   source classification) **+ a runtime choke that refuses UN-branded values** (so the brand can't be skipped). The
-  residual — "was the brand *justly* given?" — is neither soundly runtime- nor build-decidable (it was round-7 B2),
+  residual — "was the brand _justly_ given?" — is neither soundly runtime- nor build-decidable (it was round-7 B2),
   and is handled by the audited-explicit hatch (§10.2/§10.3) + the narrow waist + a **stated non-goal** (§6): Kovo
-  does not stop an author who *deliberately* brands untrusted/secret data through `trustedHtml(x,{reason})` /
+  does not stop an author who _deliberately_ brands untrusted/secret data through `trustedHtml(x,{reason})` /
   `reveal(reason)` — it makes the act explicit and reviewable.
 
 This taxonomy is what DEC-D's registry `enforcement` field encodes, and it is a more honest — and stronger —
@@ -77,34 +78,31 @@ exactly where an irreducible author-time obligation remains.
 - **DEC-A — Confidentiality is enforced per-dialect by the mechanism that is actually sound there (SQLite = provenance
   box, Postgres = engine `REVOKE`), never by result-key name-matching.** The audit established that provenance boxing
   is fully available on SQLite but NOT on Postgres through the current API (Drizzle exposes only `{ name, dataTypeID }`;
-  recovering `tableID`/`columnID` needs a new raw-protocol read path, and PG *views* report the view column origin, not
+  recovering `tableID`/`columnID` needs a new raw-protocol read path, and PG _views_ report the view column origin, not
   the base `session.token`). So:
   - **SQLite (PRIMARY = provenance box).** better-sqlite3 (`@12.11.1`, `ENABLE_COLUMN_METADATA` confirmed present)
     `Statement.columns()` gives per-column `{ table, column }` origin — audit-confirmed to preserve **aliases, views,
-    and CTEs**. The managed read handle boxes a cell by WHERE IT CAME FROM, in three sub-cases:
-    1. **Simple column ref** (`token AS company`, JOINed, via view/CTE) → origin `session.token` → box iff secret.
-       Alias/view/CTE-proof.
-    2. **Modeled builder expression** (`sql\`substr(${session.token},1,4)\``) → **serve only if EVERY chunk is proven
-       safe**: a proven-non-secret interpolated `Column`, or an inert whitelisted string fragment (operators, literals,
-       parens — NO bare identifiers, NO `select`). **Any unrecognized raw string chunk → treat as opaque → box**
-       (this closes the audit's mixed-chunk hole `sql\`upper(${contacts.name}) || (select token from session)\``,
-       where the secret hides in a string chunk while a non-secret column is interpolated). Feasibility of chunk
-       introspection is 2.0b; if unavailable, ALL `sql` expressions collapse to sub-case 3.
-    3. **Opaque fragment** (raw `sql\`(select …)\`` with no modeled refs, or a `null` origin) → **fail closed → box.**
+    and CTEs**. The managed read handle boxes a cell by WHERE IT CAME FROM. Sub-cases: **simple column ref**
+    (`token AS company`, JOINed, via view/CTE) → origin `session.token` → box iff secret; **modeled builder
+    expression** (for example `substr(session.token, 1, 4)`) → serve only if EVERY chunk is a proven-non-secret
+    interpolated `Column` or an inert whitelisted string fragment (operators, literals, parens — NO bare identifiers,
+    NO `select`; any unrecognized raw string chunk → opaque → box, closing the mixed-chunk hidden-select case);
+    **opaque fragment** (raw SQL with no modeled refs, or null origin) → fail closed → box. Feasibility of chunk
+    introspection is 2.0b; if unavailable, ALL sql expressions collapse to the opaque sub-case.
   - **Postgres / PGlite (PRIMARY = engine column-`REVOKE`, DEC-B).** Because provenance metadata isn't available via
     the Drizzle result API and views don't report base origin, the sound Postgres mechanism is engine column-`REVOKE`
-    + `security_invoker` views (DEC-B) — which the audit confirmed blocks alias AND view reads at the engine.
-    Provenance boxing on Postgres is OPTIONAL defense-in-depth that requires the new raw-protocol read path (2.0);
-    it is not relied on for soundness.
-  Result-key name-matching is forbidden as the confidentiality boundary on either dialect. Closes `bugz-29` B1
-  (SQLite→box sub-case 1 / Postgres→REVOKE), B2 view (SQLite→box / Postgres→`security_invoker`+REVOKE), the derivation
-  cases (→ 2/3), and `papercuts-27` P3 (SQLite sub-case 2 serves a proven-non-secret computation). **The
-  secret-copied-into-a-nonsecret-column case is NOT a read-provenance problem** (indistinguishable on read once at
-  rest) — it is closed on the WRITE side (DEC-C.2).
+    with `security_invoker` views (DEC-B) — which the audit confirmed blocks alias AND view reads at the engine.
+    Provenance boxing on Postgres is OPTIONAL defense-in-depth that requires the new raw-protocol read path (2.0); it
+    is not relied on for soundness.
+    Result-key name-matching is forbidden as the confidentiality boundary on either dialect. Closes `bugz-29` B1
+    (SQLite→box simple-ref / Postgres→REVOKE), B2 view (SQLite→box / Postgres→`security_invoker`+REVOKE), the derivation
+    cases (→ modeled/opaque), and `papercuts-27` P3 (SQLite modeled sub-case serves a proven-non-secret computation).
+    **The secret-copied-into-a-nonsecret-column case is NOT a read-provenance problem** (indistinguishable on read once
+    at rest) — it is closed on the WRITE side (DEC-C.2).
 - **DEC-B — Engine column-`REVOKE` is the confidentiality boundary on Postgres (SQLite has no column grants, so boxing
   is its boundary); view + role bypasses made explicit.** The default reader role has column-level `REVOKE` on secret
-  columns; a secret read requires the privileged `declareSecretReadCapability` grant (audit-confirmed: PGlite `SET LOCAL
-  ROLE` + column `REVOKE` work). Sound for all shapes at the engine — **provided two bypasses are closed**: (a) **views
+  columns; a secret read requires the privileged `declareSecretReadCapability` grant (audit-confirmed: PGlite SET LOCAL
+  ROLE plus column `REVOKE` work). Sound for all shapes at the engine — **provided two bypasses are closed**: (a) **views
   run `security_invoker`** (PG15+) or the view owner is also revoked, else a definer-rights view reads the secret with
   the owner's privileges and bypasses the reader `REVOKE` (audit-confirmed `security_invoker` closes it); (b) the
   reader is a **genuine non-superuser role** the request runs under via `SET ROLE` — a superuser bypasses `REVOKE`, so
@@ -119,7 +117,7 @@ exactly where an irreducible author-time obligation remains.
   4): SQLite via `sqlite3_set_authorizer` (called for trigger-body accesses too); Postgres/PGlite via a **per-mutation
   restricted role whose GRANTs = `tables:`**, so a trigger writing outside the grant is engine-rejected (task 3.0
   confirms per-mutation `SET LOCAL ROLE` + grants are assumable; if not, app-defined triggers are forbidden /
-  pre-audited as a narrow-waist restriction). **Breaking-change migration:** today a missing `tables:` means *no* write
+  pre-audited as a narrow-waist restriction). **Breaking-change migration:** today a missing `tables:` means _no_ write
   policy (`packages/server/src/mutation.ts:654`) and the starter `addContact` declares only `touches:`
   (`packages/create-kovo/templates/src/mutations.ts:71`); this plan makes absent-`tables:` fail-closed and updates the
   scaffold to declare `tables: ['contacts']` — existing apps must add `tables:` to writing mutations. Closes
@@ -129,7 +127,7 @@ exactly where an irreducible author-time obligation remains.
     fail closed; `reveal` is audited** (extends followup-3 DEC-C(4)). Builder writes inspect `.values()`/`.set()` args
     for `Secret` boxes and refuse (feasible). **Raw-SQL writes fail closed on any `Secret` bind parameter** — the
     boundary cannot map a bind param to its destination column, so a boxed secret as a raw-SQL write param is refused
-    outright (discharge via the capability). And because `Secret.reveal()` returns a *plain, untagged* value (so a
+    outright (discharge via the capability). And because `Secret.reveal()` returns a _plain, untagged_ value (so a
     reveal-then-write would be invisible), **`reveal(reason)` records an audit event** (who/why/when) — otherwise the
     "audited write" claim is unprovable. This closes the secret-copied-into-a-nonsecret-column leak on the WRITE side,
     where it is decidable (the value is still a box at write time), rather than the read side, where it is not.
@@ -147,11 +145,11 @@ exactly where an irreducible author-time obligation remains.
   - **`escape-hatch-audit`** — the residual author-time part of a provenance property (`KV426`: "was the trust brand
     justified?"). **NOT stubbed** — but the runtime injection choke independently refuses UN-branded values at sinks
     (that part IS a runtime choke), and author-misuse of the audited hatch is a stated non-goal (§6).
-  Tests assert: (i) the paranoid advisory set === the registry's `runtime-choke` ∪ (proven) `by-construction` codes;
-  (ii) none of those is build-fatal under paranoid; (iii) every code any security classifier emits has a registry
-  entry (drift guard); (iv) every `runtime-choke` entry names a live choke. This keeps DEC-D from creating an A7
-  *neither-layer* gap (a code is either runtime-enforced-and-stubbed, or genuinely author-time-and-not-stubbed with
-  its residual named) — and stops over-claiming that "everything moved to runtime." Closes `papercuts-27` P1.
+    Tests assert: (i) the paranoid advisory set === the registry's `runtime-choke` ∪ (proven) `by-construction` codes;
+    (ii) none of those is build-fatal under paranoid; (iii) every code any security classifier emits has a registry
+    entry (drift guard); (iv) every `runtime-choke` entry names a live choke. This keeps DEC-D from creating an A7
+    _neither-layer_ gap (a code is either runtime-enforced-and-stubbed, or genuinely author-time-and-not-stubbed with
+    its residual named) — and stops over-claiming that "everything moved to runtime." Closes `papercuts-27` P1.
 - **DEC-E — Split enforcement into pure-metadata extraction (`@kovojs/drizzle`) + a verified decision (`@kovojs/server`);
   generated code wires config only.** The audit flagged a packaging gap: schema mapping needs Drizzle dialect APIs, but
   `@kovojs/server` does not own Drizzle. Resolution (audit option 3): the **Drizzle-specific extraction** (schema →
@@ -178,112 +176,118 @@ exactly where an irreducible author-time obligation remains.
 ## 4. Phases (each leaf a single commit; every acceptance runs under FULL paranoid mode)
 
 ### Phase 0 — Real paranoid mode FIRST (the forcing function)
+
 - [ ] **0.1 Security-code registry + paranoid advisory set derived from it (DEC-D, B2, §2.1).** Build the
-  `code → { property, enforcement, chokeId? }` registry; the three paranoid sites (`graph-output.ts:630`,
-  `build-export.ts:465`, `vite.ts:568`) import the advisory set = `runtime-choke` ∪ proven `by-construction` codes.
-  Tests: advisory set equals that derivation; no member is build-fatal under `KOVO_PARANOID=1`; every code a security
-  classifier emits has a registry entry (drift guard); every `runtime-choke` entry names a live choke;
-  `escape-hatch-audit`/build-only codes are NOT in the advisory set. (Reconciles with the brand from plan-2 DEC1, but
-  the registry — not brand-inference — is the source of truth, since the brand carries no codes.)
+      `code → { property, enforcement, chokeId? }` registry; the three paranoid sites (`graph-output.ts:630`,
+      `build-export.ts:465`, `vite.ts:568`) import the advisory set = `runtime-choke` ∪ proven `by-construction` codes.
+      Tests: advisory set equals that derivation; no member is build-fatal under `KOVO_PARANOID=1`; every code a security
+      classifier emits has a registry entry (drift guard); every `runtime-choke` entry names a live choke;
+      `escape-hatch-audit`/build-only codes are NOT in the advisory set. (Reconciles with the brand from plan-2 DEC1, but
+      the registry — not brand-inference — is the source of truth, since the brand carries no codes.)
 - [ ] **0.2 Confirm the round-8 bugs now surface (B4).** With 0.1 landed, `KOVO_PARANOID=1` builds of the `bugz-29`
-  B1/B2/B3 shapes MUST reproduce the leak/write (static no longer masks them). Capture these as failing acceptance
-  fixtures — they are the Phase 2/3 targets. Re-open the affected followup-3 checkboxes (DEC-F).
+      B1/B2/B3 shapes MUST reproduce the leak/write (static no longer masks them). Capture these as failing acceptance
+      fixtures — they are the Phase 2/3 targets. Re-open the affected followup-3 checkboxes (DEC-F).
 
 ### Phase 1 — Put enforcement in the verified TCB
+
 - [ ] **1.1 Split enforcement: Drizzle extraction → pure metadata (`@kovojs/drizzle`), decision (`@kovojs/server`) (DEC-E, B3).**
-  Move boxing / declared-write / read-only decisions out of the generated adapter into `@kovojs/server` (no Drizzle
-  dep); the Drizzle-specific schema→metadata extraction lives in `@kovojs/drizzle` and emits pure, verified metadata;
-  the generated adapter only passes that metadata + config.
+      Move boxing / declared-write / read-only decisions out of the generated adapter into `@kovojs/server` (no Drizzle
+      dep); the Drizzle-specific schema→metadata extraction lives in `@kovojs/drizzle` and emits pure, verified metadata;
+      the generated adapter only passes that metadata + config.
 - [ ] **1.2 TCB manifest + boundary lint cover the relocated chokes (DEC-E, A10).** Enroll them in `security/TCB.md`;
-  extend `check:tcb-boundary` to fail on any security decision inside `packages/create-kovo/templates/**` or outside
-  the manifest, and to enforce the budget on the relocated chokes.
+      extend `check:tcb-boundary` to fail on any security decision inside `packages/create-kovo/templates/**` or outside
+      the manifest, and to enforce the budget on the relocated chokes.
 
 ### Phase 2 — Provenance-sound confidentiality
+
 - [ ] **2.0 Record driver column-origin availability per dialect (DEC-A).** SQLite: confirmed — better-sqlite3
-  `@12.11.1` has `ENABLE_COLUMN_METADATA`, `Statement.columns()` preserves alias/view/CTE origins (audit-probed); this
-  is SQLite's front line. Postgres/PGlite: the current Drizzle result API exposes only `{ name, dataTypeID }` — NOT
-  `tableID`/`columnID` — and views report the view column origin, not the base table; so provenance boxing on Postgres
-  needs a **new raw-protocol read path** and is only optional defense-in-depth. The Postgres confidentiality boundary
-  is engine `REVOKE` (DEC-B), not boxing. Record the decision; do not assume PG provenance.
+      `@12.11.1` has `ENABLE_COLUMN_METADATA`, `Statement.columns()` preserves alias/view/CTE origins (audit-probed); this
+      is SQLite's front line. Postgres/PGlite: the current Drizzle result API exposes only `{ name, dataTypeID }` — NOT
+      `tableID`/`columnID` — and views report the view column origin, not the base table; so provenance boxing on Postgres
+      needs a **new raw-protocol read path** and is only optional defense-in-depth. The Postgres confidentiality boundary
+      is engine `REVOKE` (DEC-B), not boxing. Record the decision; do not assume PG provenance.
 - [ ] **2.0b Verify the builder exposes interpolated column refs for `sql` expressions (DEC-A sub-case 2).** Confirm
-  Drizzle's `sql` template object exposes its `queryChunks` (or equivalent) so the framework can enumerate the
-  interpolated `Column` instances in an expression (`sql\`substr(${session.token},1,4)\``) and resolve each to
-  `table.column`, AND that a plain-string chunk carrying no `Column` (the round-8 B1 opaque `sql\`(select token from
-  session)\``) is distinguishable so it routes to sub-case 3. Record the result. **Fallback if unavailable:** every
-  `sql` expression collapses to sub-case 3 (opaque → fail-closed box), which is sound but re-introduces the P3
-  over-block for `sql`-expression projections — discharged via the DEC-B capability / `reveal`. This is the
-  expression-tree analogue of 2.0: the plan must not assume the introspection, it must verify it.
+      Drizzle's `sql` template object exposes its `queryChunks` (or equivalent) so the framework can enumerate the
+      interpolated `Column` instances in an expression (`sql\`substr(${session.token},1,4)\``) and resolve each to
+`table.column`, AND that a plain-string chunk carrying no `Column`(the round-8 B1 opaque`sql\`(select token from
+      session)\``) is distinguishable so it routes to sub-case 3. Record the result. **Fallback if unavailable:** every
+`sql`expression collapses to sub-case 3 (opaque → fail-closed box), which is sound but re-introduces the P3
+over-block for`sql`-expression projections — discharged via the DEC-B capability / `reveal`. This is the
+      expression-tree analogue of 2.0: the plan must not assume the introspection, it must verify it.
 - [ ] **2.1 SQLite provenance boxing at the row-mapping boundary (DEC-A, B1).** Box by source across the three DEC-A
-  sub-cases: (1) simple ref via `Statement.columns()` origin (alias/JOIN/view/CTE proof), (2) modeled builder
-  expression — serve only if EVERY chunk is a proven-non-secret interpolated `Column` or an inert whitelisted string;
-  any un-whitelisted raw chunk → box (closes the mixed-chunk hole), (3) opaque fragment → fail-closed box. (Postgres
-  confidentiality is 2.2's engine `REVOKE`, not this path.)
-  Acceptance (full paranoid): `bugz-29` B1 alias, B2 view, `substr()`/`||`/`coalesce()` derivations, JOIN-aliased,
-  CTE/subquery all box → refused at egress; a legit non-secret projection/computation from a secret-bearing table
-  serves (`papercuts-27` P3, no over-block); a raw-SQL opaque secret fragment boxes fail-closed. (The
-  secret-copied-to-nonsecret-column case is 3.2, not here.)
+      sub-cases: (1) simple ref via `Statement.columns()` origin (alias/JOIN/view/CTE proof), (2) modeled builder
+      expression — serve only if EVERY chunk is a proven-non-secret interpolated `Column` or an inert whitelisted string;
+      any un-whitelisted raw chunk → box (closes the mixed-chunk hole), (3) opaque fragment → fail-closed box. (Postgres
+      confidentiality is 2.2's engine `REVOKE`, not this path.)
+      Acceptance (full paranoid): `bugz-29` B1 alias, B2 view, `substr()`/`||`/`coalesce()` derivations, JOIN-aliased,
+      CTE/subquery all box → refused at egress; a legit non-secret projection/computation from a secret-bearing table
+      serves (`papercuts-27` P3, no over-block); a raw-SQL opaque secret fragment boxes fail-closed. (The
+      secret-copied-to-nonsecret-column case is 3.2, not here.)
 - [ ] **2.2 Engine column-`REVOKE` primary on Postgres + declared secret-read capability (DEC-B).** Reader role cannot
-  `SELECT` secret columns (raw SQL, alias, and view included); views run `security_invoker` (or the owner is also
-  revoked) so a view cannot bypass the reader grant; confirm a non-superuser reader role is assumable via `SET ROLE`
-  on PGlite (else DEC-A boxing is the PGlite front line — record which). The privileged capability reads the secret
-  and the value stays boxed to egress. Acceptance (full paranoid): a reader secret read that is direct, aliased, AND
-  through a view is engine-rejected; the declared capability reads + the value is refused at the wire without
-  `reveal(reason)`.
+      `SELECT` secret columns (raw SQL, alias, and view included); views run `security_invoker` (or the owner is also
+      revoked) so a view cannot bypass the reader grant; confirm a non-superuser reader role is assumable via `SET ROLE`
+      on PGlite (else DEC-A boxing is the PGlite front line — record which). The privileged capability reads the secret
+      and the value stays boxed to egress. Acceptance (full paranoid): a reader secret read that is direct, aliased, AND
+      through a view is engine-rejected; the declared capability reads + the value is refused at the wire without
+      `reveal(reason)`.
 
 ### Phase 3 — Integrity for the default mutation shape
+
 - [ ] **3.0 Record per-mutation engine-role feasibility (DEC-C).** Confirm Postgres/PGlite can run a mutation under a
-  **per-mutation restricted role** (`SET LOCAL ROLE` + GRANTs = `tables:`) so trigger/function side-effects outside the
-  grant are engine-rejected (audit: `SET LOCAL ROLE` works on PGlite). If per-mutation roles are infeasible in a
-  deployment, app-defined triggers are **forbidden / pre-audited** as a narrow-waist restriction (record which).
+      **per-mutation restricted role** (`SET LOCAL ROLE` + GRANTs = `tables:`) so trigger/function side-effects outside the
+      grant are engine-rejected (audit: `SET LOCAL ROLE` works on PGlite). If per-mutation roles are infeasible in a
+      deployment, app-defined triggers are **forbidden / pre-audited** as a narrow-waist restriction (record which).
 - [ ] **3.1 Declared-write scope = `tables:`, fail-closed, ENGINE-enforced (DEC-C, B3).** Scope on `tables:` only;
-  deny all writes absent a declared `tables:`; `touches:` grants no write access. Enforcement is the engine (SQLite
-  authorizer / Postgres per-mutation role), so **trigger side-effects** outside scope are caught (a framework parse
-  can't see them). Scaffold declares `tables:` for every writing mutation; **breaking change** — existing apps must add
-  `tables:` (today absent = no policy, `mutation.ts:654`; starter declares only `touches:`, `mutations.ts:71`).
-  Acceptance (full paranoid): the default mutation writing an out-of-scope table (auth `user`/`session`) is rejected,
-  **including via a trigger side-effect write**; an in-scope `contacts` write succeeds; an absent-`tables:` mutation is
-  write-denied.
+      deny all writes absent a declared `tables:`; `touches:` grants no write access. Enforcement is the engine (SQLite
+      authorizer / Postgres per-mutation role), so **trigger side-effects** outside scope are caught (a framework parse
+      can't see them). Scaffold declares `tables:` for every writing mutation; **breaking change** — existing apps must add
+      `tables:` (today absent = no policy, `mutation.ts:654`; starter declares only `touches:`, `mutations.ts:71`).
+      Acceptance (full paranoid): the default mutation writing an out-of-scope table (auth `user`/`session`) is rejected,
+      **including via a trigger side-effect write**; an in-scope `contacts` write succeeds; an absent-`tables:` mutation is
+      write-denied.
 - [ ] **3.2 A `Secret` box written into a non-secret column is refused; raw-SQL write params fail closed; `reveal` is
-  audited (DEC-C.2).** Builder writes inspect `.values()`/`.set()` for boxes; a raw-SQL write with a `Secret` bind
-  param is refused outright; `reveal(reason)` records an audit event so a reveal-then-write is traceable. Acceptance
-  (full paranoid): a boxed secret written into a non-secret column (builder AND raw-SQL) is refused; a
-  `reveal(reason)` write emits an audit record.
+      audited (DEC-C.2).** Builder writes inspect `.values()`/`.set()` for boxes; a raw-SQL write with a `Secret` bind
+      param is refused outright; `reveal(reason)` records an audit event so a reveal-then-write is traceable. Acceptance
+      (full paranoid): a boxed secret written into a non-secret column (builder AND raw-SQL) is refused; a
+      `reveal(reason)` write emits an audit record.
 
 ### Phase 4 — Honesty + DX cleanups
+
 - [ ] **4.1 Honest KV433/KV435 diagnostics (DEC-G).** Each names the actual enforcing layer.
 - [ ] **4.2 Inline `style` object serialized safely or diagnosed (DEC-H).**
 
 ### Phase 5 — Prove it (round-9 acceptance)
+
 - [ ] **5.1 Full-paranoid generative dogfood (B2/B4).** Property generators vary the read SOURCE shape (alias,
-  derivation, view, computed, JOIN, CTE, subquery) and the write shape (out-of-scope `tables:`, absent-`tables:`, DDL,
-  trigger, boxed-secret-into-nonsecret-column), run under `KOVO_PARANOID=1` with the FULL `SECURITY_KV_CODES` stubbed.
-  Acceptance: zero secret-to-egress leaks, zero out-of-scope writes, zero over-blocks; the relocated chokes are in the
-  manifest and within budget.
+      derivation, view, computed, JOIN, CTE, subquery) and the write shape (out-of-scope `tables:`, absent-`tables:`, DDL,
+      trigger, boxed-secret-into-nonsecret-column), run under `KOVO_PARANOID=1` with the FULL `SECURITY_KV_CODES` stubbed.
+      Acceptance: zero secret-to-egress leaks, zero out-of-scope writes, zero over-blocks; the relocated chokes are in the
+      manifest and within budget.
 
 ## 5. Pre-mortem — what round-9 will attack, and which item closes it
 
-| Anticipated round-9 attack | Why it would work | Closed by | Proof |
-|---|---|---|---|
-| A driver build without column-origin metadata (SQLite no `SQLITE_ENABLE_COLUMN_METADATA`) | provenance mapping returns null → name-match creeps back | DEC-A fail-closed + DEC-B `REVOKE` (2.0/2.1/2.2) | 2.0 availability record + 2.1 fail-closed test |
-| A computed column derived from a secret (`substr(token)`) with null origin | origin is unattributable | DEC-A sub-case 2 (expression tree) / sub-case 3 fail-closed (2.1) | 2.1 derivation acceptance |
-| The builder does NOT expose interpolated column refs for `sql` expressions | sub-case 2 is not achievable → either name-match creeps back or every `sql` expr over-blocks | DEC-A 2.0b feasibility gate + documented fallback (all `sql` exprs → sub-case 3) | 2.0b introspection record + fallback test |
-| A new security code added later, not in `SECURITY_KV_CODES` | paranoid silently stops covering it | DEC-D drift guard (0.1) | 0.1 "every emitted code ∈ set" test |
-| Enforcement re-added to the generated adapter | TCB shrinks back to an illusion | DEC-E `check:tcb-boundary` scans templates (1.2) | 1.2 lint fails on security decision in templates |
-| Provenance box over-boxes a non-secret column from a secret table | coarse dual of B1 | DEC-A per-column provenance (2.1) | 2.1 legit-projection-serves test |
-| A legitimately-revealed secret's plaintext flows to the wire | `reveal` cliff (followup-3 known) | audited `reveal(reason)` at egress only; capability keeps it boxed | 2.2 capability-still-boxed test |
-| Paranoid acceptance re-marked `[x]` without a real pass | the round-8 self-deception repeats | B4 + DEC-F | 5.1 full-paranoid generative pass |
-| A mutation writes a table it only `touches:` (invalidates) | `touches:` mistaken for write authority | DEC-C `tables:`-only, fail-closed absent it (3.1) | 3.1 out-of-scope + absent-`tables:` write-denied |
-| A definer-rights view reads a secret and bypasses the reader `REVOKE` | view runs with owner privileges | DEC-B `security_invoker` / owner also revoked (2.2) | 2.2 secret-through-view engine-rejected |
-| A superuser (PGlite default) bypasses column `REVOKE` | `REVOKE` does not bind superusers | DEC-B non-superuser reader via `SET ROLE` (2.2) | 2.2 role-assumable feasibility record |
-| A security code with a static gate but NO runtime choke gets stubbed | paranoid disables the only enforcer → A7 neither-layer gap | DEC-D (iv) every member names a live choke | DEC-D test (iv) code↔choke register |
-| The TCB budget is raised to fit un-simplified per-shape work | the "small verified TCB" illusion returns | DEC-E budget on the DECISION only; "simplify, don't raise" | 1.2 budget check on decision funcs |
-| A secret laundered into a non-secret column then read back | read provenance sees a genuine non-secret column | DEC-C.2 boxed-secret write refused at the DB-write boundary (3.2) | 3.2 boxed-secret-into-nonsecret-column refused |
-| A mixed `sql` chunk hides the secret in a string while interpolating a non-secret column (`upper(${name}) \|\| (select token…)`) | interpolated-column check sees only the non-secret column | DEC-A sub-case 2 chunk-level fail-closed (2.1) | 2.1 mixed-chunk boxes |
-| A Postgres secret read via alias/view (provenance unavailable in the Drizzle API) | boxing can't attribute origin on PG | DEC-B engine `REVOKE` + `security_invoker` is the PG boundary, not boxing (2.2) | 2.2 alias+view engine-rejected |
-| A trigger fired by an in-scope write mutates an out-of-scope table | a framework table-parse sees only the top-level write | DEC-C engine enforcement (SQLite authorizer / PG per-mutation role) (3.0/3.1) | 3.1 trigger-side-effect write rejected |
-| Enforcement can't move to `@kovojs/server` because it needs Drizzle | packaging: server doesn't own Drizzle | DEC-E extraction in `@kovojs/drizzle` → pure metadata → decision in `@kovojs/server` (1.1) | 1.1 packaging + metadata correctness test |
-| `reveal()` returns a bare string, so a reveal-then-write/emit is untracked | the tag is gone after reveal | DEC-C.2 `reveal(reason)` records an audit event | 3.2 reveal-write audit record |
-| An author deliberately brands untrusted/secret data via `trustedHtml(x,{reason})` / `reveal(reason)` | provenance-of-intent is not runtime- or soundly-build-decidable | **Stated NON-GOAL** (§2.1, §6) — hatch is explicit + reviewable, not prevented | §6 non-goal + `SECURITY.md` (6.2) |
+| Anticipated round-9 attack                                                                                                       | Why it would work                                                                            | Closed by                                                                                  | Proof                                            |
+| -------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------ |
+| A driver build without column-origin metadata (SQLite no `SQLITE_ENABLE_COLUMN_METADATA`)                                        | provenance mapping returns null → name-match creeps back                                     | DEC-A fail-closed + DEC-B `REVOKE` (2.0/2.1/2.2)                                           | 2.0 availability record + 2.1 fail-closed test   |
+| A computed column derived from a secret (`substr(token)`) with null origin                                                       | origin is unattributable                                                                     | DEC-A sub-case 2 (expression tree) / sub-case 3 fail-closed (2.1)                          | 2.1 derivation acceptance                        |
+| The builder does NOT expose interpolated column refs for `sql` expressions                                                       | sub-case 2 is not achievable → either name-match creeps back or every `sql` expr over-blocks | DEC-A 2.0b feasibility gate + documented fallback (all `sql` exprs → sub-case 3)           | 2.0b introspection record + fallback test        |
+| A new security code added later, not in `SECURITY_KV_CODES`                                                                      | paranoid silently stops covering it                                                          | DEC-D drift guard (0.1)                                                                    | 0.1 "every emitted code ∈ set" test              |
+| Enforcement re-added to the generated adapter                                                                                    | TCB shrinks back to an illusion                                                              | DEC-E `check:tcb-boundary` scans templates (1.2)                                           | 1.2 lint fails on security decision in templates |
+| Provenance box over-boxes a non-secret column from a secret table                                                                | coarse dual of B1                                                                            | DEC-A per-column provenance (2.1)                                                          | 2.1 legit-projection-serves test                 |
+| A legitimately-revealed secret's plaintext flows to the wire                                                                     | `reveal` cliff (followup-3 known)                                                            | audited `reveal(reason)` at egress only; capability keeps it boxed                         | 2.2 capability-still-boxed test                  |
+| Paranoid acceptance re-marked `[x]` without a real pass                                                                          | the round-8 self-deception repeats                                                           | B4 + DEC-F                                                                                 | 5.1 full-paranoid generative pass                |
+| A mutation writes a table it only `touches:` (invalidates)                                                                       | `touches:` mistaken for write authority                                                      | DEC-C `tables:`-only, fail-closed absent it (3.1)                                          | 3.1 out-of-scope + absent-`tables:` write-denied |
+| A definer-rights view reads a secret and bypasses the reader `REVOKE`                                                            | view runs with owner privileges                                                              | DEC-B `security_invoker` / owner also revoked (2.2)                                        | 2.2 secret-through-view engine-rejected          |
+| A superuser (PGlite default) bypasses column `REVOKE`                                                                            | `REVOKE` does not bind superusers                                                            | DEC-B non-superuser reader via `SET ROLE` (2.2)                                            | 2.2 role-assumable feasibility record            |
+| A security code with a static gate but NO runtime choke gets stubbed                                                             | paranoid disables the only enforcer → A7 neither-layer gap                                   | DEC-D (iv) every member names a live choke                                                 | DEC-D test (iv) code↔choke register              |
+| The TCB budget is raised to fit un-simplified per-shape work                                                                     | the "small verified TCB" illusion returns                                                    | DEC-E budget on the DECISION only; "simplify, don't raise"                                 | 1.2 budget check on decision funcs               |
+| A secret laundered into a non-secret column then read back                                                                       | read provenance sees a genuine non-secret column                                             | DEC-C.2 boxed-secret write refused at the DB-write boundary (3.2)                          | 3.2 boxed-secret-into-nonsecret-column refused   |
+| A mixed `sql` chunk hides the secret in a string while interpolating a non-secret column (`upper(${name}) \|\| (select token…)`) | interpolated-column check sees only the non-secret column                                    | DEC-A sub-case 2 chunk-level fail-closed (2.1)                                             | 2.1 mixed-chunk boxes                            |
+| A Postgres secret read via alias/view (provenance unavailable in the Drizzle API)                                                | boxing can't attribute origin on PG                                                          | DEC-B engine `REVOKE` + `security_invoker` is the PG boundary, not boxing (2.2)            | 2.2 alias+view engine-rejected                   |
+| A trigger fired by an in-scope write mutates an out-of-scope table                                                               | a framework table-parse sees only the top-level write                                        | DEC-C engine enforcement (SQLite authorizer / PG per-mutation role) (3.0/3.1)              | 3.1 trigger-side-effect write rejected           |
+| Enforcement can't move to `@kovojs/server` because it needs Drizzle                                                              | packaging: server doesn't own Drizzle                                                        | DEC-E extraction in `@kovojs/drizzle` → pure metadata → decision in `@kovojs/server` (1.1) | 1.1 packaging + metadata correctness test        |
+| `reveal()` returns a bare string, so a reveal-then-write/emit is untracked                                                       | the tag is gone after reveal                                                                 | DEC-C.2 `reveal(reason)` records an audit event                                            | 3.2 reveal-write audit record                    |
+| An author deliberately brands untrusted/secret data via `trustedHtml(x,{reason})` / `reveal(reason)`                             | provenance-of-intent is not runtime- or soundly-build-decidable                              | **Stated NON-GOAL** (§2.1, §6) — hatch is explicit + reviewable, not prevented             | §6 non-goal + `SECURITY.md` (6.2)                |
 
 ## 6. Honest tradeoffs and non-goals
 
@@ -291,7 +295,7 @@ exactly where an irreducible author-time obligation remains.
   origin (better-sqlite3 `@12.11.1`, alias/view/CTE-preserving) but no column grants → **provenance boxing**. Postgres
   has column grants but no origin metadata via the Drizzle API (and views don't report base origin) → **engine
   `REVOKE`**. Each dialect's boundary is the mechanism that is actually sound there. This is more surface than "one
-  choke," and accepted (honest > tidy); the shared, verified part is the enforcement *decision* + the pure metadata
+  choke," and accepted (honest > tidy); the shared, verified part is the enforcement _decision_ + the pure metadata
   (DEC-E).
 - **Real paranoid mode will (correctly) turn CI red first.** Landing 0.1 exposes `bugz-29` B1/B2/B3 as failing
   acceptances before the fixes land. That is the point — a red that reflects reality beats a green that hides it.
@@ -300,14 +304,14 @@ exactly where an irreducible author-time obligation remains.
   what makes them verifiable (A10).
 - **The TCB budget is a design forcing-function, not a target to negotiate.** The round-8 enforcement was ~683
   lines/dialect; relocating it (DEC-E) does not shrink it by itself. The budget is met by splitting the tiny
-  *decision* from the *schema→secret mapping* (a derived data structure verified separately) — and if the decision
+  _decision_ from the _schema→secret mapping_ (a derived data structure verified separately) — and if the decision
   still won't fit, that means it is still doing per-shape name-match work and must be simplified. Raising the budget to
   fit is how the "small verified TCB" became an illusion; this plan forbids it.
 - **`touches:` vs `tables:` is a real API sharp edge.** Making `tables:` the sole write authority (DEC-C) means authors
   must declare it on writing mutations; the scaffold does so, and an absent `tables:` fails closed (write-denied)
   rather than silently allowing. This is stricter than before and intentional.
 - **Non-goal — author misuse of an audited escape hatch (STATED, per §2.1).** Kovo does not prevent an author who
-  *deliberately* brands untrusted data as trusted (`trustedHtml(x,{reason})`) or reveals+emits a secret
+  _deliberately_ brands untrusted data as trusted (`trustedHtml(x,{reason})`) or reveals+emits a secret
   (`reveal(reason)`). Provenance-of-intent is neither soundly runtime- nor build-decidable; Kovo's guarantee is that
   the act is **explicit, typed, and reviewable** (SPEC §10.2/§10.3) and that UN-branded values are refused at the
   runtime choke — not that a determined author cannot assert a falsehood through the hatch. `SECURITY.md` (6.2) states
