@@ -293,18 +293,25 @@ interface SecretReadMetadata {
   allColumnKeys: ReadonlySet<string>;
   secretColumnKeys: ReadonlySet<string>;
   secretColumnNames: ReadonlySet<string>;
+  secretColumnKeysByTable: ReadonlyMap<string, ReadonlySet<string>>;
+  secretColumnNamesByTable: ReadonlyMap<string, ReadonlySet<string>>;
   secretTableNames: ReadonlySet<string>;
 }
 
 interface SecretReadBoundary {
   builderSecretTableRead: boolean;
   rawWholeRowSecret: boolean;
+  secretColumnKeys: ReadonlySet<string>;
+  secretColumnNames: ReadonlySet<string>;
+  secretColumnScopeKnown: boolean;
 }
 
 function secretReadMetadata(tables: readonly PgTable[]): SecretReadMetadata {
   const allColumnKeys = new Set<string>();
   const secretColumnKeys = new Set<string>();
   const secretColumnNames = new Set<string>();
+  const secretColumnKeysByTable = new Map<string, ReadonlySet<string>>();
+  const secretColumnNamesByTable = new Map<string, ReadonlySet<string>>();
   const secretTableNames = new Set<string>();
 
   for (const table of tables) {
@@ -315,19 +322,32 @@ function secretReadMetadata(tables: readonly PgTable[]): SecretReadMetadata {
     if (secretAnnotation === undefined) continue;
 
     secretTableNames.add(config.name);
+    const tableSecretColumnKeys = new Set<string>();
+    const tableSecretColumnNames = new Set<string>();
     const secretKeys =
       secretAnnotation === true
         ? [...columnKeys.values()]
         : kovoSecretColumnKeys(secretAnnotation, table, columnKeys);
     for (const key of secretKeys) {
       secretColumnKeys.add(key);
+      tableSecretColumnKeys.add(key);
       const column = Reflect.get(table, key);
       const dbName = isColumnLike(column) ? column.name : key;
       secretColumnNames.add(dbName);
+      tableSecretColumnNames.add(dbName);
     }
+    secretColumnKeysByTable.set(config.name, tableSecretColumnKeys);
+    secretColumnNamesByTable.set(config.name, tableSecretColumnNames);
   }
 
-  return { allColumnKeys, secretColumnKeys, secretColumnNames, secretTableNames };
+  return {
+    allColumnKeys,
+    secretColumnKeys,
+    secretColumnKeysByTable,
+    secretColumnNames,
+    secretColumnNamesByTable,
+    secretTableNames,
+  };
 }
 
 function columnKeysByDbName(table: PgTable, columns: readonly PgColumn[]): Map<string, string> {
@@ -460,10 +480,18 @@ function wrapReadSurface(
 function readBoundaryForQuery(value: unknown, metadata: SecretReadMetadata): SecretReadBoundary {
   const sql = querySqlText(value);
   if (sql === undefined) return emptyReadBoundary();
-  return {
-    builderSecretTableRead: sqlReferencesSecretTable(sql, metadata.secretTableNames),
-    rawWholeRowSecret: false,
-  };
+  let boundary = { ...emptyReadBoundary(), secretColumnScopeKnown: true };
+  for (const table of metadata.secretTableNames) {
+    if (!sqlReferencesTable(sql, table)) continue;
+    boundary = mergeReadBoundaries(boundary, {
+      builderSecretTableRead: true,
+      rawWholeRowSecret: false,
+      secretColumnKeys: metadata.secretColumnKeysByTable.get(table) ?? new Set<string>(),
+      secretColumnNames: metadata.secretColumnNamesByTable.get(table) ?? new Set<string>(),
+      secretColumnScopeKnown: true,
+    });
+  }
+  return boundary;
 }
 
 function readBoundaryForArgs(
@@ -474,12 +502,12 @@ function readBoundaryForArgs(
   if (!directSqlRead) return emptyReadBoundary();
   for (const arg of args) {
     const sql = querySqlText(arg) ?? sqlTextFromValue(arg);
-    if (sql === undefined) return { builderSecretTableRead: false, rawWholeRowSecret: true };
+    if (sql === undefined) return { ...emptyReadBoundary(), rawWholeRowSecret: true };
     if (sqlReferencesSecretTable(sql, metadata.secretTableNames)) {
-      return { builderSecretTableRead: false, rawWholeRowSecret: true };
+      return { ...emptyReadBoundary(), rawWholeRowSecret: true };
     }
   }
-  return emptyReadBoundary();
+  return { ...emptyReadBoundary(), secretColumnScopeKnown: true };
 }
 
 function mergeReadBoundaries(
@@ -489,11 +517,26 @@ function mergeReadBoundaries(
   return {
     builderSecretTableRead: left.builderSecretTableRead || right.builderSecretTableRead,
     rawWholeRowSecret: left.rawWholeRowSecret || right.rawWholeRowSecret,
+    secretColumnKeys: unionSets(left.secretColumnKeys, right.secretColumnKeys),
+    secretColumnNames: unionSets(left.secretColumnNames, right.secretColumnNames),
+    secretColumnScopeKnown: left.secretColumnScopeKnown || right.secretColumnScopeKnown,
   };
 }
 
 function emptyReadBoundary(): SecretReadBoundary {
-  return { builderSecretTableRead: false, rawWholeRowSecret: false };
+  return {
+    builderSecretTableRead: false,
+    rawWholeRowSecret: false,
+    secretColumnKeys: new Set<string>(),
+    secretColumnNames: new Set<string>(),
+    secretColumnScopeKnown: false,
+  };
+}
+
+function unionSets(left: ReadonlySet<string>, right: ReadonlySet<string>): ReadonlySet<string> {
+  if (left.size === 0) return right;
+  if (right.size === 0) return left;
+  return new Set([...left, ...right]);
 }
 
 function isDirectSqlReadMethod(prop: PropertyKey): boolean {
@@ -542,12 +585,14 @@ function sqlTextFromValue(value: unknown): string | undefined {
 
 function sqlReferencesSecretTable(sql: string, secretTableNames: ReadonlySet<string>): boolean {
   for (const table of secretTableNames) {
-    const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp(`(?:^|[^A-Za-z0-9_])"?${escaped}"?(?:$|[^A-Za-z0-9_])`, 'i').test(sql)) {
-      return true;
-    }
+    if (sqlReferencesTable(sql, table)) return true;
   }
   return false;
+}
+
+function sqlReferencesTable(sql: string, table: string): boolean {
+  const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[^A-Za-z0-9_])"?${escaped}"?(?:$|[^A-Za-z0-9_])`, 'i').test(sql);
 }
 
 function boxSecretRows(
@@ -571,10 +616,16 @@ function boxSecretRows(
   }
   const boxed: Record<string, unknown> = {};
   for (const [key, item] of Object.entries(value)) {
+    const secretColumnKeys = boundary.secretColumnScopeKnown
+      ? boundary.secretColumnKeys
+      : metadata.secretColumnKeys;
+    const secretColumnNames = boundary.secretColumnScopeKnown
+      ? boundary.secretColumnNames
+      : metadata.secretColumnNames;
     boxed[key] =
       item === null || item === undefined
         ? item
-        : metadata.secretColumnKeys.has(key) || metadata.secretColumnNames.has(key)
+        : secretColumnKeys.has(key) || secretColumnNames.has(key)
           ? secret(item)
           : boxSecretRows(item, metadata, boundary);
   }
