@@ -253,11 +253,7 @@ function readonlyDbTarget<Db>(raw: Db): Db {
 }
 
 function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy | undefined): Db {
-  if (
-    writePolicy === undefined ||
-    writePolicy.tables === undefined ||
-    writePolicy.tables.length === 0
-  ) {
+  if (writePolicy === undefined) {
     return raw;
   }
   const target = frameworkManagedDbRawTarget(raw) ?? raw;

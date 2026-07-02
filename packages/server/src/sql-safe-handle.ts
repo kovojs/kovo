@@ -25,6 +25,7 @@ import {
   type SqlClassifierVerdict,
   type SqlWriteTargets,
 } from './sql-write-allowlist.js';
+import { isSecret } from '@kovojs/core';
 
 /** Runtime raw-SQL write table policy enforced on mutation managed DB handles. */
 export interface ManagedSqlWritePolicy {
@@ -237,11 +238,14 @@ function wrapDbAdapter(
       }
 
       if (typeof value !== 'function') return value;
-      return cachedSqlSafetyMethod(target, prop, value, methodCache, () =>
-        isSqlBuilderFastPath(prop, writePolicy)
+      return cachedSqlSafetyMethod(target, prop, value, methodCache, () => {
+        if (isWriteSqlBuilderEntry(prop, writePolicy)) {
+          return guardedWriteBuilderEntry(target, value, methodCache);
+        }
+        return isSqlBuilderFastPath(prop, writePolicy)
           ? value.bind(target)
-          : guardedUnknownSqlMethod(target, prop, value, mode, writePolicy, strictSqlTarget),
-      );
+          : guardedUnknownSqlMethod(target, prop, value, mode, writePolicy, strictSqlTarget);
+      });
     },
   });
 
@@ -259,6 +263,52 @@ function isSqlBuilderFastPath(
       ? READ_SQL_BUILDER_FAST_PATH_METHODS
       : WRITE_SQL_BUILDER_FAST_PATH_METHODS
   ).has(prop);
+}
+
+function isWriteSqlBuilderEntry(
+  prop: PropertyKey,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): boolean {
+  return writePolicy?.capability !== 'read' && (prop === 'insert' || prop === 'update');
+}
+
+function guardedWriteBuilderEntry(
+  target: object,
+  value: Function,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+): Function {
+  return (...args: unknown[]) => {
+    const builder = value.apply(target, args);
+    return isRecord(builder) ? wrapWriteBuilderSecretBoundary(builder, methodCache) : builder;
+  };
+}
+
+function wrapWriteBuilderSecretBoundary(
+  builder: object,
+  methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+): object {
+  return new Proxy(builder as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if ((prop === 'values' || prop === 'set') && typeof value === 'function') {
+        return cachedSqlSafetyMethod(
+          target,
+          prop,
+          value,
+          methodCache,
+          () =>
+            (...args: unknown[]) => {
+              assertNoSecretDbWriteValue(args);
+              const result = value.apply(target, args);
+              return isRecord(result)
+                ? wrapWriteBuilderSecretBoundary(result, methodCache)
+                : result;
+            },
+        );
+      }
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  });
 }
 
 function guardedSqlMethod(
@@ -364,9 +414,17 @@ function assertAmbiguousSqlMethodArguments(
   }
   if (statements.length > 0) return;
   if (writePolicy === undefined || !strictSqlTarget) return;
+  if (!isSuspiciousSqlMethodName(prop)) return;
 
   throw new Error(
     `KV422: unknown managed DB method ${describeSqlMethod(prop)} is not a proven SQL builder/read capability and did not receive a recognizable SQL carrier (SPEC §10.2/§10.3).`,
+  );
+}
+
+function isSuspiciousSqlMethodName(prop: PropertyKey): boolean {
+  if (typeof prop !== 'string') return true;
+  return /sql|query|execute|statement|prepare|insert|update|delete|run|exec|all|get|values/i.test(
+    prop,
   );
 }
 
@@ -649,7 +707,7 @@ const assertSqlWriteTablesAllowed = securityClassifier(
     }
 
     const declaredTables = writePolicy?.tables;
-    if (declaredTables === undefined || declaredTables.length === 0) return;
+    if (writePolicy === undefined) return;
 
     const sql = sqlStatementText(statement);
     if (sql === undefined) return;
@@ -666,6 +724,7 @@ const assertSqlWriteTablesAllowed = securityClassifier(
     }
 
     const writeTables = verdict.detail;
+    assertNoSecretRawWriteBind(statement);
     if (writeTables.includes(UNTABLED_SQL_WRITE)) {
       throw new Error(
         'KV406: raw-SQL write table allowlist encountered a write with no provable table allowlist target on a managed mutation DB handle (SPEC §10.3/§11.2).',
@@ -676,7 +735,9 @@ const assertSqlWriteTablesAllowed = securityClassifier(
       .filter(isParsedSqlTableName)
       .map((table) => normalizeManagedSqlTableName(table, writePolicy?.dialect));
     const allowed = new Set(
-      declaredTables.map((table) => normalizeManagedSqlTableName(table, writePolicy?.dialect)),
+      (declaredTables ?? []).map((table) =>
+        normalizeManagedSqlTableName(table, writePolicy?.dialect),
+      ),
     );
     const unexpected = writeTableNames.filter((table) => !allowed.has(table));
     if (unexpected.length === 0) return;
@@ -685,7 +746,7 @@ const assertSqlWriteTablesAllowed = securityClassifier(
       [
         'KV406: raw-SQL write touched table(s) outside the declared mutation registry tables (SPEC §10.3/§11.2).',
         `  unexpected: ${[...new Set(unexpected)].sort().join(', ')}`,
-        `  declared tables: ${[...new Set(declaredTables)].sort().join(', ')}`,
+        `  declared tables: ${[...new Set(declaredTables ?? [])].sort().join(', ') || '<none>'}`,
         `  touches: ${[...new Set(writePolicy?.touches ?? [])].sort().join(', ') || '<none>'}`,
       ].join('\n'),
     );
@@ -760,6 +821,37 @@ function sqlStatementText(statement: unknown): string | undefined {
   return undefined;
 }
 
+function assertNoSecretRawWriteBind(statement: unknown): void {
+  if (typeof statement !== 'object' || statement === null) return;
+  const record = statement as Record<PropertyKey, unknown>;
+  for (const key of ['values', 'params', 'args'] as const) {
+    const value = record[key];
+    if (Array.isArray(value)) assertNoSecretDbWriteValue(value);
+  }
+  const queryChunks = record.queryChunks;
+  if (Array.isArray(queryChunks)) assertNoSecretDbWriteValue(queryChunks);
+}
+
+function assertNoSecretDbWriteValue(value: unknown): void {
+  if (containsSecret(value, new WeakSet<object>())) {
+    throw new Error(
+      'KV435: Secret runtime value cannot be written through a managed DB write boundary (SPEC §10.3/§11.2). Call reveal(reason) at an audited site before writing.',
+    );
+  }
+}
+
+function containsSecret(value: unknown, seen: WeakSet<object>): boolean {
+  if (isSecret(value)) return true;
+  if (typeof value !== 'object' || value === null) return false;
+  if (seen.has(value)) return false;
+  seen.add(value);
+  if (Array.isArray(value)) return value.some((entry) => containsSecret(entry, seen));
+  for (const entry of Object.values(value as Record<string, unknown>)) {
+    if (containsSecret(entry, seen)) return true;
+  }
+  return false;
+}
+
 function readStringProperty(
   record: Record<PropertyKey, unknown>,
   property: 'text' | 'sql',
@@ -808,16 +900,20 @@ function sqlFromQueryChunk(chunk: unknown, nextParameter: () => string): string 
 }
 
 function isManagedDbAdapterLike(value: unknown): value is Record<PropertyKey, unknown> {
-  if (isDbAdapterLike(value)) return true;
   if (typeof value !== 'object' || value === null) return false;
-  const record = value as Record<PropertyKey, unknown>;
-  return (
-    typeof record.all === 'function' ||
-    typeof record.get === 'function' ||
-    typeof record.run === 'function' ||
-    typeof record.values === 'function' ||
-    isSqlHandleLike(record.session)
-  );
+  try {
+    if (isDbAdapterLike(value)) return true;
+    const record = value as Record<PropertyKey, unknown>;
+    return (
+      typeof record.all === 'function' ||
+      typeof record.get === 'function' ||
+      typeof record.run === 'function' ||
+      typeof record.values === 'function' ||
+      isSqlHandleLike(record.session)
+    );
+  } catch {
+    return true;
+  }
 }
 
 function isNestedSqlHandleProperty(prop: PropertyKey): boolean {

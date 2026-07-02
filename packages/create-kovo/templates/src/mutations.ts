@@ -68,7 +68,7 @@ export const addContact = mutation({
       else draft.items.splice(index, 0, row);
     },
   },
-  registry: { touches: [contact] },
+  registry: { tables: ['contacts'], touches: [contact] },
   async handler(
     input,
     request: AppRequest,

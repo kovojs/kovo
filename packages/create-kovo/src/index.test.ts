@@ -103,6 +103,9 @@ describe('create-kovo starter (metadata)', () => {
       const project = createKovoProject({ name: 'My App' });
       expect(project.name).toBe('my-app');
       expect(project.files.map((file) => file.path)).toEqual(ALL_FILES);
+      expect(readFileSync(join(root, 'src/mutations.ts'), 'utf8')).toContain(
+        "registry: { tables: ['contacts'], touches: [contact] }",
+      );
     } finally {
       rmSync(root, { force: true, recursive: true });
     }

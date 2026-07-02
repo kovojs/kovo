@@ -47,6 +47,20 @@ export interface SecretValue<T> extends Secret<T> {
 export type SecretRevealReason = string | { readonly justification: string };
 
 /**
+ * Audit record emitted whenever a runtime {@link SecretValue} is explicitly revealed.
+ *
+ * Audit-only: this records that an author intentionally unboxed a secret; it is not a
+ * confidentiality proof and does not authorize a later sink.
+ */
+export interface SecretRevealAuditFact {
+  kind: 'secret-reveal';
+  reason: string;
+  revealedAt: string;
+}
+
+const secretRevealAuditFacts: SecretRevealAuditFact[] = [];
+
+/**
  * Type-level marker for request-derived or otherwise untrusted values. This tag
  * is DX/provenance only; contextual render and protocol chokes remain the
  * enforcement boundary (SPEC §5.2 rule 11).
@@ -113,6 +127,7 @@ class KovoPoisonBox<T> {
 
   reveal(reason?: SecretRevealReason): T {
     if (this.#kind === 'secret' || this.#kind === 'untrusted') validateRevealReason(reason);
+    if (this.#kind === 'secret') recordSecretReveal(reason);
     return this.#value;
   }
 
@@ -204,6 +219,17 @@ export function isSecret(value: unknown): value is SecretValue<unknown> {
  */
 export function revealSecret<T>(value: Secret<T>, reason: SecretRevealReason): T {
   return isSecret(value) ? (value as SecretValue<T>).reveal(reason) : (value as unknown as T);
+}
+
+/**
+ * Drain the runtime Secret reveal audit records collected in this process.
+ *
+ * Framework audit/explain integrations use this to make reveal-then-write paths reviewable
+ * (SPEC §10.3). Draining is destructive so tests and request-scoped collectors can snapshot
+ * only the facts produced by the operation they are proving.
+ */
+export function drainSecretRevealAuditFacts(): SecretRevealAuditFact[] {
+  return secretRevealAuditFacts.splice(0);
 }
 
 /** Wraps a request-derived value in a non-coercible DX provenance tag. */
@@ -308,6 +334,15 @@ function validateRevealReason(reason: SecretRevealReason | undefined): void {
   if (typeof text !== 'string' || text.trim() === '') {
     throw new Error('Secret/Untrusted reveal requires a non-empty justification.');
   }
+}
+
+function recordSecretReveal(reason: SecretRevealReason | undefined): void {
+  const text = typeof reason === 'string' ? reason : reason?.justification;
+  secretRevealAuditFacts.push({
+    kind: 'secret-reveal',
+    reason: text?.trim() ?? '<missing>',
+    revealedAt: new Date().toISOString(),
+  });
 }
 
 function nonCoercibleError(kind: Exclude<PoisonKind, 'redacted'>, operation: string): Error {

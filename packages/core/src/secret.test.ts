@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   declareOffWire,
+  drainSecretRevealAuditFacts,
   isRedacted,
   isSecret,
   isUntrusted,
@@ -66,12 +67,17 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
   });
 
   it('reveals the value only on explicit reveal()/revealSecret()', () => {
+    drainSecretRevealAuditFacts();
     const s = secret('hunter2');
     expect(() => s.reveal('')).toThrow(
       'Secret/Untrusted reveal requires a non-empty justification.',
     );
     expect(s.reveal('needed for HMAC comparison')).toBe('hunter2');
     expect(revealSecret(s, { justification: 'needed for HMAC comparison' })).toBe('hunter2');
+    expect(drainSecretRevealAuditFacts()).toMatchObject([
+      { kind: 'secret-reveal', reason: 'needed for HMAC comparison' },
+      { kind: 'secret-reveal', reason: 'needed for HMAC comparison' },
+    ]);
   });
 
   it('derives via map() without un-poisoning', () => {

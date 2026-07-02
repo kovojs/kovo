@@ -1188,6 +1188,42 @@ describe('server mutation lifecycle', () => {
     expect(calls).toEqual([]);
   });
 
+  it('denies mutation writes when registry tables are absent even if touches is declared', async () => {
+    const contact = domain('contact-absent-tables');
+    const calls: unknown[] = [];
+    const absentTables = mutation('contacts/absent-tables', {
+      input: s.object({}),
+      registry: {
+        touches: [contact],
+      },
+      handler(_input, request) {
+        return (request as { db: { execute(statement: unknown): unknown } }).db.execute(
+          stampTrustedSql(
+            { text: 'insert into contacts (id) values ($1)', values: ['c1'] },
+            'absent tables mutation write',
+          ),
+        );
+      },
+    });
+
+    await expect(
+      runMutation(
+        absentTables,
+        {},
+        {},
+        {
+          db: () => ({
+            execute(statement: unknown) {
+              calls.push(statement);
+              return 'ok';
+            },
+          }),
+        },
+      ),
+    ).rejects.toThrow(/KV406/);
+    expect(calls).toEqual([]);
+  });
+
   it('renders mutation query chunks after the configured transaction commits', async () => {
     const state = { committed: 0, pending: 0 };
     const cart = domain('cart');

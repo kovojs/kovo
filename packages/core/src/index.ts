@@ -7,6 +7,7 @@ export type { DiagnosticCode, DiagnosticSeverity } from './diagnostics.js';
 export type { JsonValue } from './json.js';
 export {
   declareOffWire,
+  drainSecretRevealAuditFacts,
   isRedacted,
   isSecret,
   isUntrusted,
@@ -27,6 +28,7 @@ export type {
   RedactedValue,
   Secret,
   SecretRevealReason,
+  SecretRevealAuditFact,
   SecretValue,
   TrustedRevealMethod,
   TrustedRevealOptions,
