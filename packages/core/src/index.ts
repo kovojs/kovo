@@ -9,12 +9,15 @@ export {
   declareOffWire,
   isRedacted,
   isSecret,
+  isUntrusted,
   publishToClient,
   redacted,
   revealRedacted,
   revealSecret,
+  revealUntrusted,
   secret,
   trustedReveal,
+  untrusted,
 } from './secret.js';
 export type {
   DeclareOffWireOptions,
@@ -23,10 +26,13 @@ export type {
   RedactedOptions,
   RedactedValue,
   Secret,
+  SecretRevealReason,
   SecretValue,
   TrustedRevealMethod,
   TrustedRevealOptions,
   TrustedRevealValue,
+  Untrusted,
+  UntrustedValue,
 } from './secret.js';
 export type {
   ComponentMutationFormState,
