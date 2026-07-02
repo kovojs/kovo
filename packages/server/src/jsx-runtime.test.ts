@@ -513,6 +513,17 @@ describe('server jsx runtime', () => {
     ).toBe('<meta httpEquiv="ReFrEsH">');
   });
 
+  it('escapes synthetic future attributes by default', () => {
+    expect(
+      html(
+        jsx('div', {
+          'future-nav-target': '<script>alert(1)</script>',
+          children: 'safe',
+        }),
+      ),
+    ).toBe('<div future-nav-target="&lt;script&gt;alert(1)&lt;/script&gt;">safe</div>');
+  });
+
   it('refuses plain script and style element text while preserving trusted raw HTML escapes', () => {
     expect(html(jsx('script', { children: 'alert(1)' }))).toBe('<script></script>');
     expect(html(jsx('style', { children: 'body{background:url(javascript:alert(1))}' }))).toBe(

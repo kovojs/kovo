@@ -215,10 +215,12 @@ mattering.
       Evidence: focused Vitest batch over `packages/core/src/secret.test.ts`, `wire-json`, `logging`, and
       `task-observability` tests proves non-coercion, audited reveal, unforgeable `Secret`/`Untrusted`, wire refusal, and
       log/status redaction.
-- [ ] **0.2 Paranoid mode harness (A9a, DEC-H).** `KOVO_PARANOID=1` stubs all static security classifiers to
+- [x] **0.2 Paranoid mode harness (A9a, DEC-H).** `KOVO_PARANOID=1` stubs all static security classifiers to
       `proven-safe`; a CI job scaffolds the app + adversarial suites and asserts (i) unsafe→runtime-throw, (ii) legit→green.
-      Progress: `pnpm run check:paranoid-classifiers` verifies the static classifier gate harness runs advisory under
-      `KOVO_PARANOID=1`; app/adversarial runtime-choke suites still need to be wired before this checkbox can close.
+      Evidence: `pnpm run check:paranoid-classifiers` proves the static classifier harness is advisory under
+      `KOVO_PARANOID=1`; `pnpm run check:paranoid-runtime` builds/serves the starter production artifact under
+      `KOVO_PARANOID=1`, verifies a legitimate route is green, and verifies an unsafe CRLF response-header attempt fails
+      closed at the runtime choke. `.github/workflows/ci.yml` runs both checks via `vp exec pnpm ...`.
 - [x] **0.3 Choke inventory + sole-door reachability gate (DEC-J/DEC-E).** The enumerated egress/exec sinks, each
       mapped to a choke, with a reachability test that nothing bypasses. This gate must be GREEN before any static gate is
       downgraded in later phases (A7).
@@ -241,7 +243,9 @@ mattering.
       in-scope write succeeds.
       Progress: focused managed-write tests prove the current runtime choke rejects undeclared `userx`,
       `otherschema.contacts`, DDL/pragma-style writes, and unproven SQL-function side effects before driver execution.
-      SQLite authorizer and Postgres role/stat-delta enforcement remain open.
+      `vp exec vitest --run packages/server/src/managed-db.test.ts` also proves framework-owned managed write handles
+      thread declared-table policy to engine-capable adapters before parser-blind builders run. SQLite authorizer and
+      Postgres role/stat-delta enforcement remain open.
 - [ ] **1.3 Static SQL classifier → advisory (DEC-F, gated by A7).** Only after 1.1/1.2 pass paranoid mode. A
       runtime-twin deletion test proves the round-6/7 SQL corpus is enforced with the static classifier stubbed.
 
@@ -265,10 +269,13 @@ mattering.
       Progress: focused request tests prove Kovo-owned parsed JSON/FormData leaves, route params/search, and query search
       inputs are tagged with `Untrusted` and schema/CSRF validation reveals with framework-owned reasons. Native
       `Request.headers`/cookie reads remain plain platform APIs.
-- [ ] **3.2 Contextual default-deny renderer over the final attribute set (DEC-D).** Escape-by-position; refuse at
+- [x] **3.2 Contextual default-deny renderer over the final attribute set (DEC-D).** Escape-by-position; refuse at
       non-inert positions unless a proven trusted brand; spread-aware; unknown→escape, executable→refuse. Acceptance
       (paranoid mode): `meta http-equiv=refresh content`, spread-delivered sinks, `<style>`, event handlers,
       `iframe srcdoc`, and a synthetic new attribute all fail closed or escape with static KV426 stubbed.
+      Evidence: `KOVO_PARANOID=1 vp exec vitest --run packages/server/src/jsx-runtime.test.ts` proves spread-delivered
+      event/srcdoc/style/URL sinks, final `meta http-equiv=refresh content`, script/style element text, and a synthetic
+      future attribute fail closed or escape at the runtime renderer; `pnpm run check:sink-policy` remains green.
 - [ ] **3.3 Static KV426 → advisory (DEC-F, gated by A7).**
 
 ### Phase 4 — Unrepresentability + honest static + total proofs
@@ -335,8 +342,8 @@ point on an endless enumeration.
 
 ## Latest verification
 
-- Grounded in first-hand round-7 evidence: `bugz-28` B1 (raw-SQL secret projection served; root `static.ts:3037`),
-  B2 (`sink-policy.ts:269-277` per-name denylist + `trusted-html-provenance.ts:84-88` spread-blind), B3
-  (`sql-write-allowlist.ts:240-252` ignores `for` lock); `papercuts-26` P1 (`package.sqlite.json` omits the parser;
-  `createRequire(...).resolve('pgsql-ast-parser')` → MODULE_NOT_FOUND, self-verified). No framework source or
-  `SPEC.md` changed by this document.
+- `vp exec vitest --run packages/server/src/managed-db.test.ts`
+- `KOVO_PARANOID=1 vp exec vitest --run packages/server/src/jsx-runtime.test.ts`
+- `pnpm run check:paranoid-classifiers && pnpm run check:paranoid-runtime`
+- `pnpm run check:api-surface && pnpm run check:single-choke && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census`
+- `pnpm run check:sink-policy && pnpm run check:vp && git diff --check`
