@@ -201,7 +201,13 @@ function lintKnownSecurityHelperFunctions(sourceFile) {
   return dedupeFindings(findings);
 }
 
-function collectRecognitionSkipFindings(sourceFile, statement, classifier, recognizerResults, findings) {
+function collectRecognitionSkipFindings(
+  sourceFile,
+  statement,
+  classifier,
+  recognizerResults,
+  findings,
+) {
   const skip = recognitionSkipDescription(statement, recognizerResults);
   if (!skip) return;
   findings.push(
@@ -255,7 +261,8 @@ function expressionLooksLikeRecognizer(expression) {
   if (ts.isCallExpression(expression)) {
     return expressionNameLooksLikeRecognizer(expression.expression);
   }
-  if (ts.isAwaitExpression(expression)) return expressionLooksLikeRecognizer(unwrapExpression(expression.expression));
+  if (ts.isAwaitExpression(expression))
+    return expressionLooksLikeRecognizer(unwrapExpression(expression.expression));
   return false;
 }
 
@@ -283,7 +290,10 @@ function nullishOrEmptySkipName(condition, recognizerResults) {
     }
     return nullishOrEmptyComparisonName(unwrapped, recognizerResults);
   }
-  if (ts.isPrefixUnaryExpression(unwrapped) && unwrapped.operator === ts.SyntaxKind.ExclamationToken) {
+  if (
+    ts.isPrefixUnaryExpression(unwrapped) &&
+    unwrapped.operator === ts.SyntaxKind.ExclamationToken
+  ) {
     const operand = unwrapExpression(unwrapped.operand);
     if (ts.isIdentifier(operand) && recognizerResults.has(operand.text)) return operand.text;
     if (ts.isCallExpression(operand) && expressionNameLooksLikeRecognizer(operand.expression)) {
@@ -500,10 +510,7 @@ function isSecurityHelperFunctionName(name) {
 }
 
 function isEqualityOperator(kind) {
-  return (
-    kind === ts.SyntaxKind.EqualsEqualsToken ||
-    kind === ts.SyntaxKind.EqualsEqualsEqualsToken
-  );
+  return kind === ts.SyntaxKind.EqualsEqualsToken || kind === ts.SyntaxKind.EqualsEqualsEqualsToken;
 }
 
 function isInequalityOperator(kind) {

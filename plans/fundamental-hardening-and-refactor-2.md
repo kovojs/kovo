@@ -1,6 +1,6 @@
 # Fundamental Hardening & Refactoring 2 — invert fail-open to fail-closed, structurally
 
-Created 2026-07-01. **Self-standing:** every item carries its own root-cause (file:line), the *inversion* it makes,
+Created 2026-07-01. **Self-standing:** every item carries its own root-cause (file:line), the _inversion_ it makes,
 the in-plan decision, single-commit scope, and a generative acceptance test — no other file needs reading. Source
 of truth for behavior is `SPEC.md` (§10.2/§10.3 audited escape, §11.1 type-identity, §11.2 `observed ⊆ declared`).
 Fixes the round-6 findings (`plans/claude-bugz-27.md` B1–B4, `plans/claude-papercuts-25.md` P1–P2) that survived
@@ -9,31 +9,31 @@ Fixes the round-6 findings (`plans/claude-bugz-27.md` B1–B4, `plans/claude-pap
 ## Why this plan exists (the meta-lesson, in one paragraph)
 
 The previous plan marked three "fail closed" items `[x]` — **J.2** (read-only SQL floor), **K.2** (KV426 recognizer),
-**L.1** (DEC7 off-wire prover) — but each was implemented as a *denylist extension* ("recognize one more shape"),
+**L.1** (DEC7 off-wire prover) — but each was implemented as a _denylist extension_ ("recognize one more shape"),
 not the promised inversion. Round 6 walked straight through them one shape deeper: a `SELECT setval()` write
 (bugz-27 B1), four un-resolved KV426 callee shapes (B2), an array-binding secret launder (B3). Two structural
 reasons let this pass CI green: (1) the fail-closed-classifier lint (`scripts/check-fail-closed-classifiers.mjs`,
 old DEC2) only flagged `switch default:` / `?? permissive`, **never the recognition-skip pattern**
 `if (recognized === null) return /*skip=allow*/` — which is the actual shape of all three fail-opens; and (2) the
-gates were proved by *enumerated* fixture lists, so patching the reported shape turned them green. This plan makes
+gates were proved by _enumerated_ fixture lists, so patching the reported shape turned them green. This plan makes
 fail-closed **structural and self-proving**: classifiers become 3-valued with an unskippable `UNPROVEN` verdict, the
-lint is extended to catch recognition-skip (and will *retroactively flag the three offending sites* — that is the
+lint is extended to catch recognition-skip (and will _retroactively flag the three offending sites_ — that is the
 forcing function), and every recognition gate is proved by a **generative** shape fuzzer instead of a fixed list.
 
 ## Meta-invariants (nothing is "done" until all hold)
 
 - **N1 — Three-valued classifiers.** Every security classifier returns `{PROVEN_SAFE, PROVEN_UNSAFE, UNPROVEN}` (a
-  shared discriminated union), where `UNPROVEN` is a *distinct* value from `PROVEN_SAFE`. "Empty write-set",
+  shared discriminated union), where `UNPROVEN` is a _distinct_ value from `PROVEN_SAFE`. "Empty write-set",
   "sink === null", "resolver returned undefined", "could not analyze" all map to `UNPROVEN`, never to `PROVEN_SAFE`.
 - **N2 — UNPROVEN is fail-closed at the sink and unskippable.** At every enforcement site, `UNPROVEN` routes to the
   closed action (throw / KV diagnostic), never to the allow/skip action. A lint proves no enforcement site maps
   `UNPROVEN → allow`.
 - **N3 — The anti-fail-open lint catches recognition-skip.** The classifier lint flags, in any branded classifier:
   `switch default:` returning non-closed, `?? / || <permissive>`, **and** `if (<recognition> == null/undefined/0 or
-  .length === 0) return <allow/skip/empty>` where `<recognition>` is a recognizer/resolver result. Landing this lint
+.length === 0) return <allow/skip/empty>` where `<recognition>` is a recognizer/resolver result. Landing this lint
   is Phase 0 and MUST light up the current J.2/K.2/L.1 sites.
 - **N4 — Gates are proved generatively, not by a fixed list.** Every recognition/off-wire/read-only gate has a
-  metamorphic **generator** that emits *novel* shapes (random callee wrappings, random binding patterns, random SQL
+  metamorphic **generator** that emits _novel_ shapes (random callee wrappings, random binding patterns, random SQL
   function calls) and asserts the gate fails closed on all of them. A hardcoded shape list is insufficient evidence.
 - **N5 — Runtime twin actually enforces (§11.2).** The SQL read-only floor's twin is execute-and-diff (or a proven-
   pure-function allowlist); the raw-HTML/URL sink's twin is the SSR renderer refusing an unproven brand; the wire's
@@ -46,7 +46,7 @@ forcing function), and every recognition gate is proved by a **generative** shap
 ## Decisions register (made here; no deferral)
 
 - **DEC1 — Shared verdict type.** Add `packages/core/src/internal/classifier-verdict.ts`: `type ClassifierVerdict<T>
-  = {kind:'proven-safe'} | {kind:'proven-unsafe', detail:T} | {kind:'unproven', reason:string}`; a helper
+= {kind:'proven-safe'} | {kind:'proven-unsafe', detail:T} | {kind:'unproven', reason:string}`; a helper
   `enforceOrThrow(verdict, closedError)` that throws on `proven-unsafe` **and** `unproven`. Security classifiers
   return this; enforcement sites call `enforceOrThrow`. This makes N1/N2 structural.
 - **DEC2 — SQL read-only is an allowlist of proven-read-only, not a denylist of writes.** `writeTablesForStatement`
@@ -93,15 +93,17 @@ forcing function), and every recognition gate is proved by a **generative** shap
 
 ## Phase 0 — The structural substrate (land FIRST; it forces the rest)
 
-- [ ] **0.1 — Shared 3-valued verdict + fail-closed enforcer (DEC1, N1/N2).**
+- [x] **0.1 — Shared 3-valued verdict + fail-closed enforcer (DEC1, N1/N2).**
+  - Evidence: `pnpm exec vitest --run scripts/check-classifier-verdict-routing.test.mjs scripts/check-fail-closed-classifiers.test.mjs packages/core/src/internal/classifier-verdict.test.ts --reporter=dot` passed; `packages/core/src/internal/classifier-verdict.ts` defines `ClassifierVerdict` and `enforceOrThrow`.
   - Add `packages/core/src/internal/classifier-verdict.ts` with `ClassifierVerdict<T>` and
     `enforceOrThrow(verdict, () => Error)` that throws on BOTH `proven-unsafe` and `unproven`. Unit-test that
     `unproven` throws.
   - Acceptance: importing modules can express "I could not prove safe" as a first-class value distinct from safe.
-- [ ] **0.2 — Extend the fail-closed-classifier lint to catch recognition-skip (N3); it MUST flag J.2/K.2/L.1.**
+- [x] **0.2 — Extend the fail-closed-classifier lint to catch recognition-skip (N3); it MUST flag J.2/K.2/L.1.**
+  - Evidence: pre-fix `pnpm run check:fail-closed-classifiers` reported the known SQL, trusted-sink, and Drizzle recognition-skip sites; post-integration `pnpm run check:fail-closed-classifiers` passed.
   - `scripts/check-fail-closed-classifiers.mjs` currently flags only `switch default:` / `?? permissive`. Add a rule:
     inside a `securityClassifier`/enforcement-branded function, flag `if (<x> === null | undefined | 0 | <x>.length === 0)
-    return <allow/skip/empty/undefined>` where `<x>` is a recognizer/resolver call result — i.e. "unrecognized ⇒
+return <allow/skip/empty/undefined>` where `<x>` is a recognizer/resolver call result — i.e. "unrecognized ⇒
     allow". Add the same for an early `return null`/`return;` reached when a resolver returned nothing.
   - Acceptance: running the extended lint on the CURRENT tree flags exactly the three known sites —
     `packages/server/src/sql-safe-handle.ts:552/568/606` (empty write-set → return),
@@ -109,7 +111,8 @@ forcing function), and every recognition gate is proved by a **generative** shap
     `packages/drizzle/src/static/query-shapes.ts` off-wire default — proving the lint would have caught the last
     plan's false-completions. Commit the lint RED against these three (they are fixed in Phase 1). Add a committed
     canary classifier with a recognition-skip that the lint flags (N3 negative test).
-- [ ] **0.3 — Enforcement-site UNPROVEN-routing lint (N2).**
+- [x] **0.3 — Enforcement-site UNPROVEN-routing lint (N2).**
+  - Evidence: `pnpm run check:classifier-verdict-routing` passed; `scripts/check-classifier-verdict-routing.test.mjs` rejects a `proven-unsafe`-only fixture.
   - Add a check that every call site consuming a `ClassifierVerdict` routes `unproven` through `enforceOrThrow` (or an
     explicit closed action), never to the allow branch. Fail on any `if (verdict.kind === 'proven-unsafe')` that lacks
     an `unproven` companion closing branch.
@@ -117,7 +120,8 @@ forcing function), and every recognition gate is proved by a **generative** shap
 
 ## Phase 1 — The three inversions (each: invert + generative fuzzer + old lint goes green)
 
-- [ ] **B1 — Invert the SQL read-only floor + declared-table allowlist to fail closed on non-proven-read (DEC2, N5).**
+- [x] **B1 — Invert the SQL read-only floor + declared-table allowlist to fail closed on non-proven-read (DEC2, N5).**
+  - Evidence: `pnpm exec vitest run packages/server/src/sql-write-allowlist.test.ts packages/server/src/sql-write-allowlist.oracle.test.ts packages/server/src/managed-db.test.ts --reporter=dot` passed; `pnpm run check:fail-closed-classifiers` no longer flags `sql-safe-handle.ts`.
   - Root: `packages/server/src/sql-write-allowlist.ts:141-146` returns `[]` for `select/show/union/values`;
     `packages/server/src/sql-safe-handle.ts:552,568,606` treat `writeTables.length === 0` as allowed. So
     `readonlyDb.execute(sql`select setval('seq',N)`)` writes on a green build; a `tables:['contacts']` handle admits
@@ -135,6 +139,8 @@ forcing function), and every recognition gate is proved by a **generative** shap
     volatile wrappers) is 100% closed on the unknown class, green on the pure class; the 0.2 lint no longer flags
     `sql-safe-handle.ts`.
 - [ ] **B2 — Move the raw-HTML/URL soundness choke to the sink: unproven brand-provenance ⇒ KV426 (DEC3, N2/N5).**
+  - Partial evidence: `pnpm exec vitest run packages/compiler/src/trusted-html-provenance.test.ts --reporter=dot` passed, including generated hidden-callee coverage, and `pnpm run check:fail-closed-classifiers` no longer flags `trusted-html-provenance.ts`.
+  - Remaining gap: the integrated fix improves resolver coverage and makes the old skip explicit, but still needs a sink-provenance verdict that fails closed independent of resolver success for a typed trusted value reaching a raw sink.
   - Root: `packages/compiler/src/validate/trusted-html-provenance.ts:130-144` recognizes a trust sink only via the
     resolver / element-access / same-file-wrapper; an unresolved callee returns `null` and the call is SKIPPED at
     `:60-61` (fail-open). Resolver gaps: `packages/core/src/internal/framework-identity.ts:517,534-535,918-919` have
@@ -152,7 +158,8 @@ forcing function), and every recognition gate is proved by a **generative** shap
   - Acceptance: all five round-6 shapes fire KV426 in a real `kovo build`; direct `trustedHtml(literal)` and a
     resolver-traced helper stay green; the generative callee-shape fuzzer (≥200 novel wrappings of a brand over tainted
     args) is 100% closed; the 0.2 lint no longer flags `trusted-html-provenance.ts`.
-- [ ] **B3 — Invert the DEC7 off-wire prover: prove off-wire, default KV435 on any un-analyzable binding (DEC4, N2).**
+- [x] **B3 — Invert the DEC7 off-wire prover: prove off-wire, default KV435 on any un-analyzable binding (DEC4, N2).**
+  - Evidence: `pnpm exec vitest run packages/drizzle/src/index.query-offwire-prover.test.ts packages/drizzle/src/index.query-shapes.test.ts packages/drizzle/src/static-analysis-context.test.ts --reporter=dot` passed; `pnpm run check:fail-closed-classifiers` no longer flags the off-wire helper.
   - Root: `packages/drizzle/src/static/query-shapes.ts:799` `wireElementAliasRoots()` registers a wire alias only when
     `Node.isIdentifier(name)`; an array/object binding pattern (`const [firstItem]=items`) is skipped, so
     `taintedValueReachesWire()` (`:487`) misses a secret write into it. Round-6 laundered `contacts.ssn` to `/_q`.
@@ -166,14 +173,16 @@ forcing function), and every recognition gate is proved by a **generative** shap
 
 ## Phase 2 — Mechanical fixes (single commit each; decisions already made)
 
-- [ ] **B4 — Schema-qualify the declared-table comparison (DEC5).**
+- [x] **B4 — Schema-qualify the declared-table comparison (DEC5).**
+  - Evidence: `pnpm exec vitest run packages/server/src/sql-write-allowlist.test.ts packages/server/src/managed-db.test.ts -t "preserves schema-qualified table names for write enforcement|write mode requires schema-qualified matches for declared raw-SQL tables on pglite handles" --reporter=dot` passed.
   - Root: `packages/server/src/sql-write-allowlist.ts:333` `tableName()` returns `identifier.name` (drops
     `identifier.schema`); compared bare at `packages/server/src/sql-safe-handle.ts:575-577`. `tables:['contacts']`
     admits `otherschema.contacts`.
   - Fix: compare `schema.name` (unqualified side → search-path/`public`).
   - Acceptance: a mutation `tables:['contacts']` writing `otherschema.contacts` throws KV406; `public.contacts` still
     admitted; test on the pglite dialect.
-- [ ] **P1/O.2 — KV310 fragment-dead-transform fires in the real build path (DEC6); re-open O.2.**
+- [x] **P1/O.2 — KV310 fragment-dead-transform fires in the real build path (DEC6); re-open O.2.**
+  - Evidence: `pnpm exec vitest run packages/cli/src/index.kovo-check.test.ts -t "does not count hand-written optimistic transforms whose only consumers are fragment-target regions" --reporter=dot` and `pnpm exec vitest run packages/cli/src/index.kovo-build.test.ts -t "treats fragment-only component consumers as dead hand-written optimistic transforms in build preflight|counts source-derived component query consumers for hand-written optimistic coverage" --reporter=dot` passed.
   - Root: `packages/cli/src/commands/build-export.ts` `staticBuildCheckGraph` builds the check graph WITHOUT
     `updateCoverage` (persisted `graph.json` has `updateCoverage:null`); `packages/cli/src/graph-explain-format.ts`
     `optimisticClientQueryConsumers` short-circuits `if (updateCoverage.length === 0) return clientQueries;` and never
@@ -189,12 +198,16 @@ forcing function), and every recognition gate is proved by a **generative** shap
 ## Phase 3 — Completeness meta-fixes (make the proofs sound, not enumerated)
 
 - [ ] **P2.1 — Reachability-derived brand denominator (DEC7, N6).**
+  - Partial evidence: `pnpm exec vitest --run scripts/check-security-brands.test.mjs scripts/fundamental-fixes-census-gate.test.mjs scripts/security-gate-mutations.test.mjs --reporter=dot`, `pnpm run check:security-brands`, and `pnpm run check:fundamental-fixes-census` passed with reachable canaries.
+  - Remaining gap: default roots still start from the declared security-decision list before reachability expansion; derive directly from raw enforcement primitives before closing this item.
   - Root: `scripts/check-security-brands.mjs` derives "must be branded" from name/import/file patterns, so a sink
     authored outside the pattern is invisible.
   - Fix: derive the required-branded set from call-graph reachability from the enforcement sinks / the driver-method
     choke (`enforceManagedSql`) / `emitToWire`. Commit a canary: an unbranded function reachable from an enforcement
     sink MUST fail the gate.
 - [ ] **P2.2 — Reachability-derived census denominator (DEC7, N6).**
+  - Partial evidence: `node scripts/fundamental-fixes-census-gate.mjs --require-complete` passed after enrolling newly discovered SQL classifier decisions.
+  - Remaining gap: same raw-root derivation gap as P2.1; leave open until the denominator is rooted only in enforcement sinks / driver-method choke / `emitToWire`.
   - Root: `scripts/fundamental-fixes-census-gate.mjs` `--require-complete` derives write-handle/wire-sink denominators
     from enumerated construction-call names.
   - Fix: derive from reachability (every value that reaches the driver-method choke = a write-capable handle; every
@@ -218,16 +231,14 @@ forcing function), and every recognition gate is proved by a **generative** shap
 - Server (B1, B4, P3): `pnpm --filter @kovojs/server test`; `sql-write-allowlist.oracle.test.ts` with the generated
   volatile-function corpus; `check:fail-closed-classifiers` (0.2) green on `sql-safe-handle.ts`.
 - Compiler (B2): focused `@kovojs/compiler` test; the callee-shape fuzzer; render-equivalence/fixpoint; `check:fail-
-  closed-classifiers` green on `trusted-html-provenance.ts`.
+closed-classifiers` green on `trusted-html-provenance.ts`.
 - Drizzle (B3): `pnpm --filter @kovojs/drizzle test`; the binding-shape fuzzer; `pnpm run test:conformance`.
 - CLI (P1/O.2, P2): `@kovojs/cli` test; default-scaffold build emits KV310 fragment warning; `check:security-brands`
-  + census gate with reachability canaries.
+  and census gate with reachability canaries.
 - Program: `check:fail-closed-classifiers` (extended), the enforcement-site UNPROVEN-routing lint, the DEC8 generators
   wired into `check`, the round-7 dogfood record.
 
 ## Latest verification
 
-- Round-6 findings reproduced first-hand before writing this plan: B1 `select setval` persisted through
-  `readonlyDb` on real PGlite; B2 five shapes served reflected `<script>`/`javascript:`; B3 array-binding launder
-  green; the read-only floor confirmed still `writeTables.length === 0 → return` (`sql-safe-handle.ts:552,568,606`).
-  No framework source or `SPEC.md` changed by this document.
+- 2026-07-01 integrated verification: `pnpm run check:fail-closed-classifiers && pnpm run check:classifier-verdict-routing && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census` passed.
+- 2026-07-01 focused package verification: server SQL suite (`sql-write-allowlist.test.ts`, `sql-write-allowlist.oracle.test.ts`, `managed-db.test.ts`) passed 129 tests; compiler/Drizzle focused suite (`trusted-html-provenance.test.ts`, `index.query-offwire-prover.test.ts`, `index.query-shapes.test.ts`, `static-analysis-context.test.ts`) passed 147 tests; focused CLI KV310 build/check tests passed.

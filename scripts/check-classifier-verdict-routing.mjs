@@ -108,7 +108,8 @@ function elseBranchClosesUnproven(statement, unsafeVariables) {
 
 function statementCloses(statement) {
   if (ts.isThrowStatement(statement)) return true;
-  if (ts.isBlock(statement)) return statement.statements.some((child) => ts.isThrowStatement(child));
+  if (ts.isBlock(statement))
+    return statement.statements.some((child) => ts.isThrowStatement(child));
   return false;
 }
 
@@ -124,7 +125,8 @@ function kindComparison(node, expected) {
 function kindComparisonSide(left, right, expected) {
   const kindAccess = unwrapExpression(left);
   const literal = unwrapExpression(right);
-  if (!ts.isPropertyAccessExpression(kindAccess) || kindAccess.name.text !== 'kind') return undefined;
+  if (!ts.isPropertyAccessExpression(kindAccess) || kindAccess.name.text !== 'kind')
+    return undefined;
   if (!ts.isStringLiteralLike(literal) || literal.text !== expected) return undefined;
   const expression = unwrapExpression(kindAccess.expression);
   return ts.isIdentifier(expression) ? expression.text : undefined;
@@ -145,10 +147,7 @@ function unwrapExpression(expression) {
 }
 
 function isEqualityOperator(kind) {
-  return (
-    kind === ts.SyntaxKind.EqualsEqualsToken ||
-    kind === ts.SyntaxKind.EqualsEqualsEqualsToken
-  );
+  return kind === ts.SyntaxKind.EqualsEqualsToken || kind === ts.SyntaxKind.EqualsEqualsEqualsToken;
 }
 
 function lineOf(sourceFile, node) {
