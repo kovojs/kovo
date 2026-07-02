@@ -456,7 +456,7 @@ mattering.
 
 ### Phase 6 — Narrow waist, honest claims, external validation (complementary; land alongside 1–3)
 
-- [ ] **6.1 Narrow the security surface (DEC-L).** Disallow raw SQL in query loaders on the common path (typed builder
+- [x] **6.1 Narrow the security surface (DEC-L).** Disallow raw SQL in query loaders on the common path (typed builder
       only; `sql.unsafe` as an explicit escape through the DEC-A/DEC-C chokes); require statically-resolvable trust-sink
       callees; extend `check:sound-subset` to the whole security surface. Acceptance: the round-7 raw-SQL leak shape is
       a build error on the common path and, via the escape hatch, still refused at the runtime choke.
@@ -470,6 +470,9 @@ mattering.
   - [x] **Whole starter security surface enrollment.** Starter `check:sound-subset` fails if any enrolled security
         surface file disappears from the generated project scan.
         Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts --reporter=dot`.
+  - [x] **Explicit raw-SQL escape hatch remains runtime-confined.** A query-loader `trustedSql(sql.raw(...))` read path
+        still boxes secret rows and is refused at query-wire egress under paranoid mode.
+        Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'boxes schema-declared secret reads' --reporter=dot`.
 - [x] **6.2 Publish the guarantee statement + non-goals (DEC-M).** A `SECURITY.md`/SPEC section states the exact
       choke-backed invariants, threat model, and non-goals; a test proves every stated invariant names a TCB choke and a
       paranoid-mode proof, and that no claim lacks a backing choke.
