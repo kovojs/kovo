@@ -200,7 +200,7 @@ describe('create-kovo starter (build integration: production security artifacts)
       });
       const revealBody = await revealResponse.text();
 
-      expect(revealResponse.status, `${revealBody}\n${output()}`).toBe(200);
+      expect(revealResponse.status, revealBody).toBe(200);
       expect(revealBody).toContain('<kovo-query name="runtime-secret-reveal-egress"');
       expect(revealBody).toContain('runtime-secret-value');
       expect(revealBody).toContain('runtime-secret-value:computed');
