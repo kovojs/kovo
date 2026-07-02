@@ -115,6 +115,16 @@ export function tagUntrustedRequestValue(value: unknown): unknown {
 export function revealUntrustedRequestValue(value: unknown, reason: string): unknown {
   if (isUntrusted(value))
     return revealUntrustedRequestValue(revealUntrusted(value, reason), reason);
+  if (value instanceof FormData) {
+    const revealed = new FormData();
+    for (const [key, entry] of value.entries()) {
+      const entryValue = revealUntrustedRequestValue(entry, reason);
+      if (typeof entryValue === 'string' || entryValue instanceof Blob) {
+        revealed.append(key, entryValue);
+      }
+    }
+    return revealed;
+  }
   if (Array.isArray(value)) return value.map((entry) => revealUntrustedRequestValue(entry, reason));
   if (isPlainRecord(value)) {
     const revealed: Record<string, unknown> = {};
