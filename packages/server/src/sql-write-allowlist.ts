@@ -1,4 +1,5 @@
 import { createRequire } from 'node:module';
+import type { ClassifierVerdict } from '@kovojs/core/internal/classifier-verdict';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
 import type {
   DeleteStatement,
@@ -28,11 +29,7 @@ export interface ParseSqlWriteTablesOptions {
 export const UNTABLED_SQL_WRITE: unique symbol = Symbol('kovo:untabled-sql-write');
 export type ParsedSqlWriteTarget = string | typeof UNTABLED_SQL_WRITE;
 export type SqlWriteTargets = readonly ParsedSqlWriteTarget[];
-
-export type SqlClassifierVerdict<T> =
-  | { kind: 'proven-safe' }
-  | { kind: 'proven-unsafe'; detail: T }
-  | { kind: 'unproven'; reason: string };
+export type SqlClassifierVerdict<T> = ClassifierVerdict<T>;
 
 /** Parse a SQL statement into the physical tables it mutates (SPEC §10.3/§11.2). */
 export const parseSqlWriteTables = securityClassifier(
@@ -40,8 +37,8 @@ export const parseSqlWriteTables = securityClassifier(
   function (statement: string, options: ParseSqlWriteTablesOptions = {}): ParsedSqlWriteTarget[] {
     const verdict = classifyStatement(statement, options);
     if (verdict.kind === 'proven-safe') return [];
-    if (verdict.kind === 'proven-unsafe') return [...verdict.detail];
-    return [UNTABLED_SQL_WRITE];
+    if (verdict.kind === 'unproven') return [UNTABLED_SQL_WRITE];
+    return [...verdict.detail];
   },
 );
 
