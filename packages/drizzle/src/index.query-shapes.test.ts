@@ -2471,6 +2471,110 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     expect(revealFactsFromQueryFacts(facts)).toEqual([]);
   });
 
+  it('does not treat shadowed reveal aliases as audited reveal calls', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import { trustedReveal as realReveal } from "@kovojs/core";',
+            '',
+            'function reveal<T>(value: T): T { return value; }',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userDetail = query("user", {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({',
+            '      fakeDigest: reveal(users.passwordHash),',
+            '      realDigest: realReveal(users.passwordHash, { justification: "real reveal", source: "users.passwordHash" }),',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(diagnosticsForQueryFacts(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV435',
+          message: expect.stringContaining(
+            'Query projection user.fakeDigest reads a secret-classified',
+          ),
+        }),
+        expect.objectContaining({
+          code: 'KV406',
+          message: expect.stringContaining(
+            'Query projection user.fakeDigest could not be resolved',
+          ),
+        }),
+      ]),
+    );
+    expect(facts[0]?.shape).toMatchObject({
+      realDigest: { kind: 'revealed' },
+    });
+    expect(revealFactsFromQueryFacts(facts)).toEqual([
+      expect.objectContaining({
+        justification: 'real reveal',
+        path: 'realDigest',
+      }),
+    ]);
+  });
+
+  it('does not let bare casts reveal secret query projections', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'user.queries.ts',
+          source: [
+            'import type { Secret } from "@kovojs/core";',
+            '',
+            'export const users = pgTable("users", {',
+            '  id: text("id").primaryKey(),',
+            '  passwordHash: text("password_hash").notNull(),',
+            '}, kovo({ domain: "user", key: "id", secret: ["passwordHash"] }));',
+            '',
+            'export const userDetail = query("user", {',
+            '  load(_input, db: PgAsyncDatabase<any, any>) {',
+            '    return db.select({',
+            '      castString: users.passwordHash as unknown as string,',
+            '      castSecret: users.passwordHash as unknown as Secret<string>,',
+            '    }).from(users);',
+            '  },',
+            '});',
+          ].join('\n'),
+        },
+      ],
+    });
+
+    expect(revealFactsFromQueryFacts(facts)).toEqual([]);
+    expect(facts[0]?.shape).toMatchObject({
+      castSecret: { kind: 'secret', shape: 'string' },
+      castString: { kind: 'secret', shape: 'string' },
+    });
+    expect(diagnosticsForQueryFacts(facts)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV435',
+          message: expect.stringContaining(
+            'Query projection user.castString reads a secret-classified',
+          ),
+        }),
+        expect.objectContaining({
+          code: 'KV435',
+          message: expect.stringContaining(
+            'Query projection user.castSecret reads a secret-classified',
+          ),
+        }),
+      ]),
+    );
+  });
+
   it('requires a non-empty static trustedReveal justification before emitting reveal facts', () => {
     const facts = extractQueryFactsFromProject({
       files: [
