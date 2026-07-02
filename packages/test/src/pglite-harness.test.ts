@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { mutation, s } from '@kovojs/server';
+import { managedDb } from '@kovojs/server/internal/execution';
 
 import { createKovoTestHarness } from './harness.js';
 import { createPgliteTestDb, type PgliteTestDb } from './pglite.js';
@@ -8,6 +10,72 @@ import { expectedDiagnostic } from './test-fixtures.js';
 import { assertOwnerWritesScoped, createDbVerifier } from './verifier.js';
 
 describe('@kovojs/test PGlite harness integration', () => {
+  it('backs managed readers with read-only PGlite transactions', async () => {
+    const db = await createPgliteTestDb();
+
+    try {
+      await db.exec('create table products (id text primary key, qty integer not null)');
+      await db.exec('create sequence products_id_seq');
+      await db.write('products', { id: 'p1', qty: 1 });
+      await db.write('products', { id: 'p2', qty: 2 });
+
+      const reader = managedDb(db, 'read') as unknown as Pick<
+        PgliteTestDb,
+        'exec' | 'query' | 'sql'
+      >;
+
+      await expect(
+        reader.query<{ ids: string }>(
+          stampTrustedSql(
+            { text: "select string_agg(id, ',' order by id) as ids from products" },
+            'static Postgres string_agg read',
+          ),
+        ),
+      ).resolves.toEqual([{ ids: 'p1,p2' }]);
+      await expect(
+        reader.sql<{ day: Date | string }>(
+          stampTrustedSql(
+            { text: "select date_trunc('day', timestamp '2020-01-02 03:04:05') as day" },
+            'static Postgres date_trunc read',
+          ),
+        ),
+      ).resolves.toHaveLength(1);
+
+      for (const statement of [
+        { text: 'insert into products (id, qty) values ($1, $2)', values: ['p3', 3] },
+        { text: 'update products set qty = $1 where id = $2', values: [4, 'p1'] },
+        { text: 'delete from products where id = $1', values: ['p1'] },
+      ]) {
+        await expect(reader.query(statement)).rejects.toThrow(/KV433.*engine/s);
+      }
+      await expect(
+        reader.exec(stampTrustedSql({ text: 'drop table products' }, 'read-surface DDL attempt')),
+      ).rejects.toThrow(/KV433.*engine/s);
+      await expect(
+        reader.query(stampTrustedSql({ text: 'select * from products for update' }, 'read lock')),
+      ).rejects.toThrow(/KV433.*engine/s);
+      await expect(
+        reader.query(
+          stampTrustedSql({ text: "select nextval('products_id_seq')" }, 'sequence write'),
+        ),
+      ).rejects.toThrow(/KV433.*engine/s);
+      await expect(
+        reader.query(
+          stampTrustedSql({ text: "select setval('products_id_seq', 10)" }, 'sequence write'),
+        ),
+      ).rejects.toThrow(/KV433.*engine/s);
+
+      await db.write('products', { id: 'p3', qty: 3 });
+      await expect(db.read<{ id: string }>('products')).resolves.toMatchObject([
+        { id: 'p1' },
+        { id: 'p2' },
+        { id: 'p3' },
+      ]);
+    } finally {
+      await db.close();
+    }
+  });
+
   it('runs mutation suites against an in-memory pglite database', async () => {
     const db = await createPgliteTestDb();
 

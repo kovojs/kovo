@@ -1,12 +1,66 @@
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import { mutation, s } from '@kovojs/server';
+import { managedDb } from '@kovojs/server/internal/execution';
 
 import { createKovoTestHarness } from './harness.js';
 import { createSqliteTestDb, type SqliteTestDb } from './sqlite.js';
 import { expectedDiagnostic } from './test-fixtures.js';
 
 describe('@kovojs/test SQLite harness integration', () => {
+  it('backs managed readers with a dedicated readonly/query_only SQLite handle', () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-sqlite-readonly-'));
+    const db = createSqliteTestDb({ filename: join(root, 'app.sqlite') });
+
+    try {
+      db.exec('create table products (id text primary key, qty integer not null)');
+      db.write('products', { id: 'p1', qty: 1 });
+      db.write('products', { id: 'p2', qty: 2 });
+
+      const reader = managedDb(db, 'read', {
+        sqlWritePolicy: { dialect: 'sqlite' },
+      }) as unknown as Pick<SqliteTestDb, 'exec' | 'query' | 'sql'>;
+
+      expect(
+        reader.query<{ ids: string }>({
+          sql: 'select group_concat(id, ?) as ids from products',
+          values: [','],
+        }),
+      ).toEqual([{ ids: 'p1,p2' }]);
+      expect(
+        reader.sql<{ today: string }>(
+          stampTrustedSql({ sql: "select date('2020-01-02') as today" }, 'static SQLite date read'),
+        ),
+      ).toEqual([{ today: '2020-01-02' }]);
+
+      for (const statement of [
+        { sql: 'insert into products (id, qty) values (?, ?)', values: ['p3', 3] },
+        { sql: 'update products set qty = ? where id = ?', values: [4, 'p1'] },
+        { sql: 'delete from products where id = ?', values: ['p1'] },
+      ]) {
+        expect(() => reader.query(statement)).toThrow(/KV433.*engine/s);
+      }
+      expect(() =>
+        reader.exec(stampTrustedSql({ sql: 'drop table products' }, 'read-surface DDL attempt')),
+      ).toThrow(/KV433.*engine/s);
+      expect(() =>
+        reader.query(
+          stampTrustedSql({ sql: 'select * from products for update' }, 'read lock attempt'),
+        ),
+      ).toThrow(/KV433.*engine/s);
+
+      db.write('products', { id: 'p3', qty: 3 });
+      expect(db.read<{ id: string }>('products').map((row) => row.id)).toEqual(['p1', 'p2', 'p3']);
+    } finally {
+      db.close();
+      rmSync(root, { force: true, recursive: true });
+    }
+  });
+
   it('runs mutation suites against an in-memory SQLite database', async () => {
     const db = createSqliteTestDb();
 

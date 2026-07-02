@@ -718,6 +718,7 @@ describe('server app-shell public API barrels', () => {
       'createMemoryMutationReplayStore',
       'endpointMatches',
       'invalidate',
+      'kovoReadonlyDbHandle',
       'managedDb',
       'readonlyDb',
       'registerGeneratedMutationTouchRegistry',

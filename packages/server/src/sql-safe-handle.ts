@@ -30,6 +30,7 @@ import {
 export interface ManagedSqlWritePolicy {
   capability?: 'read' | 'write';
   dialect?: ParseSqlWriteTablesOptions['dialect'];
+  engineReadonly?: boolean;
   tables?: readonly string[];
   touches?: readonly string[];
 }
@@ -226,7 +227,7 @@ function guardedSqlMethod(
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
     enforceManagedSql(statement, mode, writePolicy);
-    return value.call(target, statement, ...args);
+    return wrapReadonlyEngineResult(() => value.call(target, statement, ...args), writePolicy);
   };
 }
 
@@ -304,7 +305,7 @@ function guardedUnknownSqlMethod(
 ): Function {
   return (...args: unknown[]) => {
     assertAmbiguousSqlMethodArguments(prop, args, mode, writePolicy, strictSqlTarget);
-    return value.apply(target, args);
+    return wrapReadonlyEngineResult(() => value.apply(target, args), writePolicy);
   };
 }
 
@@ -457,6 +458,46 @@ async function runQueuedManagedTransaction<Result>(
   }
 }
 
+function wrapReadonlyEngineResult<Result>(
+  execute: () => Result,
+  writePolicy: ManagedSqlWritePolicy | undefined,
+): Result {
+  if (writePolicy?.capability !== 'read' || writePolicy.engineReadonly !== true) {
+    return execute();
+  }
+
+  try {
+    const result = execute();
+    if (isPromiseLike(result)) {
+      return result.catch((error: unknown) => {
+        throw readonlyEngineError(error);
+      }) as Result;
+    }
+    return result;
+  } catch (error) {
+    throw readonlyEngineError(error);
+  }
+}
+
+function readonlyEngineError(error: unknown): Error {
+  const message = error instanceof Error ? error.message : String(error);
+  return new Error(
+    [
+      'KV433: database engine rejected a read-only SQL capability statement from a query loader (SPEC §10.3/§11.2).',
+      `  engine: ${message}`,
+    ].join('\n'),
+  );
+}
+
+function isPromiseLike(value: unknown): value is Promise<unknown> {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { then?: unknown }).then === 'function' &&
+    typeof (value as { catch?: unknown }).catch === 'function'
+  );
+}
+
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return typeof value === 'object' && value !== null;
 }
@@ -490,9 +531,12 @@ function guardedPrepareMethod(
 ): Function {
   return (statement: unknown, ...args: unknown[]) => {
     enforceManagedSql(statement, mode, writePolicy);
-    const prepared = value.call(target, statement, ...args);
+    const prepared = wrapReadonlyEngineResult(
+      () => value.call(target, statement, ...args),
+      writePolicy,
+    );
     return typeof prepared === 'object' && prepared !== null
-      ? wrapPreparedSqlStatement(prepared, mode, proxyCache, methodCache)
+      ? wrapPreparedSqlStatement(prepared, mode, proxyCache, methodCache, writePolicy)
       : prepared;
   };
 }
@@ -502,6 +546,7 @@ function wrapPreparedSqlStatement(
   mode: SqlSafetyMode,
   proxyCache: WeakMap<object, object>,
   methodCache: WeakMap<object, Map<PropertyKey, Function>>,
+  writePolicy: ManagedSqlWritePolicy | undefined,
 ): object {
   const cached = proxyCache.get(statementHandle);
   if (cached) return cached;
@@ -510,7 +555,15 @@ function wrapPreparedSqlStatement(
     get(target, prop, receiver) {
       const value = Reflect.get(target, prop, receiver);
       if (isPreparedStatementExecutionMethod(prop) && typeof value === 'function') {
-        return cachedSqlSafetyMethod(target, prop, value, methodCache, () => value.bind(target));
+        return cachedSqlSafetyMethod(
+          target,
+          prop,
+          value,
+          methodCache,
+          () =>
+            (...args: unknown[]) =>
+              wrapReadonlyEngineResult(() => value.apply(target, args), writePolicy),
+        );
       }
 
       return typeof value === 'function'
@@ -548,6 +601,7 @@ const assertSqlWriteTablesAllowed = securityClassifier(
   'server.sql.write-table-allowlist',
   function (statement: unknown, writePolicy: ManagedSqlWritePolicy | undefined): void {
     if (writePolicy?.capability === 'read') {
+      if (writePolicy.engineReadonly === true) return;
       assertReadSqlStatement(statement, writePolicy?.dialect);
       return;
     }

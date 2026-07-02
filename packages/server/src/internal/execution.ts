@@ -31,8 +31,10 @@ export { runRoutePage } from '../route.js';
 // same way the request shell does.
 export {
   KovoReadonlyHandleError,
+  kovoReadonlyDbHandle,
   managedDb,
   readonlyDb,
+  type KovoReadonlyDbCapable,
   type ManagedDbMode,
   type Reader,
 } from '../managed-db.js';

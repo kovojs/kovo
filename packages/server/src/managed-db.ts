@@ -19,6 +19,12 @@ import { wrapManagedDbForSqlSafety, type ManagedSqlWritePolicy } from './sql-saf
 
 declare const readerDbBrand: unique symbol;
 
+export const kovoReadonlyDbHandle: unique symbol = Symbol('kovo.readonly-db-handle');
+
+export interface KovoReadonlyDbCapable<ReadDb = unknown> {
+  [kovoReadonlyDbHandle](): ReadDb;
+}
+
 const READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$count',
   '$with',
@@ -108,7 +114,11 @@ export type ManagedDbMode = 'read' | 'write';
  * fail-closed runtime floor plus a branded type, not the SPEC §6.6 security proof.
  */
 export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
-  const safe = wrapManagedDbForSqlSafety(db, undefined, { capability: 'read' });
+  const readDb = readonlyDbTarget(db);
+  const safe = wrapManagedDbForSqlSafety(readDb, undefined, {
+    capability: 'read',
+    engineReadonly: readDb !== db,
+  });
   return readonlyCapabilityDb(safe as object) as Reader<Db>;
 }
 
@@ -170,11 +180,24 @@ export function managedDb<Db>(
   mode: ManagedDbMode,
   options: ManagedDbOptions = {},
 ): Db | Reader<Db> {
-  const safe = wrapManagedDbForSqlSafety(raw, undefined, {
+  const target = mode === 'read' ? readonlyDbTarget(raw) : raw;
+  const safe = wrapManagedDbForSqlSafety(target, undefined, {
     ...options.sqlWritePolicy,
     capability: mode,
+    engineReadonly: mode === 'read' && target !== raw,
   });
   if (mode === 'write') return safe;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
   return readonlyCapabilityDb(safe as unknown as object) as Reader<Db>;
+}
+
+function readonlyDbTarget<Db>(raw: Db): Db {
+  if (!isRecord(raw)) return raw;
+  const createReadonly = raw[kovoReadonlyDbHandle];
+  if (typeof createReadonly !== 'function') return raw;
+  return createReadonly.call(raw) as Db;
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === 'object' && value !== null;
 }

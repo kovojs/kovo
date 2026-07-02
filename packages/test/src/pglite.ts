@@ -1,23 +1,37 @@
 import { PGlite, type PGliteOptions, type Results } from '@electric-sql/pglite';
+import {
+  kovoReadonlyDbHandle,
+  type KovoReadonlyDbCapable,
+} from '@kovojs/server/internal/execution';
+
+interface PgliteStatementCarrier {
+  sql?: string;
+  text?: string;
+  values?: readonly unknown[];
+}
+
+type PgliteStatementInput = string | PgliteStatementCarrier;
 
 /** A PGlite-backed test database handle: `exec`/`query`/`sql` SQL helpers plus `read`/`write` and `close`. */
 export interface PgliteTestDb {
   close(): Promise<void>;
-  exec(statement: string): Promise<Results[]>;
+  exec(statement: PgliteStatementInput): Promise<Results[]>;
   pglite: PGlite;
   query<Row extends Record<string, unknown> = Record<string, unknown>>(
-    statement: string,
+    statement: PgliteStatementInput,
     params?: readonly unknown[],
   ): Promise<Row[]>;
   read<Row extends Record<string, unknown> = Record<string, unknown>>(
     table: string,
   ): Promise<Row[]>;
   sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-    statement: string,
+    statement: PgliteStatementInput,
     params?: readonly unknown[],
   ): Promise<Row[]>;
   write(table: string, value: Record<string, unknown>): Promise<void>;
 }
+
+type ReadonlyPgliteTestDb = Omit<PgliteTestDb, typeof kovoReadonlyDbHandle>;
 /**
  * Spin up an ephemeral in-process Postgres (PGlite) for tests, returning a
  * handle with SQL and row helpers. No external database required.
@@ -28,20 +42,68 @@ export interface PgliteTestDb {
 export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<PgliteTestDb> {
   const pglite = new PGlite(options);
   await pglite.waitReady;
+  let readonlyQueue = Promise.resolve();
+  let readonlyDb: ReadonlyPgliteTestDb | null = null;
 
-  return {
+  const runReadonly = async <Result>(callback: () => Promise<Result>): Promise<Result> => {
+    const previous = readonlyQueue;
+    let release!: () => void;
+    readonlyQueue = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    await previous;
+    try {
+      await pglite.exec('begin read only');
+      try {
+        const result = await callback();
+        await pglite.exec('commit');
+        return result;
+      } catch (error) {
+        try {
+          await pglite.exec('rollback');
+        } catch {
+          // Preserve the original engine denial for KV433 wrapping.
+        }
+        throw error;
+      }
+    } finally {
+      release();
+    }
+  };
+
+  const readonlyHandle = (): ReadonlyPgliteTestDb => {
+    // PGlite exposes one embedded engine handle here, not a pool. Use serialized read-only
+    // transactions so the engine enforces DEC-A without leaking state to the writer helpers.
+    readonlyDb ??= pgliteTestDbFromOperations(
+      pglite,
+      async (statement) => runReadonly(() => pglite.exec(pgliteStatementText(statement))),
+      async <Row extends Record<string, unknown>>(
+        statement: PgliteStatementInput,
+        params: readonly unknown[] = [],
+      ) =>
+        runReadonly(async () => {
+          const carrier = pgliteStatement(statement, params);
+          return (await pglite.query<Row>(carrier.text, [...carrier.values])).rows;
+        }),
+      true,
+    );
+    return readonlyDb;
+  };
+
+  const db: PgliteTestDb & KovoReadonlyDbCapable<ReadonlyPgliteTestDb> = {
     async close() {
       await pglite.close();
     },
     async exec(statement) {
-      return pglite.exec(statement);
+      return pglite.exec(pgliteStatementText(statement));
     },
     pglite,
     async query<Row extends Record<string, unknown> = Record<string, unknown>>(
-      statement: string,
+      statement: PgliteStatementInput,
       params: readonly unknown[] = [],
     ) {
-      const result = await pglite.query<Row>(statement, [...params]);
+      const carrier = pgliteStatement(statement, params);
+      const result = await pglite.query<Row>(carrier.text, [...carrier.values]);
       return result.rows;
     },
     async read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string) {
@@ -49,10 +111,11 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
       return result.rows;
     },
     async sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-      statement: string,
+      statement: PgliteStatementInput,
       params: readonly unknown[] = [],
     ) {
-      const result = await pglite.query<Row>(statement, [...params]);
+      const carrier = pgliteStatement(statement, params);
+      const result = await pglite.query<Row>(carrier.text, [...carrier.values]);
       return result.rows;
     },
     async write(table, value) {
@@ -65,6 +128,58 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
       const columns = entries.map(([column]) => quoteSqlIdentifier(column)).join(', ');
       const placeholders = entries.map((_, index) => `$${index + 1}`).join(', ');
       await pglite.query(
+        `insert into ${quoteSqlIdentifier(table)} (${columns}) values (${placeholders})`,
+        entries.map(([, columnValue]) => columnValue),
+      );
+    },
+    [kovoReadonlyDbHandle]: readonlyHandle,
+  };
+
+  return db;
+}
+
+function pgliteTestDbFromOperations(
+  pglite: PGlite,
+  execStatement: (statement: PgliteStatementInput) => Promise<Results[]>,
+  queryRows: <Row extends Record<string, unknown> = Record<string, unknown>>(
+    statement: PgliteStatementInput,
+    params?: readonly unknown[],
+  ) => Promise<Row[]>,
+  readonly: boolean,
+): ReadonlyPgliteTestDb {
+  return {
+    async close() {
+      if (!readonly) await pglite.close();
+    },
+    async exec(statement) {
+      return execStatement(statement);
+    },
+    pglite,
+    async query<Row extends Record<string, unknown> = Record<string, unknown>>(
+      statement: string,
+      params: readonly unknown[] = [],
+    ) {
+      return queryRows<Row>(statement, params);
+    },
+    async read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string) {
+      return queryRows<Row>(`select * from ${quoteSqlIdentifier(table)}`);
+    },
+    async sql<Row extends Record<string, unknown> = Record<string, unknown>>(
+      statement: string,
+      params: readonly unknown[] = [],
+    ) {
+      return queryRows<Row>(statement, params);
+    },
+    async write(table, value) {
+      const entries = Object.entries(value);
+      if (entries.length === 0) {
+        await execStatement(`insert into ${quoteSqlIdentifier(table)} default values`);
+        return;
+      }
+
+      const columns = entries.map(([column]) => quoteSqlIdentifier(column)).join(', ');
+      const placeholders = entries.map((_, index) => `$${index + 1}`).join(', ');
+      await queryRows(
         `insert into ${quoteSqlIdentifier(table)} (${columns}) values (${placeholders})`,
         entries.map(([, columnValue]) => columnValue),
       );
@@ -82,4 +197,18 @@ function quoteSqlIdentifier(identifier: string): string {
       return `"${part.replaceAll('"', '""')}"`;
     })
     .join('.');
+}
+
+function pgliteStatement(
+  statement: PgliteStatementInput,
+  params: readonly unknown[],
+): { text: string; values: readonly unknown[] } {
+  if (typeof statement === 'string') return { text: statement, values: params };
+  const text = statement.text ?? statement.sql;
+  if (typeof text !== 'string') throw new Error('PGlite statement carrier must include text/sql.');
+  return { text, values: statement.values ?? params };
+}
+
+function pgliteStatementText(statement: PgliteStatementInput): string {
+  return pgliteStatement(statement, []).text;
 }
