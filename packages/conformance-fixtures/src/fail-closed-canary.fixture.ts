@@ -6,3 +6,16 @@ export const permissiveFailClosedCanary = securityClassifier(
     return value ?? [];
   },
 );
+
+export const recognitionSkipFailClosedCanary = securityClassifier(
+  'conformance.fail-closed-recognition-skip-canary',
+  function (value: string): readonly string[] {
+    const resolved = resolveCanary(value);
+    if (resolved === null) return [];
+    return [resolved];
+  },
+);
+
+function resolveCanary(value: string): string | null {
+  return value === '' ? null : value;
+}

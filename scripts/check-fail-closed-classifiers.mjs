@@ -12,15 +12,21 @@ export const repoRoot = findRepoRoot();
 const SECURITY_MARKERS_MODULE = '@kovojs/core/internal/security-markers';
 const SECURITY_CLASSIFIER_EXPORT = 'securityClassifier';
 const PERMISSIVE_STRING_VALUES = new Set(['', 'allow', 'allowed', 'ok', 'pass', 'safe', 'clean']);
+const RECOGNIZER_NAME_PATTERN =
+  /(?:recogn|resolv|parse|classif|sink|lookup|find|detect|match|write.*tables?|^is[A-Z])/u;
+const DEFAULT_EXTRA_SOURCE_FILES = ['packages/compiler/src/validate/trusted-html-provenance.ts'];
 
 export function checkFailClosedClassifiers(options = {}) {
   const root = options.repoRoot ?? repoRoot;
   const roots = options.roots ?? productionSourceRoots;
   const files =
     options.files ??
-    collectSourceFiles(root, roots, {
-      productionRoots: options.productionRoots ?? roots,
-    });
+    uniqueSortedFiles([
+      ...collectSourceFiles(root, roots, {
+        productionRoots: options.productionRoots ?? roots,
+      }),
+      ...DEFAULT_EXTRA_SOURCE_FILES,
+    ]);
   const readText =
     options.readText ?? ((relativePath) => readFileSync(path.join(root, relativePath), 'utf8'));
   const findings = [];
@@ -75,6 +81,7 @@ function classifySourceFile(sourceFile) {
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
+  findings.push(...lintKnownSecurityHelperFunctions(sourceFile));
   return findings;
 }
 
@@ -93,10 +100,12 @@ function lintClassifierFunction(sourceFile, fn, classifier) {
     return findings;
   }
 
-  const visit = (node) => {
-    if (node !== fn.body && isFunctionLike(node)) return;
+  const recognizerResults = collectRecognizerResultNames(fn.body);
+  const recognitionSkipKeys = new Set();
+  const visit = (node, nestedFunctionDepth = 0) => {
+    const inNestedFunction = nestedFunctionDepth > 0;
 
-    if (ts.isSwitchStatement(node)) {
+    if (!inNestedFunction && ts.isSwitchStatement(node)) {
       for (const clause of node.caseBlock.clauses) {
         if (!ts.isDefaultClause(clause)) continue;
         for (const returnStatement of returnStatementsIn(clause)) {
@@ -111,7 +120,7 @@ function lintClassifierFunction(sourceFile, fn, classifier) {
       }
     }
 
-    if (ts.isReturnStatement(node)) {
+    if (!inNestedFunction && ts.isReturnStatement(node)) {
       collectShortCircuitFallbackFindings(sourceFile, node.expression, classifier, findings);
       if (isNegatedProofReturn(node)) {
         collectReturnedExpressionFindings(
@@ -133,11 +142,239 @@ function lintClassifierFunction(sourceFile, fn, classifier) {
       }
     }
 
-    ts.forEachChild(node, visit);
+    if (ts.isIfStatement(node)) {
+      const before = findings.length;
+      collectRecognitionSkipFindings(sourceFile, node, classifier, recognizerResults, findings);
+      if (findings.length > before) {
+        const key = `${sourceFile.fileName}:${classifier.name}`;
+        if (recognitionSkipKeys.has(key)) findings.pop();
+        else recognitionSkipKeys.add(key);
+      }
+    }
+
+    ts.forEachChild(node, (child) => {
+      visit(child, nestedFunctionDepth + (child !== fn.body && isFunctionLike(child) ? 1 : 0));
+    });
   };
   visit(fn.body);
 
   return dedupeFindings(findings);
+}
+
+function lintKnownSecurityHelperFunctions(sourceFile) {
+  const findings = [];
+  const visit = (node) => {
+    if (!isNamedFunction(node)) {
+      ts.forEachChild(node, visit);
+      return;
+    }
+    const name = node.name.text;
+    if (!isSecurityHelperFunctionName(name) || !ts.isBlock(node.body)) return;
+    const recognizerResults = collectRecognizerResultNames(node.body);
+    const helperClassifier = {
+      decisionName: 'security helper',
+      name,
+    };
+    const helperSkipKeys = new Set();
+    const visitBody = (child) => {
+      if (child !== node.body && isFunctionLike(child)) return;
+      if (ts.isIfStatement(child)) {
+        const before = findings.length;
+        collectRecognitionSkipFindings(
+          sourceFile,
+          child,
+          helperClassifier,
+          recognizerResults,
+          findings,
+        );
+        if (findings.length > before) {
+          const key = `${sourceFile.fileName}:${name}`;
+          if (helperSkipKeys.has(key)) findings.pop();
+          else helperSkipKeys.add(key);
+        }
+      }
+      ts.forEachChild(child, visitBody);
+    };
+    visitBody(node.body);
+  };
+  visit(sourceFile);
+  return dedupeFindings(findings);
+}
+
+function collectRecognitionSkipFindings(sourceFile, statement, classifier, recognizerResults, findings) {
+  const skip = recognitionSkipDescription(statement, recognizerResults);
+  if (!skip) return;
+  findings.push(
+    `${sourceFile.fileName}:${lineOf(sourceFile, statement.expression)}: ${classifier.name} (${classifier.decisionName}) skips on unproven recognizer result ${skip}; fail-closed classifiers must return an unproven/closed verdict instead of allowing recognition failure to continue`,
+  );
+}
+
+function recognitionSkipDescription(statement, recognizerResults) {
+  const condition = unwrapExpression(statement.expression);
+  const nullishSkip = nullishOrEmptySkipName(condition, recognizerResults);
+  if (nullishSkip && statementSkipsOrAllows(statement.thenStatement)) return `\`${nullishSkip}\``;
+
+  const positiveGuard = positiveRecognizerGuardName(condition, recognizerResults);
+  if (
+    positiveGuard &&
+    statement.elseStatement === undefined &&
+    branchIsNonEmpty(statement.thenStatement) &&
+    !branchReturns(statement.thenStatement)
+  ) {
+    return `\`${positiveGuard}\` via implicit else skip`;
+  }
+
+  return undefined;
+}
+
+function collectRecognizerResultNames(body) {
+  const names = new Set();
+  const visit = (node) => {
+    if (ts.isVariableDeclaration(node) && ts.isIdentifier(node.name)) {
+      const initializer = node.initializer ? unwrapExpression(node.initializer) : undefined;
+      if (
+        RECOGNIZER_NAME_PATTERN.test(node.name.text) ||
+        (initializer && expressionLooksLikeRecognizer(initializer))
+      ) {
+        names.add(node.name.text);
+      }
+    }
+    if (ts.isBinaryExpression(node) && isAssignmentOperator(node.operatorToken.kind)) {
+      const left = unwrapExpression(node.left);
+      if (ts.isIdentifier(left) && expressionLooksLikeRecognizer(unwrapExpression(node.right))) {
+        names.add(left.text);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(body);
+  return names;
+}
+
+function expressionLooksLikeRecognizer(expression) {
+  if (ts.isCallExpression(expression)) {
+    return expressionNameLooksLikeRecognizer(expression.expression);
+  }
+  if (ts.isAwaitExpression(expression)) return expressionLooksLikeRecognizer(unwrapExpression(expression.expression));
+  return false;
+}
+
+function expressionNameLooksLikeRecognizer(expression) {
+  const unwrapped = unwrapExpression(expression);
+  if (ts.isIdentifier(unwrapped)) return RECOGNIZER_NAME_PATTERN.test(unwrapped.text);
+  if (ts.isPropertyAccessExpression(unwrapped)) {
+    return RECOGNIZER_NAME_PATTERN.test(unwrapped.name.text);
+  }
+  if (ts.isElementAccessExpression(unwrapped)) return true;
+  return false;
+}
+
+function nullishOrEmptySkipName(condition, recognizerResults) {
+  const unwrapped = unwrapExpression(condition);
+  if (ts.isBinaryExpression(unwrapped)) {
+    if (
+      unwrapped.operatorToken.kind === ts.SyntaxKind.BarBarToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken
+    ) {
+      return (
+        nullishOrEmptySkipName(unwrapped.left, recognizerResults) ??
+        nullishOrEmptySkipName(unwrapped.right, recognizerResults)
+      );
+    }
+    return nullishOrEmptyComparisonName(unwrapped, recognizerResults);
+  }
+  if (ts.isPrefixUnaryExpression(unwrapped) && unwrapped.operator === ts.SyntaxKind.ExclamationToken) {
+    const operand = unwrapExpression(unwrapped.operand);
+    if (ts.isIdentifier(operand) && recognizerResults.has(operand.text)) return operand.text;
+    if (ts.isCallExpression(operand) && expressionNameLooksLikeRecognizer(operand.expression)) {
+      return operand.expression.getText();
+    }
+  }
+  if (ts.isCallExpression(unwrapped) && expressionNameLooksLikeRecognizer(unwrapped.expression)) {
+    return unwrapped.expression.getText();
+  }
+  return undefined;
+}
+
+function nullishOrEmptyComparisonName(expression, recognizerResults) {
+  if (!isEqualityOperator(expression.operatorToken.kind)) return undefined;
+  return (
+    recognizerComparedToNullishOrEmpty(expression.left, expression.right, recognizerResults) ??
+    recognizerComparedToNullishOrEmpty(expression.right, expression.left, recognizerResults)
+  );
+}
+
+function recognizerComparedToNullishOrEmpty(candidate, sentinel, recognizerResults) {
+  const unwrappedCandidate = unwrapExpression(candidate);
+  const unwrappedSentinel = unwrapExpression(sentinel);
+  const candidateName = recognizerCandidateName(unwrappedCandidate, recognizerResults);
+  if (!candidateName) return undefined;
+  if (isNullishSentinel(unwrappedSentinel)) return candidateName;
+  if (numericLiteralValue(unwrappedSentinel) === 0) return candidateName;
+  return undefined;
+}
+
+function recognizerCandidateName(candidate, recognizerResults) {
+  if (ts.isIdentifier(candidate) && recognizerResults.has(candidate.text)) return candidate.text;
+  if (
+    ts.isPropertyAccessExpression(candidate) &&
+    candidate.name.text === 'length' &&
+    ts.isIdentifier(unwrapExpression(candidate.expression)) &&
+    recognizerResults.has(unwrapExpression(candidate.expression).text)
+  ) {
+    return unwrapExpression(candidate.expression).text;
+  }
+  if (ts.isCallExpression(candidate) && expressionNameLooksLikeRecognizer(candidate.expression)) {
+    return candidate.expression.getText();
+  }
+  return undefined;
+}
+
+function positiveRecognizerGuardName(condition, recognizerResults) {
+  const unwrapped = unwrapExpression(condition);
+  if (ts.isBinaryExpression(unwrapped)) {
+    if (
+      unwrapped.operatorToken.kind === ts.SyntaxKind.AmpersandAmpersandToken ||
+      unwrapped.operatorToken.kind === ts.SyntaxKind.BarBarToken
+    ) {
+      return (
+        positiveRecognizerGuardName(unwrapped.left, recognizerResults) ??
+        positiveRecognizerGuardName(unwrapped.right, recognizerResults)
+      );
+    }
+    if (!isInequalityOperator(unwrapped.operatorToken.kind)) return undefined;
+    return (
+      recognizerComparedToNullishOrEmpty(unwrapped.left, unwrapped.right, recognizerResults) ??
+      recognizerComparedToNullishOrEmpty(unwrapped.right, unwrapped.left, recognizerResults)
+    );
+  }
+  if (ts.isIdentifier(unwrapped) && recognizerResults.has(unwrapped.text)) return unwrapped.text;
+  return undefined;
+}
+
+function statementSkipsOrAllows(statement) {
+  if (ts.isReturnStatement(statement)) return permissiveReturn(statement);
+  if (ts.isContinueStatement(statement)) return true;
+  if (!ts.isBlock(statement)) return false;
+  return statement.statements.some((child) => {
+    if (ts.isReturnStatement(child)) return permissiveReturn(child);
+    return ts.isContinueStatement(child);
+  });
+}
+
+function permissiveReturn(statement) {
+  if (!statement.expression) return true;
+  return permissiveValueDescription(unwrapExpression(statement.expression)) !== undefined;
+}
+
+function branchIsNonEmpty(statement) {
+  return ts.isBlock(statement) ? statement.statements.length > 0 : true;
+}
+
+function branchReturns(statement) {
+  if (ts.isReturnStatement(statement)) return true;
+  if (!ts.isBlock(statement)) return false;
+  return statement.statements.some((child) => ts.isReturnStatement(child));
 }
 
 function collectReturnedExpressionFindings(sourceFile, expression, classifier, arm, findings) {
@@ -254,6 +491,44 @@ function permissiveValueDescription(expression) {
   return undefined;
 }
 
+function isNamedFunction(node) {
+  return ts.isFunctionDeclaration(node) && node.name !== undefined;
+}
+
+function isSecurityHelperFunctionName(name) {
+  return /(?:wire.*alias.*roots?|trust.*sink|raw.*sink|write.*tables?|parse.*sql)/iu.test(name);
+}
+
+function isEqualityOperator(kind) {
+  return (
+    kind === ts.SyntaxKind.EqualsEqualsToken ||
+    kind === ts.SyntaxKind.EqualsEqualsEqualsToken
+  );
+}
+
+function isInequalityOperator(kind) {
+  return (
+    kind === ts.SyntaxKind.ExclamationEqualsToken ||
+    kind === ts.SyntaxKind.ExclamationEqualsEqualsToken
+  );
+}
+
+function isNullishSentinel(expression) {
+  return (
+    expression.kind === ts.SyntaxKind.NullKeyword ||
+    expression.kind === ts.SyntaxKind.UndefinedKeyword ||
+    (ts.isIdentifier(expression) && expression.text === 'undefined')
+  );
+}
+
+function numericLiteralValue(expression) {
+  return ts.isNumericLiteral(expression) ? Number(expression.text) : undefined;
+}
+
+function isAssignmentOperator(kind) {
+  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
+}
+
 function isNegatedProofReturn(statement) {
   const parent = statement.parent;
   if (!ts.isIfStatement(parent) || parent.thenStatement !== statement) return false;
@@ -300,6 +575,10 @@ function scriptKind(file) {
 
 function dedupeFindings(findings) {
   return [...new Set(findings)];
+}
+
+function uniqueSortedFiles(files) {
+  return [...new Set(files)].sort((left, right) => left.localeCompare(right));
 }
 
 if (isMainEntry(import.meta.url)) await runGate(main);

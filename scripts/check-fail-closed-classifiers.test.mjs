@@ -72,6 +72,57 @@ export const expressionBody = securityClassifier('test.expression-body', (value:
     ]);
   });
 
+  it('rejects nullish recognizer skips and implicit positive-guard skips', () => {
+    const result = runFixture({
+      'packages/server/src/classifier.ts': `
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
+
+export const nullSkip = securityClassifier('test.null-skip', function (value: string) {
+  const resolved = resolveThing(value);
+  if (resolved === null) return;
+  return 'fail-closed';
+});
+
+export const emptySkip = securityClassifier('test.empty-skip', function (value: string) {
+  const writeTables = parseWriteTables(value);
+  if (writeTables.length === 0) return [];
+  return 'fail-closed';
+});
+
+export const implicitSkip = securityClassifier('test.implicit-skip', function (value: string) {
+  const sink = rawTrustSinkForCall(value);
+  const found: string[] = [];
+  if (sink !== null) {
+    found.push(sink);
+  }
+  return found;
+});
+
+function resolveThing(value: string): string | null {
+  return value || null;
+}
+function parseWriteTables(value: string): string[] {
+  return value ? [value] : [];
+}
+function rawTrustSinkForCall(value: string): string | null {
+  return value || null;
+}
+`,
+    });
+
+    expect(result.findings).toEqual([
+      expect.stringContaining(
+        'nullSkip (test.null-skip) skips on unproven recognizer result `resolved`',
+      ),
+      expect.stringContaining(
+        'emptySkip (test.empty-skip) skips on unproven recognizer result `writeTables`',
+      ),
+      expect.stringContaining(
+        'implicitSkip (test.implicit-skip) skips on unproven recognizer result `sink` via implicit else skip',
+      ),
+    ]);
+  });
+
   it('rejects the planted conformance canary', () => {
     const file = 'packages/conformance-fixtures/src/fail-closed-canary.fixture.ts';
     const result = checkFailClosedClassifiers({
@@ -82,6 +133,9 @@ export const expressionBody = securityClassifier('test.expression-body', (value:
     expect(result.findings).toEqual([
       expect.stringContaining(
         `${file}:6: permissiveFailClosedCanary (conformance.fail-closed-canary) uses \`??\` with permissive \`[]\``,
+      ),
+      expect.stringContaining(
+        `${file}:14: recognitionSkipFailClosedCanary (conformance.fail-closed-recognition-skip-canary) skips on unproven recognizer result \`resolved\``,
       ),
     ]);
   });
