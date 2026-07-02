@@ -881,6 +881,96 @@ describe('@kovojs/drizzle touch graph helpers', () => {
     ]);
   });
 
+  it('terminates cyclic pgView read-set derivation at the base table domain', () => {
+    const facts = extractQueryFactsFromProject({
+      files: [
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          export const products = pgTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "product", key: "id" }));
+          export const productSearchA = pgView("product_search_a").as((qb) =>
+            qb.select({ id: products.id, name: products.name })
+              .from(products)
+              .leftJoin(productSearchB, eq(productSearchB.id, products.id)));
+          export const productSearchB = pgView("product_search_b").as((qb) =>
+            qb.select({ id: productSearchA.id, name: productSearchA.name }).from(productSearchA));
+
+          export const searchQuery = query("search/view-cycle", {
+            output: s.object({ name: s.string() }),
+            reads: [productSearchB],
+            load(_input, db: PgAsyncDatabase<any, any>) {
+              return db.select({ name: sql<string>\`name\` }).from(productSearchB);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'search/view-cycle',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:13',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
+  it('terminates cyclic sqliteView read-set derivation at the base table domain', () => {
+    const facts = extractQueryFactsFromProjectBase({
+      files: [
+        sqliteDatabaseTypes([
+          'select(value?: unknown): { from(table: unknown): Promise<unknown[]> };',
+        ]),
+        {
+          fileName: 'product.queries.ts',
+          source: `
+          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          import { sqliteTable, sqliteView, text } from "drizzle-orm/sqlite-core";
+
+          export const products = sqliteTable("products", {
+            id: text("id").primaryKey(),
+            name: text("name").notNull(),
+          }, kovo({ domain: "product", key: "id" }));
+          export const productSearchA = sqliteView("product_search_a").as((qb) =>
+            qb.select({ id: products.id, name: products.name })
+              .from(products)
+              .leftJoin(productSearchB, eq(productSearchB.id, products.id)));
+          export const productSearchB = sqliteView("product_search_b").as((qb) =>
+            qb.select({ id: productSearchA.id, name: productSearchA.name }).from(productSearchA));
+
+          export const searchQuery = query("search/sqlite-view-cycle", {
+            output: s.object({ name: s.string() }),
+            reads: [productSearchB],
+            load(_input, db: BaseSQLiteDatabase) {
+              return db.select({ name: sql<string>\`name\` }).from(productSearchB);
+            },
+          });
+        `,
+        },
+      ],
+    });
+
+    expect(facts).toEqual([
+      {
+        query: 'search/sqlite-view-cycle',
+        reads: ['product'],
+        shape: {
+          name: 'string',
+        },
+        site: 'product.queries.ts:16',
+      },
+    ]);
+    expect(diagnosticsForQueryFacts(facts)).toEqual([]);
+  });
+
   it('uses declared materialized-view metadata as a query read domain', () => {
     const facts = extractQueryFactsFromProject({
       files: [

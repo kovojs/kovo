@@ -205,6 +205,7 @@ interface ExportStarAlias {
   const derivedRelationTablesByExpression = projectDerivedRelationTablesByExpression(
     extraction,
     tablesBySyntheticName,
+    declaredRelationTablesByExpression,
   );
   const tablesByFileName = new Map<string, Map<string, ExtractedTable[]>>();
 
@@ -317,8 +318,9 @@ function projectDeclaredRelationTablesByExpression(
 function projectDerivedRelationTablesByExpression(
   extraction: ProjectExtraction,
   tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>,
+  declaredRelationTablesByExpression: ReadonlyMap<string, readonly ExtractedTable[]>,
 ): ReadonlyMap<string, readonly ExtractedTable[]> {
-  const relationTables = new Map<string, ExtractedTable[]>();
+  const relationReads = new Map<string, string[]>();
 
   for (const sourceFile of extraction.sourceFiles) {
     const namespaceTableNames = projectNamespaceTableNamesByLocal(
@@ -337,28 +339,73 @@ function projectDerivedRelationTablesByExpression(
       const tableExpressions = projectViewReadTableExpressions(
         declaration.getInitializer(),
         extraction.tableNamesBySymbol,
+        extraction.unmodeledRelationNamesBySymbol,
         namespaceTableNames,
       );
-      const tables = tableExpressions.flatMap((tableExpression) => {
+      relationReads.set(expression, tableExpressions);
+    }
+  }
+
+  return resolveDerivedRelationTables(
+    relationReads,
+    tablesBySyntheticName,
+    declaredRelationTablesByExpression,
+  );
+}
+
+function resolveDerivedRelationTables(
+  relationReads: ReadonlyMap<string, readonly string[]>,
+  tablesBySyntheticName: ReadonlyMap<string, ExtractedTable>,
+  declaredRelationTablesByExpression: ReadonlyMap<string, readonly ExtractedTable[]>,
+): ReadonlyMap<string, readonly ExtractedTable[]> {
+  const resolved = new Map<string, ExtractedTable[]>(
+    [...declaredRelationTablesByExpression].map(([expression, entries]) => [
+      expression,
+      [...entries],
+    ]),
+  );
+
+  // SPEC §10.1/§11.1: view read sets are a finite graph. Iterate monotonically over deduped
+  // table facts so view cycles terminate instead of repeatedly expanding relation paths.
+  let changed = true;
+  while (changed) {
+    changed = false;
+
+    for (const [expression, tableExpressions] of relationReads) {
+      const next = new Map(
+        (resolved.get(expression) ?? []).map((table) => [extractedTableKey(table), table]),
+      );
+
+      for (const tableExpression of tableExpressions) {
         const table =
           tablesBySyntheticName.get(tableExpression) ??
           tablesBySyntheticName.get(tableExpression.split('.').at(-1) ?? '');
-        return table ? [table] : [];
-      });
-      if (tables.length > 0) {
-        relationTables.set(expression, [
-          ...new Map(tables.map((table) => [extractedTableKey(table), table])).values(),
-        ]);
+        if (table) next.set(extractedTableKey(table), table);
+
+        for (const relationTable of resolved.get(tableExpression) ?? []) {
+          next.set(extractedTableKey(relationTable), relationTable);
+        }
+      }
+
+      if (next.size > (resolved.get(expression) ?? []).length) {
+        resolved.set(expression, [...next.values()]);
+        changed = true;
       }
     }
   }
 
-  return relationTables;
+  const derived = new Map<string, ExtractedTable[]>();
+  for (const expression of relationReads.keys()) {
+    const entries = resolved.get(expression) ?? [];
+    if (entries.length > 0) derived.set(expression, entries);
+  }
+  return derived;
 }
 
 function projectViewReadTableExpressions(
   initializer: Node | undefined,
   tableNamesBySymbol: ReadonlyMap<string, string>,
+  relationNamesBySymbol: ReadonlyMap<string, string>,
   namespaceTableNames: ProjectNamespaceTableNames,
 ): string[] {
   const callback = viewAsCallback(initializer);
@@ -373,9 +420,22 @@ function projectViewReadTableExpressions(
     symbolKeys: new Set(),
   };
   const body = callback.getBody();
-  return queryReadTableExpressionsForBody(body, receiverReferences, (node) =>
-    projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames),
+  return queryReadTableExpressionsForBody(
+    body,
+    receiverReferences,
+    (node) =>
+      projectTableNameForNode(node, tableNamesBySymbol, namespaceTableNames) ??
+      projectRelationNameForNode(node, relationNamesBySymbol),
   );
+}
+
+function projectRelationNameForNode(
+  node: Node,
+  relationNamesBySymbol: ReadonlyMap<string, string>,
+): string | undefined {
+  const symbolNode = Node.isPropertyAccessExpression(node) ? node.getNameNode() : node;
+  const symbolKey = resolvedSymbolKey(symbolAtLocation(symbolNode));
+  return symbolKey ? relationNamesBySymbol.get(symbolKey) : undefined;
 }
 
 function viewAsCallback(initializer: Node | undefined): ArrowFunction | FunctionExpression | null {
