@@ -150,3 +150,5 @@ export type { BlessedFormatName, UnsafeRegexBrand, UnsafeRegexFact } from '../re
 // in-memory implementation and its contract types stay public at the root.
 export { createMemoryMutationReplayStore } from '../replay.js';
 export type { MutationReplayReservation, MutationReplayStore } from '../replay.js';
+export { replayMutationWireBody } from '../response.js';
+export type { FrameworkWireBody, ReplayMutationWireBodyOptions } from '../response.js';

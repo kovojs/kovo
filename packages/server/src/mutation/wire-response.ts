@@ -4,6 +4,7 @@ import { guardFailureIsUnauthenticated, type ResolvedGuardFailure } from '../gua
 import { generatedFragmentHtml, generatedFragmentHtmlValue } from '../html.js';
 import type { ChangeRecord } from '../change-record.js';
 import {
+  frameworkWireBody,
   mergeResponseHeaders,
   retryAfterHeaders,
   type MutationResponseHeaders,
@@ -89,7 +90,7 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
       );
       if (reauthResponse) return reauthResponse;
       return {
-        body: await renderFailureFragment(lifecycle.failure, wireRequest),
+        body: frameworkWireBody(await renderFailureFragment(lifecycle.failure, wireRequest)),
         // A1: a rate-limit (or other retry-able) guard failure carries Retry-After; preserve it on the
         // pre-replay guard-failure response (the old runMutation path added it via retryAfterHeaders).
         headers: mergeMutationResponseHeaders(
@@ -122,7 +123,7 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
       const result = lifecycle.result;
       if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
         return {
-          body: await renderFailureFragment(result, wireRequest),
+          body: frameworkWireBody(await renderFailureFragment(result, wireRequest)),
           headers: mergeMutationResponseHeaders(
             mutationWireResponseHeaders(wireRequest),
             retryAfterHeaders(result),
@@ -132,7 +133,7 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
       }
 
       return commitReservedMutationReplay(lifecycle.reservation, async () => ({
-        body: await renderFailureFragment(result, wireRequest),
+        body: frameworkWireBody(await renderFailureFragment(result, wireRequest)),
         headers: mergeMutationResponseHeaders(
           mutationWireResponseHeaders(wireRequest),
           retryAfterHeaders(result),
@@ -254,7 +255,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
       queryWarningHeader === undefined ? undefined : { 'Kovo-Warn': queryWarningHeader };
 
     return {
-      body: [...queryChunks, ...fragmentChunks].join('\n'),
+      body: frameworkWireBody([...queryChunks, ...fragmentChunks].join('\n')),
       headers: mergeMutationResponseHeaders(
         mutationWireResponseHeaders(wireRequest),
         {
@@ -273,7 +274,7 @@ const mutationWireFailureResponse = wireEmitter('server.wire.mutation-failure', 
   Request,
 >(failure: MutationFail, wireRequest: MutationWireRequest<Request>): Promise<BufferedMutationWireResponse> {
   return Promise.resolve(renderFailureFragment(failure, wireRequest)).then((body) => ({
-    body,
+    body: frameworkWireBody(body),
     headers: mutationWireResponseHeaders(wireRequest),
     status: 422,
   }));
@@ -283,12 +284,14 @@ function renderReplayConflictFragment<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): BufferedMutationWireResponse {
   return {
-    body: renderFragmentWireHtml({
-      html: generatedFragmentHtml(
-        '<output role="alert" data-error-code="IDEMPOTENCY_CONFLICT">Conflict</output>',
-      ),
-      target: mutationFailureTarget(wireRequest),
-    }),
+    body: frameworkWireBody(
+      renderFragmentWireHtml({
+        html: generatedFragmentHtml(
+          '<output role="alert" data-error-code="IDEMPOTENCY_CONFLICT">Conflict</output>',
+        ),
+        target: mutationFailureTarget(wireRequest),
+      }),
+    ),
     headers: mutationWireResponseHeaders(wireRequest),
     status: 422,
   };
@@ -298,7 +301,7 @@ async function renderReplayUnavailableFragment<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): Promise<MutationWireResponse> {
   return {
-    body: await renderFailureFragment(replayUnavailableFailure(), wireRequest),
+    body: frameworkWireBody(await renderFailureFragment(replayUnavailableFailure(), wireRequest)),
     headers: mergeMutationResponseHeaders(mutationWireResponseHeaders(wireRequest), {
       'Retry-After': '1',
     }),
@@ -331,7 +334,7 @@ function mutationRenderErrorResponse<Request>(
   responseHeaders?: MutationResponseHeaders,
 ): BufferedMutationWireResponse {
   return {
-    body: renderMutationRenderErrorFragment(wireRequest),
+    body: frameworkWireBody(renderMutationRenderErrorFragment(wireRequest)),
     headers: mergeMutationResponseHeaders(
       mutationWireResponseHeaders(wireRequest),
       {
@@ -347,7 +350,7 @@ function mutationServerErrorResponse<Request>(
   wireRequest: MutationWireRequest<Request>,
 ): MutationWireResponse {
   return {
-    body: renderMutationServerErrorFragment(wireRequest),
+    body: frameworkWireBody(renderMutationServerErrorFragment(wireRequest)),
     headers: mutationWireResponseHeaders(wireRequest),
     status: 500,
   };
@@ -454,7 +457,7 @@ export const enhancedMutationReauthResponse = wireEmitter('server.wire.mutation-
   // SPEC §6.5: enhanced unauthenticated mutation guard failures re-enter auth
   // with a 401 Kovo-Reauth directive instead of rendering validation UI.
   return {
-    body: '',
+    body: frameworkWireBody(''),
     headers: mergeMutationResponseHeaders(
       mutationWireResponseHeaders({} as MutationWireRequest<Request>),
       {

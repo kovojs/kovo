@@ -2,6 +2,7 @@ import { reportServerError } from '../diagnostics.js';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import type { ServerErrorDiagnosticContext, ServerErrorHandler } from '../diagnostics.js';
 import { generatedFragmentHtmlValue, type FragmentHtml } from '../html.js';
+import { frameworkWireBody } from '../response.js';
 import type { BufferedMutationWireResponse, MutationWireResponse } from '../mutation-wire.js';
 import type { ServerFragmentRenderable } from '../renderable.js';
 import type { MutationReplayReservation } from '../replay.js';
@@ -190,7 +191,7 @@ export const renderStreamingMutationWireResponse = wireEmitter(
                 controller.close();
                 // Commit the full settled body so replays re-serve the complete stream.
                 reservation?.commit({
-                  body: buffered.join(''),
+                  body: frameworkWireBody(buffered.join('')),
                   headers: finalResponse.headers,
                   status: finalResponse.status,
                 });
@@ -204,7 +205,7 @@ export const renderStreamingMutationWireResponse = wireEmitter(
             controller.close();
             // Commit after the generator exhausted (no explicit done chunk).
             reservation?.commit({
-              body: buffered.join(''),
+              body: frameworkWireBody(buffered.join('')),
               headers: finalResponse.headers,
               status: finalResponse.status,
             });

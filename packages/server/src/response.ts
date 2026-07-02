@@ -49,6 +49,47 @@ export interface ServerResponseBase<
   status: Status;
 }
 
+declare const frameworkWireBodyBrand: unique symbol;
+
+/**
+ * Framework-owned response/wire body currency for generated mutation/query output.
+ * The brand symbol is module-private, so structural `{ body: string }` objects cannot
+ * satisfy framework wire response types without going through this choke or an audited
+ * endpoint/raw-Response escape path (SPEC §9.1/§9.4).
+ */
+export type FrameworkWireBody = string & {
+  readonly [frameworkWireBodyBrand]: true;
+};
+
+/** @internal Sole constructor for framework-owned query/mutation wire bodies. */
+export function frameworkWireBody(body: string): FrameworkWireBody {
+  return body as FrameworkWireBody;
+}
+
+/** Options for rehydrating a persisted framework mutation replay body. */
+export interface ReplayMutationWireBodyOptions {
+  /** Audit-readable reason this stored body is being reintroduced to the framework wire. */
+  reason: string;
+}
+
+/**
+ * Rehydrate a persisted mutation replay body through an explicit audited escape path.
+ *
+ * Normal query/mutation responses are minted by framework renderers. Apps that implement a durable
+ * `MutationReplayStore` may need to deserialize a previously stored framework response; this
+ * constructor keeps that escape visible and reason-bearing instead of allowing plain strings to
+ * satisfy the mutation wire body type.
+ */
+export function replayMutationWireBody(
+  body: string,
+  options: ReplayMutationWireBodyOptions,
+): FrameworkWireBody {
+  if (options.reason.trim() === '') {
+    throw new TypeError('replayMutationWireBody() requires a non-empty audit reason.');
+  }
+  return frameworkWireBody(body);
+}
+
 /** A renderable route body: a string, bytes, an ArrayBuffer, or a byte stream. */
 export type RouteResponseBody = ArrayBuffer | ReadableStream<Uint8Array> | Uint8Array | string;
 
