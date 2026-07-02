@@ -198,19 +198,15 @@ exactly where an irreducible author-time obligation remains.
 
 ### Phase 1 — Put enforcement in the verified TCB
 
-- [ ] **1.1 Split enforcement: Drizzle extraction → pure metadata (`@kovojs/drizzle`), decision (`@kovojs/server`) (DEC-E, B3).**
+- [x] **1.1 Split enforcement: Drizzle extraction → pure metadata (`@kovojs/drizzle`), decision (`@kovojs/server`) (DEC-E, B3).**
       Move boxing / declared-write / read-only decisions out of the generated adapter into `@kovojs/server` (no Drizzle
       dep); the Drizzle-specific schema→metadata extraction lives in `@kovojs/drizzle` and emits pure, verified metadata;
       the generated adapter only passes that metadata + config.
-  - Status: SQLite and PGlite read-confidentiality decisions now live in `@kovojs/server` with Drizzle table metadata
-    extraction in `@kovojs/drizzle`; the generated adapters wire metadata/config. This stays open until the generated
-    declared-write and read-only decisions are also relocated.
-- [ ] **1.2 TCB manifest + boundary lint cover the relocated chokes (DEC-E, A10).** Enroll them in `security/TCB.md`;
+  - Evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts scripts/check-tcb-boundary.test.mjs packages/create-kovo/src/index.test.ts --reporter=dot` proves server-owned declared-write/read-only helpers, generated adapter wiring, and scaffold metadata after relocation.
+- [x] **1.2 TCB manifest + boundary lint cover the relocated chokes (DEC-E, A10).** Enroll them in `security/TCB.md`;
       extend `check:tcb-boundary` to fail on any security decision inside `packages/create-kovo/templates/**` or outside
       the manifest, and to enforce the budget on the relocated chokes.
-  - Status: `scripts/check-tcb-boundary.mjs` scans generated templates, and `security/TCB.md` enrolls the relocated
-    server/drizzle read-confidentiality chokes. This stays open until generated declared-write and read-only decisions
-    are fully relocated and enrolled.
+  - Evidence: `node scripts/check-tcb-boundary.mjs` passes with generated template DB-decision exceptions removed and relocated server/drizzle chokes enrolled in `security/TCB.md` within the 600-line budget.
 
 ### Phase 2 — Provenance-sound confidentiality
 
@@ -367,4 +363,4 @@ self-catching rather than self-deceiving.
   `app-runtime-db.sqlite.ts` per-key `secretColumnNames.has(key)`), B2 (view regex), B3 (`touches:` write choke
   dormant); `papercuts-27` P1 (advisory set = `{KV406,KV422,KV438}` at `graph-output.ts:630`/`build-export.ts:465`/
   `vite.ts:568`; `KOVO_PARANOID=1` still KV435-fatal), P2 (`app-runtime-db.sqlite.ts` 683 lines, not in TCB/boundary lint).
-- Current integrated gates: `pnpm exec vitest --run packages/server/src/secret-read-boundary.test.ts packages/drizzle/src/runtime-metadata.test.ts`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes schema-declared secret reads|runtime Secret read through a Drizzle view"`, `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "boxes SQLite secret reads by source provenance"`, `pnpm exec vitest --run packages/create-kovo/src/index.test.ts -t "keeps Postgres as the default scaffold dialect|emits the SQLite scaffold variant when requested"`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
+- Current integrated gates: `pnpm exec vitest --run packages/server/src/managed-db.test.ts scripts/check-tcb-boundary.test.mjs packages/create-kovo/src/index.test.ts --reporter=dot`, `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t "starter mutation DB table scope" --reporter=dot`, `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts -t "keeps SQLite readonly handles isolated" --reporter=dot`, `node scripts/check-tcb-boundary.mjs`, `pnpm run check:api-surface`, `pnpm run check:vp`, and `git diff --check`.
