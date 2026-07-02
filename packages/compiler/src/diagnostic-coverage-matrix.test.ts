@@ -1391,7 +1391,7 @@ describe('compiler diagnostic coverage matrix', () => {
           "help": "Would lower to: a client-readable kovo-query payload embedded in the document and hydrated by the browser query store.
       Blocked reason: the projected query shape contains a secret-classified field, or an opaque/unresolved projection reads a table carrying secret columns, so rendering this query could serialize confidential data onto the client wire.
       Fixes: remove the secret field or opaque projection, select explicit non-secret columns, select a non-secret surrogate, or add an explicit reveal/redaction escape once the audited reveal surface lands.
-      SPEC §6.2, §10.2, and §11.3 make query results JsonValue-bounded client wire values; a secret-classified or unprovable secret-table projection is ineligible for that boundary.",
+      SPEC §6.2/§10.2/§11.3 and fundamental-fixes-followup-3 DEC-C/DEC-F: KV435 is static defense-in-depth for client-wire confidentiality; the non-coercible Secret tag and every egress choke are the security boundary when static source classification is incomplete.",
           "length": null,
           "message": "Secret query value reaches the client wire. query="user" path="user.passwordHash"",
           "severity": "error",
@@ -1406,7 +1406,7 @@ describe('compiler diagnostic coverage matrix', () => {
       Would lower to: a trust-audit row naming the escape hatch, source span, justification, and owning safe path or app review boundary.
       Blocked reason: raw endpoint, trustedHtml/trustedUrl, custom/no verifier, static export path override, or future trustedSql use without provenance becomes invisible to kovo explain --trust.
       Fixes: add a named justification/source span, use a typed safe helper instead of the escape hatch, or remove the trust override.
-      SPEC §4.8 and §9.1 allow trust escape hatches only when they are explicit and auditable.",
+      SPEC §4.8/§9.1 and fundamental-fixes-followup-3 DEC-D/DEC-F: KV426 is an auditable static provenance signal; contextual renderer/header/URL runtime chokes and unforgeable trusted constructors remain the security boundary when static provenance is incomplete.",
           "length": 9,
           "message": "Trust escape hatch lacks auditable provenance. trustedHtml() sends query-derived data to a raw HTML sink without sanitization or an audited justification.",
           "severity": "error",
