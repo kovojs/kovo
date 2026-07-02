@@ -100,11 +100,11 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 
 - [ ] CI wall-clock time improves by at least 25% on two consecutive comparable runs.
   - Evidence to add: before/after run URLs and wall-clock durations for the full CI workflow.
-  - Current evidence: optimized run `28562997661` for `f0faf34f4` succeeded in 13m08s (`2026-07-02T03:21:19Z` to `03:34:27Z`) versus baseline `28554909799` at 13m36s. This proves the first two batches were green but not sufficient; the long pole was queued `kovo-check` jobs, with the last shard finishing at `03:34:22Z`.
+  - Current evidence: optimized run `28562997661` for `f0faf34f4` succeeded in 13m08s (`2026-07-02T03:21:19Z` to `03:34:27Z`) versus baseline `28554909799` at 13m36s, which was green but not sufficient. After duplicate removal, run `28563692587` for `af6ecc78f` succeeded in 9m26s (`2026-07-02T03:40:58Z` to `03:50:24Z`), clearing the 25% target once; second consecutive comparable run still pending.
 - [ ] No required proof disappears.
   - Evidence to add: checklist mapping every pre-plan CI job/step to an optimized job/step that still runs on pull requests and `main` pushes.
 - [ ] Cache hits are visible and keyed safely.
   - Evidence to add: logs showing Playwright and compiler cache restores, with keys including OS and relevant tool/package versions.
 - [ ] Local and workflow syntax checks pass.
   - Evidence to add: `pnpm run check:vp`, `git diff --check`, and a successful GitHub Actions run for the optimized commit.
-  - Current evidence: for the starter split, `vp exec vitest --run scripts/ci-shards.test.mjs` passed with 14 tests; `pnpm run check:vp` passed; `git diff --check` passed; Ruby YAML parse passed for `.github/workflows/ci.yml`, `.github/workflows/pages.yml`, `.github/workflows/race-repeat.yml`, `.github/actions/kovo-setup/action.yml`, and `.github/actions/playwright-install/action.yml`. GitHub Actions evidence still pending.
+  - Current evidence: for the latest batch, `vp exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts scripts/ci-shards.test.mjs` passed; `pnpm run check:vp` passed in the integration worktree; `git diff --check` passed; Ruby YAML parse passed for `.github/workflows/ci.yml`, `.github/workflows/pages.yml`, `.github/workflows/race-repeat.yml`, `.github/actions/kovo-setup/action.yml`, and `.github/actions/playwright-install/action.yml`; GitHub CI run `28563692587` and Pages run `28563692573` passed for `af6ecc78f`.
