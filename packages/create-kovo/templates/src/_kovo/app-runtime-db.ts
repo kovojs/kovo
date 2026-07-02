@@ -223,8 +223,6 @@ function isDrizzleWriteMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 
 
 function assertDeclaredDrizzleTableAllowed(table: unknown, policy: DeclaredWritePolicy): void {
   const allowed = new Set((policy.tables ?? []).map((name) => normalizePolicyTable(name)));
-  if (allowed.size === 0) return;
-
   const tableNames = pgTablePolicyNames(table);
   if (tableNames.some((name) => allowed.has(name))) return;
 

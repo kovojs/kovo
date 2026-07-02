@@ -652,7 +652,7 @@ function mutationLifecycleOptionsWithSqlPolicy<
   options: RunMutationOptions<Request>,
 ): RunMutationOptions<Request> {
   const tables = definition.registry?.tables;
-  if (tables === undefined || tables.length === 0 || options.sqlWritePolicy !== undefined) {
+  if (options.sqlWritePolicy !== undefined) {
     return options;
   }
 
@@ -660,7 +660,7 @@ function mutationLifecycleOptionsWithSqlPolicy<
   return {
     ...options,
     sqlWritePolicy: {
-      tables,
+      tables: tables ?? [],
       ...(touches === undefined ? {} : { touches }),
     },
   };

@@ -2,6 +2,7 @@ import { execFileSync, type ExecFileSyncOptionsWithBufferEncoding } from 'node:c
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import {
   KovoReadonlyHandleError,
@@ -1207,6 +1208,168 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     await expect(handle.insert('contacts').values()).resolves.toBeUndefined();
     expect(() => handle.insert('userx').values()).toThrow(/KV406/);
     expect(log).toEqual(['engine-policy:contacts', 'engine-insert:contacts']);
+  });
+
+  it('fails closed when a declared write policy has no tables', async () => {
+    const log: string[] = [];
+    const raw = {
+      [kovoDeclaredWriteDbHandle](policy: { tables?: readonly string[] }) {
+        log.push(`engine-policy:${policy.tables?.join(',') ?? '<none>'}`);
+        const allowed = new Set(policy.tables ?? []);
+        return {
+          insert(table: string) {
+            return {
+              values() {
+                if (!allowed.has(table)) {
+                  throw new Error(`KV406: engine declared-write policy rejected ${table}`);
+                }
+                log.push(`engine-insert:${table}`);
+                return Promise.resolve();
+              },
+            };
+          },
+        };
+      },
+      execute(statement: unknown) {
+        log.push('raw-execute');
+        return statement;
+      },
+    };
+    const handle = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: [], touches: ['contact'] },
+    }) as {
+      insert(table: string): { values(): Promise<void> };
+    };
+
+    expect(() => handle.insert('contacts').values()).toThrow(/KV406/);
+    expect(log).toEqual(['engine-policy:']);
+
+    const rawSqlHandle = managedDb(
+      {
+        execute(statement: unknown) {
+          log.push('raw-execute');
+          return statement;
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: { tables: [], touches: ['contact'] },
+      },
+    ) as { execute(statement: unknown): unknown };
+    expect(() =>
+      rawSqlHandle.execute(
+        stampTrustedSql(
+          { text: 'insert into contacts (id) values ($1)', values: ['c1'] },
+          'absent tables write',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual(['engine-policy:']);
+  });
+
+  it('refuses Secret boxes at builder values and set write boundaries', () => {
+    const log: string[] = [];
+    const raw = {
+      insert(table: string) {
+        return {
+          values(row: unknown) {
+            log.push(`insert:${table}:${JSON.stringify(row)}`);
+            return Promise.resolve();
+          },
+        };
+      },
+      update(table: string) {
+        return {
+          set(row: unknown) {
+            log.push(`update:${table}:${JSON.stringify(row)}`);
+            return { where: () => Promise.resolve() };
+          },
+        };
+      },
+    };
+    const handle = managedDb(raw, 'write', {
+      sqlWritePolicy: { tables: ['contacts'], touches: ['contact'] },
+    }) as {
+      insert(table: string): { values(row: unknown): Promise<void> };
+      update(table: string): { set(row: unknown): { where(): Promise<void> } };
+    };
+
+    expect(() => handle.insert('contacts').values({ token: secret('sk_live') })).toThrow(/KV435/);
+    expect(() => handle.update('contacts').set({ nested: { token: secret('sk_live') } })).toThrow(
+      /KV435/,
+    );
+    expect(log).toEqual([]);
+  });
+
+  it('refuses Secret boxes in raw-SQL write bind params', () => {
+    const log: string[] = [];
+    const handle = managedDb(fakeDb(log), 'write', {
+      sqlWritePolicy: { tables: ['contacts'], touches: ['contact'] },
+    }) as { execute(statement: unknown): unknown };
+
+    expect(() =>
+      handle.execute(
+        stampTrustedSql(
+          {
+            text: 'update contacts set token = $1 where id = $2',
+            values: [secret('sk_live'), 'c1'],
+          },
+          'secret raw write bind',
+        ),
+      ),
+    ).toThrow(/KV435/);
+    expect(log).toEqual([]);
+  });
+
+  it('records reveal audit facts when a revealed Secret is intentionally written', async () => {
+    drainSecretRevealAuditFacts();
+    const log: unknown[] = [];
+    const token = secret('sk_live').reveal('copy token into audited internal sink');
+    const handle = managedDb(
+      {
+        insert(_table: string) {
+          return {
+            values(row: unknown) {
+              log.push(row);
+              return Promise.resolve();
+            },
+          };
+        },
+      },
+      'write',
+      {
+        sqlWritePolicy: { tables: ['contacts'], touches: ['contact'] },
+      },
+    ) as { insert(table: string): { values(row: unknown): Promise<void> } };
+
+    await expect(handle.insert('contacts').values({ token })).resolves.toBeUndefined();
+    expect(log).toEqual([{ token: 'sk_live' }]);
+    expect(drainSecretRevealAuditFacts()).toMatchObject([
+      { kind: 'secret-reveal', reason: 'copy token into audited internal sink' },
+    ]);
+  });
+
+  it('denies app-defined triggers at the managed raw-SQL write boundary', () => {
+    const log: string[] = [];
+    const handle = managedDb(fakeDb(log), 'write', {
+      sqlWritePolicy: { dialect: 'sqlite', tables: ['contacts'], touches: ['contact'] },
+    }) as { execute(statement: unknown): unknown };
+
+    expect(() =>
+      handle.execute(
+        stampTrustedSql(
+          {
+            sql: [
+              'create trigger contacts_ai after insert on contacts',
+              'begin insert into userx (id) values (new.id); end',
+            ].join(' '),
+            values: [],
+          },
+          'trigger side-effect proof',
+        ),
+      ),
+    ).toThrow(/KV406/);
+    expect(log).toEqual([]);
   });
 
   it('threads declared write policy through an already managed writer without guarding the adapter hook', async () => {

@@ -250,7 +250,7 @@ class DeclaredWriteSqliteAuthorizer {
         const allowed = new Set(
           (this.policy.tables ?? []).map((name) => normalizePolicyTable(name)),
         );
-        if (allowed.size > 0 && allowed.has(table)) return nodeSqliteConstants.SQLITE_OK;
+        if (allowed.has(table)) return nodeSqliteConstants.SQLITE_OK;
         if (
           triggerOrView === null &&
           (objectName === 'sqlite_sequence' || objectName === 'sqlite_stat1')
@@ -321,8 +321,6 @@ function isDirectSqlWriteMethod(prop: PropertyKey): boolean {
 
 function assertDeclaredDrizzleTableAllowed(table: unknown, policy: DeclaredWritePolicy): void {
   const allowed = new Set((policy.tables ?? []).map((name) => normalizePolicyTable(name)));
-  if (allowed.size === 0) return;
-
   const tableNames = sqliteTablePolicyNames(table);
   if (tableNames.some((name) => allowed.has(name))) return;
 
