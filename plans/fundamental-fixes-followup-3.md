@@ -373,7 +373,7 @@ mattering.
       Evidence: `KOVO_PARANOID=1 vp exec vitest --run packages/server/src/jsx-runtime.test.ts` proves spread-delivered
       event/srcdoc/style/URL sinks, final `meta http-equiv=refresh content`, script/style element text, and a synthetic
       future attribute fail closed or escape at the runtime renderer; `pnpm run check:sink-policy` remains green.
-- [ ] **3.3 Static KV426 → advisory (DEC-F, gated by A7).**
+- [x] **3.3 Static KV426 → advisory (DEC-F, gated by A7).**
   - [x] **Runtime renderer choke is live under paranoid mode.** Spread-delivered executable sinks, `meta refresh`,
         script/style text, and synthetic future attributes fail closed or escape with static KV426 stubbed.
         Evidence: `KOVO_PARANOID=1 vp exec vitest --run packages/server/src/jsx-runtime.test.ts`.
