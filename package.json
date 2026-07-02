@@ -22,6 +22,7 @@
     "check:security-brands": "node scripts/check-security-brands.mjs",
     "check:fail-closed-classifiers": "node scripts/check-fail-closed-classifiers.mjs",
     "check:classifier-verdict-routing": "node scripts/check-classifier-verdict-routing.mjs",
+    "check:paranoid-classifiers": "KOVO_PARANOID=1 pnpm run check:fail-closed-classifiers && KOVO_PARANOID=1 pnpm run check:classifier-verdict-routing",
     "check:green-corpus": "node scripts/check-green-corpus.mjs",
     "check:fundamental-fixes-census": "node scripts/fundamental-fixes-census-gate.mjs",
     "check:filesystem-boundary": "node scripts/check-filesystem-boundary.mjs",

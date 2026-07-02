@@ -70,6 +70,35 @@ export const expressionBody = securityClassifier('test.expression-body', (value:
         'expressionBody (test.expression-body) uses `||` with permissive `[]`',
       ),
     ]);
+    expect(result.ok).toBe(false);
+  });
+
+  it('keeps static classifier findings advisory under paranoid mode', () => {
+    const result = runFixture(
+      {
+        'packages/server/src/classifier.ts': `
+import { securityClassifier } from '@kovojs/core/internal/security-markers';
+
+export const terminal = securityClassifier('test.terminal', function (value: { ok: boolean }) {
+  if (value.ok) return ['known'];
+  return [];
+});
+`,
+      },
+      { paranoidMode: true },
+    );
+
+    expect(result).toMatchObject({
+      advisory: true,
+      ok: true,
+      paranoidMode: true,
+    });
+    expect(result.summary).toContain('advisory under KOVO_PARANOID=1');
+    expect(result.findings).toEqual([
+      expect.stringContaining(
+        'terminal (test.terminal) returns permissive `[]` from terminal fallback',
+      ),
+    ]);
   });
 
   it('rejects nullish recognizer skips and implicit positive-guard skips', () => {

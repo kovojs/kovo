@@ -4,6 +4,7 @@ import path from 'node:path';
 import ts from 'typescript';
 
 import { isMainEntry, runGate } from './lib/cli-entry.mjs';
+import { staticClassifierGateResult } from './lib/paranoid-mode.mjs';
 import { repoRoot as findRepoRoot } from './lib/repo-root.mjs';
 import { collectSourceFiles, productionSourceRoots } from './lib/source-files.mjs';
 
@@ -32,14 +33,16 @@ export function checkClassifierVerdictRouting(options = {}) {
     findings.push(...classifySourceFile(sourceFile));
   }
 
-  return {
+  return staticClassifierGateResult({
     findings,
-    ok: findings.length === 0,
-    summary:
-      findings.length === 0
-        ? `OK ${files.length} source file(s) scanned`
-        : `${findings.length} classifier verdict routing violation(s)`,
-  };
+    scanned: files.length,
+    cleanSummary: (scanned, paranoidMode) =>
+      `OK ${scanned} source file(s) scanned${paranoidMode ? ' (paranoid static classifiers advisory)' : ''}`,
+    violationSummary: (count, paranoidMode) =>
+      `${count} classifier verdict routing violation(s)${
+        paranoidMode ? ' (advisory under KOVO_PARANOID=1)' : ''
+      }`,
+  }, options);
 }
 
 export function main(options = {}) {

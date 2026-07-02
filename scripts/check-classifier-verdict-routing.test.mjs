@@ -2,11 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { checkClassifierVerdictRouting } from './check-classifier-verdict-routing.mjs';
 
-function runFixture(files) {
+function runFixture(files, options = {}) {
   return checkClassifierVerdictRouting({
     files: Object.keys(files),
     readText: (relativePath) => files[relativePath] ?? '',
     repoRoot: '/fixture',
+    ...options,
   });
 }
 
@@ -41,6 +42,32 @@ export function enforce(verdict) {
 `,
     });
 
+    expect(result.findings).toEqual([
+      expect.stringContaining('closes proven-unsafe without an unproven companion branch'),
+    ]);
+    expect(result.ok).toBe(false);
+  });
+
+  it('keeps verdict routing findings advisory under paranoid mode', () => {
+    const result = runFixture(
+      {
+        'packages/server/src/verdict.ts': `
+export function enforce(verdict) {
+  if (verdict.kind === 'proven-unsafe') {
+    throw new Error('closed');
+  }
+}
+`,
+      },
+      { paranoidMode: true },
+    );
+
+    expect(result).toMatchObject({
+      advisory: true,
+      ok: true,
+      paranoidMode: true,
+    });
+    expect(result.summary).toContain('advisory under KOVO_PARANOID=1');
     expect(result.findings).toEqual([
       expect.stringContaining('closes proven-unsafe without an unproven companion branch'),
     ]);
