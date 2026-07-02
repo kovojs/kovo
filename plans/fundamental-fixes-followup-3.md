@@ -359,9 +359,13 @@ mattering.
         enrollment.
         Evidence: `pnpm exec vitest --run scripts/security-test-build-gate.test.mjs scripts/security-gate-mutations.test.mjs`
         and `pnpm run check:security-test-builds && pnpm run check:security-gate-mutations`.
-  - [ ] **Read-SOURCE generator.** Seeded cases vary request/query/db-read source families rather than a curated index.
-  - [ ] **General wrapping grammar generator.** Seeded cases vary aliases, helpers, local wrappers, component props, and
+  - [x] **Read-SOURCE generator.** Seeded cases vary request/query/db-read source families rather than a curated index.
+        Evidence: `pnpm exec vitest --run scripts/security-test-build-gate.test.mjs scripts/security-gate-mutations.test.mjs`
+        and `pnpm run check:security-test-builds && pnpm run check:security-gate-mutations`.
+  - [x] **General wrapping grammar generator.** Seeded cases vary aliases, helpers, local wrappers, component props, and
         other wrapping forms across the security proof surfaces.
+        Evidence: `pnpm exec vitest --run scripts/security-test-build-gate.test.mjs scripts/security-gate-mutations.test.mjs`
+        and `pnpm run check:security-test-builds && pnpm run check:security-gate-mutations`.
   - [ ] **Round-8 paranoid generator acceptance.** Generated adversarial cases run with static classifiers stubbed and
         prove unsafe cases hit runtime chokes while legitimate cases stay green.
 
