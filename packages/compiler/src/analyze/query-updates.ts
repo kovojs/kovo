@@ -37,6 +37,7 @@ import {
   type ComponentModel,
   type ComponentModuleModel,
 } from '../scan/parse.js';
+import { generatedOffsetToOriginal, type SourceOffsetMap } from '../shared.js';
 import type { GeneratedOutputWriteFact } from '../output-context-facts.js';
 import type {
   CompileComponentOptions,
@@ -45,6 +46,7 @@ import type {
   QueryTemplateStampFact,
   QueryUpdateCoverageFact,
   QueryUpdatePlanFact,
+  StateDeriveFact,
 } from '../types.js';
 
 export { collectDataBindListStamps } from './query-bindings.js';
@@ -148,6 +150,8 @@ export function collectQueryUpdateCoverage(
   model: ComponentModuleModel,
   options: CompileComponentOptions,
   componentName: string,
+  stateDerives: readonly StateDeriveFact[] = [],
+  sourceOffsetMap?: SourceOffsetMap,
 ): QueryUpdateCoverageFact[] {
   const facts: QueryUpdateCoverageFact[] = [];
   const coveredPaths = new Set<string>();
@@ -313,6 +317,9 @@ export function collectQueryUpdateCoverage(
       continue;
     }
     if (stateExpressionCoveredByDataBind(expression, model)) continue;
+    if (stateExpressionCoveredByGeneratedDerive(expression, stateDerives, sourceOffsetMap)) {
+      continue;
+    }
 
     facts.push({
       componentName: ownerName,
@@ -326,6 +333,51 @@ export function collectQueryUpdateCoverage(
   }
 
   return dedupeBy(facts, updateCoverageKey);
+}
+
+function stateExpressionCoveredByGeneratedDerive(
+  expression: { end: number; path: string; start: number },
+  stateDerives: readonly StateDeriveFact[],
+  sourceOffsetMap: SourceOffsetMap | undefined,
+): boolean {
+  const span = originalSpanForGeneratedExpression(expression, sourceOffsetMap);
+  if (!span) return false;
+  return stateDerives.some(
+    (derive) =>
+      derive.sourceSpan !== undefined &&
+      deriveExpressionReferencesPath(derive.expression, expression.path) &&
+      derive.sourceSpan.start >= span.start &&
+      derive.sourceSpan.end <= span.end,
+  );
+}
+
+function originalSpanForGeneratedExpression(
+  expression: { end: number; start: number },
+  sourceOffsetMap: SourceOffsetMap | undefined,
+): { end: number; start: number } | null {
+  if (sourceOffsetMap === undefined) return expression;
+  const start = generatedOffsetToOriginal(sourceOffsetMap, expression.start);
+  const mappedEnd =
+    generatedOffsetToOriginal(sourceOffsetMap, expression.end) ??
+    endOffsetAfterMappedLastCharacter(sourceOffsetMap, expression.end);
+  if (start === undefined || mappedEnd === undefined) return null;
+  return { end: mappedEnd, start };
+}
+
+function endOffsetAfterMappedLastCharacter(
+  sourceOffsetMap: SourceOffsetMap,
+  generatedEnd: number,
+): number | undefined {
+  if (generatedEnd <= 0) return undefined;
+  const previous = generatedOffsetToOriginal(sourceOffsetMap, generatedEnd - 1);
+  return previous === undefined ? undefined : previous + 1;
+}
+
+function deriveExpressionReferencesPath(expression: string, path: string): boolean {
+  const start = expression.indexOf(path);
+  if (start === -1) return false;
+  const next = expression[start + path.length];
+  return next === undefined || !/[$\w]/u.test(next);
 }
 
 function componentForSpan(

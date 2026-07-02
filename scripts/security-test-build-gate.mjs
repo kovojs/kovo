@@ -351,8 +351,7 @@ export const SECURITY_BUILD_PROOFS = [
       "not.toContain('format(state.count)')",
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
-    testName:
-      'does not ship an unbound module-helper state derive in the production client artifact',
+    testName: 'rejects unbound module-helper state derives during production build preflight',
   },
   {
     buildInvocation: 'cli-main-build',

@@ -166,7 +166,7 @@ describe('create-kovo starter (build integration: production island derives)', (
   }, 180_000);
 
   // @kovo-security-certifies KV311 module-helper-derive-prod-artifact
-  it('does not ship an unbound module-helper state derive in the production client artifact', () => {
+  it('rejects unbound module-helper state derives during production build preflight', () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-helper-derive-'));
@@ -176,7 +176,7 @@ describe('create-kovo starter (build integration: production island derives)', (
       linkStarterBuildDependencies(root);
       addModuleHelperDeriveProof(root);
 
-      buildReusableProductionArtifact(root);
+      expect(() => buildReusableProductionArtifact(root)).toThrow(/KV311/u);
 
       const clientSources = clientArtifactSources(root).join('\n');
       expect(clientSources).not.toContain('format(state.count)');

@@ -346,13 +346,23 @@ function validateComponentPhase(
     ...collectQueryUpdatePlans(lowered.model, parsed.componentName),
     ...styleExtraction.queryUpdatePlans,
   ]);
+  const stateDerives = [
+    ...lowered.lowering.structuralLowering.stateDerives,
+    ...styleExtraction.stateDerives,
+  ];
   const clockUpdatePlans = collectClockUpdatePlans(
     lowered.model,
     parsed.componentName,
     queryUpdatePlans,
   );
   const updateCoverage = mergeStyleUpdateCoverage(
-    collectQueryUpdateCoverage(lowered.model, parsed.compileOptions, parsed.componentName),
+    collectQueryUpdateCoverage(
+      lowered.model,
+      parsed.compileOptions,
+      parsed.componentName,
+      stateDerives,
+      lowered.lowering.validationOffsetMap,
+    ),
     styleExtraction.updateCoverage,
     styleExtraction.handledSpans,
   );

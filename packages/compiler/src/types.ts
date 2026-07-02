@@ -672,6 +672,7 @@ export interface StateDeriveFact {
   outputContext: GeneratedOutputWriteFact;
   param: 'state';
   placeholder: string;
+  sourceSpan?: { end: number; start: number };
 }
 
 /**

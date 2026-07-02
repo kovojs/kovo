@@ -632,6 +632,35 @@ export const StateChainedAlias = component({
     expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
   });
 
+  it('credits generated state derives for JSX expression containers that produced them', () => {
+    const result = compileComponentModule({
+      fileName: 'state-iife-alias.tsx',
+      source: `
+export const StateIifeAlias = component({
+  state: () => ({ count: 1 }),
+  render: (_queries, state) => (
+    <state-iife-alias>
+      {(() => {
+        const { count } = state;
+        const chained = count;
+        return <p>{chained + 1}</p>;
+      })()}
+    </state-iife-alias>
+  ),
+});
+`,
+    });
+    const clientSource = result.files[1]?.source ?? '';
+
+    expect(clientSource).toContain(
+      'export const StateIifeAlias$p_text_derive = derive(["state"], (state) => (state.count) + 1);',
+    );
+    expect(result.updateCoverage).not.toContainEqual(
+      expect.objectContaining({ query: 'state.count', source: 'state', status: 'UNHANDLED' }),
+    );
+    expect(result.diagnostics).not.toContainEqual(expect.objectContaining({ code: 'KV311' }));
+  });
+
   it('lowers chained destructured state aliases to canonical state-path derives', () => {
     const result = compileComponentModule({
       fileName: 'state-chained-destructure-alias.tsx',

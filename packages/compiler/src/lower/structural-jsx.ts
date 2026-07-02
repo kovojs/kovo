@@ -90,6 +90,7 @@ interface InlineStateTextDerive {
   baseName: string;
   expression: string;
   expressionNode: JsxIrExpression;
+  sourceSpan: SourceSpan;
   wrapper?: JsxIrElement;
 }
 
@@ -1517,6 +1518,7 @@ function inlineTextDerive(
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
     expression: deriveExpression,
     expressionNode: expression,
+    sourceSpan: { end: expression.expression.end, start: expression.expression.start },
     wrapper: element,
   };
 }
@@ -1578,6 +1580,7 @@ function inlineMixedTextDerive(
     baseName: `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_text_derive`,
     expression: deriveExpression,
     expressionNode: expression,
+    sourceSpan: { end: expression.expression.end, start: expression.expression.start },
   };
 }
 
@@ -1655,6 +1658,7 @@ function recordStateDerive(
       }),
       param: 'state',
       placeholder: `state.${exportName}`,
+      sourceSpan: derive.sourceSpan,
     }),
     stateDerives,
     outputContext: outputWriteFact({
