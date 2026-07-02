@@ -44,7 +44,8 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const client = new PGlite(process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR);
   const ready = initializeAppDb(client);
   const db = drizzle({ client });
-  return { db, readonlyDb: readonlyDb(secretBoxingReadDb(db, SECRET_COLUMN_KEYS)), ready };
+  const readDb = drizzle({ client: readonlyPgliteClient(client) });
+  return { db, readonlyDb: readonlyDb(secretBoxingReadDb(readDb, SECRET_COLUMN_KEYS)), ready };
 }
 
 async function initializeAppDb(client: PGlite): Promise<void> {
@@ -173,6 +174,49 @@ function quoteIdent(value: string): string {
 
 function quoteLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
+}
+
+function readonlyPgliteClient(client: PGlite): PGlite {
+  return new Proxy(client, {
+    get(target, prop, receiver) {
+      if (prop === 'query') {
+        return readonlyPgliteQuery.bind(undefined, target);
+      }
+      if (prop === 'exec') {
+        return readonlyPgliteExec.bind(undefined, target);
+      }
+      return Reflect.get(target, prop, receiver);
+    },
+  }) as PGlite;
+}
+
+function readonlyPgliteQuery(
+  client: PGlite,
+  query: string,
+  params?: unknown[],
+  options?: Parameters<PGlite['query']>[2],
+): Promise<unknown> {
+  return client.transaction(async (tx) => {
+    await runPgliteReadOnlyTransactionControl(tx);
+    return Reflect.apply(tx.query, tx, [query, params, options]) as Promise<unknown>;
+  });
+}
+
+function readonlyPgliteExec(
+  client: PGlite,
+  query: string,
+  options?: Parameters<PGlite['exec']>[1],
+): ReturnType<PGlite['exec']> {
+  return client.transaction(async (tx) => {
+    await runPgliteReadOnlyTransactionControl(tx);
+    return Reflect.apply(tx.exec, tx, [query, options]) as ReturnType<PGlite['exec']>;
+  });
+}
+
+function runPgliteReadOnlyTransactionControl(
+  tx: Parameters<Parameters<PGlite['transaction']>[0]>[0],
+): Promise<unknown> {
+  return Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY']) as Promise<unknown>;
 }
 
 function secretBoxingReadDb<Db extends object>(db: Db, secretKeys: ReadonlySet<string>): Db {

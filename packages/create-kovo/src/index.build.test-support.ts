@@ -779,6 +779,7 @@ export function addRuntimeMutationSafetyProofs(
             "  csrfJustification: 'GET endpoint proves readonlyAppDb cannot mutate',",
             '  async handler() {',
             '    const results = [',
+            `      await attemptReadonlySqlMethod('${rawRuntimeDriftMethod}'),`,
             "      await attemptReadonlySqlMethod('all'),",
             "      await attemptReadonlySqlMethod('get'),",
             "      await attemptReadonlySqlMethod('values'),",

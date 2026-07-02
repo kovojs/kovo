@@ -265,7 +265,13 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'return { db, readonlyDb: readonlyDb(secretBoxingReadDb(db, SECRET_COLUMN_KEYS)), ready }',
+      'const readDb = drizzle({ client: readonlyPgliteClient(client) });',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'return { db, readonlyDb: readonlyDb(secretBoxingReadDb(readDb, SECRET_COLUMN_KEYS)), ready }',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "Reflect.apply(tx.exec, tx, ['SET TRANSACTION READ ONLY'])",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "const SECRET_COLUMN_KEYS = new Set(['accessToken', 'idToken', 'password', 'refreshToken', 'token'])",
