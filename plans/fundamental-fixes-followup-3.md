@@ -263,6 +263,15 @@ mattering.
       property-test + model-check harness for the `Secret`/`Untrusted` boxes and `emitToWire`. Makes "the chokes are the
       whole TCB and they are verified" a mechanically checked standing invariant. As each phase adds a choke, it is
       enrolled in the manifest and must pass the bar before that phase is "done."
+  - [x] **TCB manifest and focused boundary/budget lint substrate.** `security/TCB.md` lists the current budgeted
+        runtime TCB separately from deliberately classified advisory/static wrapper inventory; `check:tcb-boundary`
+        binds manifest entries to real AST declarations, enforces per-entry and total TCB line budgets, and fails on
+        unlisted/mismatched `securityClassifier`/`wireEmitter` wrappers.
+        Evidence: `pnpm exec vitest --run scripts/check-tcb-boundary.test.mjs`, `pnpm run check:tcb-boundary`, and
+        `pnpm run check:security-brands` are green in the Phase 0.4 substrate slice worktree.
+  - [ ] **Exhaustive property-test + model-check/proof harness.** Add exhaustive property tests for every JS coercion
+        path on the boxes and every value shape into `emitToWire`, plus the model-checking or proof-assistant obligation
+        for non-coercibility and egress refusal required by DEC-K.
 
 ### Phase 1 — Integrity via the engine (biggest win, smallest change)
 
