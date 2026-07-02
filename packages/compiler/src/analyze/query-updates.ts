@@ -382,9 +382,7 @@ function deriveSourcePathsCoverExpression(
 
 function statePathCovers(sourcePath: string, path: string): boolean {
   return (
-    sourcePath === path ||
-    sourcePath.startsWith(`${path}.`) ||
-    sourcePath.startsWith(`${path}[`)
+    sourcePath === path || sourcePath.startsWith(`${path}.`) || sourcePath.startsWith(`${path}[`)
   );
 }
 
