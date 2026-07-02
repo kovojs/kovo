@@ -7,9 +7,11 @@ import { describe, expect, it } from 'vitest';
 import {
   SECURITY_BUILD_CERTIFICATION_SOURCES,
   SECURITY_BUILD_PROOFS,
+  generateTrustedOutputSinkPositionCases,
   extractMetamorphicSeedCodes,
   extractSecurityCertificationMarkers,
   securityTestBuildGateViolations,
+  trustedOutputSinkPositionProofNeedles,
 } from './security-test-build-gate.mjs';
 
 const METAMORPHIC_CERTIFICATION_SOURCES = SECURITY_BUILD_CERTIFICATION_SOURCES.filter(
@@ -44,6 +46,33 @@ describe('security-test-build-gate', () => {
     ).toEqual([
       { claimId: 'trusted-html-barrel', code: 'KV426' },
       { claimId: 'secret-wire', code: 'KV435' },
+    ]);
+  });
+
+  it('generates deterministic trusted-output SINK-position proof cases from a seeded grammar', () => {
+    const defaultCases = generateTrustedOutputSinkPositionCases();
+    const sameSeedCases = generateTrustedOutputSinkPositionCases({
+      seed: 'dec-g:kv426:trusted-output:v1',
+    });
+    const alternateSeedCases = generateTrustedOutputSinkPositionCases({
+      seed: 'dec-g:kv426:trusted-output:order-a',
+    });
+
+    expect(defaultCases).toEqual(sameSeedCases);
+    expect(defaultCases).not.toEqual(alternateSeedCases);
+    expect(new Set(defaultCases.map((testCase) => testCase.sink))).toEqual(
+      new Set(['trustedHtml', 'trustedUrl', 'renderedHtml']),
+    );
+    expect(new Set(defaultCases.map((testCase) => testCase.source))).toEqual(
+      new Set(['request', 'query']),
+    );
+    expect(new Set(defaultCases.map((testCase) => testCase.wrapping))).toEqual(
+      new Set(['direct-call', 'helper-call', 'component-prop']),
+    );
+    expect(trustedOutputSinkPositionProofNeedles().sort()).toEqual([
+      'renderedHtml() sends query-derived data',
+      'trustedHtml() sends request-derived data',
+      'trustedUrl() sends query-derived data',
     ]);
   });
 
@@ -302,6 +331,60 @@ describe('security-test-build-gate', () => {
           repoRoot,
         }),
       ).toEqual([]);
+    });
+  });
+
+  it('consumes generated trusted-output SINK-position evidence in the proof gate', () => {
+    withTempRepo((repoRoot) => {
+      writeStarterProofFile(
+        repoRoot,
+        [
+          '// @kovo-security-certifies KV426 trusted-output-prod-artifact',
+          "it('trusted output proof', () => {",
+          '  addTrustedOutputProvenanceBuildProof(unsafeRoot);',
+          '  buildProductionArtifact(unsafeRoot);',
+          '  addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false });',
+          '  buildReusableProductionArtifact(safeRoot);',
+          "  expect(output).toContain('KV426');",
+          "  expect(output).toContain('trustedUrl() sends query-derived data');",
+          "  expect(output).toContain('trustedHtml() sends request-derived data');",
+          '});',
+        ].join('\n'),
+      );
+      writeStarterBuildHelper(repoRoot, validStarterBuildHelperSource());
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: [
+            {
+              claimExtractor: 'security-certification-markers',
+              description: 'starter security proof-scope enrollment declarations',
+              file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+            },
+          ],
+          proofs: [
+            {
+              buildInvocation: 'starter-build-production-artifact',
+              claimId: 'trusted-output-prod-artifact',
+              code: 'KV426',
+              proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+              requiredNeedles: [
+                'addTrustedOutputProvenanceBuildProof(unsafeRoot)',
+                'buildProductionArtifact(unsafeRoot)',
+                'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',
+                'buildReusableProductionArtifact(safeRoot)',
+                'KV426',
+                ...trustedOutputSinkPositionProofNeedles(),
+              ],
+              sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+              testName: 'trusted output proof',
+            },
+          ],
+          repoRoot,
+        }),
+      ).toContain(
+        'packages/create-kovo/src/index.build.prod-artifact.security.test.ts KV426/trusted-output-prod-artifact -> packages/create-kovo/src/index.build.prod-artifact.security.test.ts: proof test is missing required evidence "renderedHtml() sends query-derived data"',
+      );
     });
   });
 

@@ -53,6 +53,10 @@ describe('security-gate-mutations', () => {
           status: 'killed',
         }),
         expect.objectContaining({
+          name: 'security-test-build-gate/drop-kv426-generated-sink-position-proof-enrollment',
+          status: 'killed',
+        }),
+        expect.objectContaining({
           name: 'check-sink-policy-gate/drop-sql-guard-env-detector',
           status: 'killed',
         }),

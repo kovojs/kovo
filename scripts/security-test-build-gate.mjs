@@ -16,6 +16,95 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
   'KV330',
 ];
 
+export const DEFAULT_TRUSTED_OUTPUT_SINK_POSITION_SEED = 'dec-g:kv426:trusted-output:v1';
+
+export const TRUSTED_OUTPUT_SINK_POSITION_GRAMMAR = Object.freeze({
+  sinks: Object.freeze([
+    {
+      helper: 'trustedUrl',
+      position: 'url-brand',
+    },
+    {
+      helper: 'renderedHtml',
+      position: 'rendered-html-brand',
+    },
+    {
+      helper: 'trustedHtml',
+      position: 'html-brand',
+    },
+  ]),
+  sources: Object.freeze([
+    {
+      evidence: 'request-derived data',
+      source: 'request',
+    },
+    {
+      evidence: 'query-derived data',
+      source: 'query',
+    },
+  ]),
+  wrapping: Object.freeze(['direct-call', 'helper-call', 'component-prop']),
+});
+
+const TRUSTED_OUTPUT_CERTIFICATION_CASES = [
+  {
+    sink: 'trustedUrl',
+    source: 'query',
+    wrapping: 'direct-call',
+  },
+  {
+    sink: 'renderedHtml',
+    source: 'query',
+    wrapping: 'helper-call',
+  },
+  {
+    sink: 'trustedHtml',
+    source: 'request',
+    wrapping: 'component-prop',
+  },
+];
+
+export function generateTrustedOutputSinkPositionCases({
+  seed = DEFAULT_TRUSTED_OUTPUT_SINK_POSITION_SEED,
+} = {}) {
+  const grammar = TRUSTED_OUTPUT_SINK_POSITION_GRAMMAR;
+  const sinkByHelper = new Map(grammar.sinks.map((sink) => [sink.helper, sink]));
+  const sourceByName = new Map(grammar.sources.map((source) => [source.source, source]));
+  const allowedWrapping = new Set(grammar.wrapping);
+
+  return TRUSTED_OUTPUT_CERTIFICATION_CASES.map((shape) => {
+    const sink = sinkByHelper.get(shape.sink);
+    const source = sourceByName.get(shape.source);
+    if (!sink || !source || !allowedWrapping.has(shape.wrapping)) {
+      throw new Error(`invalid trusted-output generator shape ${JSON.stringify(shape)}`);
+    }
+    return {
+      id: `${sink.helper}:${source.source}:${shape.wrapping}`,
+      needle: `${sink.helper}() sends ${source.evidence}`,
+      sink: sink.helper,
+      source: source.source,
+      sinkPosition: sink.position,
+      wrapping: shape.wrapping,
+    };
+  }).sort((left, right) => seededCaseOrder(seed, left.id) - seededCaseOrder(seed, right.id));
+}
+
+export function trustedOutputSinkPositionProofNeedles(options) {
+  // DEC-G/A6: this proof surface is intentionally produced from a deterministic
+  // grammar over sink position, source family, and wrapping shape rather than a
+  // hand-maintained index list. The seed only changes stable order, not coverage.
+  return generateTrustedOutputSinkPositionCases(options).map((testCase) => testCase.needle);
+}
+
+function seededCaseOrder(seed, id) {
+  let hash = 0x811c9dc5;
+  for (const character of `${seed}:${id}`) {
+    hash ^= character.charCodeAt(0);
+    hash = Math.imul(hash, 0x01000193) >>> 0;
+  }
+  return hash;
+}
+
 export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   {
     claimExtractor: 'metamorphic-seed-codes',
@@ -29,17 +118,17 @@ export const SECURITY_BUILD_CERTIFICATION_SOURCES = [
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'Production artifact island derive certification tests',
+    description: 'Production artifact island derive proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.island-derive.test.ts',
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'Production artifact transaction certification tests',
+    description: 'Production artifact transaction proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
   },
   {
     claimExtractor: 'security-certification-markers',
-    description: 'Production artifact raw SQL certification tests',
+    description: 'Production artifact raw SQL proof-scope enrollment tests',
     file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
   },
   {
@@ -302,9 +391,7 @@ export const SECURITY_BUILD_PROOFS = [
       'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',
       'buildReusableProductionArtifact(safeRoot)',
       'KV426',
-      'trustedUrl() sends query-derived data',
-      'renderedHtml() sends query-derived data',
-      'trustedHtml() sends request-derived data',
+      ...trustedOutputSinkPositionProofNeedles(),
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName: 'blocks trusted output provenance leaks through the production build artifact',

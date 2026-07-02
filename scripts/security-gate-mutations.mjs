@@ -44,7 +44,7 @@ const queryWireHtmlPath = path.join(repoRoot, 'packages/server/src/wire-html.ts'
 const missingRealBuildProofBranch = [
   '      if (!proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
   '        violations.push(',
-  '          `${formatClaimLabel(source.file, claim)}: security certification has no real kovo build proof`,',
+  '          `${formatClaimLabel(source.file, claim)}: security proof-scope enrollment has no real kovo build proof`,',
   '        );',
   '      }',
 ].join('\n');
@@ -52,7 +52,7 @@ const missingRealBuildProofBranch = [
 const removedMissingRealBuildProofBranch = [
   '      if (false && !proofs.some((proof) => proofMatchesClaim(proof, source.file, claim))) {',
   '        violations.push(',
-  '          `${formatClaimLabel(source.file, claim)}: security certification has no real kovo build proof`,',
+  '          `${formatClaimLabel(source.file, claim)}: security proof-scope enrollment has no real kovo build proof`,',
   '        );',
   '      }',
 ].join('\n');
@@ -76,7 +76,7 @@ const staleProofRowBranch = [
   '      .get(proof.sourceFile)',
   '      .some((claim) => proofMatchesClaim(proof, proof.sourceFile, claim))',
   '  ) {',
-  '    violations.push(`${label}: proof is stale; source does not certify ${formatProofClaim(proof)}`);',
+  '    violations.push(`${label}: proof is stale; source does not enroll ${formatProofClaim(proof)}`);',
   '  }',
 ].join('\n');
 
@@ -88,7 +88,7 @@ const removedStaleProofRowBranch = [
   '      .get(proof.sourceFile)',
   '      .some((claim) => proofMatchesClaim(proof, proof.sourceFile, claim))',
   '  ) {',
-  '    violations.push(`${label}: proof is stale; source does not certify ${formatProofClaim(proof)}`);',
+  '    violations.push(`${label}: proof is stale; source does not enroll ${formatProofClaim(proof)}`);',
   '  }',
 ].join('\n');
 
@@ -173,6 +173,10 @@ const weakenedKv435SafeSiblingProofNeedle = `      'addAuthSecretLeakProof(safeR
 const kv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvenanceBuildProof(safeRoot, { unsafe: false })',`;
 
 const weakenedKv426TrustedOutputSafeSiblingProofNeedle = `      'addTrustedOutputProvenanceBuildProof(safeRoot)',`;
+
+const kv426TrustedOutputGeneratedSinkNeedles = `      ...trustedOutputSinkPositionProofNeedles(),`;
+
+const removedKv426TrustedOutputGeneratedSinkNeedles = `      // generated SINK-position proof needles removed by mutant`;
 
 const kv426TrustedUrlAttributeProofNeedle = `      'addTrustedUrlAttributeTypeGateProof(root)',`;
 
@@ -479,9 +483,9 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
     description:
-      'Deletes the branch that reads explicit non-metamorphic security certification markers.',
+      'Deletes the branch that reads explicit non-metamorphic security proof-scope enrollment markers.',
     expectedKiller:
-      'enrolled unit or fixture security certification markers must require real build proof',
+      'enrolled unit or fixture security proof-scope enrollment markers must require real build proof',
     name: 'security-test-build-gate/drop-security-certification-marker-extractor',
     replacement: removedSecurityCertificationMarkerExtractorBranch,
     search: securityCertificationMarkerExtractorBranch,
@@ -491,7 +495,7 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
     description: 'Deletes the branch that rejects stale proof rows.',
-    expectedKiller: 'stale security proof rows must not certify a removed or renamed source claim',
+    expectedKiller: 'stale security proof rows must not enroll a removed or renamed source claim',
     name: 'security-test-build-gate/drop-stale-proof-row-rejection',
     replacement: removedStaleProofRowBranch,
     search: staleProofRowBranch,
@@ -501,7 +505,7 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
     description: 'Deletes the branch that rejects skipped or todo real-build proof tests.',
-    expectedKiller: 'skipped security proof tests must not certify M2 build fidelity',
+    expectedKiller: 'skipped security proof tests must not claim M2 build fidelity',
     name: 'security-test-build-gate/drop-skipped-proof-rejection',
     replacement: removedSkippedProofBranch,
     search: skippedProofBranch,
@@ -577,6 +581,18 @@ export const SECURITY_GATE_MUTANTS = [
     search: kv426TrustedOutputSafeSiblingProofNeedle,
     sourceFile: securityTestBuildGatePath,
     test: assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned,
+  },
+  {
+    baseModule: securityTestBuildGate,
+    description:
+      'Deletes the generated KV426 trusted-output SINK-position proof evidence from the real-build gate.',
+    expectedKiller:
+      'KV426 trusted-output proof enrollment must consume DEC-G generated SINK-position needles',
+    name: 'security-test-build-gate/drop-kv426-generated-sink-position-proof-enrollment',
+    replacement: removedKv426TrustedOutputGeneratedSinkNeedles,
+    search: kv426TrustedOutputGeneratedSinkNeedles,
+    sourceFile: securityTestBuildGatePath,
+    test: assertKv426TrustedOutputGeneratedSinkPositionProofEnrollmentIsPinned,
   },
   {
     baseModule: securityTestBuildGate,
@@ -957,7 +973,7 @@ async function assertMissingRealBuildProofIsCaught(moduleUnderTest) {
     });
     assertIncludes(
       violations,
-      'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security certification has no real kovo build proof',
+      'packages/conformance-fixtures/src/metamorphic-recognition-fixtures.ts KV426: security proof-scope enrollment has no real kovo build proof',
     );
   });
 }
@@ -977,7 +993,7 @@ async function assertSecurityCertificationMarkerIsCaught(moduleUnderTest) {
       certificationSources: [
         {
           claimExtractor: 'security-certification-markers',
-          description: 'unit security certification declarations',
+          description: 'unit security proof-scope enrollment declarations',
           file: 'packages/drizzle/src/unit-security.test.ts',
         },
       ],
@@ -986,7 +1002,7 @@ async function assertSecurityCertificationMarkerIsCaught(moduleUnderTest) {
     });
     assertIncludes(
       violations,
-      'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-unit: security certification has no real kovo build proof',
+      'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-unit: security proof-scope enrollment has no real kovo build proof',
     );
   });
 }
@@ -1011,7 +1027,7 @@ async function assertStaleProofRowIsCaught(moduleUnderTest) {
       certificationSources: [
         {
           claimExtractor: 'security-certification-markers',
-          description: 'unit security certification declarations',
+          description: 'unit security proof-scope enrollment declarations',
           file: 'packages/drizzle/src/unit-security.test.ts',
         },
       ],
@@ -1029,7 +1045,7 @@ async function assertStaleProofRowIsCaught(moduleUnderTest) {
     });
     assertIncludes(
       violations,
-      'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-old -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not certify KV426/trusted-html-old',
+      'packages/drizzle/src/unit-security.test.ts KV426/trusted-html-old -> packages/cli/src/index.kovo-build.test.ts: proof is stale; source does not enroll KV426/trusted-html-old',
     );
   });
 }
@@ -1206,6 +1222,27 @@ async function assertKv426TrustedOutputSafeSiblingProofEnrollmentIsPinned(module
         needle,
       )}`,
     );
+  }
+}
+
+async function assertKv426TrustedOutputGeneratedSinkPositionProofEnrollmentIsPinned(
+  moduleUnderTest,
+) {
+  const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
+    (candidate) =>
+      candidate.code === 'KV426' &&
+      candidate.claimId === 'trusted-output-prod-artifact' &&
+      candidate.proofFile === 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+  );
+  if (!proof) throw new Error('KV426 trusted-output production build proof is not enrolled');
+  for (const needle of moduleUnderTest.trustedOutputSinkPositionProofNeedles()) {
+    if (!proof.requiredNeedles?.includes(needle)) {
+      throw new Error(
+        `KV426 trusted-output proof must require generated SINK-position evidence ${JSON.stringify(
+          needle,
+        )}`,
+      );
+    }
   }
 }
 
