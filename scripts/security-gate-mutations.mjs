@@ -911,6 +911,7 @@ export async function runSecurityGateMutationHarness({ mutants = SECURITY_GATE_M
 function installMutantScriptLib(tempRoot) {
   const libDir = path.join(tempRoot, 'scripts', 'lib');
   mkdirSync(libDir, { recursive: true });
+  mkdirSync(path.join(tempRoot, 'scripts'), { recursive: true });
   writeFileSync(path.join(tempRoot, 'package.json'), '{"type":"module"}\n', 'utf8');
   const repoNodeModules = path.join(repoRoot, 'node_modules');
   if (existsSync(repoNodeModules)) {
@@ -923,6 +924,11 @@ function installMutantScriptLib(tempRoot) {
       'utf8',
     );
   }
+  writeFileSync(
+    path.join(tempRoot, 'scripts', 'check-security-brands.mjs'),
+    readFileSync(path.join(scriptsDir, 'check-security-brands.mjs'), 'utf8'),
+    'utf8',
+  );
 }
 
 export function applyExactMutation(sourceText, mutant) {
