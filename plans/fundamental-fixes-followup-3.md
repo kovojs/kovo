@@ -350,8 +350,9 @@ mattering.
         through the framework choke or an audited escape path.
   - [ ] **DB exec constructor unrepresentability.** DB execution paths should reach managed read/write chokes by type and
         reachability, not by curated shape recognition.
-  - [ ] **Escape-hatch forgery rejection.** Shadowed `reveal`, `declareOffWire`, fake trusted brands, and bare casts must
+  - [x] **Escape-hatch forgery rejection.** Shadowed `reveal`, `declareOffWire`, fake trusted brands, and bare casts must
         be rejected or fail to satisfy the validating constructor path.
+        Evidence: `pnpm exec vitest --run packages/drizzle/src/index.query-shapes.test.ts packages/browser/src/security-output.test.ts`.
 - [x] **4.2 Reword static gates as advisory + fix proof scope (DEC-F/G).** Diagnostics name their choke; scanned roots
       derived from marker-imports (fixes `papercuts-26` P4).
       Evidence: `pnpm exec vitest --run packages/core/src/diagnostics.test.ts scripts/check-classifier-verdict-routing.test.mjs scripts/check-fail-closed-classifiers.test.mjs scripts/security-test-build-gate.test.mjs scripts/lib/source-files.test.mjs`
