@@ -93,7 +93,7 @@ describe('security-test-build-gate', () => {
       new Set(['request', 'query', 'db-read']),
     );
     expect(readSourceFamilyProofNeedles().sort()).toEqual([
-      'queries/auth-secret-direct-leak-query.accessToken',
+      'query="secrets0" path="secrets0\\.accessToken"',
       'trustedHtml() sends request-derived data',
       'trustedUrl() sends query-derived data',
     ]);
@@ -112,48 +112,61 @@ describe('security-test-build-gate', () => {
       new Set(['alias', 'component-prop', 'direct', 'helper', 'local-wrapper']),
     );
     expect(securityWrappingProofNeedles().sort()).toEqual([
-      'queries/auth-secret-direct-leak-query.accessToken',
-      'queries/auth-secret-leak-query.accessToken',
-      'queries/auth-secret-transformed-leak-query.password',
+      'query="secrets0" path="secrets0\\.accessToken"',
+      'query="secrets1" path="secrets1\\.password"',
+      'query="secrets3" path="secrets3\\.accessToken"',
       'renderedHtml() sends query-derived data',
       'trustedHtml() sends request-derived data',
     ]);
   });
 
-  it('generates deterministic paranoid acceptance cases for unsafe and legitimate paths', () => {
+  it('generates deterministic paranoid acceptance cases for read and write paths', () => {
     const defaultCases = generateParanoidGeneratorAcceptanceCases();
     const sameSeedCases = generateParanoidGeneratorAcceptanceCases({
-      seed: 'dec-h:round-8:paranoid:v1',
+      seed: 'dec-h:phase-5-1:paranoid:v1',
     });
     const alternateSeedCases = generateParanoidGeneratorAcceptanceCases({ seed: 'a' });
 
     expect(defaultCases).toEqual(sameSeedCases);
     expect(defaultCases).not.toEqual(alternateSeedCases);
     expect(new Set(defaultCases.map((testCase) => testCase.expectation))).toEqual(
-      new Set(['unsafe-runtime-choke', 'static-classifiers-stubbed', 'legitimate-build-green']),
+      new Set(['blocked-read', 'allowed-read', 'allowed-write', 'blocked-write', 'status-clean']),
     );
     expect(
       new Set(
         defaultCases
-          .filter((testCase) => testCase.kind === 'runtime-route')
+          .filter((testCase) => typeof testCase.route === 'string')
           .map((testCase) => testCase.route),
       ),
     ).toEqual(
       new Set([
-        '/paranoid-runtime-safe.txt',
-        '/paranoid-runtime-unsafe-header.txt',
-        '/paranoid-runtime-unsafe-helper.txt',
+        '/_m/mutations/add-contact',
+        '/_m/phase5-write-boundary/boxed-secret-raw',
+        '/_q/sqlite-secret-alias-egress',
+        '/_q/sqlite-secret-cte-egress',
+        '/_q/sqlite-secret-reveal',
+        '/api/phase5-write-boundary-proof',
       ]),
     );
-    expect(
-      defaultCases.filter((testCase) => testCase.expectation === 'unsafe-runtime-choke'),
-    ).toHaveLength(2);
+    expect(defaultCases.filter((testCase) => testCase.expectation === 'blocked-read')).toHaveLength(
+      2,
+    );
     expect(paranoidGeneratorAcceptanceProofNeedles().sort()).toEqual([
       "KOVO_PARANOID: '1'",
-      'addParanoidRuntimeProofRoutes(root, paranoidCases)',
+      'addParanoidPhase5WriteBoundaryProof(root)',
+      'addSqliteRuntimeSecretProvenanceProof(root)',
+      'addStarterMutationDbScopeProof(root)',
       'buildParanoidProductionArtifact(root)',
-      'expectParanoidRuntimeCase(origin, testCase)',
-      'generateParanoidGeneratorAcceptanceCases()',
+      "dialect: 'sqlite'",
+      "expect(output()).toContain('KV406')",
+      "expect(output()).toContain('KV435')",
+      'expectAllowedReadShapes(origin, jar)',
+      'expectBlockedReadShapes(origin, jar)',
+      'expectBlockedWrites(origin, marker)',
+      'expectStarterInScopeWrite(origin, jar, output, contactEmail)',
+      'expectWriteStatus(origin, marker, contactEmail)',
+      'pruneParanoidPhase5SqliteReadSet(root)',
+      'writeKovoProject(root, {',
     ]);
   });
 

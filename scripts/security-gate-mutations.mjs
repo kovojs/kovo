@@ -640,9 +640,9 @@ export const SECURITY_GATE_MUTANTS = [
   {
     baseModule: securityTestBuildGate,
     description:
-      'Deletes the generated round-8 paranoid acceptance evidence from the real-build gate.',
+      'Deletes the generated Phase 5.1 paranoid acceptance evidence from the real-build gate.',
     expectedKiller:
-      'paranoid runtime proof enrollment must consume generated unsafe and legitimate acceptance needles',
+      'paranoid runtime proof enrollment must consume generated read and write acceptance needles',
     name: 'security-test-build-gate/drop-generated-paranoid-acceptance-proof-enrollment',
     replacement: removedParanoidAcceptanceGeneratedNeedles,
     search: paranoidAcceptanceGeneratedNeedles,
@@ -1361,22 +1361,22 @@ async function assertGeneratedParanoidAcceptanceProofEnrollmentIsPinned(
   { sourceText } = {},
 ) {
   if (sourceText && !sourceText.includes(paranoidAcceptanceGeneratedNeedles)) {
-    throw new Error('paranoid proof must consume the generated round-8 acceptance spread');
+    throw new Error('paranoid proof must consume the generated Phase 5.1 acceptance spread');
   }
   const proof = moduleUnderTest.SECURITY_BUILD_PROOFS.find(
     (candidate) =>
       candidate.code === 'KV435' &&
-      candidate.claimId === 'round-8-paranoid-generator-acceptance' &&
+      candidate.claimId === 'phase-5-1-full-paranoid-dogfood-read-acceptance' &&
       candidate.proofFile ===
         'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
   );
-  if (!proof) throw new Error('round-8 paranoid generated runtime proof is not enrolled');
+  if (!proof) throw new Error('Phase 5.1 paranoid generated runtime proof is not enrolled');
   for (const needle of moduleUnderTest.paranoidGeneratorAcceptanceProofNeedles()) {
     const enrolled =
       proof.requiredNeedles?.includes(needle) || proof.requiredProofFileNeedles?.includes(needle);
     if (!enrolled) {
       throw new Error(
-        `paranoid proof must require generated round-8 acceptance evidence ${JSON.stringify(
+        `paranoid proof must require generated Phase 5.1 acceptance evidence ${JSON.stringify(
           needle,
         )}`,
       );

@@ -9,7 +9,11 @@ function runFixture(files) {
       'packages/server/src/response-posture.ts',
       'packages/server/src/mutation/streaming.ts',
     ],
-    allowedDriverFiles: ['packages/server/src/sql-safe-handle.ts'],
+    allowedDriverFiles: [
+      'packages/server/src/managed-db.ts',
+      'packages/server/src/secret-read-boundary.ts',
+      'packages/server/src/sql-safe-handle.ts',
+    ],
     allowedRawTargetFiles: ['packages/server/src/sql-safe-handle.ts'],
     exists: (relativePath) => Object.hasOwn(files, relativePath),
     readText: (relativePath) => files[relativePath] ?? '',
@@ -64,6 +68,32 @@ export async function bypass(db) {
     expect(result.findings).toContain(
       'packages/server/src/app-bypass.ts:3: driver method/property .execute must route through enforceManagedSql() in sql-safe-handle.ts or an audited durable-task internal SQL executor',
     );
+  });
+
+  it('accepts driver calls inside server-owned DB boundary chokes', () => {
+    const result = runFixture({
+      'packages/server/src/sql-safe-handle.ts': `
+export function enforceManagedSql(statement, mode, writePolicy) {
+  return validate(statement, mode, writePolicy);
+}
+`,
+      'packages/server/src/managed-db.ts': `
+export function createPostgresReadonlyClient(client) {
+  return client.transaction((tx) => {
+    tx.exec('SET TRANSACTION READ ONLY');
+    return tx.query('select 1');
+  });
+}
+`,
+      'packages/server/src/secret-read-boundary.ts': `
+export function sqliteResultColumns(client, sql) {
+  const statement = client.prepare(sql);
+  return statement.columns();
+}
+`,
+    });
+
+    expect(result.findings).toEqual([]);
   });
 
   it('rejects canary transaction and CTE handle execution outside the choke', () => {

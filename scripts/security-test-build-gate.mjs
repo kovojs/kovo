@@ -12,6 +12,7 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
   'KV426',
   'KV433',
   'KV435',
+  'KV406',
   'KV311',
   'KV330',
 ];
@@ -19,7 +20,7 @@ export const SECURITY_BUILD_CERTIFICATION_CODES = [
 export const DEFAULT_TRUSTED_OUTPUT_SINK_POSITION_SEED = 'dec-g:kv426:trusted-output:v1';
 export const DEFAULT_READ_SOURCE_FAMILY_SEED = 'dec-g:read-source:v1';
 export const DEFAULT_WRAPPING_GRAMMAR_SEED = 'dec-g:wrapping:v1';
-export const DEFAULT_PARANOID_GENERATOR_ACCEPTANCE_SEED = 'dec-h:round-8:paranoid:v1';
+export const DEFAULT_PARANOID_GENERATOR_ACCEPTANCE_SEED = 'dec-h:phase-5-1:paranoid:v1';
 
 export const TRUSTED_OUTPUT_SINK_POSITION_GRAMMAR = Object.freeze({
   sinks: Object.freeze([
@@ -81,7 +82,7 @@ export const READ_SOURCE_FAMILY_GRAMMAR = Object.freeze({
     },
     {
       family: 'db-read',
-      needle: 'queries/auth-secret-direct-leak-query.accessToken',
+      needle: 'query="secrets0" path="secrets0\\.accessToken"',
       surface: 'KV435 direct secret DB-read source',
     },
   ]),
@@ -91,7 +92,7 @@ export const SECURITY_WRAPPING_GRAMMAR = Object.freeze({
   forms: Object.freeze([
     {
       form: 'alias',
-      needle: 'queries/auth-secret-leak-query.accessToken',
+      needle: 'query="secrets3" path="secrets3\\.accessToken"',
       surface: 'KV435 cross-select alias/value merge',
     },
     {
@@ -101,12 +102,12 @@ export const SECURITY_WRAPPING_GRAMMAR = Object.freeze({
     },
     {
       form: 'direct',
-      needle: 'queries/auth-secret-direct-leak-query.accessToken',
+      needle: 'query="secrets0" path="secrets0\\.accessToken"',
       surface: 'KV435 direct query projection',
     },
     {
       form: 'helper',
-      needle: 'queries/auth-secret-transformed-leak-query.password',
+      needle: 'query="secrets1" path="secrets1\\.password"',
       surface: 'KV435 local helper transformation',
     },
     {
@@ -120,30 +121,40 @@ export const SECURITY_WRAPPING_GRAMMAR = Object.freeze({
 export const PARANOID_GENERATOR_ACCEPTANCE_GRAMMAR = Object.freeze({
   cases: Object.freeze([
     {
-      expectation: 'legitimate-build-green',
-      kind: 'runtime-route',
-      route: '/paranoid-runtime-safe.txt',
-      sink: 'respond.file header',
-      surface: 'legitimate response-file route stays green',
+      expectation: 'blocked-read',
+      kind: 'query-route',
+      route: '/_q/sqlite-secret-alias-egress',
+      surface: 'SQLite secret alias read stays boxed',
     },
     {
-      expectation: 'static-classifiers-stubbed',
-      kind: 'build-env',
-      surface: 'KOVO_PARANOID production artifact build',
+      expectation: 'blocked-read',
+      kind: 'query-route',
+      route: '/_q/sqlite-secret-cte-egress',
+      surface: 'SQLite secret CTE read stays boxed',
     },
     {
-      expectation: 'unsafe-runtime-choke',
-      kind: 'runtime-route',
-      route: '/paranoid-runtime-unsafe-header.txt',
-      sink: 'response header CRLF direct',
-      surface: 'direct response header runtime choke',
+      expectation: 'allowed-read',
+      kind: 'query-route',
+      route: '/_q/sqlite-secret-reveal',
+      surface: 'audited SQLite secret reveal stays allowed',
     },
     {
-      expectation: 'unsafe-runtime-choke',
-      kind: 'runtime-route',
-      route: '/paranoid-runtime-unsafe-helper.txt',
-      sink: 'response header CRLF helper',
-      surface: 'helper-wrapped response header runtime choke',
+      expectation: 'allowed-write',
+      kind: 'mutation-route',
+      route: '/_m/mutations/add-contact',
+      surface: 'declared starter contact write stays allowed',
+    },
+    {
+      expectation: 'blocked-write',
+      kind: 'mutation-route',
+      route: '/_m/phase5-write-boundary/boxed-secret-raw',
+      surface: 'boxed secret raw write stays blocked',
+    },
+    {
+      expectation: 'status-clean',
+      kind: 'api-route',
+      route: '/api/phase5-write-boundary-proof',
+      surface: 'blocked writes leave no persisted rows',
     },
   ]),
 });
@@ -215,14 +226,24 @@ export function generateParanoidGeneratorAcceptanceCases({
 }
 
 export function paranoidGeneratorAcceptanceProofNeedles(options) {
-  // DEC-H/A9: round-8 acceptance is a generated unsafe/legit/paranoid-mode
-  // proof shape, not a single hand-enrolled adversarial fixture.
+  // DEC-H/A9: Phase 5.1 acceptance is generated across read/write
+  // paranoid-mode shapes, not a single hand-enrolled adversarial fixture.
   void options;
   return [
-    'generateParanoidGeneratorAcceptanceCases()',
-    'addParanoidRuntimeProofRoutes(root, paranoidCases)',
-    'expectParanoidRuntimeCase(origin, testCase)',
+    'writeKovoProject(root, {',
+    "dialect: 'sqlite'",
+    'addSqliteRuntimeSecretProvenanceProof(root)',
+    'pruneParanoidPhase5SqliteReadSet(root)',
+    'addStarterMutationDbScopeProof(root)',
+    'addParanoidPhase5WriteBoundaryProof(root)',
     'buildParanoidProductionArtifact(root)',
+    'expectBlockedReadShapes(origin, jar)',
+    'expectAllowedReadShapes(origin, jar)',
+    'expectStarterInScopeWrite(origin, jar, output, contactEmail)',
+    'expectBlockedWrites(origin, marker)',
+    'expectWriteStatus(origin, marker, contactEmail)',
+    "expect(output()).toContain('KV435')",
+    "expect(output()).toContain('KV406')",
     "KOVO_PARANOID: '1'",
   ];
 }
@@ -389,7 +410,7 @@ export const SECURITY_BUILD_PROOFS = [
       'buildProductionArtifact(unsafeRoot)',
       'KV435',
       'Secret query value reaches the client wire',
-      'queries/auth-secret-render-leak-query.renderPassword',
+      'query="secrets2" path="secrets2\\.renderPassword"',
     ],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
@@ -448,7 +469,7 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
-    claimId: 'round-8-paranoid-generator-acceptance',
+    claimId: 'phase-5-1-full-paranoid-dogfood-read-acceptance',
     code: 'KV435',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
     requiredNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
@@ -458,7 +479,23 @@ export const SECURITY_BUILD_PROOFS = [
       (needle) => needle === "KOVO_PARANOID: '1'",
     ),
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    testName: 'runs generated paranoid acceptance cases with static classifiers advisory',
+    testName: 'runs the Phase 5.1 full-paranoid dogfood acceptance across read and write shapes',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'phase-5-1-full-paranoid-dogfood-write-acceptance',
+    code: 'KV406',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    requiredNeedles: [
+      ...paranoidGeneratorAcceptanceProofNeedles().filter(
+        (needle) => needle !== "KOVO_PARANOID: '1'",
+      ),
+    ],
+    requiredProofFileNeedles: paranoidGeneratorAcceptanceProofNeedles().filter(
+      (needle) => needle === "KOVO_PARANOID: '1'",
+    ),
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    testName: 'runs the Phase 5.1 full-paranoid dogfood acceptance across read and write shapes',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -571,6 +608,81 @@ export const SECURITY_BUILD_PROOFS = [
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName:
       'boxes schema-declared secret reads, raw SQL aliases, and computed values before query-wire egress in paranoid mode while allowing audited reveals',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'starter-mutation-db-scope-prod-artifact',
+    code: 'KV406',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addStarterMutationDbScopeProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'starter-db-scope/auth-user-table-write',
+      'starter-db-scope/auth-session-table-write',
+      'starter-db-scope/raw-auth-table-write',
+      'starter-db-scope/absent-tables-contact-write',
+      'contactRows: 1',
+      "expect(output()).toContain('KV406')",
+      "expect(output()).toContain('declared mutation registry tables')",
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName: 'enforces starter mutation DB table scope in paranoid production artifacts',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'sqlite-runtime-secret-source-provenance',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      "dialect: 'sqlite'",
+      'addSqliteRuntimeSecretProvenanceProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'sqlite-secret-alias-egress',
+      'sqlite-secret-view-egress',
+      'sqlite-secret-join-alias-egress',
+      'sqlite-secret-cte-egress',
+      'sqlite-secret-mixed-chunk-egress',
+      'sqlite-secret-mixed-chunk-builder-egress',
+      'expect(response.status',
+      "expect(body).not.toContain('runtime-secret-value')",
+      'sqlite-secret-nonsecret-projection',
+      'sqlite-secret-reveal',
+    ],
+    requiredProofFileNeedles: [
+      "KOVO_PARANOID: '1'",
+      'company: proof.classified',
+      'runtimeSecretViewProof.exposed',
+      'classified as leaked from secret_cte',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes SQLite secret reads by source provenance while serving proven non-secret projections in paranoid mode',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'sqlite-runtime-secret-expression-provenance',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      "dialect: 'sqlite'",
+      'addSqliteRuntimeSecretProvenanceProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'sqlite-secret-derivation-egress',
+      'sqlite-secret-nonsecret-projection',
+      'sqlite-secret-reveal',
+      'runtime-secret-value:revealed',
+    ],
+    requiredProofFileNeedles: [
+      "KOVO_PARANOID: '1'",
+      'substr(classified, 1, 7) as leaked',
+      '(select classified from runtime_secret_proof) as leaked',
+      'drizzleSql<string>`upper(${contacts.name})',
+      'label: proof.label',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'boxes SQLite secret reads by source provenance while serving proven non-secret projections in paranoid mode',
   },
   {
     buildInvocation: 'starter-build-production-artifact',

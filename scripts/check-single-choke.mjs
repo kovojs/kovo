@@ -22,6 +22,8 @@ export const defaultAllowedExternalEgressFiles = [
   'packages/server/src/vite-dev.ts',
 ];
 export const defaultAllowedDriverFiles = [
+  'packages/server/src/managed-db.ts',
+  'packages/server/src/secret-read-boundary.ts',
   'packages/server/src/sql-safe-handle.ts',
   'packages/server/src/sql-write-oracle.ts',
   'packages/server/src/mutation.ts',
