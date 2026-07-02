@@ -3,7 +3,7 @@
  * SPEC.md §9.1.1 and §9.4 require schema-shaped query JSON that can preserve
  * runtime Date/bigint values without letting package-local encoders drift.
  */
-import { isSecret } from '../secret.js';
+import { isSecret, isUntrusted } from '../secret.js';
 
 /** @internal Discriminator key for Kovo's tagged wire JSON forms. */
 export const KOVO_WIRE_TAG = '$kovo' as const;
@@ -137,6 +137,16 @@ export function jsonSafeWireValue(value: unknown): unknown {
   if (isSecret(value)) {
     throw new Error(
       'KV435 Secret runtime value cannot cross the Kovo client wire; reveal or redact it explicitly before returning it.',
+    );
+  }
+  if (isUntrusted(value)) {
+    throw new Error(
+      'KV426 Untrusted runtime value cannot cross the Kovo client wire; validate or escape it explicitly before returning it.',
+    );
+  }
+  if (typeof value === 'function' || typeof value === 'symbol') {
+    throw new TypeError(
+      'Kovo wire JSON cannot encode function or symbol values; return schema-shaped JSON data.',
     );
   }
   if (typeof value === 'bigint') {

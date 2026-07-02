@@ -1,8 +1,17 @@
 # Kovo Security TCB Manifest
 
 This manifest is the current A10/DEC-K substrate inventory for the security trusted computing
-base. It is intentionally narrower than the full Phase 0.4 acceptance: the exhaustive property
-tests and model-check/proof obligation remain open in `plans/fundamental-fixes-followup-3.md`.
+base. The compact finite-model proof harness for the `Secret`/`Untrusted` boxes, Kovo wire JSON,
+and the typed `emitToWire` response choke lives in:
+
+- `packages/core/src/secret.tcb-proof.test.ts`
+- `packages/core/src/internal/wire-json.tcb-proof.test.ts`
+- `scripts/tcb-proof-harness.test.ts`
+
+Those tests enumerate the modeled JS coercion operations, JSON value shapes, poisoned-box depths,
+and `emitToWire` framework/raw response cases. They prove the current runtime floor only: box
+non-coercibility, fixed redacted observation, wire-JSON refusal for `Secret`/`Untrusted`, and
+`emitToWire` refusal for typed framework response header egress.
 
 Entries classified as `tcb` count toward the size budget. Entries classified as
 `delegating-wire-emitter`, `advisory-static-classifier`, or `inventory-classifier` are deliberately

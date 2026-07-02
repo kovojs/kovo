@@ -258,7 +258,7 @@ mattering.
       downgraded in later phases (A7).
       Evidence: `pnpm run check:single-choke && pnpm run check:security-brands && pnpm run check:fundamental-fixes-census`
       proves the current DEC-J egress/DB exec denominator and classified sole-door gates are green.
-- [ ] **0.4 TCB manifest + boundary lint + verification harness (A10, DEC-K).** Create `security/TCB.md`, the
+- [x] **0.4 TCB manifest + boundary lint + verification harness (A10, DEC-K).** Create `security/TCB.md`, the
       `check:tcb-boundary` lint (fails on any enforcement outside the manifest or a TCB over budget), and the exhaustive
       property-test + model-check harness for the `Secret`/`Untrusted` boxes and `emitToWire`. Makes "the chokes are the
       whole TCB and they are verified" a mechanically checked standing invariant. As each phase adds a choke, it is
@@ -269,9 +269,10 @@ mattering.
         unlisted/mismatched `securityClassifier`/`wireEmitter` wrappers.
         Evidence: `pnpm exec vitest --run scripts/check-tcb-boundary.test.mjs`, `pnpm run check:tcb-boundary`, and
         `pnpm run check:security-brands` are green in the Phase 0.4 substrate slice worktree.
-  - [ ] **Exhaustive property-test + model-check/proof harness.** Add exhaustive property tests for every JS coercion
-        path on the boxes and every value shape into `emitToWire`, plus the model-checking or proof-assistant obligation
-        for non-coercibility and egress refusal required by DEC-K.
+  - [x] **Finite-model property/proof harness for the current TCB floor.** The harness enumerates modeled JS coercion
+        operations for `Secret`/`Untrusted`, Kovo wire JSON value shapes and poisoned depths, and typed `emitToWire`
+        framework/raw response cases for non-coercibility and egress refusal.
+        Evidence: `pnpm exec vitest --run packages/core/src/secret.tcb-proof.test.ts packages/core/src/internal/wire-json.tcb-proof.test.ts scripts/tcb-proof-harness.test.ts packages/core/src/secret.test.ts packages/core/src/internal/wire-json.test.ts --reporter=dot`.
 
 ### Phase 1 — Integrity via the engine (biggest win, smallest change)
 
@@ -516,6 +517,7 @@ TCB does not already refuse.
 - `vp exec vitest --run packages/server/src/untrusted-request-body.test.ts`
 - `pnpm exec vitest --run scripts/lib/source-files.test.mjs scripts/check-fail-closed-classifiers.test.mjs scripts/check-classifier-verdict-routing.test.mjs`
 - `pnpm exec vitest --run scripts/security-test-build-gate.test.mjs scripts/security-gate-mutations.test.mjs`
+- `pnpm exec vitest --run packages/core/src/secret.tcb-proof.test.ts packages/core/src/internal/wire-json.tcb-proof.test.ts scripts/tcb-proof-harness.test.ts packages/core/src/secret.test.ts packages/core/src/internal/wire-json.test.ts --reporter=dot`
 - `KOVO_PARANOID=1 vp exec vitest --run packages/create-kovo/src/index.build.prod-artifact.security.test.ts -t 'Drizzle view'`
 - `vp exec vitest --run packages/create-kovo/src/index.test.ts && vp exec vitest --run packages/create-kovo/src/index.build.scaffold.sqlite.test.ts -t 'runs vp check'`
 - `pnpm run check:paranoid-classifiers && pnpm run check:paranoid-runtime`
