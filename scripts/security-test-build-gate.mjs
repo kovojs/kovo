@@ -192,6 +192,22 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
+    claimId: 'runtime-secret-view-egress',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    requiredNeedles: [
+      'addSecretViewEgressProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'KV435',
+      'Secret runtime value cannot cross',
+      '/_q/secret-view-egress',
+    ],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+    testName:
+      'refuses a runtime Secret read through a Drizzle view at query-wire egress in paranoid mode',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
     claimId: 'readonly-managed-handle-prod-artifact',
     code: 'KV433',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
@@ -383,9 +399,11 @@ export const PRODUCTION_BUILD_HELPERS = {
     requiredNeedles: [
       'export function buildProductionArtifact',
       'export function buildReusableProductionArtifact',
+      'export function buildParanoidProductionArtifact',
       'execFileSync',
       "['build', './src/app.tsx', '--no-cache']",
       "['build', './src/app.tsx']",
+      "KOVO_PARANOID: '1'",
     ],
   },
 };
@@ -395,6 +413,7 @@ const BUILD_INVOCATION_PATTERNS = {
   'starter-build-production-artifact': [
     /\bbuildProductionArtifact\(/,
     /\bbuildReusableProductionArtifact\(/,
+    /\bbuildParanoidProductionArtifact\(/,
   ],
 };
 

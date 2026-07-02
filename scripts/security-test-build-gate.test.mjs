@@ -305,6 +305,55 @@ describe('security-test-build-gate', () => {
     });
   });
 
+  it('recognizes paranoid starter production builds as real build proofs', () => {
+    withTempRepo((repoRoot) => {
+      writeStarterProofFile(
+        repoRoot,
+        [
+          '// @kovo-security-certifies KV435 runtime-secret-view-egress',
+          "it('paranoid secret view proof', () => {",
+          '  addSecretViewEgressProof(root);',
+          '  buildParanoidProductionArtifact(root);',
+          "  expect(output).toContain('KV435');",
+          "  expect(output).toContain('Secret runtime value cannot cross');",
+          '  await fetch(`${origin}/_q/secret-view-egress`);',
+          '});',
+        ].join('\n'),
+      );
+      writeStarterBuildHelper(repoRoot, validStarterBuildHelperSource());
+
+      expect(
+        securityTestBuildGateViolations({
+          certificationSources: [
+            {
+              claimExtractor: 'security-certification-markers',
+              description: 'starter security certification declarations',
+              file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+            },
+          ],
+          proofs: [
+            {
+              buildInvocation: 'starter-build-production-artifact',
+              claimId: 'runtime-secret-view-egress',
+              code: 'KV435',
+              proofFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+              requiredNeedles: [
+                'addSecretViewEgressProof(root)',
+                'buildParanoidProductionArtifact(root)',
+                'KV435',
+                'Secret runtime value cannot cross',
+                '/_q/secret-view-egress',
+              ],
+              sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
+              testName: 'paranoid secret view proof',
+            },
+          ],
+          repoRoot,
+        }),
+      ).toEqual([]);
+    });
+  });
+
   it('allows proof manifests to require evidence from helper sources outside the test block', () => {
     withTempRepo((repoRoot) => {
       writeFixtureSource(repoRoot, "export const seeds = [{ code: 'KV426' }];");
@@ -565,6 +614,12 @@ function validStarterBuildHelperSource() {
     '}',
     'export function buildReusableProductionArtifact(root) {',
     "  return execFileSync('kovo', ['build', './src/app.tsx'], { cwd: root });",
+    '}',
+    'export function buildParanoidProductionArtifact(root) {',
+    "  return execFileSync('kovo', ['build', './src/app.tsx', '--no-cache'], {",
+    '    cwd: root,',
+    "    env: { KOVO_PARANOID: '1' },",
+    '  });',
     '}',
   ].join('\n');
 }
