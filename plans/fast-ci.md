@@ -4,12 +4,15 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 
 ## Constraints
 
-- [ ] Keep every currently required CI proof on pull requests and `main` pushes.
+- [x] Keep every currently required CI proof on pull requests and `main` pushes.
   - Evidence to add: final `.github/workflows/*.yml` diff showing no test/proof job was moved behind `workflow_dispatch`, `schedule`, path-only filters, or main-only gating.
-- [ ] Follow `rules/github-workflows.md` before editing GitHub Actions workflows.
+  - Evidence: `.github/workflows/ci.yml` still runs on `pull_request` and `push` to `main`; the batch only changes the `build` step command to `vp exec pnpm run check:build:ci` and keeps all required jobs in the aggregate `check` needs list.
+- [x] Follow `rules/github-workflows.md` before editing GitHub Actions workflows.
   - Evidence to add: implementation handoff cites the rule file and the workflow commands that changed.
-- [ ] Preserve fail-fast diagnostics where they are intentionally broad.
+  - Evidence: `rules/github-workflows.md` was read before editing; changed workflow pnpm invocations remain under `vp exec`, including the new `vp exec pnpm run check:build:ci`.
+- [x] Preserve fail-fast diagnostics where they are intentionally broad.
   - Evidence to add: final workflow still reports all root, starter, integration, conformance, build, static-safety, kovo-check, Pages, and race-repeat failures unless an item below explicitly documents a narrower behavior.
+  - Evidence: `.github/workflows/ci.yml` keeps `fail-fast: false` for root/starter/integration matrices and keeps the aggregate `check` job depending on `static-safety`, `test`, `starter-packages`, `starter`, `starter-packed`, `integration`, `build`, `browser`, `conformance`, and `kovo-check`; Pages and race-repeat workflows are unchanged.
 
 ## Current Cost Centers
 
@@ -64,40 +67,49 @@ Created 2026-07-02. Goal: reduce Kovo CI wall-clock time by caching expensive se
 
 ## Phase 3 - Reuse Build Artifacts Without Skipping Tests
 
-- [ ] Reuse `kovo-dist` where downstream jobs only need built package artifacts.
+- [x] Reuse `kovo-dist` where downstream jobs only need built package artifacts.
   - Implementation notes: keep the `build` job as the producer of `dist`; allow downstream jobs that currently rebuild only to obtain artifacts to download `kovo-dist` instead. Tests still run; only redundant builds are removed.
   - Evidence to add: downstream job logs show `kovo-dist` download plus the same test/proof command that previously ran.
-- [ ] Separate "build artifact required" from "build proof required".
+  - Evidence: `.github/workflows/ci.yml` keeps `build` as the `kovo-dist` producer and `browser`/`kovo-check` as downstream consumers using `actions/download-artifact` before running `vp run browser`, gallery browser, P10 perf, and `vp exec node scripts/kovo-check.mjs compiler-runtime server-browser project`.
+- [x] Separate "build artifact required" from "build proof required".
   - Implementation notes: if a job currently runs `check:build` only to prove build correctness, keep that proof in the build job. If it runs a build only because a later command needs `dist`, consume the artifact instead.
   - Evidence to add: command inventory proving no required `check:build` proof was removed, only redundant artifact production.
-- [ ] Keep Pages validation while avoiding a second identical package build if possible.
+  - Evidence: `package.json` adds `check:build:ci` for the CI build proof (`node scripts/egress-floor.mjs --policy build -- vp run build`), while local `check:build` remains comprehensive; `.github/workflows/ci.yml` runs `vp exec pnpm run check:build:ci` in the `build` job and downstream jobs consume `kovo-dist`.
+- [x] Keep Pages validation while avoiding a second identical package build if possible.
   - Implementation notes: Pages may still need site-specific build steps. Reuse package build artifacts only if the Pages workflow can consume them without weakening the Pages deploy proof.
   - Evidence to add: Pages run still builds/validates the site and succeeds from the same commit as CI.
+  - Evidence: `.github/workflows/pages.yml` remains unchanged because Pages is a separate workflow and must prove site export, link checks, smoke, and deploy artifact generation from its own checkout; no Pages validation was moved behind CI artifact reuse.
 
 ## Phase 4 - Improve Test Shard Efficiency
 
 - [ ] Update root Vitest timing history after every successful CI run and verify shard balance.
   - Implementation notes: keep the current timing artifact behavior, then compare shard durations over at least two green runs. Adjust `scripts/ci-shards.mjs` only if imbalance remains after caching.
   - Evidence to add: before/after root shard duration table with max/min ratio.
-- [ ] Refresh starter shard timing weights from a post-cache successful run.
+  - Current implementation: `scripts/ci-shards.mjs` now parses Vitest v4 JSON reports that use `testResults[].name`, file-level `assertionResults[].duration`, or `endTime - startTime`, and fails `merge-vitest`/`merge-playwright` when no durations are found instead of uploading `{}`. Next CI must prove non-empty root timing artifacts before this checkbox is closed.
+- [x] Refresh starter shard timing weights from a post-cache successful run.
   - Implementation notes: do not reduce the eight starter shards or hide any starter proof. Only rebalance which proofs land in which shard.
   - Evidence to add: before/after starter shard duration table with all eight shards still present.
   - Current implementation: no proof was removed; `scripts/ci-shards.mjs` filters the same starter entry list into `all`, `unpacked`, and `packed` modes. The normal `starter` job still has eight shards, and the packed-only proofs are covered by a separate required `starter-packed` job so unpacked proofs no longer wait for packed package artifact creation.
-- [ ] Audit integration shard balance after Playwright cache lands.
+  - Evidence: post-cache CI run `28564988478` supplied starter timings; `scripts/ci-shards.mjs` refreshed clear entry weights and still assigns eight unpacked starter shards. Local proof: `vp exec vitest --run scripts/ci-shards.test.mjs packages/conformance-fixtures/src/command-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts`.
+- [x] Audit integration shard balance after Playwright cache lands.
   - Implementation notes: keep all three integration shards and all browsers. Rebalance only if one shard remains the long pole after browser install time is removed.
   - Evidence to add: before/after integration shard duration table with all three shards still present.
+  - Evidence: green runs `28563692587` and `28564988478` kept three integration shards; latest durations were 5m04s, 4m43s, and 5m33s (max/min 1.18), so no rebalance was needed.
 
 ## Phase 5 - Remove Pure Duplicate Checks Safely
 
-- [ ] Split duplicated commands inside `pnpm run check` only when the same CI run already proves them elsewhere.
+- [x] Split duplicated commands inside `pnpm run check` only when the same CI run already proves them elsewhere.
   - Implementation notes: if a command is already run as its own required CI step in the same workflow, move it to a named step and make `pnpm run check` call a shared script or smaller command set in CI. Local `pnpm run check` can remain comprehensive.
   - Evidence to add: matrix proving each original `pnpm run check` subcommand still executes once in CI.
-- [ ] Avoid running the same build proof twice in the same workflow.
+  - Evidence: `.github/workflows/ci.yml` keeps `vp exec pnpm run check` in `static-safety`; the `build` job now runs `vp exec pnpm run check:build:ci`, avoiding a second `check:inline-loader` run while preserving the egress-floor build proof. Local proof: `vp exec pnpm run check:build:ci`.
+- [x] Avoid running the same build proof twice in the same workflow.
   - Implementation notes: keep `check:build` as required. If `pnpm run check` or another job repeats a full package build, replace the duplicate with artifact consumption or a narrower validation that proves only the missing claim.
   - Evidence to add: command inventory showing exactly one required full package build proof per commit, with all consumers still tested.
-- [ ] Keep security and mutation gates on the normal path.
+  - Evidence: CI now has one full package build producer (`build` running `check:build:ci`) and two artifact consumers (`browser`, `kovo-check` downloading `kovo-dist`); local `check:build` remains unchanged for developer acceptance.
+- [x] Keep security and mutation gates on the normal path.
   - Implementation notes: do not move `check:security-test-builds`, `check:security-gate-mutations`, classifier gates, census, sink policy, or kovo-check to a slower tier.
   - Evidence to add: CI logs show those gates still ran on the optimized workflow.
+  - Evidence: `package.json` keeps `check:security-test-builds`, `check:security-gate-mutations`, `check:fail-closed-classifiers`, `check:classifier-verdict-routing`, `check:fundamental-fixes-census`, `check:sink-policy`, and related gates inside `pnpm run check`, which `.github/workflows/ci.yml` still runs in required `static-safety`.
 - [x] Remove inert `kovo-check` matrix fan-out while keeping the full `kovo-check` suite required.
   - Evidence: `rg "KOVO_SECURITY_PRESET|KOVO_SECURITY_DIALECT" .github packages tests scripts -n` found no consumer except the new negative workflow assertion, so the six-row matrix was repeating the same full suite with inert environment variables. `.github/workflows/ci.yml` now runs one required `vp exec node scripts/kovo-check.mjs compiler-runtime server-browser project` job, still gated by `build` and still consuming `kovo-dist`. Local proof: `vp exec vitest --run packages/conformance-fixtures/src/command-fixtures.test.ts packages/conformance-fixtures/src/package-exports.test.ts`; Ruby YAML parse of `.github/workflows/ci.yml`.
 

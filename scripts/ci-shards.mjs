@@ -68,13 +68,13 @@ const STARTER_ENTRIES = [
     id: 'contacts-add-contact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
     testName: 'non-empty enhanced add-contact',
-    seconds: 54,
+    seconds: 70,
   },
   {
     id: 'contacts-sqlite-add-contact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts',
     testName: 'generated SQLite add-contact',
-    seconds: 63,
+    seconds: 67,
   },
   {
     id: 'contacts-multi-component-refresh',
@@ -110,7 +110,7 @@ const STARTER_ENTRIES = [
     id: 'security-mutation-storage-writes',
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName: 'declared mutation storage writes',
-    seconds: 56,
+    seconds: 74,
   },
   {
     id: 'security-trusted-output-provenance',
@@ -128,7 +128,7 @@ const STARTER_ENTRIES = [
     id: 'security-runtime-wires',
     file: 'packages/create-kovo/src/index.build.prod-artifact.security.test.ts',
     testName: 'escaped runtime security wires',
-    seconds: 220,
+    seconds: 143,
   },
   {
     id: 'security-form-error',
@@ -152,24 +152,24 @@ const STARTER_ENTRIES = [
     id: 'm1-secret-wire',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:secret-wire',
-    seconds: 142,
+    seconds: 151,
   },
   {
     id: 'm1-raw-sql',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:raw-sql',
-    seconds: 272,
+    seconds: 146,
   },
   {
     id: 'm1-output-wire',
     file: 'packages/create-kovo/src/index.build.prod-artifact.adversarial.test.ts',
     testName: 'M1:output-wire',
-    seconds: 281,
+    seconds: 148,
   },
   {
     id: 'raw-sql-artifacts',
     file: 'packages/create-kovo/src/index.build.prod-artifact.raw-sql.test.ts',
-    seconds: 80,
+    seconds: 70,
   },
   {
     id: 'starter-typecheck',
@@ -184,7 +184,7 @@ const STARTER_ENTRIES = [
   {
     id: 'runtime-dev-server',
     file: 'packages/create-kovo/src/index.build.runtime.test.ts',
-    seconds: 197,
+    seconds: 262,
   },
   {
     id: 'starter-sqlite',
@@ -200,24 +200,24 @@ const STARTER_ENTRIES = [
     id: 'starter-packed-postgres',
     file: 'packages/create-kovo/src/index.build.scaffold.packed-postgres.test.ts',
     needsPacked: true,
-    seconds: 68,
+    seconds: 7,
   },
   {
     id: 'durable-task-retries',
     file: 'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts',
-    seconds: 83,
+    seconds: 90,
   },
   {
     id: 'starter-packed-sqlite',
     file: 'packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts',
     needsPacked: true,
-    seconds: 68,
+    seconds: 7,
   },
   {
     id: 'transaction-default-served-artifact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     testName: 'rolls back default mutation transactions and executes webhooks',
-    seconds: 150,
+    seconds: 78,
   },
   {
     id: 'transaction-managed-write-escape-default',
@@ -235,7 +235,7 @@ const STARTER_ENTRIES = [
     id: 'transaction-sqlite-served-artifact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     testName: 'SQLite readonly handles isolated and executes webhook transactions',
-    seconds: 140,
+    seconds: 71,
   },
   {
     id: 'transaction-webhook-escape-default',
@@ -253,7 +253,7 @@ const STARTER_ENTRIES = [
     id: 'starter-packed-runtime',
     file: 'packages/create-kovo/src/index.build.scaffold.packed-runtime.test.ts',
     needsPacked: true,
-    seconds: 157,
+    seconds: 69,
   },
   {
     id: 'runtime-contract-artifacts',
@@ -263,7 +263,7 @@ const STARTER_ENTRIES = [
   {
     id: 'durable-task-lifecycle',
     file: 'packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts',
-    seconds: 67,
+    seconds: 85,
   },
   {
     id: 'defer-artifacts',
@@ -447,8 +447,24 @@ export async function discoverTests(kind, options = {}) {
 export function extractVitestDurations(report) {
   const durations = {};
   visit(report, (node) => {
-    const file = normalizeRelativeFile(node?.filepath ?? node?.file?.filepath ?? node?.file);
-    const durationMs = Number(node?.duration ?? node?.time ?? node?.perfStats?.runtime);
+    const file = normalizeRelativeFile(
+      node?.filepath ?? node?.file?.filepath ?? node?.file ?? node?.name,
+    );
+    const assertionDurationMs = Array.isArray(node?.assertionResults)
+      ? node.assertionResults.reduce((total, assertion) => {
+          const duration = Number(assertion?.duration);
+          return Number.isFinite(duration) && duration > 0 ? total + duration : total;
+        }, 0)
+      : undefined;
+    const durationMs = Number(
+      node?.duration ??
+        node?.time ??
+        node?.perfStats?.runtime ??
+        (assertionDurationMs && assertionDurationMs > 0 ? assertionDurationMs : undefined) ??
+        (Number.isFinite(Number(node?.endTime)) && Number.isFinite(Number(node?.startTime))
+          ? Number(node.endTime) - Number(node.startTime)
+          : undefined),
+    );
     if (!file || !Number.isFinite(durationMs) || durationMs <= 0) return;
     durations[file] = {
       seconds: roundSeconds(Math.max(durations[file]?.seconds ?? 0, durationMs / 1000)),
@@ -820,6 +836,9 @@ async function main(argv) {
       command === 'merge-vitest'
         ? extractVitestDurations(report)
         : (durationHistoryEntries(report) ?? extractPlaywrightDurations(report));
+    if (Object.keys(latest).length === 0) {
+      throw new Error(`${command} did not find any duration entries in ${String(args.report)}`);
+    }
     await writeJson(String(args.out), mergeDurationHistory(previous, latest));
     return;
   }
