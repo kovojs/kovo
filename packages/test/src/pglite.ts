@@ -57,20 +57,23 @@ type DeclaredWritePgliteTestDb = Omit<
 export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<PgliteTestDb> {
   const pglite = new PGlite(options);
   await pglite.waitReady;
-  let readonlyQueue = Promise.resolve();
+  let transactionQueue = Promise.resolve();
   let readonlyDb: ReadonlyPgliteTestDb | null = null;
   let readonlyPglite: PGlite | null = null;
   let readonlyPgliteReady: Promise<PGlite> | null = null;
 
-  const runReadonly = async <Result>(callback: () => Promise<Result>): Promise<Result> => {
-    const previous = readonlyQueue;
+  const runSerializedTransaction = async <Result>(
+    begin: 'begin' | 'begin read only',
+    callback: () => Promise<Result>,
+  ): Promise<Result> => {
+    const previous = transactionQueue;
     let release!: () => void;
-    readonlyQueue = new Promise<void>((resolve) => {
+    transactionQueue = new Promise<void>((resolve) => {
       release = resolve;
     });
     await previous;
     try {
-      await pglite.exec('begin read only');
+      await pglite.exec(begin);
       try {
         const result = await callback();
         await pglite.exec('commit');
@@ -87,6 +90,22 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
       release();
     }
   };
+
+  const runReadonly = async <Result>(callback: () => Promise<Result>): Promise<Result> =>
+    runSerializedTransaction('begin read only', callback);
+
+  const runDeclaredWriteFallback = async <Result>(
+    policy: DeclaredWritePolicy,
+    callback: () => Promise<Result>,
+  ): Promise<Result> =>
+    runSerializedTransaction('begin', async () => {
+      const result = await callback();
+      const unexpected = await unexpectedPgliteWriteStatTables(pglite, policy);
+      if (unexpected.length > 0) {
+        throw new PgliteDeclaredWriteScopeError(policy, unexpected);
+      }
+      return result;
+    });
 
   const readonlyHandle = (): ReadonlyPgliteTestDb => {
     const readonlyDataDir = pgliteReadonlyDataDir(options);
@@ -217,17 +236,22 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
     },
     [kovoDeclaredWriteDbHandle](policy) {
       // PGlite exposes one embedded engine handle here and does not give Kovo a request-scoped
-      // GRANT/ROLE sandbox. Keep the residual explicit: enforce declared tables at this adapter
-      // boundary for parser-blind helpers, with managedDb still guarding raw SQL before execution.
+      // GRANT/ROLE sandbox. Use Postgres transaction stats as the committed DEC-B fallback:
+      // statements execute in one transaction, out-of-declared table deltas roll back as KV406.
+      // Residual per plans/fundamental-fixes-followup-3.md: writes with no stat delta are not caught.
       return pgliteTestDbFromOperations(
         pglite,
-        (statement) => pglite.exec(pgliteStatementText(statement)),
+        (statement) =>
+          runDeclaredWriteFallback(policy, () => pglite.exec(pgliteStatementText(statement))),
         async <Row extends Record<string, unknown>>(
           statement: PgliteStatementInput,
           params: readonly unknown[] = [],
         ) => {
           const carrier = pgliteStatement(statement, params);
-          return (await pglite.query<Row>(carrier.text, [...carrier.values])).rows;
+          return runDeclaredWriteFallback(
+            policy,
+            async () => (await pglite.query<Row>(carrier.text, [...carrier.values])).rows,
+          );
         },
         false,
         policy,
@@ -298,6 +322,47 @@ function pgliteReadonlyDataDir(options: PGliteOptions): string | undefined {
   if (typeof options.dataDir !== 'string') return undefined;
   if (options.dataDir === '' || options.dataDir.startsWith('memory://')) return undefined;
   return options.dataDir;
+}
+
+interface PgliteWriteStatRow {
+  table: string;
+  n_tup_del: number | string;
+  n_tup_ins: number | string;
+  n_tup_upd: number | string;
+}
+
+class PgliteDeclaredWriteScopeError extends Error {
+  constructor(policy: DeclaredWritePolicy, unexpected: readonly string[]) {
+    super(
+      [
+        'KV406: PGlite declared-write stat-delta fallback rejected table(s) outside the mutation registry tables (SPEC §10.3/§11.2).',
+        `  unexpected: ${[...new Set(unexpected)].sort().join(', ')}`,
+        `  declared tables: ${[...new Set(policy.tables ?? [])].sort().join(', ')}`,
+        `  touches: ${[...new Set(policy.touches ?? [])].sort().join(', ') || '<none>'}`,
+      ].join('\n'),
+    );
+    this.name = 'PgliteDeclaredWriteScopeError';
+  }
+}
+
+async function unexpectedPgliteWriteStatTables(
+  pglite: PGlite,
+  policy: DeclaredWritePolicy,
+): Promise<string[]> {
+  const declaredTables = policy.tables ?? [];
+  if (declaredTables.length === 0) return [];
+
+  const allowed = new Set(declaredTables.map((table) => normalizePolicyTable(table, 'postgres')));
+  const stats = await pglite.query<PgliteWriteStatRow>(
+    [
+      'select relid::regclass::text as table, n_tup_ins, n_tup_upd, n_tup_del',
+      'from pg_stat_xact_user_tables',
+    ].join(' '),
+  );
+  return stats.rows
+    .filter((row) => Number(row.n_tup_ins) + Number(row.n_tup_upd) + Number(row.n_tup_del) > 0)
+    .map((row) => normalizePolicyTable(row.table, 'postgres'))
+    .filter((table) => !allowed.has(table));
 }
 
 async function insertPgliteRow(
