@@ -415,6 +415,59 @@ export const C = component({
     ).toHaveLength(0);
   });
 
+  it('keeps direct proven trustedHtml/trustedUrl construction clean at raw sinks', () => {
+    expect(
+      kv426(`
+import { trustedHtml, trustedUrl } from '@kovojs/browser';
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => (
+    <main>
+      <article rawHtml={trustedHtml('<b>safe</b>')} />
+      <section innerHTML={trustedHtml(post.body, 'admin-curated body sanitized upstream')} />
+      <a href={trustedUrl('/docs')}>docs</a>
+      <a href={trustedUrl(post.href, 'admin-curated redirect')}>read</a>
+    </main>
+  ),
+});
+`),
+    ).toHaveLength(0);
+  });
+
+  it('fails closed when an unresolved TrustedHtml value reaches a rawHtml sink', () => {
+    const messages = kv426(`
+import type { TrustedHtml } from '@kovojs/browser';
+declare const brandElsewhere: (value: string) => TrustedHtml;
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => {
+    const html: TrustedHtml = brandElsewhere(post.body);
+    return <article rawHtml={html} />;
+  },
+});
+`);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('rawHtml value sends data whose provenance cannot be proven');
+  });
+
+  it('fails closed when an unresolved TrustedUrl value reaches a URL sink', () => {
+    const messages = kv426(`
+import type { TrustedUrl } from '@kovojs/browser';
+declare const brandUrlElsewhere: (value: string) => TrustedUrl;
+export const C = component({
+  queries: { post: postQuery },
+  render: ({ post }) => {
+    const href: TrustedUrl = brandUrlElsewhere(post.href);
+    return <a href={href}>read</a>;
+  },
+});
+`);
+
+    expect(messages).toHaveLength(1);
+    expect(messages[0]).toContain('trustedUrl value sends data whose provenance cannot be proven');
+  });
+
   it('stays clean for safeRichHtml() on query data (the sanitizing primitive)', () => {
     expect(
       kv426(`
