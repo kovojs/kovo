@@ -12,6 +12,7 @@ import type { AwaitableGeneratedFragmentRenderable } from './renderable.js';
 import { canonicalRequestFingerprint, type MutationReplayStore } from './replay.js';
 import {
   readHeader,
+  type FrameworkWireBody,
   type HeaderSource,
   type MutationResponseHeaders,
   type ServerResponseBase,
@@ -142,7 +143,7 @@ export interface LiveTargetRenderContext<Request = unknown> {
  * this buffered final-truth response to replay storage instead of caching a one-shot stream.
  */
 export interface BufferedMutationWireResponse extends ServerResponseBase<
-  string,
+  FrameworkWireBody,
   MutationResponseHeaders,
   200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
@@ -205,7 +206,7 @@ export interface MutationWireRequestOptions<
  * app authors.
  */
 export interface MutationWireResponse extends ServerResponseBase<
-  ReadableStream<Uint8Array> | string,
+  FrameworkWireBody | ReadableStream<Uint8Array>,
   MutationResponseHeaders,
   200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
@@ -254,7 +255,7 @@ export interface NoJsMutationRequest<
  * the full page). Exported only for in-repo consumers and compiler-emitted code, not app authors.
  */
 export interface NoJsMutationResponse extends ServerResponseBase<
-  string,
+  FrameworkWireBody,
   MutationResponseHeaders,
   303 | 403 | 409 | 422 | 429 | 500
 > {}

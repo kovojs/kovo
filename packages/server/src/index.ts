@@ -258,6 +258,7 @@ export {
   query,
   RedosPatternError,
   readonlyDb,
+  replayMutationWireBody,
   s,
   SchemaValidationError,
   // KV429 (SPEC §10.3/§11.1): thrown by a mutation handler when a CAS predicate matches
@@ -281,6 +282,7 @@ export type {
   FileLike,
   FileSchema,
   FileSchemaOptions,
+  FrameworkWireBody,
   InferSchema,
   InvalidateOptions,
   MutationContext,
@@ -321,6 +323,7 @@ export type {
   QueryResult,
   QueryUnknownDefinitionFieldError,
   Reader,
+  ReplayMutationWireBodyOptions,
   Schema,
   Secret,
   // KV429 (SPEC §10.3/§11.1): the typed 409 stale-version conflict outcome.

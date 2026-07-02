@@ -17,8 +17,10 @@ import { resolveKovoLifecycleRequest } from './response-posture.js';
 import {
   blessRedirectResponse,
   isBlessedRedirectResponse,
+  frameworkWireBody,
   mergeResponseHeaders,
   retryAfterHeaders,
+  type FrameworkWireBody,
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
@@ -86,7 +88,7 @@ export type QuerySearchInput =
 
 /** @internal */
 export interface QueryEndpointResponse extends ServerResponseBase<
-  string,
+  FrameworkWireBody,
   ResponseHeaders,
   200 | 303 | 403 | 404 | 422 | 429 | 500
 > {}
@@ -567,7 +569,7 @@ export const renderQueryEndpointResponse = wireEmitter(
       // including error responses, so a shared/intermediary cache cannot store and replay
       // any response (even an anon 403) to a different user.
       return {
-        body: JSON.stringify(serverErrorPayload()),
+        body: frameworkWireBody(JSON.stringify(serverErrorPayload())),
         headers: queryJsonHeaders(endpointRequest),
         status: 500,
       };
@@ -583,11 +585,17 @@ export const renderQueryEndpointResponse = wireEmitter(
       // SPEC §9.4:895: guard-failure responses (303 redirect, 403) also carry the private
       // cache posture — an anon 403 must not be cached and replayed to an authed user.
       if (authResponse) {
-        return withQueryBuildHeaders(withQueryCacheHeaders(authResponse), endpointRequest);
+        return withQueryBuildHeaders(
+          withQueryCacheHeaders({
+            ...authResponse,
+            body: frameworkWireBody(typeof authResponse.body === 'string' ? authResponse.body : ''),
+          }),
+          endpointRequest,
+        );
       }
 
       return {
-        body: JSON.stringify(result.error),
+        body: frameworkWireBody(JSON.stringify(result.error)),
         headers: mergeResponseHeaders(
           {
             'Cache-Control': 'private, no-store',
@@ -617,14 +625,14 @@ export const renderQueryEndpointResponse = wireEmitter(
         request: lifecycleRequest,
       });
       return {
-        body: JSON.stringify(serverErrorPayload()),
+        body: frameworkWireBody(JSON.stringify(serverErrorPayload())),
         headers: queryJsonHeaders(endpointRequest),
         status: 500,
       };
     }
 
     return {
-      body,
+      body: frameworkWireBody(body),
       headers: mergeResponseHeaders(
         { 'Content-Type': 'text/html; charset=utf-8' },
         querySuccessCacheHeaders(),
@@ -654,7 +662,7 @@ export const renderQueryRegistryEndpointResponse = wireEmitter(
 
     if (!definition) {
       return withQueryCacheHeaders({
-        body: 'Not Found',
+        body: frameworkWireBody('Not Found'),
         headers: mergeResponseHeaders(
           { 'Content-Type': 'text/plain; charset=utf-8' },
           queryBuildHeaders(endpointRequest),

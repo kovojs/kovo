@@ -1,10 +1,15 @@
 import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
-import { cloneResponseHeaders, type ResponseHeaders, type ServerResponseBase } from './response.js';
+import {
+  cloneResponseHeaders,
+  type FrameworkWireBody,
+  type ResponseHeaders,
+  type ServerResponseBase,
+} from './response.js';
 import { formLikeToRecord } from './schema.js';
 
 export type MutationReplayResponse = ServerResponseBase<
-  string,
+  FrameworkWireBody,
   ResponseHeaders,
   200 | 303 | 401 | 403 | 409 | 422 | 429 | 500
 >;
