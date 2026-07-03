@@ -285,6 +285,12 @@ describe('create-kovo starter (metadata)', () => {
       'applyPgliteWriterTablePrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const readableTables = pgliteReaderReadableTableNames(metadata)',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'readableTables.has(config.name) && publicColumns.length > 0',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "classifications.includes('authzPolicy')",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(

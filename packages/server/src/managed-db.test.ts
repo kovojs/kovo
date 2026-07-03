@@ -39,6 +39,7 @@ import { adminAssign, serverValue } from './write-governance.js';
 // `Reader<Db>` tsc mirror are exercised elsewhere (drizzle static gate; type-level).
 
 const product = domain('product');
+const POSTGRES_READER_ROLE = 'kovo_reader';
 const POSTGRES_WRITER_ROLE = 'kovo_writer';
 
 function resolveBin(name: string): string {
@@ -75,6 +76,24 @@ async function runAsPostgresWriter(client: PGlite, statement: string): Promise<v
     await client.exec("SET LOCAL kovo.principal = 'demo-user'");
     await client.exec(statement);
     await client.exec('COMMIT');
+  } catch (error) {
+    await client.exec('ROLLBACK');
+    throw error;
+  }
+}
+
+async function runAsPostgresReader(
+  client: PGlite,
+  statement: string,
+): Promise<readonly Record<string, unknown>[]> {
+  await client.exec('BEGIN');
+  try {
+    await client.exec('SET TRANSACTION READ ONLY');
+    await client.exec(`SET LOCAL ROLE ${POSTGRES_READER_ROLE}`);
+    await client.exec("SET LOCAL kovo.principal = 'demo-user'");
+    const result = await client.query(statement);
+    await client.exec('COMMIT');
+    return result.rows as readonly Record<string, unknown>[];
   } catch (error) {
     await client.exec('ROLLBACK');
     throw error;
@@ -974,6 +993,48 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     );
     expect(() => handle.insert({ name: 'drafts' }).values()).toThrow(/KV414/);
     expect(log).toEqual(['select:contacts', 'select:reference_tags', 'leftJoin:published_posts']);
+  });
+
+  // @kovo-security-certifies KV414 postgres-reader-grant-default-deny
+  it('proves Postgres reader grants default-deny unclassified tables while RLS scopes owner reads', async () => {
+    const client = new PGlite();
+    try {
+      await client.exec(`
+        CREATE ROLE ${POSTGRES_READER_ROLE};
+        CREATE TABLE orders (id text PRIMARY KEY, user_id text NOT NULL, label text NOT NULL);
+        CREATE TABLE verification (
+          id text PRIMARY KEY,
+          identifier text NOT NULL,
+          value text NOT NULL,
+          "expiresAt" integer NOT NULL
+        );
+        INSERT INTO orders (id, user_id, label) VALUES
+          ('own-row', 'demo-user', 'owned'),
+          ('other-row', 'other-user', 'blocked');
+        INSERT INTO verification (id, identifier, value, "expiresAt")
+          VALUES ('v1', 'demo-user', 'secret-token', 1);
+        REVOKE ALL ON TABLE orders FROM PUBLIC;
+        REVOKE ALL ON TABLE verification FROM PUBLIC;
+        REVOKE ALL ON TABLE orders FROM ${POSTGRES_READER_ROLE};
+        REVOKE ALL ON TABLE verification FROM ${POSTGRES_READER_ROLE};
+        GRANT SELECT (id, user_id, label) ON TABLE orders TO ${POSTGRES_READER_ROLE};
+        ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
+        ALTER TABLE orders FORCE ROW LEVEL SECURITY;
+        CREATE POLICY kovo_owner_scope ON orders
+          FOR SELECT TO ${POSTGRES_READER_ROLE}
+          USING (user_id = current_setting('kovo.principal', true));
+      `);
+
+      await expect(
+        runAsPostgresReader(client, 'SELECT id, label FROM orders ORDER BY id'),
+      ).resolves.toEqual([{ id: 'own-row', label: 'owned' }]);
+
+      await expect(runAsPostgresReader(client, 'SELECT id FROM verification')).rejects.toThrow(
+        /permission denied for table verification/u,
+      );
+    } finally {
+      await client.close();
+    }
   });
 
   // @kovo-security-certifies KV406 postgres-writer-grant-default-deny
