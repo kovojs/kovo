@@ -415,7 +415,8 @@ export const createPostgresScopedClient = securityClassifier(
       get(target, prop, receiver) {
         if (prop === 'query') return scopedPostgresQuery.bind(undefined, target, options);
         if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
-        return Reflect.get(target, prop, receiver);
+        const value = Reflect.get(target, prop, receiver);
+        return typeof value === 'function' ? value.bind(target) : value;
       },
     }) as Client;
   },
