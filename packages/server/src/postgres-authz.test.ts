@@ -1,6 +1,7 @@
 import { PGlite } from '@electric-sql/pglite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { createPostgresScopedClient } from './managed-db.js';
+import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
+import { createPostgresScopedClient, readonlyDb } from './managed-db.js';
 
 // SPEC §10.3/§11.1: Postgres/PGlite owner authorization is enforced by RLS on the
 // proven owner principal, not by query-shape inspection. These tests use real
@@ -72,6 +73,35 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
     await expect(orderIds(u1)).resolves.toEqual(['o1', 'o3']);
   });
 
+  it('confines ownerVia child tables through the parent owner policy', async () => {
+    const client = new PGlite();
+    clients.push(client);
+    await installOwnerScopedSchema(client);
+
+    const u1 = scopedClient(client, 'u1');
+    const u2 = scopedClient(client, 'u2');
+    const anonymous = scopedClient(client, undefined);
+
+    await expect(itemIds(u1)).resolves.toEqual(['i1']);
+    await expect(itemIds(u2)).resolves.toEqual(['i2']);
+    await expect(itemIds(anonymous)).resolves.toEqual([]);
+    await expect(
+      rowsOf(u1.query('select id from order_items where order_id = $1 order by id', ['o2'])),
+    ).resolves.toEqual([]);
+    await expect(
+      rowsOf(
+        u1.query('insert into order_items (id, order_id, label) values ($1, $2, $3)', [
+          'forged-child',
+          'o2',
+          'forged child',
+        ]),
+      ),
+    ).rejects.toThrow(/row-level security|violates/i);
+    await expect(
+      rowsOf(u1.query('update order_items set order_id = $1 where id = $2', ['o2', 'i1'])),
+    ).rejects.toThrow(/row-level security|violates/i);
+  });
+
   it('binds the principal before role assumption and prevents SQL text from widening it', async () => {
     const client = new PGlite();
     clients.push(client);
@@ -88,6 +118,33 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
     ).rejects.toThrow();
     await expect(orderIds(u1)).resolves.toEqual(['o1']);
   });
+
+  it('keeps declared rawRead scoped by Postgres RLS regardless of declaration breadth', async () => {
+    const client = new PGlite();
+    clients.push(client);
+    await installOwnerScopedSchema(client);
+    const u1 = rawReadClient(client, 'u1');
+    const anonymous = rawReadClient(client, undefined);
+    const statement = stampTrustedSql(
+      { sql: 'select id from orders order by id', values: [] },
+      'Postgres owner-scoped rawRead proof',
+    );
+
+    await expect(
+      rowsOf<{ id: string }>(
+        u1.rawRead(statement, { reads: ['orders'] }) as Promise<{
+          rows: { id: string }[];
+        }>,
+      ),
+    ).resolves.toEqual([{ id: 'o1' }]);
+    await expect(
+      rowsOf<{ id: string }>(
+        anonymous.rawRead(statement, { reads: ['orders'] }) as Promise<{
+          rows: { id: string }[];
+        }>,
+      ),
+    ).resolves.toEqual([]);
+  });
 });
 
 function scopedClient(client: PGlite, principal: string | undefined): PGlite {
@@ -96,8 +153,31 @@ function scopedClient(client: PGlite, principal: string | undefined): PGlite {
   return createPostgresScopedClient(client, options);
 }
 
+function rawReadClient(client: PGlite, principal: string | undefined) {
+  const scoped = scopedClient(client, principal);
+  return readonlyDb(
+    {
+      query(statement: { sql: string; values?: unknown[] }) {
+        return scoped.query(statement.sql, statement.values);
+      },
+    },
+    {
+      rawRead: {
+        dialectLabel: 'PGlite',
+        executeMethod: 'query',
+        normalizeTableName: (table) => table,
+      },
+    },
+  );
+}
+
 async function orderIds(client: PGlite): Promise<string[]> {
   const rows = await rowsOf<{ id: string }>(client.query('select id from orders order by id'));
+  return rows.map((row) => row.id);
+}
+
+async function itemIds(client: PGlite): Promise<string[]> {
+  const rows = await rowsOf<{ id: string }>(client.query('select id from order_items order by id'));
   return rows.map((row) => row.id);
 }
 
@@ -116,15 +196,42 @@ async function installOwnerScopedSchema(client: PGlite): Promise<void> {
       user_id text NOT NULL,
       label text NOT NULL
     );
+    CREATE TABLE order_items (
+      id text PRIMARY KEY,
+      order_id text NOT NULL REFERENCES orders(id),
+      label text NOT NULL
+    );
     INSERT INTO orders (id, user_id, label) VALUES
       ('o1', 'u1', 'owner one'),
       ('o2', 'u2', 'owner two');
+    INSERT INTO order_items (id, order_id, label) VALUES
+      ('i1', 'o1', 'owner one child'),
+      ('i2', 'o2', 'owner two child');
     ALTER TABLE orders ENABLE ROW LEVEL SECURITY;
     ALTER TABLE orders FORCE ROW LEVEL SECURITY;
     CREATE POLICY kovo_owner_scope ON orders
       FOR ALL TO ${APP_ROLE}
       USING (user_id = current_setting('kovo.principal', true))
       WITH CHECK (user_id = current_setting('kovo.principal', true));
+    ALTER TABLE order_items ENABLE ROW LEVEL SECURITY;
+    ALTER TABLE order_items FORCE ROW LEVEL SECURITY;
+    CREATE POLICY kovo_owner_via_scope ON order_items
+      FOR ALL TO ${APP_ROLE}
+      USING (
+        EXISTS (
+          SELECT 1 FROM orders
+          WHERE orders.id = order_items.order_id
+            AND orders.user_id = current_setting('kovo.principal', true)
+        )
+      )
+      WITH CHECK (
+        EXISTS (
+          SELECT 1 FROM orders
+          WHERE orders.id = order_items.order_id
+            AND orders.user_id = current_setting('kovo.principal', true)
+        )
+      );
     GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE orders TO ${APP_ROLE};
+    GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE order_items TO ${APP_ROLE};
   `);
 }
