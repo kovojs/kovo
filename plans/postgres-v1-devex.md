@@ -135,8 +135,9 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
   - Acceptance: a `documents` table with a team-membership predicate gets FORCE RLS + a policy at provision; a member of the team reads/writes team documents, a non-member sees `[]`; the posture check treats it as covered.
   - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/server/src/postgres-runtime.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts --config ./vite.config.ts`.
   - Residual risk: dependency grants for custom predicates are derived from Drizzle `usedTables`; predicates that mention dependency tables only as raw text may still fail closed with engine permission denial rather than inferred dependency grants.
-- [ ] **I2 — Ship the worked team/org example in the docs (the documented custom-RLS-policy escape).** State the honesty boundary explicitly: Kovo guarantees the table is FORCE-RLS + policy-present + census-covered; the **predicate's correctness is the app's responsibility**, exactly like any custom authz (SPEC §10.3 / followup-5 DEC-J). Show the many-to-many membership shape `ownerVia` cannot express in one hop.
+- [x] **I2 — Ship the worked team/org example in the docs (the documented custom-RLS-policy escape).** State the honesty boundary explicitly: Kovo guarantees the table is FORCE-RLS + policy-present + census-covered; the **predicate's correctness is the app's responsibility**, exactly like any custom authz (SPEC §10.3 / followup-5 DEC-J). Show the many-to-many membership shape `ownerVia` cannot express in one hop.
   - Acceptance: a docs page under `site/content/guides/` demonstrates the membership-join `authzPolicy` end to end (schema annotation, provisioned policy, member vs non-member behavior) with the guarantee boundary called out; follows `rules/docs-style.md`.
+  - Evidence: `site/content/guides/postgres-authz-policy.md`; worker `pnpm --filter @kovojs/site run build`; worker `pnpm --filter @kovojs/site run check:links`; worker `node site/scripts/code-snippets-check.mjs`.
 
 ## 4. Config surface (new)
 
