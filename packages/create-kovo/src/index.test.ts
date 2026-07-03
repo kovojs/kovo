@@ -813,6 +813,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).toContain(
       "import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js'",
     );
+    expect(files.get('src/db.ts')).toContain('export type AppDb = BetterSQLite3Database;');
     expect(files.get('src/db.ts')).toContain('export type AppReadonlyDb = Reader<AppDb>');
     expect(files.get('src/db.ts')).toContain(
       'export const readonlyAppDb: AppReadonlyDb = appRuntimeReadonlyDb',
@@ -828,7 +829,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("from 'drizzle-orm/better-sqlite3'");
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'client.exec(SCHEMA_DDL);\n  client.exec(SEED_CONTACTS);\n  const db = drizzle({ client, schema });',
+      'client.exec(SCHEMA_DDL);\n  client.exec(SEED_CONTACTS);\n  const db = drizzle({ client });',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'readonlyDb(db).exec(SCHEMA_DDL)',

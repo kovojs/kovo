@@ -69,7 +69,7 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const client = new Database(sqliteFile);
   client.exec(SCHEMA_DDL);
   client.exec(SEED_CONTACTS);
-  const db = drizzle({ client, schema });
+  const db = drizzle({ client });
   const secretReadDb = createSecretBoxingReadDb(
     readonlyDb(db, {
       rawRead: {
