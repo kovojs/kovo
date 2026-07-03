@@ -66,7 +66,7 @@ failure paths.
 5. **Classify confidential columns** with `secret`; reveal only reviewed fields with
    `trustedReveal(...)`, then inspect `kovo explain --revealed`.
 6. **Govern server-owned columns** with `governed`; write them through `serverValue(...)` or
-   `adminAssign(...)`, never from request input.
+   `trustedAssign(...)`, never from request input.
 7. **Leave CSRF on**; justify every `csrf: false` and confirm it in `kovo explain --endpoints`.
 8. **Use capability URLs for downloads**: mint with `ctx.signUrl(...)`, serve through
    `createStorageDownloadEndpoint`, and review `kovo explain --capabilities`.
@@ -362,22 +362,22 @@ await db.update(accounts).set({ displayName: input.displayName, role: input.role
 ```
 
 `role` came from the request, so Kovo reports a governed-write diagnostic. Use a server-derived value or an explicit
-admin assignment instead:
+trusted assignment instead:
 
 ```ts
-import { adminAssign, serverValue } from '@kovojs/server';
+import { trustedAssign, serverValue } from '@kovojs/server';
 
 await db.update(accounts).set({
   displayName: input.displayName,
-  role: serverValue('member'),
+  role: serverValue('member', 'default role'),
 });
 
 await db.update(accounts).set({
-  role: adminAssign(input.role, { justification: 'admin role editor' }),
+  role: trustedAssign(input.role, { reason: 'admin role editor' }),
 });
 ```
 
-`serverValue(...)` says the value is framework or app-server provenance. `adminAssign(...)` says an
+`serverValue(...)` says the value is framework or app-server provenance. `trustedAssign(...)` says an
 authorized admin action intentionally writes a governed column and leaves an audit row.
 
 ## Serve file downloads with capability URLs

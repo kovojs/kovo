@@ -330,7 +330,7 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
       '/app/framework.ts',
       [
         'export { query as dataQuery, s as dataSchema } from "@kovojs/server/api/data";',
-        'export { adminAssign as grantInput } from "@kovojs/server/write-governance";',
+        'export { trustedAssign as grantInput } from "@kovojs/server/write-governance";',
         'export { sql as kovoSql, trustedSql as reviewedSql } from "@kovojs/drizzle";',
       ].join('\n'),
     );
@@ -368,7 +368,7 @@ describe('@kovojs/drizzle static framework identity resolver', () => {
     expect(
       expressionResolvesToFrameworkExport(
         expressionByText.get('grantInput')!.getExpression(),
-        frameworkExport('@kovojs/server', 'adminAssign'),
+        frameworkExport('@kovojs/server', 'trustedAssign'),
       ),
     ).toBe(true);
     expect(

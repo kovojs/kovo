@@ -34,8 +34,8 @@ export type {
 } from './postgres-runtime.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
-export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';
-export type { AdminAssignFact, AdminAssignOptions } from './write-governance.js';
+export { trustedAssign, drainTrustedAssignFacts, serverValue } from './write-governance.js';
+export type { TrustedAssignFact, TrustedAssignOptions } from './write-governance.js';
 export { encryptAtRest } from './confidential-at-rest.js';
 export type { EncryptedAtRest, EncryptAtRestOptions } from './confidential-at-rest.js';
 // SPEC §6.6 / KV424 and plans/most-secure-web-framework.md SINK-02: shell command

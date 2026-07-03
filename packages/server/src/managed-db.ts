@@ -739,7 +739,7 @@ function assertGovernedWriteObjectAllowed(
     throw new Error(
       [
         `KV438: ${context.options.dialectLabel} managed write rejected parsed request input ${provenance.path} for governed column ${key} in ${context.verb}.${context.boundary} (SPEC §11.1).`,
-        '  Use a server-derived value or the audited adminAssign(...) escape for intentional privileged assignment.',
+        '  Use a server-derived value or the audited trustedAssign(...) escape for intentional privileged assignment.',
       ].join('\n'),
     );
   }
