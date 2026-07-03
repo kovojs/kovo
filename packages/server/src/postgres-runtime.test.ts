@@ -146,6 +146,24 @@ describe('createPostgresAppRuntimeDb', () => {
     expect(report.issues).toEqual([]);
   });
 
+  it('returns least-privilege PGlite app handles when called without a request', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-no-request-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+
+    try {
+      await runtime.ready;
+      const appDb = runtime.db();
+
+      await expect(appDb.select().from(notes).orderBy(notes.id)).resolves.toEqual([]);
+      await expect(
+        appDb.execute(sql.raw('CREATE TABLE kovo_no_request_superuser_escape (id text)')),
+      ).rejects.toThrow();
+    } finally {
+      await runtime.close();
+    }
+  });
+
   it('threads Postgres rawRead through the runtime reader without bypassing RLS or column grants', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-raw-read-'));
     roots.push(dataDir);
