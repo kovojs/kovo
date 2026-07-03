@@ -277,6 +277,8 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
       handle. Landing this makes the build RED on every currently-unannotated request-reachable table — the second forcing
       function (nothing ships until every table's authorization is a declared decision). A planted unclassified-table
       canary must fail the gate.
+  - [x] Static/build census gate: `pnpm vitest --run packages/drizzle/src/authz-census-static.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/drizzle/src/static-analysis-context.test.ts packages/server/src/internal/data-plane-static-analysis.test.ts` passed; the Drizzle aggregate now derives request-reachable tables from schema facts plus query/write graph facts and fails KV414 unless each reachable table has exactly one DEC-K classification.
+  - [ ] Runtime managed-handle deny remains open: proving denial for unclassified tables requires changes in `packages/server/src/managed-db.ts` / owner-scoping runtime files, which this branch was instructed not to edit.
 
 ### Phase 1 — Runtime authorization choke
 

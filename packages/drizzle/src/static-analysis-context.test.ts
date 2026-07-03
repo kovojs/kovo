@@ -102,7 +102,7 @@ function fixtureProject(): TouchGraphProjectOptions {
           'import { sql } from "@kovojs/drizzle";',
           'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
           '',
-          'export const carts = pgTable("carts", {}, kovo({ domain: "cart", key: "id" }));',
+          'export const carts = pgTable("carts", {}, kovo({ domain: "cart", key: "id", reference: true }));',
           '',
           'export const cartQuery = query("cart", {',
           '  output: s.object({ rows: s.array(s.string()) }),',

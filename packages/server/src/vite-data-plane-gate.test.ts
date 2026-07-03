@@ -61,6 +61,23 @@ export async function loadProducts(input: { id: string }, db: any) {
 }
 `;
 
+const KV414_AUTHZ_CENSUS_UNCLASSIFIED = `
+import { query } from "@kovojs/server";
+import { kovo } from "@kovojs/drizzle";
+import { pgTable, text } from "drizzle-orm/pg-core";
+import type { PgAsyncDatabase } from "drizzle-orm/pg-core";
+
+export const drafts = pgTable("drafts", {
+  id: text("id").primaryKey(),
+}, kovo({ domain: "draft", key: "id" }));
+
+export const draftQuery = query("draft", {
+  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {
+    return db.select({ id: drafts.id }).from(drafts);
+  },
+});
+`;
+
 // KV410: opaque sql<number> projection in a query loader without a declared output schema.
 const KV410_OPAQUE = `
 export const cartItems = pgTable("cart_items", {}, kovo({ domain: "cart", key: "cartId" }));
@@ -475,6 +492,19 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     await plugin.configResolved({ command: 'build', root });
 
     await expect(plugin.buildStart()).resolves.toBeUndefined();
+  });
+
+  it('fails the build on a KV414 authorization-census canary', async () => {
+    const root = await fixture({
+      'src/drizzle-types.d.ts': DRIZZLE_QUERY_SHAPE_TYPES,
+      'src/queries/drafts.ts': KV414_AUTHZ_CENSUS_UNCLASSIFIED,
+    });
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+    await plugin.configResolved({ command: 'build', root });
+
+    await expect(plugin.buildStart()).rejects.toThrow(
+      /ERROR KV414[\s\S]*drafts\.ts[\s\S]*Authorization census table drafts/,
+    );
   });
 
   it('fails the build on a KV410 opaque-projection fixture', async () => {
