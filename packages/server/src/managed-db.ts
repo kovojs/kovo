@@ -125,8 +125,17 @@ export interface DeclaredWriteDbOptions {
 
 /** Options for a Postgres/PGlite read-only transaction client. */
 export interface PostgresReadonlyClientOptions {
+  principal?: string | undefined;
   quoteIdentifier?: (value: string) => string;
   readerRole?: string | false;
+}
+
+/** Options for a Postgres/PGlite request-scoped transaction client. */
+export interface PostgresScopedClientOptions {
+  principal?: string | undefined;
+  quoteIdentifier?: (value: string) => string;
+  readOnly?: boolean;
+  role?: string | false;
 }
 
 /** User-authored declaration for the raw read escape (SPEC §10.2/§10.3 DEC-C). */
@@ -313,10 +322,31 @@ export const createPostgresReadonlyClient = securityClassifier(
     client: Client,
     options: PostgresReadonlyClientOptions = {},
   ): Client {
+    const scopedOptions: PostgresScopedClientOptions = { readOnly: true };
+    if (options.principal !== undefined) scopedOptions.principal = options.principal;
+    if (options.quoteIdentifier !== undefined)
+      scopedOptions.quoteIdentifier = options.quoteIdentifier;
+    if (options.readerRole !== undefined) scopedOptions.role = options.readerRole;
+    return createPostgresScopedClient(client, scopedOptions);
+  },
+);
+
+/**
+ * Create a Postgres/PGlite client whose app SQL runs as one extended-protocol statement inside a
+ * transaction-scoped role/principal frame (SPEC §10.3 RLS owner scoping). The framework binds
+ * `kovo.principal` with parameters before assuming the app role; direct `exec` is blocked for
+ * role/principal-scoped handles so appended simple-query control text cannot widen the frame.
+ */
+export const createPostgresScopedClient = securityClassifier(
+  'server.managed-db.postgres-scoped-client',
+  function <Client extends object>(
+    client: Client,
+    options: PostgresScopedClientOptions = {},
+  ): Client {
     return new Proxy(client as Record<PropertyKey, unknown>, {
       get(target, prop, receiver) {
-        if (prop === 'query') return readonlyPostgresQuery.bind(undefined, target, options);
-        if (prop === 'exec') return readonlyPostgresExec.bind(undefined, target, options);
+        if (prop === 'query') return scopedPostgresQuery.bind(undefined, target, options);
+        if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
         return Reflect.get(target, prop, receiver);
       },
     }) as Client;
@@ -1013,31 +1043,30 @@ type PostgresTransactionClient = {
   ): Promise<Result>;
 };
 
-function readonlyPostgresQuery(
+function scopedPostgresQuery(
   client: Record<PropertyKey, unknown>,
-  options: PostgresReadonlyClientOptions,
+  options: PostgresScopedClientOptions,
   query: string,
   params?: unknown[],
   queryOptions?: unknown,
 ): Promise<unknown> {
   return postgresTransaction(client, async (tx) => {
-    await runPostgresReadOnlyTransactionControl(tx, options);
+    await runPostgresTransactionControl(tx, options);
     const queryMethod = tx.query.bind(tx);
     return queryMethod(query, params, queryOptions) as Promise<unknown>;
   });
 }
 
-function readonlyPostgresExec(
-  client: Record<PropertyKey, unknown>,
-  options: PostgresReadonlyClientOptions,
-  query: string,
-  execOptions?: unknown,
-): Promise<unknown> {
-  return postgresTransaction(client, async (tx) => {
-    await runPostgresReadOnlyTransactionControl(tx, options);
-    const execMethod = tx.exec.bind(tx);
-    return execMethod(query, execOptions) as Promise<unknown>;
-  });
+function scopedPostgresExec(options: PostgresScopedClientOptions, query: string): Promise<unknown> {
+  if (options.role !== false && options.role !== undefined) {
+    throw new KovoReadonlyHandleError(
+      'KV414: Postgres role-scoped managed clients require parameterized db.query(...) so app SQL executes as one extended-protocol statement (SPEC §10.3/§11.1).',
+    );
+  }
+  void query;
+  throw new KovoReadonlyHandleError(
+    'KV414: Postgres managed clients reject db.exec(...) on the request-scoped path; use parameterized db.query(...) instead (SPEC §10.3/§11.1).',
+  );
 }
 
 function postgresTransaction<Result>(
@@ -1053,15 +1082,21 @@ function postgresTransaction<Result>(
   return Reflect.apply(transaction, client, [callback]) as Promise<Result>;
 }
 
-async function runPostgresReadOnlyTransactionControl(
+async function runPostgresTransactionControl(
   tx: PostgresTransactionClient,
-  options: PostgresReadonlyClientOptions,
+  options: PostgresScopedClientOptions,
 ): Promise<void> {
   const exec = tx.exec.bind(tx);
-  await (exec('SET TRANSACTION READ ONLY') as Promise<unknown>);
-  if (options.readerRole !== false && options.readerRole !== undefined) {
+  const query = tx.query.bind(tx);
+  if (options.readOnly === true) await (exec('SET TRANSACTION READ ONLY') as Promise<unknown>);
+  if (options.principal !== undefined) {
+    await (query("SELECT set_config('kovo.principal', $1, true)", [
+      options.principal,
+    ]) as Promise<unknown>);
+  }
+  if (options.role !== false && options.role !== undefined) {
     const quote = options.quoteIdentifier ?? quoteSqlIdentifier;
-    await (exec(`SET LOCAL ROLE ${quote(options.readerRole)}`) as Promise<unknown>);
+    await (exec(`SET LOCAL ROLE ${quote(options.role)}`) as Promise<unknown>);
   }
 }
 

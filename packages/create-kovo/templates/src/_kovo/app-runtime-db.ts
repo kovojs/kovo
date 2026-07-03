@@ -3,12 +3,15 @@ import {
   createSecretBoxingReadDb,
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
+  createPostgresScopedClient,
   declareSecretReadCapability,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
   readonlyDb,
+  type PostgresReadonlyClientOptions,
+  type PostgresScopedClientOptions,
 } from '@kovojs/server';
-import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle';
+import { extractKovoRuntimeDbMetadata, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle } from 'drizzle-orm/pglite';
 
@@ -24,7 +27,7 @@ import type { AppDb, AppReadonlyDb } from '../db.js';
 // hiding until a later request.
 
 interface CreatedAppRuntimeDb {
-  db: AppDb;
+  db: (request?: unknown) => AppDb;
   readonlyDb: AppReadonlyDb;
   ready: Promise<void>;
 }
@@ -39,6 +42,7 @@ const SCHEMA_TABLES = sortTablesByForeignKeyDependencies([
 const SCHEMA_DDL = schemaDdl(SCHEMA_TABLES);
 const SECRET_READ_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES);
 const READER_ROLE = 'kovo_reader';
+const WRITER_ROLE = 'kovo_writer';
 interface DeclaredWritePolicy {
   tables?: readonly string[];
   touches?: readonly string[];
@@ -56,20 +60,40 @@ const DEFAULT_DATA_DIR = '.kovo/pglite';
 function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const client = new PGlite(process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR);
   const ready = initializeAppDb(client);
-  const db = drizzle({ client });
-  const readDb = drizzle({
-    client: createPostgresReadonlyClient(client, { readerRole: READER_ROLE }),
-  });
-  const privilegedReadDb = drizzle({
-    client: createPostgresReadonlyClient(client, { readerRole: false }),
-  });
-  const secretReadDb = createSecretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA, {
-    privilegedDb: readonlyDb(privilegedReadDb),
-    rawSecretTableRead: 'engine',
+  return {
+    db: (request?: unknown) => createRequestScopedDb(client, principalFromRequest(request)),
+    readonlyDb: createRequestScopedReadonlyDb(client),
+    ready,
+  };
+}
+
+async function initializeAppDb(client: PGlite): Promise<void> {
+  await ensurePgliteRole(client, READER_ROLE);
+  await ensurePgliteRole(client, WRITER_ROLE);
+  await client.exec(SCHEMA_DDL);
+  await client.exec(
+    'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
+  );
+  await applyPgliteOwnerPolicies(client, SCHEMA_TABLES, SECRET_READ_METADATA);
+  await applyPgliteReaderColumnPrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA);
+  await applyPgliteWriterTablePrivileges(client, SCHEMA_TABLES);
+  await client.exec(SEED_CONTACTS);
+}
+
+type PgTableConfig = ReturnType<typeof getTableConfig>;
+type PgTable = Parameters<typeof getTableConfig>[0];
+type PgColumn = PgTableConfig['columns'][number];
+type PgForeignKey = PgTableConfig['foreignKeys'][number];
+
+export { declareSecretReadCapability };
+
+function createRequestScopedDb(client: PGlite, principal: string | undefined): AppDb {
+  const db = drizzle({
+    client: createPostgresScopedClient(client, postgresScopedClientOptions(principal)),
   });
   Object.defineProperty(db, kovoReadonlyDbHandle, {
     configurable: true,
-    value: () => secretReadDb,
+    value: () => createRequestScopedReadonlyDb(client, principal),
   });
   Object.defineProperty(db, kovoDeclaredWriteDbHandle, {
     configurable: true,
@@ -81,22 +105,24 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
         tableNames: pgTablePolicyNames,
       }),
   });
-  return { db, readonlyDb: secretReadDb, ready };
+  return db;
 }
 
-async function initializeAppDb(client: PGlite): Promise<void> {
-  await ensurePgliteRole(client, READER_ROLE);
-  await client.exec(SCHEMA_DDL);
-  await applyPgliteReaderColumnPrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA);
-  await client.exec(SEED_CONTACTS);
+function createRequestScopedReadonlyDb(
+  client: PGlite,
+  principal: string | undefined = undefined,
+): AppReadonlyDb {
+  const readDb = drizzle({
+    client: createPostgresReadonlyClient(client, postgresReadonlyClientOptions(principal)),
+  });
+  const privilegedReadDb = drizzle({
+    client: createPostgresReadonlyClient(client, postgresReadonlyClientOptions(principal, false)),
+  });
+  return createSecretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA, {
+    privilegedDb: readonlyDb(privilegedReadDb),
+    rawSecretTableRead: 'engine',
+  });
 }
-
-type PgTableConfig = ReturnType<typeof getTableConfig>;
-type PgTable = Parameters<typeof getTableConfig>[0];
-type PgColumn = PgTableConfig['columns'][number];
-type PgForeignKey = PgTableConfig['foreignKeys'][number];
-
-export { declareSecretReadCapability };
 
 function schemaDdl(tables: readonly PgTable[]): string {
   return [
@@ -243,7 +269,7 @@ async function ensurePgliteRole(client: PGlite, role: string): Promise<void> {
 async function applyPgliteReaderColumnPrivileges(
   client: PGlite,
   tables: readonly PgTable[],
-  metadata: ReturnType<typeof extractKovoRuntimeDbMetadata>,
+  metadata: KovoRuntimeDbMetadata,
 ): Promise<void> {
   for (const table of tables) {
     const config = getTableConfig(table);
@@ -265,6 +291,88 @@ async function applyPgliteReaderColumnPrivileges(
   }
 }
 
+async function applyPgliteWriterTablePrivileges(
+  client: PGlite,
+  tables: readonly PgTable[],
+): Promise<void> {
+  for (const table of tables) {
+    const name = quoteIdent(getTableConfig(table).name);
+    await client.exec(
+      `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${name} TO ${quoteIdent(WRITER_ROLE)}`,
+    );
+  }
+}
+
+async function applyPgliteOwnerPolicies(
+  client: PGlite,
+  tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
+): Promise<void> {
+  const tableNames = new Set(tables.map((table) => getTableConfig(table).name));
+  for (const [tableName, owner] of metadata.ownerSourcesByTable) {
+    if (!tableNames.has(tableName)) continue;
+    const table = quoteIdent(tableName);
+    const predicate = `${quoteIdent(owner.columnName)} = current_setting('kovo.principal', true)`;
+    await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+    await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
+    await client.exec(`DROP POLICY IF EXISTS kovo_owner_scope ON ${table}`);
+    await client.exec(
+      [
+        `CREATE POLICY kovo_owner_scope ON ${table}`,
+        `FOR ALL TO ${quoteIdent(READER_ROLE)}, ${quoteIdent(WRITER_ROLE)}`,
+        `USING (${predicate}) WITH CHECK (${predicate})`,
+      ].join(' '),
+    );
+  }
+  for (const [tableName, ownerVia] of metadata.ownerViaSourcesByTable) {
+    if (!tableNames.has(tableName) || !tableNames.has(ownerVia.parentTable)) continue;
+    const table = quoteIdent(tableName);
+    const childFk = `${table}.${quoteIdent(ownerVia.fkColumnName)}`;
+    const parentAlias = quoteIdent(`kovo_parent_${ownerVia.parentTable}`);
+    const parentOwner = metadata.ownerSourcesByTable.get(ownerVia.parentTable);
+    if (parentOwner === undefined) continue;
+    const predicate = [
+      'EXISTS (SELECT 1 FROM',
+      `${quoteIdent(ownerVia.parentTable)} ${parentAlias}`,
+      'WHERE',
+      `${parentAlias}.${quoteIdent(ownerVia.parentKeyColumnName)} = ${childFk}`,
+      'AND',
+      `${parentAlias}.${quoteIdent(parentOwner.columnName)} = current_setting('kovo.principal', true))`,
+    ].join(' ');
+    await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+    await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
+    await client.exec(`DROP POLICY IF EXISTS kovo_owner_scope ON ${table}`);
+    await client.exec(
+      [
+        `CREATE POLICY kovo_owner_scope ON ${table}`,
+        `FOR ALL TO ${quoteIdent(READER_ROLE)}, ${quoteIdent(WRITER_ROLE)}`,
+        `USING (${predicate}) WITH CHECK (${predicate})`,
+      ].join(' '),
+    );
+  }
+}
+
+function postgresScopedClientOptions(principal: string | undefined): PostgresScopedClientOptions {
+  const options: PostgresScopedClientOptions = { role: WRITER_ROLE };
+  if (principal !== undefined) options.principal = principal;
+  return options;
+}
+
+function postgresReadonlyClientOptions(
+  principal: string | undefined,
+  readerRole: string | false = READER_ROLE,
+): PostgresReadonlyClientOptions {
+  const options: PostgresReadonlyClientOptions = { readerRole };
+  if (principal !== undefined) options.principal = principal;
+  return options;
+}
+
+function principalFromRequest(request: unknown): string | undefined {
+  const userId = (request as { session?: { user?: { id?: unknown } } } | undefined)?.session?.user
+    ?.id;
+  return typeof userId === 'string' && userId !== '' ? userId : undefined;
+}
+
 const appDatabase = createAppRuntimeDb();
 
 /** Read-only app DB value re-exported by src/db.ts for endpoint/user-authored reads. */
@@ -272,6 +380,6 @@ export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb;
 export const appRuntimeDbReady: Promise<void> = appDatabase.ready;
 
 /** Framework construction/auth adapter hook; do not import this into endpoint/webhook/task code. */
-export function appRuntimeDbProvider(): AppDb {
-  return appDatabase.db;
+export function appRuntimeDbProvider(request?: unknown): AppDb {
+  return appDatabase.db(request);
 }

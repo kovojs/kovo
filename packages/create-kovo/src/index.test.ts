@@ -268,7 +268,13 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'client: createPostgresReadonlyClient(client, { readerRole: READER_ROLE })',
+      'client: createPostgresReadonlyClient(client, postgresReadonlyClientOptions(principal))',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createPostgresScopedClient');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("const WRITER_ROLE = 'kovo_writer'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('applyPgliteOwnerPolicies');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb(privilegedReadDb)');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("const READER_ROLE = 'kovo_reader'");
@@ -279,7 +285,7 @@ describe('create-kovo starter (metadata)', () => {
       'Object.defineProperty(db, kovoReadonlyDbHandle',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'return { db, readonlyDb: secretReadDb, ready }',
+      'db: (request?: unknown) => createRequestScopedDb(client, principalFromRequest(request))',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createDeclaredWriteDb(db, policy');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("dialectLabel: 'PGlite'");
@@ -296,17 +302,17 @@ describe('create-kovo starter (metadata)', () => {
       'const SECRET_READ_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle'",
+      'import { extractKovoRuntimeDbMetadata, type KovoRuntimeDbMetadata } from',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const secretReadDb = createSecretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA',
+      'return createSecretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA',
     );
     expect(files.get('src/db.ts')).not.toContain('PgliteDatabase<typeof schema>');
     expect(files.get('src/db.ts')).not.toContain('drizzle({ client, schema })');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('await client.exec(SCHEMA_DDL)');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('void client.exec');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const ready = initializeAppDb(client);\n  const db = drizzle({ client });',
+      'const ready = initializeAppDb(client);\n  return {',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'readonlyDb(db).exec(SCHEMA_DDL)',
@@ -318,7 +324,7 @@ describe('create-kovo starter (metadata)', () => {
       'export const appRuntimeDbReady: Promise<void> = appDatabase.ready',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'export function appRuntimeDbProvider(): AppDb',
+      'export function appRuntimeDbProvider(request?: unknown): AppDb',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('__kovoStarterAppDatabase');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ON CONFLICT (id) DO NOTHING');
@@ -355,10 +361,25 @@ describe('create-kovo starter (metadata)', () => {
     });
     const sqliteFiles = new Map(sqliteProject.files.map((file) => [file.path, file.source]));
 
-    for (const schemaSource of [
-      defaultFiles.get('src/schema.ts'),
-      sqliteFiles.get('src/schema.ts'),
-    ]) {
+    const postgresSchema = defaultFiles.get('src/schema.ts');
+    expect(postgresSchema).toContain("domain: 'auth'");
+    expect(postgresSchema).toContain("key: 'userId'");
+    expect(postgresSchema).toContain("owner: 'userId'");
+    expect(postgresSchema).toContain("secret: ['token']");
+    expect(postgresSchema).toContain(
+      "secret: ['password', 'accessToken', 'refreshToken', 'idToken']",
+    );
+
+    const sqliteSchema = sqliteFiles.get('src/schema.ts');
+    expect(sqliteSchema).toContain("domain: 'auth'");
+    expect(sqliteSchema).toContain("key: 'userId'");
+    expect(sqliteSchema).toContain("owner: 'userId'");
+    expect(sqliteSchema).toContain("secret: ['token']");
+    expect(sqliteSchema).toContain(
+      "secret: ['password', 'accessToken', 'refreshToken', 'idToken']",
+    );
+
+    for (const schemaSource of [postgresSchema, sqliteSchema]) {
       // SPEC.md §6.6 / §10.1: classification is carried by the schema annotation the
       // compiler reads, not by TypeScript-only branding. KV435 rejects projections from
       // these columns once the build graph ingests this starter schema.
@@ -840,9 +861,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'const secretReadDb = createSecretBoxingReadDb(',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'RUNTIME_DB_METADATA,',
-    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('RUNTIME_DB_METADATA,');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'createSqliteAuthorizationDb(appDatabase.db',
     );

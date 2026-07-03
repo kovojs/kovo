@@ -30,15 +30,19 @@ export const contacts = pgTable(
 // bearer/OAuth tokens off the client wire (SPEC.md §6.6, §10.1). The column names match
 // the fields Better Auth expects (introspectable via `getAuthTables(auth.options)`);
 // `src/db.ts` creates them.
-export const user = pgTable('user', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  email: text('email').notNull().unique(),
-  emailVerified: boolean('emailVerified').notNull().default(false),
-  image: text('image'),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+export const user = pgTable(
+  'user',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    email: text('email').notNull().unique(),
+    emailVerified: boolean('emailVerified').notNull().default(false),
+    image: text('image'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  kovo({ domain: 'auth', key: 'id', owner: (table) => table.id }),
+);
 
 export const session = pgTable(
   'session',

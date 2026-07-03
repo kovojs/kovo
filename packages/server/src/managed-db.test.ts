@@ -8,6 +8,7 @@ import {
   KovoReadonlyHandleError,
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
+  createPostgresScopedClient,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
   managedDb,
@@ -1707,6 +1708,39 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       'exec:SET LOCAL ROLE "kovo_reader"',
       'query:select id from contacts',
     ]);
+  });
+
+  it('server-owned Postgres scoped client parameterizes the principal before assuming the app role', async () => {
+    const log: string[] = [];
+    const client = {
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        log.push('transaction');
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: string, params?: unknown[]) {
+        log.push(`query:${statement}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve([{ id: 'c1' }]);
+      },
+    };
+    const scoped = createPostgresScopedClient(client, {
+      principal: 'user-1',
+      readOnly: true,
+      role: 'kovo_reader',
+    });
+
+    await expect(scoped.query('select id from contacts')).resolves.toEqual([{ id: 'c1' }]);
+    expect(log).toEqual([
+      'transaction',
+      'exec:SET TRANSACTION READ ONLY',
+      `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
+      'exec:SET LOCAL ROLE "kovo_reader"',
+      'query:select id from contacts:[]',
+    ]);
+    expect(() => scoped.exec('select 1')).toThrow(/parameterized db\.query/);
   });
 
   it('refuses Secret boxes at builder values and set write boundaries', () => {

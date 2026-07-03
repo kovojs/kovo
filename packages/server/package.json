@@ -119,6 +119,7 @@
     "undici": "^7.28.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@types/better-sqlite3": "^7.6.13",
     "better-sqlite3": "^12.0.0",
     "vitest": "4.1.8"

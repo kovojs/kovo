@@ -119,6 +119,7 @@ export type {
 export {
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
+  createPostgresScopedClient,
   createSqliteAuthorizationDb,
   KovoReadonlyHandleError,
   kovoDeclaredWriteDbHandle,
@@ -132,6 +133,7 @@ export type {
   DeclaredWriteSqliteAuthorizerOptions,
   GovernedWriteMetadata,
   PostgresReadonlyClientOptions,
+  PostgresScopedClientOptions,
   RawReadDeclaration,
   RawReadPolicyOptions,
   Reader,
