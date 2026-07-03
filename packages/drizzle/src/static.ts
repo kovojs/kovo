@@ -883,6 +883,7 @@ function sqlSafetyDiagnosticsForSourceFile(
   const rawDriverImport = endpointRawDriverImportDiagnostic(file, sourceFile);
   if (rawDriverImport) diagnostics.push(rawDriverImport);
   diagnostics.push(...sqliteOwnerScopeWarningDiagnostics(file, sourceFile));
+  diagnostics.push(...crossOwnerReadStaticGuardDiagnostics(file, sourceFile));
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
   // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
   // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
@@ -926,6 +927,135 @@ function sqlSafetyDiagnosticsForSourceFile(
   }
 
   return diagnostics;
+}
+
+function crossOwnerReadStaticGuardDiagnostics(
+  file: SourceFileInput,
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic[] {
+  const diagnostics: TouchGraphDiagnostic[] = [];
+
+  for (const call of sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression)) {
+    if (propertyAccessCallName(call) !== 'crossOwnerRead') continue;
+    const surface = owningCrossOwnerReadGuardedSurface(call);
+    if (surface && surfaceHasExplicitAdminRoleGuard(surface.body)) continue;
+
+    diagnostics.push(
+      drizzleDiagnostic({
+        code: 'KV414',
+        detail:
+          'crossOwnerRead(...) must be statically dominated by an explicit endpoint/query guard: guards.role("admin"). SPEC §10.3 requires a runtime guard marker, but runtime guard marker is necessary, not sufficient, without this static dominance proof.',
+        site: `${file.fileName}:${lineForIndex(file.source, call.getStart())}`,
+      }),
+    );
+  }
+
+  return diagnostics;
+}
+
+function owningCrossOwnerReadGuardedSurface(
+  call: CallExpression,
+): { body: ObjectLiteralExpression; kind: 'endpoint' | 'query' } | undefined {
+  const sourceFile = call.getSourceFile();
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    if (!initializer) continue;
+    const initializerCall = unwrappedStaticExpressionNode(initializer);
+    if (!Node.isCallExpression(initializerCall)) continue;
+
+    const queryDeclaration = staticQueryDeclarationFromCall(declaration, initializerCall);
+    if (queryDeclaration) {
+      const body = queryBodyObjectLiteral(queryDeclaration.bodyArgument, 'project').body;
+      if (body && objectOwnsNode(body, call)) return { body, kind: 'query' };
+    }
+
+    if (isKovoServerCalleeExpression(initializerCall.getExpression(), 'endpoint')) {
+      const body = endpointBodyObjectFromCall(initializerCall);
+      if (body && objectOwnsNode(body, call)) return { body, kind: 'endpoint' };
+    }
+  }
+
+  return undefined;
+}
+
+function endpointBodyObjectFromCall(call: CallExpression): ObjectLiteralExpression | undefined {
+  const [firstArgument, secondArgument] = call.getArguments();
+  if (secondArgument && Node.isObjectLiteralExpression(secondArgument)) return secondArgument;
+  return firstArgument && Node.isObjectLiteralExpression(firstArgument) ? firstArgument : undefined;
+}
+
+function objectOwnsNode(object: ObjectLiteralExpression, node: Node): boolean {
+  const objectStart = object.getStart();
+  const objectEnd = object.getEnd();
+  const nodeStart = node.getStart();
+  return nodeStart >= objectStart && nodeStart <= objectEnd;
+}
+
+function surfaceHasExplicitAdminRoleGuard(body: ObjectLiteralExpression): boolean {
+  const property = body.getProperty('guard');
+  if (!Node.isPropertyAssignment(property)) return false;
+  const initializer = property.getInitializer();
+  return initializer ? expressionHasExplicitAdminRoleGuard(initializer) : false;
+}
+
+function expressionHasExplicitAdminRoleGuard(expression: Node, depth = 0): boolean {
+  if (depth > 4) return false;
+  const node = unwrappedStaticExpressionNode(expression);
+
+  if (!Node.isCallExpression(node)) return false;
+
+  const callee = unwrappedStaticExpressionNode(node.getExpression());
+  if (isExplicitAdminRoleGuardCall(callee, node.getArguments())) return true;
+
+  if (!isKovoGuardCompositionCall(callee)) return false;
+  return node.getArguments().some((argument) => {
+    if (Node.isSpreadElement(argument)) return false;
+    return expressionHasExplicitAdminRoleGuard(argument, depth + 1);
+  });
+}
+
+function isExplicitAdminRoleGuardCall(callee: Node, args: readonly Node[]): boolean {
+  if (!Node.isPropertyAccessExpression(callee)) return false;
+  if (callee.getName() !== 'role') return false;
+  const [role] = args;
+  return (
+    role !== undefined &&
+    (Node.isStringLiteral(role) || Node.isNoSubstitutionTemplateLiteral(role)) &&
+    role.getLiteralText() === 'admin' &&
+    expressionResolvesToKovoServerGuards(unwrappedStaticExpressionNode(callee.getExpression()))
+  );
+}
+
+function isKovoGuardCompositionCall(expression: Node): boolean {
+  if (!Node.isPropertyAccessExpression(expression)) return false;
+  const name = expression.getName();
+  if (name !== 'all' && name !== 'compose') return false;
+  return expressionResolvesToKovoServerGuards(
+    unwrappedStaticExpressionNode(expression.getExpression()),
+  );
+}
+
+function expressionResolvesToKovoServerGuards(expression: Node): boolean {
+  if (
+    expressionResolvesToFrameworkExport(expression, frameworkExport('@kovojs/server', 'guards'), {
+      legacyGlobals: [frameworkExport('@kovojs/server', 'guards')],
+    })
+  ) {
+    return true;
+  }
+
+  if (!Node.isIdentifier(expression)) return false;
+  const localName = expression.getText();
+  const declarations = expression.getSymbol()?.getDeclarations() ?? [];
+  if (declarations.length === 0) return localName === 'guards';
+  return declarations.some((declaration) => {
+    if (!Node.isImportSpecifier(declaration)) return false;
+    if (declaration.getName() !== 'guards') return false;
+    if ((declaration.getAliasNode()?.getText() ?? declaration.getName()) !== localName) {
+      return false;
+    }
+    return declaration.getImportDeclaration().getModuleSpecifierValue() === '@kovojs/server';
+  });
 }
 
 function mutationSecretWireDiagnosticsForSourceFile(
