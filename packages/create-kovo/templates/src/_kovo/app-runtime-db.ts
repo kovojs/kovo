@@ -384,9 +384,31 @@ function postgresReadonlyClientOptions(
 }
 
 function principalFromRequest(request: unknown): string | undefined {
+  const nonRequestPrincipal = principalFromNonRequestPosture(request);
+  if (nonRequestPrincipal !== undefined) return nonRequestPrincipal;
   const userId = (request as { session?: { user?: { id?: unknown } } } | undefined)?.session?.user
     ?.id;
   return typeof userId === 'string' && userId !== '' ? userId : undefined;
+}
+
+function principalFromNonRequestPosture(request: unknown): string | undefined {
+  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
+    return undefined;
+  }
+  const posture = (request as { principalPosture?: unknown }).principalPosture;
+  if ((typeof posture !== 'object' && typeof posture !== 'function') || posture === null) {
+    return undefined;
+  }
+  const kind = (posture as { kind?: unknown }).kind;
+  if (kind === 'system') {
+    throw new Error(
+      'System principal DB posture is not supported by the PGlite starter owner-scope provider yet (SPEC §10.3 DEC-G).',
+    );
+  }
+  const principal = (posture as { principal?: unknown }).principal;
+  return kind === 'act-as' && typeof principal === 'string' && principal.trim() === principal
+    ? principal
+    : undefined;
 }
 
 const appDatabase = createAppRuntimeDb();

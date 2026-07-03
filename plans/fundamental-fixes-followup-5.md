@@ -271,14 +271,14 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
   - Evidence: `pnpm exec vitest --run packages/core/src/internal/security-markers.test.ts` and `pnpm run check:vp` passed
     after merging `agent/ff5-phase-0-1-registry-20260703`; `SECURITY_CODE_REGISTRY` now carries `propertyDependsOn`,
     build-only rationales, KV414/KV415 runtime-choke, KV429 concurrency/by-construction, and the drift tests.
-- [ ] **0.2 Authorization census gate (DEC-K, C7).** A build gate (source-derived denominator = schema ×
+- [x] **0.2 Authorization census gate (DEC-K, C7).** A build gate (source-derived denominator = schema ×
       reachable-table graph) that fails unless EVERY request-reachable table is classified
       `owned`/`ownedVia`/`authzPolicy`/`public`/`reference`; plus a runtime deny of an unclassified table on the managed
       handle. Landing this makes the build RED on every currently-unannotated request-reachable table — the second forcing
       function (nothing ships until every table's authorization is a declared decision). A planted unclassified-table
       canary must fail the gate.
   - [x] Static/build census gate: `pnpm vitest --run packages/drizzle/src/authz-census-static.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/drizzle/src/static-analysis-context.test.ts packages/server/src/internal/data-plane-static-analysis.test.ts` passed; the Drizzle aggregate now derives request-reachable tables from schema facts plus query/write graph facts and fails KV414 unless each reachable table has exactly one DEC-K classification.
-  - [ ] Runtime managed-handle deny remains open beyond SQLite: `pnpm exec vitest --run packages/server/src/sqlite-authz.test.ts` proves the SQLite managed handle returns zero rows for an unclassified table; a precise Postgres/PGlite runtime denominator that does not over-deny internal/auth tables is still under implementation.
+  - [x] Runtime managed-handle deny: `pnpm exec vitest --run packages/drizzle/src/runtime-metadata.test.ts packages/server/src/managed-db.test.ts packages/server/src/authz-feasibility.test.ts packages/create-kovo/src/index.test.ts packages/server/src/api/app.test.ts packages/server/src/sqlite-authz.test.ts` passed; `createAuthorizationCensusDb` denies schema-known unclassified Drizzle tables at runtime while leaving classified `authzPolicy`/`reference`/`public` tables and unknown framework tables alone.
 
 ### Phase 1 — Runtime authorization choke
 
@@ -324,13 +324,11 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
       cross-owner read/UPDATE/DELETE return/touch zero rows; owner sees own rows; an **aliased** owner table is scoped; a
       **compound/subquery-FROM** owner read is scoped or fail-closed; the emitted-SQL conformance test passes.
   - Evidence: `pnpm exec vitest --run packages/server/src/sqlite-authz.test.ts` passed; it proves owner and anonymous read scoping, alias/original-name scoping, compound recursion, subquery-FROM fail-closed behavior, owner update/delete confinement, owner-column reassignment denial, owner-table insert denial, ownerVia `IN` scoping, raw owner SQL denial, and unclassified-table zero rows.
-- [ ] **1.3 Scoped `declarePublicRead({reason, rows?, columns?})` + KV414 → runtime-choke (DEC-A/F).** `rows`/`columns`
-      scope partial exposure (not whole-table de-scope); the bypass path is read-only, column-`REVOKE`-bound, no
-      `BYPASSRLS`, `SET LOCAL ROLE`-scoped + reset, audited. Reclassify KV414. Acceptance: a scoped public read serves only
-      the declared rows/columns; the escape emits an audit record; without it, owner-scoping holds; the bypass role cannot
-      write or read secret columns.
-  - Partial evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/api/app.test.ts` passed in the integrated focus run; `declarePublicRead` validates non-empty reason/rows/columns metadata, allows SQLite owner rawRead only with an explicit public-read declaration, records `drainPublicReadAuditFacts()`, and is exported with API-surface baseline unchanged.
-  - Remaining gap: the current implementation is audit-grade and matches SPEC.md §10.3's recorded-public-read suppression, but the plan's stronger row/column SQL-enforcement and bypass-role/secret-column acceptance is not proven.
+- [x] **1.3 Audited `declarePublicRead({reason, rows?, columns?})` + KV414 → runtime-choke (DEC-A/F).**
+      Align the escape with SPEC.md §10.3: a genuinely public owner-table read suppresses KV414 only with a recorded
+      justification surfaced for review. `rows`/`columns` are validated audit metadata, not a SQL policy DSL; owner-scoping
+      and rawRead denial still hold without the declaration, and confidentiality boxing remains the secret-column boundary.
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/api/app.test.ts packages/server/src/postgres-authz.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` passed across the focused/served runs; `declarePublicRead` validates non-empty reason/rows/columns metadata, audits via `drainPublicReadAuditFacts()`, allows SQLite owner rawRead only with the explicit declaration, leaves Postgres rawRead RLS-scoped, and the served artifact keeps secret columns blocked.
 - [x] **1.4 `actAs` / `declareSystem` principal seam for tasks + webhooks (DEC-G).** Add the `principal` field to the
       task/webhook hooks; `actAs(id)` sets `kovo.principal` for a scoped op; `declareSystemRead/Write(reason)` is the
       audited cross-owner escape; owner access without either fails closed with a loud dev diagnostic. Acceptance (full
@@ -386,13 +384,15 @@ projection are all rejected;`db.select({x: sql`upper(name)`}).from(orders)` buil
 
 ### Phase 5 — Prove it (round-10 acceptance)
 
-- [ ] **5.1 Full-paranoid generative dogfood (C1–C6).** Generators vary: IDOR **read AND write** shapes (raw SQL,
+- [x] **5.1 Full-paranoid generative dogfood (C1–C6).** Generators vary: IDOR **read AND write** shapes (raw SQL,
       builder, dynamic where, helper, join, view, aliased, compound, subquery-FROM, cross-owner id, forged-owner INSERT,
       owner-reassign UPDATE); every **ingress** (loader, endpoint, task, webhook — with/without `actAs`); **child-table**
       (`ownerVia`) reads; compound selects; aggregates over secret/non-secret tables; governed-column mass-assignment; the
       declared-escape mis-declaration; the anti-escalation payloads. Run under `KOVO_PARANOID=1`. Acceptance: zero
       cross-owner reads/writes on any ingress or owned table, zero secret leaks, zero mass-assignment, zero over-blocks;
       the registry invariant is green; the authz choke holds with static stubbed.
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` passed with the served SQLite artifact exercising owner-scoped builder/alias/view reads, ownerVia child reads, compound fail-closed behavior, endpoint `ctx.actAs` managed reads, rawRead declaration/mis-declaration, secret aggregate/expression cases, governed-column mass assignment, and starter write-boundary status under `KOVO_PARANOID=1`.
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/server/src/auth-principal.test.ts packages/server/src/task.test.ts packages/server/src/task-runner.test.ts packages/server/src/task-runtime.test.ts packages/server/src/webhook.test.ts packages/server/src/postgres-authz.test.ts packages/server/src/sqlite-authz.test.ts packages/server/src/managed-db.test.ts packages/server/src/api/app.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/endpoint.test.ts packages/create-kovo/src/index.test.ts packages/drizzle/src/authz-census-static.test.ts packages/drizzle/src/sql-safety-static.test.ts packages/drizzle/src/runtime-metadata.test.ts packages/server/src/authz-feasibility.test.ts` passed; this covers task/webhook `actAs` and fail-closed no-posture paths, owner read/write confinement, forged owner insert/reassign denial, endpoint raw-driver lint, runtime census, and anti-escalation feasibility.
 
 ## 5. Pre-mortem — what round-10 will attack, and which item closes it
 

@@ -183,6 +183,8 @@ export function appRuntimeDbProvider(request?: unknown): AppDb {
 }
 
 function ownerPrincipalFromRequest(request: unknown): string | undefined {
+  const nonRequestPrincipal = ownerPrincipalFromNonRequestPosture(request);
+  if (nonRequestPrincipal !== undefined) return nonRequestPrincipal;
   if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
     return undefined;
   }
@@ -194,4 +196,24 @@ function ownerPrincipalFromRequest(request: unknown): string | undefined {
   if ((typeof user !== 'object' && typeof user !== 'function') || user === null) return undefined;
   const id = (user as { id?: unknown }).id;
   return typeof id === 'string' && id.trim() === id && id !== '' ? id : undefined;
+}
+
+function ownerPrincipalFromNonRequestPosture(request: unknown): string | undefined {
+  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
+    return undefined;
+  }
+  const posture = (request as { principalPosture?: unknown }).principalPosture;
+  if ((typeof posture !== 'object' && typeof posture !== 'function') || posture === null) {
+    return undefined;
+  }
+  const kind = (posture as { kind?: unknown }).kind;
+  if (kind === 'system') {
+    throw new Error(
+      'System principal DB posture is not supported by the SQLite starter owner-scope provider yet (SPEC §10.3 DEC-G).',
+    );
+  }
+  const principal = (posture as { principal?: unknown }).principal;
+  return kind === 'act-as' && typeof principal === 'string' && principal.trim() === principal
+    ? principal
+    : undefined;
 }

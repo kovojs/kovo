@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject } from './index.js';
 import {
+  addParanoidPhase5AuthorizationProof,
   addParanoidPhase5WriteBoundaryProof,
   addSqliteRuntimeSecretProvenanceProof,
   addStarterMutationDbScopeProof,
@@ -77,6 +78,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       pruneParanoidPhase5SqliteReadSet(root);
       addStarterMutationDbScopeProof(root);
       addParanoidPhase5WriteBoundaryProof(root);
+      addParanoidPhase5AuthorizationProof(root);
 
       buildParanoidProductionArtifact(root);
 
@@ -97,6 +99,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       const contactEmail = `${marker}-contact@example.com`;
 
       await signInDemoUser(root, origin, jar, output);
+      await expectAuthorizationQueryShapes(origin, jar);
       await expectBlockedReadShapes(origin, jar);
       await expectAllowedReadShapes(origin, jar);
       await expectNonSecretAggregateEndpoint(origin);
@@ -105,6 +108,8 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await expectDeclaredRawReadEndpoint(origin);
       await expectUnderdeclaredRawReadEndpoint(origin);
       await expectStarterInScopeWrite(origin, jar, output, contactEmail);
+      await expectAuthorizationEndpoint(origin);
+      await expectAuthorizationStatus(origin);
       await expectBlockedWrites(origin, marker);
       await expectWriteStatus(origin, marker, contactEmail);
 
@@ -120,6 +125,95 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
     }
   }, 240_000);
 });
+
+async function expectAuthorizationQueryShapes(
+  origin: string,
+  jar: Map<string, string>,
+): Promise<void> {
+  const cases = [
+    {
+      key: 'phase5-authz-builder',
+      allowed: 'owner-visible',
+      blocked: 'cross-owner-hidden',
+      status: 200,
+    },
+    {
+      key: 'phase5-authz-alias',
+      allowed: 'owner-visible',
+      blocked: 'cross-owner-hidden',
+      status: 200,
+    },
+    {
+      key: 'phase5-authz-view',
+      allowed: 'owner-visible',
+      blocked: 'cross-owner-hidden',
+      status: 200,
+    },
+    {
+      key: 'phase5-authz-compound',
+      allowed: undefined,
+      blocked: 'cross-owner-hidden',
+      status: 500,
+    },
+    { key: 'phase5-authz-owner-via', allowed: 'owner-item', blocked: 'other-item', status: 200 },
+  ] as const;
+
+  for (const testCase of cases) {
+    const response = await fetch(`${origin}/_q/${testCase.key}`, {
+      headers: { cookie: cookieHeader(jar) },
+    });
+    const body = await response.text();
+
+    expect(response.status, `${testCase.key}: ${body}`).toBe(testCase.status);
+    if (testCase.allowed !== undefined) expect(body).toContain(testCase.allowed);
+    expect(body).not.toContain(testCase.blocked);
+    expect(body).not.toContain('phase5-authz-secret');
+  }
+}
+
+async function expectAuthorizationEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-authz-endpoint`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  const result = JSON.parse(body) as {
+    childRows: { id: string; label: string }[];
+    rows: { id: string; label: string }[];
+  };
+  expect(result.rows).toEqual([{ id: 'phase5-authz-owned', label: 'owner-visible' }]);
+  expect(result.childRows).toEqual([{ id: 'phase5-authz-item-owned', label: 'owner-item' }]);
+}
+
+async function expectAuthorizationStatus(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-authz-status`);
+  const body = await response.text();
+  expect(response.status, body).toBe(200);
+  const status = JSON.parse(body) as {
+    rows: { id: string; label: string; userId: string }[];
+    secretReadBlocked: boolean;
+  };
+
+  expect(status.secretReadBlocked).toBe(true);
+  expect(status.rows).toEqual(
+    expect.arrayContaining([
+      {
+        id: 'phase5-authz-owned',
+        label: 'owner-visible',
+        userId: 'demo-user',
+      },
+      {
+        id: 'phase5-authz-other',
+        label: 'cross-owner-hidden',
+        userId: 'other-user',
+      },
+    ]),
+  );
+  expect(
+    status.rows.some(
+      (row) => row.id === 'phase5-authz-owned-session' && row.label === 'owner-visible',
+    ),
+  ).toBe(true);
+}
 
 async function expectBlockedReadShapes(origin: string, jar: Map<string, string>): Promise<void> {
   for (const key of blockedReadCases) {
