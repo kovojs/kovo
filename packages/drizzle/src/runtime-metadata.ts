@@ -15,11 +15,19 @@ type KovoRuntimeDbTableConfig = {
 type KovoRuntimeColumnRef = string | ((table: Record<string, unknown>) => unknown);
 type KovoRuntimeColumnAnnotation = true | KovoRuntimeColumnRef | readonly unknown[];
 type KovoRuntimeDomainAnnotation = {
+  authzPolicy?: unknown;
   confidentialAtRest?: KovoRuntimeColumnAnnotation;
   domain: unknown;
   governed?: KovoRuntimeColumnAnnotation;
   key?: KovoRuntimeColumnRef;
   owner?: KovoRuntimeColumnRef;
+  ownerVia?: {
+    fk?: unknown;
+    parent?: unknown;
+    parentKey?: unknown;
+  };
+  public?: true;
+  reference?: true;
 };
 
 /** Drizzle-derived runtime source metadata for one physical database column. */
@@ -34,16 +42,59 @@ export interface KovoRuntimeDbColumnSource {
   table: string;
 }
 
+/** Drizzle-derived runtime authorization classification for one physical database table. */
+export type KovoRuntimeAuthorizationClassification =
+  | 'authzPolicy'
+  | 'owned'
+  | 'ownedVia'
+  | 'public'
+  | 'reference';
+
+/** Direct owner-column metadata for one physical database table. */
+export interface KovoRuntimeOwnerSource {
+  /** Drizzle selection key for the owner column. */
+  columnKey: string;
+  /** Physical database owner column name. */
+  columnName: string;
+  /** Physical database table name. */
+  table: string;
+}
+
+/** Transitive owner metadata for one child table whose owner comes from a parent table. */
+export interface KovoRuntimeOwnerViaSource {
+  /** Drizzle selection key for the child foreign-key column. */
+  fkColumnKey: string;
+  /** Physical database child foreign-key column name. */
+  fkColumnName: string;
+  /** Physical database parent table name. */
+  parentTable: string;
+  /** Drizzle selection key for the parent key column reached by the child FK. */
+  parentKeyColumnKey: string;
+  /** Physical database parent key column name reached by the child FK. */
+  parentKeyColumnName: string;
+  /** Physical database child table name. */
+  table: string;
+}
+
 /** Drizzle-derived metadata consumed by the server read-confidentiality boundary. */
 export interface KovoRuntimeDbMetadata {
   /** Every known Drizzle column key in the schema. */
   allColumnKeys: ReadonlySet<string>;
+  /** Runtime authorization classifications grouped by physical table. */
+  authorizationClassificationsByTable: ReadonlyMap<
+    string,
+    readonly KovoRuntimeAuthorizationClassification[]
+  >;
   /** Runtime object identity map for Drizzle column objects used in SQL expressions. */
   columnSources: ReadonlyMap<object, KovoRuntimeDbColumnSource>;
   /** Governed Drizzle column keys grouped by physical table. */
   governedColumnKeysByTable: ReadonlyMap<string, ReadonlySet<string>>;
   /** Governed physical column names grouped by physical table. */
   governedColumnNamesByTable: ReadonlyMap<string, ReadonlySet<string>>;
+  /** Owner-column facts grouped by physical table. */
+  ownerSourcesByTable: ReadonlyMap<string, KovoRuntimeOwnerSource>;
+  /** Transitive owner facts grouped by physical child table. */
+  ownerViaSourcesByTable: ReadonlyMap<string, KovoRuntimeOwnerViaSource>;
   /** Secret Drizzle column keys. */
   secretColumnKeys: ReadonlySet<string>;
   /** Secret physical column names. */
@@ -64,9 +115,15 @@ export interface KovoRuntimeDbMetadata {
  */
 export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRuntimeDbMetadata {
   const allColumnKeys = new Set<string>();
+  const authorizationClassificationsByTable = new Map<
+    string,
+    readonly KovoRuntimeAuthorizationClassification[]
+  >();
   const columnSources = new Map<object, KovoRuntimeDbColumnSource>();
   const governedColumnKeysByTable = new Map<string, ReadonlySet<string>>();
   const governedColumnNamesByTable = new Map<string, ReadonlySet<string>>();
+  const ownerSourcesByTable = new Map<string, KovoRuntimeOwnerSource>();
+  const ownerViaSourcesByTable = new Map<string, KovoRuntimeOwnerViaSource>();
   const secretColumnKeys = new Set<string>();
   const secretColumnNames = new Set<string>();
   const secretColumnKeysByTable = new Map<string, ReadonlySet<string>>();
@@ -78,6 +135,24 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
     const columnKeys = columnKeysByDbName(table as KovoRuntimeDbTable, config.columns);
     for (const key of columnKeys.values()) allColumnKeys.add(key);
     const domainAnnotation = kovoDomainAnnotation(table as KovoRuntimeDbTable);
+    const classifications = authorizationClassificationsForAnnotation(domainAnnotation);
+    if (classifications.length > 0) {
+      authorizationClassificationsByTable.set(config.name, classifications);
+    }
+    const ownerSource = ownerSourceForTable(
+      domainAnnotation,
+      table as KovoRuntimeDbTable,
+      config.name,
+      columnKeys,
+    );
+    if (ownerSource !== undefined) ownerSourcesByTable.set(config.name, ownerSource);
+    const ownerViaSource = ownerViaSourceForTable(
+      domainAnnotation,
+      table as KovoRuntimeDbTable,
+      config.name,
+      columnKeys,
+    );
+    if (ownerViaSource !== undefined) ownerViaSourcesByTable.set(config.name, ownerViaSource);
     const tableGovernedColumnKeys = governedColumnKeysForTable(
       domainAnnotation,
       table as KovoRuntimeDbTable,
@@ -131,9 +206,12 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
 
   return {
     allColumnKeys,
+    authorizationClassificationsByTable,
     columnSources,
     governedColumnKeysByTable,
     governedColumnNamesByTable,
+    ownerSourcesByTable,
+    ownerViaSourcesByTable,
     secretColumnKeys,
     secretColumnKeysByTable,
     secretColumnNames,
@@ -229,6 +307,62 @@ function governedColumnKeysForTable(
     governed.add(columnKey);
   }
   return governed;
+}
+
+function authorizationClassificationsForAnnotation(
+  annotation: KovoRuntimeDomainAnnotation | undefined,
+): readonly KovoRuntimeAuthorizationClassification[] {
+  if (annotation === undefined) return [];
+  return [
+    annotation.owner !== undefined ? 'owned' : undefined,
+    annotation.ownerVia !== undefined ? 'ownedVia' : undefined,
+    annotation.authzPolicy !== undefined ? 'authzPolicy' : undefined,
+    annotation.public === true ? 'public' : undefined,
+    annotation.reference === true ? 'reference' : undefined,
+  ].filter(
+    (classification): classification is KovoRuntimeAuthorizationClassification =>
+      classification !== undefined,
+  );
+}
+
+function ownerSourceForTable(
+  annotation: KovoRuntimeDomainAnnotation | undefined,
+  table: KovoRuntimeDbTable,
+  tableName: string,
+  columnKeys: ReadonlyMap<string, string>,
+): KovoRuntimeOwnerSource | undefined {
+  if (annotation?.owner === undefined) return undefined;
+  const columnKey = columnKeyForRef(annotation.owner, table, columnKeys);
+  if (columnKey === undefined) return undefined;
+  return {
+    columnKey,
+    columnName: dbNameForColumnKey(table, columnKey),
+    table: tableName,
+  };
+}
+
+function ownerViaSourceForTable(
+  annotation: KovoRuntimeDomainAnnotation | undefined,
+  table: KovoRuntimeDbTable,
+  tableName: string,
+  columnKeys: ReadonlyMap<string, string>,
+): KovoRuntimeOwnerViaSource | undefined {
+  const ownerVia = annotation?.ownerVia;
+  if (ownerVia === undefined || ownerVia.parent === undefined) return undefined;
+  const parentTable = ownerVia.parent as KovoRuntimeDbTable;
+  const parentConfig = getRuntimeTableConfig(parentTable);
+  const parentColumnKeys = columnKeysByDbName(parentTable, parentConfig.columns);
+  const fkColumnKey = columnKeyForRef(ownerVia.fk, table, columnKeys);
+  const parentKeyColumnKey = columnKeyForRef(ownerVia.parentKey, parentTable, parentColumnKeys);
+  if (fkColumnKey === undefined || parentKeyColumnKey === undefined) return undefined;
+  return {
+    fkColumnKey,
+    fkColumnName: dbNameForColumnKey(table, fkColumnKey),
+    parentKeyColumnKey,
+    parentKeyColumnName: dbNameForColumnKey(parentTable, parentKeyColumnKey),
+    parentTable: parentConfig.name,
+    table: tableName,
+  };
 }
 
 function columnKeysForAnnotation(
