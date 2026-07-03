@@ -142,13 +142,14 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
 
 ### DEC-H — Principal-aware test helper (Tier-2 #6)
 
-- [ ] **H1 — Expose the existing `createRequestScopedDb(client, principal)` (`app-runtime-db.ts:98`) as a test-blessed `withPrincipal(id, fn)` (+ `asSystem`, `asAdmin`) from a `@kovojs/server/testing` subpath, wired to an ephemeral provisioned PGlite.** Tests exercise the REAL RLS engine, not a mock.
+- [x] **H1 — Expose the existing `createRequestScopedDb(client, principal)` (`app-runtime-db.ts:98`) as a test-blessed `withPrincipal(id, fn)` (+ `asSystem`, `asAdmin`) from a `@kovojs/server/testing` subpath, wired to an ephemeral provisioned PGlite.** Tests exercise the REAL RLS engine, not a mock.
   - Acceptance: a unit test writes rows as `user-a` and asserts `user-b` sees `[]` for an owner table, using only the test helper (no HTTP/auth). The subpath is forbidden in request code by the sole-door lint (followup-6 DEC-B).
   - [x] Verified partial: `@kovojs/server/testing` exposes `createPostgresTestRuntime(...).withPrincipal(id, fn)` over an ephemeral provisioned PGlite runtime; a focused test writes as `user-a` and proves `user-b` sees `[]` through real RLS.
     - Evidence: `packages/server/src/testing.ts`, `packages/server/src/postgres-testing.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-testing.test.ts --config ./vite.config.ts`.
   - [x] Verified partial: `createPostgresTestRuntime({ crossOwnerReadTables }).asAdmin(id, fn)` exposes the runtime's read-only admin posture, passes the real `guards.role("admin")` marker, requires explicit table opt-in, and records the `crossOwnerRead` audit principal.
     - Evidence: `packages/server/src/testing.ts`, `packages/server/src/postgres-testing.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-testing.test.ts --config ./vite.config.ts`; touched-file strict `tsc`; `pnpm run check:api-surface`; `pnpm run check:vp`.
-  - [ ] Remaining: no `asSystem` helper is exposed until the runtime has an honest system Postgres posture.
+  - [x] Verified partial: `createPostgresTestRuntime(...).asSystem(reason, fn)` uses a framework-minted audited system posture, the Postgres runtime backs it with transaction-scoped `kovo.role = 'system'` and per-table `kovo_system_scope` RLS policies, and unbranded/empty system posture fails closed.
+    - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/server/src/testing.ts`, `packages/server/src/postgres-runtime.test.ts`, `packages/server/src/postgres-testing.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-testing.test.ts --config ./vite.config.ts`; touched-file strict `tsc`; `pnpm run check:api-surface`; `pnpm run check:vp`.
 
 ### DEC-I — Custom-RLS-policy escape for team/org/RBAC (Tier-3 #7; concretizes followup-5 DEC-J)
 
@@ -193,8 +194,10 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
   - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
 - [x] Adding an owner table touches only `schema.ts` (E1); no `_kovo/*` hand-edits.
   - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/create-kovo/templates/src/_kovo/app-runtime-db.ts`, `packages/cli/src/index.kovo-db.test.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`; `pnpm run check:tcb-boundary`.
-- [ ] An empty scoped read is debuggable (F1 names principal-unset vs RLS-filtered vs empty); an admin-guarded endpoint reads across owners (G1); isolation is unit-testable via `withPrincipal` (H1).
-- [ ] A team/org table via `authzPolicy: sql\`…\`` is FORCE-RLS + policy-provisioned and posture-verified, with the documented escape example shipped (I1/I2).
+- [x] An empty scoped read is debuggable (F1 names principal-unset vs RLS-filtered vs empty); an admin-guarded endpoint reads across owners (G1); isolation is unit-testable via `withPrincipal` (H1).
+  - Evidence: F1/G1/H1 rows above; `pnpm exec vitest --run packages/server/src/postgres-authz.test.ts packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-testing.test.ts packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
+- [x] A team/org table via `authzPolicy: sql\`…\`` is FORCE-RLS + policy-provisioned and posture-verified, with the documented escape example shipped (I1/I2).
+  - Evidence: I1/I2 rows above; `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts --config ./vite.config.ts`; `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`; `node site/scripts/code-snippets-check.mjs`.
 
 ## 7. Scope & out of scope
 
