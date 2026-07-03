@@ -144,6 +144,46 @@ describe('createPostgresAppRuntimeDb', () => {
     expect(report.issues.map((issue) => issue.code)).toContain('KV433_SCHEMA_FINGERPRINT');
   });
 
+  it('adopts pre-created provider roles from env without creating them', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-adopt-roles-'));
+    roots.push(dataDir);
+    await execPglite(dataDir, 'CREATE ROLE "provider_reader"');
+    await execPglite(dataDir, 'CREATE ROLE "provider_writer"');
+
+    await withPostgresRoleEnv(
+      { reader: 'provider_reader', writer: 'provider_writer' },
+      async () => {
+        const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+        try {
+          await runtime.ready;
+        } finally {
+          await runtime.close();
+        }
+
+        const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+        expect(report.ok).toBe(true);
+        expect(report.issues).toEqual([]);
+      },
+    );
+  });
+
+  it('fails closed instead of creating missing provider-adopted roles', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-adopt-roles-missing-'));
+    roots.push(dataDir);
+
+    await withPostgresRoleEnv(
+      { reader: 'missing_provider_reader', writer: 'missing_provider_writer' },
+      async () => {
+        const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema });
+        try {
+          await expect(runtime.ready).rejects.toThrow(/missing_provider_reader/);
+        } finally {
+          await runtime.close();
+        }
+      },
+    );
+  });
+
   it('provisions custom authzPolicy predicates as FORCE RLS policies', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-authz-policy-'));
     roots.push(dataDir);
@@ -255,4 +295,25 @@ async function execPglite(dataDir: string, statement: string): Promise<void> {
   } finally {
     await client.close();
   }
+}
+
+async function withPostgresRoleEnv<Result>(
+  roles: { reader: string; writer: string },
+  callback: () => Promise<Result>,
+): Promise<Result> {
+  const previousReader = process.env.KOVO_DB_READER_ROLE;
+  const previousWriter = process.env.KOVO_DB_WRITER_ROLE;
+  process.env.KOVO_DB_READER_ROLE = roles.reader;
+  process.env.KOVO_DB_WRITER_ROLE = roles.writer;
+  try {
+    return await callback();
+  } finally {
+    restoreEnv('KOVO_DB_READER_ROLE', previousReader);
+    restoreEnv('KOVO_DB_WRITER_ROLE', previousWriter);
+  }
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
 }

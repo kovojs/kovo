@@ -172,6 +172,10 @@ KOVO_DATABASE_URL=postgres://app@db/app kovo db check
 kovo db check --driver pglite --data-dir .kovo/pglite
 ```
 
+If your provider or DBA owns role creation, set `KOVO_DB_READER_ROLE` and
+`KOVO_DB_WRITER_ROLE` before `kovo db provision`. Kovo adopts those pre-created roles and skips
+`CREATE ROLE`; the runtime login still needs membership in both roles.
+
 `kovo db check` exits non-zero when posture is missing or stale, so production boot and CI can fail
 closed instead of serving an unprotected table. Migration generation is still a separate roadmap item;
 this command currently reasserts the derived runtime posture against the schema you ship.

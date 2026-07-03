@@ -69,6 +69,8 @@ interface RuntimeSqlClient extends RuntimeTransactionClient {
 }
 
 interface ResolvedPostgresRuntimeConfig {
+  createReaderRole: boolean;
+  createWriterRole: boolean;
   dataDir: string;
   databaseUrl?: string;
   driver: KovoPostgresResolvedRuntimeDriver;
@@ -298,8 +300,8 @@ async function provisionRuntimeDb(
     schemaTables: readonly PgTable[];
   },
 ): Promise<void> {
-  await ensurePostgresRole(client, input.config.readerRole);
-  await ensurePostgresRole(client, input.config.writerRole);
+  if (input.config.createReaderRole) await ensurePostgresRole(client, input.config.readerRole);
+  if (input.config.createWriterRole) await ensurePostgresRole(client, input.config.writerRole);
   await client.exec(input.schemaDdl);
   await client.exec(
     'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
@@ -607,7 +609,11 @@ function resolvePostgresRuntimeConfig(
 ): ResolvedPostgresRuntimeConfig {
   const driver = resolveDriver(options);
   const databaseUrl = options.databaseUrl ?? process.env.KOVO_DATABASE_URL;
+  const envReaderRole = nonEmptyEnv('KOVO_DB_READER_ROLE');
+  const envWriterRole = nonEmptyEnv('KOVO_DB_WRITER_ROLE');
   const config: ResolvedPostgresRuntimeConfig = {
+    createReaderRole: options.readerRole !== undefined || envReaderRole === undefined,
+    createWriterRole: options.writerRole !== undefined || envWriterRole === undefined,
     dataDir: options.dataDir ?? process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR,
     driver,
     postureCheckOnBoot:
@@ -615,13 +621,18 @@ function resolvePostgresRuntimeConfig(
       (driver === 'node-postgres' && options.provisionOnBoot !== true),
     principalFromRequest: options.principalFromRequest ?? principalFromRequest,
     provisionOnBoot: options.provisionOnBoot ?? driver === 'pglite',
-    readerRole: options.readerRole ?? DEFAULT_READER_ROLE,
+    readerRole: options.readerRole ?? envReaderRole ?? DEFAULT_READER_ROLE,
     schema: options.schema,
     seedSql: normalizeSeedSql(options.seedSql),
-    writerRole: options.writerRole ?? DEFAULT_WRITER_ROLE,
+    writerRole: options.writerRole ?? envWriterRole ?? DEFAULT_WRITER_ROLE,
   };
   if (databaseUrl !== undefined) return { ...config, databaseUrl };
   return config;
+}
+
+function nonEmptyEnv(name: string): string | undefined {
+  const value = process.env[name];
+  return value === undefined || value === '' ? undefined : value;
 }
 
 function resolveDriver(options: KovoPostgresAppRuntimeOptions): KovoPostgresResolvedRuntimeDriver {
