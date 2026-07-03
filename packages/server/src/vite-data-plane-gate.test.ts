@@ -556,6 +556,23 @@ describe('public Kovo Vite plugin: data-plane safety gate (SPEC.md §11.4)', () 
     );
   });
 
+  it('skips runtime registry injection while the CLI derives the build graph', async () => {
+    const root = await fixture({
+      'src/contacts.ts': DRIZZLE_RUNTIME_REGISTRY_SOURCE,
+      'src/drizzle-types.d.ts': DRIZZLE_RUNTIME_REGISTRY_TYPES,
+    });
+    const plugin = kovo({ app: APP_ENTRY }) as unknown as DataPlaneGatePlugin;
+
+    await withKovoBuildContext({ graphDerivation: true }, async () => {
+      await plugin.configResolved({ command: 'build', root });
+
+      const transformed = await plugin.transform(APP_SOURCE, join(root, 'src/app.tsx'));
+      const code = transformed === null ? APP_SOURCE : transformed.code;
+
+      expect(code).not.toContain('virtual:kovo-runtime-registry:/src/app.tsx');
+    });
+  });
+
   it('feeds Drizzle query-shape facts to compiler diagnostics in the public server plugin path', async () => {
     const root = await fixture({
       'src/components/product-card.tsx': SHAPE_DEPENDENT_COMPONENT,

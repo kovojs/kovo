@@ -316,7 +316,7 @@ export function kovo(options: KovoVitePluginOptions): KovoVitePlugin {
       return (await compilerPlugin()).load?.(id) ?? null;
     },
     async transform(source, id) {
-      const transformedSource = isAppEntryModuleId(id, app, root)
+      const transformedSource = shouldInjectRuntimeRegistryImport(root, app, id)
         ? insertAfterJsxImportSourcePragma(
             source,
             `import ${JSON.stringify(runtimeRegistryPublicId)};\n`,
@@ -369,6 +369,13 @@ function appEntryFileName(app: string, root: string): string {
 function isAppEntryModuleId(id: string, app: string, root: string): boolean {
   const clean = id.split(/[?#]/, 1)[0] ?? id;
   return slashPath(resolve(root, clean)) === slashPath(appEntryFileName(app, root));
+}
+
+function shouldInjectRuntimeRegistryImport(root: string, app: string, id: string): boolean {
+  if (!isAppEntryModuleId(id, app, root)) return false;
+  // SPEC.md §11.4: CLI graph derivation has its own authoritative build/check graph and only
+  // loads the app definition. The runtime registry module is serialized from that graph later.
+  return currentKovoBuildContext()?.graphDerivation !== true;
 }
 
 function insertAfterJsxImportSourcePragma(source: string, insertion: string): string {
