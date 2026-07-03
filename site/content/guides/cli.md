@@ -179,6 +179,11 @@ If your provider or DBA owns role creation, set `KOVO_DB_READER_ROLE`,
 `kovo db provision`. Kovo adopts those pre-created roles and skips `CREATE ROLE`; the runtime login
 still needs membership in each configured role.
 
+Kovo's scoped Postgres runtime depends on transaction-local `SET LOCAL ROLE` and
+`set_config(..., true)`. Direct Postgres pools and transaction-mode poolers are supported; PgBouncer
+statement mode is not, because it cannot preserve the transaction boundary that contains the role
+and principal.
+
 `kovo db check` exits non-zero when posture is missing or stale, so production boot and CI can fail
 closed instead of serving an unprotected table. Automatic migration generation is still a roadmap
 item; `kovo db migrate` applies reviewed `.sql` files and then reasserts the derived runtime posture

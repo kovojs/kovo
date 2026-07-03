@@ -1,0 +1,449 @@
+import { execFileSync, spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
+
+import { kovo } from '@kovojs/drizzle';
+import { eq } from 'drizzle-orm';
+import { pgTable, text } from 'drizzle-orm/pg-core';
+import { Pool, type PoolClient, type QueryConfig, type QueryResultRow } from 'pg';
+import { afterAll, describe, expect, it } from 'vitest';
+
+import { createPostgresScopedClient } from './managed-db.js';
+import {
+  checkPostgresAppDbPosture,
+  createPostgresAppRuntimeDb,
+  provisionPostgresAppDb,
+  type KovoPostgresAppRuntimeOptions,
+} from './postgres-runtime.js';
+
+const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
+const probeToolchain = localPostgresToolchain();
+const describeIfPostgres = probeToolchain.available ? describe : describe.skip;
+
+const probeNotes = pgTable(
+  'kovo_ext_probe_notes',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    title: text('title').notNull(),
+  },
+  kovo({
+    domain: 'external-postgres-probe-notes',
+    key: 'id',
+    owner: 'ownerId',
+  }),
+);
+
+const schema = { probeNotes };
+const createNotesMigration = {
+  id: '001-create-probe-notes.sql',
+  sql: `
+    CREATE TABLE kovo_ext_probe_notes (
+      id text PRIMARY KEY,
+      owner_id text NOT NULL,
+      title text NOT NULL
+    );
+  `,
+};
+
+const probeRun = `kovo_ext_${process.pid}_${Date.now()}`;
+
+describeIfPostgres('external Postgres runtime/provisioning probes', () => {
+  const roots: string[] = [];
+  const clusters: LocalPostgresCluster[] = [];
+
+  afterAll(async () => {
+    await Promise.allSettled(clusters.splice(0).map((cluster) => cluster.stop()));
+    for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
+  });
+
+  it('proves split provisioning, adopted roles, fail-closed posture, and pg Pool scope reset', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-external-postgres-probe-'));
+    roots.push(root);
+    const cluster = await startLocalPostgres(root);
+    clusters.push(cluster);
+    const admin = await connect(cluster.url('postgres', 'postgres'));
+
+    const defaultDb = `${probeRun}_default`;
+    const adoptedDb = `${probeRun}_adopted`;
+    const staleDb = `${probeRun}_stale`;
+    const defaultAdmin = `${probeRun}_admin`;
+    const defaultRuntime = `${probeRun}_runtime`;
+    const adoptedAdmin = `${probeRun}_adopt_admin`;
+    const adoptedRuntime = `${probeRun}_adopt_runtime`;
+    const adoptedReader = `${probeRun}_reader`;
+    const adoptedWriter = `${probeRun}_writer`;
+    const staleRuntimeRole = `${probeRun}_stale_runtime`;
+
+    try {
+      await admin.query(`CREATE ROLE ${quoteIdent(defaultAdmin)} LOGIN CREATEROLE NOBYPASSRLS`);
+      await admin.query(
+        `CREATE ROLE ${quoteIdent(defaultRuntime)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await admin.query(
+        `CREATE DATABASE ${quoteIdent(defaultDb)} OWNER ${quoteIdent(defaultAdmin)}`,
+      );
+
+      await admin.query(
+        `CREATE ROLE ${quoteIdent(adoptedAdmin)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await admin.query(
+        `CREATE ROLE ${quoteIdent(adoptedRuntime)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await admin.query(`CREATE ROLE ${quoteIdent(adoptedReader)} NOBYPASSRLS`);
+      await admin.query(`CREATE ROLE ${quoteIdent(adoptedWriter)} NOBYPASSRLS`);
+      await admin.query(`GRANT ${quoteIdent(adoptedReader)} TO ${quoteIdent(adoptedRuntime)}`);
+      await admin.query(`GRANT ${quoteIdent(adoptedWriter)} TO ${quoteIdent(adoptedRuntime)}`);
+      await admin.query(
+        `CREATE DATABASE ${quoteIdent(adoptedDb)} OWNER ${quoteIdent(adoptedAdmin)}`,
+      );
+
+      await admin.query(
+        `CREATE ROLE ${quoteIdent(staleRuntimeRole)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await admin.query(`CREATE DATABASE ${quoteIdent(staleDb)} OWNER postgres`);
+    } finally {
+      await admin.end();
+    }
+
+    const defaultAdminUrl = cluster.url(defaultDb, defaultAdmin);
+    const defaultRuntimeUrl = cluster.url(defaultDb, defaultRuntime);
+    const defaultReport = await provisionPostgresAppDb({
+      databaseUrl: defaultAdminUrl,
+      migrations: [createNotesMigration],
+      schema,
+    });
+    expect(defaultReport.ok).toBe(true);
+    expect(defaultReport.issues).toEqual([]);
+
+    await withPool(cluster.url(defaultDb, 'postgres'), async (superPool) => {
+      await superPool.query(`GRANT kovo_reader TO ${quoteIdent(defaultRuntime)}`);
+      await superPool.query(`GRANT kovo_writer TO ${quoteIdent(defaultRuntime)}`);
+      await superPool.query(
+        `GRANT SELECT ON TABLE kovo_schema_state TO ${quoteIdent(defaultRuntime)}`,
+      );
+    });
+    await expectPermissionDenied(
+      defaultRuntimeUrl,
+      `CREATE ROLE ${quoteIdent(`${probeRun}_blocked_role`)}`,
+    );
+    await expectPermissionDenied(
+      defaultRuntimeUrl,
+      'ALTER TABLE kovo_ext_probe_notes FORCE ROW LEVEL SECURITY',
+    );
+
+    const defaultReportAgain = await provisionPostgresAppDb({
+      databaseUrl: defaultAdminUrl,
+      migrations: [createNotesMigration],
+      schema,
+    });
+    expect(defaultReportAgain.ok).toBe(true);
+    expect(defaultReportAgain.issues).toEqual([]);
+
+    await expectOwnerIsolation(defaultRuntimeUrl, {});
+    await expectPooledScopeDoesNotLeak(defaultRuntimeUrl, 'kovo_writer');
+
+    await expectPermissionDenied(
+      cluster.url(adoptedDb, adoptedAdmin),
+      `CREATE ROLE ${quoteIdent(`${probeRun}_blocked_adopted_role`)}`,
+    );
+    await withAdoptedRoleEnv({ reader: adoptedReader, writer: adoptedWriter }, async () => {
+      const adoptedReport = await provisionPostgresAppDb({
+        databaseUrl: cluster.url(adoptedDb, adoptedAdmin),
+        migrations: [createNotesMigration],
+        schema,
+      });
+      expect(adoptedReport.ok).toBe(true);
+      expect(adoptedReport.issues).toEqual([]);
+
+      await withPool(cluster.url(adoptedDb, 'postgres'), async (superPool) => {
+        await superPool.query(
+          `GRANT SELECT ON TABLE kovo_schema_state TO ${quoteIdent(adoptedRuntime)}`,
+        );
+      });
+      await expectOwnerIsolation(cluster.url(adoptedDb, adoptedRuntime), {
+        readerRole: adoptedReader,
+        writerRole: adoptedWriter,
+      });
+      await expectPooledScopeDoesNotLeak(cluster.url(adoptedDb, adoptedRuntime), adoptedWriter);
+    });
+
+    await withPool(cluster.url(staleDb, 'postgres'), async (superPool) => {
+      await superPool.query(createNotesMigration.sql);
+      await superPool.query(
+        `GRANT SELECT ON TABLE kovo_ext_probe_notes TO ${quoteIdent(staleRuntimeRole)}`,
+      );
+    });
+    const staleReport = await checkPostgresAppDbPosture({
+      databaseUrl: cluster.url(staleDb, staleRuntimeRole),
+      schema,
+    });
+    expect(staleReport.ok).toBe(false);
+    expect(staleReport.issues.map((issue) => issue.code)).toEqual(
+      expect.arrayContaining(['KV433_SCHEMA_FINGERPRINT', 'KV433_FORCE_RLS', 'KV433_OWNER_POLICY']),
+    );
+    const staleRuntime = createPostgresAppRuntimeDb({
+      databaseUrl: cluster.url(staleDb, staleRuntimeRole),
+      schema,
+    });
+    try {
+      await expect(staleRuntime.ready).rejects.toThrow(/KV433.*run `kovo db provision`|KV433/);
+    } finally {
+      await staleRuntime.close();
+    }
+  }, 120_000);
+});
+
+async function expectOwnerIsolation(
+  databaseUrl: string,
+  options: Pick<KovoPostgresAppRuntimeOptions, 'readerRole' | 'writerRole'>,
+): Promise<void> {
+  const runtime = createPostgresAppRuntimeDb({
+    ...options,
+    databaseUrl,
+    schema,
+  });
+  try {
+    await runtime.ready;
+    const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+    const u2Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u2' } });
+
+    await u1Db.insert(probeNotes).values({ id: 'u1-note', ownerId: 'u1', title: 'One' });
+    await u2Db.insert(probeNotes).values({ id: 'u2-note', ownerId: 'u2', title: 'Two' });
+    await expect(u1Db.select().from(probeNotes).orderBy(probeNotes.id)).resolves.toEqual([
+      { id: 'u1-note', ownerId: 'u1', title: 'One' },
+    ]);
+    await expect(u2Db.select().from(probeNotes).orderBy(probeNotes.id)).resolves.toEqual([
+      { id: 'u2-note', ownerId: 'u2', title: 'Two' },
+    ]);
+    await expect(
+      u1Db.select().from(probeNotes).where(eq(probeNotes.ownerId, 'u2')),
+    ).resolves.toEqual([]);
+  } finally {
+    await runtime.close();
+  }
+}
+
+async function expectPooledScopeDoesNotLeak(
+  databaseUrl: string,
+  writerRole: string,
+): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    const txClient = new TestNodePostgresRuntimeClient(pool);
+    const u1 = createPostgresScopedClient(txClient, { principal: 'u1', role: writerRole });
+    const u2 = createPostgresScopedClient(txClient, { principal: 'u2', role: writerRole });
+    const requests = Array.from({ length: 24 }, (_, index) => {
+      const client = index % 2 === 0 ? u1 : u2;
+      const expectedId = index % 2 === 0 ? 'u1-note' : 'u2-note';
+      return client
+        .query<{ id: string }>('SELECT id FROM kovo_ext_probe_notes ORDER BY id')
+        .then((result) => expect(result.rows).toEqual([{ id: expectedId }]));
+    });
+    await Promise.all(requests);
+
+    const leaked = await pool.query<{ current_user: string; principal: string | null }>(
+      "SELECT current_user, current_setting('kovo.principal', true) AS principal",
+    );
+    expect(leaked.rows[0]?.current_user).toBe(databaseUser(databaseUrl));
+    expect(leaked.rows[0]?.principal ?? '').toBe('');
+  });
+}
+
+async function expectPermissionDenied(databaseUrl: string, statement: string): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    await expect(pool.query(statement)).rejects.toMatchObject({
+      code: expect.stringMatching(/^(42501|0LP01)$/),
+    });
+  });
+}
+
+async function withPool<Result>(
+  connectionString: string,
+  callback: (pool: Pool) => Promise<Result>,
+): Promise<Result> {
+  const pool = new Pool({ connectionString, max: 1 });
+  try {
+    return await callback(pool);
+  } finally {
+    await pool.end();
+  }
+}
+
+class TestNodePostgresRuntimeClient {
+  constructor(private readonly pool: Pool) {}
+
+  async exec(statement: string): Promise<unknown> {
+    return this.pool.query(statement);
+  }
+
+  async query<Row extends QueryResultRow = QueryResultRow>(
+    query: QueryConfig | string,
+    params?: unknown[],
+  ): Promise<{ rows: Row[] }> {
+    const result = await this.pool.query<Row>(query as QueryConfig, params);
+    return { rows: result.rows };
+  }
+
+  async transaction<Result>(
+    callback: (tx: TestNodePostgresTransactionClient) => Promise<Result>,
+  ): Promise<Result> {
+    const client = await this.pool.connect();
+    const tx = new TestNodePostgresTransactionClient(client);
+    try {
+      await client.query('BEGIN');
+      const result = await callback(tx);
+      await client.query('COMMIT');
+      return result;
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
+  }
+}
+
+class TestNodePostgresTransactionClient {
+  constructor(private readonly client: PoolClient) {}
+
+  async exec(statement: string): Promise<unknown> {
+    return this.client.query(statement);
+  }
+
+  async query<Row extends QueryResultRow = QueryResultRow>(
+    query: QueryConfig | string,
+    params?: unknown[],
+  ): Promise<{ rows: Row[] }> {
+    const result = await this.client.query<Row>(query as QueryConfig, params);
+    return { rows: result.rows };
+  }
+}
+
+interface LocalPostgresCluster {
+  stop(): Promise<void>;
+  url(database: string, user: string): string;
+}
+
+async function startLocalPostgres(root: string): Promise<LocalPostgresCluster> {
+  const dataDir = join(root, 'data');
+  const socketDir = '/tmp';
+  execFileSync('initdb', ['-D', dataDir, '-A', 'trust', '-U', 'postgres'], {
+    stdio: 'ignore',
+  });
+  const port = await availablePort();
+  const process = spawn(
+    'postgres',
+    ['-D', dataDir, '-h', '127.0.0.1', '-k', socketDir, '-p', String(port)],
+    {
+      stdio: 'pipe',
+    },
+  );
+  const stderr: string[] = [];
+  process.stderr.on('data', (chunk: Buffer) => stderr.push(chunk.toString('utf8')));
+  const cluster: LocalPostgresCluster = {
+    async stop() {
+      process.kill('SIGTERM');
+      await onceExit(process);
+    },
+    url(database: string, user: string) {
+      return `postgres://${encodeURIComponent(user)}@127.0.0.1:${port}/${encodeURIComponent(database)}`;
+    },
+  };
+
+  const started = Date.now();
+  while (Date.now() - started < 20_000) {
+    if (process.exitCode !== null) {
+      throw new Error(`local postgres exited before accepting connections: ${stderr.join('')}`);
+    }
+    try {
+      const pool = new Pool({ connectionString: cluster.url('postgres', 'postgres'), max: 1 });
+      await pool.query('SELECT 1');
+      await pool.end();
+      return cluster;
+    } catch {
+      await delay(100);
+    }
+  }
+  await cluster.stop();
+  throw new Error(`local postgres did not accept connections: ${stderr.join('')}`);
+}
+
+function localPostgresToolchain(): { available: true } | { available: false; reason: string } {
+  const missing = POSTGRES_BINARIES.filter((binary) => {
+    try {
+      execFileSync(binary, ['--version'], { stdio: 'ignore' });
+      return false;
+    } catch {
+      return true;
+    }
+  });
+  if (missing.length > 0) {
+    return {
+      available: false,
+      reason: `missing local Postgres binaries: ${missing.join(', ')}`,
+    };
+  }
+  return { available: true };
+}
+
+async function connect(connectionString: string): Promise<Pool> {
+  const pool = new Pool({ connectionString, max: 1 });
+  await pool.query('SELECT 1');
+  return pool;
+}
+
+function availablePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    import('node:net')
+      .then(({ createServer }) => {
+        const server = createServer();
+        server.once('error', reject);
+        server.listen(0, '127.0.0.1', () => {
+          const address = server.address();
+          server.close(() => {
+            if (typeof address === 'object' && address !== null) resolve(address.port);
+            else reject(new Error('could not allocate a local Postgres probe port'));
+          });
+        });
+      })
+      .catch(reject);
+  });
+}
+
+async function withAdoptedRoleEnv<Result>(
+  roles: { reader: string; writer: string },
+  callback: () => Promise<Result>,
+): Promise<Result> {
+  const previousReader = process.env.KOVO_DB_READER_ROLE;
+  const previousWriter = process.env.KOVO_DB_WRITER_ROLE;
+  process.env.KOVO_DB_READER_ROLE = roles.reader;
+  process.env.KOVO_DB_WRITER_ROLE = roles.writer;
+  try {
+    return await callback();
+  } finally {
+    restoreEnv('KOVO_DB_READER_ROLE', previousReader);
+    restoreEnv('KOVO_DB_WRITER_ROLE', previousWriter);
+  }
+}
+
+function restoreEnv(name: string, value: string | undefined): void {
+  if (value === undefined) delete process.env[name];
+  else process.env[name] = value;
+}
+
+function databaseUser(databaseUrl: string): string {
+  return decodeURIComponent(new URL(databaseUrl).username);
+}
+
+function quoteIdent(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
+async function onceExit(child: ChildProcessWithoutNullStreams): Promise<void> {
+  if (child.exitCode !== null || child.signalCode !== null) return;
+  await new Promise<void>((resolve) => child.once('exit', () => resolve()));
+}
+
+void probeToolchain;
