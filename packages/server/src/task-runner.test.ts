@@ -3,6 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installNetConnectFloor, resolveEgressPolicy } from './egress.js';
+import { mutation, runMutation } from './mutation.js';
+import { query, runQuery } from './query.js';
 import { s } from './schema.js';
 import { task } from './task.js';
 import { createDurableTaskRunner } from './task-runner.js';
@@ -109,6 +111,76 @@ describe('durable task runner (SPEC §9.6)', () => {
       'without actAs(id) or declareSystemRead(reason)',
     );
     expect(hookInputs).toHaveLength(1);
+  });
+
+  it('threads task principal posture through runQuery and runMutation lifecycle DB resolution', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const providerPostures: unknown[] = [];
+    const readOrders = query('orders/read', {
+      load: async () => [{ id: 'ord_1' }],
+    });
+    const recordOrder = mutation('orders/record', {
+      input: s.object({ id: s.string() }),
+      handler: async () => ({ id: 'ord_1' }),
+    });
+    const scoped = task('owner.read-write.scoped', {
+      input: s.object({ ownerId: s.string() }),
+      async run(args, ctx) {
+        await ctx.actAs(args.ownerId).runQuery(readOrders, undefined);
+        await ctx.declareSystemRead('compact system audit').runQuery(readOrders, undefined);
+        await ctx.actAs(args.ownerId).runMutation(recordOrder, { id: 'ord_1' });
+      },
+    });
+    await store.enqueue({
+      task: scoped.key,
+      args: { ownerId: 'user_1' },
+      runAt: new Date('2026-06-30T10:00:00Z'),
+    });
+    const db = async (request: unknown) => {
+      const posture = (request as { principalPosture?: unknown }).principalPosture;
+      assertNonRequestPrincipalPosture(posture);
+      providerPostures.push(posture);
+      return {};
+    };
+    const runner = createDurableTaskRunner({
+      store,
+      tasks: [scoped],
+      hooks: {
+        runMutation: (definition, input, options) =>
+          runMutation(
+            definition as never,
+            input,
+            {},
+            {
+              csrf: false,
+              db,
+              principalPosture: options.principalPosture,
+            },
+          ),
+        runQuery: (definition, input, options) =>
+          runQuery(
+            definition as never,
+            input,
+            {},
+            {
+              db,
+              principalPosture: options.principalPosture,
+            },
+          ),
+      },
+    });
+
+    await runner.runOnce(new Date('2026-06-30T10:00:01Z'));
+
+    expect(store.snapshot()[0]).toMatchObject({ status: 'succeeded' });
+    expect(providerPostures).toHaveLength(3);
+    expect(providerPostures.map((posture) => (posture as { kind: string }).kind)).toEqual([
+      'act-as',
+      'system',
+      'act-as',
+    ]);
+    expect(providerPostures[0]).toMatchObject({ kind: 'act-as', principal: 'user_1' });
+    expect(providerPostures[1]).toMatchObject({ kind: 'system', reason: 'compact system audit' });
   });
 
   it('routes default ctx.fetch through the framework egress allowlist choke', async () => {

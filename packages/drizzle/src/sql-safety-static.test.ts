@@ -41,6 +41,110 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     ]);
   });
 
+  it('flags unconfined appRuntimeDbProvider calls in request-authored endpoint modules', () => {
+    const diagnostics = diagnosticsFor(`
+      import { endpoint } from '@kovojs/server';
+      declare function appRuntimeDbProvider(request?: unknown): { execute(sql: string): unknown };
+
+      export const leak = endpoint('/leak', {
+        method: 'GET',
+        reason: 'unconfined runtime db proof',
+        csrf: false,
+        csrfJustification: 'read-only proof endpoint',
+        response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+        async handler() {
+          await appRuntimeDbProvider().execute('select * from account');
+          return new Response('ok');
+        },
+      });
+    `);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV414',
+        message: expect.stringContaining(
+          'must not call appRuntimeDbProvider() without a lifecycle request',
+        ),
+        site: 'app.ts:12',
+      }),
+    ]);
+  });
+
+  it('flags explicit undefined appRuntimeDbProvider calls in request-authored endpoint modules', () => {
+    const diagnostics = diagnosticsFor(`
+      import { endpoint } from '@kovojs/server';
+      declare function appRuntimeDbProvider(request?: unknown): { execute(sql: string): unknown };
+
+      export const leak = endpoint('/leak', {
+        method: 'GET',
+        reason: 'undefined runtime db proof',
+        csrf: false,
+        csrfJustification: 'read-only proof endpoint',
+        response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+        async handler() {
+          await appRuntimeDbProvider(undefined).execute('select * from account');
+          return new Response('ok');
+        },
+      });
+    `);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV414',
+        message: expect.stringContaining(
+          'must not call appRuntimeDbProvider() without a lifecycle request',
+        ),
+        site: 'app.ts:12',
+      }),
+    ]);
+  });
+
+  it('flags value imports from generated runtime DB modules in request-authored surfaces', () => {
+    const diagnostics = diagnosticsFor(`
+      import { endpoint } from '@kovojs/server';
+      import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';
+
+      export const leak = endpoint('/leak', {
+        method: 'GET',
+        reason: 'runtime db value import proof',
+        csrf: false,
+        csrfJustification: 'read-only proof endpoint',
+        response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+        handler: () => new Response(String(appRuntimeDbProvider)),
+      });
+    `);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV414',
+        message: expect.stringContaining(
+          'must not import value symbols from src/_kovo/app-runtime-db',
+        ),
+        site: 'app.ts:3',
+      }),
+    ]);
+  });
+
+  it('allows type-only runtime DB imports in request-authored surfaces', () => {
+    const diagnostics = diagnosticsFor(`
+      import { endpoint } from '@kovojs/server';
+      import type { AppDb } from './_kovo/app-runtime-db.js';
+
+      export const status = endpoint('/status', {
+        method: 'GET',
+        reason: 'type-only runtime db import proof',
+        csrf: false,
+        csrfJustification: 'read-only proof endpoint',
+        response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+        handler: () => new Response('ok'),
+      });
+
+      export type EndpointDb = AppDb;
+    `);
+
+    expect(diagnostics).toEqual([]);
+  });
+
   it('accepts endpoint db access through the explicit actAs managed handle', () => {
     const diagnostics = diagnosticsFor(`
       import { endpoint } from '@kovojs/server';

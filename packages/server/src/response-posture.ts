@@ -79,6 +79,7 @@ export interface QueryLifecyclePolicy<
   SessionValue = unknown,
   DbValue = unknown,
 > extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue> {
+  principalPosture?: RequestLifecycleOptions<RawRequest, SessionValue, DbValue>['principalPosture'];
   surface: 'query';
 }
 
@@ -89,6 +90,7 @@ export interface MutationLifecyclePolicy<
 > extends LifecycleCommonOptions<RawRequest, SessionValue, DbValue> {
   csrf: { mode: 'exempt' | 'protected' };
   idempotency: { mode: 'none' | 'replay-store' };
+  principalPosture?: RequestLifecycleOptions<RawRequest, SessionValue, DbValue>['principalPosture'];
   sqlWritePolicy?: RequestLifecycleOptions<RawRequest, SessionValue, DbValue>['sqlWritePolicy'];
   surface: 'mutation';
 }
@@ -149,6 +151,9 @@ export async function resolveKovoLifecycleRequest<
       if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
       if (options.db !== undefined) lifecycleOptions.db = options.db;
       if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
+      if (options.principalPosture !== undefined) {
+        lifecycleOptions.principalPosture = options.principalPosture;
+      }
       if (options.sessionProvider !== undefined) {
         lifecycleOptions.sessionProvider = options.sessionProvider;
       }
@@ -161,6 +166,9 @@ export async function resolveKovoLifecycleRequest<
       if (options.clientIp !== undefined) lifecycleOptions.clientIp = options.clientIp;
       if (options.db !== undefined) lifecycleOptions.db = options.db;
       if (options.onError !== undefined) lifecycleOptions.onError = options.onError;
+      if (options.principalPosture !== undefined) {
+        lifecycleOptions.principalPosture = options.principalPosture;
+      }
       if (options.sessionProvider !== undefined) {
         lifecycleOptions.sessionProvider = options.sessionProvider;
       }
@@ -490,11 +498,12 @@ const LIFECYCLE_POLICY_KEYS: Record<RequestLifecycleSurface, ReadonlySet<string>
     'db',
     'idempotency',
     'onError',
+    'principalPosture',
     'sessionProvider',
     'sqlWritePolicy',
     'surface',
   ]),
-  query: new Set(['clientIp', 'db', 'onError', 'sessionProvider', 'surface']),
+  query: new Set(['clientIp', 'db', 'onError', 'principalPosture', 'sessionProvider', 'surface']),
   system: new Set(['surface']),
 };
 

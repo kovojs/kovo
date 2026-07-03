@@ -116,7 +116,8 @@ export const SECURITY_CODE_REGISTRY = {
   KV414: {
     code: 'KV414',
     enforcement: 'runtime-choke',
-    property: 'Owner-table access is scoped to a session principal or public-read justification.',
+    property:
+      'Authorization: Postgres owner-table access is scoped at the engine choke by role/RLS/current principal; SQLite is experimental/non-guaranteeing and cannot claim this authorization property.',
     propertyDependsOn: 'request-state',
   },
   KV415: {
@@ -258,7 +259,8 @@ export const SECURITY_CODE_REGISTRY = {
     chokeId: 'server.response.emit-to-wire',
     code: 'KV435',
     enforcement: 'runtime-choke',
-    property: 'Runtime Secret values cannot cross client-readable wire egress.',
+    property:
+      'Confidentiality: runtime Secret values cannot cross client-readable wire egress; Postgres secret columns are engine-unreadable via column privileges at the engine choke, while SQLite is experimental/non-guaranteeing and relies on runtime boxes.',
     propertyDependsOn: 'request-state',
   },
   KV436: {

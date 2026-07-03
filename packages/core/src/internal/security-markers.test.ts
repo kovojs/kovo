@@ -104,6 +104,16 @@ describe('DEC-D security code registry', () => {
     }
   });
 
+  it('documents engine-choke wording for authorization and confidentiality registry entries', () => {
+    for (const code of ['KV414', 'KV435'] as const) {
+      const property = SECURITY_CODE_REGISTRY[code].property;
+      expect(property, `${code} Postgres engine choke`).toMatch(/Postgres[\s\S]*engine choke/u);
+      expect(property, `${code} SQLite limitation`).toMatch(
+        /SQLite[\s\S]*experimental\/non-guaranteeing/u,
+      );
+    }
+  });
+
   it('requires a chokeId to name runtime-choke enforcement or a proven by-construction floor', () => {
     for (const entry of Object.values(SECURITY_CODE_REGISTRY)) {
       if (entry.chokeId === undefined) continue;
