@@ -19,6 +19,10 @@ const referenceTags = sqliteTable('reference_tags', {
   id: text('id').primaryKey(),
   label: text('label').notNull(),
 });
+const sharedDocs = sqliteTable('shared_docs', {
+  id: text('id').primaryKey(),
+  label: text('label').notNull(),
+});
 const unclassifiedRows = sqliteTable('unclassified_rows', {
   id: text('id').primaryKey(),
 });
@@ -28,6 +32,7 @@ const metadata: SqliteAuthorizationMetadata = {
     ['orders', ['owned']],
     ['order_items', ['ownedVia']],
     ['reference_tags', ['reference']],
+    ['shared_docs', ['authzPolicy']],
   ]),
   ownerSourcesByTable: new Map([
     ['orders', { columnKey: 'userId', columnName: 'user_id', table: 'orders' }],
@@ -61,6 +66,7 @@ describe('SQLite managed authorization predicate binding', () => {
       create table orders (id text primary key, user_id text not null, status text not null);
       create table order_items (id text primary key, order_id text not null, sku text not null);
       create table reference_tags (id text primary key, label text not null);
+      create table shared_docs (id text primary key, label text not null);
       create table unclassified_rows (id text primary key);
       insert into orders (id, user_id, status) values
         ('o1', 'u1', 'open'),
@@ -70,6 +76,7 @@ describe('SQLite managed authorization predicate binding', () => {
         ('i1', 'o1', 'sku-u1'),
         ('i2', 'o2', 'sku-u2');
       insert into reference_tags (id, label) values ('t1', 'public');
+      insert into shared_docs (id, label) values ('d1', 'guard-owned');
       insert into unclassified_rows (id) values ('x1');
     `);
     return drizzle(client);
@@ -173,7 +180,9 @@ describe('SQLite managed authorization predicate binding', () => {
     const db = createSqliteAuthorizationDb(seededDb(), { metadata, principal: 'u1' });
 
     expect(() => db.all('select id from orders')).toThrow(/KV414/);
+    expect(() => db.all('select id from shared_docs')).toThrow(/KV414/);
     expect(db.select().from(referenceTags).all()).toEqual([{ id: 't1', label: 'public' }]);
+    expect(db.select().from(sharedDocs).all()).toEqual([{ id: 'd1', label: 'guard-owned' }]);
     expect(db.select().from(unclassifiedRows).all()).toEqual([]);
   });
 });

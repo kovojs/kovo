@@ -228,7 +228,7 @@ export interface SqliteAuthorizationMetadata {
 /** Options for the framework-owned SQLite predicate-binding authorization wrapper. */
 export interface SqliteAuthorizationDbOptions {
   metadata: SqliteAuthorizationMetadata;
-  principal?: string;
+  principal?: string | undefined;
 }
 
 interface SqliteAuthorizationApplyState {
@@ -891,7 +891,7 @@ function sqliteAuthorizationPredicateForTable(
   const classifications = options.metadata.authorizationClassificationsByTable?.get(tableName);
   if (classifications === undefined || classifications.length === 0) return sql`1 = 0`;
   if (classifications.includes('public') || classifications.includes('reference')) return undefined;
-  if (classifications.includes('authzPolicy')) return sql`1 = 0`;
+  if (classifications.includes('authzPolicy')) return undefined;
 
   const owner = options.metadata.ownerSourcesByTable?.get(tableName);
   if (owner !== undefined) {

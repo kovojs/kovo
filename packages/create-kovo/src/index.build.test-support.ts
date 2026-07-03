@@ -2471,7 +2471,7 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
   runtimeDb = replaceRequired(
     runtimeDb,
     '  schema.verification,',
-    '  schema.verification,\n  schema.runtimeSecretProof,\n  schema.runtimeSecretJoinProof,',
+    '  schema.verification,\n  schema.runtimeSecretProof,\n  schema.runtimeSecretJoinProof,\n  schema.runtimeSecretViewProof,',
     'sqlite runtime secret provenance metadata table list',
   );
   runtimeDb = replaceRequired(
