@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 
 import { PGlite } from '@electric-sql/pglite';
 import { extractKovoRuntimeDbMetadata, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
-import type { SQL } from 'drizzle-orm';
+import { buildRelations, type AnyRelations, type SQL } from 'drizzle-orm';
 import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle as drizzleNodePg, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { drizzle as drizzlePglite, type PgliteDatabase } from 'drizzle-orm/pglite';
@@ -641,17 +641,22 @@ async function checkRuntimeDbPosture(
 }
 
 function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRuntimeClient {
+  const relations = buildRelations(
+    postgresRelationSchemaFromModule(config.schema),
+    {},
+  ) as AnyRelations;
   if (config.driver === 'pglite') {
     const client = new PGlite(config.dataDir);
     return {
       close: () => client.close(),
-      drizzleInternalDb: () => drizzlePglite({ client }),
+      drizzleInternalDb: () => drizzlePglite({ client, relations }),
       drizzleReadonlyDb: (principal, role, roleSetting) =>
         drizzlePglite({
           client: createPostgresReadonlyClient(
             client,
             postgresReadonlyClientOptions(config, principal, role, roleSetting),
           ),
+          relations,
         }),
       drizzleRequestDb: (principal, roleSetting) =>
         drizzlePglite({
@@ -659,6 +664,7 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
             client,
             postgresScopedClientOptions(config, principal, roleSetting),
           ),
+          relations,
         }),
       label: 'PGlite',
       sql: client,
@@ -669,13 +675,14 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
   const transactionalClient = new NodePostgresRuntimeClient(pool);
   return {
     close: () => transactionalClient.close(),
-    drizzleInternalDb: () => drizzleNodePg({ client: pool }),
+    drizzleInternalDb: () => drizzleNodePg({ client: pool, relations }),
     drizzleReadonlyDb: (principal, role, roleSetting) =>
       drizzleNodePg({
         client: createPostgresReadonlyClient(
           transactionalClient,
           postgresReadonlyClientOptions(config, principal, role, roleSetting),
         ) as unknown as Pool,
+        relations,
       }),
     drizzleRequestDb: (principal, roleSetting) =>
       drizzleNodePg({
@@ -683,6 +690,7 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
           transactionalClient,
           postgresScopedClientOptions(config, principal, roleSetting),
         ) as unknown as Pool,
+        relations,
       }),
     label: 'Postgres',
     sql: transactionalClient,
@@ -744,9 +752,14 @@ function createRequestScopedReadonlyDb(
           ownerTables: [...config.crossOwnerReadTables],
           ...(scope.principal === undefined ? {} : { principal: scope.principal }),
         };
-  const readOptions = crossOwnerRead === undefined ? {} : { crossOwnerRead };
+  const rawRead = {
+    dialectLabel: client.label,
+    normalizeTableName: normalizePolicyTable,
+    ownerTables: postgresOwnerScopedTableNames(metadata),
+  };
+  const readOptions = crossOwnerRead === undefined ? { rawRead } : { crossOwnerRead, rawRead };
   return createSecretBoxingReadDb(readonlyDb(readDb, readOptions), metadata, {
-    privilegedDb: readonlyDb(privilegedReadDb),
+    privilegedDb: readonlyDb(privilegedReadDb, { rawRead }),
     rawSecretTableRead: 'engine',
   });
 }
@@ -893,6 +906,24 @@ function postgresTablesFromSchema(schema: Record<string, unknown>): PgTable[] {
     seen.add(value);
   }
   if (tables.length === 0) {
+    throw new Error('KV433: Postgres runtime could not derive any Drizzle pgTable exports.');
+  }
+  return tables;
+}
+
+function postgresRelationSchemaFromModule(
+  schema: Record<string, unknown>,
+): Record<string, PgTable> {
+  const tables: Record<string, PgTable> = {};
+  const seen = new Set<unknown>();
+  for (const [name, value] of Object.entries(schema)) {
+    if (seen.has(value)) continue;
+    const table = asPgTable(value);
+    if (table === undefined) continue;
+    tables[name] = table;
+    seen.add(value);
+  }
+  if (Object.keys(tables).length === 0) {
     throw new Error('KV433: Postgres runtime could not derive any Drizzle pgTable exports.');
   }
   return tables;
@@ -1244,6 +1275,12 @@ function postgresReaderReadableTableNames(metadata: KovoRuntimeDbMetadata): Read
     }
   }
   return readableTables;
+}
+
+function postgresOwnerScopedTableNames(metadata: KovoRuntimeDbMetadata): readonly string[] {
+  return [
+    ...new Set([...metadata.ownerSourcesByTable.keys(), ...metadata.ownerViaSourcesByTable.keys()]),
+  ];
 }
 
 async function applyPostgresWriterTablePrivileges(

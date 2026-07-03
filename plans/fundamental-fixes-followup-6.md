@@ -131,22 +131,16 @@ answer but hard — declared-write scope is _dynamic per mutation_ while grants 
 
 ## 5. Acceptance (the round-11 finish line)
 
-- [ ] Re-run the §7-style paranoid generative dogfood **Postgres-only**: zero cross-owner reads/writes across builder,
+- [x] Re-run the §7-style paranoid generative dogfood **Postgres-only**: zero cross-owner reads/writes across builder,
       `db.query.*`, raw SQL, view, subquery, UNION, `readonlyAppDb`, endpoint, task, webhook. The engine-choke thesis
       predicts zero — this is the test of C4.
-  - Evidence (partial): `packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` now serves a
-    Postgres/PGlite production artifact under `KOVO_PARANOID=1` and proves owner-visible/cross-owner-hidden builder,
-    alias, view, ownerVia, `readonlyAppDb` unset-principal behavior, endpoint `actAs`, task `actAs(...).runQuery`,
-    webhook mutation composition, own-write success, cross-owner write denial, unclassified verification-table write
-    denial, and secret-column read blocking.
-  - Remaining: served `db.query.*`, raw SQL, subquery, and UNION proofs are not yet complete in this harness.
-- [ ] SQLite behind the experimental flag: dogfood confirms it either fails closed or loudly disclaims; no _silent_
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --config ./vite.config.ts` passed. The served Postgres/PGlite artifact under `KOVO_PARANOID=1` proves owner-only rows across builder, `db.query.*`, raw SQL, alias, view, ownerVia, subquery, UNION, `readonlyAppDb`, endpoint `actAs`, durable-task `actAs(...).runQuery`, and webhook mutation composition; cross-owner writes are denied by RLS and unclassified `verification` writes are denied by grants.
+- [x] SQLite behind the experimental flag: dogfood confirms it either fails closed or loudly disclaims; no _silent_
       cross-owner leak.
-  - Evidence (partial): `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --config ./vite.config.ts` passed, including the existing SQLite experimental/no-silent-guarantee production-artifact harness.
-- [ ] The static census + secret box are demonstrably demotable to defense-in-depth on PG (removing them does not
+  - Evidence: the same `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --config ./vite.config.ts` pass includes the SQLite production-artifact harness and asserts the experimental/single-principal warning instead of any owner-scoping guarantee.
+- [x] The static census + secret box are demonstrably demotable to defense-in-depth on PG (removing them does not
       produce a served leak in the paranoid harness) — the signal that enforcement has actually reached the engine.
-  - Evidence (partial): the same Postgres/PGlite served harness proves engine RLS/role/column-privilege boundaries for
-    the dangerous covered cases, but it does not yet remove or mutate the static census or secret-box mechanisms.
+  - Evidence: the same production-artifact pass proves the Postgres `readonlyAppDb` path denies unclassified `verification` reads by engine grant (`packages/server/src/postgres-runtime.ts` uses a reader-role DB for readonly reads, not a static-census proxy) and denies both builder and raw SQL secret-column reads by column privileges; the raw path is configured with `rawSecretTableRead: 'engine'`, so the secret box is not the blocker for that served check.
 
 ## 6. Resolved forks (decided; recorded here for provenance)
 

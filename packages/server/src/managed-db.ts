@@ -409,6 +409,26 @@ export const createPostgresScopedClient = securityClassifier(
       get(target, prop, receiver) {
         if (prop === 'query') return scopedPostgresQuery.bind(undefined, target, options);
         if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
+        if (prop === 'transaction') {
+          const value = Reflect.get(target, prop, receiver);
+          if (typeof value !== 'function') return value;
+          return <Result>(
+            callback: (tx: unknown) => Promise<Result> | Result,
+            ...args: unknown[]
+          ) => {
+            if (typeof callback !== 'function') return value.call(target, callback, ...args);
+            return value.call(
+              target,
+              (tx: unknown) => {
+                if (!isPostgresTransactionClient(tx)) return callback(tx);
+                return Promise.resolve(runPostgresTransactionControl(tx, options)).then(() =>
+                  callback(tx),
+                );
+              },
+              ...args,
+            ) as Result;
+          };
+        }
         const value = Reflect.get(target, prop, receiver);
         return typeof value === 'function' ? value.bind(target) : value;
       },
@@ -989,6 +1009,10 @@ type PostgresTransactionClient = {
   ): Promise<Result>;
 };
 
+function isPostgresTransactionClient(value: unknown): value is PostgresTransactionClient {
+  return isRecord(value) && typeof value.exec === 'function' && typeof value.query === 'function';
+}
+
 function scopedPostgresQuery(
   client: Record<PropertyKey, unknown>,
   options: PostgresScopedClientOptions,
@@ -1205,6 +1229,7 @@ export function readonlyDb<Db extends object>(
 function readonlyCapabilityDb<Db extends object>(
   db: Db,
   options: { crossOwnerRead?: CrossOwnerReadPolicyOptions; rawRead?: RawReadPolicyOptions },
+  preserveInnerCapabilities = false,
 ): Reader<Db> {
   return new Proxy(db, {
     get(target, prop, receiver) {
@@ -1212,8 +1237,20 @@ function readonlyCapabilityDb<Db extends object>(
       if (typeof prop === 'string') {
         if (DENIED_READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
         if (!READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
-        if (prop === 'crossOwnerRead') return crossOwnerReadCapability(options.crossOwnerRead);
-        if (prop === 'rawRead') return rawReadCapability(target, options.rawRead);
+        if (prop === 'crossOwnerRead') {
+          if (options.crossOwnerRead === undefined && preserveInnerCapabilities) {
+            const value = Reflect.get(target, prop, receiver);
+            if (typeof value === 'function') return value.bind(target);
+          }
+          return crossOwnerReadCapability(options.crossOwnerRead);
+        }
+        if (prop === 'rawRead') {
+          if (options.rawRead === undefined && preserveInnerCapabilities) {
+            const value = Reflect.get(target, prop, receiver);
+            if (typeof value === 'function') return value.bind(target);
+          }
+          return rawReadCapability(target, options.rawRead);
+        }
         const value = Reflect.get(target, prop, receiver);
         if (prop === 'query') {
           if (typeof value === 'function') return readonlyCapabilityError(prop);
@@ -1578,8 +1615,10 @@ export function managedDb<Db>(
   mode: ManagedDbMode,
   options: ManagedDbOptions = {},
 ): Reader<Db> | Writer<Db> {
+  const readonlyTarget =
+    mode === 'read' ? resolveReadonlyDbTarget(raw) : { fromHook: false, target: raw };
   const target =
-    mode === 'read' ? readonlyDbTarget(raw) : declaredWriteDbTarget(raw, options.sqlWritePolicy);
+    mode === 'read' ? readonlyTarget.target : declaredWriteDbTarget(raw, options.sqlWritePolicy);
   const safe = wrapManagedDbForSqlSafety(
     target,
     undefined,
@@ -1597,20 +1636,28 @@ export function managedDb<Db>(
   } = {};
   if (options.crossOwnerRead !== undefined) readOptions.crossOwnerRead = options.crossOwnerRead;
   if (options.rawRead !== undefined) readOptions.rawRead = options.rawRead;
-  return readonlyCapabilityDb(safe as unknown as object, readOptions) as unknown as Reader<Db>;
+  return readonlyCapabilityDb(
+    safe as unknown as object,
+    readOptions,
+    readonlyTarget.fromHook,
+  ) as unknown as Reader<Db>;
 }
 
 function readonlyDbTarget<Db>(raw: Db): Db {
-  if (!isRecord(raw)) return raw;
+  return resolveReadonlyDbTarget(raw).target;
+}
+
+function resolveReadonlyDbTarget<Db>(raw: Db): { fromHook: boolean; target: Db } {
+  if (!isRecord(raw)) return { fromHook: false, target: raw };
   const createReadonly = raw[kovoReadonlyDbHandle];
-  if (typeof createReadonly !== 'function') return raw;
+  if (typeof createReadonly !== 'function') return { fromHook: false, target: raw };
   const readTarget = createReadonly.call(raw) as Db;
   if (readTarget === raw) {
     throw new KovoReadonlyHandleError(
       'KV433: adapter read-only DB hook returned the mutable writer handle; managed readers require a dedicated engine read-only handle (SPEC §10.3/§11.2).',
     );
   }
-  return readTarget;
+  return { fromHook: true, target: readTarget };
 }
 
 function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy | undefined): Db {

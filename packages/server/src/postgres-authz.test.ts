@@ -152,6 +152,29 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
     ).resolves.toEqual([]);
   });
 
+  it('keeps explicit transactions inside the same Postgres role and principal frame', async () => {
+    const client = new PGlite();
+    clients.push(client);
+    await installOwnerScopedSchema(client);
+    const u1 = scopedClient(client, 'u1') as PGlite;
+
+    await expect(
+      u1.transaction(async (tx) => {
+        await tx.query(
+          "insert into orders (id, user_id, label) values ('own-tx', 'u1', 'own transaction')",
+        );
+      }),
+    ).resolves.toBeUndefined();
+    await expect(orderIds(u1)).resolves.toEqual(['o1', 'own-tx']);
+    await expect(
+      u1.transaction(async (tx) => {
+        await tx.query(
+          "insert into orders (id, user_id, label) values ('cross-tx', 'u2', 'cross transaction')",
+        );
+      }),
+    ).rejects.toThrow(/row-level security|violates/u);
+  });
+
   it('diagnoses dev empty reads when RLS filtered a non-empty owner table', async () => {
     const client = new PGlite();
     clients.push(client);

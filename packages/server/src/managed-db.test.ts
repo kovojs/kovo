@@ -1244,6 +1244,41 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['readonly-target-created', 'writer.insert:contacts:readonly=false']);
   });
 
+  it('preserves adapter-provided read capabilities from the engine read-only hook', async () => {
+    const log: string[] = [];
+    const raw = {
+      [kovoReadonlyDbHandle]() {
+        log.push('readonly-target-created');
+        return readonlyDb(fakeDb(log), {
+          rawRead: {
+            dialectLabel: 'Postgres',
+            executeMethod: 'query',
+            normalizeTableName: (table) => table,
+          },
+        });
+      },
+      query(statement: unknown) {
+        log.push('writer.query');
+        return Promise.resolve(statement);
+      },
+    };
+
+    const reader = managedDb(raw, 'read') as unknown as {
+      rawRead(statement: unknown, declaration: { reads: readonly string[] }): Promise<unknown>;
+    };
+    await expect(
+      reader.rawRead(
+        stampTrustedSql(
+          { sql: 'select id from products where id = ?', values: ['p1'] },
+          'adapter-provided rawRead capability',
+        ),
+        { reads: ['products'] },
+      ),
+    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+
+    expect(log).toEqual(['readonly-target-created', 'query']);
+  });
+
   it('fails closed when an engine read-only hook returns the writer handle', () => {
     const raw = {
       [kovoReadonlyDbHandle]() {

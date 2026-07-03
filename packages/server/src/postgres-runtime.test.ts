@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
-import { kovo, sql } from '@kovojs/drizzle';
+import { kovo, sql, trustedSql } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -144,6 +144,38 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('threads Postgres rawRead through the runtime reader without bypassing RLS or column grants', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-raw-read-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+
+    try {
+      await runtime.ready;
+      const writer = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      const readDb = (writer as unknown as KovoReadonlyDbCapable<Reader<KovoPostgresRuntimeDb>>)[
+        kovoReadonlyDbHandle
+      ]();
+
+      const rows = await readDb.rawRead<{ id: string; title: string }>(
+        trustedSql(sql.raw('select id, title from kovo_runtime_notes order by id'), {
+          justification: 'runtime rawRead RLS proof',
+        }),
+        { reads: ['kovo_runtime_notes'] },
+      );
+      expect(rowsOf(rows)).toEqual([{ id: 'n1', title: 'One' }]);
+      await expect(
+        readDb.rawRead<{ secretNote: string }>(
+          trustedSql(sql.raw('select "secretNote" from kovo_runtime_notes'), {
+            justification: 'runtime rawRead secret-column denial proof',
+          }),
+          { reads: ['kovo_runtime_notes'] },
+        ),
+      ).rejects.toThrow();
+    } finally {
+      await runtime.close();
+    }
   });
 
   it('uses an audited system posture for cross-owner owner-table work without bypassing RLS', async () => {

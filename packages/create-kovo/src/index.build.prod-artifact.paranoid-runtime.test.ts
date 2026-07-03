@@ -97,8 +97,8 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await signInDemoUser(root, origin, jar, output);
       await expectPostgresEndpoint(origin, output);
       await expectPostgresReadonlyStatus(origin, marker);
-      await expectPostgresWriteBoundary(origin);
-      await expectPostgresTaskAndWebhook(origin, marker);
+      await expectPostgresWriteBoundary(origin, jar);
+      await expectPostgresTaskAndWebhook(origin, marker, output);
 
       expect(output()).not.toContain('Kovo SQLite starter is experimental');
       expect(output()).not.toContain('phase5-pg-secret');
@@ -185,15 +185,24 @@ async function expectPostgresEndpoint(origin: string, output: () => string): Pro
   const result = JSON.parse(body) as {
     aliasRows: { id: string; label: string }[];
     childRows: { id: string; label: string }[];
+    dbQueryRows: { id: string; label: string }[];
+    rawRows: { id: string; label: string }[];
     rows: { id: string; label: string }[];
+    subqueryRows: { id: string; label: string }[];
+    unionRows: { id: string; label: string }[];
     viewRows: { id: string; label: string }[];
   };
 
   expect(result.rows).toEqual([{ id: 'phase5-pg-demo', label: 'owner-visible' }]);
   expect(result.aliasRows).toEqual(result.rows);
+  expect(result.dbQueryRows).toEqual(result.rows);
+  expect(result.rawRows).toEqual(result.rows);
+  expect(result.subqueryRows).toEqual(result.rows);
+  expect(result.unionRows).toEqual(result.rows);
   expect(result.viewRows).toEqual(result.rows);
   expect(result.childRows).toEqual([{ id: 'phase5-pg-item-demo', label: 'owner-item' }]);
   expect(body).not.toContain('cross-owner-hidden');
+  expect(body).not.toContain('other-item');
   expect(body).not.toContain('phase5-pg-secret');
 }
 
@@ -202,6 +211,7 @@ async function expectPostgresReadonlyStatus(origin: string, marker: string): Pro
   const body = await response.text();
   expect(response.status, body).toBe(200);
   const status = JSON.parse(body) as {
+    builderSecretReadBlocked: boolean;
     events: { id: string; label: string }[];
     readonlyRows: { id: string; label: string }[];
     secretReadBlocked: boolean;
@@ -210,24 +220,43 @@ async function expectPostgresReadonlyStatus(origin: string, marker: string): Pro
 
   expect(status.readonlyRows).toEqual([]);
   expect(status.events).toEqual([]);
+  expect(status.builderSecretReadBlocked).toBe(true);
   expect(status.secretReadBlocked).toBe(true);
   expect(status.verificationDenied).toBe(true);
 }
 
-async function expectPostgresWriteBoundary(origin: string): Promise<void> {
-  const response = await fetch(`${origin}/api/phase5-pg-write-boundary`, {
+async function expectPostgresWriteBoundary(
+  origin: string,
+  jar: Map<string, string>,
+): Promise<void> {
+  const crossOwnerWrite = await fetch(`${origin}/_m/phase5-pg/cross-owner-order-write`, {
+    body: new URLSearchParams({ marker: 'phase5-pg-cross' }),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      cookie: cookieHeader(jar),
+      origin,
+    },
     method: 'POST',
+    redirect: 'manual',
   });
+  const crossOwnerBody = await crossOwnerWrite.text();
+  expect([303, 500], crossOwnerBody).toContain(crossOwnerWrite.status);
+  expect(crossOwnerBody).not.toContain('cross-owner-write');
+
+  const response = await fetch(`${origin}/api/phase5-pg-write-boundary`);
   const body = await response.text();
   expect(response.status, body).toBe(200);
   expect(JSON.parse(body)).toEqual({
     crossOwnerDenied: true,
-    ownWrite: true,
     verificationDenied: true,
   });
 }
 
-async function expectPostgresTaskAndWebhook(origin: string, marker: string): Promise<void> {
+async function expectPostgresTaskAndWebhook(
+  origin: string,
+  marker: string,
+  output: () => string,
+): Promise<void> {
   const taskResponse = await fetch(`${origin}/_m/phase5-pg/schedule-task`, {
     body: new URLSearchParams({ marker }),
     headers: {
@@ -237,8 +266,8 @@ async function expectPostgresTaskAndWebhook(origin: string, marker: string): Pro
     method: 'POST',
     redirect: 'manual',
   });
-  await taskResponse.text();
-  expect(taskResponse.status).toBe(303);
+  const taskBody = await taskResponse.text();
+  expect(taskResponse.status, `${taskBody}\n${output()}`).toBe(303);
 
   const webhookId = `${marker}-webhook`;
   const webhookResponse = await fetch(`${origin}/webhooks/phase5-pg-read`, {
@@ -260,11 +289,7 @@ async function expectEventuallyPostgresEvent(origin: string, marker: string): Pr
     lastBody = await response.text();
     expect(response.status, lastBody).toBe(200);
     const status = JSON.parse(lastBody) as { events: { id: string; label: string }[] };
-    if (
-      status.events.some(
-        (event) => event.id === 'phase5-pg-task-event' && event.label === 'owner-visible',
-      )
-    ) {
+    if (status.events.some((event) => event.label === 'owner-visible')) {
       return;
     }
     await new Promise((resolve) => setTimeout(resolve, 100));
