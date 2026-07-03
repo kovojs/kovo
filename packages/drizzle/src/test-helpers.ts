@@ -32,12 +32,12 @@ export function sqliteDatabaseTypes(methods: readonly string[]): SourceFileInput
     source: [
       'import "drizzle-orm/sqlite-core";',
       'declare module "drizzle-orm/sqlite-core" {',
-      '  export interface BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> {',
+      '  export interface SQLiteAsyncDatabase<TResultKind extends "sync" | "async" = "async", TRunResult = unknown, TRelations = unknown> {',
       ...methods.map((method) => `    ${method}`),
       '  }',
       '}',
       'declare global {',
-      '  type BaseSQLiteDatabase<TResultKind = unknown, TRunResult = unknown, TFullSchema = unknown, TSchema = unknown> = import("drizzle-orm/sqlite-core").BaseSQLiteDatabase<any, any, any, any>;',
+      '  type SQLiteAsyncDatabase<TResultKind extends "sync" | "async" = "async", TRunResult = unknown, TRelations = unknown> = import("drizzle-orm/sqlite-core").SQLiteAsyncDatabase<any, any, any>;',
       '}',
     ].join('\n'),
   };

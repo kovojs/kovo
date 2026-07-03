@@ -219,7 +219,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: `
-            import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+            import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";
             import { integer, sqliteTable, text } from "drizzle-orm/sqlite-core";
 
             export const products = sqliteTable("products", {
@@ -230,7 +230,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
             }, kovo({ domain: "product", key: "id" }));
 
             export const productQuery = query("product/sqlite", {
-              load(_input, db: BaseSQLiteDatabase) {
+              load(_input, db: SQLiteAsyncDatabase) {
                 return db.select({
                   active: products.active,
                   id: products.id,

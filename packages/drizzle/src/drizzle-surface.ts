@@ -1,7 +1,7 @@
 export const DRIZZLE_TABLE_FACTORY_NAMES = new Set(['pgTable', 'sqliteTable']);
 
 export const DRIZZLE_DATABASE_TYPE_NAMES = new Set([
-  'BaseSQLiteDatabase',
+  'SQLiteAsyncDatabase',
   'BetterSQLite3Database',
   'BunSQLiteDatabase',
   'LibSQLDatabase',

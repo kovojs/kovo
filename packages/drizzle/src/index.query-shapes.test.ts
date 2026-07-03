@@ -848,7 +848,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: `
-          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";
           import { sqliteTable, sqliteView, text } from "drizzle-orm/sqlite-core";
 
           export const products = sqliteTable("products", {
@@ -860,7 +860,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const searchQuery = query("search/sqlite", {
             output: s.object({ name: s.string() }),
             reads: [productSearch],
-            load(_input, db: BaseSQLiteDatabase) {
+            load(_input, db: SQLiteAsyncDatabase) {
               return db.select({ name: sql<string>\`name\` }).from(productSearch);
             },
           });
@@ -932,7 +932,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: `
-          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";
           import { sqliteTable, sqliteView, text } from "drizzle-orm/sqlite-core";
 
           export const products = sqliteTable("products", {
@@ -949,7 +949,7 @@ describe('@kovojs/drizzle touch graph helpers', () => {
           export const searchQuery = query("search/sqlite-view-cycle", {
             output: s.object({ name: s.string() }),
             reads: [productSearchB],
-            load(_input, db: BaseSQLiteDatabase) {
+            load(_input, db: SQLiteAsyncDatabase) {
               return db.select({ name: sql<string>\`name\` }).from(productSearchB);
             },
           });
@@ -3199,11 +3199,11 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: `
-          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";
           export const products = sqliteTable("products", { id: text("id").primaryKey() }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product/sqlite-raw", {
-            load(_input, db: BaseSQLiteDatabase<any, any, any, any>) {
+            load(_input, db: SQLiteAsyncDatabase<any, any, any>) {
               return db.get(sql\`select id from products\`);
             },
           });
@@ -3266,13 +3266,13 @@ describe('@kovojs/drizzle touch graph helpers', () => {
         {
           fileName: 'product.queries.ts',
           source: `
-          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";
           export const products = sqliteTable("products", { id: text("id").primaryKey() }, kovo({ domain: "product", key: "id" }));
 
           export const productQuery = query("product/raw", {
             output: s.object({ id: s.string(), stock: s.number().int() }),
             reads: [products],
-            load(_input, db: BaseSQLiteDatabase<any, any, any, any>) {
+            load(_input, db: SQLiteAsyncDatabase<any, any, any>) {
               return db.all(sql\`select id, stock from products\`);
             },
           });
