@@ -679,7 +679,7 @@ function sqliteAuthorizationProxy(
       const item = Reflect.get(target, prop, receiver);
       if (typeof item !== 'function') return item;
       const isBuilder = isRecord((target as { config?: unknown }).config);
-      if (!isBuilder && SQLITE_AUTHZ_DIRECT_SQL_METHODS.has(prop)) {
+      if (builderMode === undefined && !isBuilder && SQLITE_AUTHZ_DIRECT_SQL_METHODS.has(prop)) {
         return (...args: unknown[]) => {
           assertSqliteAuthorizationDirectSqlAllowed(args[0], options);
           return Reflect.apply(item, target, args);
@@ -688,7 +688,12 @@ function sqliteAuthorizationProxy(
       if (SQLITE_AUTHZ_TERMINALS.has(prop)) {
         return (...args: unknown[]) => {
           applySqliteAuthorizationToBuilder(target, options, applyStates, builderMode);
-          return Reflect.apply(item, target, args);
+          const result = Reflect.apply(item, target, args);
+          if (builderMode === 'insert' && prop === 'values' && isRecord(result)) {
+            applySqliteAuthorizationToBuilder(result, options, applyStates, builderMode);
+            return sqliteAuthorizationProxy(result, options, applyStates, builderMode);
+          }
+          return result;
         };
       }
       if (prop === 'select' || prop === 'selectDistinct') {

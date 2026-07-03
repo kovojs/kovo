@@ -101,6 +101,12 @@ describe('SQLite managed authorization predicate binding', () => {
     expect(query.all()).toEqual([{ id: 'o1' }, { id: 'o3' }]);
   });
 
+  it('fails closed for anonymous owner-table reads', () => {
+    const db = createSqliteAuthorizationDb(seededDb(), { metadata });
+
+    expect(db.select({ id: orders.id }).from(orders).all()).toEqual([]);
+  });
+
   it('recurses into compound select arms before SQL emission', () => {
     const db = createSqliteAuthorizationDb(seededDb(), { metadata, principal: 'u1' });
     const query = db
@@ -142,6 +148,12 @@ describe('SQLite managed authorization predicate binding', () => {
     );
     expect(db.delete(orders).where(eq(orders.id, 'o2')).run().changes).toBe(0);
     expect(db.delete(orders).where(eq(orders.id, 'o3')).run().changes).toBe(1);
+    expect(() => db.update(orders).set({ userId: 'u2' }).where(eq(orders.id, 'o1')).run()).toThrow(
+      /cannot reassign an owner column/,
+    );
+    expect(() =>
+      db.insert(orders).values({ id: 'o4', status: 'open', userId: 'u1' }).run(),
+    ).toThrow(/insert into an owner-scoped table/);
   });
 
   it('scopes ownerVia tables with a framework-generated parent-owner subquery', () => {
