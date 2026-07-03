@@ -12,6 +12,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./build": "./src/build.ts",
+    "./testing": "./src/testing.ts",
     "./vite": "./src/vite.ts",
     "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
     "./internal/build": "./src/internal/build.ts",
@@ -38,6 +39,10 @@
       "./build": {
         "types": "./dist/build.d.mts",
         "default": "./dist/build.mjs"
+      },
+      "./testing": {
+        "types": "./dist/testing.d.mts",
+        "default": "./dist/testing.mjs"
       },
       "./vite": {
         "types": "./dist/vite.d.mts",
@@ -106,7 +111,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/build.ts src/internal/build-context.ts src/internal/client-modules.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/runtime-registry-wire.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/build.ts src/internal/build-context.ts src/internal/client-modules.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/runtime-registry-wire.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/testing.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
