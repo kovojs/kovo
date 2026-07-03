@@ -282,6 +282,12 @@ describe('create-kovo starter (metadata)', () => {
       'applyPgliteReaderColumnPrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'applyPgliteWriterTablePrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA)',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "classifications.includes('authzPolicy')",
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'Object.defineProperty(db, kovoReadonlyDbHandle',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('request === undefined');
