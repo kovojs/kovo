@@ -452,6 +452,11 @@ export interface RateLimitOptions<Request> {
 
 const defaultRateLimitWindowMs = 60_000;
 const defaultRateLimitMaxKeys = 10_000;
+const passedRoleGuardsSymbol: unique symbol = Symbol('kovo.passedRoleGuards');
+
+interface PassedRoleGuardRequest {
+  [passedRoleGuardsSymbol]?: Set<string>;
+}
 
 /**
  * Built-in guard factories for routes, queries, and mutations. `guards.authed()`
@@ -549,7 +554,9 @@ export const guards = {
         if (!request.session?.user || provenPrincipalFromRequest(request) === undefined) {
           return unauthenticatedGuardFailure();
         }
-        return request.session.user.roles?.includes(role) ? true : unauthorizedGuardFailure();
+        if (request.session.user.roles?.includes(role) !== true) return unauthorizedGuardFailure();
+        markPassedRoleGuard(request, role);
+        return true;
       },
       [
         {
@@ -622,6 +629,28 @@ export function explainGuard<Request>(
   guard: Guard<Request> | undefined,
 ): readonly GuardAuditFact[] {
   return guard === undefined ? [] : ((guard as GuardWithAudit<Request>)[guardAuditSymbol] ?? []);
+}
+
+/** @internal SPEC §10.3 DEC-G: runtime evidence that a named role guard passed on this request. */
+export function requestPassedRoleGuard(request: unknown, role: string): boolean {
+  if (!isObjectLike(request)) return false;
+  return (request as PassedRoleGuardRequest)[passedRoleGuardsSymbol]?.has(role) === true;
+}
+
+function markPassedRoleGuard(request: unknown, role: string): void {
+  if (!isObjectLike(request)) return;
+  const target = request as PassedRoleGuardRequest;
+  let roles = target[passedRoleGuardsSymbol];
+  if (roles === undefined) {
+    roles = new Set();
+    Object.defineProperty(target, passedRoleGuardsSymbol, {
+      configurable: false,
+      enumerable: false,
+      value: roles,
+      writable: false,
+    });
+  }
+  roles.add(role);
 }
 
 function stampGuardAudit<Request, RefinedRequest extends Request = Request>(

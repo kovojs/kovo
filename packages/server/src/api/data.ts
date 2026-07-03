@@ -122,6 +122,7 @@ export {
   createPostgresReadonlyClient,
   createPostgresScopedClient,
   declarePublicRead,
+  drainCrossOwnerReadAuditFacts,
   drainPostgresRlsSilentDenyDiagnostics,
   drainPublicReadAuditFacts,
   KovoReadonlyHandleError,
@@ -136,6 +137,9 @@ export {
   provisionPostgresAppDb,
 } from '../postgres-runtime.js';
 export type {
+  CrossOwnerReadAuditFact,
+  CrossOwnerReadDeclaration,
+  CrossOwnerReadPolicyOptions,
   DeclaredWriteDbOptions,
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,

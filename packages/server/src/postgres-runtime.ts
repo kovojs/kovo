@@ -20,9 +20,11 @@ import {
   type PostgresScopedClientOptions,
   type Reader,
 } from './managed-db.js';
+import { requestPassedRoleGuard } from './guards.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
 
 const DEFAULT_DATA_DIR = '.kovo/pglite';
+const DEFAULT_ADMIN_ROLE = 'kovo_admin';
 const DEFAULT_READER_ROLE = 'kovo_reader';
 const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
@@ -70,8 +72,11 @@ interface RuntimeSqlClient extends RuntimeTransactionClient {
 }
 
 interface ResolvedPostgresRuntimeConfig {
+  adminRole: string;
   createReaderRole: boolean;
+  createAdminRole: boolean;
   createWriterRole: boolean;
+  crossOwnerReadTables: ReadonlySet<string>;
   dataDir: string;
   databaseUrl?: string;
   driver: KovoPostgresResolvedRuntimeDriver;
@@ -87,7 +92,11 @@ interface ResolvedPostgresRuntimeConfig {
 interface CreatedRuntimeClient {
   close(): Promise<void>;
   drizzleInternalDb(): KovoPostgresRuntimeDb;
-  drizzleReadonlyDb(principal: string | undefined, useReaderRole: boolean): KovoPostgresRuntimeDb;
+  drizzleReadonlyDb(
+    principal: string | undefined,
+    role: string | false,
+    roleSetting?: string,
+  ): KovoPostgresRuntimeDb;
   drizzleRequestDb(principal: string | undefined): KovoPostgresRuntimeDb;
   sql: RuntimeSqlClient;
   label: string;
@@ -127,6 +136,13 @@ export interface KovoPostgresAppRuntimeOptions {
   postureCheckOnBoot?: boolean;
   principalFromRequest?: (request: unknown) => string | undefined;
   readerRole?: string;
+  /**
+   * Role used by audited `crossOwnerRead(...)` calls. Defaults to `KOVO_DB_ADMIN_ROLE` or
+   * `kovo_admin`; only used when `crossOwnerReadTables` is non-empty.
+   */
+  adminRole?: string;
+  /** Physical owner/authz table names that should receive the per-table `kovo_admin_scope` policy. */
+  crossOwnerReadTables?: readonly string[];
   seedSql?: string | readonly string[];
   writerRole?: string;
 }
@@ -212,11 +228,14 @@ export function createPostgresAppRuntimeDb(
   return {
     db(request?: unknown) {
       if (request === undefined) return client.drizzleInternalDb();
+      const principal = config.principalFromRequest(request);
       return createRequestScopedDb(
-        client.drizzleRequestDb(config.principalFromRequest(request)),
+        client.drizzleRequestDb(principal),
         client,
         config,
         metadata,
+        principal,
+        request,
       );
     },
     readonlyDb: createRequestScopedReadonlyDb(client, config, metadata),
@@ -366,6 +385,7 @@ async function provisionRuntimeDb(
     schemaTables: readonly PgTable[];
   },
 ): Promise<{ applied: readonly string[]; skipped: readonly string[] }> {
+  if (input.config.createAdminRole) await ensurePostgresRole(client, input.config.adminRole);
   if (input.config.createReaderRole) await ensurePostgresRole(client, input.config.readerRole);
   if (input.config.createWriterRole) await ensurePostgresRole(client, input.config.writerRole);
   const migrationReport = await applyPostgresMigrations(client, input.migrations);
@@ -480,6 +500,20 @@ async function checkRuntimeDbPosture(
     }
   }
 
+  for (const tableName of input.config.crossOwnerReadTables) {
+    const policy = await safeQuery(
+      client,
+      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
+      [tableName, 'kovo_admin_scope'],
+    );
+    if ((policy?.rows.length ?? 0) === 0) {
+      issues.push({
+        code: 'KV433_ADMIN_POLICY',
+        detail: `${tableName} is missing kovo_admin_scope for crossOwnerRead`,
+      });
+    }
+  }
+
   for (const table of input.schemaTables) {
     const tableName = getTableConfig(table).name;
     const secretColumns = input.metadata.secretColumnNamesByTable.get(tableName) ?? new Set();
@@ -498,6 +532,22 @@ async function checkRuntimeDbPosture(
           detail: `${input.config.readerRole} must not have SELECT on ${tableName}.${column}`,
         });
       }
+      if (input.config.crossOwnerReadTables.has(tableName)) {
+        const adminGrant = await safeQuery(
+          client,
+          [
+            'SELECT 1 FROM information_schema.column_privileges',
+            'WHERE table_name = $1 AND column_name = $2 AND grantee = $3 AND privilege_type = $4',
+          ].join(' '),
+          [tableName, column, input.config.adminRole, 'SELECT'],
+        );
+        if ((adminGrant?.rows.length ?? 0) > 0) {
+          issues.push({
+            code: 'KV435_SECRET_COLUMN_GRANT',
+            detail: `${input.config.adminRole} must not have SELECT on ${tableName}.${column}`,
+          });
+        }
+      }
     }
   }
 
@@ -515,11 +565,11 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
     return {
       close: () => client.close(),
       drizzleInternalDb: () => drizzlePglite({ client }),
-      drizzleReadonlyDb: (principal, useReaderRole) =>
+      drizzleReadonlyDb: (principal, role, roleSetting) =>
         drizzlePglite({
           client: createPostgresReadonlyClient(
             client,
-            postgresReadonlyClientOptions(config, principal, useReaderRole),
+            postgresReadonlyClientOptions(config, principal, role, roleSetting),
           ),
         }),
       drizzleRequestDb: (principal) =>
@@ -539,11 +589,11 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
   return {
     close: () => transactionalClient.close(),
     drizzleInternalDb: () => drizzleNodePg({ client: pool }),
-    drizzleReadonlyDb: (principal, useReaderRole) =>
+    drizzleReadonlyDb: (principal, role, roleSetting) =>
       drizzleNodePg({
         client: createPostgresReadonlyClient(
           transactionalClient,
-          postgresReadonlyClientOptions(config, principal, useReaderRole),
+          postgresReadonlyClientOptions(config, principal, role, roleSetting),
         ) as unknown as Pool,
       }),
     drizzleRequestDb: (principal) =>
@@ -563,6 +613,8 @@ function createRequestScopedDb(
   client: CreatedRuntimeClient,
   config: ResolvedPostgresRuntimeConfig,
   metadata: KovoRuntimeDbMetadata,
+  principal?: string,
+  request?: unknown,
 ): KovoPostgresRuntimeDb {
   const governedDb = createAuthorizationCensusDb(db, {
     dialectLabel: client.label,
@@ -572,7 +624,7 @@ function createRequestScopedDb(
   });
   Object.defineProperty(governedDb, kovoReadonlyDbHandle, {
     configurable: true,
-    value: () => createRequestScopedReadonlyDb(client, config, metadata),
+    value: () => createRequestScopedReadonlyDb(client, config, metadata, principal, request),
   });
   Object.defineProperty(governedDb, kovoDeclaredWriteDbHandle, {
     configurable: true,
@@ -592,10 +644,27 @@ function createRequestScopedReadonlyDb(
   config: ResolvedPostgresRuntimeConfig,
   metadata: KovoRuntimeDbMetadata,
   principal?: string,
+  request?: unknown,
 ): Reader<KovoPostgresRuntimeDb> {
-  const readDb = client.drizzleReadonlyDb(principal, true);
+  const readDb = client.drizzleReadonlyDb(principal, config.readerRole);
   const privilegedReadDb = client.drizzleReadonlyDb(principal, false);
-  return createSecretBoxingReadDb(readonlyDb(readDb), metadata, {
+  const adminReadDb =
+    config.crossOwnerReadTables.size === 0
+      ? undefined
+      : client.drizzleReadonlyDb(principal, config.adminRole, 'admin');
+  const crossOwnerRead =
+    adminReadDb === undefined
+      ? undefined
+      : {
+          adminClient: adminReadDb as object,
+          dialectLabel: client.label,
+          hasRole: (role: 'admin') => requestPassedRoleGuard(request, role),
+          normalizeTableName: normalizePolicyTable,
+          ownerTables: [...config.crossOwnerReadTables],
+          ...(principal === undefined ? {} : { principal }),
+        };
+  const readOptions = crossOwnerRead === undefined ? {} : { crossOwnerRead };
+  return createSecretBoxingReadDb(readonlyDb(readDb, readOptions), metadata, {
     privilegedDb: readonlyDb(privilegedReadDb),
     rawSecretTableRead: 'engine',
   });
@@ -677,11 +746,18 @@ function resolvePostgresRuntimeConfig(
 ): ResolvedPostgresRuntimeConfig {
   const driver = resolveDriver(options);
   const databaseUrl = options.databaseUrl ?? process.env.KOVO_DATABASE_URL;
+  const envAdminRole = nonEmptyEnv('KOVO_DB_ADMIN_ROLE');
   const envReaderRole = nonEmptyEnv('KOVO_DB_READER_ROLE');
   const envWriterRole = nonEmptyEnv('KOVO_DB_WRITER_ROLE');
+  const crossOwnerReadTables = normalizeStringSet(options.crossOwnerReadTables);
   const config: ResolvedPostgresRuntimeConfig = {
+    adminRole: options.adminRole ?? envAdminRole ?? DEFAULT_ADMIN_ROLE,
+    createAdminRole:
+      crossOwnerReadTables.size > 0 &&
+      (options.adminRole !== undefined || envAdminRole === undefined),
     createReaderRole: options.readerRole !== undefined || envReaderRole === undefined,
     createWriterRole: options.writerRole !== undefined || envWriterRole === undefined,
+    crossOwnerReadTables,
     dataDir: options.dataDir ?? process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR,
     driver,
     postureCheckOnBoot:
@@ -701,6 +777,11 @@ function resolvePostgresRuntimeConfig(
 function nonEmptyEnv(name: string): string | undefined {
   const value = process.env[name];
   return value === undefined || value === '' ? undefined : value;
+}
+
+function normalizeStringSet(values: readonly string[] | undefined): ReadonlySet<string> {
+  if (values === undefined) return new Set();
+  return new Set(values.map((value) => value.trim()).filter((value) => value !== ''));
 }
 
 function resolveDriver(options: KovoPostgresAppRuntimeOptions): KovoPostgresResolvedRuntimeDriver {
@@ -953,6 +1034,11 @@ async function applyPostgresReaderColumnPrivileges(
     await client.exec(
       `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.readerRole)}`,
     );
+    if (config.crossOwnerReadTables.has(tableConfig.name)) {
+      await client.exec(
+        `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.adminRole)}`,
+      );
+    }
     if (
       (readableTables.has(tableConfig.name) || authzPolicyDependencyTables.has(tableConfig.name)) &&
       publicColumns.length > 0
@@ -961,6 +1047,13 @@ async function applyPostgresReaderColumnPrivileges(
         `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
           tableConfig,
         )} TO ${quoteIdent(config.readerRole)}`,
+      );
+    }
+    if (config.crossOwnerReadTables.has(tableConfig.name) && publicColumns.length > 0) {
+      await client.exec(
+        `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
+          tableConfig,
+        )} TO ${quoteIdent(config.adminRole)}`,
       );
     }
   }
@@ -1031,6 +1124,19 @@ function postgresWriterWritableTableNames(metadata: KovoRuntimeDbMetadata): Read
   return writableTables;
 }
 
+function postgresCrossOwnerReadableTableNames(
+  tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
+): ReadonlySet<string> {
+  const readableTables = new Set<string>();
+  for (const tableName of metadata.ownerSourcesByTable.keys()) readableTables.add(tableName);
+  for (const tableName of metadata.ownerViaSourcesByTable.keys()) readableTables.add(tableName);
+  for (const tableName of customAuthzPolicyPredicatesByTable(tables).keys()) {
+    readableTables.add(tableName);
+  }
+  return readableTables;
+}
+
 async function applyPostgresRlsPolicies(
   client: RuntimeSqlClient,
   tables: readonly PgTable[],
@@ -1089,6 +1195,26 @@ async function applyPostgresRlsPolicies(
         `CREATE POLICY kovo_authz_policy ON ${table}`,
         `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
         `USING (${predicate}) WITH CHECK (${predicate})`,
+      ].join(' '),
+    );
+  }
+  for (const tableObject of tables) {
+    const tableConfig = getTableConfig(tableObject);
+    const table = quoteTable(tableConfig);
+    await client.exec(`DROP POLICY IF EXISTS kovo_admin_scope ON ${table}`);
+    if (!config.crossOwnerReadTables.has(tableConfig.name)) continue;
+    if (!postgresCrossOwnerReadableTableNames(tables, metadata).has(tableConfig.name)) {
+      throw new Error(
+        `KV414: crossOwnerRead table ${tableConfig.name} must be owner, ownerVia, or custom authzPolicy scoped (SPEC §10.3).`,
+      );
+    }
+    await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+    await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
+    await client.exec(
+      [
+        `CREATE POLICY kovo_admin_scope ON ${table}`,
+        `FOR SELECT TO ${quoteIdent(config.adminRole)}`,
+        "USING (current_setting('kovo.role', true) = 'admin')",
       ].join(' '),
     );
   }
@@ -1314,12 +1440,14 @@ function postgresScopedClientOptions(
 function postgresReadonlyClientOptions(
   config: ResolvedPostgresRuntimeConfig,
   principal: string | undefined,
-  useReaderRole: boolean,
+  role: string | false,
+  roleSetting?: string,
 ): PostgresReadonlyClientOptions {
   const options: PostgresReadonlyClientOptions = {
-    readerRole: useReaderRole ? config.readerRole : false,
+    readerRole: role,
   };
   if (principal !== undefined) options.principal = principal;
+  if (roleSetting !== undefined) options.roleSetting = roleSetting;
   return options;
 }
 

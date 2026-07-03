@@ -290,6 +290,32 @@ Lists tool capabilities, audit-grade `trustedReveal` rows, and capability URL mi
 reviewer sees "this code can email a customer," "this action can read a secret," or "this route can
 mint a signed storage URL" in one table.
 
+## Read across owners in an admin tool
+
+Most Postgres reads stay owner-scoped. If a reviewed admin tool needs rows across owners, opt the
+table into the Postgres runtime and keep the read behind `guards.role('admin')`:
+
+```ts
+import { sql } from '@kovojs/drizzle';
+import { guards, query } from '@kovojs/server';
+
+export const adminOrders = query({
+  guard: guards.role('admin'),
+  load: (_args, { db }) =>
+    db.crossOwnerRead(sql`SELECT id, total FROM ${orders}`, {
+      reads: ['orders'],
+      reason: 'admin order export',
+      role: 'admin',
+    }),
+});
+```
+
+`crossOwnerRead` is the capability name. The `role: 'admin'` declaration is the runtime role posture
+that must match a passed `guards.role('admin')` request guard and the generated Postgres
+`kovo_admin_scope` policy. Kovo records the reason and principal for review, and
+`kovo explain --capabilities` lists the capability row. Reading as one other user remains
+`ctx.actAs(id)` in `endpoint({ db: true })`.
+
 ## Keep confidential data off the wire
 
 Mark confidential fields at the data boundary. A `secret` field is not eligible for the client query

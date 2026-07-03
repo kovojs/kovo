@@ -127,8 +127,8 @@ kovo explain --cookies [graph.json]                          # cookie downgrade 
 - **`--revealed`** lists confidentiality reveals, including `trustedReveal(...)` rows that need human
   review.
 - **`--access`** lists explicit public/authenticated/machine access decisions.
-- **`--capabilities`** lists held dangerous capabilities: agent tools, audit-grade reveals, and
-  signed download/capability URL mints.
+- **`--capabilities`** lists held dangerous capabilities: agent tools, audit-grade reveals,
+  cross-owner admin reads, and signed download/capability URL mints.
 - **`--cookies`** lists cookie posture and downgrade findings.
 
 ### `kovo add` — vendor a UI component
@@ -174,9 +174,10 @@ KOVO_DATABASE_URL=postgres://app@db/app kovo db check
 kovo db check --driver pglite --data-dir .kovo/pglite
 ```
 
-If your provider or DBA owns role creation, set `KOVO_DB_READER_ROLE` and
-`KOVO_DB_WRITER_ROLE` before `kovo db provision`. Kovo adopts those pre-created roles and skips
-`CREATE ROLE`; the runtime login still needs membership in both roles.
+If your provider or DBA owns role creation, set `KOVO_DB_READER_ROLE`,
+`KOVO_DB_WRITER_ROLE`, and, when using `crossOwnerRead`, `KOVO_DB_ADMIN_ROLE` before
+`kovo db provision`. Kovo adopts those pre-created roles and skips `CREATE ROLE`; the runtime login
+still needs membership in each configured role.
 
 `kovo db check` exits non-zero when posture is missing or stale, so production boot and CI can fail
 closed instead of serving an unprotected table. Automatic migration generation is still a roadmap

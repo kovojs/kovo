@@ -7,7 +7,18 @@ import { kovo, sql } from '@kovojs/drizzle';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { checkPostgresAppDbPosture, createPostgresAppRuntimeDb } from './postgres-runtime.js';
+import {
+  drainCrossOwnerReadAuditFacts,
+  kovoReadonlyDbHandle,
+  type KovoReadonlyDbCapable,
+  type Reader,
+} from './managed-db.js';
+import { guards } from './guards.js';
+import {
+  checkPostgresAppDbPosture,
+  createPostgresAppRuntimeDb,
+  type KovoPostgresRuntimeDb,
+} from './postgres-runtime.js';
 
 const notes = pgTable(
   'kovo_runtime_notes',
@@ -184,6 +195,84 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('provisions audited crossOwnerRead as an opted-in admin RLS policy', async () => {
+    drainCrossOwnerReadAuditFacts();
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-cross-owner-read-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({
+      crossOwnerReadTables: ['kovo_runtime_notes'],
+      dataDir,
+      driver: 'pglite',
+      schema,
+      seedSql,
+    });
+
+    try {
+      await runtime.ready;
+      const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
+      const writer = runtime.db(request) as unknown as KovoReadonlyDbCapable<
+        Reader<KovoPostgresRuntimeDb>
+      >;
+      const readDb = writer[kovoReadonlyDbHandle]();
+      expect(() =>
+        readDb.crossOwnerRead(sql`SELECT id, title FROM ${notes} ORDER BY id`, {
+          reads: ['kovo_runtime_notes'],
+          reason: 'attempt before role guard',
+          role: 'admin',
+        }),
+      ).toThrow(/guards\.role\("admin"\)/);
+      expect(await guards.role<typeof request>('admin')(request)).toBe(true);
+      const result = await readDb.crossOwnerRead<{ id: string; title: string }>(
+        sql`SELECT id, title FROM ${notes} ORDER BY id`,
+        {
+          reads: ['kovo_runtime_notes'],
+          reason: 'support export for an admin-guarded endpoint',
+          role: 'admin',
+          site: 'admin.ts:12',
+        },
+      );
+      expect(rowsOf(result)).toEqual([
+        { id: 'n1', title: 'One' },
+        { id: 'n2', title: 'Two' },
+      ]);
+      expect(drainCrossOwnerReadAuditFacts()).toEqual([
+        {
+          declaredReads: ['public.kovo_runtime_notes'],
+          dialectLabel: 'PGlite',
+          observedRead: 'public.kovo_runtime_notes',
+          principal: 'admin-user',
+          reason: 'support export for an admin-guarded endpoint',
+          site: 'admin.ts:12',
+        },
+      ]);
+      expect(() =>
+        readDb.crossOwnerRead(sql`SELECT id, label FROM ${labels}`, {
+          reads: ['kovo_runtime_labels'],
+          reason: 'attempt unconfigured table',
+          role: 'admin',
+        }),
+      ).toThrow(/not opted in/);
+      expect(() =>
+        readDb.crossOwnerRead(sql`SELECT ${notes.id} FROM ${notes} JOIN ${labels} ON true`, {
+          reads: ['kovo_runtime_notes'],
+          reason: 'attempt joined read',
+          role: 'admin',
+        }),
+      ).toThrow(/one simple SELECT/);
+    } finally {
+      await runtime.close();
+    }
+
+    const report = await checkPostgresAppDbPosture({
+      crossOwnerReadTables: ['kovo_runtime_notes'],
+      dataDir,
+      driver: 'pglite',
+      schema,
+    });
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
+  });
+
   it('provisions custom authzPolicy predicates as FORCE RLS policies', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-authz-policy-'));
     roots.push(dataDir);
@@ -316,4 +405,8 @@ async function withPostgresRoleEnv<Result>(
 function restoreEnv(name: string, value: string | undefined): void {
   if (value === undefined) delete process.env[name];
   else process.env[name] = value;
+}
+
+function rowsOf<Row>(result: Row[] | { rows?: Row[] }): Row[] {
+  return Array.isArray(result) ? result : (result.rows ?? []);
 }
