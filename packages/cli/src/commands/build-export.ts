@@ -67,8 +67,14 @@ function isKovoServerHandlerExternalDependency(id: string): boolean {
     id === '@electric-sql/pglite' ||
     id.startsWith('@electric-sql/pglite/') ||
     id === '@node-rs/argon2' ||
-    id.startsWith('@node-rs/argon2-')
+    id.startsWith('@node-rs/argon2-') ||
+    id === 'pg' ||
+    id.startsWith('pg/')
   );
+}
+
+function isKovoServerHandlerModuleSideEffectFree(id: string): boolean {
+  return /(?:^|[/\\])packages[/\\]server[/\\]src[/\\]postgres-runtime\.ts$/.test(id);
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1611,8 +1617,8 @@ async function bundleKovoServerHandler(
         minify: false,
         outDir,
         rollupOptions: {
-          // SPEC 6.6 keeps Argon2 as the runtime password sink. Do not make apps that import the
-          // @kovojs/server barrel evaluate native optional packages during server-handler bundling.
+          // SPEC 6.6/§10.3 keeps native and Postgres drivers as runtime sinks; unused
+          // @kovojs/server barrel re-exports must not make every app load those drivers.
           external: isKovoServerHandlerExternalDependency,
           input: entryPath,
           output: {
@@ -1620,7 +1626,12 @@ async function bundleKovoServerHandler(
             format: 'es',
             // The neutral build contract accepts serverHandlerSource as one file.
             // Keep SSR dynamic imports inlined so presets never miss sidecar chunks.
-            inlineDynamicImports: true,
+            codeSplitting: false,
+          },
+          treeshake: {
+            moduleSideEffects(id) {
+              return !isKovoServerHandlerModuleSideEffectFree(id);
+            },
           },
         },
         ssr: true,
