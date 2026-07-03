@@ -15,10 +15,31 @@ export type {
   SecretReadSqliteColumnOrigin,
   SecretReadSqliteColumnOriginClient,
 } from './secret-read-boundary.js';
+// SPEC §10.3: generated Postgres apps import this runtime to derive schema DDL/RLS/grants from
+// app-authored Drizzle schema exports while keeping privileged provisioning out of normal boot.
+export {
+  checkPostgresAppDbPosture,
+  createPostgresAppRuntimeDb,
+  migratePostgresAppDb,
+  provisionPostgresAppDb,
+} from './postgres-runtime.js';
+export type {
+  KovoPostgresAppRuntimeDb,
+  KovoPostgresAppRuntimeOptions,
+  KovoPostgresMigrateOptions,
+  KovoPostgresMigration,
+  KovoPostgresMigrationRunReport,
+  KovoPostgresPostureIssue,
+  KovoPostgresPostureReport,
+  KovoPostgresProvisionOptions,
+  KovoPostgresResolvedRuntimeDriver,
+  KovoPostgresRuntimeDb,
+  KovoPostgresRuntimeDriver,
+} from './postgres-runtime.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
-export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';
-export type { AdminAssignFact, AdminAssignOptions } from './write-governance.js';
+export { trustedAssign, drainTrustedAssignFacts, serverValue } from './write-governance.js';
+export type { TrustedAssignFact, TrustedAssignOptions } from './write-governance.js';
 export { encryptAtRest } from './confidential-at-rest.js';
 export type { EncryptedAtRest, EncryptAtRestOptions } from './confidential-at-rest.js';
 // SPEC §6.6 / KV424 and plans/most-secure-web-framework.md SINK-02: shell command
@@ -257,6 +278,8 @@ export {
   csrfToken,
   declarePublicRead,
   domain,
+  drainCrossOwnerReadAuditFacts,
+  drainPostgresRlsSilentDenyDiagnostics,
   drainPublicReadAuditFacts,
   drainUnsafeRegexFacts,
   drainUnverifiedMimeFacts,
@@ -326,11 +349,17 @@ export type {
   NumberSchema,
   AuthorizationCensusDbOptions,
   AuthorizationCensusMetadata,
+  CrossOwnerReadAuditFact,
+  CrossOwnerReadDeclaration,
+  CrossOwnerReadPolicyOptions,
   DeclaredWriteDbOptions,
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,
   DeclaredWriteSqliteAuthorizerOptions,
   GovernedWriteMetadata,
+  PostgresRlsDiagnosticReadClient,
+  PostgresRlsSilentDenyDiagnostic,
+  PostgresRlsSilentDenyDiagnosticsOptions,
   PostgresScopedClientOptions,
   PreserveDefinitionInference,
   PostgresReadonlyClientOptions,

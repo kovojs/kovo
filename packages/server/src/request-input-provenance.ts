@@ -42,7 +42,7 @@ export function runWithRequestInputProvenance<Input, Result>(
   return requestInputProvenance.run(state, () => callback(trackedInput));
 }
 
-/** @internal Mark an audited `adminAssign(...)` value as intentionally writable to governed columns. */
+/** @internal Mark an audited `trustedAssign(...)` value as intentionally writable to governed columns. */
 export function markPrivilegedRequestInputAssignment(value: unknown): void {
   const state = requestInputProvenance.getStore();
   if (state === undefined) return;
@@ -52,7 +52,7 @@ export function markPrivilegedRequestInputAssignment(value: unknown): void {
   }
   if (isPrimitiveValue(value)) {
     const read = lastPrimitiveReadForValue(state, value) ?? {
-      path: '<adminAssign>',
+      path: '<trustedAssign>',
       type: typeof value,
       value,
     };

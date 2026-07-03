@@ -11,10 +11,12 @@ import { csrfToken } from './csrf.js';
 import {
   explainGuard,
   guards,
+  requestPassedRoleGuard,
   renderHttpGuardFailureResponse,
   resolveLifecycleRequest,
   sanitizeNext,
   session,
+  withGuardArgs,
   type GuardArgsRequest,
   type GuardParamsRequest,
 } from './guards.js';
@@ -528,6 +530,16 @@ describe('server guard and session primitives', () => {
       value: 'ok',
     });
     expect(assertRolesRequired).toBeTypeOf('function');
+  });
+
+  it('records passed role guards on proxied lifecycle requests', async () => {
+    const request = { session: { user: { id: 'admin_1', roles: ['admin'] } } };
+    const guardedRequest = withGuardArgs(request, { productId: 'p1' });
+
+    expect(requestPassedRoleGuard(request, 'admin')).toBe(false);
+    expect(await guards.role<typeof guardedRequest>('admin')(guardedRequest)).toBe(true);
+    expect(requestPassedRoleGuard(guardedRequest, 'admin')).toBe(true);
+    expect(requestPassedRoleGuard(request, 'admin')).toBe(true);
   });
 
   it('rate-limits mutations by session by default', async () => {

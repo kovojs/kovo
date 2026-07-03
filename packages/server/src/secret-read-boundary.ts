@@ -266,6 +266,7 @@ function isReadSurfaceMethod(prop: PropertyKey): boolean {
     prop === '$count' ||
     prop === '$with' ||
     prop === 'all' ||
+    prop === 'crossOwnerRead' ||
     prop === 'execute' ||
     prop === 'get' ||
     prop === 'prepare' ||

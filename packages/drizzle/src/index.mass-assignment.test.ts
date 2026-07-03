@@ -79,7 +79,7 @@ function confidentialFacts(domainSource: string, annotation = 'confidentialAtRes
 const HEADER = [
   'import { eq } from "drizzle-orm";',
   'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
-  'import { serverValue, adminAssign } from "@kovojs/server";',
+  'import { serverValue, trustedAssign } from "@kovojs/server";',
   'import { kovoAnalyzerSummary } from "@kovojs/drizzle";',
   'import { accounts } from "./schema";',
   '',
@@ -333,25 +333,25 @@ describe('@kovojs/drizzle mass-assignment gate (KV438)', () => {
     ]);
   });
 
-  it('passes adminAssign(input.x) as the audited privileged write', () => {
+  it('passes trustedAssign(input.x) as the audited privileged write', () => {
     expect(
       facts(
         handler(
-          '  await db.update(accounts).set({ role: adminAssign(input.role, "promotion") }).where(eq(accounts.id, input.id));',
+          '  await db.update(accounts).set({ role: trustedAssign(input.role, "promotion") }).where(eq(accounts.id, input.id));',
         ),
       ),
     ).toEqual([]);
   });
 
-  it('rejects a local fake adminAssign helper with the privileged name', () => {
+  it('rejects a local fake trustedAssign helper with the privileged name', () => {
     const result = facts(
       [
         'import { eq } from "drizzle-orm";',
         'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
         'import { accounts } from "./schema";',
-        'function adminAssign<T>(value: T, reason: string): T { return value; }',
+        'function trustedAssign<T>(value: T, reason: string): T { return value; }',
         'export const updateAccount = async (db: PgAsyncDatabase<any, any>, input: { id: string; role: string }) => {',
-        '  await db.update(accounts).set({ role: adminAssign(input.role, "promotion") }).where(eq(accounts.id, input.id));',
+        '  await db.update(accounts).set({ role: trustedAssign(input.role, "promotion") }).where(eq(accounts.id, input.id));',
         '};',
       ].join('\n'),
     );

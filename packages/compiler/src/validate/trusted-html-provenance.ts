@@ -47,7 +47,7 @@ import type { ComponentModuleModel } from '../scan/parse.js';
  * as unproven trust sinks when the member cannot be resolved to a safe non-sink export.
  *
  * Author escapes (audit-visible in `kovo explain --trust`, consistent with KV438's
- * serverValue/adminAssign):
+ * serverValue/trustedAssign):
  *   - render user/CMS content through `safeRichHtml(value)` — the sanitizing rich-HTML floor; it is
  *     a different callee, so it is never flagged here;
  *   - for a value the author asserts is safe, take the audited escape `trustedHtml(value,

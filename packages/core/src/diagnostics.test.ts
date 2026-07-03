@@ -811,8 +811,8 @@ describe('diagnostic registry', () => {
           "code": "KV438",
           "help": "Would lower to: a write whose governed columns (owner/principal columns, the primary key, and columns marked kovo({ governed: true })) receive only server-derived, literal, or explicitly-asserted values — never raw request input.
       Blocked reason: a governed column (owner/principal/role/privilege/identity) set from request input — directly, through an alias/destructure, or via a .values(input) / .set(input) spread — is mass assignment: a client can over-write a field the server never meant to expose (privilege escalation, ownership takeover, balance tampering).
-      Fixes: assign the column from a server value (req.session/guard/tenant), a literal, or a same-package helper declared kovoAnalyzerSummary(fn, { returns: { kind: "server" } }); discharge a proven non-input value with serverValue(value, reason); for a deliberate privileged write use adminAssign(input.x, reason) (the audited path, surfaced in kovo explain --writes).
-      SPEC §10.3/§11.1 and secure-framework Phase 3: governed-column write-provenance is by-construction (input-reaching a governed column fails the build, fail-closed on unprovable provenance); serverValue/adminAssign are author-assertion escapes (audit-grade).",
+      Fixes: assign the column from a server value (req.session/guard/tenant), a literal, or a same-package helper declared kovoAnalyzerSummary(fn, { returns: { kind: "server" } }); discharge a proven non-input value with serverValue(value, reason); for a deliberate privileged write use trustedAssign(input.x, reason) (the audited path, surfaced in kovo explain --writes).
+      SPEC §10.3/§11.1 and secure-framework Phase 3: governed-column write-provenance is by-construction (input-reaching a governed column fails the build, fail-closed on unprovable provenance); serverValue/trustedAssign are author-assertion escapes (audit-grade).",
           "message": "Request input reaches a governed column (mass assignment).",
           "severity": "error",
         },

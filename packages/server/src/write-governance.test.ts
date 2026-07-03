@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';
+import { trustedAssign, drainTrustedAssignFacts, serverValue } from './write-governance.js';
 
 // SPEC §10.3/§11.1 — the KV438 mass-assignment runtime escapes (author-assertion,
 // audit-grade per SPEC §6.6). Runtime-transparent value passthrough.
@@ -18,24 +18,24 @@ describe('serverValue', () => {
   });
 });
 
-describe('adminAssign', () => {
+describe('trustedAssign', () => {
   it('returns the value unchanged and records an audit fact', () => {
-    drainAdminAssignFacts();
+    drainTrustedAssignFacts();
     const value = 'superadmin';
-    expect(adminAssign(value, 'role grant by admin')).toBe(value);
-    const facts = drainAdminAssignFacts();
+    expect(trustedAssign(value, 'role grant by admin')).toBe(value);
+    const facts = drainTrustedAssignFacts();
     expect(facts).toEqual([{ reason: 'role grant by admin' }]);
     // Draining clears the log.
-    expect(drainAdminAssignFacts()).toEqual([]);
+    expect(drainTrustedAssignFacts()).toEqual([]);
   });
 
   it('requires a non-empty reason', () => {
-    expect(() => adminAssign('x', '')).toThrow(/reason/);
+    expect(() => trustedAssign('x', '')).toThrow(/reason/);
   });
 
   it('records structured audit context when provided', () => {
-    drainAdminAssignFacts();
-    adminAssign('admin', {
+    drainTrustedAssignFacts();
+    trustedAssign('admin', {
       actor: 'user:1',
       callsite: 'account.domain.ts:12',
       columns: ['role'],
@@ -46,7 +46,7 @@ describe('adminAssign', () => {
       table: 'accounts',
     });
 
-    expect(drainAdminAssignFacts()).toEqual([
+    expect(drainTrustedAssignFacts()).toEqual([
       {
         actor: 'user:1',
         callsite: 'account.domain.ts:12',

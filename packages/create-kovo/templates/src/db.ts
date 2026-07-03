@@ -1,5 +1,6 @@
 import type { Reader } from '@kovojs/server';
-import type { PgliteDatabase } from 'drizzle-orm/pglite';
+import type { PgAsyncDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core';
+import type { EmptyRelations } from 'drizzle-orm/relations';
 
 import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
 
@@ -8,7 +9,7 @@ import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js';
 // src/_kovo/app-runtime-db.ts for framework-owned app construction/auth wiring.
 
 /** The app runtime database. */
-export type AppDb = PgliteDatabase;
+export type AppDb = PgAsyncDatabase<PgQueryResultHKT, EmptyRelations>;
 export type AppReadonlyDb = Reader<AppDb>;
 
 /** The running app read surface. Endpoint/user-authored reads should import this value. */

@@ -58,11 +58,11 @@ So `npm run check:kovo` → `vp run kovo-check` → `kovo check`. The npm script
 
 ```sh
 $ kovo
-kovo: add, audit, build, check, compile, explain, export, mcp, update-docs
+kovo: add, audit, build, check, db, compile, explain, export, mcp, update-docs
 ```
 
-Every command emits stable, versioned, diffable output (`kovo-check/v1`, `kovo-explain/v1`, …) — the
-same artifact a reviewer reads and an agent consumes.
+Every command emits stable, versioned, diffable output (`kovo-check/v1`, `kovo-explain/v1`,
+`kovo-db/v1`, …) — the same artifact a reviewer reads and an agent consumes.
 
 ### `kovo check` — the graph/coverage check
 
@@ -127,8 +127,8 @@ kovo explain --cookies [graph.json]                          # cookie downgrade 
 - **`--revealed`** lists confidentiality reveals, including `trustedReveal(...)` rows that need human
   review.
 - **`--access`** lists explicit public/authenticated/machine access decisions.
-- **`--capabilities`** lists held dangerous capabilities: agent tools, audit-grade reveals, and
-  signed download/capability URL mints.
+- **`--capabilities`** lists held dangerous capabilities: agent tools, audit-grade reveals,
+  cross-owner admin reads, and signed download/capability URL mints.
 - **`--cookies`** lists cookie posture and downgrade findings.
 
 ### `kovo add` — vendor a UI component
@@ -159,6 +159,30 @@ kovo build ./src/app.ts --out build --preset vercel
 
 `--preset` selects the deployment target (`node`, `vercel`, `cloudflare`); `--out` overrides the
 output directory (default `dist`). See [deployment](/guides/deployment/).
+
+### `kovo db` — migrate, provision, and check Postgres posture
+
+Applies or verifies the framework-owned Postgres database posture derived from `src/schema.ts`:
+reviewed SQL migrations, roles, forced RLS, owner policies, grants, and the schema fingerprint.
+External Postgres migration/provisioning uses a privileged admin URL; runtime/checking uses the
+least-privilege app URL.
+
+```sh
+kovo db migrate --migrations migrations
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision
+KOVO_DATABASE_URL=postgres://app@db/app kovo db check
+kovo db check --driver pglite --data-dir .kovo/pglite
+```
+
+If your provider or DBA owns role creation, set `KOVO_DB_READER_ROLE`,
+`KOVO_DB_WRITER_ROLE`, and, when using `crossOwnerRead`, `KOVO_DB_ADMIN_ROLE` before
+`kovo db provision`. Kovo adopts those pre-created roles and skips `CREATE ROLE`; the runtime login
+still needs membership in each configured role.
+
+`kovo db check` exits non-zero when posture is missing or stale, so production boot and CI can fail
+closed instead of serving an unprotected table. Automatic migration generation is still a roadmap
+item; `kovo db migrate` applies reviewed `.sql` files and then reasserts the derived runtime posture
+against the schema you ship.
 
 ### `kovo compile` — emit compiler-backed artifacts
 

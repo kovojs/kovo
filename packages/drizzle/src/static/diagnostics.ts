@@ -27,7 +27,10 @@ export function drizzleDiagnostic(input: DrizzleDiagnosticInput): TouchGraphDiag
   const message = input.preferHelp
     ? diagnosticDefinitionText(input.code, { preferHelp: true })
     : definition.message;
-  const site = 'node' in input ? sourceSiteForNode(input.node) : nonEmptyDiagnosticSite(input.site);
+  const site =
+    'node' in input && input.node !== undefined
+      ? sourceSiteForNode(input.node)
+      : nonEmptyDiagnosticSite(input.site);
 
   return {
     code: input.code,

@@ -55,6 +55,10 @@ export const ADD_USAGE = 'usage: kovo add <component...> [--out <dir>]';
 export const BUILD_USAGE =
   'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache]';
 
+/** @internal Usage line emitted for `kovo db` (see `dbUsage`). */
+export const DB_USAGE =
+  'usage: kovo db provision|migrate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]';
+
 /** @internal Usage forms emitted for `kovo compile` (see `compileUsage`). */
 export const COMPILE_USAGE = [
   'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--no-cache] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>]',
@@ -177,6 +181,52 @@ export const BUILD_ARGV_SPEC = {
     },
     { flag: '--check', kind: 'boolean' },
     { flag: '--no-cache', kind: 'boolean' },
+  ],
+} as const satisfies CommandArgvSpec;
+
+/** @internal DB command flags consumed by `parseDbArgs`. */
+export const DB_ARGV_SPEC = {
+  options: [
+    {
+      flag: '--schema',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --schema requires a module path.\n',
+    },
+    {
+      flag: '--driver',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --driver requires pglite, pg, or node-postgres.\n',
+    },
+    {
+      flag: '--database-url',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --database-url requires a URL.\n',
+    },
+    {
+      flag: '--admin-database-url',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --admin-database-url requires a URL.\n',
+    },
+    {
+      flag: '--data-dir',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --data-dir requires a directory.\n',
+    },
+    {
+      flag: '--migrations',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --migrations requires a directory.\n',
+    },
+    {
+      flag: '--reader-role',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --reader-role requires a role name.\n',
+    },
+    {
+      flag: '--writer-role',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --writer-role requires a role name.\n',
+    },
   ],
 } as const satisfies CommandArgvSpec;
 
@@ -386,7 +436,7 @@ export interface CommandManifestEntry {
 
 /**
  * @internal The full `kovo` command surface, in display order. Covers every
- * command `main`/`mainAsync` dispatches: check, explain, add, build, audit,
+ * command `main`/`mainAsync` dispatches: check, explain, add, build, db, audit,
  * compile, export, mcp, update-docs.
  */
 export const COMMANDS_MANIFEST = [
@@ -395,7 +445,7 @@ export const COMMANDS_MANIFEST = [
     noArgsOrder: 4,
     summary:
       'Run the consistency and exhaustiveness verifier over an extracted app graph and report findings.',
-    unknownOrder: 5,
+    unknownOrder: 6,
     usage: CHECK_USAGE,
     flags: [
       {
@@ -425,9 +475,9 @@ export const COMMANDS_MANIFEST = [
   },
   {
     name: 'explain',
-    noArgsOrder: 6,
+    noArgsOrder: 7,
     summary: 'Print the stable graph view for a single subject, or run the security review modes.',
-    unknownOrder: 4,
+    unknownOrder: 5,
     usage: EXPLAIN_USAGE,
     flags: [
       { flag: '--optimistic', description: 'Include optimistic-update detail for the subject.' },
@@ -529,11 +579,69 @@ export const COMMANDS_MANIFEST = [
     examples: ['kovo build ./src/app-shell.ts --out dist', 'kovo build ./src/app.tsx --check'],
   },
   {
-    name: 'compile',
+    name: 'db',
     noArgsOrder: 5,
     summary:
-      'Emit compiler-backed app artifacts without importing @kovojs/compiler from app scripts.',
+      'Provision, migrate, or check a Postgres app database from the Drizzle schema and framework-owned RLS posture.',
     unknownOrder: 3,
+    usage: DB_USAGE,
+    async: true,
+    flags: [
+      {
+        flag: 'provision',
+        description:
+          'Apply pending migrations, roles, RLS policies, grants, and the schema fingerprint. External Postgres uses KOVO_ADMIN_DATABASE_URL unless --admin-database-url is supplied.',
+      },
+      {
+        flag: 'migrate',
+        description:
+          'Apply reviewed SQL migrations transactionally, then reassert derived RLS policies, grants, and the schema fingerprint.',
+      },
+      {
+        flag: 'check',
+        description:
+          'Verify the existing database has the expected schema fingerprint, forced RLS, policies, and secret-column grants.',
+      },
+      { flag: '--schema <module>', description: 'Schema module path (default: src/schema.ts).' },
+      {
+        flag: '--driver <pglite|pg|node-postgres>',
+        description:
+          'Database driver. Defaults to external Postgres when a URL is present, otherwise PGlite.',
+      },
+      {
+        flag: '--migrations <dir>',
+        description: 'Directory of reviewed .sql migrations (default: migrations).',
+      },
+      {
+        flag: '--database-url <url>',
+        description: 'Least-privilege runtime/check URL. Defaults to KOVO_DATABASE_URL for check.',
+      },
+      {
+        flag: '--admin-database-url <url>',
+        description:
+          'Privileged provision URL. Defaults to KOVO_ADMIN_DATABASE_URL for external provision.',
+      },
+      {
+        flag: '--data-dir <dir>',
+        description: 'PGlite data directory for embedded development databases.',
+      },
+      { flag: '--reader-role <role>', description: 'Reader role name (default: kovo_reader).' },
+      { flag: '--writer-role <role>', description: 'Writer role name (default: kovo_writer).' },
+    ],
+    examples: [
+      'kovo db provision --schema src/schema.ts',
+      'kovo db migrate --migrations migrations',
+      'KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision',
+      'KOVO_DATABASE_URL=postgres://app@db/app kovo db check',
+      'kovo db check --driver pglite --data-dir .kovo/pglite',
+    ],
+  },
+  {
+    name: 'compile',
+    noArgsOrder: 6,
+    summary:
+      'Emit compiler-backed app artifacts without importing @kovojs/compiler from app scripts.',
+    unknownOrder: 4,
     usage: COMPILE_USAGE,
     async: true,
     flags: [
@@ -593,7 +701,7 @@ export const COMMANDS_MANIFEST = [
     name: 'audit',
     noArgsOrder: 2,
     summary: 'Run the security/access audits over an extracted app graph.',
-    unknownOrder: 6,
+    unknownOrder: 7,
     usage: AUDIT_USAGE,
     flags: [
       {
@@ -605,9 +713,9 @@ export const COMMANDS_MANIFEST = [
   },
   {
     name: 'export',
-    noArgsOrder: 7,
+    noArgsOrder: 8,
     summary: 'Statically export a Kovo app module to disk for hosting.',
-    unknownOrder: 7,
+    unknownOrder: 8,
     usage: EXPORT_USAGE,
     async: true,
     flags: [
@@ -649,19 +757,19 @@ export const COMMANDS_MANIFEST = [
   },
   {
     name: 'mcp',
-    noArgsOrder: 8,
+    noArgsOrder: 9,
     summary:
       'Run the Model Context Protocol server: read newline-delimited JSON-RPC from stdin, write responses to stdout.',
-    unknownOrder: 8,
+    unknownOrder: 9,
     usage: MCP_USAGE,
     async: true,
     examples: ['kovo mcp'],
   },
   {
     name: 'update-docs',
-    noArgsOrder: 9,
+    noArgsOrder: 10,
     summary: 'Refresh AGENTS.md and mirror the latest agent-readable Kovo docs into ./.kovo/docs.',
-    unknownOrder: 9,
+    unknownOrder: 10,
     usage: UPDATE_DOCS_USAGE,
     async: true,
     examples: ['kovo update-docs'],

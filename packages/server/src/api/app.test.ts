@@ -454,9 +454,9 @@ describe('server app-shell public API barrels', () => {
       isKovoApp: appGuardsApi.isKovoApp,
       // SPEC.md §10.3/§11.1 / plans/secure-framework.md Phase 3: the mass-assignment
       // (KV438) author-assertion escapes — serverValue(non-input) + the audited
-      // adminAssign + its drain — are public at the root barrel.
-      adminAssign: writeGovernanceApi.adminAssign,
-      drainAdminAssignFacts: writeGovernanceApi.drainAdminAssignFacts,
+      // trustedAssign + its drain — are public at the root barrel.
+      trustedAssign: writeGovernanceApi.trustedAssign,
+      drainTrustedAssignFacts: writeGovernanceApi.drainTrustedAssignFacts,
       serverValue: writeGovernanceApi.serverValue,
       // SPEC.md §6.6 / plans/most-secure-web-framework.md OPP-04: app authors
       // satisfy confidential-at-rest write gates with this authenticated-encryption sink.
@@ -520,6 +520,9 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.createPostgresReadonlyClient).toBe(dataApi.createPostgresReadonlyClient);
     expect(publicApi.createPostgresScopedClient).toBe(dataApi.createPostgresScopedClient);
     expect(publicApi.declarePublicRead).toBe(dataApi.declarePublicRead);
+    expect(publicApi.drainPostgresRlsSilentDenyDiagnostics).toBe(
+      dataApi.drainPostgresRlsSilentDenyDiagnostics,
+    );
     expect(publicApi.drainPublicReadAuditFacts).toBe(dataApi.drainPublicReadAuditFacts);
     expect(publicApi.createSecretBoxingReadDb).toBe(secretReadBoundaryApi.createSecretBoxingReadDb);
     expect(publicApi.declareSecretReadCapability).toBe(

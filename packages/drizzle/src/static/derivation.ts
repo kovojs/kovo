@@ -950,7 +950,7 @@ function dedupeEffectFacts(facts: readonly SymbolicEffectFact[]): SymbolicEffect
 //
 // Two-tier escape (author-assertion, audit-grade):
 //   serverValue(value, reason)   — discharges a NON-input value (serverValue(input.x,…) still fails).
-//   adminAssign(value, reason)   — the louder audited path for a deliberate privileged write.
+//   trustedAssign(value, reason)   — the louder audited path for a deliberate privileged write.
 // Helper false-positives are resolved by `kovoAnalyzerSummary(fn, { returns: { kind: 'server' } })`,
 // which the symbol-provenance engine reads as `server` provenance.
 
@@ -1440,7 +1440,7 @@ interface GovernedValueVerdict {
 /**
  * Classify a value flowing into a governed column. Fail-closed:
  *  - `serverValue(x, reason)` passes only when `x` is NON-input (serverValue(input.x,…) fails).
- *  - `adminAssign(x, reason)` is the audited privileged write — always passes (recorded).
+ *  - `trustedAssign(x, reason)` is the audited privileged write — always passes (recorded).
  *  - literal / `server` (req.session/guard/tenant or a `kovoAnalyzerSummary('server')` helper) passes.
  *  - `input` provenance → reject (`input`).
  *  - anything else (unprovable / opaque helper) → reject (`unknown`, fail-closed).
@@ -1453,8 +1453,8 @@ function governedValueVerdict(
 
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    // adminAssign(value, reason): the audited privileged write — always passes (recorded).
-    if (isPrivilegedHelperCall(callee, 'adminAssign')) {
+    // trustedAssign(value, reason): the audited privileged write — always passes (recorded).
+    if (isPrivilegedHelperCall(callee, 'trustedAssign')) {
       return { ok: true, provenance: 'input' };
     }
     if (isPrivilegedHelperCall(callee, 'serverValue')) {
@@ -1544,7 +1544,7 @@ function confidentialAtRestValueVerdict(
   const expression = unwrappedAwaitedStaticExpressionNode(node);
   if (Node.isCallExpression(expression)) {
     const callee = unwrappedStaticExpressionNode(expression.getExpression());
-    if (isPrivilegedHelperCall(callee, 'adminAssign')) {
+    if (isPrivilegedHelperCall(callee, 'trustedAssign')) {
       return { ok: true, provenance: 'input' };
     }
     if (isBlessedEncryptAtRestCall(expression, context)) {
@@ -1569,7 +1569,7 @@ function confidentialAtRestValueVerdict(
   return { ok: false, provenance: 'unknown', detail: expression.getText() };
 }
 
-function isPrivilegedHelperCall(callee: Node, helper: 'adminAssign' | 'serverValue'): boolean {
+function isPrivilegedHelperCall(callee: Node, helper: 'trustedAssign' | 'serverValue'): boolean {
   return expressionResolvesToFrameworkExport(callee, frameworkExport('@kovojs/server', helper));
 }
 

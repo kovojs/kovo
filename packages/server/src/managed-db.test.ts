@@ -28,7 +28,7 @@ import { runQuery } from './query.js';
 import { query } from './api/data.js';
 import { domain } from './domain.js';
 import { runWithRequestInputProvenance } from './request-input-provenance.js';
-import { adminAssign, serverValue } from './write-governance.js';
+import { trustedAssign, serverValue } from './write-governance.js';
 
 // SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle.
 //
@@ -1887,14 +1887,14 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     ]);
   });
 
-  it('treats adminAssign as the audited request-input escape but not serverValue(input)', async () => {
+  it('treats trustedAssign as the audited request-input escape but not serverValue(input)', async () => {
     const log: unknown[] = [];
     const handle = governedWriteHandle(log);
     const table = { name: 'accounts' };
 
     await runWithRequestInputProvenance({ role: 'admin' }, async (input) => {
       await expect(
-        handle.update(table).set({ role: adminAssign(input.role, 'operator role grant') }),
+        handle.update(table).set({ role: trustedAssign(input.role, 'operator role grant') }),
       ).resolves.toBe('updated');
       expect(() =>
         handle.update(table).set({ role: serverValue(input.role, 'attempted laundering') }),

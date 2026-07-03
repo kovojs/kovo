@@ -164,8 +164,8 @@ export const frameworkIdentityCatalog = [
   serverBrowserRenderingReExport('trustedHtml'),
   serverBrowserRenderingReExport('trustedUrl'),
   serverInternalRendering('renderedHtml'),
-  ...['adminAssign', 'encryptAtRest', 'hashPassword', 'serverValue', 'stream'].map((exportName) =>
-    exportName === 'adminAssign' || exportName === 'serverValue'
+  ...['trustedAssign', 'encryptAtRest', 'hashPassword', 'serverValue', 'stream'].map((exportName) =>
+    exportName === 'trustedAssign' || exportName === 'serverValue'
       ? serverWriteGovernance(exportName)
       : serverData(exportName),
   ),

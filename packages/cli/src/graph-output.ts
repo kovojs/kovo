@@ -754,7 +754,7 @@ export function kovoCheck(
 
     // SPEC §11.1 / secure-framework Phase 3: a write reaching a governed column with
     // request-input (or fail-closed unprovable) provenance is the blocking KV438
-    // mass-assignment error. serverValue/adminAssign discharges never reach here.
+    // mass-assignment error. serverValue/trustedAssign discharges never reach here.
     for (const finding of sortedMassAssignment(graph.massAssignmentFacts ?? [])) {
       pushFinding(massAssignmentKv438Line(finding), staticFindingFails('KV438'));
     }

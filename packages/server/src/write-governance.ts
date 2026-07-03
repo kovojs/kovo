@@ -10,14 +10,14 @@
 //
 //   serverValue(value, reason)  — assert a NON-input value is server-derived. The
 //                                 analyzer still rejects `serverValue(input.x, …)`.
-//   adminAssign(value, reason)  — the louder, audited path for a deliberate privileged
+//   trustedAssign(value, reason)  — the louder, audited path for a deliberate privileged
 //                                 write of a request value to a governed column. Recorded
 //                                 for `kovo explain --writes`.
 
 import { markPrivilegedRequestInputAssignment } from './request-input-provenance.js';
 
-/** A recorded `adminAssign` audit fact for `kovo explain --writes` (SPEC §6.6, audit-grade). */
-export interface AdminAssignFact {
+/** A recorded `trustedAssign` audit fact for `kovo explain --writes` (SPEC §6.6, audit-grade). */
+export interface TrustedAssignFact {
   actor?: string;
   callsite?: string;
   columns?: readonly string[];
@@ -28,8 +28,8 @@ export interface AdminAssignFact {
   table?: string;
 }
 
-/** Additional audit context for the `adminAssign` privileged-write escape. */
-export interface AdminAssignOptions {
+/** Additional audit context for the `trustedAssign` privileged-write escape. */
+export interface TrustedAssignOptions {
   actor?: string;
   callsite?: string;
   columns?: readonly string[];
@@ -40,7 +40,7 @@ export interface AdminAssignOptions {
   table?: string;
 }
 
-const adminAssignFacts: AdminAssignFact[] = [];
+const trustedAssignFacts: TrustedAssignFact[] = [];
 
 /**
  * Assert that `value` is a server-derived (non-request-input) value flowing into a
@@ -71,15 +71,15 @@ export function serverValue<T>(value: T, reason: string): T {
  * @param reason - A required non-empty justification, recorded for audit.
  * @returns `value`, unchanged.
  * @example
- * await db.update(users).set({ role: adminAssign(input.role, 'admin role grant') })...;
+ * await db.update(users).set({ role: trustedAssign(input.role, 'admin role grant') })...;
  */
-export function adminAssign<T>(value: T, reason: string | AdminAssignOptions): T {
+export function trustedAssign<T>(value: T, reason: string | TrustedAssignOptions): T {
   const fact = typeof reason === 'string' ? { reason } : reason;
   if (typeof fact.reason !== 'string' || fact.reason.trim() === '') {
-    throw new Error('adminAssign requires a non-empty reason (KV438).');
+    throw new Error('trustedAssign requires a non-empty reason (KV438).');
   }
   markPrivilegedRequestInputAssignment(value);
-  adminAssignFacts.push({
+  trustedAssignFacts.push({
     ...fact,
     ...(fact.columns ? { columns: [...fact.columns] } : {}),
   });
@@ -87,11 +87,11 @@ export function adminAssign<T>(value: T, reason: string | AdminAssignOptions): T
 }
 
 /**
- * Drain the recorded {@link adminAssign} audit facts (SPEC §6.6, audit-grade), for
+ * Drain the recorded {@link trustedAssign} audit facts (SPEC §6.6, audit-grade), for
  * `kovo explain --writes`. Returns and clears the accumulated facts.
  *
- * @returns The recorded admin-assign facts since the last drain.
+ * @returns The recorded trusted-assign facts since the last drain.
  */
-export function drainAdminAssignFacts(): AdminAssignFact[] {
-  return adminAssignFacts.splice(0, adminAssignFacts.length);
+export function drainTrustedAssignFacts(): TrustedAssignFact[] {
+  return trustedAssignFacts.splice(0, trustedAssignFacts.length);
 }

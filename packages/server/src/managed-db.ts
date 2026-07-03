@@ -126,6 +126,7 @@ export interface PostgresReadonlyClientOptions {
   principal?: string | undefined;
   quoteIdentifier?: (value: string) => string;
   readerRole?: string | false;
+  roleSetting?: string;
 }
 
 /** Options for a Postgres/PGlite request-scoped transaction client. */
@@ -133,8 +134,43 @@ export interface PostgresScopedClientOptions {
   principal?: string | undefined;
   quoteIdentifier?: (value: string) => string;
   readOnly?: boolean;
+  rlsDiagnostics?: PostgresRlsSilentDenyDiagnosticsOptions;
   role?: string | false;
+  roleSetting?: string;
 }
+
+/** Minimal query surface for dev-only RLS silent-deny recounts. */
+export interface PostgresRlsDiagnosticReadClient {
+  query(query: unknown, params?: unknown[], queryOptions?: unknown): unknown;
+}
+
+/** Dev-only diagnostics for empty owner-scoped Postgres reads (plans/postgres-v1-devex.md DEC-F1). */
+export interface PostgresRlsSilentDenyDiagnosticsOptions {
+  /**
+   * Defaults to true outside `NODE_ENV=production` when this object is present. Production disables
+   * this path unconditionally so least-privilege runtime reads never run a privileged recount.
+   */
+  enabled?: boolean;
+  /** Internal/admin read handle used only for dev recounts after principal-scoped reads return 0 rows. */
+  privilegedClient?: PostgresRlsDiagnosticReadClient;
+  /** Optional table resolver supplied by framework adapters with declared read metadata. */
+  tableName?: string | ((query: unknown) => string | undefined);
+}
+
+/** In-memory runtime diagnostic fact drained by tests and future `kovo explain` plumbing. */
+export type PostgresRlsSilentDenyDiagnostic =
+  | {
+      kind: 'principal-unset';
+      message: string;
+      table?: string;
+    }
+  | {
+      filteredRows: number;
+      kind: 'owner-scope-filtered';
+      message: string;
+      principal: string;
+      table: string;
+    };
 
 /** Row-scope metadata for an audited public raw read (SPEC §10.3 DEC-F). */
 export interface PublicReadRowsScope {
@@ -188,6 +224,39 @@ export interface RawReadPolicyOptions {
   sqliteAuthorizer?: DeclaredWriteSqliteAuthorizerOptions;
 }
 
+/** User-authored declaration for the audited cross-owner read escape (SPEC §10.3 DEC-G). */
+export interface CrossOwnerReadDeclaration {
+  /** Required audit reason explaining why this endpoint may read across owners. */
+  reason: string;
+  /** Physical table set the statement may read. The v1 runtime supports a single owner table. */
+  reads: readonly string[];
+  /** Runtime role gate. Only an admin-guarded call may request this capability. */
+  role: 'admin';
+  /** Optional source span for capability ledgers. */
+  site?: string;
+}
+
+/** Recorded cross-owner read audit fact. */
+export interface CrossOwnerReadAuditFact {
+  declaredReads: readonly string[];
+  dialectLabel: string;
+  observedRead: string;
+  principal?: string;
+  reason: string;
+  site?: string;
+}
+
+/** Framework-owned cross-owner read execution options. */
+export interface CrossOwnerReadPolicyOptions {
+  adminClient?: object;
+  dialectLabel: string;
+  executeMethod?: 'all' | 'execute' | 'query' | 'values';
+  hasRole?: (role: CrossOwnerReadDeclaration['role']) => boolean;
+  normalizeTableName: (table: string) => string;
+  ownerTables: readonly string[];
+  principal?: string | undefined;
+}
+
 /** Runtime authorization classifications grouped by physical SQLite table. */
 export type SqliteAuthorizationClassification =
   | 'authzPolicy'
@@ -216,6 +285,7 @@ export interface AuthorizationCensusDbOptions {
 const READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$count',
   '$with',
+  'crossOwnerRead',
   'query',
   'rawRead',
   'select',
@@ -237,12 +307,12 @@ const DENIED_READ_CAPABILITY_PROPERTIES = new Set<string>([
 const CALLABLE_READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$count',
   '$with',
+  'crossOwnerRead',
   'rawRead',
   'select',
   'selectDistinct',
   'with',
 ]);
-const DRIZZLE_NAME_SYMBOL = Symbol.for('drizzle:Name');
 
 /**
  * Create a framework-owned declared-write DB wrapper (SPEC §10.3/§11.2). Generated adapters pass
@@ -318,6 +388,7 @@ export const createPostgresReadonlyClient = securityClassifier(
     if (options.quoteIdentifier !== undefined)
       scopedOptions.quoteIdentifier = options.quoteIdentifier;
     if (options.readerRole !== undefined) scopedOptions.role = options.readerRole;
+    if (options.roleSetting !== undefined) scopedOptions.roleSetting = options.roleSetting;
     return createPostgresScopedClient(client, scopedOptions);
   },
 );
@@ -451,6 +522,10 @@ export type Reader<Db> = (Db extends object
           ? {}
           : { query: Query }
         : {}) & {
+        crossOwnerRead<Row = unknown>(
+          statement: unknown,
+          declaration: CrossOwnerReadDeclaration,
+        ): Promise<Row[]> | Row[];
         rawRead<Row = unknown>(
           statement: unknown,
           declaration: RawReadDeclaration,
@@ -493,7 +568,13 @@ interface SqlCarrier {
   text: string;
 }
 
+const DRIZZLE_NAME_SYMBOL = Symbol.for('drizzle:Name');
+const DRIZZLE_SCHEMA_SYMBOL = Symbol.for('drizzle:Schema');
+const DRIZZLE_IS_TABLE_SYMBOL = Symbol.for('drizzle:IsDrizzleTable');
+
 const publicReadAuditFacts: PublicReadAuditFact[] = [];
+const crossOwnerReadAuditFacts: CrossOwnerReadAuditFact[] = [];
+const postgresRlsSilentDenyDiagnostics: PostgresRlsSilentDenyDiagnostic[] = [];
 
 /**
  * Declare an audited public-read authorization scope (SPEC §10.3 DEC-F). This does not assert SQL
@@ -517,6 +598,22 @@ export function declarePublicRead(options: PublicReadDeclaration): PublicReadDec
  */
 export function drainPublicReadAuditFacts(): PublicReadAuditFact[] {
   return publicReadAuditFacts.splice(0, publicReadAuditFacts.length);
+}
+
+/**
+ * Drain recorded cross-owner read audit facts for `kovo explain`/tests. Returns and clears the
+ * facts accumulated since the last drain.
+ */
+export function drainCrossOwnerReadAuditFacts(): CrossOwnerReadAuditFact[] {
+  return crossOwnerReadAuditFacts.splice(0, crossOwnerReadAuditFacts.length);
+}
+
+/**
+ * Drain dev-only Postgres RLS empty-read diagnostics. Returns and clears facts accumulated since
+ * the last drain; production scoped clients never write to this sink.
+ */
+export function drainPostgresRlsSilentDenyDiagnostics(): PostgresRlsSilentDenyDiagnostic[] {
+  return postgresRlsSilentDenyDiagnostics.splice(0, postgresRlsSilentDenyDiagnostics.length);
 }
 
 function isDeclaredWriteDrizzleMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
@@ -739,7 +836,7 @@ function assertGovernedWriteObjectAllowed(
     throw new Error(
       [
         `KV438: ${context.options.dialectLabel} managed write rejected parsed request input ${provenance.path} for governed column ${key} in ${context.verb}.${context.boundary} (SPEC §11.1).`,
-        '  Use a server-derived value or the audited adminAssign(...) escape for intentional privileged assignment.',
+        '  Use a server-derived value or the audited trustedAssign(...) escape for intentional privileged assignment.',
       ].join('\n'),
     );
   }
@@ -798,15 +895,48 @@ function sqlTextFromValue(value: unknown): string | undefined {
   if (typeof sql === 'string') return sql;
   const chunks = (value as { queryChunks?: unknown }).queryChunks;
   if (!Array.isArray(chunks)) return undefined;
-  const text = chunks
-    .flatMap((chunk) => {
-      const part = (chunk as { value?: unknown }).value;
-      return Array.isArray(part)
-        ? part.filter((item): item is string => typeof item === 'string')
-        : [];
-    })
-    .join('');
+  const text = sqlTextFromChunks(chunks);
   return text || undefined;
+}
+
+function sqlTextFromChunks(chunks: readonly unknown[]): string {
+  return chunks.map(sqlTextFromChunk).join('');
+}
+
+function sqlTextFromChunk(chunk: unknown): string {
+  if (chunk === undefined) return '';
+  if (typeof chunk === 'string') return chunk;
+  if (Array.isArray(chunk)) return `(${chunk.map(sqlTextFromChunk).join(', ')})`;
+  if (!isRecord(chunk)) return '';
+
+  const stringChunkValue = chunk.value;
+  if (Array.isArray(stringChunkValue)) {
+    return stringChunkValue.filter((item): item is string => typeof item === 'string').join('');
+  }
+  if (typeof stringChunkValue === 'string') return quoteSqlIdentifier(stringChunkValue);
+
+  const table = drizzleTableIdentifier(chunk);
+  if (table !== undefined) return table;
+
+  const nestedChunks = chunk.queryChunks;
+  if (Array.isArray(nestedChunks)) return sqlTextFromChunks(nestedChunks);
+
+  const columnName = chunk.name;
+  if (typeof columnName !== 'string') return '';
+  const tableName = drizzleTableIdentifier(chunk.table);
+  return tableName === undefined
+    ? quoteSqlIdentifier(columnName)
+    : `${tableName}.${quoteSqlIdentifier(columnName)}`;
+}
+
+function drizzleTableIdentifier(value: unknown): string | undefined {
+  if (!isRecord(value) || !(DRIZZLE_IS_TABLE_SYMBOL in value)) return undefined;
+  const name = value[DRIZZLE_NAME_SYMBOL];
+  if (typeof name !== 'string' || name === '') return undefined;
+  const schema = value[DRIZZLE_SCHEMA_SYMBOL];
+  return typeof schema === 'string' && schema !== ''
+    ? `${quoteSqlIdentifier(schema)}.${quoteSqlIdentifier(name)}`
+    : quoteSqlIdentifier(name);
 }
 
 function isSqliteWriteAction(
@@ -853,7 +983,7 @@ function isSqliteDdlAction(
 
 type PostgresTransactionClient = {
   exec(statement: string, options?: unknown): unknown;
-  query(query: string, params?: unknown[], queryOptions?: unknown): unknown;
+  query(query: unknown, params?: unknown[], queryOptions?: unknown): unknown;
   transaction<Result>(
     callback: (tx: PostgresTransactionClient) => Promise<Result>,
   ): Promise<Result>;
@@ -862,7 +992,7 @@ type PostgresTransactionClient = {
 function scopedPostgresQuery(
   client: Record<PropertyKey, unknown>,
   options: PostgresScopedClientOptions,
-  query: string,
+  query: unknown,
   params?: unknown[],
   queryOptions?: unknown,
 ): Promise<unknown> {
@@ -870,6 +1000,9 @@ function scopedPostgresQuery(
     await runPostgresTransactionControl(tx, options);
     const queryMethod = tx.query.bind(tx);
     return queryMethod(query, params, queryOptions) as Promise<unknown>;
+  }).then(async (result) => {
+    await maybeReportPostgresRlsSilentDeny(options, query, result);
+    return result;
   });
 }
 
@@ -910,6 +1043,11 @@ async function runPostgresTransactionControl(
       options.principal,
     ]) as Promise<unknown>);
   }
+  if (options.roleSetting !== undefined) {
+    await (query("SELECT set_config('kovo.role', $1, true)", [
+      options.roleSetting,
+    ]) as Promise<unknown>);
+  }
   if (options.role !== false && options.role !== undefined) {
     const quote = options.quoteIdentifier ?? quoteSqlIdentifier;
     await (exec(`SET LOCAL ROLE ${quote(options.role)}`) as Promise<unknown>);
@@ -918,6 +1056,121 @@ async function runPostgresTransactionControl(
 
 function quoteSqlIdentifier(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+async function maybeReportPostgresRlsSilentDeny(
+  options: PostgresScopedClientOptions,
+  query: unknown,
+  result: unknown,
+): Promise<void> {
+  const diagnostics = options.rlsDiagnostics;
+  if (
+    diagnostics === undefined ||
+    diagnostics.enabled === false ||
+    process.env.NODE_ENV === 'production' ||
+    options.readOnly !== true ||
+    resultRowCount(result) !== 0
+  ) {
+    return;
+  }
+
+  const table = resolvePostgresRlsDiagnosticTable(query, diagnostics);
+  if (options.principal === undefined) {
+    postgresRlsSilentDenyDiagnostics.push({
+      kind: 'principal-unset',
+      message: 'Postgres owner-scoped read returned 0 rows because no kovo.principal was set.',
+      ...(table === undefined ? {} : { table }),
+    });
+    return;
+  }
+
+  const privilegedClient = diagnostics.privilegedClient;
+  if (privilegedClient === undefined || table === undefined) return;
+
+  const count = await countPostgresDiagnosticRows(privilegedClient, table, options);
+  if (count <= 0) return;
+
+  postgresRlsSilentDenyDiagnostics.push({
+    filteredRows: count,
+    kind: 'owner-scope-filtered',
+    message: `kovo_owner_scope filtered ${count} row${count === 1 ? '' : 's'} for principal ${options.principal}.`,
+    principal: options.principal,
+    table,
+  });
+}
+
+function resultRowCount(result: unknown): number | undefined {
+  if (Array.isArray(result)) return result.length;
+  if (isRecord(result)) {
+    const rows = result.rows;
+    if (Array.isArray(rows)) return rows.length;
+  }
+  return undefined;
+}
+
+async function countPostgresDiagnosticRows(
+  client: PostgresRlsDiagnosticReadClient,
+  table: string,
+  options: PostgresScopedClientOptions,
+): Promise<number> {
+  const quote = options.quoteIdentifier ?? quoteSqlIdentifier;
+  const query = `SELECT count(*) AS count FROM ${quoteQualifiedSqlIdentifier(table, quote)}`;
+  const result = await client.query(query);
+  const rows = Array.isArray(result)
+    ? result
+    : isRecord(result) && Array.isArray(result.rows)
+      ? result.rows
+      : [];
+  const first = rows[0];
+  if (!isRecord(first)) return 0;
+  const raw = first.count;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'bigint') return Number(raw);
+  if (typeof raw === 'string' && /^\d+$/.test(raw)) return Number(raw);
+  return 0;
+}
+
+function resolvePostgresRlsDiagnosticTable(
+  query: unknown,
+  diagnostics: PostgresRlsSilentDenyDiagnosticsOptions,
+): string | undefined {
+  if (typeof diagnostics.tableName === 'string') return diagnostics.tableName;
+  if (typeof diagnostics.tableName === 'function') return diagnostics.tableName(query);
+  if (typeof query !== 'string') return undefined;
+  return simpleSingleTableSelectName(query);
+}
+
+function simpleSingleTableSelectName(query: string): string | undefined {
+  const normalized = query.trim().replace(/;+\s*$/, '');
+  const match =
+    /^select\b[\s\S]*?\bfrom\s+((?:"[^"]+"|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?)(?:\s+(?:as\s+)?(?:"[^"]+"|[A-Za-z_][\w$]*))?(?:\s+where\b|\s+group\s+by\b|\s+having\b|\s+order\s+by\b|\s+limit\b|\s+offset\b|\s+fetch\b|\s+for\b|\s*$)/iu.exec(
+      normalized,
+    );
+  if (!match) return undefined;
+  const table = match[1]?.replace(/\s*\.\s*/g, '.');
+  if (table === undefined) return undefined;
+  if (/\b(join|,)\b/iu.test(normalized.slice(match.index + match[0].length))) return undefined;
+  return unquoteQualifiedSqlIdentifier(table);
+}
+
+function unquoteQualifiedSqlIdentifier(value: string): string {
+  return value
+    .split('.')
+    .map((part) => {
+      const trimmed = part.trim();
+      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        return trimmed.slice(1, -1).replaceAll('""', '"');
+      }
+      return trimmed;
+    })
+    .join('.');
+}
+
+function quoteQualifiedSqlIdentifier(value: string, quote: (identifier: string) => string): string {
+  return value
+    .split('.')
+    .map((part) => quote(part))
+    .join('.');
 }
 
 /** The mode a managed handle is resolved in: a read-only loader handle, or a read-write handle. */
@@ -935,7 +1188,7 @@ export type ManagedDbMode = 'read' | 'write';
  */
 export function readonlyDb<Db extends object>(
   db: Db,
-  options: { rawRead?: RawReadPolicyOptions } = {},
+  options: { crossOwnerRead?: CrossOwnerReadPolicyOptions; rawRead?: RawReadPolicyOptions } = {},
 ): Reader<Db> {
   const readDb = readonlyDbTarget(db);
   const safe = wrapManagedDbForSqlSafety(
@@ -946,12 +1199,12 @@ export function readonlyDb<Db extends object>(
       engineReadonly: readDb !== db,
     }),
   );
-  return readonlyCapabilityDb(safe as object, options.rawRead) as unknown as Reader<Db>;
+  return readonlyCapabilityDb(safe as object, options) as unknown as Reader<Db>;
 }
 
 function readonlyCapabilityDb<Db extends object>(
   db: Db,
-  rawReadPolicy: RawReadPolicyOptions | undefined,
+  options: { crossOwnerRead?: CrossOwnerReadPolicyOptions; rawRead?: RawReadPolicyOptions },
 ): Reader<Db> {
   return new Proxy(db, {
     get(target, prop, receiver) {
@@ -959,7 +1212,8 @@ function readonlyCapabilityDb<Db extends object>(
       if (typeof prop === 'string') {
         if (DENIED_READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
         if (!READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
-        if (prop === 'rawRead') return rawReadCapability(target, rawReadPolicy);
+        if (prop === 'crossOwnerRead') return crossOwnerReadCapability(options.crossOwnerRead);
+        if (prop === 'rawRead') return rawReadCapability(target, options.rawRead);
         const value = Reflect.get(target, prop, receiver);
         if (prop === 'query') {
           if (typeof value === 'function') return readonlyCapabilityError(prop);
@@ -1003,6 +1257,43 @@ function rawReadCapability(
     assertRawReadObservedTablesAllowed(carrier.text, declaration, policy);
     const method = rawReadExecutionMethod(target, policy);
     return method.call(target, statement) as Promise<Row[]> | Row[];
+  };
+}
+
+function crossOwnerReadCapability(
+  policy: CrossOwnerReadPolicyOptions | undefined,
+): <Row = unknown>(
+  statement: unknown,
+  declaration: CrossOwnerReadDeclaration,
+) => Promise<Row[]> | Row[] {
+  return <Row = unknown>(statement: unknown, declaration: CrossOwnerReadDeclaration) => {
+    if (policy === undefined || policy.adminClient === undefined) {
+      throw new KovoReadonlyHandleError(
+        'KV414: crossOwnerRead requires a framework-owned admin read policy and opt-in table set (SPEC §10.3).',
+      );
+    }
+    const normalized = normalizedCrossOwnerReadDeclaration(declaration);
+    const carrier = sqlCarrierFromValue(statement, []);
+    if (carrier === undefined) {
+      throw new Error(
+        'KV414: crossOwnerRead requires a SQL statement whose single table can be checked (SPEC §10.3).',
+      );
+    }
+    const observed = simpleSingleTableSelectName(carrier.text);
+    if (observed === undefined) {
+      throw new Error(
+        'KV414: crossOwnerRead currently supports one simple SELECT ... FROM table statement (SPEC §10.3).',
+      );
+    }
+    if (policy.hasRole?.(normalized.role) !== true) {
+      throw new KovoReadonlyHandleError(
+        'KV414: crossOwnerRead requires a passed guards.role("admin") request guard before the admin read role is enabled (SPEC §10.3).',
+      );
+    }
+    assertCrossOwnerReadAllowed(observed, normalized, policy);
+    recordCrossOwnerReadAuditFact(normalized, observed, policy);
+    const method = rawReadExecutionMethod(policy.adminClient, policy);
+    return method.call(policy.adminClient, statement) as Promise<Row[]> | Row[];
   };
 }
 
@@ -1165,6 +1456,74 @@ function recordPublicReadAuditFact(
   });
 }
 
+function normalizedCrossOwnerReadDeclaration(
+  declaration: CrossOwnerReadDeclaration,
+): CrossOwnerReadDeclaration {
+  if (!isRecord(declaration)) {
+    throw new Error('KV414: crossOwnerRead requires a declaration object (SPEC §10.3).');
+  }
+  if (declaration.role !== 'admin') {
+    throw new Error('KV414: crossOwnerRead requires role: "admin" (SPEC §10.3).');
+  }
+  const reason = declaration.reason;
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    throw new Error('KV414: crossOwnerRead requires a non-empty reason.');
+  }
+  if (
+    !Array.isArray(declaration.reads) ||
+    declaration.reads.length === 0 ||
+    declaration.reads.some((table) => typeof table !== 'string' || table.trim() === '')
+  ) {
+    throw new Error('KV414: crossOwnerRead requires a non-empty declared reads table set.');
+  }
+  const site = declaration.site?.trim();
+  return {
+    reason: reason.trim(),
+    reads: [...new Set(declaration.reads.map((table) => table.trim()))],
+    role: 'admin',
+    ...(site === undefined || site === '' ? {} : { site }),
+  };
+}
+
+function assertCrossOwnerReadAllowed(
+  observedTable: string,
+  declaration: CrossOwnerReadDeclaration,
+  policy: CrossOwnerReadPolicyOptions,
+): void {
+  const observed = policy.normalizeTableName(observedTable);
+  const declared = new Set(declaration.reads.map(policy.normalizeTableName));
+  const optedIn = new Set(policy.ownerTables.map(policy.normalizeTableName));
+  if (!declared.has(observed)) {
+    throw new Error(
+      [
+        `KV414: ${policy.dialectLabel} crossOwnerRead observed a table outside the declared reads set (SPEC §10.3).`,
+        `  observed: ${observed}`,
+        `  declared reads: ${[...declared].sort().join(', ') || '<none>'}`,
+      ].join('\n'),
+    );
+  }
+  if (!optedIn.has(observed)) {
+    throw new Error(
+      `KV414: ${policy.dialectLabel} crossOwnerRead table ${observed} is not opted in with kovo_admin_scope (SPEC §10.3).`,
+    );
+  }
+}
+
+function recordCrossOwnerReadAuditFact(
+  declaration: CrossOwnerReadDeclaration,
+  observedTable: string,
+  policy: CrossOwnerReadPolicyOptions,
+): void {
+  crossOwnerReadAuditFacts.push({
+    declaredReads: [...new Set(declaration.reads.map(policy.normalizeTableName))].sort(),
+    dialectLabel: policy.dialectLabel,
+    observedRead: policy.normalizeTableName(observedTable),
+    reason: declaration.reason,
+    ...(policy.principal === undefined ? {} : { principal: policy.principal }),
+    ...(declaration.site === undefined ? {} : { site: declaration.site }),
+  });
+}
+
 function isPublicReadRowsScope(value: unknown): value is PublicReadRowsScope {
   return (
     isRecord(value) &&
@@ -1173,7 +1532,10 @@ function isPublicReadRowsScope(value: unknown): value is PublicReadRowsScope {
   );
 }
 
-function rawReadExecutionMethod(target: object, policy: RawReadPolicyOptions): Function {
+function rawReadExecutionMethod(
+  target: object,
+  policy: Pick<RawReadPolicyOptions, 'dialectLabel' | 'executeMethod'>,
+): Function {
   const methods =
     policy.executeMethod === undefined
       ? (['all', 'query', 'execute', 'values'] as const)
@@ -1189,6 +1551,7 @@ function rawReadExecutionMethod(target: object, policy: RawReadPolicyOptions): F
 
 /** @internal Options for the framework-owned managed DB handle composition point. */
 export interface ManagedDbOptions {
+  crossOwnerRead?: CrossOwnerReadPolicyOptions;
   rawRead?: RawReadPolicyOptions;
   sqlWritePolicy?: ManagedSqlWritePolicy;
 }
@@ -1228,7 +1591,13 @@ export function managedDb<Db>(
   );
   if (mode === 'write') return safe as Writer<Db>;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
-  return readonlyCapabilityDb(safe as unknown as object, options.rawRead) as unknown as Reader<Db>;
+  const readOptions: {
+    crossOwnerRead?: CrossOwnerReadPolicyOptions;
+    rawRead?: RawReadPolicyOptions;
+  } = {};
+  if (options.crossOwnerRead !== undefined) readOptions.crossOwnerRead = options.crossOwnerRead;
+  if (options.rawRead !== undefined) readOptions.rawRead = options.rawRead;
+  return readonlyCapabilityDb(safe as unknown as object, readOptions) as unknown as Reader<Db>;
 }
 
 function readonlyDbTarget<Db>(raw: Db): Db {

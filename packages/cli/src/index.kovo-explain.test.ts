@@ -1126,6 +1126,12 @@ export const save = mutation('cart/save', {
             site: 'app/admin.ts:3',
             target: 'export.email',
           },
+          {
+            justification: 'admin support export across owners',
+            kind: 'crossOwnerRead',
+            site: 'app/admin.ts:12',
+            target: 'public.orders',
+          },
         ],
         // An audit-grade reveal folds into the table as a trustedReveal capability.
         revealed: [
@@ -1154,11 +1160,12 @@ export const save = mutation('cart/save', {
     expect(result.output).toMatchInlineSnapshot(`
       "kovo-explain/v1
       CAPABILITIES
+      CAPABILITY kind=crossOwnerRead site=app/admin.ts:12 module=- target=public.orders justification="admin support export across owners"
       CAPABILITY kind=egressAllowInternal site=app/server.ts:14 module=- target=10.0.0.5:9090 justification="internal metrics sidecar on the pod network"
       CAPABILITY kind=publishToClient site=app/checkout.tsx:9 module=./checkout-config target=stripeClient justification="Stripe SDK is a client-safe published handle"
       CAPABILITY kind=serverValue site=app/admin.ts:3 module=- target=export.email justification="admin export reveals masked emails"
       CAPABILITY kind=trustedReveal site=app/support.ts:7 module=- target=supportUser.email justification="masked email for support tooling"
-      SUMMARY total=4
+      SUMMARY total=5
       "
     `);
   });

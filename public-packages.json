@@ -1813,7 +1813,7 @@
       "visibility": "public",
       "kind": "library",
       "apiBoundary": {
-        "public": [".", "./build", "./vite"],
+        "public": [".", "./build", "./testing", "./vite"],
         "generated": ["./jsx-runtime", "./jsx-dev-runtime"],
         "internal": [
           "./internal/app-shell-vite",
@@ -1845,6 +1845,11 @@
             "path": "./build",
             "slug": "server-build",
             "description": "Build-time deployment presets and neutral artifact helpers for kovo build."
+          },
+          {
+            "path": "./testing",
+            "slug": "server-testing",
+            "description": "PGlite-backed Postgres helpers for tests that need real owner-scoped RLS behavior."
           },
           {
             "path": "./vite",

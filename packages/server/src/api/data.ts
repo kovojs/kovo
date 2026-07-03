@@ -122,13 +122,24 @@ export {
   createPostgresReadonlyClient,
   createPostgresScopedClient,
   declarePublicRead,
+  drainCrossOwnerReadAuditFacts,
+  drainPostgresRlsSilentDenyDiagnostics,
   drainPublicReadAuditFacts,
   KovoReadonlyHandleError,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
   readonlyDb,
 } from '../managed-db.js';
+export {
+  checkPostgresAppDbPosture,
+  createPostgresAppRuntimeDb,
+  migratePostgresAppDb,
+  provisionPostgresAppDb,
+} from '../postgres-runtime.js';
 export type {
+  CrossOwnerReadAuditFact,
+  CrossOwnerReadDeclaration,
+  CrossOwnerReadPolicyOptions,
   DeclaredWriteDbOptions,
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,
@@ -136,6 +147,9 @@ export type {
   AuthorizationCensusDbOptions,
   AuthorizationCensusMetadata,
   GovernedWriteMetadata,
+  PostgresRlsDiagnosticReadClient,
+  PostgresRlsSilentDenyDiagnostic,
+  PostgresRlsSilentDenyDiagnosticsOptions,
   PostgresReadonlyClientOptions,
   PostgresScopedClientOptions,
   PublicReadAuditFact,
@@ -147,6 +161,19 @@ export type {
   SqliteAuthorizationClassification,
   Writer,
 } from '../managed-db.js';
+export type {
+  KovoPostgresAppRuntimeDb,
+  KovoPostgresAppRuntimeOptions,
+  KovoPostgresMigrateOptions,
+  KovoPostgresMigration,
+  KovoPostgresMigrationRunReport,
+  KovoPostgresPostureIssue,
+  KovoPostgresPostureReport,
+  KovoPostgresProvisionOptions,
+  KovoPostgresResolvedRuntimeDriver,
+  KovoPostgresRuntimeDb,
+  KovoPostgresRuntimeDriver,
+} from '../postgres-runtime.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {
   FileLike,
