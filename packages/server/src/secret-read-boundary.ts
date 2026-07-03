@@ -491,6 +491,11 @@ function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
 
   const value = (chunk as { value?: unknown }).value;
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    if (value.some(sqlStringChunkHidesReadSource)) {
+      throw new Error(
+        'KV410: raw SQL expression chunks cannot contain SELECT or FROM; use builder table bindings or a declared rawRead path so the read set stays visible (SPEC §10.2/§10.3).',
+      );
+    }
     return value.every(sqlStringChunkIsInert);
   }
   return false;
@@ -528,6 +533,10 @@ function sqlStringChunkIsInert(value: string): boolean {
     if (!SAFE_SQL_WORDS.has(word.toLowerCase())) return false;
   }
   return true;
+}
+
+function sqlStringChunkHidesReadSource(value: string): boolean {
+  return /\b(?:from|select)\b/i.test(value);
 }
 
 function isDirectSqlReadMethod(prop: PropertyKey): boolean {

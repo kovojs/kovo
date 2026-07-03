@@ -110,6 +110,34 @@ describe('secret read boundary', () => {
     expect(row.publicLabel).toBe('public label');
   });
 
+  it('rejects raw expression chunks that hide a subquery read source', async () => {
+    const db = createSecretBoxingReadDb(
+      builderDb(
+        queryObject(
+          'select upper(label) || (select classified from secrets) as leaked from metrics',
+          [{ leaked: 'runtime-secret-value' }],
+          {
+            leaked: {
+              queryChunks: [
+                { value: ['upper('] },
+                publicColumn,
+                { value: [') || (select classified from secrets)'] },
+              ],
+            },
+          },
+        ),
+      ),
+      metadata(),
+      {
+        sqliteColumnOrigins: originClient([{ column: null, name: 'leaked', table: null }]),
+      },
+    );
+
+    await expect(async () => {
+      await db.select();
+    }).rejects.toThrow(/KV410[\s\S]*SELECT or FROM/);
+  });
+
   it('boxes opaque derived values when the SQL reads a secret table', async () => {
     const db = createSecretBoxingReadDb(
       builderDb(

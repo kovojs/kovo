@@ -99,6 +99,8 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await expectBlockedReadShapes(origin, jar);
       await expectAllowedReadShapes(origin, jar);
       await expectNonSecretAggregateEndpoint(origin);
+      await expectSafeBuilderExpressionEndpoint(origin);
+      await expectHiddenBuilderExpressionEndpoint(origin);
       await expectStarterInScopeWrite(origin, jar, output, contactEmail);
       await expectBlockedWrites(origin, marker);
       await expectWriteStatus(origin, marker, contactEmail);
@@ -148,6 +150,23 @@ async function expectNonSecretAggregateEndpoint(origin: string): Promise<void> {
 
   expect(response.status, body).toBe(200);
   expect(body).toContain('"total":1');
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectSafeBuilderExpressionEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-secret-safe-builder-expression`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(body).toContain('ADA LOVELACE');
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectHiddenBuilderExpressionEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-secret-hidden-builder-expression`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(500);
   expect(body).not.toContain('runtime-secret-value');
 }
 

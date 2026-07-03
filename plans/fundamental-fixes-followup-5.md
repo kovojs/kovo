@@ -329,12 +329,13 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
 
 ### Phase 2 — Raw-SQL narrow-waist
 
-- [ ] **2.1 Strict read allowlist; builder owns the table binding; tier-1 sub-`SELECT` reject (DEC-C, C4).** Flip the
+- [x] **2.1 Strict read allowlist; builder owns the table binding; tier-1 sub-`SELECT` reject (DEC-C, C4).** Flip the
       read-handle proxy (`managed-db.ts:543`) from `prop in target` fail-open to a strict enumerated builder allowlist
       (deny `all/get/values/run/exec/execute/sql/prepare`; expose only `select`/`with`/`$count`/relational `query`
       namespace, deny raw `query(text)`); reject a sub-`SELECT`/`FROM` inside a raw expression chunk. Acceptance (full
       paranoid): `db.all(sql`…FROM orders…`)`, `db.query('select …')`, and `sql\`(SELECT … FROM accounts)\``in a
 projection are all rejected;`db.select({x: sql`upper(name)`}).from(orders)` builds, owner-scoped + boxed.
+  - Evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/secret-read-boundary.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` passed; covers the strict read allowlist/raw `query(text)` denial, focused `SELECT`/`FROM` raw-expression refusal, and served `/api/sqlite-secret-hidden-builder-expression` rejection plus `/api/sqlite-secret-safe-builder-expression` success. `git diff --check` and `pnpm run check:vp` passed.
 - [ ] **2.2 Declared `rawRead(sql, { reads })`: SQLite `SQLITE_READ` authorizer; PG RLS + coverage non-goal (DEC-C).**
       SQLite installs a read authorizer for a complete observed set (`observed ⊆ declared`) AND denies an owner-table read
       in a `rawRead` lacking `actAs`/`declarePublicRead`; drop `.columns()` as the cross-check. PG: RLS confines the
