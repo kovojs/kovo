@@ -126,16 +126,6 @@ const READ_CAPABILITY_PROPERTIES = new Set<string>([
   'selectDistinct',
   'with',
 ]);
-const PARSED_READ_SQL_METHODS = new Set<string>([
-  'all',
-  'exec',
-  'execute',
-  'get',
-  'prepare',
-  'run',
-  'sql',
-  'values',
-]);
 const DENIED_READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$client',
   'batch',
@@ -147,6 +137,13 @@ const DENIED_READ_CAPABILITY_PROPERTIES = new Set<string>([
   'sqlite',
   'transaction',
   'update',
+]);
+const CALLABLE_READ_CAPABILITY_PROPERTIES = new Set<string>([
+  '$count',
+  '$with',
+  'select',
+  'selectDistinct',
+  'with',
 ]);
 
 /**
@@ -309,8 +306,20 @@ const assertSqliteDeclaredWriteStatementAllowed = securityClassifier(
  * floor, and the static KV433 provenance gate remains the by-construction proof. Casts/`any` can
  * defeat this type and must never be accepted as security evidence.
  */
+type ReaderRootCapabilityKeys<Db extends object> = Extract<
+  keyof Db,
+  '$count' | '$with' | 'select' | 'selectDistinct'
+>;
+
+type ReaderQueryNamespace<Db extends object> = Db extends { query: infer Query }
+  ? Query extends (...args: any[]) => any
+    ? {}
+    : { query: Query }
+  : {};
+
 export type Reader<Db> = (Db extends object
-  ? Pick<Db, Extract<keyof Db, '$count' | '$with' | 'query' | 'select' | 'selectDistinct'>> &
+  ? Pick<Db, ReaderRootCapabilityKeys<Db>> &
+      ReaderQueryNamespace<Db> &
       (Db extends { with: (...args: infer Args) => infer Result }
         ? {
             with(
@@ -536,19 +545,18 @@ function readonlyCapabilityDb<Db extends object>(db: Db): Reader<Db> {
       if (prop === 'then') return undefined;
       if (typeof prop === 'string') {
         if (DENIED_READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
-        if (!READ_CAPABILITY_PROPERTIES.has(prop)) {
-          const value = Reflect.get(target, prop, receiver);
-          if (
-            typeof value === 'function' &&
-            (PARSED_READ_SQL_METHODS.has(prop) || prop in target)
-          ) {
-            return value.bind(target);
-          }
+        if (!READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
+        const value = Reflect.get(target, prop, receiver);
+        if (prop === 'query') {
+          if (typeof value === 'function') return readonlyCapabilityError(prop);
+          return value;
+        }
+        if (!CALLABLE_READ_CAPABILITY_PROPERTIES.has(prop)) {
           return readonlyCapabilityError(prop);
         }
+        return typeof value === 'function' ? value.bind(target) : value;
       }
-      const value = Reflect.get(target, prop, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
+      return Reflect.get(target, prop, receiver);
     },
   }) as Reader<Db>;
 }
