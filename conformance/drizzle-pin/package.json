@@ -10,7 +10,7 @@
     "@kovojs/drizzle": "workspace:*"
   },
   "devDependencies": {
-    "drizzle-orm": "1.0.0-rc.3",
+    "drizzle-orm": "1.0.0-rc.4",
     "vitest": "4.1.8"
   }
 }

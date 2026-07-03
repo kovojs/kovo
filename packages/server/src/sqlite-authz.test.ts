@@ -79,7 +79,7 @@ describe('SQLite managed authorization predicate binding', () => {
       insert into shared_docs (id, label) values ('d1', 'guard-owned');
       insert into unclassified_rows (id) values ('x1');
     `);
-    return drizzle(client);
+    return drizzle({ client });
   }
 
   it('scopes owner reads and composes with author predicates without replacing them', () => {
@@ -91,7 +91,9 @@ describe('SQLite managed authorization predicate binding', () => {
 
     expect(query.toSQL()).toMatchObject({
       params: ['open', 'u1'],
-      sql: expect.stringMatching(/"orders"\."status" = \? and "orders"\."user_id" = \?/),
+      sql: expect.stringMatching(
+        /"orders"\."status" = \?\)? and \("orders"\."user_id" = \?/,
+      ),
     });
     expect(query.all()).toEqual([{ id: 'o1' }]);
   });
