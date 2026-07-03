@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { sql } from 'drizzle-orm';
 import { pgTable, text as pgText } from 'drizzle-orm/pg-core';
 import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
 import { kovo } from './runtime.js';
@@ -41,6 +42,12 @@ describe('runtime metadata extraction', () => {
       secret: false,
       table: 'users',
     });
+    expect(metadata.governedColumnKeysByTable.get('users')).toEqual(
+      new Set(['id', 'passwordHash']),
+    );
+    expect(metadata.governedColumnNamesByTable.get('users')).toEqual(
+      new Set(['id', 'password_hash']),
+    );
   });
 
   it('treats secret: true as a whole-table secret annotation', () => {
@@ -90,6 +97,131 @@ describe('runtime metadata extraction', () => {
       key: 'providerId',
       secret: false,
       table: 'account',
+    });
+  });
+
+  it('extracts governed keys and physical names from selectors and column annotations', () => {
+    const account = pgTable(
+      'account',
+      {
+        id: pgText('id').primaryKey(),
+        ownerId: pgText('owner_id').notNull(),
+        passwordDigest: pgText('password_digest').notNull(),
+        recoveryCode: pgText('recovery_code').notNull(),
+        role: pgText('role').notNull(),
+        displayName: pgText('display_name').notNull(),
+      },
+      kovo({
+        confidentialAtRest: [(table) => table.recoveryCode],
+        domain: 'account',
+        governed: [(table) => table.role],
+        key: (table) => table.id,
+        owner: 'owner_id',
+      }),
+    );
+
+    const metadata = extractKovoRuntimeDbMetadata([account]);
+
+    expect(metadata.governedColumnKeysByTable.get('account')).toEqual(
+      new Set(['id', 'ownerId', 'passwordDigest', 'recoveryCode', 'role']),
+    );
+    expect(metadata.governedColumnNamesByTable.get('account')).toEqual(
+      new Set(['id', 'owner_id', 'password_digest', 'recovery_code', 'role']),
+    );
+    expect(metadata.authorizationClassificationsByTable.get('account')).toEqual(['owned']);
+    expect(metadata.ownerSourcesByTable.get('account')).toEqual({
+      columnKey: 'ownerId',
+      columnName: 'owner_id',
+      table: 'account',
+    });
+  });
+
+  it('treats governed: true as a whole-table governed annotation', () => {
+    const auditLog = sqliteTable(
+      'audit_log',
+      {
+        id: text('id').primaryKey(),
+        actorId: text('actor_id').notNull(),
+        event: text('event').notNull(),
+      },
+      kovo({ domain: 'audit', governed: true, key: 'id' }),
+    );
+
+    const metadata = extractKovoRuntimeDbMetadata([auditLog]);
+
+    expect(metadata.governedColumnKeysByTable.get('audit_log')).toEqual(
+      new Set(['id', 'actorId', 'event']),
+    );
+    expect(metadata.governedColumnNamesByTable.get('audit_log')).toEqual(
+      new Set(['id', 'actor_id', 'event']),
+    );
+  });
+
+  it('extracts ownerVia and non-owner DEC-K classifications for runtime authorization', () => {
+    const users = pgTable(
+      'users',
+      {
+        id: pgText('id').primaryKey(),
+      },
+      kovo({ domain: 'user', key: 'id', reference: true }),
+    );
+    const orders = pgTable(
+      'orders',
+      {
+        id: pgText('id').primaryKey(),
+        userId: pgText('user_id').notNull(),
+      },
+      kovo({ domain: 'order', key: 'id', owner: 'userId' }),
+    );
+    const orderItems = pgTable(
+      'order_items',
+      {
+        id: pgText('id').primaryKey(),
+        orderId: pgText('order_id').notNull(),
+      },
+      kovo({
+        domain: 'orderItem',
+        key: 'id',
+        ownerVia: { fk: (table) => table.orderId, parent: orders, parentKey: 'id' },
+      }),
+    );
+    const posts = pgTable(
+      'posts',
+      {
+        id: pgText('id').primaryKey(),
+      },
+      kovo({ domain: 'post', key: 'id', public: true }),
+    );
+    const shares = pgTable(
+      'shares',
+      {
+        id: pgText('id').primaryKey(),
+      },
+      kovo({
+        authzPolicy: sql`owner_id = current_setting('kovo.principal', true)`,
+        domain: 'share',
+        key: 'id',
+      }),
+    );
+
+    const metadata = extractKovoRuntimeDbMetadata([users, orders, orderItems, posts, shares]);
+
+    expect(metadata.authorizationClassificationsByTable).toEqual(
+      new Map([
+        ['users', ['reference']],
+        ['orders', ['owned']],
+        ['order_items', ['ownedVia']],
+        ['posts', ['public']],
+        ['shares', ['authzPolicy']],
+      ]),
+    );
+    expect(metadata.ownerViaSourcesByTable.get('order_items')).toEqual({
+      fkColumnKey: 'orderId',
+      fkColumnName: 'order_id',
+      parentKeyColumnKey: 'id',
+      parentKeyColumnName: 'id',
+      parentTable: 'orders',
+      table: 'order_items',
     });
   });
 });

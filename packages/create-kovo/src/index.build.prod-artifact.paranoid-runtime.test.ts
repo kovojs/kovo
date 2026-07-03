@@ -35,6 +35,8 @@ const blockedReadCases = [
   'sqlite-secret-join-alias-egress',
   'sqlite-secret-cte-egress',
   'sqlite-secret-subquery-egress',
+  'sqlite-secret-union-egress',
+  'sqlite-secret-aggregate-egress',
 ] as const;
 
 const allowedReadCases = [
@@ -51,6 +53,7 @@ const blockedWriteCases = [
   'phase5-write-boundary/ddl-write',
   'phase5-write-boundary/boxed-secret-builder',
   'phase5-write-boundary/boxed-secret-raw',
+  'phase5-write-boundary/governed-mass-assignment',
 ] as const;
 
 describe('create-kovo starter (build integration: paranoid runtime chokes)', () => {
@@ -96,12 +99,18 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await signInDemoUser(root, origin, jar, output);
       await expectBlockedReadShapes(origin, jar);
       await expectAllowedReadShapes(origin, jar);
+      await expectNonSecretAggregateEndpoint(origin);
+      await expectSafeBuilderExpressionEndpoint(origin);
+      await expectHiddenBuilderExpressionEndpoint(origin);
+      await expectDeclaredRawReadEndpoint(origin);
+      await expectUnderdeclaredRawReadEndpoint(origin);
       await expectStarterInScopeWrite(origin, jar, output, contactEmail);
       await expectBlockedWrites(origin, marker);
       await expectWriteStatus(origin, marker, contactEmail);
 
       expect(output()).toContain('KV435');
       expect(output()).toContain('KV406');
+      expect(output()).toContain('KV438');
       expect(output()).not.toContain('runtime-secret-value');
       expect(output()).not.toContain('phase5-builder-secret');
       expect(output()).not.toContain('phase5-raw-secret');
@@ -137,6 +146,50 @@ async function expectAllowedReadShapes(origin: string, jar: Map<string, string>)
     expect(body).toContain(testCase.witness);
     if (!testCase.leaksSecret) expect(body).not.toContain('runtime-secret-value');
   }
+}
+
+async function expectNonSecretAggregateEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-secret-nonsecret-aggregate`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(body).toContain('"total":1');
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectSafeBuilderExpressionEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-secret-safe-builder-expression`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(body).toContain('ADA LOVELACE');
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectHiddenBuilderExpressionEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-secret-hidden-builder-expression`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(500);
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectDeclaredRawReadEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-raw-read-declared`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(body).toContain('Ada Lovelace');
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectUnderdeclaredRawReadEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-raw-read-underdeclared`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(500);
+  expect(body).not.toContain('runtime-secret-value');
+  expect(body).not.toContain('join public label');
 }
 
 async function expectStarterInScopeWrite(
@@ -229,12 +282,14 @@ async function expectWriteStatus(
   const writeStatus = JSON.parse(writeStatusBody) as {
     blockedBuilderSecretRows: number;
     blockedDdlTables: number;
+    blockedGovernedMassAssignmentRows: number;
     blockedRawSecretRows: number;
   };
 
   expect(writeStatus).toEqual({
     blockedBuilderSecretRows: 0,
     blockedDdlTables: 0,
+    blockedGovernedMassAssignmentRows: 0,
     blockedRawSecretRows: 0,
   });
 }

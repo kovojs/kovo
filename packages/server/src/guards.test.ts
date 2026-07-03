@@ -94,9 +94,19 @@ describe('guard principal resolution (Q.6 auth-decision fail-closed)', () => {
     expect(guards.authed<Req>()({ session: { user: { id: 'user_1' } } })).toBe(true);
     expect(
       guards.role<Req & { session: { user: { roles: readonly string[] } } }>('admin')({
-        session: { id: 'session_1', user: { roles: ['admin'] } },
+        session: { id: 'session_1', user: { id: 'user_1', roles: ['admin'] } },
       }),
     ).toBe(true);
+  });
+
+  it('keys authorization principal from session.user.id rather than session.id', async () => {
+    expect(guards.authed<Req>()({ session: { id: 'session_1', user: { id: 'user_1' } } })).toBe(
+      true,
+    );
+    expect(guards.authed<Req>()({ session: { id: 'session_1', user: {} } })).toEqual({
+      kind: 'unauthenticated',
+      payload: {},
+    });
   });
 
   it.each(['', ' ', 'unknown', 'unresolved', 'anonymous'])(

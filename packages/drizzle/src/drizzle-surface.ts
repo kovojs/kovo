@@ -94,17 +94,28 @@ export type KovoConcurrencyColumnAnnotation = KovoColumnRef | readonly KovoColum
 /** A domain annotation can use explicit external vocabulary or a source-derived Kovo domain value. */
 export type KovoDomainRef = string | { key: string };
 
+/** Declares ownership through a parent table relation (fundamental-fixes-followup-5 DEC-I/DEC-K). */
+export interface KovoOwnerViaAnnotation {
+  fk: KovoColumnRef;
+  parent: unknown;
+  parentKey: KovoColumnRef;
+}
+
 /** A Kovo annotation on a Drizzle table: a `domain` (with optional row `key` and principal `owner`), or an `exempt` marker. */
 export type KovoTableAnnotation =
   | {
       atomic?: KovoConcurrencyColumnAnnotation;
+      authzPolicy?: unknown;
       confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation;
       domain: KovoDomainRef;
       fans?: readonly KovoFanAnnotation[];
       governed?: KovoGovernedColumnAnnotation;
       key?: KovoColumnRef;
       owner?: KovoColumnRef;
+      ownerVia?: KovoOwnerViaAnnotation;
+      public?: true;
       readOnly?: true;
+      reference?: true;
       secret?: KovoSecretColumnAnnotation;
       version?: KovoConcurrencyColumnAnnotation;
     }
@@ -122,13 +133,17 @@ export type KovoAnnotation = KovoTableAnnotation | KovoViewExtraConfigAnnotation
 /** The domain-bearing form of a table annotation: its `domain`, optional `key` column, and optional principal `owner` column (SPEC §10.1). */
 export interface KovoDomainTableAnnotation {
   atomic?: KovoConcurrencyColumnAnnotation;
+  authzPolicy?: unknown;
   confidentialAtRest?: KovoConfidentialAtRestColumnAnnotation;
   domain: KovoDomainRef;
   fans?: readonly KovoFanAnnotation[];
   governed?: KovoGovernedColumnAnnotation;
   key?: KovoColumnRef;
   owner?: KovoColumnRef;
+  ownerVia?: KovoOwnerViaAnnotation;
+  public?: true;
   readOnly?: true;
+  reference?: true;
   secret?: KovoSecretColumnAnnotation;
   version?: KovoConcurrencyColumnAnnotation;
 }

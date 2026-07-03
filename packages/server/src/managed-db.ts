@@ -22,6 +22,7 @@ import {
   type ManagedSqlWritePolicy,
 } from './sql-safe-handle.js';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import { requestInputProvenanceForValue } from './request-input-provenance.js';
 
 declare const readerDbBrand: unique symbol;
 declare const writerDbBrand: unique symbol;
@@ -79,6 +80,7 @@ export interface DeclaredWriteSqliteAuthorizerConstants {
   SQLITE_INSERT: number;
   SQLITE_OK: number;
   SQLITE_PRAGMA: number;
+  SQLITE_READ?: number;
   SQLITE_REINDEX: number;
   SQLITE_UPDATE: number;
 }
@@ -104,9 +106,16 @@ export interface DeclaredWriteSqliteAuthorizerOptions {
   openDatabase(): DeclaredWriteSqliteAuthorizerDatabase;
 }
 
+/** Schema-derived governed-column metadata consumed by the KV438 runtime write floor. */
+export interface GovernedWriteMetadata {
+  governedColumnKeysByTable: ReadonlyMap<string, ReadonlySet<string>>;
+  governedColumnNamesByTable: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
 /** Options for the framework-owned declared-write DB choke. */
 export interface DeclaredWriteDbOptions {
   dialectLabel: string;
+  governedColumns?: GovernedWriteMetadata;
   normalizeTableName: (table: string) => string;
   sqliteAuthorizer?: DeclaredWriteSqliteAuthorizerOptions;
   tableNames: (table: unknown) => readonly string[];
@@ -118,23 +127,30 @@ export interface PostgresReadonlyClientOptions {
   readerRole?: string | false;
 }
 
+/** User-authored declaration for the raw read escape (SPEC §10.2/§10.3 DEC-C). */
+export interface RawReadDeclaration {
+  actAs?: string;
+  declarePublicRead?: { reason: string };
+  reads: readonly string[];
+}
+
+/** Framework-owned rawRead enforcement options for a managed read handle. */
+export interface RawReadPolicyOptions {
+  dialectLabel: string;
+  executeMethod?: 'all' | 'execute' | 'query' | 'values';
+  normalizeTableName: (table: string) => string;
+  ownerTables?: readonly string[];
+  sqliteAuthorizer?: DeclaredWriteSqliteAuthorizerOptions;
+}
+
 const READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$count',
   '$with',
   'query',
+  'rawRead',
   'select',
   'selectDistinct',
   'with',
-]);
-const PARSED_READ_SQL_METHODS = new Set<string>([
-  'all',
-  'exec',
-  'execute',
-  'get',
-  'prepare',
-  'run',
-  'sql',
-  'values',
 ]);
 const DENIED_READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$client',
@@ -147,6 +163,14 @@ const DENIED_READ_CAPABILITY_PROPERTIES = new Set<string>([
   'sqlite',
   'transaction',
   'update',
+]);
+const CALLABLE_READ_CAPABILITY_PROPERTIES = new Set<string>([
+  '$count',
+  '$with',
+  'rawRead',
+  'select',
+  'selectDistinct',
+  'with',
 ]);
 
 /**
@@ -173,8 +197,12 @@ export const createDeclaredWriteDb = securityClassifier(
         }
         if (isDeclaredWriteDrizzleMethod(prop) && typeof value === 'function') {
           return (table: unknown, ...args: unknown[]) => {
-            assertDeclaredWriteTablesAllowed(options.tableNames(table), policy, options);
-            return Reflect.apply(value, target, [table, ...args]);
+            const tableNames = options.tableNames(table);
+            assertDeclaredWriteTablesAllowed(tableNames, policy, options);
+            const builder = Reflect.apply(value, target, [table, ...args]);
+            return prop === 'delete'
+              ? builder
+              : declaredWriteBuilder(builder, prop, tableNames, options);
           };
         }
         if (prop === 'transaction' && typeof value === 'function') {
@@ -310,8 +338,17 @@ const assertSqliteDeclaredWriteStatementAllowed = securityClassifier(
  * defeat this type and must never be accepted as security evidence.
  */
 export type Reader<Db> = (Db extends object
-  ? Pick<Db, Extract<keyof Db, '$count' | '$with' | 'query' | 'select' | 'selectDistinct'>> &
-      (Db extends { with: (...args: infer Args) => infer Result }
+  ? Pick<Db, Extract<keyof Db, '$count' | '$with' | 'select' | 'selectDistinct'>> &
+      (Db extends { query: infer Query }
+        ? Query extends (...args: any[]) => any
+          ? {}
+          : { query: Query }
+        : {}) & {
+        rawRead<Row = unknown>(
+          statement: unknown,
+          declaration: RawReadDeclaration,
+        ): Promise<Row[]> | Row[];
+      } & (Db extends { with: (...args: infer Args) => infer Result }
         ? {
             with(
               ...args: Args
@@ -351,6 +388,155 @@ interface SqlCarrier {
 
 function isDeclaredWriteDrizzleMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
   return prop === 'delete' || prop === 'insert' || prop === 'update';
+}
+
+function declaredWriteBuilder(
+  builder: unknown,
+  verb: 'insert' | 'update',
+  tableNames: readonly string[],
+  options: DeclaredWriteDbOptions,
+): unknown {
+  if (!isRecord(builder)) return builder;
+  return new Proxy(builder, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value !== 'function') return value;
+      if (prop === 'values') {
+        return (payload: unknown, ...args: unknown[]) => {
+          assertGovernedWritePayloadAllowed(payload, {
+            boundary: 'values',
+            options,
+            tableNames,
+            verb,
+          });
+          return wrapDeclaredWriteBuilderResult(
+            Reflect.apply(value, target, [payload, ...args]),
+            verb,
+            tableNames,
+            options,
+          );
+        };
+      }
+      if (prop === 'set') {
+        return (payload: unknown, ...args: unknown[]) => {
+          assertGovernedWritePayloadAllowed(payload, {
+            boundary: 'set',
+            options,
+            tableNames,
+            verb,
+          });
+          return wrapDeclaredWriteBuilderResult(
+            Reflect.apply(value, target, [payload, ...args]),
+            verb,
+            tableNames,
+            options,
+          );
+        };
+      }
+      if (prop === 'onConflictDoUpdate') {
+        return (config: unknown, ...args: unknown[]) => {
+          if (isRecord(config)) {
+            assertGovernedWritePayloadAllowed(config.set, {
+              boundary: 'onConflictDoUpdate.set',
+              options,
+              tableNames,
+              verb,
+            });
+          }
+          return wrapDeclaredWriteBuilderResult(
+            Reflect.apply(value, target, [config, ...args]),
+            verb,
+            tableNames,
+            options,
+          );
+        };
+      }
+      return (...args: unknown[]) =>
+        wrapDeclaredWriteBuilderResult(
+          Reflect.apply(value, target, args),
+          verb,
+          tableNames,
+          options,
+        );
+    },
+  });
+}
+
+function wrapDeclaredWriteBuilderResult(
+  result: unknown,
+  verb: 'insert' | 'update',
+  tableNames: readonly string[],
+  options: DeclaredWriteDbOptions,
+): unknown {
+  if (!isRecord(result) || !hasDeclaredWriteBuilderMethod(result)) return result;
+  return declaredWriteBuilder(result, verb, tableNames, options);
+}
+
+function hasDeclaredWriteBuilderMethod(result: Record<PropertyKey, unknown>): boolean {
+  return (
+    typeof result.values === 'function' ||
+    typeof result.set === 'function' ||
+    typeof result.onConflictDoUpdate === 'function'
+  );
+}
+
+interface GovernedWritePayloadContext {
+  boundary: string;
+  options: DeclaredWriteDbOptions;
+  tableNames: readonly string[];
+  verb: 'insert' | 'update';
+}
+
+function assertGovernedWritePayloadAllowed(
+  payload: unknown,
+  context: GovernedWritePayloadContext,
+): void {
+  const governed = governedWriteColumnsForTables(context.tableNames, context.options);
+  if (governed.size === 0) return;
+  if (Array.isArray(payload)) {
+    for (const row of payload) assertGovernedWriteObjectAllowed(row, governed, context);
+    return;
+  }
+  assertGovernedWriteObjectAllowed(payload, governed, context);
+}
+
+function assertGovernedWriteObjectAllowed(
+  payload: unknown,
+  governed: ReadonlySet<string>,
+  context: GovernedWritePayloadContext,
+): void {
+  if (!isRecord(payload)) return;
+  for (const key of Reflect.ownKeys(payload)) {
+    if (typeof key !== 'string' || !governed.has(key)) continue;
+    const value = Reflect.get(payload, key);
+    const provenance = requestInputProvenanceForValue(value);
+    if (provenance === undefined) continue;
+    throw new Error(
+      [
+        `KV438: ${context.options.dialectLabel} managed write rejected parsed request input ${provenance.path} for governed column ${key} in ${context.verb}.${context.boundary} (SPEC §11.1).`,
+        '  Use a server-derived value or the audited adminAssign(...) escape for intentional privileged assignment.',
+      ].join('\n'),
+    );
+  }
+}
+
+function governedWriteColumnsForTables(
+  tableNames: readonly string[],
+  options: DeclaredWriteDbOptions,
+): ReadonlySet<string> {
+  const metadata = options.governedColumns;
+  if (metadata === undefined) return new Set();
+  const normalizedTargets = new Set(tableNames.map(options.normalizeTableName));
+  const governed = new Set<string>();
+  for (const [table, columns] of metadata.governedColumnKeysByTable) {
+    if (!normalizedTargets.has(options.normalizeTableName(table))) continue;
+    for (const column of columns) governed.add(column);
+  }
+  for (const [table, columns] of metadata.governedColumnNamesByTable) {
+    if (!normalizedTargets.has(options.normalizeTableName(table))) continue;
+    for (const column of columns) governed.add(column);
+  }
+  return governed;
 }
 
 function isDeclaredWriteDirectSqlMethod(
@@ -517,7 +703,10 @@ export type ManagedDbMode = 'read' | 'write';
  * `readonlyDb(appDb)` instead of importing a broad write handle into a read-only endpoint. It is a
  * fail-closed runtime floor plus a branded type, not the SPEC §6.6 security proof.
  */
-export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
+export function readonlyDb<Db extends object>(
+  db: Db,
+  options: { rawRead?: RawReadPolicyOptions } = {},
+): Reader<Db> {
   const readDb = readonlyDbTarget(db);
   const safe = wrapManagedDbForSqlSafety(
     readDb,
@@ -527,28 +716,31 @@ export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
       engineReadonly: readDb !== db,
     }),
   );
-  return readonlyCapabilityDb(safe as object) as Reader<Db>;
+  return readonlyCapabilityDb(safe as object, options.rawRead) as unknown as Reader<Db>;
 }
 
-function readonlyCapabilityDb<Db extends object>(db: Db): Reader<Db> {
+function readonlyCapabilityDb<Db extends object>(
+  db: Db,
+  rawReadPolicy: RawReadPolicyOptions | undefined,
+): Reader<Db> {
   return new Proxy(db, {
     get(target, prop, receiver) {
       if (prop === 'then') return undefined;
       if (typeof prop === 'string') {
         if (DENIED_READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
-        if (!READ_CAPABILITY_PROPERTIES.has(prop)) {
-          const value = Reflect.get(target, prop, receiver);
-          if (
-            typeof value === 'function' &&
-            (PARSED_READ_SQL_METHODS.has(prop) || prop in target)
-          ) {
-            return value.bind(target);
-          }
+        if (!READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
+        if (prop === 'rawRead') return rawReadCapability(target, rawReadPolicy);
+        const value = Reflect.get(target, prop, receiver);
+        if (prop === 'query') {
+          if (typeof value === 'function') return readonlyCapabilityError(prop);
+          return value;
+        }
+        if (!CALLABLE_READ_CAPABILITY_PROPERTIES.has(prop)) {
           return readonlyCapabilityError(prop);
         }
+        return typeof value === 'function' ? value.bind(target) : value;
       }
-      const value = Reflect.get(target, prop, receiver);
-      return typeof value === 'function' ? value.bind(target) : value;
+      return Reflect.get(target, prop, receiver);
     },
   }) as Reader<Db>;
 }
@@ -561,8 +753,117 @@ function readonlyCapabilityError(prop: string): () => never {
   };
 }
 
+function rawReadCapability(
+  target: object,
+  policy: RawReadPolicyOptions | undefined,
+): <Row = unknown>(statement: unknown, declaration: RawReadDeclaration) => Promise<Row[]> | Row[] {
+  return <Row = unknown>(statement: unknown, declaration: RawReadDeclaration) => {
+    if (policy === undefined) {
+      throw new KovoReadonlyHandleError(
+        'KV410: rawRead requires a framework-owned read policy; use builder reads unless the adapter wires the declared raw-read escape (SPEC §10.2/§10.3).',
+      );
+    }
+    assertRawReadDeclaration(declaration);
+    const carrier = sqlCarrierFromValue(statement, []);
+    if (carrier === undefined) {
+      throw new Error(
+        'KV410: rawRead requires a SQL statement whose table set can be checked against the declared reads (SPEC §10.2/§10.3).',
+      );
+    }
+    assertRawReadObservedTablesAllowed(carrier.text, declaration, policy);
+    const method = rawReadExecutionMethod(target, policy);
+    return method.call(target, statement) as Promise<Row[]> | Row[];
+  };
+}
+
+function assertRawReadDeclaration(declaration: RawReadDeclaration): void {
+  if (
+    !Array.isArray(declaration.reads) ||
+    declaration.reads.length === 0 ||
+    declaration.reads.some((table) => typeof table !== 'string' || table.trim() === '')
+  ) {
+    throw new Error('KV410: rawRead requires a non-empty declared reads table set.');
+  }
+  if (declaration.actAs !== undefined && declaration.actAs.trim() === '') {
+    throw new Error('KV414: rawRead actAs scope requires a non-empty principal.');
+  }
+  const publicReason = declaration.declarePublicRead?.reason;
+  if (publicReason !== undefined && publicReason.trim() === '') {
+    throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
+  }
+}
+
+function assertRawReadObservedTablesAllowed(
+  sql: string,
+  declaration: RawReadDeclaration,
+  policy: RawReadPolicyOptions,
+): void {
+  const sqliteAuthorizer = policy.sqliteAuthorizer;
+  if (sqliteAuthorizer === undefined) return;
+  const readAction = sqliteAuthorizer.constants.SQLITE_READ;
+  if (readAction === undefined) {
+    throw new Error(
+      'KV410: SQLite rawRead authorizer requires SQLITE_READ support to observe declared reads (SPEC §10.2/§10.3).',
+    );
+  }
+
+  const observed = new Set<string>();
+  const sqlite = sqliteAuthorizer.openDatabase();
+  try {
+    sqlite.setAuthorizer((action, objectName, _columnName, databaseName) => {
+      if (action === readAction && objectName !== null) {
+        observed.add(policy.normalizeTableName(`${databaseName ?? 'main'}.${objectName}`));
+      }
+      return sqliteAuthorizer.constants.SQLITE_OK;
+    });
+    sqlite.prepare(sql);
+  } finally {
+    sqlite.close();
+  }
+
+  const declared = new Set(declaration.reads.map(policy.normalizeTableName));
+  const unexpected = [...observed].filter((table) => !declared.has(table));
+  if (unexpected.length > 0) {
+    throw new Error(
+      [
+        `KV410: ${policy.dialectLabel} rawRead observed table(s) outside the declared reads set (SPEC §10.2/§10.3).`,
+        `  observed: ${[...observed].sort().join(', ') || '<none>'}`,
+        `  declared reads: ${[...declared].sort().join(', ') || '<none>'}`,
+      ].join('\n'),
+    );
+  }
+
+  const ownerTables = new Set((policy.ownerTables ?? []).map(policy.normalizeTableName));
+  const scoped =
+    declaration.actAs !== undefined || declaration.declarePublicRead?.reason !== undefined;
+  const ownerReads = [...observed].filter((table) => ownerTables.has(table));
+  if (!scoped && ownerReads.length > 0) {
+    throw new Error(
+      [
+        `KV414: ${policy.dialectLabel} rawRead of owner-scoped table(s) requires actAs or declarePublicRead scope (SPEC §10.3).`,
+        `  owner tables: ${[...new Set(ownerReads)].sort().join(', ')}`,
+      ].join('\n'),
+    );
+  }
+}
+
+function rawReadExecutionMethod(target: object, policy: RawReadPolicyOptions): Function {
+  const methods =
+    policy.executeMethod === undefined
+      ? (['all', 'query', 'execute', 'values'] as const)
+      : ([policy.executeMethod] as const);
+  for (const method of methods) {
+    const value = Reflect.get(target, method);
+    if (typeof value === 'function') return value;
+  }
+  throw new KovoReadonlyHandleError(
+    `KV410: ${policy.dialectLabel} rawRead could not find an executable read method on the managed DB handle (SPEC §10.2/§10.3).`,
+  );
+}
+
 /** @internal Options for the framework-owned managed DB handle composition point. */
 export interface ManagedDbOptions {
+  rawRead?: RawReadPolicyOptions;
   sqlWritePolicy?: ManagedSqlWritePolicy;
 }
 
@@ -601,7 +902,7 @@ export function managedDb<Db>(
   );
   if (mode === 'write') return safe as Writer<Db>;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
-  return readonlyCapabilityDb(safe as unknown as object) as Reader<Db>;
+  return readonlyCapabilityDb(safe as unknown as object, options.rawRead) as unknown as Reader<Db>;
 }
 
 function readonlyDbTarget<Db>(raw: Db): Db {

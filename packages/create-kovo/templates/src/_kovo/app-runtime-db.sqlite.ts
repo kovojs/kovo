@@ -68,9 +68,23 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   client.exec(SCHEMA_DDL);
   client.exec(SEED_CONTACTS);
   const db = drizzle({ client, schema });
-  const secretReadDb = createSecretBoxingReadDb(readonlyDb(db), SECRET_READ_METADATA, {
-    sqliteColumnOrigins: client,
-  });
+  const secretReadDb = createSecretBoxingReadDb(
+    readonlyDb(db, {
+      rawRead: {
+        dialectLabel: 'SQLite',
+        executeMethod: 'all',
+        normalizeTableName: normalizePolicyTable,
+        sqliteAuthorizer: {
+          constants: nodeSqliteConstants,
+          openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile),
+        },
+      },
+    }),
+    SECRET_READ_METADATA,
+    {
+      sqliteColumnOrigins: client,
+    },
+  );
   Object.defineProperty(db, kovoReadonlyDbHandle, {
     configurable: true,
     value: () => secretReadDb,
@@ -80,6 +94,7 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
     value: (policy: DeclaredWritePolicy) =>
       createDeclaredWriteDb(db, policy, {
         dialectLabel: 'SQLite',
+        governedColumns: SECRET_READ_METADATA,
         normalizeTableName: normalizePolicyTable,
         sqliteAuthorizer: {
           constants: nodeSqliteConstants,

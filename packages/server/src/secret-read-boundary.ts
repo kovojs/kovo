@@ -215,6 +215,7 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
     const expressionSafety = expressionSafetyByResultKey(statement, metadata);
     const selectedKeys = selectedResultKeysFromValue(statement);
     const referencesSecretTable = sqlReferencesSecretTable(sql, metadata.secretTableNames);
+    const secretBearingCompound = sqlHasCompoundSelect(sql) && referencesSecretTable;
     const columns = sqliteResultColumns(client, sql);
 
     if (columns === undefined) {
@@ -229,6 +230,10 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
         (typeof column.name === 'string' && column.name !== '' ? column.name : undefined);
       if (key === undefined) {
         if (referencesSecretTable) return { ...emptyReadBoundary(), rawWholeRowSecret: true };
+        continue;
+      }
+      if (secretBearingCompound) {
+        opaqueResultKeys.add(key);
         continue;
       }
       if (
@@ -265,6 +270,7 @@ function isReadSurfaceMethod(prop: PropertyKey): boolean {
     prop === 'get' ||
     prop === 'prepare' ||
     prop === 'query' ||
+    prop === 'rawRead' ||
     prop === 'run' ||
     prop === 'select' ||
     prop === 'selectDistinct' ||
@@ -486,6 +492,11 @@ function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
 
   const value = (chunk as { value?: unknown }).value;
   if (Array.isArray(value) && value.every((item) => typeof item === 'string')) {
+    if (value.some(sqlStringChunkHidesReadSource)) {
+      throw new Error(
+        'KV410: raw SQL expression chunks cannot contain SELECT or FROM; use builder table bindings or a declared rawRead path so the read set stays visible (SPEC §10.2/§10.3).',
+      );
+    }
     return value.every(sqlStringChunkIsInert);
   }
   return false;
@@ -494,19 +505,25 @@ function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
 const SAFE_SQL_WORDS = new Set([
   'abs',
   'as',
+  'avg',
   'cast',
   'coalesce',
   'collate',
+  'count',
   'ifnull',
   'length',
   'lower',
   'ltrim',
+  'max',
+  'min',
   'null',
   'nullif',
   'round',
   'rtrim',
   'substr',
   'substring',
+  'sum',
+  'total',
   'trim',
   'upper',
 ]);
@@ -519,6 +536,10 @@ function sqlStringChunkIsInert(value: string): boolean {
   return true;
 }
 
+function sqlStringChunkHidesReadSource(value: string): boolean {
+  return /\b(?:from|select)\b/i.test(value);
+}
+
 function isDirectSqlReadMethod(prop: PropertyKey): boolean {
   return (
     prop === 'all' ||
@@ -526,6 +547,7 @@ function isDirectSqlReadMethod(prop: PropertyKey): boolean {
     prop === 'get' ||
     prop === 'prepare' ||
     prop === 'query' ||
+    prop === 'rawRead' ||
     prop === 'run' ||
     prop === 'sql' ||
     prop === 'values'
@@ -578,6 +600,10 @@ function sqlReferencesSecretTable(sql: string, secretTableNames: ReadonlySet<str
     if (sqlReferencesTable(sql, table)) return true;
   }
   return false;
+}
+
+function sqlHasCompoundSelect(sql: string): boolean {
+  return /\b(?:union|intersect|except)\b/i.test(sql);
 }
 
 function sqlReferencesTable(sql: string, table: string): boolean {

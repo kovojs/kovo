@@ -37,7 +37,6 @@ export const principalPostureFromRequest = securityClassifier(
       } else if (typeof sessionValue === 'object' || typeof sessionValue === 'function') {
         hasUnresolvedCarrier = true;
         const session = sessionValue as Record<PropertyKey, unknown>;
-        candidates.push(session.id);
         const user = session.user;
         if (typeof user === 'object' || typeof user === 'function') {
           candidates.push((user as Record<PropertyKey, unknown>).id);
@@ -50,12 +49,8 @@ export const principalPostureFromRequest = securityClassifier(
       }
     }
 
-    if ('sessionId' in record) {
-      const sessionId = record.sessionId;
-      if (sessionId !== null && sessionId !== undefined) {
-        hasUnresolvedCarrier = true;
-        candidates.push(sessionId);
-      }
+    if ('sessionId' in record && record.sessionId !== null && record.sessionId !== undefined) {
+      hasUnresolvedCarrier = true;
     }
 
     for (const candidate of candidates) {
