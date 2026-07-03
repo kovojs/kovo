@@ -819,7 +819,7 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createDeclaredWriteDb(db, policy');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("dialectLabel: 'SQLite'");
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'governedColumns: SECRET_READ_METADATA',
+      'governedColumns: RUNTIME_DB_METADATA',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile)',
@@ -832,11 +832,20 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ready: Promise.resolve()');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const SECRET_READ_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES)',
+      'const RUNTIME_DB_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb(db, {');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('rawRead: {');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("executeMethod: 'all'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const secretReadDb = createSecretBoxingReadDb(',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'RUNTIME_DB_METADATA,',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'createSqliteAuthorizationDb(appDatabase.db',
+    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'function secretBoxingReadDb<Db extends object>',
     );
@@ -844,7 +853,7 @@ describe('create-kovo starter (metadata)', () => {
       'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'export function appRuntimeDbProvider(): AppDb',
+      'export function appRuntimeDbProvider(request?: unknown): AppDb',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('__kovoStarterAppDatabase');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(

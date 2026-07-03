@@ -119,6 +119,7 @@ export type {
 export {
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
+  createSqliteAuthorizationDb,
   KovoReadonlyHandleError,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
@@ -134,6 +135,11 @@ export type {
   RawReadDeclaration,
   RawReadPolicyOptions,
   Reader,
+  SqliteAuthorizationClassification,
+  SqliteAuthorizationDbOptions,
+  SqliteAuthorizationMetadata,
+  SqliteOwnerSource,
+  SqliteOwnerViaSource,
   Writer,
 } from '../managed-db.js';
 export { s, SchemaValidationError } from '../schema.js';

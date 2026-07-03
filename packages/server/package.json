@@ -114,10 +114,13 @@
     "@kovojs/core": "workspace:*",
     "@kovojs/style": "workspace:*",
     "@node-rs/argon2": "^2.0.2",
+    "drizzle-orm": "^0.45.2",
     "pgsql-ast-parser": "^12.0.2",
     "undici": "^7.28.0"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.0.0",
     "vitest": "4.1.8"
   }
 }

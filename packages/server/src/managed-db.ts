@@ -22,6 +22,8 @@ import {
   type ManagedSqlWritePolicy,
 } from './sql-safe-handle.js';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import { and, eq, sql } from 'drizzle-orm';
+import type { SQLWrapper } from 'drizzle-orm';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
 
 declare const readerDbBrand: unique symbol;
@@ -143,6 +145,52 @@ export interface RawReadPolicyOptions {
   sqliteAuthorizer?: DeclaredWriteSqliteAuthorizerOptions;
 }
 
+/** Runtime authorization classifications grouped by physical SQLite table. */
+export type SqliteAuthorizationClassification =
+  | 'authzPolicy'
+  | 'owned'
+  | 'ownedVia'
+  | 'public'
+  | 'reference';
+
+/** Direct owner-column source metadata for a physical SQLite table. */
+export interface SqliteOwnerSource {
+  columnKey: string;
+  columnName: string;
+  table: string;
+}
+
+/** Transitive owner source metadata for an ownerVia-classified SQLite table. */
+export interface SqliteOwnerViaSource {
+  fkColumnKey: string;
+  fkColumnName: string;
+  parentKeyColumnKey: string;
+  parentKeyColumnName: string;
+  parentTable: string;
+  table: string;
+}
+
+/** Structural subset of `@kovojs/drizzle` runtime metadata consumed by SQLite authz. */
+export interface SqliteAuthorizationMetadata {
+  authorizationClassificationsByTable?: ReadonlyMap<
+    string,
+    readonly SqliteAuthorizationClassification[]
+  >;
+  ownerSourcesByTable?: ReadonlyMap<string, SqliteOwnerSource>;
+  ownerViaSourcesByTable?: ReadonlyMap<string, SqliteOwnerViaSource>;
+}
+
+/** Options for the framework-owned SQLite predicate-binding authorization wrapper. */
+export interface SqliteAuthorizationDbOptions {
+  metadata: SqliteAuthorizationMetadata;
+  principal?: string;
+}
+
+interface SqliteAuthorizationApplyState {
+  appliedWhere: SQLWrapper | undefined;
+  sourceWhere: SQLWrapper | undefined;
+}
+
 const READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$count',
   '$with',
@@ -172,6 +220,28 @@ const CALLABLE_READ_CAPABILITY_PROPERTIES = new Set<string>([
   'selectDistinct',
   'with',
 ]);
+const SQLITE_AUTHZ_DIRECT_SQL_METHODS = new Set<PropertyKey>([
+  'all',
+  'execute',
+  'get',
+  'prepare',
+  'query',
+  'run',
+  'sql',
+  'values',
+]);
+const SQLITE_AUTHZ_TERMINALS = new Set<PropertyKey>([
+  'all',
+  'execute',
+  'get',
+  'run',
+  'then',
+  'toSQL',
+  'values',
+]);
+const DRIZZLE_NAME_SYMBOL = Symbol.for('drizzle:Name');
+const DRIZZLE_ORIGINAL_NAME_SYMBOL = Symbol.for('drizzle:OriginalName');
+const DRIZZLE_BASE_NAME_SYMBOL = Symbol.for('drizzle:BaseName');
 
 /**
  * Create a framework-owned declared-write DB wrapper (SPEC §10.3/§11.2). Generated adapters pass
@@ -215,6 +285,21 @@ export const createDeclaredWriteDb = securityClassifier(
         return typeof value === 'function' ? value.bind(target) : value;
       },
     }) as Db;
+  },
+);
+
+/**
+ * Create a SQLite Drizzle handle that binds Kovo owner/ownerVia predicates at runtime.
+ *
+ * SQLite has no storage-engine RLS, so the framework-owned managed handle is the DEC-A choke:
+ * owned reads/writes are scoped to the proven owner principal, unclassified reachable tables deny
+ * at runtime, and shapes the wrapper cannot safely introspect fail closed (SPEC §10.3/§11.2).
+ */
+export const createSqliteAuthorizationDb = securityClassifier(
+  'server.managed-db.sqlite-authorization-db',
+  function <Db extends object>(db: Db, options: SqliteAuthorizationDbOptions): Db {
+    const applyStates = new WeakMap<object, SqliteAuthorizationApplyState>();
+    return sqliteAuthorizationProxy(db, options, applyStates, undefined) as Db;
   },
 );
 
@@ -546,6 +631,300 @@ function isDeclaredWriteDirectSqlMethod(
   return (
     options.sqliteAuthorizer !== undefined &&
     (prop === 'all' || prop === 'execute' || prop === 'get' || prop === 'run' || prop === 'values')
+  );
+}
+
+function sqliteAuthorizationProxy(
+  value: unknown,
+  options: SqliteAuthorizationDbOptions,
+  applyStates: WeakMap<object, SqliteAuthorizationApplyState>,
+  builderMode: 'delete' | 'insert' | 'select' | 'update' | undefined,
+): unknown {
+  if (!isRecord(value)) return value;
+  return new Proxy(value, {
+    get(target, prop, receiver) {
+      if (prop === 'then') {
+        applySqliteAuthorizationToBuilder(target, options, applyStates, builderMode);
+      }
+      const item = Reflect.get(target, prop, receiver);
+      if (typeof item !== 'function') return item;
+      const isBuilder = isRecord((target as { config?: unknown }).config);
+      if (!isBuilder && SQLITE_AUTHZ_DIRECT_SQL_METHODS.has(prop)) {
+        return (...args: unknown[]) => {
+          assertSqliteAuthorizationDirectSqlAllowed(args[0], options);
+          return Reflect.apply(item, target, args);
+        };
+      }
+      if (SQLITE_AUTHZ_TERMINALS.has(prop)) {
+        return (...args: unknown[]) => {
+          applySqliteAuthorizationToBuilder(target, options, applyStates, builderMode);
+          return Reflect.apply(item, target, args);
+        };
+      }
+      if (prop === 'select' || prop === 'selectDistinct') {
+        return (...args: unknown[]) =>
+          sqliteAuthorizationProxy(
+            Reflect.apply(item, target, args),
+            options,
+            applyStates,
+            'select',
+          );
+      }
+      if (prop === 'update' || prop === 'delete' || prop === 'insert') {
+        return (...args: unknown[]) =>
+          sqliteAuthorizationProxy(Reflect.apply(item, target, args), options, applyStates, prop);
+      }
+      return (...args: unknown[]) => {
+        const result = Reflect.apply(item, target, args);
+        return sqliteAuthorizationProxy(result, options, applyStates, builderMode);
+      };
+    },
+  });
+}
+
+function applySqliteAuthorizationToBuilder(
+  builder: object,
+  options: SqliteAuthorizationDbOptions,
+  applyStates: WeakMap<object, SqliteAuthorizationApplyState>,
+  builderMode: 'delete' | 'insert' | 'select' | 'update' | undefined,
+): void {
+  const config = (builder as { config?: unknown }).config;
+  if (!isRecord(config)) return;
+  if (builderMode === 'insert') {
+    assertSqliteInsertIsOwnerCheckable(config, options);
+    return;
+  }
+  if (builderMode === 'update') assertSqliteUpdateDoesNotReassignOwner(config, options);
+  const predicates = sqliteAuthorizationPredicatesForConfig(config, options);
+  if (predicates.length === 0) {
+    applySqliteAuthorizationToSetOperatorArms(config, options, applyStates);
+    return;
+  }
+
+  const sourceWhere = (
+    applyStates.get(config)?.appliedWhere === config.where
+      ? applyStates.get(config)?.sourceWhere
+      : config.where
+  ) as SQLWrapper | undefined;
+  const nextWhere = and(...[sourceWhere, ...predicates].filter(Boolean));
+  config.where = nextWhere;
+  applyStates.set(config, { appliedWhere: nextWhere, sourceWhere });
+  applySqliteAuthorizationToSetOperatorArms(config, options, applyStates);
+}
+
+function sqliteAuthorizationPredicatesForConfig(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+): SQLWrapper[] {
+  const predicates: SQLWrapper[] = [];
+  const seenSelects = new WeakSet<object>();
+  collectSqliteAuthorizationPredicatesForSelectConfig(config, options, predicates, seenSelects);
+  return predicates;
+}
+
+function collectSqliteAuthorizationPredicatesForSelectConfig(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+  predicates: SQLWrapper[],
+  seenSelects: WeakSet<object>,
+): void {
+  if (seenSelects.has(config)) return;
+  seenSelects.add(config);
+  collectSqliteAuthorizationPredicateForTable(config.table, options, predicates, 'where');
+  const joins = config.joins;
+  if (Array.isArray(joins)) {
+    for (const join of joins) {
+      collectSqliteAuthorizationPredicateForTable(
+        (join as { table?: unknown }).table,
+        options,
+        predicates,
+        'where',
+      );
+    }
+  }
+  const setOperators = config.setOperators;
+  if (
+    Array.isArray(setOperators) &&
+    setOperators.some(
+      (operator) =>
+        !isRecord((operator as { rightSelect?: { config?: unknown } }).rightSelect?.config),
+    )
+  ) {
+    predicates.push(sql`1 = 0`);
+  }
+}
+
+function applySqliteAuthorizationToSetOperatorArms(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+  applyStates: WeakMap<object, SqliteAuthorizationApplyState>,
+): void {
+  const setOperators = config.setOperators;
+  if (!Array.isArray(setOperators)) return;
+  for (const operator of setOperators) {
+    const rightSelect = (operator as { rightSelect?: unknown }).rightSelect;
+    if (isRecord(rightSelect)) {
+      applySqliteAuthorizationToBuilder(rightSelect, options, applyStates, 'select');
+    }
+  }
+}
+
+function collectSqliteAuthorizationPredicateForTable(
+  table: unknown,
+  options: SqliteAuthorizationDbOptions,
+  predicates: SQLWrapper[],
+  scope: 'direct' | 'where',
+): void {
+  if (table === undefined || table === null) return;
+  const tableName = sqlitePhysicalTableName(table);
+  if (tableName === undefined) {
+    if (sqliteSubqueryUsesDeniedTable(table, options)) predicates.push(sql`1 = 0`);
+    return;
+  }
+  const predicate = sqliteAuthorizationPredicateForTable(table, tableName, options, scope);
+  if (predicate !== undefined) predicates.push(predicate);
+}
+
+function sqliteAuthorizationPredicateForTable(
+  table: unknown,
+  tableName: string,
+  options: SqliteAuthorizationDbOptions,
+  scope: 'direct' | 'where',
+): SQLWrapper | undefined {
+  const classifications = options.metadata.authorizationClassificationsByTable?.get(tableName);
+  if (classifications === undefined || classifications.length === 0) return sql`1 = 0`;
+  if (classifications.includes('public') || classifications.includes('reference')) return undefined;
+  if (classifications.includes('authzPolicy')) return sql`1 = 0`;
+
+  const owner = options.metadata.ownerSourcesByTable?.get(tableName);
+  if (owner !== undefined) {
+    const column = sqliteColumnForKey(table, owner.columnKey, owner.columnName);
+    if (column === undefined || options.principal === undefined) return sql`1 = 0`;
+    return eq(column as Parameters<typeof eq>[0], options.principal);
+  }
+
+  const ownerVia = options.metadata.ownerViaSourcesByTable?.get(tableName);
+  if (ownerVia !== undefined) {
+    const fkColumn = sqliteColumnForKey(table, ownerVia.fkColumnKey, ownerVia.fkColumnName);
+    const parentOwner = options.metadata.ownerSourcesByTable?.get(ownerVia.parentTable);
+    if (fkColumn === undefined || parentOwner === undefined || options.principal === undefined) {
+      return sql`1 = 0`;
+    }
+    return sql`${fkColumn} in (select ${sql.raw(quoteSqlIdentifier(ownerVia.parentKeyColumnName))} from ${sql.raw(quoteSqlIdentifier(ownerVia.parentTable))} where ${sql.raw(quoteSqlIdentifier(parentOwner.columnName))} = ${options.principal})`;
+  }
+
+  return scope === 'where' ? sql`1 = 0` : undefined;
+}
+
+function sqliteSubqueryUsesDeniedTable(
+  table: unknown,
+  options: SqliteAuthorizationDbOptions,
+): boolean {
+  const usedTables = (table as { _?: { usedTables?: unknown } })?._?.usedTables;
+  if (!Array.isArray(usedTables)) return true;
+  return usedTables.some((entry) => {
+    if (typeof entry !== 'string') return true;
+    const classifications = options.metadata.authorizationClassificationsByTable?.get(entry);
+    return (
+      classifications === undefined ||
+      classifications.includes('owned') ||
+      classifications.includes('ownedVia') ||
+      classifications.includes('authzPolicy')
+    );
+  });
+}
+
+function assertSqliteInsertIsOwnerCheckable(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+): void {
+  const tableName = sqlitePhysicalTableName(config.table);
+  if (tableName === undefined) return;
+  const classifications = options.metadata.authorizationClassificationsByTable?.get(tableName);
+  if (
+    classifications?.includes('owned') !== true &&
+    classifications?.includes('ownedVia') !== true
+  ) {
+    if (classifications === undefined || classifications.length === 0) throwSqliteAuthzDeny();
+    return;
+  }
+  throw new Error(
+    'KV414: SQLite managed insert into an owner-scoped table requires owner-checkable framework proof (SPEC §10.3).',
+  );
+}
+
+function assertSqliteUpdateDoesNotReassignOwner(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+): void {
+  const tableName = sqlitePhysicalTableName(config.table);
+  if (tableName === undefined) return;
+  const owner = options.metadata.ownerSourcesByTable?.get(tableName);
+  if (owner === undefined || !isRecord(config.set)) return;
+  if (owner.columnKey in config.set || owner.columnName in config.set) {
+    throw new Error(
+      'KV414: SQLite managed update cannot reassign an owner column through an owner-scoped write (SPEC §10.3).',
+    );
+  }
+}
+
+function assertSqliteAuthorizationDirectSqlAllowed(
+  statement: unknown,
+  options: SqliteAuthorizationDbOptions,
+): void {
+  const sqlText = sqlTextFromValue(statement);
+  if (sqlText === undefined) return;
+  for (const table of sqliteAuthzDeniedRawTables(options)) {
+    if (sqlTextReferencesTable(sqlText, table)) throwSqliteAuthzDeny();
+  }
+}
+
+function sqliteAuthzDeniedRawTables(options: SqliteAuthorizationDbOptions): string[] {
+  const tables = new Set<string>();
+  for (const [table, classifications] of options.metadata.authorizationClassificationsByTable ??
+    []) {
+    if (
+      classifications.length === 0 ||
+      classifications.includes('owned') ||
+      classifications.includes('ownedVia') ||
+      classifications.includes('authzPolicy')
+    ) {
+      tables.add(table);
+    }
+  }
+  for (const table of options.metadata.ownerSourcesByTable?.keys() ?? []) tables.add(table);
+  for (const table of options.metadata.ownerViaSourcesByTable?.keys() ?? []) tables.add(table);
+  return [...tables];
+}
+
+function sqlitePhysicalTableName(table: unknown): string | undefined {
+  if (!isRecord(table)) return undefined;
+  const original = table[DRIZZLE_ORIGINAL_NAME_SYMBOL];
+  if (typeof original === 'string' && original !== '') return original;
+  const base = table[DRIZZLE_BASE_NAME_SYMBOL];
+  if (typeof base === 'string' && base !== '') return base;
+  const name = table[DRIZZLE_NAME_SYMBOL];
+  return typeof name === 'string' && name !== '' ? name : undefined;
+}
+
+function sqliteColumnForKey(table: unknown, key: string, columnName: string): object | undefined {
+  if (!isRecord(table)) return undefined;
+  const byKey = table[key];
+  if (isColumnLike(byKey)) return byKey;
+  for (const value of Object.values(table)) {
+    if (isColumnLike(value) && value.name === columnName) return value;
+  }
+  return undefined;
+}
+
+function sqlTextReferencesTable(sqlText: string, table: string): boolean {
+  const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[^A-Za-z0-9_])"?${escaped}"?(?:$|[^A-Za-z0-9_])`, 'iu').test(sqlText);
+}
+
+function throwSqliteAuthzDeny(): never {
+  throw new Error(
+    'KV414: SQLite managed authorization denied an owner-scoped or unclassified table access (SPEC §10.3).',
   );
 }
 
@@ -931,4 +1310,12 @@ function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy |
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isColumnLike(value: unknown): value is { name: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { name?: unknown }).name === 'string'
+  );
 }
