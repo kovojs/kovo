@@ -124,7 +124,7 @@ export function addDurableTaskProofs(root: string): void {
       "import { taskProofs } from './schema.js';",
       "import type { AppRequest } from './auth.js';",
       '',
-      "const taskProof = domain('task_proof');",
+      "const taskProof = domain('task-proof');",
       "const publicProof = publicAccess('public durable task regression proof');",
       'const flakyTaskAttempts = new Map<string, number>();',
       '',
