@@ -50,6 +50,20 @@ const labels = pgTable(
   }),
 );
 
+const shadowNotes = pgTable(
+  'kovo_runtime_shadow_notes',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('ownerId').notNull(),
+    title: text('title').notNull(),
+  },
+  kovo({
+    domain: 'runtime-shadow-notes',
+    key: 'id',
+    owner: 'ownerId',
+  }),
+);
+
 const schema = { labels, notes };
 const seedSql = [
   'INSERT INTO kovo_runtime_notes (id, "ownerId", "secretNote", title) VALUES ' +
@@ -114,6 +128,33 @@ const parameterizedPolicyDocuments = pgTable(
   }),
 );
 
+const sharedContainers = pgTable(
+  'kovo_runtime_shared_containers',
+  {
+    id: text('id').primaryKey(),
+  },
+  kovo({
+    domain: 'runtime-shared-containers',
+    key: 'id',
+    reference: true,
+  }),
+);
+
+const orphanedContainerItems = pgTable(
+  'kovo_runtime_orphaned_container_items',
+  {
+    id: text('id').primaryKey(),
+    containerId: text('container_id').notNull(),
+  },
+  kovo({
+    domain: 'runtime-orphaned-container-items',
+    key: 'id',
+    ownerVia: { fk: (table) => table.containerId, parent: sharedContainers, parentKey: 'id' },
+  }),
+);
+
+const unresolvableOwnerViaSchema = { orphanedContainerItems, sharedContainers };
+
 describe('createPostgresAppRuntimeDb', () => {
   const roots: string[] = [];
 
@@ -144,6 +185,115 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('grants protected tables only with FORCE RLS and live Kovo policies', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-grant-policy-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    const granted = await queryPglite<{ table_name: string }>(
+      dataDir,
+      [
+        'SELECT DISTINCT table_name FROM information_schema.role_table_grants',
+        "WHERE grantee IN ('kovo_reader', 'kovo_writer')",
+        "AND table_name IN ('kovo_runtime_notes', 'kovo_runtime_labels')",
+        'UNION',
+        'SELECT DISTINCT table_name FROM information_schema.column_privileges',
+        "WHERE grantee IN ('kovo_reader', 'kovo_writer')",
+        "AND table_name IN ('kovo_runtime_notes', 'kovo_runtime_labels')",
+        'ORDER BY table_name',
+      ].join(' '),
+    );
+    expect(granted.rows.map((row) => row.table_name)).toEqual([
+      'kovo_runtime_labels',
+      'kovo_runtime_notes',
+    ]);
+
+    const protectedGrantPosture = await queryPglite<{
+      policy_count: number | string;
+      relforcerowsecurity: boolean;
+      relrowsecurity: boolean;
+      table_name: string;
+    }>(
+      dataDir,
+      [
+        'SELECT c.relname AS table_name, c.relrowsecurity, c.relforcerowsecurity,',
+        "COUNT(p.polname) FILTER (WHERE p.polname IN ('kovo_owner_scope', 'kovo_authz_policy', 'kovo_system_scope')) AS policy_count",
+        'FROM pg_class c',
+        'LEFT JOIN pg_policy p ON p.polrelid = c.oid',
+        "WHERE c.relname = 'kovo_runtime_notes'",
+        'GROUP BY c.relname, c.relrowsecurity, c.relforcerowsecurity',
+      ].join(' '),
+    );
+    expect(protectedGrantPosture.rows).toEqual([
+      {
+        policy_count: expect.toSatisfy((count: number | string) => Number(count) >= 2),
+        relforcerowsecurity: true,
+        relrowsecurity: true,
+        table_name: 'kovo_runtime_notes',
+      },
+    ]);
+  });
+
+  it('keeps database tables outside the app schema default-denied until they are declared', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-default-deny-'));
+    roots.push(dataDir);
+    await execPglite(
+      dataDir,
+      [
+        'CREATE TABLE kovo_runtime_shadow_notes (id text PRIMARY KEY, "ownerId" text NOT NULL, title text NOT NULL)',
+        "INSERT INTO kovo_runtime_shadow_notes (id, \"ownerId\", title) VALUES ('s1', 'u1', 'Shadow')",
+      ].join('; '),
+    );
+
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+      const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      await expect(u1Db.select().from(shadowNotes)).rejects.toThrow();
+    } finally {
+      await runtime.close();
+    }
+
+    const declaredRuntime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: { labels, notes, shadowNotes },
+    });
+    try {
+      await declaredRuntime.ready;
+      const u1Db = declaredRuntime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      await expect(u1Db.select().from(shadowNotes)).resolves.toEqual([
+        { id: 's1', ownerId: 'u1', title: 'Shadow' },
+      ]);
+    } finally {
+      await declaredRuntime.close();
+    }
+  });
+
+  it('returns least-privilege PGlite app handles when called without a request', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-no-request-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+
+    try {
+      await runtime.ready;
+      const appDb = runtime.db();
+
+      await expect(appDb.select().from(notes).orderBy(notes.id)).resolves.toEqual([]);
+      await expect(
+        appDb.execute(sql.raw('CREATE TABLE kovo_no_request_superuser_escape (id text)')),
+      ).rejects.toThrow();
+    } finally {
+      await runtime.close();
+    }
   });
 
   it('threads Postgres rawRead through the runtime reader without bypassing RLS or column grants', async () => {
@@ -238,6 +388,165 @@ describe('createPostgresAppRuntimeDb', () => {
 
     expect(report.ok).toBe(false);
     expect(report.issues.map((issue) => issue.code)).toContain('KV433_SCHEMA_FINGERPRINT');
+  });
+
+  it('refuses boot when a granted definer view can reach an owner table', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-definer-view-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE VIEW kovo_runtime_notes_v AS SELECT id, title FROM kovo_runtime_notes',
+        'GRANT SELECT ON TABLE kovo_runtime_notes_v TO kovo_reader',
+      ].join('; '),
+    );
+
+    const drifted = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheckOnBoot: true,
+      provisionOnBoot: false,
+      schema,
+    });
+    try {
+      await expect(drifted.ready).rejects.toThrow(
+        /reachable non-security_invoker view kovo_runtime_notes_v over owner table kovo_runtime_notes/,
+      );
+    } finally {
+      await drifted.close();
+    }
+  });
+
+  it('forces app-schema views over protected tables to security_invoker during provision', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-security-invoker-view-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE VIEW kovo_runtime_notes_safe_v AS SELECT id, title FROM kovo_runtime_notes',
+        'GRANT SELECT ON TABLE kovo_runtime_notes_safe_v TO kovo_reader',
+      ].join('; '),
+    );
+
+    const reprovisioned = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheckOnBoot: true,
+      provisionOnBoot: true,
+      schema,
+    });
+    try {
+      await reprovisioned.ready;
+    } finally {
+      await reprovisioned.close();
+    }
+
+    const view = await queryPglite<{ reloptions: string[] | null }>(
+      dataDir,
+      "SELECT reloptions FROM pg_class WHERE relname = 'kovo_runtime_notes_safe_v'",
+    );
+    expect(view.rows[0]?.reloptions).toContain('security_invoker=true');
+  });
+
+  it('refuses boot when an app role can reach a table without FORCE RLS and Kovo policy', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-granted-unprotected-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE TABLE kovo_runtime_unprotected (id text PRIMARY KEY)',
+        "INSERT INTO kovo_runtime_unprotected (id) VALUES ('leak')",
+        'GRANT SELECT ON TABLE kovo_runtime_unprotected TO kovo_reader',
+      ].join('; '),
+    );
+
+    const drifted = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheckOnBoot: true,
+      provisionOnBoot: false,
+      schema,
+    });
+    try {
+      await expect(drifted.ready).rejects.toThrow(
+        /kovo_runtime_unprotected is reachable by an app role but is not a Kovo-protected table/,
+      );
+    } finally {
+      await drifted.close();
+    }
+  });
+
+  it('refuses boot when an app role can execute an app-schema routine', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-granted-routine-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        "CREATE FUNCTION kovo_runtime_leak() RETURNS text LANGUAGE SQL AS $$ SELECT 'leak' $$",
+        'GRANT EXECUTE ON FUNCTION kovo_runtime_leak() TO kovo_reader',
+      ].join('; '),
+    );
+
+    const drifted = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheckOnBoot: true,
+      provisionOnBoot: false,
+      schema,
+    });
+    try {
+      await expect(drifted.ready).rejects.toThrow(
+        /kovo_runtime_leak is executable by .*routine reachability has no vetted Kovo allowlist/,
+      );
+    } finally {
+      await drifted.close();
+    }
+  });
+
+  it('fails ownerVia whose parent chain cannot resolve to an owner before granting the child table', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-owner-via-bad-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: unresolvableOwnerViaSchema,
+    });
+
+    try {
+      await expect(runtime.ready).rejects.toThrow(
+        /KV414[\s\S]*kovo_runtime_orphaned_container_items[\s\S]*kovo_runtime_shared_containers/,
+      );
+    } finally {
+      await runtime.close();
+    }
   });
 
   it('adopts pre-created provider roles from env without creating them', async () => {
@@ -466,6 +775,15 @@ async function execPglite(dataDir: string, statement: string): Promise<void> {
   const client = new PGlite(dataDir);
   try {
     await client.exec(statement);
+  } finally {
+    await client.close();
+  }
+}
+
+async function queryPglite<Row>(dataDir: string, statement: string): Promise<{ rows: Row[] }> {
+  const client = new PGlite(dataDir);
+  try {
+    return await client.query<Row>(statement);
   } finally {
     await client.close();
   }

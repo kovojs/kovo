@@ -288,6 +288,9 @@ describe('create-kovo starter (metadata)', () => {
       'export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'export const appRuntimeAuthDb: AppDb = appDatabase.systemDb({',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export const appRuntimeDbReady: Promise<void> = appDatabase.ready',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
@@ -313,9 +316,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/schema.ts')).toContain('import { boolean, pgTable, text, timestamp }');
     expect(files.get('src/auth.ts')).toContain("provider: 'pg'");
     expect(files.get('src/auth.ts')).toContain(
-      "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js'",
+      "import { appRuntimeAuthDb } from './_kovo/app-runtime-db.js'",
     );
-    expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appRuntimeDbProvider(),');
+    expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appRuntimeAuthDb,');
     expect(files.get('src/auth.ts')).not.toContain('database: drizzleAdapter(appDb,');
   });
 

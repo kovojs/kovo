@@ -1273,10 +1273,13 @@ function endpointRawDriverImportDiagnostic(
     return drizzleDiagnostic({
       code: 'KV414',
       detail:
-        'Request-authored endpoint/webhook/task/query/mutation modules must not import value symbols from src/_kovo/app-runtime-db; use framework lifecycle DB capabilities so Postgres role/RLS/column privileges remain the sole authorization/confidentiality door (SPEC §10.3 DEC-B1).',
+        'Request-authored endpoint/webhook/task/query/mutation modules must not import value symbols from src/_kovo/app-runtime-db; use framework lifecycle DB capabilities so Postgres role/RLS/column privileges remain the sole authorization/confidentiality door. This lint is defense-in-depth; runtime least-privilege/capabilities remain the boundary (SPEC §10.3 DEC-B1/C5).',
       site: `${file.fileName}:${lineForIndex(file.source, runtimeDbImport.getStart())}`,
     });
   }
+
+  const runtimeDbProviderAliasImport = runtimeDbProviderAliasImportDiagnostic(file, sourceFile);
+  if (runtimeDbProviderAliasImport !== undefined) return runtimeDbProviderAliasImport;
 
   const unconfinedRuntimeDbCall = sourceFile
     .getDescendantsOfKind(SyntaxKind.CallExpression)
@@ -1285,19 +1288,17 @@ function endpointRawDriverImportDiagnostic(
     return drizzleDiagnostic({
       code: 'KV414',
       detail:
-        'Request-authored endpoint/webhook/task/query/mutation modules must not call appRuntimeDbProvider() without a lifecycle request; the undefined path returns the internal framework DB and bypasses the Postgres authorization/confidentiality engine choke (SPEC §10.3 DEC-B1).',
+        'Request-authored endpoint/webhook/task/query/mutation modules must not call appRuntimeDbProvider() without a lifecycle request; the undefined path returns the internal framework DB and bypasses the Postgres authorization/confidentiality engine choke. This lint is defense-in-depth; runtime least-privilege/capabilities remain the boundary (SPEC §10.3 DEC-B1/C5).',
       site: `${file.fileName}:${lineForIndex(file.source, unconfinedRuntimeDbCall.getStart())}`,
     });
   }
 
-  const declaration = sourceFile
-    .getImportDeclarations()
-    .find((candidate) => ENDPOINT_RAW_DRIVER_MODULES.has(candidate.getModuleSpecifierValue()));
+  const declaration = endpointRawDriverModuleReference(sourceFile);
   if (declaration === undefined) return undefined;
   return drizzleDiagnostic({
     code: 'KV414',
     detail:
-      'endpoint() code must use endpoint({ db: true }) + ctx.actAs(id) managed DB capabilities; raw driver imports bypass the endpoint authorization choke (SPEC §10.3 DEC-H).',
+      'endpoint() code must use endpoint({ db: true }) + ctx.actAs(id) managed DB capabilities; raw driver imports/import()/require() bypass the endpoint authorization choke. This lint is defense-in-depth; runtime least-privilege/capabilities remain the boundary (SPEC §10.3 DEC-H/C5).',
     site: `${file.fileName}:${lineForIndex(file.source, declaration.getStart())}`,
   });
 }
@@ -1408,6 +1409,38 @@ function runtimeDbValueBindingIsReferencedFromRequestSurface(sourceFile: SourceF
     );
 }
 
+function runtimeDbProviderAliasImportDiagnostic(
+  file: SourceFileInput,
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic | undefined {
+  const importSpecifier = sourceFile.getImportDeclarations().find((declaration) => {
+    if (declaration.isTypeOnly()) return false;
+    if (
+      !isRequestAuthoredIngressFileName(file.fileName) &&
+      !nodeContainsRuntimeDbValueBinding(
+        requestSurfaceCallExpression(sourceFile) ?? sourceFile,
+        runtimeDbProviderImportLocalNames(sourceFile),
+      )
+    ) {
+      return false;
+    }
+    return declaration
+      .getNamedImports()
+      .some(
+        (specifier) =>
+          !specifier.isTypeOnly() && importSpecifierResolvesToRuntimeDbProvider(specifier),
+      );
+  });
+  if (importSpecifier === undefined) return undefined;
+
+  return drizzleDiagnostic({
+    code: 'KV414',
+    detail:
+      'Request-authored endpoint/webhook/task/query/mutation modules must not import runtime DB provider aliases into request surfaces; use framework lifecycle DB capabilities so Postgres role/RLS/column privileges remain the sole authorization/confidentiality door. This lint is defense-in-depth; runtime least-privilege/capabilities remain the boundary (SPEC §10.3 DEC-B1/C5).',
+    site: `${file.fileName}:${lineForIndex(file.source, importSpecifier.getStart())}`,
+  });
+}
+
 function runtimeDbValueImportLocalNames(sourceFile: SourceFile): ReadonlySet<string> {
   const names = new Set<string>();
   for (const declaration of sourceFile.getImportDeclarations()) {
@@ -1442,7 +1475,10 @@ function isUnconfinedAppRuntimeDbProviderCall(
 ): boolean {
   if (!isUndefinedOrEmptyArguments(call)) return false;
 
-  const expression = call.getExpression();
+  const expression = unwrappedStaticExpressionNode(call.getExpression());
+  if (expressionResolvesToRuntimeDbProvider(expression)) {
+    return true;
+  }
   if (Node.isIdentifier(expression) && expression.getText() === 'appRuntimeDbProvider') {
     return true;
   }
@@ -1465,15 +1501,293 @@ function isUndefinedOrEmptyArguments(call: CallExpression): boolean {
 function runtimeDbProviderImportLocalNames(sourceFile: SourceFile): ReadonlySet<string> {
   const names = new Set<string>();
   for (const declaration of sourceFile.getImportDeclarations()) {
-    if (!isRuntimeDbModuleSpecifier(declaration.getModuleSpecifierValue())) continue;
     for (const specifier of declaration.getNamedImports()) {
-      if (specifier.getName() !== 'appRuntimeDbProvider') continue;
+      if (!importSpecifierResolvesToRuntimeDbProvider(specifier)) {
+        continue;
+      }
       names.add(specifier.getAliasNode()?.getText() ?? specifier.getName());
     }
     const namespaceImport = declaration.getImportClause()?.getNamespaceImport();
-    if (namespaceImport) names.add(`${namespaceImport.getText()}.appRuntimeDbProvider`);
+    if (
+      namespaceImport &&
+      namespaceImportResolvesToRuntimeDbProvider(
+        namespaceImport,
+        declaration.getModuleSpecifierSourceFile(),
+      )
+    ) {
+      names.add(`${namespaceImport.getText()}.appRuntimeDbProvider`);
+    }
   }
   return names;
+}
+
+function importSpecifierResolvesToRuntimeDbProvider(specifier: Node): boolean {
+  if (!Node.isImportSpecifier(specifier)) return false;
+  const importDeclaration = specifier.getImportDeclaration();
+  if (
+    isRuntimeDbModuleSpecifier(importDeclaration.getModuleSpecifierValue()) &&
+    specifier.getName() === 'appRuntimeDbProvider'
+  ) {
+    return true;
+  }
+  const moduleSourceFile = importDeclaration.getModuleSpecifierSourceFile();
+  return moduleSourceFile
+    ? sourceFileExportResolvesToRuntimeDbProvider(
+        moduleSourceFile,
+        specifier.getName(),
+        new Set(),
+        0,
+      )
+    : false;
+}
+
+function requestSurfaceCallExpression(sourceFile: SourceFile): CallExpression | undefined {
+  const requestSurfaceExports = ['endpoint', 'mutation', 'query', 'task', 'webhook'];
+  return sourceFile
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .find((call) =>
+      requestSurfaceExports.some((name) =>
+        isKovoServerCalleeExpression(call.getExpression(), name),
+      ),
+    );
+}
+
+function endpointRawDriverModuleReference(sourceFile: SourceFile): Node | undefined {
+  const importDeclaration = sourceFile
+    .getImportDeclarations()
+    .find((candidate) => ENDPOINT_RAW_DRIVER_MODULES.has(candidate.getModuleSpecifierValue()));
+  if (importDeclaration) return importDeclaration;
+
+  return sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).find((call) => {
+    const moduleSpecifier = rawDriverModuleSpecifierFromCall(call);
+    return moduleSpecifier !== undefined && ENDPOINT_RAW_DRIVER_MODULES.has(moduleSpecifier);
+  });
+}
+
+function rawDriverModuleSpecifierFromCall(call: CallExpression): string | undefined {
+  const [firstArgument] = call.getArguments();
+  const moduleSpecifier = staticStringLiteralText(firstArgument);
+  if (moduleSpecifier === undefined) return undefined;
+
+  const expression = unwrappedStaticExpressionNode(call.getExpression());
+  if (expression.getKind() === SyntaxKind.ImportKeyword) return moduleSpecifier;
+  if (!Node.isIdentifier(expression) || expression.getText() !== 'require') return undefined;
+  const symbol = symbolForIdentifierReference(expression) ?? expression.getSymbol();
+  const declarations = symbol?.getDeclarations() ?? [];
+  if (declarations.some((declaration) => !declaration.getSourceFile().isDeclarationFile())) {
+    return undefined;
+  }
+  return moduleSpecifier;
+}
+
+function staticStringLiteralText(node: Node | undefined): string | undefined {
+  if (!node) return undefined;
+  if (Node.isStringLiteral(node) || Node.isNoSubstitutionTemplateLiteral(node)) {
+    return node.getLiteralText();
+  }
+  return undefined;
+}
+
+function expressionResolvesToRuntimeDbProvider(expression: Node): boolean {
+  if (Node.isIdentifier(expression)) {
+    return symbolResolvesToRuntimeDbProvider(symbolForIdentifierReference(expression));
+  }
+  if (Node.isPropertyAccessExpression(expression)) {
+    return symbolResolvesToRuntimeDbProvider(expression.getNameNode().getSymbol());
+  }
+  return symbolResolvesToRuntimeDbProvider(expression.getSymbol());
+}
+
+function symbolResolvesToRuntimeDbProvider(
+  symbol: MorphSymbol | undefined,
+  seen: Set<string> = new Set(),
+  depth = 0,
+): boolean {
+  if (!symbol || depth > 12) return false;
+  const key = resolvedSymbolKey(symbol) ?? symbol.getFullyQualifiedName();
+  if (key && seen.has(key)) return false;
+  if (key) seen.add(key);
+
+  let aliased: MorphSymbol | undefined;
+  try {
+    aliased = symbol.getAliasedSymbol();
+  } catch {
+    aliased = undefined;
+  }
+  if (
+    aliased &&
+    aliased !== symbol &&
+    symbolResolvesToRuntimeDbProvider(aliased, seen, depth + 1)
+  ) {
+    return true;
+  }
+
+  return symbol
+    .getDeclarations()
+    .some((declaration) => declarationResolvesToRuntimeDbProvider(declaration, seen, depth + 1));
+}
+
+function declarationResolvesToRuntimeDbProvider(
+  declaration: Node,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 12) return false;
+
+  if (Node.isImportSpecifier(declaration)) {
+    const imported = declaration.getName();
+    const importDeclaration = declaration.getImportDeclaration();
+    if (
+      isRuntimeDbModuleSpecifier(importDeclaration.getModuleSpecifierValue()) &&
+      imported === 'appRuntimeDbProvider'
+    ) {
+      return true;
+    }
+    const moduleSourceFile = importDeclaration.getModuleSpecifierSourceFile();
+    return moduleSourceFile
+      ? sourceFileExportResolvesToRuntimeDbProvider(moduleSourceFile, imported, seen, depth + 1)
+      : false;
+  }
+
+  if (Node.isExportSpecifier(declaration)) {
+    const exportDeclaration = declaration.getFirstAncestorByKind(SyntaxKind.ExportDeclaration);
+    const imported = declaration.getName();
+    if (
+      exportDeclaration &&
+      isRuntimeDbModuleSpecifier(exportDeclaration.getModuleSpecifierValue() ?? '') &&
+      imported === 'appRuntimeDbProvider'
+    ) {
+      return true;
+    }
+    const moduleSourceFile = exportDeclaration?.getModuleSpecifierSourceFile();
+    if (moduleSourceFile) {
+      return sourceFileExportResolvesToRuntimeDbProvider(
+        moduleSourceFile,
+        imported,
+        seen,
+        depth + 1,
+      );
+    }
+    return sourceFileLocalResolvesToRuntimeDbProvider(
+      declaration.getSourceFile(),
+      imported,
+      seen,
+      depth + 1,
+    );
+  }
+
+  if (Node.isVariableDeclaration(declaration)) {
+    const initializer = declaration.getInitializer();
+    return initializer ? expressionResolvesToRuntimeDbProvider(initializer) : false;
+  }
+
+  return false;
+}
+
+function sourceFileExportResolvesToRuntimeDbProvider(
+  sourceFile: SourceFile,
+  exportedName: string,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 12) return false;
+  const key = `${sourceFile.getFilePath()}:${exportedName}`;
+  if (seen.has(key)) return false;
+  seen.add(key);
+
+  for (const declaration of sourceFile.getExportDeclarations()) {
+    const specifier = declaration.getModuleSpecifierValue();
+    const moduleSourceFile = declaration.getModuleSpecifierSourceFile();
+    const namedExports = declaration.getNamedExports();
+
+    if (namedExports.length === 0) {
+      if (
+        moduleSourceFile &&
+        sourceFileExportResolvesToRuntimeDbProvider(moduleSourceFile, exportedName, seen, depth + 1)
+      ) {
+        return true;
+      }
+      continue;
+    }
+
+    for (const named of namedExports) {
+      const exported = named.getAliasNode()?.getText() ?? named.getName();
+      if (exported !== exportedName) continue;
+      if (specifier) {
+        if (isRuntimeDbModuleSpecifier(specifier) && named.getName() === 'appRuntimeDbProvider') {
+          return true;
+        }
+        if (
+          moduleSourceFile &&
+          sourceFileExportResolvesToRuntimeDbProvider(
+            moduleSourceFile,
+            named.getName(),
+            seen,
+            depth + 1,
+          )
+        ) {
+          return true;
+        }
+        continue;
+      }
+
+      if (
+        sourceFileLocalResolvesToRuntimeDbProvider(sourceFile, named.getName(), seen, depth + 1)
+      ) {
+        return true;
+      }
+    }
+  }
+
+  return sourceFileLocalResolvesToRuntimeDbProvider(sourceFile, exportedName, seen, depth + 1);
+}
+
+function sourceFileLocalResolvesToRuntimeDbProvider(
+  sourceFile: SourceFile,
+  localName: string,
+  seen: Set<string>,
+  depth: number,
+): boolean {
+  if (depth > 12) return false;
+
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    for (const specifier of declaration.getNamedImports()) {
+      const boundName = specifier.getAliasNode()?.getText() ?? specifier.getName();
+      if (boundName !== localName) continue;
+      if (
+        symbolResolvesToRuntimeDbProvider(
+          symbolForIdentifierReference(specifier.getNameNode()),
+          seen,
+          depth + 1,
+        )
+      ) {
+        return true;
+      }
+    }
+  }
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    if (declaration.getName() !== localName) continue;
+    const initializer = declaration.getInitializer();
+    if (initializer && expressionResolvesToRuntimeDbProvider(initializer)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function namespaceImportResolvesToRuntimeDbProvider(
+  namespaceImport: Node,
+  sourceFile: SourceFile | undefined,
+): boolean {
+  if (!sourceFile) return false;
+  return sourceFileExportResolvesToRuntimeDbProvider(
+    sourceFile,
+    'appRuntimeDbProvider',
+    new Set([namespaceImport.getText()]),
+    0,
+  );
 }
 
 function sqlRawHelperDiagnostic(

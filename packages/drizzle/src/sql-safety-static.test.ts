@@ -6,15 +6,17 @@ function diagnosticsFor(source: string) {
   return diagnosticsForFile('app.ts', source);
 }
 
+function diagnosticsForFiles(
+  files: readonly {
+    fileName: string;
+    source: string;
+  }[],
+) {
+  return analyzeSqlSafetyFromProject({ files: [...files] });
+}
+
 function diagnosticsForFile(fileName: string, source: string) {
-  return analyzeSqlSafetyFromProject({
-    files: [
-      {
-        fileName,
-        source,
-      },
-    ],
-  });
+  return diagnosticsForFiles([{ fileName, source }]);
 }
 
 describe('@kovojs/drizzle SQL safety static analysis', () => {
@@ -172,6 +174,52 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     ]);
   });
 
+  it('flags statically visible re-export aliases of appRuntimeDbProvider in request-authored endpoints', () => {
+    const diagnostics = diagnosticsForFiles([
+      {
+        fileName: 'src/_kovo/app-runtime-db.ts',
+        source: `
+          export declare function appRuntimeDbProvider(request?: unknown): {
+            execute(sql: string): unknown;
+          };
+        `,
+      },
+      {
+        fileName: 'src/db.ts',
+        source: `
+          export { appRuntimeDbProvider as getRawDb } from './_kovo/app-runtime-db.js';
+        `,
+      },
+      {
+        fileName: 'src/status.endpoint.ts',
+        source: `
+          import { endpoint } from '@kovojs/server';
+          import { getRawDb } from './db.js';
+
+          export const status = endpoint('/status', {
+            method: 'GET',
+            reason: 'runtime db alias proof',
+            csrf: false,
+            csrfJustification: 'read-only proof endpoint',
+            response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+            async handler() {
+              await getRawDb().execute('select 1');
+              return new Response('ok');
+            },
+          });
+        `,
+      },
+    ]);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV414',
+        message: expect.stringContaining('must not import runtime DB provider aliases'),
+        site: 'src/status.endpoint.ts:3',
+      }),
+    ]);
+  });
+
   it.each([
     'status.endpoint.ts',
     'status.webhook.ts',
@@ -254,6 +302,55 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it('allows app entrypoint framework DB wiring through a re-export alias outside request surfaces', () => {
+    const diagnostics = diagnosticsForFiles([
+      {
+        fileName: 'src/_kovo/app-runtime-db.ts',
+        source: `
+          export declare function appRuntimeDbProvider(request?: unknown): unknown;
+          export declare const appRuntimeDbReady: Promise<void>;
+        `,
+      },
+      {
+        fileName: 'src/db.ts',
+        source: `
+          export {
+            appRuntimeDbProvider as getRawDb,
+            appRuntimeDbReady,
+          } from './_kovo/app-runtime-db.js';
+        `,
+      },
+      {
+        fileName: 'src/app.tsx',
+        source: `
+          import { createApp, endpoint, publicAccess } from '@kovojs/server';
+          import { appRuntimeDbReady, getRawDb } from './db.js';
+
+          await appRuntimeDbReady;
+
+          const healthEndpoint = endpoint('/api/health', {
+            access: publicAccess('public uptime probe'),
+            auth: { justification: 'public uptime probe', kind: 'none' },
+            csrf: false,
+            csrfJustification: 'read-only machine health probe',
+            handler: () => Response.json({ ok: true }),
+            method: 'GET',
+            reason: 'read-only machine health probe',
+            response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+          });
+
+          export default createApp({
+            db: getRawDb,
+            endpoints: [healthEndpoint],
+            routes: [],
+          });
+        `,
+      },
+    ]);
+
+    expect(diagnostics).toEqual([]);
+  });
+
   it('accepts endpoint db access through the explicit actAs managed handle', () => {
     const diagnostics = diagnosticsFor(`
       import { endpoint } from '@kovojs/server';
@@ -275,6 +372,82 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
 
     expect(diagnostics).toEqual([]);
   });
+
+  it.each([
+    {
+      fileName: 'status.endpoint.ts',
+      source: `
+        import { endpoint } from '@kovojs/server';
+
+        export const status = endpoint('/status', {
+          method: 'GET',
+          reason: 'dynamic raw pglite import proof',
+          csrf: false,
+          csrfJustification: 'read-only proof endpoint',
+          response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+          async handler() {
+            const { PGlite } = await import('@electric-sql/pglite');
+            void PGlite;
+            return new Response('ok');
+          },
+        });
+      `,
+      site: 'status.endpoint.ts:11',
+    },
+    {
+      fileName: 'status.endpoint.ts',
+      source: `
+        import { endpoint } from '@kovojs/server';
+
+        export const status = endpoint('/status', {
+          method: 'GET',
+          reason: 'dynamic drizzle pglite import proof',
+          csrf: false,
+          csrfJustification: 'read-only proof endpoint',
+          response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+          async handler() {
+            const driver = await import('drizzle-orm/pglite');
+            void driver;
+            return new Response('ok');
+          },
+        });
+      `,
+      site: 'status.endpoint.ts:11',
+    },
+    {
+      fileName: 'status.endpoint.ts',
+      source: `
+        import { endpoint } from '@kovojs/server';
+
+        export const status = endpoint('/status', {
+          method: 'GET',
+          reason: 'raw require proof',
+          csrf: false,
+          csrfJustification: 'read-only proof endpoint',
+          response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+          handler() {
+            const driver = require('@electric-sql/pglite');
+            void driver;
+            return new Response('ok');
+          },
+        });
+      `,
+      site: 'status.endpoint.ts:11',
+    },
+  ])(
+    'flags raw driver module loading via call expressions in request-authored endpoints',
+    ({ fileName, source, site }) => {
+      const diagnostics = diagnosticsForFile(fileName, source);
+
+      expect(diagnostics).toEqual([
+        expect.objectContaining({
+          code: 'KV414',
+          message: expect.stringContaining('raw driver imports/import()/require()'),
+          site,
+        }),
+      ]);
+    },
+  );
 
   it('flags request-derived raw SQL construction at managed sinks', () => {
     const diagnostics = diagnosticsFor(`

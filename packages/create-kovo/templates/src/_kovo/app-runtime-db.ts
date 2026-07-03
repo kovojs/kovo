@@ -17,6 +17,13 @@ const appDatabase = createPostgresAppRuntimeDb({
 
 export { declareSecretReadCapability };
 
+/** Framework-owned auth adapter DB. RLS-subject system posture, not a raw superuser handle. */
+export const appRuntimeAuthDb: AppDb = appDatabase.systemDb({
+  operation: 'write',
+  reason: 'Better Auth adapter manages session tables before an app session exists',
+  surface: 'src/auth.ts',
+});
+
 /** Read-only app DB value re-exported by src/db.ts for endpoint/user-authored reads. */
 export const appRuntimeReadonlyDb: AppReadonlyDb = appDatabase.readonlyDb;
 export const appRuntimeDbReady: Promise<void> = appDatabase.ready;

@@ -85,7 +85,7 @@ describe('create-kovo starter (build integration: runtime and dev server)', () =
           '    await appRuntimeDbReady;',
           query === ''
             ? '    expect(true).toBe(true);'
-            : `    await appRuntimeDbProvider().execute(sql\`${query}\`);`,
+            : `    await appRuntimeDbProvider({ session: { user: { id: 'ddl-proof' } } }).execute(sql\`${query}\`);`,
           '  });',
           '});',
           '',

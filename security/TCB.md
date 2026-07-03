@@ -21,7 +21,7 @@ they are not claimed as the verified TCB.
 ```json tcb-manifest
 {
   "schema": "kovo.security.tcb/v1",
-  "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K",
+  "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K; plans/fundamental-fixes-followup-7.md DEC-A/DEC-C/DEC-D1",
   "budgets": {
     "entryMaxLines": 150,
     "totalTcbMaxLines": 1000
@@ -44,6 +44,29 @@ they are not claimed as the verified TCB.
       "classification": "tcb",
       "wrapper": "securityClassifier",
       "decision": "server.readonly-query.assert"
+    },
+    {
+      "id": "server.postgres-runtime.capability-closure-audit",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "auditPostgresReachableClosure",
+      "kind": "postgres-capability-closure-audit",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.postgres-runtime.capability-closure-audit"
+    },
+    {
+      "id": "server.postgres-runtime.request-scoped-db",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "createRuntimeClient",
+      "kind": "pglite-least-privilege-runtime-path",
+      "classification": "tcb"
+    },
+    {
+      "id": "server.postgres-runtime.internal-framework-capability",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "assertInternalPostgresRuntimeDbCapability",
+      "kind": "pglite-superuser-capability-token-gate",
+      "classification": "tcb"
     }
   ],
   "entries": [
