@@ -13,6 +13,7 @@ import {
   type KovoReadonlyDbCapable,
   type Reader,
 } from './managed-db.js';
+import { declareSystemPrincipal } from './auth-principal.js';
 import { guards } from './guards.js';
 import {
   checkPostgresAppDbPosture,
@@ -143,6 +144,58 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('uses an audited system posture for cross-owner owner-table work without bypassing RLS', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-system-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+
+    try {
+      await runtime.ready;
+      const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      const systemDb = runtime.db({
+        principalPosture: declareSystemPrincipal('repair owner index in runtime test', {
+          ingress: 'task',
+          operation: 'write',
+          surface: 'postgres-runtime.test',
+        }),
+      });
+
+      await expect(u1Db.select().from(notes).orderBy(notes.id)).resolves.toEqual([
+        { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'One' },
+      ]);
+      await systemDb.update(notes).set({ title: 'System touched' });
+      await expect(systemDb.select().from(notes).orderBy(notes.id)).resolves.toEqual([
+        { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'System touched' },
+        { id: 'n2', ownerId: 'u2', secretNote: 's2', title: 'System touched' },
+      ]);
+      await expect(u1Db.select().from(notes).orderBy(notes.id)).resolves.toEqual([
+        { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'System touched' },
+      ]);
+      await expect(runtime.db({}).select().from(notes)).resolves.toEqual([]);
+    } finally {
+      await runtime.close();
+    }
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
+  });
+
+  it('rejects unbranded system posture instead of granting ambient system authority', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-system-unbranded-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+
+    try {
+      await runtime.ready;
+      expect(() =>
+        runtime.db({ principalPosture: { kind: 'system', reason: 'plain object' } }),
+      ).toThrow(/framework-minted actAs\(id\) or declareSystemRead\/Write\(reason\)/);
+    } finally {
+      await runtime.close();
+    }
   });
 
   it('reports a missing provisioned posture without running DDL during check', async () => {

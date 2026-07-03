@@ -9,6 +9,10 @@ import { drizzle as drizzlePglite, type PgliteDatabase } from 'drizzle-orm/pglit
 import { Pool, type PoolClient, type PoolConfig, type QueryConfig, type QueryResultRow } from 'pg';
 
 import {
+  assertNonRequestPrincipalPosture,
+  type NonRequestPrincipalPosture,
+} from './auth-principal.js';
+import {
   createAuthorizationCensusDb,
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
@@ -97,9 +101,14 @@ interface CreatedRuntimeClient {
     role: string | false,
     roleSetting?: string,
   ): KovoPostgresRuntimeDb;
-  drizzleRequestDb(principal: string | undefined): KovoPostgresRuntimeDb;
+  drizzleRequestDb(principal: string | undefined, roleSetting?: string): KovoPostgresRuntimeDb;
   sql: RuntimeSqlClient;
   label: string;
+}
+
+interface PostgresRequestScope {
+  principal?: string;
+  roleSetting?: string;
 }
 
 /** Concrete Postgres runtime driver selected after config/env resolution. */
@@ -228,13 +237,13 @@ export function createPostgresAppRuntimeDb(
   return {
     db(request?: unknown) {
       if (request === undefined) return client.drizzleInternalDb();
-      const principal = config.principalFromRequest(request);
+      const scope = postgresRequestScope(request, config);
       return createRequestScopedDb(
-        client.drizzleRequestDb(principal),
+        client.drizzleRequestDb(scope.principal, scope.roleSetting),
         client,
         config,
         metadata,
-        principal,
+        scope,
         request,
       );
     },
@@ -457,6 +466,17 @@ async function checkRuntimeDbPosture(
         detail: `${tableName} is missing kovo_owner_scope for ${owner.columnName}`,
       });
     }
+    const systemPolicy = await safeQuery(
+      client,
+      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
+      [tableName, 'kovo_system_scope'],
+    );
+    if ((systemPolicy?.rows.length ?? 0) === 0) {
+      issues.push({
+        code: 'KV433_SYSTEM_POLICY',
+        detail: `${tableName} is missing kovo_system_scope for audited system posture`,
+      });
+    }
   }
 
   for (const [tableName, ownerVia] of input.metadata.ownerViaSourcesByTable) {
@@ -469,6 +489,17 @@ async function checkRuntimeDbPosture(
       issues.push({
         code: 'KV433_OWNER_VIA_POLICY',
         detail: `${tableName} is missing owner-via policy through ${ownerVia.parentTable}`,
+      });
+    }
+    const systemPolicy = await safeQuery(
+      client,
+      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
+      [tableName, 'kovo_system_scope'],
+    );
+    if ((systemPolicy?.rows.length ?? 0) === 0) {
+      issues.push({
+        code: 'KV433_SYSTEM_POLICY',
+        detail: `${tableName} is missing kovo_system_scope for audited system posture`,
       });
     }
   }
@@ -496,6 +527,17 @@ async function checkRuntimeDbPosture(
       issues.push({
         code: 'KV433_AUTHZ_POLICY',
         detail: `${tableName} is missing kovo_authz_policy for its custom authzPolicy predicate`,
+      });
+    }
+    const systemPolicy = await safeQuery(
+      client,
+      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
+      [tableName, 'kovo_system_scope'],
+    );
+    if ((systemPolicy?.rows.length ?? 0) === 0) {
+      issues.push({
+        code: 'KV433_SYSTEM_POLICY',
+        detail: `${tableName} is missing kovo_system_scope for audited system posture`,
       });
     }
   }
@@ -572,11 +614,11 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
             postgresReadonlyClientOptions(config, principal, role, roleSetting),
           ),
         }),
-      drizzleRequestDb: (principal) =>
+      drizzleRequestDb: (principal, roleSetting) =>
         drizzlePglite({
           client: createPostgresScopedClient(
             client,
-            postgresScopedClientOptions(config, principal),
+            postgresScopedClientOptions(config, principal, roleSetting),
           ),
         }),
       label: 'PGlite',
@@ -596,11 +638,11 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
           postgresReadonlyClientOptions(config, principal, role, roleSetting),
         ) as unknown as Pool,
       }),
-    drizzleRequestDb: (principal) =>
+    drizzleRequestDb: (principal, roleSetting) =>
       drizzleNodePg({
         client: createPostgresScopedClient(
           transactionalClient,
-          postgresScopedClientOptions(config, principal),
+          postgresScopedClientOptions(config, principal, roleSetting),
         ) as unknown as Pool,
       }),
     label: 'Postgres',
@@ -613,7 +655,7 @@ function createRequestScopedDb(
   client: CreatedRuntimeClient,
   config: ResolvedPostgresRuntimeConfig,
   metadata: KovoRuntimeDbMetadata,
-  principal?: string,
+  scope: PostgresRequestScope = {},
   request?: unknown,
 ): KovoPostgresRuntimeDb {
   const governedDb = createAuthorizationCensusDb(db, {
@@ -624,7 +666,7 @@ function createRequestScopedDb(
   });
   Object.defineProperty(governedDb, kovoReadonlyDbHandle, {
     configurable: true,
-    value: () => createRequestScopedReadonlyDb(client, config, metadata, principal, request),
+    value: () => createRequestScopedReadonlyDb(client, config, metadata, scope, request),
   });
   Object.defineProperty(governedDb, kovoDeclaredWriteDbHandle, {
     configurable: true,
@@ -643,15 +685,15 @@ function createRequestScopedReadonlyDb(
   client: CreatedRuntimeClient,
   config: ResolvedPostgresRuntimeConfig,
   metadata: KovoRuntimeDbMetadata,
-  principal?: string,
+  scope: PostgresRequestScope = {},
   request?: unknown,
 ): Reader<KovoPostgresRuntimeDb> {
-  const readDb = client.drizzleReadonlyDb(principal, config.readerRole);
-  const privilegedReadDb = client.drizzleReadonlyDb(principal, false);
+  const readDb = client.drizzleReadonlyDb(scope.principal, config.readerRole, scope.roleSetting);
+  const privilegedReadDb = client.drizzleReadonlyDb(scope.principal, false, scope.roleSetting);
   const adminReadDb =
     config.crossOwnerReadTables.size === 0
       ? undefined
-      : client.drizzleReadonlyDb(principal, config.adminRole, 'admin');
+      : client.drizzleReadonlyDb(scope.principal, config.adminRole, 'admin');
   const crossOwnerRead =
     adminReadDb === undefined
       ? undefined
@@ -661,7 +703,7 @@ function createRequestScopedReadonlyDb(
           hasRole: (role: 'admin') => requestPassedRoleGuard(request, role),
           normalizeTableName: normalizePolicyTable,
           ownerTables: [...config.crossOwnerReadTables],
-          ...(principal === undefined ? {} : { principal }),
+          ...(scope.principal === undefined ? {} : { principal: scope.principal }),
         };
   const readOptions = crossOwnerRead === undefined ? {} : { crossOwnerRead };
   return createSecretBoxingReadDb(readonlyDb(readDb, readOptions), metadata, {
@@ -1151,11 +1193,20 @@ async function applyPostgresRlsPolicies(
     await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
     await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
     await client.exec(`DROP POLICY IF EXISTS kovo_owner_scope ON ${table}`);
+    await client.exec(`DROP POLICY IF EXISTS kovo_system_scope ON ${table}`);
     await client.exec(
       [
         `CREATE POLICY kovo_owner_scope ON ${table}`,
         `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
         `USING (${predicate}) WITH CHECK (${predicate})`,
+      ].join(' '),
+    );
+    await client.exec(
+      [
+        `CREATE POLICY kovo_system_scope ON ${table}`,
+        `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
+        "USING (current_setting('kovo.role', true) = 'system')",
+        "WITH CHECK (current_setting('kovo.role', true) = 'system')",
       ].join(' '),
     );
   }
@@ -1177,11 +1228,20 @@ async function applyPostgresRlsPolicies(
     await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
     await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
     await client.exec(`DROP POLICY IF EXISTS kovo_owner_scope ON ${table}`);
+    await client.exec(`DROP POLICY IF EXISTS kovo_system_scope ON ${table}`);
     await client.exec(
       [
         `CREATE POLICY kovo_owner_scope ON ${table}`,
         `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
         `USING (${predicate}) WITH CHECK (${predicate})`,
+      ].join(' '),
+    );
+    await client.exec(
+      [
+        `CREATE POLICY kovo_system_scope ON ${table}`,
+        `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
+        "USING (current_setting('kovo.role', true) = 'system')",
+        "WITH CHECK (current_setting('kovo.role', true) = 'system')",
       ].join(' '),
     );
   }
@@ -1190,11 +1250,20 @@ async function applyPostgresRlsPolicies(
     await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
     await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
     await client.exec(`DROP POLICY IF EXISTS kovo_authz_policy ON ${table}`);
+    await client.exec(`DROP POLICY IF EXISTS kovo_system_scope ON ${table}`);
     await client.exec(
       [
         `CREATE POLICY kovo_authz_policy ON ${table}`,
         `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
         `USING (${predicate}) WITH CHECK (${predicate})`,
+      ].join(' '),
+    );
+    await client.exec(
+      [
+        `CREATE POLICY kovo_system_scope ON ${table}`,
+        `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
+        "USING (current_setting('kovo.role', true) = 'system')",
+        "WITH CHECK (current_setting('kovo.role', true) = 'system')",
       ].join(' '),
     );
   }
@@ -1431,9 +1500,11 @@ function normalizePolicyTable(table: string): string {
 function postgresScopedClientOptions(
   config: ResolvedPostgresRuntimeConfig,
   principal: string | undefined,
+  roleSetting?: string,
 ): PostgresScopedClientOptions {
   const options: PostgresScopedClientOptions = { role: config.writerRole };
   if (principal !== undefined) options.principal = principal;
+  if (roleSetting !== undefined) options.roleSetting = roleSetting;
   return options;
 }
 
@@ -1452,14 +1523,44 @@ function postgresReadonlyClientOptions(
 }
 
 function principalFromRequest(request: unknown): string | undefined {
-  const nonRequestPrincipal = principalFromNonRequestPosture(request);
+  const nonRequestPrincipal = nonRequestPrincipalPostureFromRequest(request);
   if (nonRequestPrincipal !== undefined) return nonRequestPrincipal;
   const userId = (request as { session?: { user?: { id?: unknown } } } | undefined)?.session?.user
     ?.id;
   return typeof userId === 'string' && userId !== '' ? userId : undefined;
 }
 
-function principalFromNonRequestPosture(request: unknown): string | undefined {
+function postgresRequestScope(
+  request: unknown,
+  config: ResolvedPostgresRuntimeConfig,
+): PostgresRequestScope {
+  const posture = nonRequestPrincipalPostureObject(request);
+  if (posture !== undefined && posture.kind === 'system') {
+    assertNonRequestPrincipalPosture(posture);
+    return { roleSetting: 'system' };
+  }
+  const principal = config.principalFromRequest(request);
+  return principal === undefined ? {} : { principal };
+}
+
+function nonRequestPrincipalPostureFromRequest(request: unknown): string | undefined {
+  const posture = nonRequestPrincipalPostureObject(request);
+  if (posture === undefined) return undefined;
+  if (posture.kind === 'system') {
+    assertNonRequestPrincipalPosture(posture);
+    return undefined;
+  }
+  const principal = (posture as { principal?: unknown }).principal;
+  return posture.kind === 'act-as' &&
+    typeof principal === 'string' &&
+    principal.trim() === principal
+    ? principal
+    : undefined;
+}
+
+function nonRequestPrincipalPostureObject(
+  request: unknown,
+): NonRequestPrincipalPosture | undefined {
   if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
     return undefined;
   }
@@ -1467,16 +1568,7 @@ function principalFromNonRequestPosture(request: unknown): string | undefined {
   if ((typeof posture !== 'object' && typeof posture !== 'function') || posture === null) {
     return undefined;
   }
-  const kind = (posture as { kind?: unknown }).kind;
-  if (kind === 'system') {
-    throw new Error(
-      'System principal DB posture is not supported by the Postgres starter owner-scope provider yet (SPEC §10.3 DEC-G).',
-    );
-  }
-  const principal = (posture as { principal?: unknown }).principal;
-  return kind === 'act-as' && typeof principal === 'string' && principal.trim() === principal
-    ? principal
-    : undefined;
+  return posture as NonRequestPrincipalPosture;
 }
 
 function quoteTable(config: PgTableConfig): string {

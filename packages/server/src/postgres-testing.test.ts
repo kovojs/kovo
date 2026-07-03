@@ -118,6 +118,63 @@ describe('@kovojs/server/testing Postgres helpers', () => {
       await runtime.close();
     }
   });
+
+  it('exposes audited asSystem for cross-owner work through the real RLS runtime', async () => {
+    const runtime = await createPostgresTestRuntime({ schema });
+
+    try {
+      await runtime.withPrincipal('user-a', async (db) => {
+        await db.insert(notes).values({
+          body: 'visible to user-a',
+          id: 'note-a',
+          ownerId: 'user-a',
+        });
+      });
+      await runtime.withPrincipal('user-b', async (db) => {
+        await db.insert(notes).values({
+          body: 'visible to user-b',
+          id: 'note-b',
+          ownerId: 'user-b',
+        });
+      });
+
+      await expect(
+        runtime.withPrincipal('user-a', (db) =>
+          db.select({ body: notes.body, id: notes.id }).from(notes),
+        ),
+      ).resolves.toEqual([{ body: 'visible to user-a', id: 'note-a' }]);
+
+      const systemRows = await runtime.asSystem('test fixture repair across owners', async (db) => {
+        await db.update(notes).set({ body: 'system touched' });
+        return await db.select({ body: notes.body, id: notes.id }).from(notes).orderBy(notes.id);
+      });
+
+      expect(systemRows).toEqual([
+        { body: 'system touched', id: 'note-a' },
+        { body: 'system touched', id: 'note-b' },
+      ]);
+      await expect(
+        runtime.withPrincipal('user-a', (db) =>
+          db.select({ body: notes.body, id: notes.id }).from(notes).orderBy(notes.id),
+        ),
+      ).resolves.toEqual([{ body: 'system touched', id: 'note-a' }]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it('requires a non-empty audited reason before asSystem can run', async () => {
+    const runtime = await createPostgresTestRuntime({ schema });
+
+    try {
+      await expect(runtime.asSystem('', () => [])).rejects.toThrow(/non-empty audited reason/);
+      await expect(runtime.asSystem(' padded ', () => [])).rejects.toThrow(
+        /non-empty audited reason/,
+      );
+    } finally {
+      await runtime.close();
+    }
+  });
 });
 
 function rowsOf<Row>(result: Row[] | { rows?: Row[] }): Row[] {

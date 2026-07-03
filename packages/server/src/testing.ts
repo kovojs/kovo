@@ -3,7 +3,7 @@ import { join } from 'node:path';
 
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
-import { isProvenPrincipal } from './auth-principal.js';
+import { declareSystemPrincipal, isProvenPrincipal } from './auth-principal.js';
 import { guards } from './guards.js';
 import { kovoReadonlyDbHandle, type KovoReadonlyDbCapable, type Reader } from './managed-db.js';
 import { createPostgresAppRuntimeDb, type KovoPostgresRuntimeDb } from './postgres-runtime.js';
@@ -19,6 +19,9 @@ export type KovoPostgresTestDb = KovoPostgresRuntimeDb;
  * including the audited `crossOwnerRead(...)` capability. It does not expose a write handle.
  */
 export type KovoPostgresTestAdminDb = Reader<KovoPostgresRuntimeDb>;
+
+/** Drizzle database handle passed to audited Postgres system test callbacks. */
+export type KovoPostgresTestSystemDb = KovoPostgresRuntimeDb;
 
 /** Configuration for `createPostgresTestRuntime`. */
 export interface KovoPostgresTestRuntimeOptions {
@@ -73,6 +76,21 @@ export interface KovoPostgresTestRuntime {
   asAdmin<Result>(
     principalId: string,
     callback: (db: KovoPostgresTestAdminDb) => Result | Promise<Result>,
+  ): Promise<Result>;
+  /**
+   * Run test code through the Postgres runtime's audited system posture.
+   *
+   * SPEC §10.3 DEC-G: this is an explicit non-request cross-owner posture backed by
+   * transaction-scoped RLS settings. It requires a non-empty audited reason and does not expose
+   * ambient system authority outside the callback's managed DB handle.
+   *
+   * @param reason Non-empty audited reason for the system operation.
+   * @param callback Test body that receives the transaction-scoped system database handle.
+   * @returns The callback result.
+   */
+  asSystem<Result>(
+    reason: string,
+    callback: (db: KovoPostgresTestSystemDb) => Result | Promise<Result>,
   ): Promise<Result>;
 }
 
@@ -159,6 +177,18 @@ export async function createPostgresTestRuntime(
         request,
       ) as unknown as KovoReadonlyDbCapable<KovoPostgresTestAdminDb>;
       return await callback(scopedDb[kovoReadonlyDbHandle]());
+    },
+    async asSystem<Result>(
+      reason: string,
+      callback: (db: KovoPostgresTestSystemDb) => Result | Promise<Result>,
+    ): Promise<Result> {
+      if (closed) throw new Error('Postgres test runtime is already closed.');
+      const posture = declareSystemPrincipal(reason, {
+        ingress: 'endpoint',
+        operation: 'write',
+        surface: 'createPostgresTestRuntime.asSystem',
+      });
+      return await callback(runtime.db({ principalPosture: posture }));
     },
   };
 }
