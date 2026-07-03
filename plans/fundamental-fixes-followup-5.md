@@ -262,12 +262,15 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
 
 ### Phase 0 — Registry invariant FIRST (the forcing function)
 
-- [ ] **0.1 Registry invariant + re-audit (DEC-B, C2).** Add: the mechanical `chokeId ⇒ runtime-choke` converse test
+- [x] **0.1 Registry invariant + re-audit (DEC-B, C2).** Add: the mechanical `chokeId ⇒ runtime-choke` converse test
       (immediately flags **KV415 → runtime-choke**); the `propertyDependsOn` field + `!== 'build-artifact' ⇒ !== build-only`
       test; a required rationale string on every `build-only` entry. Reclassify KV414 → `runtime-choke`, KV429 →
       concurrency/by-construction, KV415 → runtime-choke; resolve **KV431** (enforce or delete); document KV407/408/410/439
       as build-artifact _with a DEC-C self-guard reference_, KV430/437 as build-artifact. Re-audit ALL build-only codes.
       Landing this makes the paranoid acceptance RED on `bugz-30` B1/B4 until DEC-A/D exist — the forcing function.
+  - Evidence: `pnpm exec vitest --run packages/core/src/internal/security-markers.test.ts` and `pnpm run check:vp` passed
+    after merging `agent/ff5-phase-0-1-registry-20260703`; `SECURITY_CODE_REGISTRY` now carries `propertyDependsOn`,
+    build-only rationales, KV414/KV415 runtime-choke, KV429 concurrency/by-construction, and the drift tests.
 - [ ] **0.2 Authorization census gate (DEC-K, C7).** A build gate (source-derived denominator = schema ×
       reachable-table graph) that fails unless EVERY request-reachable table is classified
       `owned`/`ownedVia`/`authzPolicy`/`public`/`reference`; plus a runtime deny of an unclassified table on the managed
