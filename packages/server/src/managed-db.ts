@@ -133,8 +133,42 @@ export interface PostgresScopedClientOptions {
   principal?: string | undefined;
   quoteIdentifier?: (value: string) => string;
   readOnly?: boolean;
+  rlsDiagnostics?: PostgresRlsSilentDenyDiagnosticsOptions;
   role?: string | false;
 }
+
+/** Minimal query surface for dev-only RLS silent-deny recounts. */
+export interface PostgresRlsDiagnosticReadClient {
+  query(query: unknown, params?: unknown[], queryOptions?: unknown): unknown;
+}
+
+/** Dev-only diagnostics for empty owner-scoped Postgres reads (plans/postgres-v1-devex.md DEC-F1). */
+export interface PostgresRlsSilentDenyDiagnosticsOptions {
+  /**
+   * Defaults to true outside `NODE_ENV=production` when this object is present. Production disables
+   * this path unconditionally so least-privilege runtime reads never run a privileged recount.
+   */
+  enabled?: boolean;
+  /** Internal/admin read handle used only for dev recounts after principal-scoped reads return 0 rows. */
+  privilegedClient?: PostgresRlsDiagnosticReadClient;
+  /** Optional table resolver supplied by framework adapters with declared read metadata. */
+  tableName?: string | ((query: unknown) => string | undefined);
+}
+
+/** In-memory runtime diagnostic fact drained by tests and future `kovo explain` plumbing. */
+export type PostgresRlsSilentDenyDiagnostic =
+  | {
+      kind: 'principal-unset';
+      message: string;
+      table?: string;
+    }
+  | {
+      filteredRows: number;
+      kind: 'owner-scope-filtered';
+      message: string;
+      principal: string;
+      table: string;
+    };
 
 /** Row-scope metadata for an audited public raw read (SPEC §10.3 DEC-F). */
 export interface PublicReadRowsScope {
@@ -494,6 +528,7 @@ interface SqlCarrier {
 }
 
 const publicReadAuditFacts: PublicReadAuditFact[] = [];
+const postgresRlsSilentDenyDiagnostics: PostgresRlsSilentDenyDiagnostic[] = [];
 
 /**
  * Declare an audited public-read authorization scope (SPEC §10.3 DEC-F). This does not assert SQL
@@ -517,6 +552,14 @@ export function declarePublicRead(options: PublicReadDeclaration): PublicReadDec
  */
 export function drainPublicReadAuditFacts(): PublicReadAuditFact[] {
   return publicReadAuditFacts.splice(0, publicReadAuditFacts.length);
+}
+
+/**
+ * Drain dev-only Postgres RLS empty-read diagnostics. Returns and clears facts accumulated since
+ * the last drain; production scoped clients never write to this sink.
+ */
+export function drainPostgresRlsSilentDenyDiagnostics(): PostgresRlsSilentDenyDiagnostic[] {
+  return postgresRlsSilentDenyDiagnostics.splice(0, postgresRlsSilentDenyDiagnostics.length);
 }
 
 function isDeclaredWriteDrizzleMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
@@ -870,6 +913,9 @@ function scopedPostgresQuery(
     await runPostgresTransactionControl(tx, options);
     const queryMethod = tx.query.bind(tx);
     return queryMethod(query, params, queryOptions) as Promise<unknown>;
+  }).then(async (result) => {
+    await maybeReportPostgresRlsSilentDeny(options, query, result);
+    return result;
   });
 }
 
@@ -918,6 +964,120 @@ async function runPostgresTransactionControl(
 
 function quoteSqlIdentifier(value: string): string {
   return `"${value.replaceAll('"', '""')}"`;
+}
+
+async function maybeReportPostgresRlsSilentDeny(
+  options: PostgresScopedClientOptions,
+  query: unknown,
+  result: unknown,
+): Promise<void> {
+  const diagnostics = options.rlsDiagnostics;
+  if (
+    diagnostics === undefined ||
+    diagnostics.enabled === false ||
+    process.env.NODE_ENV === 'production' ||
+    options.readOnly !== true ||
+    resultRowCount(result) !== 0
+  ) {
+    return;
+  }
+
+  const table = resolvePostgresRlsDiagnosticTable(query, diagnostics);
+  if (options.principal === undefined) {
+    postgresRlsSilentDenyDiagnostics.push({
+      kind: 'principal-unset',
+      message: 'Postgres owner-scoped read returned 0 rows because no kovo.principal was set.',
+      ...(table === undefined ? {} : { table }),
+    });
+    return;
+  }
+
+  const privilegedClient = diagnostics.privilegedClient;
+  if (privilegedClient === undefined || table === undefined) return;
+
+  const count = await countPostgresDiagnosticRows(privilegedClient, table, options);
+  if (count <= 0) return;
+
+  postgresRlsSilentDenyDiagnostics.push({
+    filteredRows: count,
+    kind: 'owner-scope-filtered',
+    message: `kovo_owner_scope filtered ${count} row${count === 1 ? '' : 's'} for principal ${options.principal}.`,
+    principal: options.principal,
+    table,
+  });
+}
+
+function resultRowCount(result: unknown): number | undefined {
+  if (Array.isArray(result)) return result.length;
+  if (isRecord(result)) {
+    const rows = result.rows;
+    if (Array.isArray(rows)) return rows.length;
+  }
+  return undefined;
+}
+
+async function countPostgresDiagnosticRows(
+  client: PostgresRlsDiagnosticReadClient,
+  table: string,
+  options: PostgresScopedClientOptions,
+): Promise<number> {
+  const quote = options.quoteIdentifier ?? quoteSqlIdentifier;
+  const query = `SELECT count(*) AS count FROM ${quoteQualifiedSqlIdentifier(table, quote)}`;
+  const result = await client.query(query);
+  const rows = Array.isArray(result)
+    ? result
+    : isRecord(result) && Array.isArray(result.rows)
+      ? result.rows
+      : [];
+  const first = rows[0];
+  if (!isRecord(first)) return 0;
+  const raw = first.count;
+  if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+  if (typeof raw === 'bigint') return Number(raw);
+  if (typeof raw === 'string' && /^\d+$/.test(raw)) return Number(raw);
+  return 0;
+}
+
+function resolvePostgresRlsDiagnosticTable(
+  query: unknown,
+  diagnostics: PostgresRlsSilentDenyDiagnosticsOptions,
+): string | undefined {
+  if (typeof diagnostics.tableName === 'string') return diagnostics.tableName;
+  if (typeof diagnostics.tableName === 'function') return diagnostics.tableName(query);
+  if (typeof query !== 'string') return undefined;
+  return simpleSingleTableSelectName(query);
+}
+
+function simpleSingleTableSelectName(query: string): string | undefined {
+  const normalized = query.trim().replace(/;+\s*$/, '');
+  const match = /^select\b[\s\S]*?\bfrom\s+((?:"[^"]+"|[A-Za-z_][\w$]*)(?:\s*\.\s*(?:"[^"]+"|[A-Za-z_][\w$]*))?)(?:\s+(?:as\s+)?(?:"[^"]+"|[A-Za-z_][\w$]*))?(?:\s+where\b|\s+group\s+by\b|\s+having\b|\s+order\s+by\b|\s+limit\b|\s+offset\b|\s+fetch\b|\s+for\b|\s*$)/iu.exec(
+    normalized,
+  );
+  if (!match) return undefined;
+  const table = match[1]?.replace(/\s*\.\s*/g, '.');
+  if (table === undefined) return undefined;
+  if (/\b(join|,)\b/iu.test(normalized.slice(match.index + match[0].length))) return undefined;
+  return unquoteQualifiedSqlIdentifier(table);
+}
+
+function unquoteQualifiedSqlIdentifier(value: string): string {
+  return value
+    .split('.')
+    .map((part) => {
+      const trimmed = part.trim();
+      if (trimmed.startsWith('"') && trimmed.endsWith('"')) {
+        return trimmed.slice(1, -1).replaceAll('""', '"');
+      }
+      return trimmed;
+    })
+    .join('.');
+}
+
+function quoteQualifiedSqlIdentifier(
+  value: string,
+  quote: (identifier: string) => string,
+): string {
+  return value.split('.').map((part) => quote(part)).join('.');
 }
 
 /** The mode a managed handle is resolved in: a read-only loader handle, or a read-write handle. */

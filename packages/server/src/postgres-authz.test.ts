@@ -1,7 +1,12 @@
 import { PGlite } from '@electric-sql/pglite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
-import { createPostgresScopedClient, readonlyDb } from './managed-db.js';
+import {
+  createPostgresScopedClient,
+  drainPostgresRlsSilentDenyDiagnostics,
+  readonlyDb,
+  type PostgresScopedClientOptions,
+} from './managed-db.js';
 
 // SPEC §10.3/§11.1: Postgres/PGlite owner authorization is enforced by RLS on the
 // proven owner principal, not by query-shape inspection. These tests use real
@@ -13,6 +18,7 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
   const clients: PGlite[] = [];
 
   afterEach(async () => {
+    drainPostgresRlsSilentDenyDiagnostics();
     await Promise.all(clients.map((client) => client.close()));
     clients.length = 0;
   });
@@ -132,24 +138,142 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
 
     await expect(
       rowsOf<{ id: string }>(
-        u1.rawRead(statement, { reads: ['orders'] }) as Promise<{
+        u1.rawRead(statement, { reads: ['orders'] }) as unknown as Promise<{
           rows: { id: string }[];
         }>,
       ),
     ).resolves.toEqual([{ id: 'o1' }]);
     await expect(
       rowsOf<{ id: string }>(
-        anonymous.rawRead(statement, { reads: ['orders'] }) as Promise<{
+        anonymous.rawRead(statement, { reads: ['orders'] }) as unknown as Promise<{
           rows: { id: string }[];
         }>,
       ),
     ).resolves.toEqual([]);
   });
+
+  it('diagnoses dev empty reads when RLS filtered a non-empty owner table', async () => {
+    const client = new PGlite();
+    clients.push(client);
+    await installOwnerScopedSchema(client);
+    const missingOwner = scopedClient(client, 'u-missing', {
+      privilegedClient: client,
+      tableName: 'orders',
+    });
+
+    await expect(orderIds(missingOwner)).resolves.toEqual([]);
+
+    expect(drainPostgresRlsSilentDenyDiagnostics()).toEqual([
+      {
+        filteredRows: 2,
+        kind: 'owner-scope-filtered',
+        message: 'kovo_owner_scope filtered 2 rows for principal u-missing.',
+        principal: 'u-missing',
+        table: 'orders',
+      },
+    ]);
+  });
+
+  it('keeps genuinely empty owner tables silent', async () => {
+    const client = new PGlite();
+    clients.push(client);
+    await installOwnerScopedSchema(client);
+    await client.query('delete from order_items');
+    await client.query('delete from orders');
+    const user = scopedClient(client, 'u1', { privilegedClient: client, tableName: 'orders' });
+
+    await expect(orderIds(user)).resolves.toEqual([]);
+
+    expect(drainPostgresRlsSilentDenyDiagnostics()).toEqual([]);
+  });
+
+  it('does not run the privileged recount when the scoped read has no principal', async () => {
+    const log: string[] = [];
+    type FakePostgresClient = {
+      exec(statement: string): Promise<void>;
+      query(statement: string, params?: unknown[]): Promise<{ rows: unknown[] }>;
+      transaction<Result>(callback: (tx: FakePostgresClient) => Promise<Result>): Promise<Result>;
+    };
+    const client: FakePostgresClient = {
+      transaction<Result>(callback: (tx: FakePostgresClient) => Promise<Result>) {
+        log.push('transaction');
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: string, params?: unknown[]) {
+        log.push(`query:${statement}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve({ rows: [] });
+      },
+    };
+    const privilegedClient = {
+      query() {
+        throw new Error('principal-unset diagnostics must not recount');
+      },
+    };
+    const anonymous = createPostgresScopedClient(client, {
+      readOnly: true,
+      role: APP_ROLE,
+      rlsDiagnostics: { privilegedClient, tableName: 'orders' },
+    });
+
+    await expect(anonymous.query('select id from orders order by id')).resolves.toEqual({
+      rows: [],
+    });
+
+    expect(log).toEqual([
+      'transaction',
+      'exec:SET TRANSACTION READ ONLY',
+      `exec:SET LOCAL ROLE "${APP_ROLE}"`,
+      'query:select id from orders order by id:[]',
+    ]);
+    expect(drainPostgresRlsSilentDenyDiagnostics()).toEqual([
+      {
+        kind: 'principal-unset',
+        message: 'Postgres owner-scoped read returned 0 rows because no kovo.principal was set.',
+        table: 'orders',
+      },
+    ]);
+  });
+
+  it('does not diagnose empty scoped reads in production', async () => {
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    const client = new PGlite();
+    clients.push(client);
+    try {
+      await installOwnerScopedSchema(client);
+      const missingOwner = scopedClient(client, 'u-missing', {
+        privilegedClient: client,
+        tableName: 'orders',
+      });
+
+      await expect(orderIds(missingOwner)).resolves.toEqual([]);
+
+      expect(drainPostgresRlsSilentDenyDiagnostics()).toEqual([]);
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
 });
 
-function scopedClient(client: PGlite, principal: string | undefined): PGlite {
+function scopedClient(
+  client: PGlite,
+  principal: string | undefined,
+  rlsDiagnostics?: PostgresScopedClientOptions['rlsDiagnostics'],
+): PGlite {
   const options: { principal?: string | undefined; role: string } = { role: APP_ROLE };
   if (principal !== undefined) options.principal = principal;
+  if (rlsDiagnostics !== undefined) {
+    return createPostgresScopedClient(client, {
+      ...options,
+      readOnly: true,
+      rlsDiagnostics,
+    });
+  }
   return createPostgresScopedClient(client, options);
 }
 

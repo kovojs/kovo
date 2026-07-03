@@ -520,6 +520,9 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.createPostgresReadonlyClient).toBe(dataApi.createPostgresReadonlyClient);
     expect(publicApi.createPostgresScopedClient).toBe(dataApi.createPostgresScopedClient);
     expect(publicApi.declarePublicRead).toBe(dataApi.declarePublicRead);
+    expect(publicApi.drainPostgresRlsSilentDenyDiagnostics).toBe(
+      dataApi.drainPostgresRlsSilentDenyDiagnostics,
+    );
     expect(publicApi.drainPublicReadAuditFacts).toBe(dataApi.drainPublicReadAuditFacts);
     expect(publicApi.createSecretBoxingReadDb).toBe(secretReadBoundaryApi.createSecretBoxingReadDb);
     expect(publicApi.declareSecretReadCapability).toBe(
