@@ -31,7 +31,7 @@ Scope note: `@kovojs/drizzle` workspace references stay `workspace:*`; this plan
   - Scope: `packages/create-kovo/templates/README.md`, `packages/create-kovo/templates/README.sqlite.md`, and related assertions in `packages/create-kovo/src/index.test.ts`.
   - Evidence: starter READMEs still document Better Auth's `drizzle-orm@^0.45.2` optional peer while stating the starter uses Drizzle `1.0.0-rc.4`; `packages/create-kovo/src/index.test.ts` starter assertions passed below.
 - [x] Fix any source or fixture incompatibilities exposed by rc.4.
-  - Evidence: `packages/server/src/sqlite-authz.test.ts` now uses Drizzle rc.4's `drizzle({ client })` better-sqlite3 adapter form; the static SQLite receiver surface uses rc.4's `SQLiteAsyncDatabase` identity; focused server/data-plane and conformance tests passed below.
+  - Evidence: `packages/server/src/sqlite-authz.test.ts` and the SQLite starter runtime now use Drizzle rc.4's `drizzle({ client })` better-sqlite3 adapter form; the static SQLite receiver surface uses rc.4's `SQLiteAsyncDatabase` identity; focused server/data-plane, starter, packed-starter, and conformance tests passed below.
 - [x] Prove no old direct package references remain.
   - Required command: `rg -n '"drizzle-orm": "(1\.0\.0-rc\.3|\^0\.45\.2|0\.45\.2)"|">=1\.0\.0-rc\.3 <2"' $(rg --files -g 'package*.json')`.
   - Evidence: required `rg` command returned no direct Kovo-owned manifest hits.
@@ -43,7 +43,7 @@ Scope note: `@kovojs/drizzle` workspace references stay `workspace:*`; this plan
   - Evidence: required `pnpm exec vitest ...` command passed: 45 test files, 947 tests; `vp run conformance` passed package-context conformance, including `@kovojs/conformance-drizzle-pin` 12 files / 189 tests.
 - [x] Run starter-template verification.
   - Required command: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.runtime.test.ts`.
-  - Evidence: required `pnpm exec vitest ...` command passed: 2 test files, 30 tests.
+  - Evidence: required `pnpm exec vitest ...` command passed: 2 test files, 30 tests; `pnpm exec vitest --run packages/create-kovo/src/index.build.scaffold.packed-sqlite.test.ts --config ./vite.config.ts` passed after the SQLite starter moved to rc.4's unparameterized better-sqlite3 DB type.
 - [x] Run package-boundary and publish-oriented gates.
   - Required commands: `pnpm run check:api-surface`, `pnpm run check:imports`, `pnpm run check:publish`, `vp run typecheck-examples`, and `git diff --check`.
   - Evidence: all required commands passed on the integration worktree.
