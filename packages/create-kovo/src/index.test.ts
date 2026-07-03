@@ -165,7 +165,6 @@ describe('create-kovo starter (metadata)', () => {
 
       expect(packageJson.name).toBe('my-app');
       expect(packageJson.dependencies).toMatchObject({
-        '@electric-sql/pglite': expect.any(String),
         '@kovojs/better-auth': expect.stringMatching(/^\d+\.\d+\.\d+/),
         '@kovojs/core': expect.stringMatching(/^\d+\.\d+\.\d+/),
         '@kovojs/drizzle': expect.stringMatching(/^\d+\.\d+\.\d+/),
@@ -174,6 +173,7 @@ describe('create-kovo starter (metadata)', () => {
         '@kovojs/ui': expect.stringMatching(/^\d+\.\d+\.\d+/),
         'better-auth': expect.any(String),
         'drizzle-orm': expect.any(String),
+        pg: expect.any(String),
       });
       expect(Object.values(packageJson.dependencies ?? {})).not.toContain('workspace:*');
       expect(Object.values(packageJson.devDependencies ?? {})).not.toContain('workspace:*');
@@ -226,17 +226,23 @@ describe('create-kovo starter (metadata)', () => {
     const files = new Map(project.files.map((file) => [file.path, file.source]));
     const packageJson = JSON.parse(files.get('package.json') ?? '{}') as { pnpm?: unknown };
 
-    expect(files.get('package.json')).toContain('"@electric-sql/pglite"');
+    expect(files.get('package.json')).toContain('"pg"');
+    expect(files.get('package.json')).not.toContain('"@electric-sql/pglite"');
     expect(files.get('package.json')).not.toContain('"better-sqlite3"');
     expect(packageJson.pnpm).toBeUndefined();
     expect(files.get('src/db.ts')).toContain("import type { Reader } from '@kovojs/server'");
     expect(files.get('src/db.ts')).toContain(
-      "import type { PgliteDatabase } from 'drizzle-orm/pglite'",
+      "import type { PgAsyncDatabase, PgQueryResultHKT } from 'drizzle-orm/pg-core'",
+    );
+    expect(files.get('src/db.ts')).toContain(
+      "import type { EmptyRelations } from 'drizzle-orm/relations'",
     );
     expect(files.get('src/db.ts')).toContain(
       "import { appRuntimeReadonlyDb } from './_kovo/app-runtime-db.js'",
     );
-    expect(files.get('src/db.ts')).toContain('export type AppDb = PgliteDatabase');
+    expect(files.get('src/db.ts')).toContain(
+      'export type AppDb = PgAsyncDatabase<PgQueryResultHKT, EmptyRelations>',
+    );
     expect(files.get('src/db.ts')).toContain('export type AppReadonlyDb = Reader<AppDb>');
     expect(files.get('src/db.ts')).toContain(
       'export const readonlyAppDb: AppReadonlyDb = appRuntimeReadonlyDb',
@@ -244,88 +250,37 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).not.toContain('createAppDb');
     expect(files.get('src/db.ts')).not.toContain('CreatedAppDb');
     expect(files.get('src/db.ts')).not.toContain('appDbReady');
-    expect(files.get('src/db.ts')).not.toContain('appRuntimeDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export function appDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export const appDb = appDatabase.db');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "import { PGlite } from '@electric-sql/pglite'",
+      "import { createPostgresAppRuntimeDb, declareSecretReadCapability } from '@kovojs/server'",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "import { getTableConfig } from 'drizzle-orm/pg-core'",
+      "import * as schema from '../schema.js'",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR',
+      "import type { AppDb, AppReadonlyDb } from '../db.js'",
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'sortTablesByForeignKeyDependencies([',
+      'const appDatabase = createPostgresAppRuntimeDb({\n  schema,\n  seedSql: SEED_CONTACTS,\n});',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'CREATE TABLE IF NOT EXISTS ${quoteIdent(config.name)}',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('ADD COLUMN IF NOT EXISTS');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "if (column.columnType === 'PgSerial') return ''",
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'client: createPostgresReadonlyClient(client, postgresReadonlyClientOptions(principal))',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createPostgresScopedClient');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("const WRITER_ROLE = 'kovo_writer'");
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('applyPgliteOwnerPolicies');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb(privilegedReadDb)');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("const READER_ROLE = 'kovo_reader'");
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'applyPgliteReaderColumnPrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA)',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'applyPgliteWriterTablePrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA)',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const readableTables = pgliteReaderReadableTableNames(metadata)',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'readableTables.has(config.name) && publicColumns.length > 0',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "classifications.includes('authzPolicy')",
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'Object.defineProperty(db, kovoReadonlyDbHandle',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('request === undefined');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createInternalFrameworkDb');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createAuthorizationCensusDb');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createDeclaredWriteDb(db, policy');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("dialectLabel: 'PGlite'");
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'governedColumns: SECRET_READ_METADATA',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('readonlyPgliteClient');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('SCHEMA_TABLES');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('getTableConfig');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
-      'declaredWriteDrizzleDb<Db extends object>',
+      'sortTablesByForeignKeyDependencies',
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('CREATE TABLE IF NOT EXISTS');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('ADD COLUMN IF NOT EXISTS');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('createPostgresScopedClient');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('applyPgliteOwnerPolicies');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('createAuthorizationCensusDb');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('createDeclaredWriteDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('SET TRANSACTION READ ONLY');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('SET LOCAL ROLE');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const SECRET_READ_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES)',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'import { extractKovoRuntimeDbMetadata, type KovoRuntimeDbMetadata } from',
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'return createSecretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA',
-    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('extractKovoRuntimeDbMetadata');
     expect(files.get('src/db.ts')).not.toContain('PgliteDatabase<typeof schema>');
     expect(files.get('src/db.ts')).not.toContain('drizzle({ client, schema })');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('await client.exec(SCHEMA_DDL)');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('void client.exec');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'const ready = initializeAppDb(client);\n  return {',
-    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'readonlyDb(db).exec(SCHEMA_DDL)',
     );

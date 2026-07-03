@@ -853,7 +853,7 @@ function isSqliteDdlAction(
 
 type PostgresTransactionClient = {
   exec(statement: string, options?: unknown): unknown;
-  query(query: string, params?: unknown[], queryOptions?: unknown): unknown;
+  query(query: unknown, params?: unknown[], queryOptions?: unknown): unknown;
   transaction<Result>(
     callback: (tx: PostgresTransactionClient) => Promise<Result>,
   ): Promise<Result>;
@@ -862,7 +862,7 @@ type PostgresTransactionClient = {
 function scopedPostgresQuery(
   client: Record<PropertyKey, unknown>,
   options: PostgresScopedClientOptions,
-  query: string,
+  query: unknown,
   params?: unknown[],
   queryOptions?: unknown,
 ): Promise<unknown> {

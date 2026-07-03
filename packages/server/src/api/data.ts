@@ -128,6 +128,11 @@ export {
   kovoReadonlyDbHandle,
   readonlyDb,
 } from '../managed-db.js';
+export {
+  checkPostgresAppDbPosture,
+  createPostgresAppRuntimeDb,
+  provisionPostgresAppDb,
+} from '../postgres-runtime.js';
 export type {
   DeclaredWriteDbOptions,
   DeclaredWriteSqliteAuthorizerConstants,
@@ -147,6 +152,16 @@ export type {
   SqliteAuthorizationClassification,
   Writer,
 } from '../managed-db.js';
+export type {
+  KovoPostgresAppRuntimeDb,
+  KovoPostgresAppRuntimeOptions,
+  KovoPostgresPostureIssue,
+  KovoPostgresPostureReport,
+  KovoPostgresProvisionOptions,
+  KovoPostgresResolvedRuntimeDriver,
+  KovoPostgresRuntimeDb,
+  KovoPostgresRuntimeDriver,
+} from '../postgres-runtime.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {
   FileLike,

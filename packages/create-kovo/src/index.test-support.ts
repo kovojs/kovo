@@ -235,6 +235,7 @@ export function linkStarterBuildDependencies(root: string): void {
     resolveDependencyRoot('@types/better-sqlite3'),
     join(nodeModules, '@types/better-sqlite3'),
   );
+  symlinkSync(resolveDependencyRoot('@types/pg'), join(nodeModules, '@types/pg'));
 
   for (const pkg of [
     '@kovojs/better-auth',
@@ -257,6 +258,7 @@ export function linkStarterBuildDependencies(root: string): void {
     'better-sqlite3',
     'drizzle-orm',
     'kovo',
+    'pg',
     'pgsql-ast-parser',
     'typescript',
     'vite',
@@ -598,6 +600,11 @@ export function resolveDependencyRoot(packageName: string): string {
 
   const pnpmStore = findPnpmStore(dependencyRoot);
   if (pnpmStore) {
+    const hoistedPackageJson = join(pnpmStore, 'node_modules', packageName, 'package.json');
+    if (existsSync(hoistedPackageJson)) {
+      return realpathSync(dirname(hoistedPackageJson));
+    }
+
     for (const entry of readdirSync(pnpmStore)) {
       const packageJson = join(pnpmStore, entry, 'node_modules', packageName, 'package.json');
       if (existsSync(packageJson)) {

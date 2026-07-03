@@ -15,6 +15,23 @@ export type {
   SecretReadSqliteColumnOrigin,
   SecretReadSqliteColumnOriginClient,
 } from './secret-read-boundary.js';
+// SPEC §10.3: generated Postgres apps import this runtime to derive schema DDL/RLS/grants from
+// app-authored Drizzle schema exports while keeping privileged provisioning out of normal boot.
+export {
+  checkPostgresAppDbPosture,
+  createPostgresAppRuntimeDb,
+  provisionPostgresAppDb,
+} from './postgres-runtime.js';
+export type {
+  KovoPostgresAppRuntimeDb,
+  KovoPostgresAppRuntimeOptions,
+  KovoPostgresPostureIssue,
+  KovoPostgresPostureReport,
+  KovoPostgresProvisionOptions,
+  KovoPostgresResolvedRuntimeDriver,
+  KovoPostgresRuntimeDb,
+  KovoPostgresRuntimeDriver,
+} from './postgres-runtime.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
 export { adminAssign, drainAdminAssignFacts, serverValue } from './write-governance.js';

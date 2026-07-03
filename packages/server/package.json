@@ -110,17 +110,20 @@
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@kovojs/browser": "workspace:*",
     "@kovojs/core": "workspace:*",
+    "@kovojs/drizzle": "workspace:*",
     "@kovojs/style": "workspace:*",
     "@node-rs/argon2": "^2.0.2",
     "drizzle-orm": "1.0.0-rc.4",
+    "pg": "^8.16.3",
     "pgsql-ast-parser": "^12.0.2",
     "undici": "^7.28.0"
   },
   "devDependencies": {
-    "@electric-sql/pglite": "^0.5.1",
     "@types/better-sqlite3": "^7.6.13",
+    "@types/pg": "^8.15.6",
     "better-sqlite3": "^12.0.0",
     "vitest": "4.1.8"
   }
