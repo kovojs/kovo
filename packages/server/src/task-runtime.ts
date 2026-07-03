@@ -13,6 +13,7 @@ import {
   PostgresDurableTaskQueue,
   createDurableTaskSqlExecutor,
   ensureDurableTaskSchema,
+  grantDurableTaskWriterRole,
   type DurableTaskQueueStore,
 } from './task-queue.js';
 import type { KovoApp } from './app-types.js';
@@ -211,26 +212,6 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     }
     return new PostgresDurableTaskQueue(createDurableTaskSqlExecutor(request.db));
   }
-}
-
-async function grantDurableTaskWriterRole(
-  executor: ReturnType<typeof createDurableTaskSqlExecutor>,
-): Promise<void> {
-  const writerRole = (process.env.KOVO_DB_WRITER_ROLE ?? 'kovo_writer').trim();
-  if (writerRole === '') return;
-  try {
-    await executor.execute({
-      text: `grant select, insert, update, delete on _kovo_jobs to ${quoteIdent(writerRole)}`,
-      values: [],
-    });
-  } catch {
-    // Non-Postgres adapters or externally managed role setups may not expose the default writer
-    // role. The queue schema itself remains the authoritative startup check.
-  }
-}
-
-function quoteIdent(value: string): string {
-  return `"${value.replaceAll('"', '""')}"`;
 }
 
 function taskInternalRequest(seed: Request): Request {

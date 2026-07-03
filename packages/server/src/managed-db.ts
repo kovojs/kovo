@@ -409,26 +409,7 @@ export const createPostgresScopedClient = securityClassifier(
       get(target, prop, receiver) {
         if (prop === 'query') return scopedPostgresQuery.bind(undefined, target, options);
         if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
-        if (prop === 'transaction') {
-          const value = Reflect.get(target, prop, receiver);
-          if (typeof value !== 'function') return value;
-          return <Result>(
-            callback: (tx: unknown) => Promise<Result> | Result,
-            ...args: unknown[]
-          ) => {
-            if (typeof callback !== 'function') return value.call(target, callback, ...args);
-            return value.call(
-              target,
-              (tx: unknown) => {
-                if (!isPostgresTransactionClient(tx)) return callback(tx);
-                return Promise.resolve(runPostgresTransactionControl(tx, options)).then(() =>
-                  callback(tx),
-                );
-              },
-              ...args,
-            ) as Result;
-          };
-        }
+        if (prop === 'transaction') return scopedPostgresTransaction(target, options, receiver);
         const value = Reflect.get(target, prop, receiver);
         return typeof value === 'function' ? value.bind(target) : value;
       },
@@ -1013,6 +994,26 @@ function isPostgresTransactionClient(value: unknown): value is PostgresTransacti
   return isRecord(value) && typeof value.exec === 'function' && typeof value.query === 'function';
 }
 
+function scopedPostgresTransaction(
+  target: Record<PropertyKey, unknown>,
+  options: PostgresScopedClientOptions,
+  receiver: unknown,
+): unknown {
+  const value = Reflect.get(target, 'transaction', receiver);
+  if (typeof value !== 'function') return value;
+  return <Result>(callback: (tx: unknown) => Promise<Result> | Result, ...args: unknown[]) => {
+    if (typeof callback !== 'function') return value.call(target, callback, ...args);
+    return value.call(
+      target,
+      (tx: unknown) => {
+        if (!isPostgresTransactionClient(tx)) return callback(tx);
+        return Promise.resolve(runPostgresTransactionControl(tx, options)).then(() => callback(tx));
+      },
+      ...args,
+    ) as Result;
+  };
+}
+
 function scopedPostgresQuery(
   client: Record<PropertyKey, unknown>,
   options: PostgresScopedClientOptions,
@@ -1237,20 +1238,10 @@ function readonlyCapabilityDb<Db extends object>(
       if (typeof prop === 'string') {
         if (DENIED_READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
         if (!READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
-        if (prop === 'crossOwnerRead') {
-          if (options.crossOwnerRead === undefined && preserveInnerCapabilities) {
-            const value = Reflect.get(target, prop, receiver);
-            if (typeof value === 'function') return value.bind(target);
-          }
-          return crossOwnerReadCapability(options.crossOwnerRead);
-        }
-        if (prop === 'rawRead') {
-          if (options.rawRead === undefined && preserveInnerCapabilities) {
-            const value = Reflect.get(target, prop, receiver);
-            if (typeof value === 'function') return value.bind(target);
-          }
-          return rawReadCapability(target, options.rawRead);
-        }
+        if (prop === 'crossOwnerRead')
+          return readonlyCrossOwnerRead(target, receiver, options, preserveInnerCapabilities);
+        if (prop === 'rawRead')
+          return readonlyRawRead(target, receiver, options, preserveInnerCapabilities);
         const value = Reflect.get(target, prop, receiver);
         if (prop === 'query') {
           if (typeof value === 'function') return readonlyCapabilityError(prop);
@@ -1272,6 +1263,32 @@ function readonlyCapabilityError(prop: string): () => never {
       `KV433: framework read-only DB capability proxy blocked db.${prop} in a query() loader. Move writes to a mutation(), domain write, or endpoint().`,
     );
   };
+}
+
+function readonlyCrossOwnerRead(
+  target: object,
+  receiver: unknown,
+  options: { crossOwnerRead?: CrossOwnerReadPolicyOptions },
+  preserveInnerCapabilities: boolean,
+): unknown {
+  if (options.crossOwnerRead === undefined && preserveInnerCapabilities) {
+    const value = Reflect.get(target, 'crossOwnerRead', receiver);
+    if (typeof value === 'function') return value.bind(target);
+  }
+  return crossOwnerReadCapability(options.crossOwnerRead);
+}
+
+function readonlyRawRead(
+  target: object,
+  receiver: unknown,
+  options: { rawRead?: RawReadPolicyOptions },
+  preserveInnerCapabilities: boolean,
+): unknown {
+  if (options.rawRead === undefined && preserveInnerCapabilities) {
+    const value = Reflect.get(target, 'rawRead', receiver);
+    if (typeof value === 'function') return value.bind(target);
+  }
+  return rawReadCapability(target, options.rawRead);
 }
 
 function rawReadCapability(
@@ -1630,21 +1647,28 @@ export function managedDb<Db>(
   );
   if (mode === 'write') return safe as Writer<Db>;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
-  const readOptions: {
-    crossOwnerRead?: CrossOwnerReadPolicyOptions;
-    rawRead?: RawReadPolicyOptions;
-  } = {};
-  if (options.crossOwnerRead !== undefined) readOptions.crossOwnerRead = options.crossOwnerRead;
-  if (options.rawRead !== undefined) readOptions.rawRead = options.rawRead;
   return readonlyCapabilityDb(
     safe as unknown as object,
-    readOptions,
+    managedReadCapabilityOptions(options),
     readonlyTarget.fromHook,
   ) as unknown as Reader<Db>;
 }
 
 function readonlyDbTarget<Db>(raw: Db): Db {
   return resolveReadonlyDbTarget(raw).target;
+}
+
+function managedReadCapabilityOptions(options: ManagedDbOptions): {
+  crossOwnerRead?: CrossOwnerReadPolicyOptions;
+  rawRead?: RawReadPolicyOptions;
+} {
+  const readOptions: {
+    crossOwnerRead?: CrossOwnerReadPolicyOptions;
+    rawRead?: RawReadPolicyOptions;
+  } = {};
+  if (options.crossOwnerRead !== undefined) readOptions.crossOwnerRead = options.crossOwnerRead;
+  if (options.rawRead !== undefined) readOptions.rawRead = options.rawRead;
+  return readOptions;
 }
 
 function resolveReadonlyDbTarget<Db>(raw: Db): { fromHook: boolean; target: Db } {

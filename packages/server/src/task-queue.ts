@@ -220,6 +220,24 @@ export async function ensureDurableTaskSchema(executor: DurableTaskSqlExecutor):
   }
 }
 
+export async function grantDurableTaskWriterRole(executor: DurableTaskSqlExecutor): Promise<void> {
+  const writerRole = (process.env.KOVO_DB_WRITER_ROLE ?? 'kovo_writer').trim();
+  if (writerRole === '') return;
+  try {
+    await executor.execute({
+      text: `grant select, insert, update, delete on _kovo_jobs to ${quoteIdent(writerRole)}`,
+      values: [],
+    });
+  } catch {
+    // Non-Postgres adapters or externally managed role setups may not expose the default writer
+    // role. The queue schema itself remains the authoritative startup check.
+  }
+}
+
+function quoteIdent(value: string): string {
+  return `"${value.replaceAll('"', '""')}"`;
+}
+
 export class PostgresDurableTaskQueue implements DurableTaskQueueStore {
   constructor(private readonly executor: DurableTaskSqlExecutor) {}
 

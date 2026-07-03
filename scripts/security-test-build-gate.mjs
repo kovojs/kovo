@@ -469,6 +469,41 @@ export const SECURITY_BUILD_PROOFS = [
   },
   {
     buildInvocation: 'starter-build-production-artifact',
+    claimId: 'phase-5-postgres-paranoid-dogfood-read-acceptance',
+    code: 'KV435',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    requiredNeedles: [
+      "dialect: 'postgres'",
+      'addPostgresParanoidPhase5DogfoodProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'expectPostgresEndpoint(origin, output)',
+      'expectPostgresReadonlyStatus(origin, marker)',
+      'expectPostgresTaskAndWebhook(origin, marker, output)',
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    testName:
+      'runs the Phase 5 Postgres/PGlite paranoid dogfood harness from the production artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
+    claimId: 'phase-5-postgres-paranoid-dogfood-write-acceptance',
+    code: 'KV406',
+    proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    requiredNeedles: [
+      "dialect: 'postgres'",
+      'addPostgresParanoidPhase5DogfoodProof(root)',
+      'buildParanoidProductionArtifact(root)',
+      'expectPostgresWriteBoundary(origin, jar)',
+      'expectPostgresTaskAndWebhook(origin, marker, output)',
+    ],
+    requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
+    sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
+    testName:
+      'runs the Phase 5 Postgres/PGlite paranoid dogfood harness from the production artifact',
+  },
+  {
+    buildInvocation: 'starter-build-production-artifact',
     claimId: 'phase-5-1-full-paranoid-dogfood-read-acceptance',
     code: 'KV435',
     proofFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
