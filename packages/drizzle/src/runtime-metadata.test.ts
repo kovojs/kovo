@@ -41,6 +41,12 @@ describe('runtime metadata extraction', () => {
       secret: false,
       table: 'users',
     });
+    expect(metadata.governedColumnKeysByTable.get('users')).toEqual(
+      new Set(['id', 'passwordHash']),
+    );
+    expect(metadata.governedColumnNamesByTable.get('users')).toEqual(
+      new Set(['id', 'password_hash']),
+    );
   });
 
   it('treats secret: true as a whole-table secret annotation', () => {
@@ -91,5 +97,56 @@ describe('runtime metadata extraction', () => {
       secret: false,
       table: 'account',
     });
+  });
+
+  it('extracts governed keys and physical names from selectors and column annotations', () => {
+    const account = pgTable(
+      'account',
+      {
+        id: pgText('id').primaryKey(),
+        ownerId: pgText('owner_id').notNull(),
+        passwordDigest: pgText('password_digest').notNull(),
+        recoveryCode: pgText('recovery_code').notNull(),
+        role: pgText('role').notNull(),
+        displayName: pgText('display_name').notNull(),
+      },
+      kovo({
+        confidentialAtRest: [(table) => table.recoveryCode],
+        domain: 'account',
+        governed: [(table) => table.role],
+        key: (table) => table.id,
+        owner: 'owner_id',
+      }),
+    );
+
+    const metadata = extractKovoRuntimeDbMetadata([account]);
+
+    expect(metadata.governedColumnKeysByTable.get('account')).toEqual(
+      new Set(['id', 'ownerId', 'passwordDigest', 'recoveryCode', 'role']),
+    );
+    expect(metadata.governedColumnNamesByTable.get('account')).toEqual(
+      new Set(['id', 'owner_id', 'password_digest', 'recovery_code', 'role']),
+    );
+  });
+
+  it('treats governed: true as a whole-table governed annotation', () => {
+    const auditLog = sqliteTable(
+      'audit_log',
+      {
+        id: text('id').primaryKey(),
+        actorId: text('actor_id').notNull(),
+        event: text('event').notNull(),
+      },
+      kovo({ domain: 'audit', governed: true, key: 'id' }),
+    );
+
+    const metadata = extractKovoRuntimeDbMetadata([auditLog]);
+
+    expect(metadata.governedColumnKeysByTable.get('audit_log')).toEqual(
+      new Set(['id', 'actorId', 'event']),
+    );
+    expect(metadata.governedColumnNamesByTable.get('audit_log')).toEqual(
+      new Set(['id', 'actor_id', 'event']),
+    );
   });
 });

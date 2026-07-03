@@ -94,6 +94,7 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
     value: (policy: DeclaredWritePolicy) =>
       createDeclaredWriteDb(db, policy, {
         dialectLabel: 'SQLite',
+        governedColumns: SECRET_READ_METADATA,
         normalizeTableName: normalizePolicyTable,
         sqliteAuthorizer: {
           constants: nodeSqliteConstants,

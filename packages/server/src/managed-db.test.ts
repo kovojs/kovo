@@ -22,6 +22,8 @@ import {
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
 import { domain } from './domain.js';
+import { runWithRequestInputProvenance } from './request-input-provenance.js';
+import { adminAssign, serverValue } from './write-governance.js';
 
 // SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle.
 //
@@ -128,6 +130,60 @@ function fakeDb(log: string[]) {
       });
     },
   };
+}
+
+interface GovernedWriteTestTable {
+  name: string;
+}
+
+interface GovernedWriteTestDb {
+  insert(table: GovernedWriteTestTable): {
+    values(row: unknown): {
+      onConflictDoUpdate(config: { set?: unknown }): Promise<string>;
+    } & Promise<string>;
+  };
+  update(table: GovernedWriteTestTable): {
+    set(row: unknown): Promise<string>;
+  };
+}
+
+function governedWriteHandle(log: unknown[]): GovernedWriteTestDb {
+  const raw = {
+    insert(table: GovernedWriteTestTable) {
+      return {
+        values(row: unknown) {
+          log.push({ op: 'insert', row, table: table.name });
+          return Object.assign(Promise.resolve('inserted'), {
+            onConflictDoUpdate(config: { set?: unknown }) {
+              log.push({ config, op: 'conflict', table: table.name });
+              return Promise.resolve('conflict');
+            },
+          });
+        },
+      };
+    },
+    update(table: GovernedWriteTestTable) {
+      return {
+        set(row: unknown) {
+          log.push({ op: 'update', row, table: table.name });
+          return Promise.resolve('updated');
+        },
+      };
+    },
+  };
+  return createDeclaredWriteDb(
+    raw,
+    { tables: ['public.accounts'], touches: ['account'] },
+    {
+      dialectLabel: 'PGlite',
+      governedColumns: {
+        governedColumnKeysByTable: new Map([['accounts', new Set(['id', 'role'])]]),
+        governedColumnNamesByTable: new Map([['accounts', new Set(['id', 'account_role'])]]),
+      },
+      normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+      tableNames: (table) => [(table as GovernedWriteTestTable).name],
+    },
+  ) as GovernedWriteTestDb;
 }
 
 const SQLITE_RAW_READ_CONSTANTS = {
@@ -1480,6 +1536,77 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     await expect(handle.insert({ name: 'contacts' }).values()).resolves.toBeUndefined();
     expect(() => handle.insert({ name: 'userx' }).values()).toThrow(/KV406/);
     expect(log).toEqual(['insert:contacts']);
+  });
+
+  it('rejects parsed request input copied to governed columns in managed Drizzle writes', async () => {
+    const log: unknown[] = [];
+    const handle = governedWriteHandle(log);
+    const table = { name: 'accounts' };
+
+    await runWithRequestInputProvenance(
+      { id: 'input-id', name: 'Ada', role: 'admin' },
+      async (input) => {
+        expect(() => handle.update(table).set({ role: input.role })).toThrow(/KV438[\s\S]*role/);
+        const { role } = input;
+        expect(() => handle.update(table).set({ role })).toThrow(/KV438[\s\S]*<input>\.role/);
+        expect(() => handle.insert(table).values({ ...input })).toThrow(/KV438/);
+        expect(() => handle.insert(table).values(input)).toThrow(/KV438/);
+        expect(log).toEqual([]);
+      },
+    );
+  });
+
+  it('allows non-governed request fields and server-owned governed values', async () => {
+    const log: unknown[] = [];
+    const handle = governedWriteHandle(log);
+    const table = { name: 'accounts' };
+
+    await runWithRequestInputProvenance({ name: 'Ada', role: 'admin' }, async (input) => {
+      await expect(handle.update(table).set({ name: input.name })).resolves.toBe('updated');
+      await expect(handle.update(table).set({ role: 'user' })).resolves.toBe('updated');
+      await expect(handle.insert(table).values({ id: 'server-id', role: 'user' })).resolves.toBe(
+        'inserted',
+      );
+    });
+    expect(log).toEqual([
+      { op: 'update', row: { name: 'Ada' }, table: 'accounts' },
+      { op: 'update', row: { role: 'user' }, table: 'accounts' },
+      { op: 'insert', row: { id: 'server-id', role: 'user' }, table: 'accounts' },
+    ]);
+  });
+
+  it('treats adminAssign as the audited request-input escape but not serverValue(input)', async () => {
+    const log: unknown[] = [];
+    const handle = governedWriteHandle(log);
+    const table = { name: 'accounts' };
+
+    await runWithRequestInputProvenance({ role: 'admin' }, async (input) => {
+      await expect(
+        handle.update(table).set({ role: adminAssign(input.role, 'operator role grant') }),
+      ).resolves.toBe('updated');
+      expect(() =>
+        handle.update(table).set({ role: serverValue(input.role, 'attempted laundering') }),
+      ).toThrow(/KV438/);
+    });
+    expect(log).toEqual([{ op: 'update', row: { role: 'admin' }, table: 'accounts' }]);
+  });
+
+  it('checks governed columns in conflict update payloads', async () => {
+    const log: unknown[] = [];
+    const handle = governedWriteHandle(log);
+    const table = { name: 'accounts' };
+
+    await runWithRequestInputProvenance({ role: 'admin' }, async (input) => {
+      expect(() =>
+        handle
+          .insert(table)
+          .values({ id: 'server-id', name: 'Ada', role: 'user' })
+          .onConflictDoUpdate({ set: { role: input.role } }),
+      ).toThrow(/KV438[\s\S]*onConflictDoUpdate\.set/);
+    });
+    expect(log).toEqual([
+      { op: 'insert', row: { id: 'server-id', name: 'Ada', role: 'user' }, table: 'accounts' },
+    ]);
   });
 
   it('server-owned declared-write helper denies SQLite direct SQL outside tables', () => {

@@ -126,6 +126,7 @@ export type {
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,
   DeclaredWriteSqliteAuthorizerOptions,
+  GovernedWriteMetadata,
   PostgresReadonlyClientOptions,
   RawReadDeclaration,
   RawReadPolicyOptions,

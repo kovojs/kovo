@@ -283,6 +283,9 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createDeclaredWriteDb(db, policy');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("dialectLabel: 'PGlite'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'governedColumns: SECRET_READ_METADATA',
+    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('readonlyPgliteClient');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'declaredWriteDrizzleDb<Db extends object>',
@@ -814,6 +817,9 @@ describe('create-kovo starter (metadata)', () => {
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createDeclaredWriteDb(db, policy');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("dialectLabel: 'SQLite'");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'governedColumns: SECRET_READ_METADATA',
+    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile)',
     );

@@ -73,6 +73,7 @@ import {
   runSqliteAsyncTransaction,
   type AsyncMutationTransactionCapableDb,
 } from './sql-safe-handle.js';
+import { runWithRequestInputProvenance } from './request-input-provenance.js';
 import type {
   MutationContext,
   MutationDefinition,
@@ -411,6 +412,29 @@ export async function runMutation<
     if (guardFailure) return mutationGuardFailureToResult(guardFailure);
   }
 
+  return runWithRequestInputProvenance(input, (trackedInput) =>
+    runMutationWithTrackedInput(
+      definition,
+      trackedInput as InferSchema<InputSchema>,
+      withGuardArgs(lifecycleRequest, trackedInput) as Request,
+      options,
+    ),
+  );
+}
+
+async function runMutationWithTrackedInput<
+  const Key extends string,
+  InputSchema extends Schema<unknown>,
+  Errors extends Record<string, Schema<unknown>>,
+  Request,
+  Value,
+  GuardedRequest extends Request = Request,
+>(
+  definition: MutationDefinition<Key, InputSchema, Errors, Request, Value, GuardedRequest>,
+  input: InferSchema<InputSchema>,
+  lifecycleRequest: Request,
+  options: RunMutationOptions<Request>,
+): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
   const manualInvalidations: ChangeRecord[] = [];
   const responseHeaders: MutationResponseHeaders = {};
   // B3 (SPEC §9.1.1:846): only the typed (name, value, options) builder is exposed;

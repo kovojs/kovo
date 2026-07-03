@@ -76,6 +76,7 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
     value: (policy: DeclaredWritePolicy) =>
       createDeclaredWriteDb(db, policy, {
         dialectLabel: 'PGlite',
+        governedColumns: SECRET_READ_METADATA,
         normalizeTableName: normalizePolicyTable,
         tableNames: pgTablePolicyNames,
       }),

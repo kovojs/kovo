@@ -53,6 +53,7 @@ const blockedWriteCases = [
   'phase5-write-boundary/ddl-write',
   'phase5-write-boundary/boxed-secret-builder',
   'phase5-write-boundary/boxed-secret-raw',
+  'phase5-write-boundary/governed-mass-assignment',
 ] as const;
 
 describe('create-kovo starter (build integration: paranoid runtime chokes)', () => {
@@ -109,6 +110,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
 
       expect(output()).toContain('KV435');
       expect(output()).toContain('KV406');
+      expect(output()).toContain('KV438');
       expect(output()).not.toContain('runtime-secret-value');
       expect(output()).not.toContain('phase5-builder-secret');
       expect(output()).not.toContain('phase5-raw-secret');
@@ -280,12 +282,14 @@ async function expectWriteStatus(
   const writeStatus = JSON.parse(writeStatusBody) as {
     blockedBuilderSecretRows: number;
     blockedDdlTables: number;
+    blockedGovernedMassAssignmentRows: number;
     blockedRawSecretRows: number;
   };
 
   expect(writeStatus).toEqual({
     blockedBuilderSecretRows: 0,
     blockedDdlTables: 0,
+    blockedGovernedMassAssignmentRows: 0,
     blockedRawSecretRows: 0,
   });
 }

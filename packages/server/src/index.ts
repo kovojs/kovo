@@ -324,6 +324,7 @@ export type {
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,
   DeclaredWriteSqliteAuthorizerOptions,
+  GovernedWriteMetadata,
   PreserveDefinitionInference,
   PostgresReadonlyClientOptions,
   QueryDeclarationBoundaryShape,

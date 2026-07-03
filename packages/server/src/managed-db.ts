@@ -22,6 +22,7 @@ import {
   type ManagedSqlWritePolicy,
 } from './sql-safe-handle.js';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import { requestInputProvenanceForValue } from './request-input-provenance.js';
 
 declare const readerDbBrand: unique symbol;
 declare const writerDbBrand: unique symbol;
@@ -105,9 +106,16 @@ export interface DeclaredWriteSqliteAuthorizerOptions {
   openDatabase(): DeclaredWriteSqliteAuthorizerDatabase;
 }
 
+/** Schema-derived governed-column metadata consumed by the KV438 runtime write floor. */
+export interface GovernedWriteMetadata {
+  governedColumnKeysByTable: ReadonlyMap<string, ReadonlySet<string>>;
+  governedColumnNamesByTable: ReadonlyMap<string, ReadonlySet<string>>;
+}
+
 /** Options for the framework-owned declared-write DB choke. */
 export interface DeclaredWriteDbOptions {
   dialectLabel: string;
+  governedColumns?: GovernedWriteMetadata;
   normalizeTableName: (table: string) => string;
   sqliteAuthorizer?: DeclaredWriteSqliteAuthorizerOptions;
   tableNames: (table: unknown) => readonly string[];
@@ -189,8 +197,12 @@ export const createDeclaredWriteDb = securityClassifier(
         }
         if (isDeclaredWriteDrizzleMethod(prop) && typeof value === 'function') {
           return (table: unknown, ...args: unknown[]) => {
-            assertDeclaredWriteTablesAllowed(options.tableNames(table), policy, options);
-            return Reflect.apply(value, target, [table, ...args]);
+            const tableNames = options.tableNames(table);
+            assertDeclaredWriteTablesAllowed(tableNames, policy, options);
+            const builder = Reflect.apply(value, target, [table, ...args]);
+            return prop === 'delete'
+              ? builder
+              : declaredWriteBuilder(builder, prop, tableNames, options);
           };
         }
         if (prop === 'transaction' && typeof value === 'function') {
@@ -376,6 +388,155 @@ interface SqlCarrier {
 
 function isDeclaredWriteDrizzleMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
   return prop === 'delete' || prop === 'insert' || prop === 'update';
+}
+
+function declaredWriteBuilder(
+  builder: unknown,
+  verb: 'insert' | 'update',
+  tableNames: readonly string[],
+  options: DeclaredWriteDbOptions,
+): unknown {
+  if (!isRecord(builder)) return builder;
+  return new Proxy(builder, {
+    get(target, prop, receiver) {
+      const value = Reflect.get(target, prop, receiver);
+      if (typeof value !== 'function') return value;
+      if (prop === 'values') {
+        return (payload: unknown, ...args: unknown[]) => {
+          assertGovernedWritePayloadAllowed(payload, {
+            boundary: 'values',
+            options,
+            tableNames,
+            verb,
+          });
+          return wrapDeclaredWriteBuilderResult(
+            Reflect.apply(value, target, [payload, ...args]),
+            verb,
+            tableNames,
+            options,
+          );
+        };
+      }
+      if (prop === 'set') {
+        return (payload: unknown, ...args: unknown[]) => {
+          assertGovernedWritePayloadAllowed(payload, {
+            boundary: 'set',
+            options,
+            tableNames,
+            verb,
+          });
+          return wrapDeclaredWriteBuilderResult(
+            Reflect.apply(value, target, [payload, ...args]),
+            verb,
+            tableNames,
+            options,
+          );
+        };
+      }
+      if (prop === 'onConflictDoUpdate') {
+        return (config: unknown, ...args: unknown[]) => {
+          if (isRecord(config)) {
+            assertGovernedWritePayloadAllowed(config.set, {
+              boundary: 'onConflictDoUpdate.set',
+              options,
+              tableNames,
+              verb,
+            });
+          }
+          return wrapDeclaredWriteBuilderResult(
+            Reflect.apply(value, target, [config, ...args]),
+            verb,
+            tableNames,
+            options,
+          );
+        };
+      }
+      return (...args: unknown[]) =>
+        wrapDeclaredWriteBuilderResult(
+          Reflect.apply(value, target, args),
+          verb,
+          tableNames,
+          options,
+        );
+    },
+  });
+}
+
+function wrapDeclaredWriteBuilderResult(
+  result: unknown,
+  verb: 'insert' | 'update',
+  tableNames: readonly string[],
+  options: DeclaredWriteDbOptions,
+): unknown {
+  if (!isRecord(result) || !hasDeclaredWriteBuilderMethod(result)) return result;
+  return declaredWriteBuilder(result, verb, tableNames, options);
+}
+
+function hasDeclaredWriteBuilderMethod(result: Record<PropertyKey, unknown>): boolean {
+  return (
+    typeof result.values === 'function' ||
+    typeof result.set === 'function' ||
+    typeof result.onConflictDoUpdate === 'function'
+  );
+}
+
+interface GovernedWritePayloadContext {
+  boundary: string;
+  options: DeclaredWriteDbOptions;
+  tableNames: readonly string[];
+  verb: 'insert' | 'update';
+}
+
+function assertGovernedWritePayloadAllowed(
+  payload: unknown,
+  context: GovernedWritePayloadContext,
+): void {
+  const governed = governedWriteColumnsForTables(context.tableNames, context.options);
+  if (governed.size === 0) return;
+  if (Array.isArray(payload)) {
+    for (const row of payload) assertGovernedWriteObjectAllowed(row, governed, context);
+    return;
+  }
+  assertGovernedWriteObjectAllowed(payload, governed, context);
+}
+
+function assertGovernedWriteObjectAllowed(
+  payload: unknown,
+  governed: ReadonlySet<string>,
+  context: GovernedWritePayloadContext,
+): void {
+  if (!isRecord(payload)) return;
+  for (const key of Reflect.ownKeys(payload)) {
+    if (typeof key !== 'string' || !governed.has(key)) continue;
+    const value = Reflect.get(payload, key);
+    const provenance = requestInputProvenanceForValue(value);
+    if (provenance === undefined) continue;
+    throw new Error(
+      [
+        `KV438: ${context.options.dialectLabel} managed write rejected parsed request input ${provenance.path} for governed column ${key} in ${context.verb}.${context.boundary} (SPEC §11.1).`,
+        '  Use a server-derived value or the audited adminAssign(...) escape for intentional privileged assignment.',
+      ].join('\n'),
+    );
+  }
+}
+
+function governedWriteColumnsForTables(
+  tableNames: readonly string[],
+  options: DeclaredWriteDbOptions,
+): ReadonlySet<string> {
+  const metadata = options.governedColumns;
+  if (metadata === undefined) return new Set();
+  const normalizedTargets = new Set(tableNames.map(options.normalizeTableName));
+  const governed = new Set<string>();
+  for (const [table, columns] of metadata.governedColumnKeysByTable) {
+    if (!normalizedTargets.has(options.normalizeTableName(table))) continue;
+    for (const column of columns) governed.add(column);
+  }
+  for (const [table, columns] of metadata.governedColumnNamesByTable) {
+    if (!normalizedTargets.has(options.normalizeTableName(table))) continue;
+    for (const column of columns) governed.add(column);
+  }
+  return governed;
 }
 
 function isDeclaredWriteDirectSqlMethod(

@@ -3067,6 +3067,32 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       '});',
       "(phase5BoxedSecretRawWriteProof as { key: string }).key = 'phase5-write-boundary/boxed-secret-raw';",
       '',
+      'const phase5GovernedMassAssignmentRun = write({',
+      "  key: 'phase5-write-boundary/governed-mass-assignment-run',",
+      "  tables: ['contacts'],",
+      '  touches: [phase5WriteProof],',
+      '  async run(db: AppRequest["db"], input: { marker: string }) {',
+      '    await db.insert(contacts).values({',
+      "      company: 'blocked governed mass assignment',",
+      '      email: `${input.marker}-governed-mass-assignment@example.com`,',
+      '      id: input.marker,',
+      "      name: 'blocked governed mass assignment',",
+      '    });',
+      '    return { ok: true };',
+      '  },',
+      '});',
+      '',
+      'export const phase5GovernedMassAssignmentProof = mutation({',
+      '  access: publicProof,',
+      '  csrf: false,',
+      '  input: proofInput,',
+      "  registry: { tables: ['contacts'], touches: phase5GovernedMassAssignmentRun.touches },",
+      '  async handler(input: { marker: string }, request: AppRequest) {',
+      '    return await phase5GovernedMassAssignmentRun.run(request.db, input);',
+      '  },',
+      '});',
+      "(phase5GovernedMassAssignmentProof as { key: string }).key = 'phase5-write-boundary/governed-mass-assignment';",
+      '',
       "export const phase5WriteBoundaryStatusEndpoint = endpoint('/api/phase5-write-boundary-proof', {",
       '  access: publicProof,',
       "  auth: { justification: 'public phase 5.1 write boundary status proof', kind: 'none' },",
@@ -3082,6 +3108,10 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       '      .select({ id: contacts.id })',
       '      .from(contacts)',
       '      .where(eq(contacts.email, `${marker}-raw-secret@example.com`));',
+      '    const governedRows = await readonlyAppDb',
+      '      .select({ id: contacts.id })',
+      '      .from(contacts)',
+      '      .where(eq(contacts.email, `${marker}-governed-mass-assignment@example.com`));',
       '    const ddlRows = await readonlyAppDb',
       '      .select({ name: sqliteMaster.name })',
       '      .from(sqliteMaster)',
@@ -3090,6 +3120,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       '      {',
       '        blockedBuilderSecretRows: builderRows.length,',
       '        blockedDdlTables: ddlRows.length,',
+      '        blockedGovernedMassAssignmentRows: governedRows.length,',
       '        blockedRawSecretRows: rawRows.length,',
       '      },',
       "      { headers: { 'Cache-Control': 'no-store' } },",
@@ -3109,7 +3140,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
   const existingImport =
     "import { starterAbsentTablesContactWriteProof, starterAuthSessionTableWriteProof, starterAuthUserTableWriteProof, starterDbScopeStatusEndpoint, starterRawAuthTableWriteProof } from './starter-mutation-db-scope-proof.js';";
   const phase5Import =
-    "import { phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, phase5WriteBoundaryStatusEndpoint } from './paranoid-phase5-write-boundary-proof.js';";
+    "import { phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, phase5GovernedMassAssignmentProof, phase5WriteBoundaryStatusEndpoint } from './paranoid-phase5-write-boundary-proof.js';";
   app = app.includes(existingImport)
     ? replaceRequired(
         app,
@@ -3130,13 +3161,13 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
     ? replaceRequired(
         app,
         '  mutations: [addContact, starterAbsentTablesContactWriteProof, starterAuthSessionTableWriteProof, starterAuthUserTableWriteProof, starterRawAuthTableWriteProof, appSignIn, appSignOut],',
-        '  mutations: [addContact, starterAbsentTablesContactWriteProof, starterAuthSessionTableWriteProof, starterAuthUserTableWriteProof, starterRawAuthTableWriteProof, phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, appSignIn, appSignOut],',
+        '  mutations: [addContact, starterAbsentTablesContactWriteProof, starterAuthSessionTableWriteProof, starterAuthUserTableWriteProof, starterRawAuthTableWriteProof, phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, phase5GovernedMassAssignmentProof, appSignIn, appSignOut],',
         'phase 5.1 write boundary mutation registration',
       )
     : replaceRequired(
         app,
         '  mutations: [addContact, appSignIn, appSignOut],',
-        '  mutations: [addContact, phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, appSignIn, appSignOut],',
+        '  mutations: [addContact, phase5BoxedSecretBuilderWriteProof, phase5BoxedSecretRawWriteProof, phase5DdlWriteProof, phase5GovernedMassAssignmentProof, appSignIn, appSignOut],',
         'phase 5.1 write boundary mutation registration',
       );
   writeFileSync(appPath, app, 'utf8');

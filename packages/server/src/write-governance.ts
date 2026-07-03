@@ -14,6 +14,8 @@
 //                                 write of a request value to a governed column. Recorded
 //                                 for `kovo explain --writes`.
 
+import { markPrivilegedRequestInputAssignment } from './request-input-provenance.js';
+
 /** A recorded `adminAssign` audit fact for `kovo explain --writes` (SPEC §6.6, audit-grade). */
 export interface AdminAssignFact {
   actor?: string;
@@ -76,6 +78,7 @@ export function adminAssign<T>(value: T, reason: string | AdminAssignOptions): T
   if (typeof fact.reason !== 'string' || fact.reason.trim() === '') {
     throw new Error('adminAssign requires a non-empty reason (KV438).');
   }
+  markPrivilegedRequestInputAssignment(value);
   adminAssignFacts.push({
     ...fact,
     ...(fact.columns ? { columns: [...fact.columns] } : {}),

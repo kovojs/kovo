@@ -360,9 +360,10 @@ projection are all rejected;`db.select({x: sql`upper(name)`}).from(orders)` buil
 
 ### Phase 3 — KV438 runtime floor
 
-- [ ] **3.1 Governed-column write floor at runtime (DEC-D, C3).** A client-field-sourced write to a governed column is
+- [x] **3.1 Governed-column write floor at runtime (DEC-D, C3).** A client-field-sourced write to a governed column is
       refused/dropped at runtime with static KV438 stubbed. Acceptance (full paranoid): `bugz-30` B4's governed-column
       mass-assignment is refused; a legit declared write succeeds. Only then keep KV438 `by-construction`+stubbed.
+  - Evidence: `pnpm exec vitest --run packages/drizzle/src/runtime-metadata.test.ts packages/server/src/request-input-provenance.test.ts packages/server/src/managed-db.test.ts packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` passed; covers schema-derived governed metadata, exact parsed-input rejection for managed Drizzle `insert().values`, `update().set`, and `onConflictDoUpdate({ set })`, `adminAssign` but not `serverValue(input.x)`, served paranoid `phase5-write-boundary/governed-mass-assignment` refusal, and the legit starter contact write success. `pnpm run check:vp`, `pnpm run check:api-surface`, and `git diff --check` passed.
 
 ### Phase 4 — Provenance-box completeness
 
