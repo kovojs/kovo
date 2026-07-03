@@ -1,6 +1,7 @@
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { JsonValue } from '@kovojs/core';
+import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
 import type {
   AlgebraicField,
   AlgebraicQueryShape,
@@ -878,6 +879,8 @@ function sqlSafetyDiagnosticsForSourceFile(
 ): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = [];
   const context = sqlSafetyContextForSourceFile(sourceFile);
+  const rawDriverImport = endpointRawDriverImportDiagnostic(file, sourceFile);
+  if (rawDriverImport) diagnostics.push(rawDriverImport);
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
   // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
   // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
@@ -1108,6 +1111,36 @@ function mutationSecretReturnDiagnostic(
     code: 'KV435',
     detail: `Mutation handler result ${mutationKey} reads a secret-classified column before the mutation response is redirected or streamed to the wire. Prove the read stays off the mutation wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
     site: site ?? `${file.fileName}:${lineForIndex(file.source, siteNode.getStart())}`,
+  });
+}
+
+const ENDPOINT_RAW_DRIVER_MODULES = new Set([
+  '@electric-sql/pglite',
+  'better-sqlite3',
+  'drizzle-orm/better-sqlite3',
+  'drizzle-orm/pglite',
+]);
+
+function endpointRawDriverImportDiagnostic(
+  file: SourceFileInput,
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic | undefined {
+  if (
+    !sourceFile
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .some((call) => isKovoServerCalleeExpression(call.getExpression(), 'endpoint'))
+  ) {
+    return undefined;
+  }
+  const declaration = sourceFile
+    .getImportDeclarations()
+    .find((candidate) => ENDPOINT_RAW_DRIVER_MODULES.has(candidate.getModuleSpecifierValue()));
+  if (declaration === undefined) return undefined;
+  return drizzleDiagnostic({
+    code: 'KV414',
+    detail:
+      'endpoint() code must use endpoint({ db: true }) + ctx.actAs(id) managed DB capabilities; raw driver imports bypass the endpoint authorization choke (SPEC §10.3 DEC-H).',
+    site: `${file.fileName}:${lineForIndex(file.source, declaration.getStart())}`,
   });
 }
 
@@ -2066,6 +2099,94 @@ function extractTouchGraphFromPreparedFiles(
   return { ownerDomains: [...ownerDomains], scopeAudits };
 }
 
+function requestReachableTableNames(input: {
+  queries: readonly QueryFact[];
+  queryWriteReachability: readonly QueryWriteReachabilityFact[];
+  touchGraph: TouchGraph;
+}): Map<string, string> {
+  const reachable = new Map<string, string>();
+  const add = (table: string, site: string) => {
+    if (table === UNRESOLVED_READ_SOURCE_EXPRESSION || reachable.has(table)) return;
+    reachable.set(table, site);
+  };
+  for (const query of input.queries) {
+    for (const read of query.readProvenance ?? []) add(read.via, read.site);
+  }
+  for (const fact of input.queryWriteReachability) {
+    add(fact.table, fact.site);
+  }
+  for (const entry of Object.values(input.touchGraph)) {
+    for (const read of entry.reads ?? []) add(read.via, read.site);
+    for (const touch of entry.touches ?? []) add(touch.via, touch.site);
+    for (const table of entry.tables ?? []) add(table, tableAuthzCensusSite(table));
+  }
+  return reachable;
+}
+
+function appendQueryReadDomainTables(
+  reachable: Map<string, string>,
+  queries: readonly QueryFact[],
+  tables: readonly ExtractedTable[],
+): void {
+  const tablesByDomain = new Map<string, string[]>();
+  for (const table of tables) {
+    if (!isDomainExtractedTableAnnotation(table.annotation)) continue;
+    const domain = extractedDomainKey(table.annotation.domain);
+    const bucket = tablesByDomain.get(domain);
+    if (bucket) bucket.push(table.annotation.name);
+    else tablesByDomain.set(domain, [table.annotation.name]);
+  }
+  for (const query of queries) {
+    for (const domain of query.reads) {
+      for (const table of tablesByDomain.get(domain) ?? []) {
+        if (!reachable.has(table)) reachable.set(table, query.site);
+      }
+    }
+  }
+}
+
+function authzCensusDiagnosticsFromTables(
+  tables: readonly ExtractedTable[],
+  reachable: ReadonlyMap<string, string>,
+): TouchGraphDiagnostic[] {
+  const diagnostics = new Map<string, TouchGraphDiagnostic>();
+  for (const table of tables) {
+    const name = table.annotation.name;
+    const site = reachable.get(name);
+    if (!site) continue;
+    const classifications = authzCensusClassifications(table.annotation);
+    if (classifications.length === 1) continue;
+    const reason =
+      classifications.length === 0
+        ? 'is request-reachable but has no authorization classification'
+        : `has multiple authorization classifications (${classifications.join(', ')})`;
+    diagnostics.set(name, {
+      code: 'KV414',
+      message: `${diagnosticDefinitions.KV414.message} Authorization census table ${name} ${reason}; declare exactly one of owned/ownedVia/authzPolicy/public/reference.`,
+      severity: diagnosticDefinitions.KV414.severity,
+      site,
+    });
+  }
+  return [...diagnostics.values()].sort((left, right) => left.site.localeCompare(right.site));
+}
+
+function authzCensusClassifications(
+  annotation: ExtractedTableAnnotation,
+): AuthzCensusClassification[] {
+  if (!isDomainExtractedTableAnnotation(annotation)) return [];
+  const classifications: AuthzCensusClassification[] = [];
+  if (annotation.owner !== undefined) classifications.push('owned');
+  if (annotation.ownerVia !== undefined) classifications.push('ownedVia');
+  if (annotation.authzPolicy !== undefined) classifications.push('authzPolicy');
+  if (annotation.public === true) classifications.push('public');
+  if (annotation.reference === true) classifications.push('reference');
+  return classifications;
+}
+
+function tableAuthzCensusSite(table: string): string {
+  return `${table || UNRESOLVED_READ_SOURCE_EXPRESSION}:1`;
+}
+
 /**
  * Write-side owner scope facts for a project (SPEC §10.3, §11.1; KV414 A1). Iterates
  * every analyzable function's Drizzle write calls (`db.update/delete(...).where(...)`)
@@ -2257,6 +2378,8 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
   touchGraph: TouchGraph;
 }
 
+type AuthzCensusClassification = 'authzPolicy' | 'owned' | 'ownedVia' | 'public' | 'reference';
+
 /** @internal */ export interface DrizzleAnalysisContext {
   extraction: ProjectExtraction;
   facts: DrizzleFactStore;
@@ -2271,6 +2394,7 @@ function ownerDomainsFromProjectExtraction(extraction: ProjectExtraction): Owner
     ownerDomains: readonly OwnerDomainFact[];
     scopeAudits: readonly ScopeAuditFact[];
   };
+  authzCensusDiagnostics(): readonly TouchGraphDiagnostic[];
   ownerDomains(): readonly OwnerDomainFact[];
   mutationSecretWireDiagnostics(): readonly TouchGraphDiagnostic[];
   queryFacts(): readonly QueryFact[];
@@ -2296,6 +2420,7 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
         scopeAudits: readonly ScopeAuditFact[];
       }
     | undefined;
+  private cachedAuthzCensusDiagnostics: readonly TouchGraphDiagnostic[] | undefined;
   private cachedOwnerDomains: readonly OwnerDomainFact[] | undefined;
   private cachedMutationSecretWireDiagnostics: readonly TouchGraphDiagnostic[] | undefined;
   private cachedQueryFacts: readonly QueryFact[] | undefined;
@@ -2438,6 +2563,32 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
     return this.cachedOwnerAudit;
   }
 
+  authzCensusDiagnostics(): readonly TouchGraphDiagnostic[] {
+    if (this.cachedAuthzCensusDiagnostics) return this.cachedAuthzCensusDiagnostics;
+    const tables: ExtractedTable[] = [];
+    for (const file of this.contextFiles()) {
+      for (const entries of this.tablesForFile(file).values()) tables.push(...entries);
+    }
+    const reachable = requestReachableTableNames({
+      queries: this.queryFacts(),
+      queryWriteReachability: this.queryWriteReachability(),
+      touchGraph: this.touchGraph(),
+    });
+    appendQueryReadDomainTables(reachable, this.queryFacts(), tables);
+    for (const file of this.extraction.files) {
+      for (const query of this.queryDefinitionsForFile(file)) {
+        const site = `${file.fileName}:${lineForIndex(file.source, query.index)}`;
+        for (const table of [...query.tableExpressions, ...query.declaredReadExpressions]) {
+          if (table !== UNRESOLVED_READ_SOURCE_EXPRESSION && !reachable.has(table)) {
+            reachable.set(table, site);
+          }
+        }
+      }
+    }
+    this.cachedAuthzCensusDiagnostics = authzCensusDiagnosticsFromTables(tables, reachable);
+    return this.cachedAuthzCensusDiagnostics;
+  }
+
   sqlSafetyDiagnostics(): readonly TouchGraphDiagnostic[] {
     if (this.cachedSqlSafetyDiagnostics) return this.cachedSqlSafetyDiagnostics;
     this.cachedSqlSafetyDiagnostics = this.contextFiles()
@@ -2532,6 +2683,7 @@ class LazyDrizzleFactStore implements DrizzleFactStore {
         ...this.sqlSafetyDiagnostics(),
         ...diagnosticsForQueryFacts(queries),
         ...this.mutationSecretWireDiagnostics(),
+        ...this.authzCensusDiagnostics(),
       ],
       toctouFacts: this.toctouFacts(),
       touchGraph: this.touchGraph(),
@@ -3635,22 +3787,30 @@ function dynamicDeclaredReadsDiagnostic(node: Node): TouchGraphDiagnostic {
   if (!domain) return null;
   const key = columnNamePropertyFromObject(annotationObject, 'key');
   const owner = columnNamePropertyFromObject(annotationObject, 'owner');
+  const ownerVia = objectPropertyFromObject(annotationObject, 'ownerVia');
+  const authzPolicy = propertyExistsOnObject(annotationObject, 'authzPolicy');
   const secret = secretPropertyFromObject(annotationObject);
   const confidentialAtRest = confidentialAtRestPropertyFromObject(annotationObject);
   const governed = governedPropertyFromObject(annotationObject);
   const atomic = concurrencyColumnsFromObject(annotationObject, 'atomic');
   const version = concurrencyColumnsFromObject(annotationObject, 'version');
   const fans = fanAnnotationsFromObject(annotationObject);
+  const publicTable = booleanPropertyFromObject(annotationObject, 'public');
+  const reference = booleanPropertyFromObject(annotationObject, 'reference');
   const readOnly = booleanPropertyFromObject(annotationObject, 'readOnly');
   return {
     domain,
     ...(atomic === undefined ? {} : { atomic }),
+    ...(authzPolicy ? { authzPolicy: true } : {}),
     ...(confidentialAtRest === undefined ? {} : { confidentialAtRest }),
     ...(fans.length > 0 ? { fans } : {}),
     ...(governed === undefined ? {} : { governed }),
     ...(key ? { key } : {}),
     ...(owner ? { owner } : {}),
+    ...(ownerVia === undefined ? {} : { ownerVia: true as never }),
+    ...(publicTable === true ? { public: true as const } : {}),
     ...(readOnly === true ? { readOnly } : {}),
+    ...(reference === true ? { reference: true as const } : {}),
     ...(secret === undefined ? {} : { secret }),
     ...(version === undefined ? {} : { version }),
     name: tableName,
@@ -3914,6 +4074,16 @@ function booleanPropertyFromObject(object: Node, name: string): boolean | undefi
   }
 
   return undefined;
+}
+
+function propertyExistsOnObject(object: Node, name: string): boolean {
+  if (!Node.isObjectLiteralExpression(object)) return false;
+  return object.getProperties().some((property) => {
+    if (!Node.isPropertyAssignment(property) && !Node.isShorthandPropertyAssignment(property)) {
+      return false;
+    }
+    return propertyNameText(property.getNameNode()) === name;
+  });
 }
 
 function objectPropertyFromObject(

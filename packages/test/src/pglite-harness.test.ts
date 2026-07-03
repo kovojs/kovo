@@ -29,49 +29,64 @@ describe('@kovojs/test PGlite harness integration', () => {
       await db.write('products', { id: 'p1', qty: 1 });
       await db.write('products', { id: 'p2', qty: 2 });
 
-      const reader = managedDb(db, 'read') as unknown as Pick<
-        PgliteTestDb,
-        'exec' | 'query' | 'sql'
-      >;
+      const reader = managedDb(db, 'read', {
+        rawRead: {
+          dialectLabel: 'PGlite',
+          executeMethod: 'query',
+          normalizeTableName: (table) => table,
+        },
+      }) as unknown as Pick<PgliteTestDb, 'exec' | 'query' | 'sql'> & {
+        rawRead<Row extends Record<string, unknown> = Record<string, unknown>>(
+          statement: unknown,
+          declaration: { reads: readonly string[] },
+        ): Promise<Row[]>;
+      };
 
       await expect(
+        reader.rawRead<{ ids: string }>(
+          stampTrustedSql(
+            { sql: "select string_agg(id, ',' order by id) as ids from products" },
+            'static Postgres string_agg read',
+          ),
+          { reads: ['products'] },
+        ),
+      ).resolves.toEqual([{ ids: 'p1,p2' }]);
+      expect(() =>
         reader.query<{ ids: string }>(
           stampTrustedSql(
             { text: "select string_agg(id, ',' order by id) as ids from products" },
-            'static Postgres string_agg read',
+            'direct query read attempt',
           ),
         ),
-      ).resolves.toEqual([{ ids: 'p1,p2' }]);
-      await expect(
-        reader.sql<{ day: Date | string }>(
-          stampTrustedSql(
-            { text: "select date_trunc('day', timestamp '2020-01-02 03:04:05') as day" },
-            'static Postgres date_trunc read',
-          ),
-        ),
-      ).resolves.toHaveLength(1);
+      ).toThrow(/KV433/);
 
       for (const statement of [
-        { text: 'insert into products (id, qty) values ($1, $2)', values: ['p3', 3] },
-        { text: 'update products set qty = $1 where id = $2', values: [4, 'p1'] },
-        { text: 'delete from products where id = $1', values: ['p1'] },
+        { sql: 'insert into products (id, qty) values ($1, $2)', values: ['p3', 3] },
+        { sql: 'update products set qty = $1 where id = $2', values: [4, 'p1'] },
+        { sql: 'delete from products where id = $1', values: ['p1'] },
       ]) {
-        await expect(reader.query(statement)).rejects.toThrow(/KV433.*engine/s);
+        await expect(reader.rawRead(statement, { reads: ['products'] })).rejects.toThrow(
+          /KV433.*engine/s,
+        );
       }
-      await expect(
+      expect(() =>
         reader.exec(stampTrustedSql({ text: 'drop table products' }, 'read-surface DDL attempt')),
+      ).toThrow(/KV433/);
+      await expect(
+        reader.rawRead(stampTrustedSql({ sql: 'select * from products for update' }, 'read lock'), {
+          reads: ['products'],
+        }),
       ).rejects.toThrow(/KV433.*engine/s);
       await expect(
-        reader.query(stampTrustedSql({ text: 'select * from products for update' }, 'read lock')),
-      ).rejects.toThrow(/KV433.*engine/s);
-      await expect(
-        reader.query(
-          stampTrustedSql({ text: "select nextval('products_id_seq')" }, 'sequence write'),
+        reader.rawRead(
+          stampTrustedSql({ sql: "select nextval('products_id_seq')" }, 'sequence write'),
+          { reads: ['products'] },
         ),
       ).rejects.toThrow(/KV433.*engine/s);
       await expect(
-        reader.query(
-          stampTrustedSql({ text: "select setval('products_id_seq', 10)" }, 'sequence write'),
+        reader.rawRead(
+          stampTrustedSql({ sql: "select setval('products_id_seq', 10)" }, 'sequence write'),
+          { reads: ['products'] },
         ),
       ).rejects.toThrow(/KV433.*engine/s);
 

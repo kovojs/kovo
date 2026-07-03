@@ -17,7 +17,11 @@ export const contacts = sqliteTable(
     email: text('email').notNull(),
     company: text('company').notNull().default(''),
   },
-  kovo({ domain: contact, key: (table) => table.id }),
+  kovo({
+    authzPolicy: 'signed-in users share the starter contact book through query/mutation guards',
+    domain: contact,
+    key: (table) => table.id,
+  }),
 );
 
 // --- Auth infrastructure -------------------------------------------------------
@@ -50,7 +54,12 @@ export const session = sqliteTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
   },
-  kovo({ domain: 'auth', key: 'userId', secret: ['token'] }),
+  kovo({
+    domain: 'auth',
+    key: 'userId',
+    owner: 'userId',
+    secret: ['token'],
+  }),
 );
 
 export const account = sqliteTable(
@@ -75,6 +84,7 @@ export const account = sqliteTable(
   kovo({
     domain: 'auth',
     key: 'userId',
+    owner: 'userId',
     secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
   }),
 );

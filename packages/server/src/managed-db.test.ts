@@ -6,10 +6,14 @@ import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import {
   KovoReadonlyHandleError,
+  createAuthorizationCensusDb,
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
+  createPostgresScopedClient,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
+  declarePublicRead,
+  drainPublicReadAuditFacts,
   managedDb,
   readonlyDb,
 } from './managed-db.js';
@@ -22,6 +26,8 @@ import {
 import { runQuery } from './query.js';
 import { query } from './api/data.js';
 import { domain } from './domain.js';
+import { runWithRequestInputProvenance } from './request-input-provenance.js';
+import { adminAssign, serverValue } from './write-governance.js';
 
 // SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle.
 //
@@ -126,6 +132,133 @@ function fakeDb(log: string[]) {
           return Promise.resolve(statement);
         },
       });
+    },
+  };
+}
+
+interface GovernedWriteTestTable {
+  name: string;
+}
+
+interface GovernedWriteTestDb {
+  insert(table: GovernedWriteTestTable): {
+    values(row: unknown): {
+      onConflictDoUpdate(config: { set?: unknown }): Promise<string>;
+    } & Promise<string>;
+  };
+  update(table: GovernedWriteTestTable): {
+    set(row: unknown): Promise<string>;
+  };
+}
+
+function governedWriteHandle(log: unknown[]): GovernedWriteTestDb {
+  const raw = {
+    insert(table: GovernedWriteTestTable) {
+      return {
+        values(row: unknown) {
+          log.push({ op: 'insert', row, table: table.name });
+          return Object.assign(Promise.resolve('inserted'), {
+            onConflictDoUpdate(config: { set?: unknown }) {
+              log.push({ config, op: 'conflict', table: table.name });
+              return Promise.resolve('conflict');
+            },
+          });
+        },
+      };
+    },
+    update(table: GovernedWriteTestTable) {
+      return {
+        set(row: unknown) {
+          log.push({ op: 'update', row, table: table.name });
+          return Promise.resolve('updated');
+        },
+      };
+    },
+  };
+  return createDeclaredWriteDb(
+    raw,
+    { tables: ['public.accounts'], touches: ['account'] },
+    {
+      dialectLabel: 'PGlite',
+      governedColumns: {
+        governedColumnKeysByTable: new Map([['accounts', new Set(['id', 'role'])]]),
+        governedColumnNamesByTable: new Map([['accounts', new Set(['id', 'account_role'])]]),
+      },
+      normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+      tableNames: (table) => [(table as GovernedWriteTestTable).name],
+    },
+  ) as GovernedWriteTestDb;
+}
+
+const SQLITE_RAW_READ_CONSTANTS = {
+  SQLITE_ALTER_TABLE: 1,
+  SQLITE_ATTACH: 2,
+  SQLITE_CREATE_INDEX: 3,
+  SQLITE_CREATE_TABLE: 4,
+  SQLITE_CREATE_TEMP_INDEX: 5,
+  SQLITE_CREATE_TEMP_TABLE: 6,
+  SQLITE_CREATE_TEMP_TRIGGER: 7,
+  SQLITE_CREATE_TEMP_VIEW: 8,
+  SQLITE_CREATE_TRIGGER: 9,
+  SQLITE_CREATE_VIEW: 10,
+  SQLITE_CREATE_VTABLE: 11,
+  SQLITE_DELETE: 12,
+  SQLITE_DENY: 13,
+  SQLITE_DETACH: 14,
+  SQLITE_DROP_INDEX: 15,
+  SQLITE_DROP_TABLE: 16,
+  SQLITE_DROP_TEMP_INDEX: 17,
+  SQLITE_DROP_TEMP_TABLE: 18,
+  SQLITE_DROP_TEMP_TRIGGER: 19,
+  SQLITE_DROP_TEMP_VIEW: 20,
+  SQLITE_DROP_TRIGGER: 21,
+  SQLITE_DROP_VIEW: 22,
+  SQLITE_DROP_VTABLE: 23,
+  SQLITE_INSERT: 24,
+  SQLITE_OK: 25,
+  SQLITE_PRAGMA: 26,
+  SQLITE_REINDEX: 27,
+  SQLITE_UPDATE: 28,
+  SQLITE_READ: 29,
+};
+
+function sqliteRawReadPolicy(
+  observedTables: readonly string[],
+  ownerTables: readonly string[] = [],
+) {
+  let authorize = (
+    _action: number,
+    _objectName: string | null,
+    _columnName: string | null,
+    _databaseName: string | null,
+    _triggerOrView: string | null,
+  ) => SQLITE_RAW_READ_CONSTANTS.SQLITE_OK;
+  return {
+    dialectLabel: 'SQLite',
+    executeMethod: 'all' as const,
+    normalizeTableName: (table: string) => (table.includes('.') ? table : `main.${table}`),
+    ownerTables,
+    sqliteAuthorizer: {
+      constants: SQLITE_RAW_READ_CONSTANTS,
+      openDatabase: () => ({
+        close() {},
+        prepare() {
+          for (const table of observedTables) {
+            authorize(SQLITE_RAW_READ_CONSTANTS.SQLITE_READ, table, 'id', 'main', null);
+          }
+        },
+        setAuthorizer(
+          callback: (
+            action: number,
+            objectName: string | null,
+            columnName: string | null,
+            databaseName: string | null,
+            triggerOrView: string | null,
+          ) => number,
+        ) {
+          authorize = callback;
+        },
+      }),
     },
   };
 }
@@ -253,7 +386,7 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
       writeFileSync(
         join(root, 'reader-type-proof.ts'),
         `
-import { readonlyDb, type Reader } from '@kovojs/server';
+import { declarePublicRead, readonlyDb, type Reader } from '@kovojs/server';
 
 type FakeDb = {
   $client: { execute(statement: unknown): Promise<unknown> };
@@ -278,9 +411,23 @@ acceptsReader(reader);
 
 reader.select().from('products');
 reader.with('active').select().from('products');
+reader.rawRead({ sql: 'select id from products', values: [] }, { reads: ['products'] });
+reader.rawRead(
+  { sql: 'select id from products where published = 1', values: [] },
+  {
+    declarePublicRead: declarePublicRead({
+      reason: 'published catalog',
+      rows: { predicate: 'published = true', table: 'products' },
+      columns: ['id'],
+    }),
+    reads: ['products'],
+  },
+);
 
 // @ts-expect-error SPEC §6.6/§9.4/§10.3: raw provider handles lack the Reader brand.
 acceptsReader(raw);
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides callable raw query handles.
+reader.query({ text: 'select 1', values: [] });
 // @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides write builders.
 reader.insert('products');
 // @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides write builders.
@@ -297,6 +444,17 @@ reader.get({ sql: 'select 1', values: [] });
 reader.values({ sql: 'select 1', values: [] });
 // @ts-expect-error SPEC §9.4/KV433: Reader<Db> narrows CTE-prefixed builders to reads.
 reader.with('active').update('products');
+
+type RelationalDb = {
+  query: {
+    products: {
+      findMany(): Promise<unknown[]>;
+    };
+  };
+};
+
+declare const relationalRaw: RelationalDb;
+readonlyDb(relationalRaw).query.products.findMany();
 
 `,
         'utf8',
@@ -427,6 +585,8 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       reader.all({ text: 'select 1', values: [] });
       // @ts-expect-error Reader<Db> hides SQLite .get sinks by default.
       reader.get({ text: 'select 1', values: [] });
+      // @ts-expect-error Reader<Db> hides callable raw query handles by default.
+      reader.query({ text: 'select 1', values: [] });
       // @ts-expect-error Reader<Db> hides SQLite .values sinks by default.
       reader.values({ text: 'select 1', values: [] });
       const withReader = readonlyDb({
@@ -451,6 +611,8 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       acceptsReader(readHandle);
       // @ts-expect-error managedDb(..., 'read') returns the branded read-only surface.
       readHandle.update('products');
+      // @ts-expect-error managedDb(..., 'read') does not expose callable raw query handles.
+      readHandle.query({ text: 'select 1', values: [] });
       // @ts-expect-error managedDb(..., 'read') exposes only the read capability allowlist.
       readHandle.transaction(() => undefined);
       // @ts-expect-error managedDb(..., 'read') does not expose raw driver escape handles.
@@ -482,31 +644,172 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     }
   });
 
-  it('routes SQL-shaped driver methods through the parser instead of denying by name', async () => {
+  it('denies root raw/FROM-source read methods even when the target exposes them', () => {
     const log: string[] = [];
     const reader = readonlyDb(fakeDb(log)) as unknown as Record<
-      'all' | 'execute' | 'futureStatement' | 'get' | 'run' | 'values',
+      'all' | 'exec' | 'execute' | 'futureStatement' | 'get' | 'prepare' | 'run' | 'sql' | 'values',
       (statement: unknown) => Promise<unknown>
     >;
 
-    for (const method of ['all', 'execute', 'futureStatement', 'get', 'run', 'values'] as const) {
-      await expect(
-        reader[method]({ sql: 'select id from products where id = ?', values: ['p1'] }),
-      ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
-    }
-    expect(log).toEqual(['all', 'execute', 'futureStatement', 'get', 'run', 'values']);
-
-    for (const method of ['all', 'execute', 'futureStatement', 'get', 'run', 'values'] as const) {
+    for (const method of [
+      'all',
+      'exec',
+      'execute',
+      'futureStatement',
+      'get',
+      'prepare',
+      'run',
+      'sql',
+      'values',
+    ] as const) {
       expect(() =>
         reader[method](
           stampTrustedSql(
-            { sql: 'delete from products where id = ? returning id', values: ['p1'] },
-            `${method} read-handle write attempt`,
+            { sql: 'select id from products where id = ?', values: ['p1'] },
+            `${method} read-handle raw read attempt`,
           ),
         ),
       ).toThrow(/KV433/);
     }
-    expect(log).toEqual(['all', 'execute', 'futureStatement', 'get', 'run', 'values']);
+    expect(log).toEqual([]);
+  });
+
+  it('executes declared rawRead statements after SQLite observed-set verification', async () => {
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: sqliteRawReadPolicy(['products']),
+    });
+    const rows = await reader.rawRead<{ id: string }>(
+      stampTrustedSql({ sql: 'select id from products where id = ?', values: ['p1'] }, 'rawRead'),
+      { reads: ['products'] },
+    );
+
+    expect(rows).toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(log).toEqual(['all']);
+  });
+
+  it('rejects SQLite rawRead statements whose observed tables exceed declared reads', () => {
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: sqliteRawReadPolicy(['products', 'accounts']),
+    });
+
+    expect(() =>
+      reader.rawRead(
+        stampTrustedSql({ sql: 'select id from products', values: [] }, 'underdeclared rawRead'),
+        { reads: ['products'] },
+      ),
+    ).toThrow(/KV410[\s\S]*outside the declared reads set/);
+    expect(log).toEqual([]);
+  });
+
+  it('rejects owner-table SQLite rawRead statements without an explicit scope', async () => {
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: sqliteRawReadPolicy(['orders'], ['orders']),
+    });
+
+    const statement = stampTrustedSql(
+      { sql: 'select id from orders where id = ?', values: ['o1'] },
+      'owner rawRead',
+    );
+    expect(() => reader.rawRead(statement, { reads: ['orders'] })).toThrow(
+      /KV414[\s\S]*requires actAs or declarePublicRead/,
+    );
+    await expect(
+      reader.rawRead(statement, { actAs: 'user-1', reads: ['orders'] }),
+    ).resolves.toMatchObject({
+      sql: 'select id from orders where id = ?',
+    });
+    expect(log).toEqual(['all']);
+  });
+
+  it('validates and audits scoped public rawRead declarations', async () => {
+    drainPublicReadAuditFacts();
+    expect(() => declarePublicRead({ reason: '' })).toThrow(/non-empty reason/);
+    expect(() =>
+      declarePublicRead({ reason: 'published orders', rows: { predicate: ' ' } }),
+    ).toThrow(/rows scope/);
+    expect(() => declarePublicRead({ columns: ['id', ' '], reason: 'published orders' })).toThrow(
+      /columns scope/,
+    );
+
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: sqliteRawReadPolicy(['orders'], ['orders']),
+    });
+    const statement = stampTrustedSql(
+      { sql: 'select id, status from orders where published = 1', values: [] },
+      'public owner rawRead',
+    );
+    await expect(
+      reader.rawRead(statement, {
+        declarePublicRead: declarePublicRead({
+          columns: ['id', 'status', 'id'],
+          reason: 'published order status page',
+          rows: { predicate: 'published = true', table: 'orders' },
+        }),
+        reads: ['orders'],
+      }),
+    ).resolves.toMatchObject({
+      sql: 'select id, status from orders where published = 1',
+    });
+
+    expect(drainPublicReadAuditFacts()).toEqual([
+      {
+        columns: ['id', 'status'],
+        declaredReads: ['main.orders'],
+        dialectLabel: 'SQLite',
+        observedReads: ['main.orders'],
+        ownerReads: ['main.orders'],
+        reason: 'published order status page',
+        rows: { predicate: 'published = true', table: 'orders' },
+      },
+    ]);
+    expect(log).toEqual(['all']);
+  });
+
+  it('audits Postgres public rawRead declarations while preserving the scoped read-only client path', async () => {
+    drainPublicReadAuditFacts();
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: {
+        dialectLabel: 'Postgres',
+        executeMethod: 'query',
+        normalizeTableName: (table) => table,
+        ownerTables: ['orders'],
+      },
+    });
+
+    await expect(
+      reader.rawRead(
+        stampTrustedSql(
+          { sql: 'select id from orders where published = true', values: [] },
+          'public postgres owner rawRead',
+        ),
+        {
+          declarePublicRead: declarePublicRead({
+            columns: ['id'],
+            reason: 'published order index',
+            rows: 'published = true',
+          }),
+          reads: ['orders'],
+        },
+      ),
+    ).resolves.toMatchObject({
+      sql: 'select id from orders where published = true',
+    });
+
+    expect(drainPublicReadAuditFacts()).toEqual([
+      {
+        columns: ['id'],
+        declaredReads: ['orders'],
+        dialectLabel: 'Postgres',
+        reason: 'published order index',
+        rows: 'published = true',
+      },
+    ]);
+    expect(log).toEqual(['query']);
   });
 
   it('passes reads through unchanged', async () => {
@@ -517,15 +820,48 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(log).toEqual(['select:products']);
   });
 
-  it('parses allowed SQL-shaped read methods instead of trusting the allowlist alone', async () => {
+  it('preserves builder terminals returned after select().from()', () => {
     const log: string[] = [];
-    const reader = readonlyDb(fakeDb(log));
-    const queryMethod = (reader as unknown as { query(statement: unknown): Promise<unknown> })
-      .query;
+    const raw = {
+      all(statement: unknown) {
+        log.push(`root.all:${String(statement)}`);
+        return [];
+      },
+      select() {
+        log.push('select');
+        return {
+          from(table: string) {
+            log.push(`from:${table}`);
+            return {
+              all() {
+                log.push('builder.all');
+                return [{ id: 'p1' }];
+              },
+            };
+          },
+        };
+      },
+    };
+    const reader = readonlyDb(raw) as unknown as typeof raw;
 
-    expect(() => queryMethod('select * from products')).toThrow(/KV422/);
     expect(() =>
-      queryMethod(
+      reader.all(stampTrustedSql({ sql: 'select id from products' }, 'root all raw read')),
+    ).toThrow(/KV433/);
+    expect(reader.select().from('products').all()).toEqual([{ id: 'p1' }]);
+    expect(log).toEqual(['select', 'from:products', 'builder.all']);
+  });
+
+  it('denies callable raw query while preserving relational query namespaces', async () => {
+    const log: string[] = [];
+    const callableReader = readonlyDb(fakeDb(log)) as unknown as {
+      query(statement: unknown): Promise<unknown>;
+    };
+
+    expect(() =>
+      callableReader.query({ sql: 'select id from products where id = ?', values: ['p1'] }),
+    ).toThrow(/KV433/);
+    expect(() =>
+      callableReader.query(
         stampTrustedSql(
           { sql: 'delete from products where id = ? returning id', values: ['p1'] },
           'attempted public read-handle write',
@@ -534,10 +870,18 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     ).toThrow(/KV433/);
     expect(log).toEqual([]);
 
-    await expect(
-      queryMethod({ sql: 'select id from products where id = ?', values: ['p1'] }),
-    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
-    expect(log).toEqual(['query']);
+    const relationalRaw = {
+      query: {
+        users: {
+          findMany() {
+            log.push('query.users.findMany');
+            return Promise.resolve([{ id: 'u1' }]);
+          },
+        },
+      },
+    };
+    await expect(readonlyDb(relationalRaw).query.users.findMany()).resolves.toEqual([{ id: 'u1' }]);
+    expect(log).toEqual(['query.users.findMany']);
   });
 
   it('binds allowed read methods to the wrapped DB target', async () => {
@@ -573,6 +917,78 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
+  it('denies schema tables with no DEC-K classification at the managed builder boundary', () => {
+    const log: string[] = [];
+    const raw = {
+      select() {
+        return {
+          from(table: { name: string }) {
+            log.push(`select:${table.name}`);
+            return [];
+          },
+          leftJoin(table: { name: string }) {
+            log.push(`leftJoin:${table.name}`);
+            return [];
+          },
+        };
+      },
+      insert(table: { name: string }) {
+        log.push(`insert:${table.name}`);
+        return { values: () => undefined };
+      },
+    };
+    const handle = createAuthorizationCensusDb(raw, {
+      dialectLabel: 'PGlite',
+      metadata: {
+        authorizationClassificationsByTable: new Map([
+          ['contacts', ['authzPolicy']],
+          ['reference_tags', ['reference']],
+          ['published_posts', ['public']],
+        ]),
+        schemaTableNames: new Set(['contacts', 'reference_tags', 'published_posts', 'drafts']),
+      },
+      normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+      tableNames: (table) => [(table as { name: string }).name],
+    });
+
+    expect(handle.select().from({ name: 'contacts' })).toEqual([]);
+    expect(handle.select().from({ name: 'reference_tags' })).toEqual([]);
+    expect(handle.select().leftJoin({ name: 'published_posts' })).toEqual([]);
+    expect(() => handle.select().from({ name: 'drafts' })).toThrow(
+      /KV414[\s\S]*drafts[\s\S]*no authorization classification/,
+    );
+    expect(() => handle.insert({ name: 'drafts' }).values()).toThrow(/KV414/);
+    expect(log).toEqual(['select:contacts', 'select:reference_tags', 'leftJoin:published_posts']);
+  });
+
+  it('does not census-deny unknown framework or driver tables outside the schema metadata', () => {
+    const log: string[] = [];
+    const handle = createAuthorizationCensusDb(
+      {
+        select() {
+          return {
+            from(table: { name: string }) {
+              log.push(`select:${table.name}`);
+              return [];
+            },
+          };
+        },
+      },
+      {
+        dialectLabel: 'PGlite',
+        metadata: {
+          authorizationClassificationsByTable: new Map(),
+          schemaTableNames: new Set(['drafts']),
+        },
+        normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+        tableNames: (table) => [(table as { name: string }).name],
+      },
+    );
+
+    expect(handle.select().from({ name: '_kovo_jobs' })).toEqual([]);
+    expect(log).toEqual(['select:_kovo_jobs']);
+  });
+
   it('rejects forged direct SQL wrapper policies before exposing DB exec', () => {
     const log: string[] = [];
     const raw = {
@@ -605,17 +1021,17 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['execute']);
   });
 
-  it('read mode rejects writes AND raw-string SQL (the unification)', () => {
+  it('read mode rejects writes AND callable raw query handles', () => {
     const handle = managedDb(fakeDb([]), 'read');
     // KV433: write verb throws the readonly error.
     expect(() => (handle as unknown as { insert(t: string): unknown }).insert('products')).toThrow(
       KovoReadonlyHandleError,
     );
-    // KV422: a raw string statement is rejected by the same handle.
-    expect(() => (handle as { query(s: unknown): unknown }).query('SELECT 1')).toThrow(/KV422/);
+    // DEC-C: callable root query() is a FROM-source raw read and is outside the strict allowlist.
+    expect(() => (handle as { query(s: unknown): unknown }).query('SELECT 1')).toThrow(/KV433/);
   });
 
-  it('read mode rejects SQL writes even through allowed read-shaped SQL methods', () => {
+  it('read mode denies callable query while preserving builder reads', async () => {
     const handle = managedDb(fakeDb([]), 'read', {
       sqlWritePolicy: { dialect: 'sqlite' },
     });
@@ -628,16 +1044,19 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         ),
       ),
     ).toThrow(/KV433/);
-
     expect(() =>
       (handle as { query(s: unknown): unknown }).query({
         sql: 'select id from products where id = ?',
         values: ['p1'],
       }),
-    ).not.toThrow();
+    ).toThrow(/KV433/);
+
+    await expect(
+      (handle as unknown as ReturnType<typeof fakeDb>).select().from('products'),
+    ).resolves.toEqual([{ id: 'p1' }]);
   });
 
-  it('uses a dedicated engine read-only target and keeps writer lifecycle isolated', async () => {
+  it('uses a dedicated engine read-only target without exposing its callable query sink', async () => {
     const log: string[] = [];
     const raw = {
       readonlyState: false,
@@ -671,29 +1090,24 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     const reader = managedDb(raw, 'read') as unknown as {
       query(statement: unknown): Promise<unknown>;
     };
-    await expect(
+    expect(() =>
       reader.query({
         text: "select string_agg(name, ',') from contacts where created_at < date_trunc('day', now()) and id <> $1",
         values: ['archived'],
       }),
-    ).resolves.toMatchObject({ text: expect.stringContaining('string_agg') });
+    ).toThrow(/KV433/);
     expect(() =>
       reader.query(
         stampTrustedSql({ text: "select setval('contact_id_seq', 1)" }, 'engine-readonly setval'),
       ),
-    ).toThrow(/KV433[\s\S]*read-only transaction/);
+    ).toThrow(/KV433/);
 
     const writer = managedDb(raw, 'write') as unknown as {
       insert(table: string): { values(): Promise<void> };
     };
     await expect(writer.insert('contacts').values()).resolves.toBeUndefined();
 
-    expect(log).toEqual([
-      'readonly-target-created',
-      'readonly.query',
-      'readonly.query',
-      'writer.insert:contacts:readonly=false',
-    ]);
+    expect(log).toEqual(['readonly-target-created', 'writer.insert:contacts:readonly=false']);
   });
 
   it('fails closed when an engine read-only hook returns the writer handle', () => {
@@ -709,7 +1123,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(() => managedDb(raw, 'read')).toThrow(/KV433[\s\S]*dedicated engine read-only handle/);
   });
 
-  it('read mode parses SQLite sinks and blocks mutating statements before execution', async () => {
+  it('read mode denies SQLite root sinks before execution', async () => {
     const log: string[] = [];
     const handle = managedDb(fakeDb(log), 'read', {
       sqlWritePolicy: { dialect: 'sqlite' },
@@ -737,12 +1151,12 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ).toThrow(/KV433/);
     }
 
-    await expect(
+    expect(() =>
       (handle as unknown as { all(statement: unknown): Promise<unknown> }).all({
         sql: 'select id from products where id = ?',
         values: ['p1'],
       }),
-    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    ).toThrow(/KV433/);
     expect(() =>
       (
         handle as unknown as { transaction(callback: (tx: unknown) => unknown): unknown }
@@ -750,7 +1164,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         log.push('callback-entered');
       }),
     ).toThrow(KovoReadonlyHandleError);
-    expect(log).toEqual(['all']);
+    expect(log).toEqual([]);
   });
 
   it.each([
@@ -766,7 +1180,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       },
       name: "managedDb('read')",
     },
-  ])('$name parses SQLite read sinks and rejects write-shaped reads', async ({ create }) => {
+  ])('$name denies SQLite read sinks and preserves builder terminals', async ({ create }) => {
     const log: string[] = [];
     const handle = create(log);
 
@@ -791,12 +1205,12 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         ),
       ).toThrow(/KV433/);
     }
-    await expect(
+    expect(() =>
       (handle as unknown as { get(statement: unknown): Promise<unknown> }).get({
         sql: 'select id from products where id = ?',
         values: ['p1'],
       }),
-    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    ).toThrow(/KV433/);
     expect(() =>
       (
         handle as unknown as { transaction(callback: (tx: unknown) => unknown): unknown }
@@ -807,7 +1221,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     const rows = await (handle as unknown as ReturnType<typeof fakeDb>).select().from('products');
     expect(rows).toEqual([{ id: 'p1' }]);
-    expect(log).toEqual(['get', 'select:products']);
+    expect(log).toEqual(['select:products']);
   });
 
   it.each([
@@ -823,7 +1237,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       },
       name: "managedDb('read')",
     },
-  ])('$name denies raw driver escape properties and parses future methods', async ({ create }) => {
+  ])('$name denies raw driver escape properties and future root methods', async ({ create }) => {
     const log: string[] = [];
     const handle = create({
       $client: {
@@ -866,13 +1280,13 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     ).toThrow(/KV433/);
     expect(log).toEqual([]);
 
-    expect(
+    expect(() =>
       (handle as unknown as { futureStatement(statement: unknown): unknown }).futureStatement({
         sql: 'select id from products where id = ?',
         values: ['p1'],
       }),
-    ).toMatchObject({ sql: 'select id from products where id = ?' });
-    expect(log).toEqual(['futureStatement:[object Object]']);
+    ).toThrow(/KV433/);
+    expect(log).toEqual([]);
   });
 
   it("managedDb('read') exposes only the read half of CTE-prefixed .with() builders", async () => {
@@ -1120,8 +1534,8 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       write: { text: 'insert into products (id) values ($1)', values: ['p1'] },
     },
   ])(
-    'read mode $name rejects raw strings and mutating statements before execution',
-    async ({ dialect, log: expectedLog, method, read, rawDb, write }) => {
+    'read mode $name denies root SQL methods before execution',
+    async ({ dialect, method, read, rawDb, write }) => {
       const log: string[] = [];
       const handle = managedDb(rawDb(log), 'read', {
         sqlWritePolicy: dialect === undefined ? {} : { dialect },
@@ -1129,16 +1543,16 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
       const execute = (statement: unknown) => handle[method]!(statement);
 
-      expect(() => execute('select id from products')).toThrow(/KV422/);
+      expect(() => execute('select id from products')).toThrow(/KV433/);
       expect(log).toEqual([]);
 
-      await expect(Promise.resolve(execute(read))).resolves.toMatchObject(read);
-      expect(log).toEqual([expectedLog]);
+      expect(() => execute(read)).toThrow(/KV433/);
+      expect(log).toEqual([]);
 
       expect(() => execute(stampTrustedSql(write, `read-mode ${method} write attempt`))).toThrow(
         /KV433/,
       );
-      expect(log).toEqual([expectedLog]);
+      expect(log).toEqual([]);
     },
   );
 
@@ -1299,6 +1713,77 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['insert:contacts']);
   });
 
+  it('rejects parsed request input copied to governed columns in managed Drizzle writes', async () => {
+    const log: unknown[] = [];
+    const handle = governedWriteHandle(log);
+    const table = { name: 'accounts' };
+
+    await runWithRequestInputProvenance(
+      { id: 'input-id', name: 'Ada', role: 'admin' },
+      async (input) => {
+        expect(() => handle.update(table).set({ role: input.role })).toThrow(/KV438[\s\S]*role/);
+        const { role } = input;
+        expect(() => handle.update(table).set({ role })).toThrow(/KV438[\s\S]*<input>\.role/);
+        expect(() => handle.insert(table).values({ ...input })).toThrow(/KV438/);
+        expect(() => handle.insert(table).values(input)).toThrow(/KV438/);
+        expect(log).toEqual([]);
+      },
+    );
+  });
+
+  it('allows non-governed request fields and server-owned governed values', async () => {
+    const log: unknown[] = [];
+    const handle = governedWriteHandle(log);
+    const table = { name: 'accounts' };
+
+    await runWithRequestInputProvenance({ name: 'Ada', role: 'admin' }, async (input) => {
+      await expect(handle.update(table).set({ name: input.name })).resolves.toBe('updated');
+      await expect(handle.update(table).set({ role: 'user' })).resolves.toBe('updated');
+      await expect(handle.insert(table).values({ id: 'server-id', role: 'user' })).resolves.toBe(
+        'inserted',
+      );
+    });
+    expect(log).toEqual([
+      { op: 'update', row: { name: 'Ada' }, table: 'accounts' },
+      { op: 'update', row: { role: 'user' }, table: 'accounts' },
+      { op: 'insert', row: { id: 'server-id', role: 'user' }, table: 'accounts' },
+    ]);
+  });
+
+  it('treats adminAssign as the audited request-input escape but not serverValue(input)', async () => {
+    const log: unknown[] = [];
+    const handle = governedWriteHandle(log);
+    const table = { name: 'accounts' };
+
+    await runWithRequestInputProvenance({ role: 'admin' }, async (input) => {
+      await expect(
+        handle.update(table).set({ role: adminAssign(input.role, 'operator role grant') }),
+      ).resolves.toBe('updated');
+      expect(() =>
+        handle.update(table).set({ role: serverValue(input.role, 'attempted laundering') }),
+      ).toThrow(/KV438/);
+    });
+    expect(log).toEqual([{ op: 'update', row: { role: 'admin' }, table: 'accounts' }]);
+  });
+
+  it('checks governed columns in conflict update payloads', async () => {
+    const log: unknown[] = [];
+    const handle = governedWriteHandle(log);
+    const table = { name: 'accounts' };
+
+    await runWithRequestInputProvenance({ role: 'admin' }, async (input) => {
+      expect(() =>
+        handle
+          .insert(table)
+          .values({ id: 'server-id', name: 'Ada', role: 'user' })
+          .onConflictDoUpdate({ set: { role: input.role } }),
+      ).toThrow(/KV438[\s\S]*onConflictDoUpdate\.set/);
+    });
+    expect(log).toEqual([
+      { op: 'insert', row: { id: 'server-id', name: 'Ada', role: 'user' }, table: 'accounts' },
+    ]);
+  });
+
   it('server-owned declared-write helper denies SQLite direct SQL outside tables', () => {
     const constants = {
       SQLITE_ALTER_TABLE: 1,
@@ -1397,6 +1882,54 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       'exec:SET LOCAL ROLE "kovo_reader"',
       'query:select id from contacts',
     ]);
+  });
+
+  it('server-owned Postgres scoped client parameterizes the principal before assuming the app role', async () => {
+    const log: string[] = [];
+    const client = {
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        log.push('transaction');
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: string, params?: unknown[]) {
+        log.push(`query:${statement}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve([{ id: 'c1' }]);
+      },
+    };
+    const scoped = createPostgresScopedClient(client, {
+      principal: 'user-1',
+      readOnly: true,
+      role: 'kovo_reader',
+    });
+
+    await expect(scoped.query('select id from contacts')).resolves.toEqual([{ id: 'c1' }]);
+    expect(log).toEqual([
+      'transaction',
+      'exec:SET TRANSACTION READ ONLY',
+      `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
+      'exec:SET LOCAL ROLE "kovo_reader"',
+      'query:select id from contacts:[]',
+    ]);
+    expect(() => scoped.exec('select 1')).toThrow(/parameterized db\.query/);
+  });
+
+  it('binds pass-through Postgres client methods to the underlying client', () => {
+    class PrivateFieldClient {
+      #ready = true;
+
+      transaction<Result>(callback: (tx: this) => Result): Result {
+        if (!this.#ready) throw new Error('not ready');
+        return callback(this);
+      }
+    }
+
+    const scoped = createPostgresScopedClient(new PrivateFieldClient()) as PrivateFieldClient;
+
+    expect(scoped.transaction((tx) => tx instanceof PrivateFieldClient)).toBe(true);
   });
 
   it('refuses Secret boxes at builder values and set write boundaries', () => {

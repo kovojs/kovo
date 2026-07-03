@@ -1,5 +1,20 @@
 import { frameworkEgressFetch } from './egress.js';
-import type { TaskDefinition, TaskHandle, TaskRunContext, TaskScheduleOptions } from './task.js';
+import {
+  actAsNonRequestPrincipal,
+  declareSystemPrincipal,
+  type NonRequestPrincipalPosture,
+  type PrincipalAccessOperation,
+} from './auth-principal.js';
+import type {
+  TaskDefinition,
+  TaskHandle,
+  TaskIngressRunOptions,
+  TaskPrincipalReadScope,
+  TaskPrincipalScope,
+  TaskPrincipalWriteScope,
+  TaskRunContext,
+  TaskScheduleOptions,
+} from './task.js';
 import type {
   DurableTaskEnqueueInput,
   DurableTaskJob,
@@ -9,8 +24,16 @@ import type {
 export interface DurableTaskRunnerHooks {
   readonly fetch?: typeof globalThis.fetch;
   onError?: (error: unknown, context: DurableTaskRunnerErrorContext) => Promise<void> | void;
-  runMutation?: TaskRunContext['runMutation'];
-  runQuery?: TaskRunContext['runQuery'];
+  runMutation?: (
+    definition: Parameters<TaskRunContext['runMutation']>[0],
+    input: Parameters<TaskRunContext['runMutation']>[1],
+    options: TaskIngressRunOptions,
+  ) => Promise<unknown>;
+  runQuery?: (
+    definition: Parameters<TaskRunContext['runQuery']>[0],
+    input: Parameters<TaskRunContext['runQuery']>[1],
+    options: TaskIngressRunOptions,
+  ) => Promise<unknown>;
 }
 
 export interface DurableTaskRunnerErrorContext {
@@ -251,20 +274,42 @@ export class DurableTaskRunner {
   }
 
   private createContext(job: DurableTaskJob): TaskRunContext {
+    const runMutation = this.hooks.runMutation;
+    const runQuery = this.hooks.runQuery;
     return {
       jobId: job.id,
       idempotencyKey: job.id,
       fetch: this.hooks.fetch ?? frameworkEgressFetch,
-      runMutation:
-        this.hooks.runMutation ??
-        (async () => {
-          throw new Error('Task runner runMutation hook is not configured.');
-        }),
-      runQuery:
-        this.hooks.runQuery ??
-        (async () => {
-          throw new Error('Task runner runQuery hook is not configured.');
-        }),
+      actAs: (principalId: string): TaskPrincipalScope =>
+        this.createPrincipalScope(
+          job,
+          actAsNonRequestPrincipal(principalId, taskPrincipalAudit(job, 'read')),
+          actAsNonRequestPrincipal(principalId, taskPrincipalAudit(job, 'write')),
+          runQuery,
+          runMutation,
+        ),
+      declareSystemRead: (reason: string): TaskPrincipalReadScope =>
+        this.createPrincipalScope(
+          job,
+          declareSystemPrincipal(reason, taskPrincipalAudit(job, 'read')),
+          undefined,
+          runQuery,
+          runMutation,
+        ),
+      declareSystemWrite: (reason: string): TaskPrincipalWriteScope =>
+        this.createPrincipalScope(
+          job,
+          undefined,
+          declareSystemPrincipal(reason, taskPrincipalAudit(job, 'write')),
+          runQuery,
+          runMutation,
+        ),
+      runMutation: async () => {
+        throw missingTaskPrincipalPostureError(job, 'write');
+      },
+      runQuery: async () => {
+        throw missingTaskPrincipalPostureError(job, 'read');
+      },
       schedule: async (definition, args, options?: TaskScheduleOptions): Promise<TaskHandle> => {
         // SPEC §9.6: task-body scheduling has one chokepoint. Registry checks, lineage,
         // maxGenerations, and the self-reschedule delay floor are computed here before any queue
@@ -282,10 +327,55 @@ export class DurableTaskRunner {
       },
     };
   }
+
+  private createPrincipalScope(
+    job: DurableTaskJob,
+    readPosture: NonRequestPrincipalPosture | undefined,
+    writePosture: NonRequestPrincipalPosture | undefined,
+    runQuery: DurableTaskRunnerHooks['runQuery'],
+    runMutation: DurableTaskRunnerHooks['runMutation'],
+  ): TaskPrincipalScope {
+    return {
+      runMutation: async (definition, input) => {
+        if (writePosture === undefined) throw missingTaskPrincipalPostureError(job, 'write');
+        if (runMutation === undefined) {
+          throw new Error('Task runner runMutation hook is not configured.');
+        }
+        return runMutation(definition, input, { principalPosture: writePosture });
+      },
+      runQuery: async (definition, input) => {
+        if (readPosture === undefined) throw missingTaskPrincipalPostureError(job, 'read');
+        if (runQuery === undefined) {
+          throw new Error('Task runner runQuery hook is not configured.');
+        }
+        return runQuery(definition, input, { principalPosture: readPosture });
+      },
+    };
+  }
 }
 
 export function createDurableTaskRunner(options: DurableTaskRunnerOptions): DurableTaskRunner {
   return new DurableTaskRunner(options);
+}
+
+function taskPrincipalAudit(
+  job: DurableTaskJob,
+  operation: PrincipalAccessOperation,
+): Parameters<typeof actAsNonRequestPrincipal>[1] {
+  return {
+    ingress: 'task',
+    operation,
+    surface: `${job.task}:${job.id}`,
+  };
+}
+
+function missingTaskPrincipalPostureError(
+  job: DurableTaskJob,
+  operation: PrincipalAccessOperation,
+): Error {
+  return new Error(
+    `Durable task "${job.task}" attempted ${operation} owner-table access without actAs(id) or declareSystem${operation === 'read' ? 'Read' : 'Write'}(reason). SPEC §10.3 DEC-G requires an explicit non-request principal posture.`,
+  );
 }
 
 export function durableTaskScheduleInput(input: {

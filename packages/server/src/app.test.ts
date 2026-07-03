@@ -350,7 +350,7 @@ describe('server createApp request shell', () => {
       createApp({
         csrf,
         routes: [route('/', { page: () => renderedHtml('<main>Account</main>') })],
-        sessionProvider: () => ({ id: 'session-1' }),
+        sessionProvider: () => ({ user: { id: 'session-1' } }),
       });
     const first = await createRequestHandler(makeApp())(new Request('https://example.test/'));
     const second = await createRequestHandler(makeApp())(new Request('https://example.test/'));
@@ -361,7 +361,7 @@ describe('server createApp request shell', () => {
           secret: 'different-session-fingerprint-secret-012',
         },
         routes: [route('/', { page: () => renderedHtml('<main>Account</main>') })],
-        sessionProvider: () => ({ id: 'session-1' }),
+        sessionProvider: () => ({ user: { id: 'session-1' } }),
       }),
     )(new Request('https://example.test/'));
 

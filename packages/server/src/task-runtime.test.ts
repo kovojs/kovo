@@ -54,6 +54,45 @@ describe('durable task runtime (SPEC §9.6)', () => {
     expect(enqueue?.values[4]).toEqual(new Date('2026-06-30T02:00:00.000Z'));
   });
 
+  it('starts the durable task store through the app-root db provider', async () => {
+    const providerCalls: string[] = [];
+    const statements: DurableTaskSqlStatement[] = [];
+    const internalDb = {
+      async query(text: string, values: readonly unknown[]) {
+        statements.push({ text, values });
+        if (text === 'select now() as now') {
+          return { rows: [{ now: '2026-06-30T10:00:00.000Z' }] };
+        }
+        return { rowCount: 0, rows: [] };
+      },
+    };
+    const requestDb = {
+      async query(text: string) {
+        throw new Error(`request-scoped db should not create durable task schema: ${text}`);
+      },
+    };
+    const noop = task('startup/internal-db', {
+      input: s.object({}),
+      run() {},
+    });
+    const app = createApp({
+      db: (request?: unknown) => {
+        providerCalls.push(request === undefined ? 'internal' : 'request');
+        return request === undefined ? internalDb : requestDb;
+      },
+      tasks: [noop],
+    });
+
+    await createAppTaskRuntime(app)?.ensureStarted(new Request('http://localhost/request'));
+
+    expect(providerCalls).toEqual(['internal']);
+    expect(
+      statements.some((statement) =>
+        statement.text.includes('create table if not exists _kovo_jobs'),
+      ),
+    ).toBe(true);
+  });
+
   it('reports task failures through the app onError hook', async () => {
     vi.useFakeTimers();
     try {

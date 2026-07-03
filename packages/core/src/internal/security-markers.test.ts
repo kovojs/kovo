@@ -49,7 +49,15 @@ describe('DEC-D security code registry', () => {
       .sort();
 
     expect(PARANOID_SECURITY_ADVISORY_CODES).toEqual(derived);
-    expect(PARANOID_SECURITY_ADVISORY_CODES).toEqual(['KV406', 'KV422', 'KV433', 'KV435', 'KV438']);
+    expect(PARANOID_SECURITY_ADVISORY_CODES).toEqual([
+      'KV406',
+      'KV414',
+      'KV415',
+      'KV422',
+      'KV433',
+      'KV435',
+      'KV438',
+    ]);
   });
 
   it('does not stub escape-hatch-audit or build-only residual codes under paranoid mode', () => {
@@ -62,8 +70,9 @@ describe('DEC-D security code registry', () => {
 
     expect(excluded).toContain('KV426');
     expect(excluded).toContain('KV423');
-    expect(excluded).toContain('KV429');
+    expect(excluded).toContain('KV431');
     expect(excluded.every((code) => !advisoryCodes.has(code))).toBe(true);
+    expect(advisoryCodes.has('KV429')).toBe(false);
   });
 
   it('covers every currently defined security diagnostic code in the checked 4xx family', () => {
@@ -74,7 +83,42 @@ describe('DEC-D security code registry', () => {
     expect(Object.keys(SECURITY_CODE_REGISTRY).sort()).toEqual(diagnosticSecurityCodes.sort());
   });
 
-  it('keeps runtime-choke registry entries pointed at live branded security decisions', () => {
+  it('requires every build-only entry to explain why the property is build-artifact-only', () => {
+    for (const entry of Object.values(SECURITY_CODE_REGISTRY)) {
+      if (entry.enforcement !== 'build-only') continue;
+
+      expect(entry.propertyDependsOn, `${entry.code} build-only property dependency`).toBe(
+        'build-artifact',
+      );
+      expect(entry.buildOnlyRationale.trim(), `${entry.code} build-only rationale`).not.toBe('');
+    }
+  });
+
+  it('prevents request-state and concurrency properties from drifting into build-only', () => {
+    for (const entry of Object.values(SECURITY_CODE_REGISTRY)) {
+      if (entry.propertyDependsOn === 'build-artifact') continue;
+
+      expect(entry.enforcement, `${entry.code} depends on ${entry.propertyDependsOn}`).not.toBe(
+        'build-only',
+      );
+    }
+  });
+
+  it('requires a chokeId to name runtime-choke enforcement or a proven by-construction floor', () => {
+    for (const entry of Object.values(SECURITY_CODE_REGISTRY)) {
+      if (entry.chokeId === undefined) continue;
+
+      const floor = 'byConstructionFloor' in entry ? entry.byConstructionFloor : undefined;
+      const hasProvenFloor = typeof floor === 'string' && floor.trim() !== '';
+      expect(
+        entry.enforcement === 'runtime-choke' ||
+          (entry.enforcement === 'by-construction' && hasProvenFloor),
+        `${entry.code} chokeId ${entry.chokeId} contradicts ${entry.enforcement}`,
+      ).toBe(true);
+    }
+  });
+
+  it('keeps chokeId registry entries pointed at live branded security decisions', () => {
     const source = [
       'packages/server/src/sql-safe-handle.ts',
       'packages/server/src/response-posture.ts',
@@ -83,7 +127,7 @@ describe('DEC-D security code registry', () => {
       .join('\n');
 
     for (const entry of Object.values(SECURITY_CODE_REGISTRY)) {
-      if (entry.enforcement !== 'runtime-choke') continue;
+      if (entry.chokeId === undefined) continue;
       expect(entry.chokeId, `${entry.code} must name a choke id`).toBeDefined();
       expect(source, `${entry.code} names a live choke ${entry.chokeId}`).toContain(
         `'${entry.chokeId}'`,

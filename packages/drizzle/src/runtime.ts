@@ -21,6 +21,7 @@ export type {
   KovoDomainTableAnnotation,
   KovoFanAnnotation,
   KovoGovernedColumnAnnotation,
+  KovoOwnerViaAnnotation,
   KovoSecretColumnAnnotation,
   KovoTableAnnotation,
   KovoTableExtraConfig,
@@ -31,9 +32,12 @@ export type {
 export { kovo, kovoAnalyzerSummary } from './drizzle-surface.js';
 export { extractKovoRuntimeDbMetadata } from './runtime-metadata.js';
 export type {
+  KovoRuntimeAuthorizationClassification,
   KovoRuntimeDbColumnSource,
   KovoRuntimeDbMetadata,
   KovoRuntimeDbTable,
+  KovoRuntimeOwnerSource,
+  KovoRuntimeOwnerViaSource,
 } from './runtime-metadata.js';
 // KV429 (SPEC §10.3/§11.1): compare-and-set helper — folds check+act into one UPDATE…WHERE
 // so a lost-update race is impossible by construction. Zero rowsAffected → CasConflict;

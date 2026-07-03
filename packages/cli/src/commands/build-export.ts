@@ -1124,13 +1124,13 @@ async function loadBuildAppModule(
     server: buildTimeViteServerOptions(),
   });
   try {
-    const [appModule, serverBuildModule, serverInternalBuildModule] = await Promise.all([
-      server.ssrLoadModule(viteSsrModuleId(appModulePath, root)),
+    const [serverBuildModule, serverInternalBuildModule] = await Promise.all([
       server.ssrLoadModule(viteSsrModuleId(requireFromApp.resolve('@kovojs/server/build'), root)),
       server.ssrLoadModule(
         viteSsrModuleId(requireFromApp.resolve('@kovojs/server/internal/build'), root),
       ),
     ]);
+    const appModule = await server.ssrLoadModule(viteSsrModuleId(appModulePath, root));
     return {
       appModule,
       serverBuildModule: serverBuildModule as LoadedBuildAppModule['serverBuildModule'],

@@ -144,15 +144,16 @@ describe('server webhook primitive', () => {
       readonly [typeof invoice]
     >('/webhooks/stripe', {
       async handler(input, context) {
-        const txId: string = context.tx.id;
-        steps.push(`handler:${context.tx.id}`);
+        const scoped = context.actAs('user_evt_1');
+        const txId: string = scoped.tx.id;
+        steps.push(`handler:${scoped.tx.id}`);
         expect('session' in context.request).toBe(false);
         expect(input.provider_extra).toEqual({ livemode: false });
         writes += 1;
         context.recordChange(invoice, { keys: [input.id] });
         const compileOnly = () => {
           const acceptsWebhookTx = (tx: WebhookTxDb<{ id: string }>) => tx;
-          acceptsWebhookTx(context.tx);
+          acceptsWebhookTx(scoped.tx);
           // @ts-expect-error raw transaction handles lack the module-private webhook tx brand.
           acceptsWebhookTx({ id: txId });
         };
@@ -248,42 +249,43 @@ describe('server webhook primitive', () => {
     const input = s.object({ id: s.string() });
     const sqlWebhook = webhook('/webhooks/sql-tx', {
       handler(_input, context) {
+        const scoped = context.declareSystemWrite('exercise webhook managed SQL tx safety');
         expect(() =>
-          (context.tx as unknown as { execute(statement: unknown): unknown }).execute(
+          (scoped.tx as unknown as { execute(statement: unknown): unknown }).execute(
             'select * from products',
           ),
         ).toThrow(/KV422/);
         expect(() =>
-          (context.tx as unknown as { session: { run(statement: unknown): unknown } }).session.run(
+          (scoped.tx as unknown as { session: { run(statement: unknown): unknown } }).session.run(
             'select * from products',
           ),
         ).toThrow(/raw driver escape db\.session|KV422/);
         expect(() =>
           (
-            context.tx as unknown as { $client: { execute(statement: unknown): unknown } }
+            scoped.tx as unknown as { $client: { execute(statement: unknown): unknown } }
           ).$client.execute('select * from products'),
         ).toThrow(/raw driver escape db\.\$client|KV422/);
         expect(() =>
-          (context.tx as unknown as { futureStatement(options: unknown): unknown }).futureStatement(
-            { mode: 'opaque' },
-          ),
+          (scoped.tx as unknown as { futureStatement(options: unknown): unknown }).futureStatement({
+            mode: 'opaque',
+          }),
         ).toThrow(/unknown managed DB method db\.futureStatement/);
         expect(
-          (context.tx as unknown as { execute(statement: unknown): unknown }).execute({
+          (scoped.tx as unknown as { execute(statement: unknown): unknown }).execute({
             text: 'select id from products where id = $1',
             values: ['p1'],
           }),
         ).toMatchObject({ text: 'select id from products where id = $1' });
         expect(() =>
           (
-            context.tx as unknown as { $client: { execute(statement: unknown): unknown } }
+            scoped.tx as unknown as { $client: { execute(statement: unknown): unknown } }
           ).$client.execute({
             text: 'select id from products where id = $1',
             values: ['p1'],
           }),
         ).toThrow(/raw driver escape db\.\$client|KV422/);
         expect(() =>
-          (context.tx as unknown as { session: { run(statement: unknown): unknown } }).session.run(
+          (scoped.tx as unknown as { session: { run(statement: unknown): unknown } }).session.run(
             stampTrustedSql(
               { text: 'update products set name = $1 where id = $2', values: ['Ada', 'p1'] },
               'audited webhook tx update',
@@ -292,7 +294,7 @@ describe('server webhook primitive', () => {
         ).toThrow(/raw driver escape db\.session|KV422/);
         expect(
           (
-            context.tx as unknown as { futureStatement(statement: unknown): unknown }
+            scoped.tx as unknown as { futureStatement(statement: unknown): unknown }
           ).futureStatement({
             text: 'select id from products where id = $1',
             values: ['p1'],
@@ -360,7 +362,7 @@ describe('server webhook primitive', () => {
     });
     const stripeWebhook = webhook('/webhooks/stripe-mutation', {
       async handler(input, context) {
-        return context.runMutation(recordInvoice, { id: input.id });
+        return context.actAs(`owner:${input.id}`).runMutation(recordInvoice, { id: input.id });
       },
       idempotency: (input) => input.id,
       input: s.object({ id: s.string() }),
@@ -386,6 +388,74 @@ describe('server webhook primitive', () => {
     expect(second.changes).toEqual([]);
     expect(second.response.status).toBe(200);
     expect(mutationWrites).toBe(1);
+  });
+
+  it('refuses a webhook mutation that only carries a payload owner and no actAs posture', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    let mutationWrites = 0;
+    const recordInvoice = mutation('invoice/refuse-payload-owner', {
+      handler(input: { id: string; ownerId: string }) {
+        mutationWrites += 1;
+        return { stored: input.id, ownerId: input.ownerId };
+      },
+      input: s.object({ id: s.string(), ownerId: s.string() }),
+    });
+    const stripeWebhook = webhook('/webhooks/payload-owner-unscoped', {
+      async handler(input, context) {
+        return context.runMutation(recordInvoice, {
+          id: input.id,
+          ownerId: input.ownerId,
+        });
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string(), ownerId: s.string() }),
+      replayStore,
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook principal posture test',
+    });
+
+    const result = await runWebhook(
+      stripeWebhook,
+      new Request('https://example.test/webhooks/payload-owner-unscoped', {
+        body: JSON.stringify({ id: 'evt_payload_owner', ownerId: 'user_from_payload' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(result.changes).toEqual([]);
+    expect(mutationWrites).toBe(0);
+  });
+
+  it('denies direct webhook tx access until the handler declares actAs or system write posture', async () => {
+    const replayStore = createMemoryWebhookReplayStore();
+    let writes = 0;
+    const directTx = webhook('/webhooks/direct-tx-unscoped', {
+      handler(_input, context) {
+        (context.tx as unknown as { insert(): void }).insert();
+        return { ok: true };
+      },
+      idempotency: (input) => input.id,
+      input: s.object({ id: s.string() }),
+      replayStore,
+      async transaction(_context, run) {
+        return run({ insert: () => (writes += 1) });
+      },
+      verify: 'none',
+      verifyJustification: 'fixture-only webhook tx principal posture test',
+    });
+
+    const result = await runWebhook(
+      directTx,
+      new Request('https://example.test/webhooks/direct-tx-unscoped', {
+        body: JSON.stringify({ id: 'evt_direct_tx' }),
+        method: 'POST',
+      }),
+    );
+
+    expect(result.response.status).toBe(500);
+    expect(result.changes).toEqual([]);
+    expect(writes).toBe(0);
   });
 
   it('fails closed before a webhook mutation dispatch when replay posture is inactive', async () => {
@@ -826,7 +896,7 @@ describe('server webhook primitive', () => {
     const wh = webhook('/webhooks/durable-charge', {
       async handler(input, context) {
         enteredTotal += 1;
-        (context.tx as unknown as { insert(): void }).insert();
+        (context.actAs(`owner:${input.id}`).tx as unknown as { insert(): void }).insert();
         context.recordChange(ledger, { keys: [input.id] });
         if (enteredTotal === 1) {
           resolveAEntered();

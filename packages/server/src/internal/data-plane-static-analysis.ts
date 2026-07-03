@@ -123,7 +123,7 @@ interface StaticBuildAnalysisFactsLike {
 
 const KOVO_BUILD_QUERY_SHAPE_FACTS_GLOBAL = Symbol.for('kovo.build.queryShapeFacts');
 const DRIZZLE_STATIC_ANALYZER_MODULE = '@kovojs/drizzle/internal/static';
-const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-06-30.shared-data-plane.v1';
+const STATIC_DATA_PLANE_FACTS_CACHE_VERSION = '2026-07-02.authz-census.v1';
 const OUTPUT_SCHEMA_QUERY_SHAPE_WORKER_KIND = 'kovo.output-schema-query-shape';
 const OUTPUT_SCHEMA_WORKER_MIN_FILES = 8;
 const OUTPUT_SCHEMA_WORKER_MAX_COUNT = 4;

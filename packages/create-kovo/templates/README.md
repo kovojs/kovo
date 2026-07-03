@@ -18,16 +18,16 @@ random `KOVO_DEMO_PASSWORD` value in your generated, gitignored `.env` file.
 
 ## What's here
 
-| File                   | Building block                                                                                                                                                                      |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `src/schema.ts`        | Drizzle tables. `contacts` carries a `kovo({ domain, key })` annotation so the compiler can prove invalidation; the four Better Auth tables sit alongside it.                       |
-| `src/db.ts`            | App-facing database types plus `readonlyAppDb` for read surfaces; raw PGlite creation and seeding live in the framework-owned `_kovo` runtime module.                               |
-| `src/queries.ts`       | `contactsQuery` — a typed read whose Drizzle select the compiler extracts.                                                                                                          |
-| `src/mutations.ts`     | `addContact` — a CSRF-protected, `authed`-guarded write with input validation and an optimistic list update.                                                                        |
-| `src/auth.ts`          | Real [Better Auth](https://better-auth.com) on the same PGlite/Drizzle database, wired into Kovo via `@kovojs/better-auth`.                                                         |
-| `src/components/*.tsx` | `@kovojs/ui` components (`Card`, `Button`, `Badge`) composing the contact list, add-contact form, and auth forms.                                                                   |
-| `src/app.tsx`          | The whole app: `createApp({ db, queries, mutations, routes, sessionProvider })` plus the routes. `vite.config.ts`'s `kovo({ app })` and `kovo build` both load this default export. |
-| `src/theme.ts`         | `defineTheme` — change the seed/custom colors to retheme everything.                                                                                                                |
+| File                   | Building block                                                                                                                                                                                       |
+| ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/schema.ts`        | Drizzle tables. `contacts` carries a `kovo({ domain, key, authzPolicy })` annotation so the compiler can prove invalidation and authorization posture; the four Better Auth tables sit alongside it. |
+| `src/db.ts`            | App-facing database types plus `readonlyAppDb` for read surfaces; raw PGlite creation and seeding live in the framework-owned `_kovo` runtime module.                                                |
+| `src/queries.ts`       | `contactsQuery` — a typed read whose Drizzle select the compiler extracts.                                                                                                                           |
+| `src/mutations.ts`     | `addContact` — a CSRF-protected, `authed`-guarded write with input validation and an optimistic list update.                                                                                         |
+| `src/auth.ts`          | Real [Better Auth](https://better-auth.com) on the same PGlite/Drizzle database, wired into Kovo via `@kovojs/better-auth`.                                                                          |
+| `src/components/*.tsx` | `@kovojs/ui` components (`Card`, `Button`, `Badge`) composing the contact list, add-contact form, and auth forms.                                                                                    |
+| `src/app.tsx`          | The whole app: `createApp({ db, queries, mutations, routes, sessionProvider })` plus the routes. `vite.config.ts`'s `kovo({ app })` and `kovo build` both load this default export.                  |
+| `src/theme.ts`         | `defineTheme` — change the seed/custom colors to retheme everything.                                                                                                                                 |
 
 `vp dev`, `vp check`, and `vp test` run through the `kovo()` Vite plugin, which
 compiles the app and serves route documents and `/c/` handler modules (SPEC.md

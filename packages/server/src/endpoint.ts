@@ -1,5 +1,8 @@
 import type { WebhookVerifier } from '@kovojs/core';
 import type { AccessDecision } from './access.js';
+import { actAsNonRequestPrincipal, type NonRequestPrincipalPosture } from './auth-principal.js';
+import type { DbProvider } from './guards.js';
+import { managedDb, type Reader, type Writer } from './managed-db.js';
 import type { RedirectLocationAllowlistEntry } from './response.js';
 import {
   assertEndpointResponsePosture,
@@ -83,13 +86,52 @@ export interface Endpoint<
 /** A `Request` guaranteed to carry no session, as endpoint handlers receive. */
 export type EndpointRequest = Request & { readonly session?: never };
 
+/** Session-free request shape passed to an endpoint DB provider after `ctx.actAs(id)`. */
+export type EndpointDbProviderRequest = EndpointRequest & {
+  readonly principalPosture: NonRequestPrincipalPosture;
+};
+
+/** Principal-scoped endpoint DB capabilities. */
+export interface EndpointDbScope<Db = unknown> {
+  readonly db: {
+    readonly read: Reader<Db>;
+    readonly write: Writer<Db>;
+  };
+}
+
+/** Context exposed only to `endpoint(..., { db: true, handler(req, ctx) { ... } })`. */
+export interface EndpointDbContext<Db = unknown> {
+  /**
+   * SPEC §10.3 DEC-H: endpoints do not inherit a session principal. App code must derive and
+   * validate the owner id from its own endpoint auth before receiving managed DB capabilities.
+   */
+  actAs(principalId: string): Promise<EndpointDbScope<Db>>;
+}
+
 /** An endpoint handler: maps a session-free `Request` to a `Response`. */
 export type EndpointHandler = (request: EndpointRequest) => Promise<Response> | Response;
+
+/** An endpoint handler that opted into an explicit principal-scoped DB context. */
+export type EndpointDbHandler<Db = unknown> = (
+  request: EndpointRequest,
+  context: EndpointDbContext<Db>,
+) => Promise<Response> | Response;
 
 interface EndpointDefinitionBase<Method extends EndpointMethod> {
   access?: AccessDecision;
   auth?: EndpointAuthDeclaration;
+  db?: false;
   handler: EndpointHandler;
+  method: Method;
+  response: EndpointResponsePosture;
+}
+
+/** Endpoint definition branch for handlers that opt into `ctx.actAs(id)` managed DB access. */
+export interface EndpointDbDefinitionBase<Method extends EndpointMethod, Db = unknown> {
+  access?: AccessDecision;
+  auth?: EndpointAuthDeclaration;
+  db: true;
+  handler: EndpointDbHandler<Db>;
   method: Method;
   response: EndpointResponsePosture;
 }
@@ -118,18 +160,26 @@ interface EndpointCsrfExempt {
 export type EndpointDefinition<
   Method extends EndpointMethod = EndpointMethod,
   Mount extends EndpointMount = 'exact',
-> = EndpointDefinitionBase<Method> &
-  EndpointReason &
-  EndpointMountDefinition<Mount> &
-  (EndpointCsrfDefault | EndpointCsrfExempt);
+  Db = unknown,
+> =
+  | (EndpointDefinitionBase<Method> &
+      EndpointReason &
+      EndpointMountDefinition<Mount> &
+      (EndpointCsrfDefault | EndpointCsrfExempt))
+  | (EndpointDbDefinitionBase<Method, Db> &
+      EndpointReason &
+      EndpointMountDefinition<Mount> &
+      (EndpointCsrfDefault | EndpointCsrfExempt));
 
 /** An endpoint with its path attached, as returned by `endpoint()`. */
 export interface EndpointDeclaration<
   Path extends string = string,
   Method extends EndpointMethod = EndpointMethod,
   Mount extends EndpointMount = EndpointMount,
+  Db = unknown,
 > extends Endpoint<Path, Method, Mount> {
-  handler: EndpointHandler;
+  db?: true;
+  handler: EndpointHandler | EndpointDbHandler<Db>;
 }
 
 /**
@@ -160,10 +210,11 @@ export function endpoint<
   const Path extends string,
   const Method extends EndpointMethod = EndpointMethod,
   const Mount extends EndpointMount = 'exact',
+  Db = unknown,
 >(
   path: Path,
-  definition: EndpointDefinition<Method, Mount>,
-): EndpointDeclaration<Path, Method, Mount> {
+  definition: EndpointDefinition<Method, Mount, Db>,
+): EndpointDeclaration<Path, Method, Mount, Db> {
   const mount = (definition.mount ?? 'exact') as Mount;
   const reason = definition.reason ?? definition.purpose;
   if (reason === undefined) {
@@ -176,6 +227,7 @@ export function endpoint<
     ...(definition.csrf === false
       ? { csrf: { exempt: true, justification: definition.csrfJustification } }
       : {}),
+    ...(definition.db === true ? { db: true as const } : {}),
     handler: definition.handler,
     method: definition.method,
     mount,
@@ -200,10 +252,65 @@ export function endpoint<
 export async function runEndpoint(
   definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
   request: Request,
+  options: EndpointRunOptions = {},
 ): Promise<Response> {
-  const response = await definition.handler(endpointRequestWithoutSession(request));
+  const endpointRequest = endpointRequestWithoutSession(request);
+  const response =
+    definition.db === true
+      ? await (definition.handler as EndpointDbHandler)(
+          endpointRequest,
+          createEndpointDbContext(endpointRequest, definition, options),
+        )
+      : await (definition.handler as EndpointHandler)(endpointRequest);
   assertEndpointResponsePosture(definition, response);
   return response;
+}
+
+export interface EndpointRunOptions<Db = unknown> {
+  db?: DbProvider<EndpointRequest, Db, never>;
+}
+
+function createEndpointDbContext<Db>(
+  request: EndpointRequest,
+  definition: EndpointDeclaration<string, EndpointMethod, EndpointMount>,
+  options: EndpointRunOptions<Db>,
+): EndpointDbContext<Db> {
+  return {
+    async actAs(principalId) {
+      if (options.db === undefined) {
+        throw new Error(
+          'endpoint({ db: true }) requires createApp({ db }) before ctx.actAs(id) can resolve a managed endpoint DB handle (SPEC §10.3 DEC-H).',
+        );
+      }
+      const principalPosture = actAsNonRequestPrincipal(principalId, {
+        ingress: 'endpoint',
+        operation: 'read',
+        surface: definition.path,
+      });
+      const dbRequest = requestWithEndpointPrincipalPosture(request, principalPosture);
+      const rawDb = await options.db(dbRequest);
+      return {
+        db: {
+          read: managedDb(rawDb, 'read'),
+          write: managedDb(rawDb, 'write'),
+        },
+      };
+    },
+  };
+}
+
+function requestWithEndpointPrincipalPosture(
+  request: EndpointRequest,
+  principalPosture: NonRequestPrincipalPosture,
+): EndpointDbProviderRequest {
+  const next = request.clone() as EndpointDbProviderRequest;
+  Object.defineProperty(next, 'principalPosture', {
+    configurable: true,
+    enumerable: false,
+    value: principalPosture,
+    writable: false,
+  });
+  return next;
 }
 
 /**

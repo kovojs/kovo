@@ -17,7 +17,11 @@ export const contacts = pgTable(
     email: text('email').notNull(),
     company: text('company').notNull().default(''),
   },
-  kovo({ domain: contact, key: (table) => table.id }),
+  kovo({
+    authzPolicy: 'signed-in users share the starter contact book through query/mutation guards',
+    domain: contact,
+    key: (table) => table.id,
+  }),
 );
 
 // --- Auth infrastructure -------------------------------------------------------
@@ -26,15 +30,19 @@ export const contacts = pgTable(
 // bearer/OAuth tokens off the client wire (SPEC.md §6.6, §10.1). The column names match
 // the fields Better Auth expects (introspectable via `getAuthTables(auth.options)`);
 // `src/db.ts` creates them.
-export const user = pgTable('user', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  email: text('email').notNull().unique(),
-  emailVerified: boolean('emailVerified').notNull().default(false),
-  image: text('image'),
-  createdAt: timestamp('createdAt').notNull().defaultNow(),
-  updatedAt: timestamp('updatedAt').notNull().defaultNow(),
-});
+export const user = pgTable(
+  'user',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    email: text('email').notNull().unique(),
+    emailVerified: boolean('emailVerified').notNull().default(false),
+    image: text('image'),
+    createdAt: timestamp('createdAt').notNull().defaultNow(),
+    updatedAt: timestamp('updatedAt').notNull().defaultNow(),
+  },
+  kovo({ domain: 'auth', key: 'id', owner: (table) => table.id }),
+);
 
 export const session = pgTable(
   'session',
@@ -50,7 +58,12 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
   },
-  kovo({ domain: 'auth', key: 'userId', secret: ['token'] }),
+  kovo({
+    domain: 'auth',
+    key: 'userId',
+    owner: 'userId',
+    secret: ['token'],
+  }),
 );
 
 export const account = pgTable(
@@ -75,6 +88,7 @@ export const account = pgTable(
   kovo({
     domain: 'auth',
     key: 'userId',
+    owner: 'userId',
     secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
   }),
 );

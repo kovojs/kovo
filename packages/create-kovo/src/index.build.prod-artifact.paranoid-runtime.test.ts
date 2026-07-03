@@ -7,6 +7,7 @@ import { describe, expect, it } from 'vitest';
 
 import { writeKovoProject } from './index.js';
 import {
+  addParanoidPhase5AuthorizationProof,
   addParanoidPhase5WriteBoundaryProof,
   addSqliteRuntimeSecretProvenanceProof,
   addStarterMutationDbScopeProof,
@@ -35,6 +36,8 @@ const blockedReadCases = [
   'sqlite-secret-join-alias-egress',
   'sqlite-secret-cte-egress',
   'sqlite-secret-subquery-egress',
+  'sqlite-secret-union-egress',
+  'sqlite-secret-aggregate-egress',
 ] as const;
 
 const allowedReadCases = [
@@ -51,6 +54,7 @@ const blockedWriteCases = [
   'phase5-write-boundary/ddl-write',
   'phase5-write-boundary/boxed-secret-builder',
   'phase5-write-boundary/boxed-secret-raw',
+  'phase5-write-boundary/governed-mass-assignment',
 ] as const;
 
 describe('create-kovo starter (build integration: paranoid runtime chokes)', () => {
@@ -74,6 +78,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       pruneParanoidPhase5SqliteReadSet(root);
       addStarterMutationDbScopeProof(root);
       addParanoidPhase5WriteBoundaryProof(root);
+      addParanoidPhase5AuthorizationProof(root);
 
       buildParanoidProductionArtifact(root);
 
@@ -94,14 +99,23 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       const contactEmail = `${marker}-contact@example.com`;
 
       await signInDemoUser(root, origin, jar, output);
+      await expectAuthorizationQueryShapes(origin, jar);
       await expectBlockedReadShapes(origin, jar);
       await expectAllowedReadShapes(origin, jar);
+      await expectNonSecretAggregateEndpoint(origin);
+      await expectSafeBuilderExpressionEndpoint(origin);
+      await expectHiddenBuilderExpressionEndpoint(origin);
+      await expectDeclaredRawReadEndpoint(origin);
+      await expectUnderdeclaredRawReadEndpoint(origin);
       await expectStarterInScopeWrite(origin, jar, output, contactEmail);
+      await expectAuthorizationEndpoint(origin);
+      await expectAuthorizationStatus(origin);
       await expectBlockedWrites(origin, marker);
       await expectWriteStatus(origin, marker, contactEmail);
 
       expect(output()).toContain('KV435');
       expect(output()).toContain('KV406');
+      expect(output()).toContain('KV438');
       expect(output()).not.toContain('runtime-secret-value');
       expect(output()).not.toContain('phase5-builder-secret');
       expect(output()).not.toContain('phase5-raw-secret');
@@ -111,6 +125,95 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
     }
   }, 240_000);
 });
+
+async function expectAuthorizationQueryShapes(
+  origin: string,
+  jar: Map<string, string>,
+): Promise<void> {
+  const cases = [
+    {
+      key: 'phase5-authz-builder',
+      allowed: 'owner-visible',
+      blocked: 'cross-owner-hidden',
+      status: 200,
+    },
+    {
+      key: 'phase5-authz-alias',
+      allowed: 'owner-visible',
+      blocked: 'cross-owner-hidden',
+      status: 200,
+    },
+    {
+      key: 'phase5-authz-view',
+      allowed: 'owner-visible',
+      blocked: 'cross-owner-hidden',
+      status: 200,
+    },
+    {
+      key: 'phase5-authz-compound',
+      allowed: undefined,
+      blocked: 'cross-owner-hidden',
+      status: 500,
+    },
+    { key: 'phase5-authz-owner-via', allowed: 'owner-item', blocked: 'other-item', status: 200 },
+  ] as const;
+
+  for (const testCase of cases) {
+    const response = await fetch(`${origin}/_q/${testCase.key}`, {
+      headers: { cookie: cookieHeader(jar) },
+    });
+    const body = await response.text();
+
+    expect(response.status, `${testCase.key}: ${body}`).toBe(testCase.status);
+    if (testCase.allowed !== undefined) expect(body).toContain(testCase.allowed);
+    expect(body).not.toContain(testCase.blocked);
+    expect(body).not.toContain('phase5-authz-secret');
+  }
+}
+
+async function expectAuthorizationEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-authz-endpoint`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  const result = JSON.parse(body) as {
+    childRows: { id: string; label: string }[];
+    rows: { id: string; label: string }[];
+  };
+  expect(result.rows).toEqual([{ id: 'phase5-authz-owned', label: 'owner-visible' }]);
+  expect(result.childRows).toEqual([{ id: 'phase5-authz-item-owned', label: 'owner-item' }]);
+}
+
+async function expectAuthorizationStatus(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-authz-status`);
+  const body = await response.text();
+  expect(response.status, body).toBe(200);
+  const status = JSON.parse(body) as {
+    rows: { id: string; label: string; userId: string }[];
+    secretReadBlocked: boolean;
+  };
+
+  expect(status.secretReadBlocked).toBe(true);
+  expect(status.rows).toEqual(
+    expect.arrayContaining([
+      {
+        id: 'phase5-authz-owned',
+        label: 'owner-visible',
+        userId: 'demo-user',
+      },
+      {
+        id: 'phase5-authz-other',
+        label: 'cross-owner-hidden',
+        userId: 'other-user',
+      },
+    ]),
+  );
+  expect(
+    status.rows.some(
+      (row) => row.id === 'phase5-authz-owned-session' && row.label === 'owner-visible',
+    ),
+  ).toBe(true);
+}
 
 async function expectBlockedReadShapes(origin: string, jar: Map<string, string>): Promise<void> {
   for (const key of blockedReadCases) {
@@ -137,6 +240,50 @@ async function expectAllowedReadShapes(origin: string, jar: Map<string, string>)
     expect(body).toContain(testCase.witness);
     if (!testCase.leaksSecret) expect(body).not.toContain('runtime-secret-value');
   }
+}
+
+async function expectNonSecretAggregateEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-secret-nonsecret-aggregate`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(body).toContain('"total":1');
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectSafeBuilderExpressionEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-secret-safe-builder-expression`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(body).toContain('ADA LOVELACE');
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectHiddenBuilderExpressionEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-secret-hidden-builder-expression`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(500);
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectDeclaredRawReadEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-raw-read-declared`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(body).toContain('Ada Lovelace');
+  expect(body).not.toContain('runtime-secret-value');
+}
+
+async function expectUnderdeclaredRawReadEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-raw-read-underdeclared`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(500);
+  expect(body).not.toContain('runtime-secret-value');
+  expect(body).not.toContain('join public label');
 }
 
 async function expectStarterInScopeWrite(
@@ -229,12 +376,14 @@ async function expectWriteStatus(
   const writeStatus = JSON.parse(writeStatusBody) as {
     blockedBuilderSecretRows: number;
     blockedDdlTables: number;
+    blockedGovernedMassAssignmentRows: number;
     blockedRawSecretRows: number;
   };
 
   expect(writeStatus).toEqual({
     blockedBuilderSecretRows: 0,
     blockedDdlTables: 0,
+    blockedGovernedMassAssignmentRows: 0,
     blockedRawSecretRows: 0,
   });
 }
