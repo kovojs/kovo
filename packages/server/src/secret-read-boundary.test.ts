@@ -9,13 +9,15 @@ import {
 
 const secretColumn = { name: 'classified' };
 const publicColumn = { name: 'label' };
+const metricColumn = { name: 'amount' };
 
 function metadata(): SecretReadMetadata {
   return {
-    allColumnKeys: new Set(['id', 'classified', 'label']),
+    allColumnKeys: new Set(['id', 'classified', 'label', 'amount']),
     columnSources: new Map([
       [secretColumn, { column: 'classified', key: 'classified', secret: true, table: 'secrets' }],
       [publicColumn, { column: 'label', key: 'label', secret: false, table: 'secrets' }],
+      [metricColumn, { column: 'amount', key: 'amount', secret: false, table: 'metrics' }],
     ]),
     secretColumnKeys: new Set(['classified']),
     secretColumnNames: new Set(['classified']),
@@ -128,6 +130,63 @@ describe('secret read boundary', () => {
     const [row] = await db.select();
 
     expect(isSecret(row.leaked)).toBe(true);
+  });
+
+  it('boxes compound selects before trusting a benign left-arm SQLite origin', async () => {
+    const db = createSecretBoxingReadDb(
+      builderDb(
+        queryObject(
+          'select id as value from users union all select classified as value from secrets',
+          [{ value: 'runtime-secret-value' }],
+        ),
+      ),
+      metadata(),
+      {
+        sqliteColumnOrigins: originClient([{ column: 'id', name: 'value', table: 'users' }]),
+      },
+    );
+
+    const [row] = await db.select();
+
+    expect(isSecret(row.value)).toBe(true);
+    expect(revealSecret(row.value, 'test')).toBe('runtime-secret-value');
+  });
+
+  it('serves aggregates over non-secret tables when SQLite origin is opaque', async () => {
+    const db = createSecretBoxingReadDb(
+      builderDb(
+        queryObject('select sum(amount) as total from metrics', [{ total: 42 }], {
+          total: { queryChunks: [{ value: ['sum('] }, metricColumn, { value: [')'] }] },
+        }),
+      ),
+      metadata(),
+      {
+        sqliteColumnOrigins: originClient([{ column: null, name: 'total', table: null }]),
+      },
+    );
+
+    const [row] = await db.select();
+
+    expect(row.total).toBe(42);
+  });
+
+  it('boxes aggregates over secret tables when SQLite origin is opaque', async () => {
+    const db = createSecretBoxingReadDb(
+      builderDb(
+        queryObject('select max(classified) as topSecret from secrets', [{ topSecret: 'z' }], {
+          topSecret: { queryChunks: [{ value: ['max('] }, secretColumn, { value: [')'] }] },
+        }),
+      ),
+      metadata(),
+      {
+        sqliteColumnOrigins: originClient([{ column: null, name: 'topSecret', table: null }]),
+      },
+    );
+
+    const [row] = await db.select();
+
+    expect(isSecret(row.topSecret)).toBe(true);
+    expect(revealSecret(row.topSecret, 'test')).toBe('z');
   });
 
   it('refuses raw secret-table reads without a declared capability', () => {

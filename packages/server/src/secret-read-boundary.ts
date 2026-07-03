@@ -215,6 +215,7 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
     const expressionSafety = expressionSafetyByResultKey(statement, metadata);
     const selectedKeys = selectedResultKeysFromValue(statement);
     const referencesSecretTable = sqlReferencesSecretTable(sql, metadata.secretTableNames);
+    const secretBearingCompound = sqlHasCompoundSelect(sql) && referencesSecretTable;
     const columns = sqliteResultColumns(client, sql);
 
     if (columns === undefined) {
@@ -229,6 +230,10 @@ const sqliteSecretReadBoundaryForStatement = securityClassifier(
         (typeof column.name === 'string' && column.name !== '' ? column.name : undefined);
       if (key === undefined) {
         if (referencesSecretTable) return { ...emptyReadBoundary(), rawWholeRowSecret: true };
+        continue;
+      }
+      if (secretBearingCompound) {
+        opaqueResultKeys.add(key);
         continue;
       }
       if (
@@ -494,19 +499,25 @@ function sqlChunkIsSafe(chunk: unknown, metadata: SecretReadMetadata): boolean {
 const SAFE_SQL_WORDS = new Set([
   'abs',
   'as',
+  'avg',
   'cast',
   'coalesce',
   'collate',
+  'count',
   'ifnull',
   'length',
   'lower',
   'ltrim',
+  'max',
+  'min',
   'null',
   'nullif',
   'round',
   'rtrim',
   'substr',
   'substring',
+  'sum',
+  'total',
   'trim',
   'upper',
 ]);
@@ -578,6 +589,10 @@ function sqlReferencesSecretTable(sql: string, secretTableNames: ReadonlySet<str
     if (sqlReferencesTable(sql, table)) return true;
   }
   return false;
+}
+
+function sqlHasCompoundSelect(sql: string): boolean {
+  return /\b(?:union|intersect|except)\b/i.test(sql);
 }
 
 function sqlReferencesTable(sql: string, table: string): boolean {
