@@ -10,7 +10,6 @@ import Database from 'better-sqlite3';
 import {
   createSecretBoxingReadDb,
   createDeclaredWriteDb,
-  createSqliteAuthorizationDb,
   declareSecretReadCapability,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
@@ -57,12 +56,16 @@ const SCHEMA_TABLES = [
   schema.verification,
 ] as const;
 const RUNTIME_DB_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES);
+const SQLITE_RUNTIME_WARNING =
+  'Kovo SQLite starter is experimental and single-principal only: SQLite has no engine role/RLS layer, so Kovo owner scoping is not enforced. Use the default PGlite/Postgres runtime for multi-tenant authorization.';
+let sqliteRuntimeWarningPrinted = false;
 interface DeclaredWritePolicy {
   tables?: readonly string[];
   touches?: readonly string[];
 }
 
 function createAppRuntimeDb(): CreatedAppRuntimeDb {
+  warnExperimentalSqliteRuntime();
   const sqliteDir = mkdtempSync(join(tmpdir(), 'kovo-sqlite-runtime-'));
   const sqliteFile = join(sqliteDir, 'app.sqlite');
   process.once('exit', () => rmSync(sqliteDir, { force: true, recursive: true }));
@@ -143,77 +146,13 @@ export const appRuntimeDbReady: Promise<void> = appDatabase.ready;
 
 /** Framework construction/auth adapter hook; do not import this into endpoint/webhook/task code. */
 export function appRuntimeDbProvider(request?: unknown): AppDb {
+  void request;
   if (request === undefined) return appDatabase.db;
-
-  const principal = ownerPrincipalFromRequest(request);
-  const authorizedDb = createSqliteAuthorizationDb(appDatabase.db, {
-    metadata: RUNTIME_DB_METADATA,
-    principal,
-  });
-  const requestDb = Object.create(authorizedDb) as AppDb;
-  Object.defineProperty(requestDb, kovoReadonlyDbHandle, {
-    configurable: true,
-    value: () =>
-      createSqliteAuthorizationDb(appDatabase.readonlyDb, {
-        metadata: RUNTIME_DB_METADATA,
-        principal,
-      }),
-  });
-  Object.defineProperty(requestDb, kovoDeclaredWriteDbHandle, {
-    configurable: true,
-    value: (policy: DeclaredWritePolicy) =>
-      createSqliteAuthorizationDb(
-        createDeclaredWriteDb(appDatabase.db, policy, {
-          dialectLabel: 'SQLite',
-          governedColumns: RUNTIME_DB_METADATA,
-          normalizeTableName: normalizePolicyTable,
-          sqliteAuthorizer: {
-            constants: nodeSqliteConstants,
-            openDatabase: () => new NodeSqliteDatabaseSync(appDatabase.sqliteFile),
-          },
-          tableNames: sqliteTablePolicyNames,
-        }),
-        {
-          metadata: RUNTIME_DB_METADATA,
-          principal,
-        },
-      ),
-  });
-  return requestDb;
+  return appDatabase.db;
 }
 
-function ownerPrincipalFromRequest(request: unknown): string | undefined {
-  const nonRequestPrincipal = ownerPrincipalFromNonRequestPosture(request);
-  if (nonRequestPrincipal !== undefined) return nonRequestPrincipal;
-  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
-    return undefined;
-  }
-  const session = (request as { session?: unknown }).session;
-  if ((typeof session !== 'object' && typeof session !== 'function') || session === null) {
-    return undefined;
-  }
-  const user = (session as { user?: unknown }).user;
-  if ((typeof user !== 'object' && typeof user !== 'function') || user === null) return undefined;
-  const id = (user as { id?: unknown }).id;
-  return typeof id === 'string' && id.trim() === id && id !== '' ? id : undefined;
-}
-
-function ownerPrincipalFromNonRequestPosture(request: unknown): string | undefined {
-  if ((typeof request !== 'object' && typeof request !== 'function') || request === null) {
-    return undefined;
-  }
-  const posture = (request as { principalPosture?: unknown }).principalPosture;
-  if ((typeof posture !== 'object' && typeof posture !== 'function') || posture === null) {
-    return undefined;
-  }
-  const kind = (posture as { kind?: unknown }).kind;
-  if (kind === 'system') {
-    throw new Error(
-      'System principal DB posture is not supported by the SQLite starter owner-scope provider yet (SPEC §10.3 DEC-G).',
-    );
-  }
-  const principal = (posture as { principal?: unknown }).principal;
-  return kind === 'act-as' && typeof principal === 'string' && principal.trim() === principal
-    ? principal
-    : undefined;
+function warnExperimentalSqliteRuntime(): void {
+  if (sqliteRuntimeWarningPrinted) return;
+  sqliteRuntimeWarningPrinted = true;
+  console.warn(SQLITE_RUNTIME_WARNING);
 }

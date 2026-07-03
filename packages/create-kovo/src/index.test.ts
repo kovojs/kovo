@@ -863,9 +863,10 @@ describe('create-kovo starter (metadata)', () => {
       'const secretReadDb = createSecretBoxingReadDb(',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('RUNTIME_DB_METADATA,');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'createSqliteAuthorizationDb(appDatabase.db',
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'create' + 'SqliteAuthorizationDb',
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('single-principal only');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'function secretBoxingReadDb<Db extends object>',
     );
