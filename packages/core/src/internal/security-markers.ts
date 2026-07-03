@@ -117,7 +117,7 @@ export const SECURITY_CODE_REGISTRY = {
     code: 'KV414',
     enforcement: 'runtime-choke',
     property:
-      'Authorization: Postgres owner-table access is scoped at the engine choke by role/RLS/current principal; SQLite is experimental/non-guaranteeing and cannot claim this authorization property.',
+      'Authorization: Postgres owner-table access is scoped at the engine choke by a least-privilege runtime role plus role/RLS/current-principal enforcement, with closure-audited reachable objects; SQLite is experimental/non-guaranteeing and cannot claim this authorization property.',
     propertyDependsOn: 'request-state',
   },
   KV415: {
@@ -260,7 +260,7 @@ export const SECURITY_CODE_REGISTRY = {
     code: 'KV435',
     enforcement: 'runtime-choke',
     property:
-      'Confidentiality: runtime Secret values cannot cross client-readable wire egress; Postgres secret columns are engine-unreadable via column privileges at the engine choke, while SQLite is experimental/non-guaranteeing and relies on runtime boxes.',
+      'Confidentiality: runtime Secret values cannot cross client-readable wire egress; Postgres secret columns are engine-unreadable only under a least-privilege runtime plus closure-audited reachable objects at the engine choke, while SQLite is experimental/non-guaranteeing and relies on runtime boxes.',
     propertyDependsOn: 'request-state',
   },
   KV436: {
@@ -309,6 +309,9 @@ export const PARANOID_SECURITY_ADVISORY_CODES: readonly string[] = Object.freeze
     .map((entry) => entry.code)
     .sort(),
 );
+
+/** @internal DEC-D1/C5: auth/confidentiality guarantees cannot rest only on build enumeration. */
+export const AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES = ['KV414', 'KV435'] as const;
 
 /** @internal Return whether a code is advisory under KOVO_PARANOID=1. */
 export function isParanoidSecurityAdvisoryCode(code: string): boolean {
