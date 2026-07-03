@@ -730,7 +730,6 @@ void test('P10 starter template stays wired to the current app-shell contract', 
     'test',
   ]);
   assert.deepEqual(Object.keys(packageJson.dependencies).sort(), [
-    '@electric-sql/pglite',
     '@kovojs/better-auth',
     '@kovojs/browser',
     '@kovojs/core',
@@ -740,6 +739,7 @@ void test('P10 starter template stays wired to the current app-shell contract', 
     '@kovojs/ui',
     'better-auth',
     'drizzle-orm',
+    'pg',
     'pgsql-ast-parser',
   ]);
   assert.deepEqual(Object.keys(packageJson.devDependencies).sort(), [
