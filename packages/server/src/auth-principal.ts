@@ -7,7 +7,7 @@ export type PrincipalPosture =
 
 declare const nonRequestPrincipalPostureBrand: unique symbol;
 
-export type NonRequestIngressKind = 'task' | 'webhook';
+export type NonRequestIngressKind = 'endpoint' | 'task' | 'webhook';
 export type PrincipalAccessOperation = 'read' | 'write';
 
 interface NonRequestPrincipalAudit {
