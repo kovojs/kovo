@@ -197,6 +197,26 @@ export function leak(handle) {
     );
   });
 
+  it('accepts endpoint ctx.actAs DB scope construction as an audited framework composition point', () => {
+    const result = runFixture({
+      'packages/server/src/sql-safe-handle.ts': `
+export function enforceManagedSql(statement, mode, writePolicy) {
+  return validate(statement, mode, writePolicy);
+}
+`,
+      'packages/server/src/endpoint.ts': `
+export function createEndpointDbScope(rawDb) {
+  return {
+    read: managedDb(rawDb, 'read'),
+    write: managedDb(rawDb, 'write'),
+  };
+}
+`,
+    });
+
+    expect(result.findings).toEqual([]);
+  });
+
   it('requires exactly one named enforceManagedSql() choke declaration', () => {
     const result = runFixture({
       'packages/server/src/sql-safe-handle.ts': `

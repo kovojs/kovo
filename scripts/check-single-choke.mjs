@@ -177,6 +177,7 @@ export function main(options = {}) {
 function isAllowedManagedHandleFactoryFile(filePath) {
   return (
     filePath === 'packages/server/src/managed-db.ts' ||
+    filePath === 'packages/server/src/endpoint.ts' ||
     filePath === 'packages/server/src/guards.ts' ||
     filePath === 'packages/server/src/webhook.ts'
   );
