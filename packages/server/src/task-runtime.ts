@@ -106,7 +106,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
                 : { sessionProvider: this.app.sessionProvider }),
               principalPosture: ingressOptions.principalPosture,
               taskScheduler: this.scheduler,
-            } as never,
+            },
           );
           if (!result.ok) {
             throw new Error(
@@ -128,7 +128,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
                 ? {}
                 : { sessionProvider: this.app.sessionProvider }),
               principalPosture: ingressOptions.principalPosture,
-            } as never,
+            },
           );
           if (!result.ok) {
             throw new Error(

@@ -39,6 +39,7 @@ import {
   type ArrowFunction,
   type FunctionDeclaration,
   type FunctionExpression,
+  type ImportDeclaration,
   type ObjectLiteralExpression,
   type ParameterDeclaration,
   type PropertyAssignment,
@@ -1126,13 +1127,34 @@ function endpointRawDriverImportDiagnostic(
   file: SourceFileInput,
   sourceFile: SourceFile,
 ): TouchGraphDiagnostic | undefined {
-  if (
-    !sourceFile
-      .getDescendantsOfKind(SyntaxKind.CallExpression)
-      .some((call) => isKovoServerCalleeExpression(call.getExpression(), 'endpoint'))
-  ) {
+  if (!isRequestAuthoredIngressModule(file, sourceFile)) {
     return undefined;
   }
+
+  const runtimeDbImport = sourceFile
+    .getImportDeclarations()
+    .find((candidate) => isRuntimeDbModuleSpecifier(candidate.getModuleSpecifierValue()));
+  if (runtimeDbImport !== undefined && runtimeDbImportHasValueBindings(runtimeDbImport)) {
+    return drizzleDiagnostic({
+      code: 'KV414',
+      detail:
+        'Request-authored endpoint/webhook/task/query/mutation modules must not import value symbols from src/_kovo/app-runtime-db; use framework lifecycle DB capabilities so Postgres role/RLS/column privileges remain the sole authorization/confidentiality door (SPEC §10.3 DEC-B1).',
+      site: `${file.fileName}:${lineForIndex(file.source, runtimeDbImport.getStart())}`,
+    });
+  }
+
+  const unconfinedRuntimeDbCall = sourceFile
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .find((call) => isUnconfinedAppRuntimeDbProviderCall(call, sourceFile));
+  if (unconfinedRuntimeDbCall !== undefined) {
+    return drizzleDiagnostic({
+      code: 'KV414',
+      detail:
+        'Request-authored endpoint/webhook/task/query/mutation modules must not call appRuntimeDbProvider() without a lifecycle request; the undefined path returns the internal framework DB and bypasses the Postgres authorization/confidentiality engine choke (SPEC §10.3 DEC-B1).',
+      site: `${file.fileName}:${lineForIndex(file.source, unconfinedRuntimeDbCall.getStart())}`,
+    });
+  }
+
   const declaration = sourceFile
     .getImportDeclarations()
     .find((candidate) => ENDPOINT_RAW_DRIVER_MODULES.has(candidate.getModuleSpecifierValue()));
@@ -1192,10 +1214,86 @@ function isSqliteTableFactoryCall(call: CallExpression): boolean {
   const expression = unwrappedStaticExpressionNode(call.getExpression());
   const factoryName = Node.isIdentifier(expression)
     ? (projectDrizzleCoreIdentifierExportName(expression) ?? expression.getText())
-    : Node.isPropertyAccessExpression(expression) && isDrizzleTableFactoryNamespaceMember(expression)
+    : Node.isPropertyAccessExpression(expression) &&
+        isDrizzleTableFactoryNamespaceMember(expression)
       ? expression.getName()
       : undefined;
   return factoryName === 'sqliteTable';
+}
+
+function isRequestAuthoredIngressModule(file: SourceFileInput, sourceFile: SourceFile): boolean {
+  if (/(?:^|\/)(?:src\/)?_kovo\/app-runtime-db(?:\.sqlite)?\.ts$/.test(file.fileName)) {
+    return false;
+  }
+  if (
+    /\.(?:endpoint|endpoints|webhook|webhooks|task|tasks|query|queries|mutation|mutations)\.[cm]?[jt]sx?$/u.test(
+      file.fileName,
+    )
+  ) {
+    return true;
+  }
+  const requestSurfaceExports = ['endpoint', 'mutation', 'query', 'task', 'webhook'];
+  return sourceFile
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .some((call) =>
+      requestSurfaceExports.some((name) =>
+        isKovoServerCalleeExpression(call.getExpression(), name),
+      ),
+    );
+}
+
+function isRuntimeDbModuleSpecifier(moduleSpecifier: string): boolean {
+  const normalized = moduleSpecifier.replace(/\\/gu, '/').replace(/\.(?:mjs|cjs|js)$/u, '');
+  return /(?:^|\/)(?:src\/)?_kovo\/app-runtime-db(?:\.sqlite)?$/u.test(normalized);
+}
+
+function runtimeDbImportHasValueBindings(declaration: ImportDeclaration): boolean {
+  if (declaration.isTypeOnly()) return false;
+  const importClause = declaration.getImportClause();
+  if (importClause === undefined) return false;
+  if (importClause.getDefaultImport() !== undefined) return true;
+  if (importClause.getNamespaceImport() !== undefined) return true;
+  return declaration.getNamedImports().some((specifier) => !specifier.isTypeOnly());
+}
+
+function isUnconfinedAppRuntimeDbProviderCall(
+  call: CallExpression,
+  sourceFile: SourceFile,
+): boolean {
+  if (!isUndefinedOrEmptyArguments(call)) return false;
+
+  const expression = call.getExpression();
+  if (Node.isIdentifier(expression) && expression.getText() === 'appRuntimeDbProvider') {
+    return true;
+  }
+  if (
+    Node.isPropertyAccessExpression(expression) &&
+    expression.getName() === 'appRuntimeDbProvider'
+  ) {
+    return true;
+  }
+
+  return runtimeDbProviderImportLocalNames(sourceFile).has(expression.getText());
+}
+
+function isUndefinedOrEmptyArguments(call: CallExpression): boolean {
+  const args = call.getArguments();
+  if (args.length === 0) return true;
+  return args.length === 1 && Node.isIdentifier(args[0]) && args[0].getText() === 'undefined';
+}
+
+function runtimeDbProviderImportLocalNames(sourceFile: SourceFile): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (!isRuntimeDbModuleSpecifier(declaration.getModuleSpecifierValue())) continue;
+    for (const specifier of declaration.getNamedImports()) {
+      if (specifier.getName() !== 'appRuntimeDbProvider') continue;
+      names.add(specifier.getAliasNode()?.getText() ?? specifier.getName());
+    }
+    const namespaceImport = declaration.getImportClause()?.getNamespaceImport();
+    if (namespaceImport) names.add(`${namespaceImport.getText()}.appRuntimeDbProvider`);
+  }
+  return names;
 }
 
 function sqlRawHelperDiagnostic(

@@ -1113,7 +1113,7 @@ export const diagnosticDefinitions = {
     code: 'KV447',
     help: [
       'Would lower to: a SQLite owner-annotated table whose owner metadata is available to static audits but is not backed by database roles or RLS at runtime.',
-      'Blocked reason: SQLite has no engine role/RLS layer, so kovo({ owner }) and ownerVia annotations cannot provide Kovo\'s multi-principal authorization guarantee in the experimental SQLite starter.',
+      "Blocked reason: SQLite has no engine role/RLS layer, so kovo({ owner }) and ownerVia annotations cannot provide Kovo's multi-principal authorization guarantee in the experimental SQLite starter.",
       'Fixes: use the default PGlite/Postgres runtime for multi-tenant authorization, or treat the SQLite starter as single-principal/local-only and do not rely on owner scoping for confidentiality or integrity.',
       'SPEC §10.3 and fundamental-fixes-followup-6 DEC-A: SQLite is explicitly experimental and non-guaranteeing for owner-scoped runtime authorization.',
     ].join('\n'),
