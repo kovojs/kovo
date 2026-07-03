@@ -1,6 +1,7 @@
-import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+
+import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import { isProvenPrincipal } from './auth-principal.js';
 import { createPostgresAppRuntimeDb, type KovoPostgresRuntimeDb } from './postgres-runtime.js';
@@ -55,7 +56,9 @@ export interface KovoPostgresTestRuntime {
 export async function createPostgresTestRuntime(
   options: KovoPostgresTestRuntimeOptions,
 ): Promise<KovoPostgresTestRuntime> {
-  const dataDir = await mkdtemp(join(tmpdir(), 'kovo-postgres-test-'));
+  const tempRoot = createFrameworkOutputFileSystemBoundary(join(tmpdir(), 'kovo-postgres-test'));
+  const dataDir = await tempRoot.createStagingRoot('kovo-postgres-test-');
+  const dataDirFileSystem = createFrameworkOutputFileSystemBoundary(dataDir);
   const runtimeOptions: KovoPostgresAppRuntimeOptions = {
     dataDir,
     driver: 'pglite',
@@ -72,7 +75,7 @@ export async function createPostgresTestRuntime(
     await runtime.ready;
   } catch (error) {
     await runtime.close().catch(() => undefined);
-    await rm(dataDir, { force: true, recursive: true }).catch(() => undefined);
+    await dataDirFileSystem.removeTree().catch(() => undefined);
     throw error;
   }
 
@@ -84,7 +87,7 @@ export async function createPostgresTestRuntime(
       try {
         await runtime.close();
       } finally {
-        await rm(dataDir, { force: true, recursive: true });
+        await dataDirFileSystem.removeTree();
       }
     },
     async withPrincipal<Result>(

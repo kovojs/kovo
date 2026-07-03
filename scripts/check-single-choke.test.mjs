@@ -21,6 +21,15 @@ function runFixture(files) {
   });
 }
 
+function runDefaultFixture(files) {
+  const sourceFiles = Object.keys(files).sort();
+  return checkSingleChoke({
+    exists: (relativePath) => Object.hasOwn(files, relativePath),
+    readText: (relativePath) => files[relativePath] ?? '',
+    sourceFiles,
+  });
+}
+
 describe('single managed DB choke gate', () => {
   it('accepts driver execution inside enforceManagedSql() choke plumbing', () => {
     const result = runFixture({
@@ -210,6 +219,28 @@ export function createEndpointDbScope(rawDb) {
     read: managedDb(rawDb, 'read'),
     write: managedDb(rawDb, 'write'),
   };
+}
+`,
+    });
+
+    expect(result.findings).toEqual([]);
+  });
+
+  it('accepts Postgres runtime SQL provisioning and scoped handle construction as audited framework internals', () => {
+    const result = runDefaultFixture({
+      'packages/server/src/sql-safe-handle.ts': `
+export function enforceManagedSql(statement, mode, writePolicy) {
+  return validate(statement, mode, writePolicy);
+}
+`,
+      'packages/server/src/postgres-runtime.ts': `
+export async function provisionRuntimeRoles(client, appHandle) {
+  await client.exec('CREATE ROLE kovo_owner');
+  await client.query('GRANT SELECT ON TABLE users TO kovo_reader');
+  await client.transaction(async (tx) => {
+    await tx.exec('ALTER TABLE users ENABLE ROW LEVEL SECURITY');
+  });
+  return readonlyDb(appHandle, { principal: 'u1' });
 }
 `,
     });

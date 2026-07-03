@@ -23,6 +23,9 @@ export const defaultAllowedExternalEgressFiles = [
 ];
 export const defaultAllowedDriverFiles = [
   'packages/server/src/managed-db.ts',
+  // SPEC.md section 6.1: framework-owned Postgres provisioning installs roles,
+  // grants, and RLS policies before app code receives managed handles.
+  'packages/server/src/postgres-runtime.ts',
   'packages/server/src/secret-read-boundary.ts',
   'packages/server/src/sql-safe-handle.ts',
   'packages/server/src/sql-write-oracle.ts',
@@ -179,6 +182,7 @@ function isAllowedManagedHandleFactoryFile(filePath) {
     filePath === 'packages/server/src/managed-db.ts' ||
     filePath === 'packages/server/src/endpoint.ts' ||
     filePath === 'packages/server/src/guards.ts' ||
+    filePath === 'packages/server/src/postgres-runtime.ts' ||
     filePath === 'packages/server/src/webhook.ts'
   );
 }
