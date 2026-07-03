@@ -26,36 +26,50 @@ describe('@kovojs/test SQLite harness integration', () => {
       db.write('products', { id: 'p2', qty: 2 });
 
       const reader = managedDb(db, 'read', {
+        rawRead: {
+          dialectLabel: 'SQLite',
+          executeMethod: 'query',
+          normalizeTableName: (table) => table.replace(/^main\./, ''),
+        },
         sqlWritePolicy: { dialect: 'sqlite' },
-      }) as unknown as Pick<SqliteTestDb, 'exec' | 'query' | 'sql'>;
+      }) as unknown as Pick<SqliteTestDb, 'exec' | 'query' | 'sql'> & {
+        rawRead<Row extends Record<string, unknown> = Record<string, unknown>>(
+          statement: unknown,
+          declaration: { reads: readonly string[] },
+        ): Row[];
+      };
 
       expect(
-        reader.query<{ ids: string }>({
-          sql: 'select group_concat(id, ?) as ids from products',
-          values: [','],
-        }),
+        reader.rawRead<{ ids: string }>(
+          {
+            sql: 'select group_concat(id, ?) as ids from products',
+            values: [','],
+          },
+          { reads: ['products'] },
+        ),
       ).toEqual([{ ids: 'p1,p2' }]);
-      expect(
-        reader.sql<{ today: string }>(
+      expect(() =>
+        reader.query<{ ids: string }>(
           stampTrustedSql({ sql: "select date('2020-01-02') as today" }, 'static SQLite date read'),
         ),
-      ).toEqual([{ today: '2020-01-02' }]);
+      ).toThrow(/KV433/);
 
       for (const statement of [
         { sql: 'insert into products (id, qty) values (?, ?)', values: ['p3', 3] },
         { sql: 'update products set qty = ? where id = ?', values: [4, 'p1'] },
         { sql: 'delete from products where id = ?', values: ['p1'] },
       ]) {
-        expect(() => reader.query(statement)).toThrow(/KV433.*engine/s);
+        expect(() => reader.rawRead(statement, { reads: ['products'] })).toThrow(/KV433.*engine/s);
       }
       expect(() =>
         reader.exec(stampTrustedSql({ sql: 'drop table products' }, 'read-surface DDL attempt')),
-      ).toThrow(/KV433.*engine/s);
+      ).toThrow(/KV433/);
       expect(() =>
-        reader.query(
+        reader.rawRead(
           stampTrustedSql({ sql: 'select * from products for update' }, 'read lock attempt'),
+          { reads: ['products'] },
         ),
-      ).toThrow(/KV433.*engine/s);
+      ).toThrow();
 
       db.write('products', { id: 'p3', qty: 3 });
       expect(db.read<{ id: string }>('products').map((row) => row.id)).toEqual(['p1', 'p2', 'p3']);

@@ -17,7 +17,11 @@ export const contacts = pgTable(
     email: text('email').notNull(),
     company: text('company').notNull().default(''),
   },
-  kovo({ domain: contact, key: (table) => table.id }),
+  kovo({
+    authzPolicy: 'signed-in users share the starter contact book through query/mutation guards',
+    domain: contact,
+    key: (table) => table.id,
+  }),
 );
 
 // --- Auth infrastructure -------------------------------------------------------

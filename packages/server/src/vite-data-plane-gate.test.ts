@@ -138,7 +138,7 @@ const DRIZZLE_RUNTIME_REGISTRY_SOURCE = [
   'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
   '',
   'interface AppRequest { db: PgAsyncDatabase<any, any> }',
-  'export const contacts = pgTable("contacts", { id: text("id").primaryKey() }, kovo({ domain: "contact", key: "id" }));',
+  'export const contacts = pgTable("contacts", { id: text("id").primaryKey() }, kovo({ domain: "contact", key: "id", authzPolicy: "synthetic registry canary" }));',
   '',
   'export const contactsQuery = query("contacts", {',
   '  async load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
