@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { diagnosticDefinitions } from '../diagnostics.js';
 import {
+  AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES,
   PARANOID_SECURITY_ADVISORY_CODES,
   SECURITY_CODE_REGISTRY,
   securityClassifier,
@@ -105,12 +106,21 @@ describe('DEC-D security code registry', () => {
   });
 
   it('documents engine-choke wording for authorization and confidentiality registry entries', () => {
-    for (const code of ['KV414', 'KV435'] as const) {
+    for (const code of AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES) {
       const property = SECURITY_CODE_REGISTRY[code].property;
       expect(property, `${code} Postgres engine choke`).toMatch(/Postgres[\s\S]*engine choke/u);
       expect(property, `${code} SQLite limitation`).toMatch(
         /SQLite[\s\S]*experimental\/non-guaranteeing/u,
       );
+    }
+  });
+
+  it('keeps authorization/confidentiality guarantees off build-only classifications', () => {
+    for (const code of AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES) {
+      expect(
+        SECURITY_CODE_REGISTRY[code].enforcement,
+        `${code} must not rely only on build-time enumeration`,
+      ).not.toBe('build-only');
     }
   });
 
