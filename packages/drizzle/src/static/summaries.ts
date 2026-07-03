@@ -2546,6 +2546,10 @@ function objectLiteralStaticPathInputPath(
   tables: ReadonlyMap<string, readonly ExtractedTable[]>,
   unresolvedIdentifiers: ReadonlySet<string>,
 ): FunctionTouchSummary {
+  if (isGeneratedAppRuntimeDbProvider(fn, file)) {
+    return { reads: [], unresolved: [], writes: [] };
+  }
+
   const reads: ReadSummaryInput[] = [];
   const writes: WriteSummaryInput[] = [];
   const unresolved: UnresolvedSummaryInput[] = [];
@@ -2646,6 +2650,18 @@ function objectLiteralStaticPathInputPath(
   }
 
   return { reads, unresolved, writes };
+}
+
+function isGeneratedAppRuntimeDbProvider(
+  fn: ExtractedFunction,
+  file: SourceFileInput,
+): boolean {
+  // SPEC §10.3/§11.1: generated `_kovo` runtime DB providers are framework handle factories,
+  // not app-authored read/write helpers. Call sites outside this generated file remain visible.
+  return (
+    fn.name === 'appRuntimeDbProvider' &&
+    /(?:^|\/)(?:src\/)?_kovo\/app-runtime-db(?:\.sqlite)?\.ts$/.test(file.fileName)
+  );
 }
 
 /** @internal */ export function materializedViewRefreshFactsForFunction(

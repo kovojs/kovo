@@ -1917,6 +1917,21 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(() => scoped.exec('select 1')).toThrow(/parameterized db\.query/);
   });
 
+  it('binds pass-through Postgres client methods to the underlying client', () => {
+    class PrivateFieldClient {
+      #ready = true;
+
+      transaction<Result>(callback: (tx: this) => Result): Result {
+        if (!this.#ready) throw new Error('not ready');
+        return callback(this);
+      }
+    }
+
+    const scoped = createPostgresScopedClient(new PrivateFieldClient()) as PrivateFieldClient;
+
+    expect(scoped.transaction((tx) => tx instanceof PrivateFieldClient)).toBe(true);
+  });
+
   it('refuses Secret boxes at builder values and set write boundaries', () => {
     const log: string[] = [];
     const raw = {

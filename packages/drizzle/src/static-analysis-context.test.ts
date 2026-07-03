@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   analyzeSqlSafetyFromProject,
   diagnosticsForQueryFacts,
+  directSummaryForFunction,
   extractMassAssignmentFromProject,
   extractOwnerAuditFromProject,
   extractQueryFactsFromProject,
@@ -10,6 +11,7 @@ import {
   extractStaticBuildAnalysisFactsFromProject,
   extractToctouFromProject,
   extractTouchGraphFromProject,
+  type ExtractedFunction,
   type TouchGraphProjectOptions,
 } from '@kovojs/drizzle/internal/static';
 import { pgDatabaseTypes } from './test-helpers.js';
@@ -33,6 +35,42 @@ describe('@kovojs/drizzle static analysis context', () => {
       toctouFacts: extractToctouFromProject(project),
       touchGraph: extractTouchGraphFromProject(project),
     });
+  });
+
+  it('does not surface generated app runtime DB provider construction as app touch graph work', () => {
+    const providerSource = [
+      'export function appRuntimeDbProvider(request?: unknown): AppDb {',
+      '  return appDatabase.db(request);',
+      '}',
+    ].join('\n');
+    const providerFunction: ExtractedFunction = {
+      bodyStart: 0,
+      key: 'appRuntimeDbProvider',
+      localCalls: [],
+      name: 'appRuntimeDbProvider',
+      readCalls: [],
+      receiverNames: [],
+      receiverParameters: [],
+      unresolvedCalls: [{ index: providerSource.indexOf('appDatabase.db'), name: 'db' }],
+      writeCalls: [],
+    };
+
+    expect(
+      directSummaryForFunction(
+        providerFunction,
+        { fileName: '_kovo/app-runtime-db.ts', source: providerSource },
+        new Map(),
+        new Set(),
+      ),
+    ).toEqual({ reads: [], unresolved: [], writes: [] });
+    expect(
+      directSummaryForFunction(
+        providerFunction,
+        { fileName: 'src/app-runtime-db.ts', source: providerSource },
+        new Map(),
+        new Set(),
+      ).unresolved,
+    ).toEqual([{ operation: 'db', site: 'src/app-runtime-db.ts:2' }]);
   });
 
   it('reports KV435 when a mutation handler returns secret-classified query results to the wire', () => {
