@@ -4,14 +4,30 @@ import { join } from 'node:path';
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
 import { isProvenPrincipal } from './auth-principal.js';
+import { guards } from './guards.js';
+import { kovoReadonlyDbHandle, type KovoReadonlyDbCapable, type Reader } from './managed-db.js';
 import { createPostgresAppRuntimeDb, type KovoPostgresRuntimeDb } from './postgres-runtime.js';
 import type { KovoPostgresAppRuntimeOptions } from './postgres-runtime.js';
 
 /** Drizzle database handle passed to Postgres testing principal callbacks. */
 export type KovoPostgresTestDb = KovoPostgresRuntimeDb;
 
+/**
+ * Read-only Postgres testing handle for admin-guarded cross-owner reads.
+ *
+ * SPEC §10.3: this is the same `Reader<Db>` shape the runtime vends to guarded read surfaces,
+ * including the audited `crossOwnerRead(...)` capability. It does not expose a write handle.
+ */
+export type KovoPostgresTestAdminDb = Reader<KovoPostgresRuntimeDb>;
+
 /** Configuration for `createPostgresTestRuntime`. */
 export interface KovoPostgresTestRuntimeOptions {
+  /**
+   * Physical owner/authz tables allowed to use the audited `asAdmin(...).crossOwnerRead(...)`
+   * path. Tests must opt in per table so the helper exercises the same `kovo_admin_scope`
+   * policy posture as the app runtime (SPEC §10.3 DEC-G).
+   */
+  crossOwnerReadTables?: readonly string[];
   /**
    * The app schema module, usually `import * as schema from '../src/schema.js'`.
    * Kovo derives the test DDL and RLS policy posture from the same schema metadata as app boot.
@@ -42,6 +58,22 @@ export interface KovoPostgresTestRuntime {
     principalId: string,
     callback: (db: KovoPostgresTestDb) => Result | Promise<Result>,
   ): Promise<Result>;
+  /**
+   * Run test code through the Postgres runtime's admin-guarded read posture.
+   *
+   * This helper creates a request-shaped object, passes the real `guards.role("admin")` runtime
+   * marker, and then exposes only the framework read handle. It requires
+   * `crossOwnerReadTables` at runtime creation so cross-owner reads stay per-table opt-in rather
+   * than becoming a blanket test bypass (SPEC §10.3 DEC-G).
+   *
+   * @param principalId Proven non-empty admin principal id recorded in audit facts.
+   * @param callback Test body that receives the request-scoped read-only database handle.
+   * @returns The callback result.
+   */
+  asAdmin<Result>(
+    principalId: string,
+    callback: (db: KovoPostgresTestAdminDb) => Result | Promise<Result>,
+  ): Promise<Result>;
 }
 
 /**
@@ -66,9 +98,14 @@ export async function createPostgresTestRuntime(
     provisionOnBoot: true,
     schema: options.schema,
   };
+  if (options.crossOwnerReadTables !== undefined) {
+    runtimeOptions.crossOwnerReadTables = options.crossOwnerReadTables;
+  }
   if (options.seedSql !== undefined) runtimeOptions.seedSql = options.seedSql;
 
   const runtime = createPostgresAppRuntimeDb(runtimeOptions);
+  const hasAdminTableOptIn =
+    options.crossOwnerReadTables?.some((table) => table.trim() !== '') === true;
   let closed = false;
 
   try {
@@ -95,17 +132,52 @@ export async function createPostgresTestRuntime(
       callback: (db: KovoPostgresTestDb) => Result | Promise<Result>,
     ): Promise<Result> {
       if (closed) throw new Error('Postgres test runtime is already closed.');
-      assertPostgresTestPrincipal(principalId);
+      assertPostgresTestPrincipal('withPrincipal', principalId);
       return await callback(
         runtime.db({ principalPosture: { kind: 'act-as', principal: principalId } }),
       );
     },
+    async asAdmin<Result>(
+      principalId: string,
+      callback: (db: KovoPostgresTestAdminDb) => Result | Promise<Result>,
+    ): Promise<Result> {
+      if (closed) throw new Error('Postgres test runtime is already closed.');
+      assertPostgresTestPrincipal('asAdmin', principalId);
+      if (!hasAdminTableOptIn) {
+        throw new Error(
+          'asAdmin(id, fn) requires createPostgresTestRuntime({ crossOwnerReadTables: [...] }) so admin reads are explicitly table-scoped (SPEC §10.3 DEC-G).',
+        );
+      }
+      const request: KovoPostgresAdminTestRequest = {
+        session: { user: { id: principalId, roles: ['admin'] } },
+      };
+      const guardResult = await guards.role<KovoPostgresAdminTestRequest>('admin')(request);
+      if (guardResult !== true) {
+        throw new Error('asAdmin(id, fn) could not establish the admin role guard.');
+      }
+      const scopedDb = runtime.db(
+        request,
+      ) as unknown as KovoReadonlyDbCapable<KovoPostgresTestAdminDb>;
+      return await callback(scopedDb[kovoReadonlyDbHandle]());
+    },
   };
 }
 
-function assertPostgresTestPrincipal(principalId: string): void {
+interface KovoPostgresAdminTestRequest {
+  session: {
+    user: {
+      id: string;
+      roles: readonly string[];
+    };
+  };
+}
+
+function assertPostgresTestPrincipal(
+  helper: 'asAdmin' | 'withPrincipal',
+  principalId: string,
+): void {
   if (isProvenPrincipal(principalId)) return;
   throw new TypeError(
-    'withPrincipal(id) requires a proven non-empty principal id for Postgres owner-scoped tests.',
+    `${helper}(id) requires a proven non-empty principal id for Postgres owner-scoped tests.`,
   );
 }

@@ -126,7 +126,9 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
   - Acceptance: a unit test writes rows as `user-a` and asserts `user-b` sees `[]` for an owner table, using only the test helper (no HTTP/auth). The subpath is forbidden in request code by the sole-door lint (followup-6 DEC-B).
   - [x] Verified partial: `@kovojs/server/testing` exposes `createPostgresTestRuntime(...).withPrincipal(id, fn)` over an ephemeral provisioned PGlite runtime; a focused test writes as `user-a` and proves `user-b` sees `[]` through real RLS.
     - Evidence: `packages/server/src/testing.ts`, `packages/server/src/postgres-testing.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-testing.test.ts --config ./vite.config.ts`.
-  - [ ] Remaining: no `asSystem`/`asAdmin` helper is exposed until the runtime has an honest system/admin Postgres posture.
+  - [x] Verified partial: `createPostgresTestRuntime({ crossOwnerReadTables }).asAdmin(id, fn)` exposes the runtime's read-only admin posture, passes the real `guards.role("admin")` marker, requires explicit table opt-in, and records the `crossOwnerRead` audit principal.
+    - Evidence: `packages/server/src/testing.ts`, `packages/server/src/postgres-testing.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-testing.test.ts --config ./vite.config.ts`; touched-file strict `tsc`; `pnpm run check:api-surface`; `pnpm run check:vp`.
+  - [ ] Remaining: no `asSystem` helper is exposed until the runtime has an honest system Postgres posture.
 
 ### DEC-I — Custom-RLS-policy escape for team/org/RBAC (Tier-3 #7; concretizes followup-5 DEC-J)
 
