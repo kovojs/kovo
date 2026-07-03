@@ -881,6 +881,7 @@ function sqlSafetyDiagnosticsForSourceFile(
   const context = sqlSafetyContextForSourceFile(sourceFile);
   const rawDriverImport = endpointRawDriverImportDiagnostic(file, sourceFile);
   if (rawDriverImport) diagnostics.push(rawDriverImport);
+  diagnostics.push(...sqliteOwnerScopeWarningDiagnostics(file, sourceFile));
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
   // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
   // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
@@ -1142,6 +1143,59 @@ function endpointRawDriverImportDiagnostic(
       'endpoint() code must use endpoint({ db: true }) + ctx.actAs(id) managed DB capabilities; raw driver imports bypass the endpoint authorization choke (SPEC §10.3 DEC-H).',
     site: `${file.fileName}:${lineForIndex(file.source, declaration.getStart())}`,
   });
+}
+
+function sqliteOwnerScopeWarningDiagnostics(
+  file: SourceFileInput,
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic[] {
+  const diagnostics: { diagnostic: TouchGraphDiagnostic; index: number }[] = [];
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    if (!initializer || !Node.isCallExpression(initializer)) continue;
+    const rootCall = rootCallExpression(initializer);
+    if (!isSqliteTableFactoryCall(rootCall)) continue;
+    const annotation = tableAnnotation(rootCall);
+    if (!annotation || !isDomainExtractedTableAnnotation(annotation)) continue;
+    const classification =
+      annotation.ownerVia !== undefined
+        ? 'ownerVia'
+        : annotation.owner !== undefined
+          ? 'owner'
+          : null;
+    if (!classification) continue;
+
+    const line = lineForIndex(file.source, rootCall.getStart());
+    const detail = [
+      `Table ${annotation.name} declares ${classification} scoping;`,
+      'SQLite keeps the static metadata but has no engine role/RLS layer,',
+      'so this starter is single-principal only. Use PGlite/Postgres for',
+      "Kovo's multi-tenant authorization guarantees (SPEC §10.3 DEC-A).",
+    ].join(' ');
+    diagnostics.push({
+      diagnostic: drizzleDiagnostic({
+        code: 'KV447',
+        detail,
+        site: `${file.fileName}:${line}`,
+      }),
+      index: line,
+    });
+  }
+
+  return diagnostics
+    .sort((left, right) => left.index - right.index)
+    .map((entry) => entry.diagnostic);
+}
+
+function isSqliteTableFactoryCall(call: CallExpression): boolean {
+  const expression = unwrappedStaticExpressionNode(call.getExpression());
+  const factoryName = Node.isIdentifier(expression)
+    ? (projectDrizzleCoreIdentifierExportName(expression) ?? expression.getText())
+    : Node.isPropertyAccessExpression(expression) && isDrizzleTableFactoryNamespaceMember(expression)
+      ? expression.getName()
+      : undefined;
+  return factoryName === 'sqliteTable';
 }
 
 function sqlRawHelperDiagnostic(

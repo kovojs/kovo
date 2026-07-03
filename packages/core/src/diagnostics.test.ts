@@ -96,6 +96,7 @@ describe('diagnostic registry', () => {
       'KV439',
       'KV445',
       'KV446',
+      'KV447',
     ]);
   });
 
@@ -841,6 +842,15 @@ describe('diagnostic registry', () => {
       SPEC §9.6 requires node durable tasks to use the Postgres durable-task store until a supported SQLite durable queue adapter exists.",
           "message": "SQLite deployments cannot use the node preset durable-task store.",
           "severity": "error",
+        },
+        "KV447": {
+          "code": "KV447",
+          "help": "Would lower to: a SQLite owner-annotated table whose owner metadata is available to static audits but is not backed by database roles or RLS at runtime.
+      Blocked reason: SQLite has no engine role/RLS layer, so kovo({ owner }) and ownerVia annotations cannot provide Kovo's multi-principal authorization guarantee in the experimental SQLite starter.
+      Fixes: use the default PGlite/Postgres runtime for multi-tenant authorization, or treat the SQLite starter as single-principal/local-only and do not rely on owner scoping for confidentiality or integrity.
+      SPEC §10.3 and fundamental-fixes-followup-6 DEC-A: SQLite is explicitly experimental and non-guaranteeing for owner-scoped runtime authorization.",
+          "message": "SQLite owner annotations are advisory only in the experimental SQLite runtime.",
+          "severity": "warn",
         },
       }
     `);

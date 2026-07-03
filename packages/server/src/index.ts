@@ -253,7 +253,6 @@ export {
   createMemoryMutationReplayStore,
   createPostgresReadonlyClient,
   createPostgresScopedClient,
-  createSqliteAuthorizationDb,
   csrfField,
   csrfToken,
   declarePublicRead,
@@ -357,10 +356,6 @@ export type {
   Schema,
   Secret,
   SqliteAuthorizationClassification,
-  SqliteAuthorizationDbOptions,
-  SqliteAuthorizationMetadata,
-  SqliteOwnerSource,
-  SqliteOwnerViaSource,
   // KV429 (SPEC §10.3/§11.1): the typed 409 stale-version conflict outcome.
   StaleVersionConflict,
   StoredFileSchema,

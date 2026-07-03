@@ -14,6 +14,49 @@ function diagnosticsFor(source: string) {
 }
 
 describe('@kovojs/drizzle SQL safety static analysis', () => {
+  it('warns that SQLite owner-table annotations are advisory in the experimental runtime', () => {
+    const diagnostics = diagnosticsFor(`
+      import { kovo } from '@kovojs/drizzle';
+      import { sqliteTable, text } from 'drizzle-orm/sqlite-core';
+
+      export const orders = sqliteTable("orders", {
+        id: text("id").primaryKey(),
+        userId: text("user_id").notNull(),
+      }, kovo({ domain: "order", key: "id", owner: "userId" }));
+
+      export const orderItems = sqliteTable("order_items", {
+        id: text("id").primaryKey(),
+        orderId: text("order_id").notNull().references(() => orders.id),
+      }, kovo({
+        domain: "orderItem",
+        key: "id",
+        ownerVia: { parent: orders, fk: "orderId", parentKey: "id" },
+      }));
+
+      export const statuses = sqliteTable("statuses", {
+        id: text("id").primaryKey(),
+      }, kovo({ domain: "status", key: "id", reference: true }));
+    `);
+
+    expect(diagnostics).toHaveLength(2);
+    expect(diagnostics).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV447',
+          message: expect.stringContaining('Table orders declares owner scoping'),
+          severity: 'warn',
+          site: 'app.ts:5',
+        }),
+        expect.objectContaining({
+          code: 'KV447',
+          message: expect.stringContaining('Table order_items declares ownerVia scoping'),
+          severity: 'warn',
+          site: 'app.ts:10',
+        }),
+      ]),
+    );
+  });
+
   it('flags raw driver imports in endpoint modules instead of the managed actAs db seam', () => {
     const diagnostics = diagnosticsFor(`
       import Database from 'better-sqlite3';
