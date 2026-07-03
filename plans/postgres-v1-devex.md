@@ -109,10 +109,13 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
 
 - [ ] **H1 — Expose the existing `createRequestScopedDb(client, principal)` (`app-runtime-db.ts:98`) as a test-blessed `withPrincipal(id, fn)` (+ `asSystem`, `asAdmin`) from a `@kovojs/server/testing` subpath, wired to an ephemeral provisioned PGlite.** Tests exercise the REAL RLS engine, not a mock.
   - Acceptance: a unit test writes rows as `user-a` and asserts `user-b` sees `[]` for an owner table, using only the test helper (no HTTP/auth). The subpath is forbidden in request code by the sole-door lint (followup-6 DEC-B).
+  - [x] Verified partial: `@kovojs/server/testing` exposes `createPostgresTestRuntime(...).withPrincipal(id, fn)` over an ephemeral provisioned PGlite runtime; a focused test writes as `user-a` and proves `user-b` sees `[]` through real RLS.
+    - Evidence: `packages/server/src/testing.ts`, `packages/server/src/postgres-testing.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-testing.test.ts --config ./vite.config.ts`.
+  - [ ] Remaining: no `asSystem`/`asAdmin` helper is exposed until the runtime has an honest system/admin Postgres posture.
 
 ### DEC-I — Custom-RLS-policy escape for team/org/RBAC (Tier-3 #7; concretizes followup-5 DEC-J)
 
-- [ ] **I1 — Wire the existing custom `authzPolicy` SQL predicate annotation into PG provisioning.**
+- [x] **I1 — Wire the existing custom `authzPolicy` SQL predicate annotation into PG provisioning.**
       The annotation shape is `kovo({ authzPolicy: sql(...) })`; provisioning should emit `ENABLE/FORCE ROW LEVEL SECURITY`
       plus `CREATE POLICY ... USING(predicate) WITH CHECK(predicate)` from the predicate. Already parsed evidence:
       `runtime-metadata.test.ts:201`; census-classified `authzPolicy`: `static.ts:2180`. Distinguish the two
@@ -122,6 +125,8 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
       table passes the census yet may get no policy (unprotected). The DEC-D posture check must verify FORCE RLS + policy
       presence for `authzPolicy(sql)` tables too.
   - Acceptance: a `documents` table with a team-membership predicate gets FORCE RLS + a policy at provision; a member of the team reads/writes team documents, a non-member sees `[]`; the posture check treats it as covered.
+  - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/server/src/postgres-runtime.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts --config ./vite.config.ts`.
+  - Residual risk: dependency grants for custom predicates are derived from Drizzle `usedTables`; predicates that mention dependency tables only as raw text may still fail closed with engine permission denial rather than inferred dependency grants.
 - [ ] **I2 — Ship the worked team/org example in the docs (the documented custom-RLS-policy escape).** State the honesty boundary explicitly: Kovo guarantees the table is FORCE-RLS + policy-present + census-covered; the **predicate's correctness is the app's responsibility**, exactly like any custom authz (SPEC §10.3 / followup-5 DEC-J). Show the many-to-many membership shape `ownerVia` cannot express in one hop.
   - Acceptance: a docs page under `site/content/guides/` demonstrates the membership-join `authzPolicy` end to end (schema annotation, provisioned policy, member vs non-member behavior) with the guarantee boundary called out; follows `rules/docs-style.md`.
 
