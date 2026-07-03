@@ -35,6 +35,8 @@ const blockedReadCases = [
   'sqlite-secret-join-alias-egress',
   'sqlite-secret-cte-egress',
   'sqlite-secret-subquery-egress',
+  'sqlite-secret-union-egress',
+  'sqlite-secret-aggregate-egress',
 ] as const;
 
 const allowedReadCases = [
@@ -96,6 +98,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await signInDemoUser(root, origin, jar, output);
       await expectBlockedReadShapes(origin, jar);
       await expectAllowedReadShapes(origin, jar);
+      await expectNonSecretAggregateEndpoint(origin);
       await expectStarterInScopeWrite(origin, jar, output, contactEmail);
       await expectBlockedWrites(origin, marker);
       await expectWriteStatus(origin, marker, contactEmail);
@@ -137,6 +140,15 @@ async function expectAllowedReadShapes(origin: string, jar: Map<string, string>)
     expect(body).toContain(testCase.witness);
     if (!testCase.leaksSecret) expect(body).not.toContain('runtime-secret-value');
   }
+}
+
+async function expectNonSecretAggregateEndpoint(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/sqlite-secret-nonsecret-aggregate`);
+  const body = await response.text();
+
+  expect(response.status, body).toBe(200);
+  expect(body).toContain('"total":1');
+  expect(body).not.toContain('runtime-secret-value');
 }
 
 async function expectStarterInScopeWrite(
