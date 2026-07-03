@@ -4,18 +4,28 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { setTimeout as delay } from 'node:timers/promises';
 
-import { kovo } from '@kovojs/drizzle';
+import { kovo, sql } from '@kovojs/drizzle';
 import { eq } from 'drizzle-orm';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { Pool, type PoolClient, type QueryConfig, type QueryResultRow } from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 
-import { createPostgresScopedClient } from './managed-db.js';
+import { guards } from './guards.js';
+import {
+  createPostgresReadonlyClient,
+  createPostgresScopedClient,
+  drainCrossOwnerReadAuditFacts,
+  kovoReadonlyDbHandle,
+  type KovoReadonlyDbCapable,
+  type Reader,
+} from './managed-db.js';
 import {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
+  migratePostgresAppDb,
   provisionPostgresAppDb,
   type KovoPostgresAppRuntimeOptions,
+  type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
 
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
@@ -25,6 +35,7 @@ const describeIfPostgres = probeToolchain.available ? describe : describe.skip;
 const probeNotes = pgTable(
   'kovo_ext_probe_notes',
   {
+    classified: text('classified').notNull().default(''),
     id: text('id').primaryKey(),
     ownerId: text('owner_id').notNull(),
     title: text('title').notNull(),
@@ -33,6 +44,7 @@ const probeNotes = pgTable(
     domain: 'external-postgres-probe-notes',
     key: 'id',
     owner: 'ownerId',
+    secret: ['classified'],
   }),
 );
 
@@ -43,6 +55,7 @@ const createNotesMigration = {
     CREATE TABLE kovo_ext_probe_notes (
       id text PRIMARY KEY,
       owner_id text NOT NULL,
+      classified text NOT NULL DEFAULT '',
       title text NOT NULL
     );
   `,
@@ -110,15 +123,27 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
 
     const defaultAdminUrl = cluster.url(defaultDb, defaultAdmin);
     const defaultRuntimeUrl = cluster.url(defaultDb, defaultRuntime);
-    const defaultReport = await provisionPostgresAppDb({
+    const defaultMigrationReport = await migratePostgresAppDb({
+      crossOwnerReadTables: ['kovo_ext_probe_notes'],
       databaseUrl: defaultAdminUrl,
       migrations: [createNotesMigration],
+      schema,
+    });
+    expect(defaultMigrationReport.applied).toEqual(['001-create-probe-notes.sql']);
+    expect(defaultMigrationReport.skipped).toEqual([]);
+    expect(defaultMigrationReport.posture.ok).toBe(true);
+    expect(defaultMigrationReport.posture.issues).toEqual([]);
+
+    const defaultReport = await provisionPostgresAppDb({
+      crossOwnerReadTables: ['kovo_ext_probe_notes'],
+      databaseUrl: defaultAdminUrl,
       schema,
     });
     expect(defaultReport.ok).toBe(true);
     expect(defaultReport.issues).toEqual([]);
 
     await withPool(cluster.url(defaultDb, 'postgres'), async (superPool) => {
+      await superPool.query(`GRANT kovo_admin TO ${quoteIdent(defaultRuntime)}`);
       await superPool.query(`GRANT kovo_reader TO ${quoteIdent(defaultRuntime)}`);
       await superPool.query(`GRANT kovo_writer TO ${quoteIdent(defaultRuntime)}`);
       await superPool.query(
@@ -134,9 +159,29 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       'ALTER TABLE kovo_ext_probe_notes FORCE ROW LEVEL SECURITY',
     );
 
-    const defaultReportAgain = await provisionPostgresAppDb({
+    const defaultMigrationReportAgain = await migratePostgresAppDb({
+      crossOwnerReadTables: ['kovo_ext_probe_notes'],
       databaseUrl: defaultAdminUrl,
       migrations: [createNotesMigration],
+      schema,
+    });
+    expect(defaultMigrationReportAgain.applied).toEqual([]);
+    expect(defaultMigrationReportAgain.skipped).toEqual(['001-create-probe-notes.sql']);
+    expect(defaultMigrationReportAgain.posture.ok).toBe(true);
+    expect(defaultMigrationReportAgain.posture.issues).toEqual([]);
+
+    await expect(
+      migratePostgresAppDb({
+        crossOwnerReadTables: ['kovo_ext_probe_notes'],
+        databaseUrl: defaultAdminUrl,
+        migrations: [{ ...createNotesMigration, sql: `${createNotesMigration.sql}\nSELECT 1;` }],
+        schema,
+      }),
+    ).rejects.toThrow(/KV433_MIGRATION_CHECKSUM/);
+
+    const defaultReportAgain = await provisionPostgresAppDb({
+      crossOwnerReadTables: ['kovo_ext_probe_notes'],
+      databaseUrl: defaultAdminUrl,
       schema,
     });
     expect(defaultReportAgain.ok).toBe(true);
@@ -144,6 +189,8 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
 
     await expectOwnerIsolation(defaultRuntimeUrl, {});
     await expectPooledScopeDoesNotLeak(defaultRuntimeUrl, 'kovo_writer');
+    await expectSecretColumnsDenied(defaultRuntimeUrl, 'kovo_reader', 'kovo_admin');
+    await expectCrossOwnerRead(defaultRuntimeUrl);
 
     await expectPermissionDenied(
       cluster.url(adoptedDb, adoptedAdmin),
@@ -210,17 +257,102 @@ async function expectOwnerIsolation(
     const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
     const u2Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u2' } });
 
-    await u1Db.insert(probeNotes).values({ id: 'u1-note', ownerId: 'u1', title: 'One' });
-    await u2Db.insert(probeNotes).values({ id: 'u2-note', ownerId: 'u2', title: 'Two' });
+    await u1Db
+      .insert(probeNotes)
+      .values({ classified: 'secret-one', id: 'u1-note', ownerId: 'u1', title: 'One' });
+    await u2Db
+      .insert(probeNotes)
+      .values({ classified: 'secret-two', id: 'u2-note', ownerId: 'u2', title: 'Two' });
     await expect(u1Db.select().from(probeNotes).orderBy(probeNotes.id)).resolves.toEqual([
-      { id: 'u1-note', ownerId: 'u1', title: 'One' },
+      { classified: 'secret-one', id: 'u1-note', ownerId: 'u1', title: 'One' },
     ]);
     await expect(u2Db.select().from(probeNotes).orderBy(probeNotes.id)).resolves.toEqual([
-      { id: 'u2-note', ownerId: 'u2', title: 'Two' },
+      { classified: 'secret-two', id: 'u2-note', ownerId: 'u2', title: 'Two' },
     ]);
     await expect(
       u1Db.select().from(probeNotes).where(eq(probeNotes.ownerId, 'u2')),
     ).resolves.toEqual([]);
+  } finally {
+    await runtime.close();
+  }
+}
+
+async function expectSecretColumnsDenied(
+  databaseUrl: string,
+  readerRole: string,
+  adminRole: string,
+): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    const txClient = new TestNodePostgresRuntimeClient(pool);
+    const reader = createPostgresReadonlyClient(txClient, {
+      principal: 'u1',
+      readerRole,
+    });
+    await expect(
+      reader.query('SELECT classified FROM kovo_ext_probe_notes ORDER BY id'),
+    ).rejects.toMatchObject({
+      code: '42501',
+    });
+
+    const admin = createPostgresReadonlyClient(txClient, {
+      principal: 'admin-user',
+      readerRole: adminRole,
+      roleSetting: 'admin',
+    });
+    await expect(
+      admin.query('SELECT classified FROM kovo_ext_probe_notes ORDER BY id'),
+    ).rejects.toMatchObject({
+      code: '42501',
+    });
+  });
+}
+
+async function expectCrossOwnerRead(databaseUrl: string): Promise<void> {
+  drainCrossOwnerReadAuditFacts();
+  const runtime = createPostgresAppRuntimeDb({
+    crossOwnerReadTables: ['kovo_ext_probe_notes'],
+    databaseUrl,
+    schema,
+  });
+  try {
+    await runtime.ready;
+    const request = { session: { user: { id: 'admin-user', roles: ['admin'] } } };
+    const writer = runtime.db(request) as unknown as KovoReadonlyDbCapable<
+      Reader<KovoPostgresRuntimeDb>
+    >;
+    const readDb = writer[kovoReadonlyDbHandle]();
+    expect(() =>
+      readDb.crossOwnerRead(sql`SELECT id, title FROM ${probeNotes} ORDER BY id`, {
+        reads: ['kovo_ext_probe_notes'],
+        reason: 'attempt before admin guard',
+        role: 'admin',
+      }),
+    ).toThrow(/guards\.role\("admin"\)/);
+    expect(await guards.role<typeof request>('admin')(request)).toBe(true);
+
+    const rows = await readDb.crossOwnerRead<{ id: string; title: string }>(
+      sql`SELECT id, title FROM ${probeNotes} ORDER BY id`,
+      {
+        reads: ['kovo_ext_probe_notes'],
+        reason: 'external admin export',
+        role: 'admin',
+        site: 'postgres-external-probe.test.ts',
+      },
+    );
+    expect(rowsOf(rows)).toEqual([
+      { id: 'u1-note', title: 'One' },
+      { id: 'u2-note', title: 'Two' },
+    ]);
+    expect(drainCrossOwnerReadAuditFacts()).toEqual([
+      {
+        declaredReads: ['public.kovo_ext_probe_notes'],
+        dialectLabel: 'Postgres',
+        observedRead: 'public.kovo_ext_probe_notes',
+        principal: 'admin-user',
+        reason: 'external admin export',
+        site: 'postgres-external-probe.test.ts',
+      },
+    ]);
   } finally {
     await runtime.close();
   }
@@ -249,6 +381,10 @@ async function expectPooledScopeDoesNotLeak(
     expect(leaked.rows[0]?.current_user).toBe(databaseUser(databaseUrl));
     expect(leaked.rows[0]?.principal ?? '').toBe('');
   });
+}
+
+function rowsOf<Row>(result: Row[] | { rows?: Row[] }): Row[] {
+  return Array.isArray(result) ? result : (result.rows ?? []);
 }
 
 async function expectPermissionDenied(databaseUrl: string, statement: string): Promise<void> {
