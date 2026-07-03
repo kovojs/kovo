@@ -6,19 +6,19 @@ Created 2026-07-02. Self-standing. Source of truth for behavior is `SPEC.md`. Co
 
 ## 1. The one foundational issue (round-1..10 diagnosis, in one sentence)
 
-**Every recurring hole is the same shape: a security property enforced at a choke that is *decidable* but not the
-*sole door* for that property's data path.** A choke is sound only if every read/write of the protected data must pass
-through it regardless of how the app *authored* the query. Over a Turing-complete authoring surface the only layer that
+**Every recurring hole is the same shape: a security property enforced at a choke that is _decidable_ but not the
+_sole door_ for that property's data path.** A choke is sound only if every read/write of the protected data must pass
+through it regardless of how the app _authored_ the query. Over a Turing-complete authoring surface the only layer that
 is structurally unavoidable is the **storage engine**, because every query — builder, `db.query.*` relational, raw SQL,
 view, subquery, UNION, an ambient singleton — reaches the engine, and the engine enforces by **role/principal**, never
-by the query's syntactic shape. Each prior fix moved *down* a layer but stayed *above* the engine, so a new syntactic
+by the query's syntactic shape. Each prior fix moved _down_ a layer but stayed _above_ the engine, so a new syntactic
 door reopened the hole:
 
-| Round | Choke | App-level shape it enumerated | Door that reopened |
-| --- | --- | --- | --- |
-| 1–6 | static AST classification | Drizzle builder table symbols | raw `sql` (bugz-30 B1) |
-| 7–9 | result-name-match secret box | result key names | alias / view / UNION (bugz-29 B1–B3) |
-| 10 | SQLite `config.where` proxy | recognized builder verbs | `db.query.*`, subquery-FROM, unwrapped singleton (bugz-31 B1/B2) |
+| Round | Choke                        | App-level shape it enumerated | Door that reopened                                               |
+| ----- | ---------------------------- | ----------------------------- | ---------------------------------------------------------------- |
+| 1–6   | static AST classification    | Drizzle builder table symbols | raw `sql` (bugz-30 B1)                                           |
+| 7–9   | result-name-match secret box | result key names              | alias / view / UNION (bugz-29 B1–B3)                             |
+| 10    | SQLite `config.where` proxy  | recognized builder verbs      | `db.query.*`, subquery-FROM, unwrapped singleton (bugz-31 B1/B2) |
 
 ## 2. The resolution — Postgres already IS the sound architecture; SQLite structurally cannot be
 
@@ -65,15 +65,15 @@ app-level shape-enumeration proxy — the exact unsound pattern. The two rejecte
 - **(ii) fail-closed on owner/unclassified reads** — REJECTED for v1: honest, but it rebuilds most of the engine's
   default-deny in the app layer — a second, unsound authorization implementation the framework must maintain forever,
   just to approximate what Postgres gets for free. Keep only if a concrete need to exercise multi-tenant behavior
-  *specifically* on SQLite appears.
+  _specifically_ on SQLite appears.
 
 Rationale for (iii): PGlite already runs in-process for dev, so the cost of "no multi-tenant on SQLite" is near zero,
-and (iii) *deletes* an unsound subsystem instead of hardening it.
+and (iii) _deletes_ an unsound subsystem instead of hardening it.
 
 - [ ] **A1 — `create-kovo --sqlite` refuses to scaffold unless `KOVO_EXPERIMENTAL_SQLITE=1` (or `--experimental-sqlite`). Postgres (PGlite in-process for dev) is the default with no flag.**
   - Acceptance: `create-kovo <app> --sqlite` without the flag exits non-zero naming the single-principal limitation; with the flag it scaffolds. Default (`create-kovo <app>`) yields the PGlite/Postgres template.
 - [ ] **A2 — Remove the SQLite owner-scope proxy entirely (`createSqliteAuthorizationDb` and `sqliteAuthorizationProxy` in `managed-db.ts`); the SQLite managed handle applies read-only + SQL-safety + KV438 floors ONLY, and `kovo({owner})` is a build-time WARNING (not error) on the SQLite dialect stating owner-scoping is not enforced.** No partial proxy that reads as a guarantee.
-  - Acceptance: with the flag on, `KOVO_PARANOID=1` + the bugz-31 B1/B2 repro (`readonlyAppDb` endpoint read, `db.query.*` relational read) no longer *claims* to scope; the boot banner + a per-`kovo({owner})`-table build warning disclaim it; `grep sqliteAuthorizationProxy` returns 0 in shipped source. Multi-owner data on SQLite is documented as visible across principals.
+  - Acceptance: with the flag on, `KOVO_PARANOID=1` + the bugz-31 B1/B2 repro (`readonlyAppDb` endpoint read, `db.query.*` relational read) no longer _claims_ to scope; the boot banner + a per-`kovo({owner})`-table build warning disclaim it; `grep sqliteAuthorizationProxy` returns 0 in shipped source. Multi-owner data on SQLite is documented as visible across principals.
 - [ ] **A3 — The KV414 SQLite insert over-block (papercuts-29 P1) is deleted with the proxy: an owner-self insert on SQLite just succeeds (no owner enforcement to check).** Removes the green-build→HTTP-500 (`assertSqliteInsertIsOwnerCheckable`, `managed-db.ts:1073-1075`).
   - Acceptance: an owner-table insert on the SQLite experimental path returns 2xx and persists; no KV414 runtime throw exists for SQLite inserts.
 
@@ -89,16 +89,16 @@ and (iii) *deletes* an unsound subsystem instead of hardening it.
 **Chosen option: (a′) narrow the writer grant to mirror the reader's default-deny.** The out-of-scope-write blast
 radius splits by table class, verified against the current template:
 
-| Out-of-scope write target | Engine protection today | Harm |
-| --- | --- | --- |
-| An **owner table** (incl. `user`/`session`/`account`, all `kovo({owner})` — `schema.ts:44,61,88`) | Owner-RLS `FOR ALL … WITH CHECK(owner=current_setting('kovo.principal'))` under FORCE RLS (`app-runtime-db.ts:338-339`) | **Benign** — can only write your OWN rows; no cross-owner tamper, no ownership reassignment. |
-| An **unclassified / non-owner table** (`verification` — `schema.ts:96`, no `kovo()`; shared `settings`/`reference`) | **NONE** — blanket `GRANT …INSERT,UPDATE,DELETE` to `kovo_writer` (`app-runtime-db.ts:311-318`), no policy | **Real** — forge a `verification` token, corrupt shared config; only the `createDeclaredWriteDb` framework shape-choke stands (bugz-29 B3's home). |
+| Out-of-scope write target                                                                                           | Engine protection today                                                                                                 | Harm                                                                                                                                               |
+| ------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------- |
+| An **owner table** (incl. `user`/`session`/`account`, all `kovo({owner})` — `schema.ts:44,61,88`)                   | Owner-RLS `FOR ALL … WITH CHECK(owner=current_setting('kovo.principal'))` under FORCE RLS (`app-runtime-db.ts:338-339`) | **Benign** — can only write your OWN rows; no cross-owner tamper, no ownership reassignment.                                                       |
+| An **unclassified / non-owner table** (`verification` — `schema.ts:96`, no `kovo()`; shared `settings`/`reference`) | **NONE** — blanket `GRANT …INSERT,UPDATE,DELETE` to `kovo_writer` (`app-runtime-db.ts:311-318`), no policy              | **Real** — forge a `verification` token, corrupt shared config; only the `createDeclaredWriteDb` framework shape-choke stands (bugz-29 B3's home). |
 
 Owner-RLS already neutralizes the benign half. The dangerous half is exactly the tables the writer role is
-*blanket-granted* on with no policy — the mirror-image of the sound reader default-deny. Rejected alternatives:
+_blanket-granted_ on with no policy — the mirror-image of the sound reader default-deny. Rejected alternatives:
 **(a) accept as-is** understates this residual (leaves `verification`-forge behind the framework choke);
 **(b) per-mutation engine confinement** (transient per-transaction roles / table-scoped `SET LOCAL`) is the "right"
-answer but hard — declared-write scope is *dynamic per mutation* while grants are *static per role* — so it is post-v1.
+answer but hard — declared-write scope is _dynamic per mutation_ while grants are _static per role_ — so it is post-v1.
 
 - [ ] **C1 — Stop blanket-granting `kovo_writer`. Grant `INSERT/UPDATE/DELETE` only to (i) owner tables (WITH CHECK bounds them) and (ii) tables the app explicitly declares writable; leave unclassified / reference tables (e.g. `verification`) UN-granted ⇒ engine default-deny on writes. `applyPgliteWriterTablePrivileges` (`app-runtime-db.ts:311-318`) must key off classification, not `SCHEMA_TABLES` wholesale.**
   - Acceptance: a mutation whose handler writes an unclassified/undeclared table (e.g. `INSERT INTO verification`) is denied at the ENGINE (`permission denied for table verification`), not by the framework choke — proven with the declared-write framework choke stubbed under `KOVO_PARANOID=1`. An owner-table write of the caller's own row still succeeds; an owner-table write reassigning ownership is denied by WITH CHECK.
@@ -127,7 +127,7 @@ answer but hard — declared-write scope is *dynamic per mutation* while grants 
 - [ ] Re-run the §7-style paranoid generative dogfood **Postgres-only**: zero cross-owner reads/writes across builder,
       `db.query.*`, raw SQL, view, subquery, UNION, `readonlyAppDb`, endpoint, task, webhook. The engine-choke thesis
       predicts zero — this is the test of C4.
-- [ ] SQLite behind the experimental flag: dogfood confirms it either fails closed or loudly disclaims; no *silent*
+- [ ] SQLite behind the experimental flag: dogfood confirms it either fails closed or loudly disclaims; no _silent_
       cross-owner leak.
 - [ ] The static census + secret box are demonstrably demotable to defense-in-depth on PG (removing them does not
       produce a served leak in the paranoid harness) — the signal that enforcement has actually reached the engine.
@@ -148,17 +148,17 @@ Both DEC-C (a′) claims verified empirically by replaying the template's exact 
 PGlite. All 9 checks PASS. Probe: `scratchpad/pg-writescope-probe.mjs`.
 
 1. **[✓] `verification` is writer-granted today** — with the wholesale grant over `SCHEMA_TABLES`, `SET LOCAL ROLE
-   kovo_writer; INSERT INTO verification` SUCCEEDS. The `verification`-forge risk C1 closes is real.
+kovo_writer; INSERT INTO verification` SUCCEEDS. The `verification`-forge risk C1 closes is real.
 2. **[✓] Narrowing the grant engine-denies the write** — with `verification`/`app_config` un-granted to the narrowed
    writer role, the same insert raises `permission denied for table verification` / `… app_config`, while the
    owner-table (`orders`) write STILL succeeds. (a′) works exactly as designed.
 3. **[✓] THE CRUX — PGlite `SET LOCAL ROLE <non-superuser>` actually DROPS superuser.** The default connection is
-   superuser (`postgres`, `rolsuper=true`), but after `SET LOCAL ROLE kovo_writer` a write to an *ungranted* table
+   superuser (`postgres`, `rolsuper=true`), but after `SET LOCAL ROLE kovo_writer` a write to an _ungranted_ table
    denies (`permission denied for table stranger`). This validates the whole engine-choke thesis: reader default-deny,
    RLS, column-REVOKE, and the writer narrowing all rest on role privilege checks that PGlite honors. (Round-9's
-   "PGlite is always superuser" is true of the *default* connection but is confined by `SET LOCAL ROLE`.)
+   "PGlite is always superuser" is true of the _default_ connection but is confined by `SET LOCAL ROLE`.)
 4. **[✓] Benign/dangerous split confirmed** — owner writes own row (OK); cross-owner write denied by WITH CHECK (`new
-   row violates row-level security policy for table "orders"`); principal-UNSET read ⇒ 0 rows (RLS default-deny — the
+row violates row-level security policy for table "orders"`); principal-UNSET read ⇒ 0 rows (RLS default-deny — the
    `readonlyAppDb` PG twin failing closed, matching bugz-31 B1's PG behavior).
 
 Caveat: tested on PGlite 0.5.1 (monorepo-resolved); the mechanism is core Postgres semantics (roles/GRANT/RLS) compiled

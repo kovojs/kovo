@@ -91,9 +91,7 @@ describe('SQLite managed authorization predicate binding', () => {
 
     expect(query.toSQL()).toMatchObject({
       params: ['open', 'u1'],
-      sql: expect.stringMatching(
-        /"orders"\."status" = \?\)? and \("orders"\."user_id" = \?/,
-      ),
+      sql: expect.stringMatching(/"orders"\."status" = \?\)? and \("orders"\."user_id" = \?/),
     });
     expect(query.all()).toEqual([{ id: 'o1' }]);
   });
