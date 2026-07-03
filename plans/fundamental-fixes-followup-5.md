@@ -280,14 +280,22 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
 
 ### Phase 1 — Runtime authorization choke
 
-- [ ] **1.0 Remaining feasibility gates (DEC-A) — the platform basics are VERIFIED (PGlite RLS incl. `WITH CHECK`
+- [x] **1.0 Remaining feasibility gates (DEC-A) — the platform basics are VERIFIED (PGlite RLS incl. `WITH CHECK`
       writes/joins; SQLite flat-read `config.where` injection).** Confirm the load-bearing residuals: the single-statement
       extended-protocol read/write path is enforceable; SQLite injection recursion into compound/subquery + alias
       resolution via `drizzle:OriginalName`; the pinned-Drizzle emitted-SQL conformance harness. **The principal is set via
       parameterized `SELECT set_config('kovo.principal', $1, true)`, NEVER `SET LOCAL kovo.principal = <interpolated>`**
       (`SET` takes no bind params, so string-building is a SQL-injection vector into the SET statement; `set_config` is a
       parameterizable function and its separate extended-protocol call is compatible with the confinement invariant).
-- [ ] **1.0b Feasibility probe (throwaway worktree, before committing DEC-H/DEC-I).** Empirically confirm, on real
+  - Evidence: `pnpm exec vitest --run packages/server/src/authz-feasibility.test.ts` exercises real PGlite RLS with
+    parameterized `set_config`, prepared-statement rejection of appended `RESET ROLE`, blocked in-statement
+    `set_config('role', ...)` / `set_config('kovo.principal', 'B', ...)`, `WITH CHECK` write rejection, and pinned
+    Drizzle emitted SQL for flat/join/alias/compound SQLite predicate injection. The probe also records the required PG
+    hardening: set `kovo.principal` before `SET LOCAL ROLE` and revoke `pg_catalog.set_config(text,text,boolean)` from
+    the app role; role-then-principal while the app role can call `set_config` is unsafe. Drizzle subquery-FROM exposes
+    owner tables through `Subquery._.usedTables`/SQL chunks but not a mutable inner select config, so the feasible
+    behavior is fail-closed unless the runtime retains the inner builder.
+- [x] **1.0b Feasibility probe (throwaway worktree, before committing DEC-H/DEC-I).** Empirically confirm, on real
       PGlite + better-sqlite3: (a) **DEC-H** — setting the default connection to the non-`BYPASSRLS` role + `kovo.principal`
       at dispatch actually binds RLS for a handle imported OUTSIDE the managed wrapper (connection-level default), or it
       doesn't and the fallback is force-the-managed-handle + lint; (b) **DEC-I** — a generated `ownerVia` `EXISTS` policy
@@ -295,6 +303,11 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
       compound/subquery recursion without a hole; (c) the `EXISTS`/`IN` overhead on a seeded dataset is bounded with an
       owner-column index. Record; if a mechanism is infeasible, its documented fallback is used. (Every prior "obvious"
       assumption this round had a footgun — session.id, `SET ROLE` reversibility, `.where()` replacing — so probe before code.)
+  - Evidence: `pnpm exec vitest --run packages/server/src/authz-feasibility.test.ts` uses the raw PGlite handle inside
+    the dispatch-scoped role/principal transaction to prove connection-level RLS, filters direct `order_items` reads via
+    a PG `EXISTS` ownerVia policy, filters SQLite direct/compound/subquery child reads via the generated `IN` predicate,
+    and asserts PG/SQLite explain plans use the seeded owner-path indexes (`orders_user_id_id_idx`,
+    `order_items_order_id_idx`).
 - [ ] **1.1 Postgres RLS owner-scoping, reads AND writes (DEC-A).** Per owner table `USING(…) WITH CHECK(…)`;
       `SET LOCAL kovo.principal = <session.user.id>` on the read AND write transaction under the non-BYPASSRLS role, each as
       a single extended-protocol statement. Acceptance (full paranoid): `bugz-30` B1's raw-SQL cross-owner read returns
