@@ -24,7 +24,7 @@ they are not claimed as the verified TCB.
   "source": "plans/fundamental-fixes-followup-3.md A10/DEC-K",
   "budgets": {
     "entryMaxLines": 150,
-    "totalTcbMaxLines": 600
+    "totalTcbMaxLines": 1000
   },
   "plannedEntries": [
     {
@@ -260,6 +260,26 @@ they are not claimed as the verified TCB.
       "lineBudget": 70
     },
     {
+      "id": "server.managed-db.sqlite-authorization-db",
+      "file": "packages/server/src/managed-db.ts",
+      "name": "createSqliteAuthorizationDb",
+      "kind": "db-owner-authorization-wrapper",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.managed-db.sqlite-authorization-db",
+      "lineBudget": 20
+    },
+    {
+      "id": "server.managed-db.authorization-census-db",
+      "file": "packages/server/src/managed-db.ts",
+      "name": "createAuthorizationCensusDb",
+      "kind": "db-authorization-census-wrapper",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.managed-db.authorization-census-db",
+      "lineBudget": 20
+    },
+    {
       "id": "server.managed-db.postgres-readonly-client",
       "file": "packages/server/src/managed-db.ts",
       "name": "createPostgresReadonlyClient",
@@ -268,6 +288,16 @@ they are not claimed as the verified TCB.
       "wrapper": "securityClassifier",
       "decision": "server.managed-db.postgres-readonly-client",
       "lineBudget": 20
+    },
+    {
+      "id": "server.managed-db.postgres-scoped-client",
+      "file": "packages/server/src/managed-db.ts",
+      "name": "createPostgresScopedClient",
+      "kind": "db-owner-authorization-wrapper",
+      "classification": "tcb",
+      "wrapper": "securityClassifier",
+      "decision": "server.managed-db.postgres-scoped-client",
+      "lineBudget": 25
     },
     {
       "id": "server.sql-safe-handle.enforce-managed-sql",
