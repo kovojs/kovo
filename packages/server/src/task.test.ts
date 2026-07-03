@@ -87,9 +87,10 @@ describe('durable task definitions (SPEC §9.6)', () => {
     const definition = task('proof/task-capabilities', {
       input: s.object({ proofId: s.string() }),
       async run(args, context) {
-        await context.runMutation(recordEffect, { proofId: args.proofId });
-        await context.runQuery(readEffect, { proofId: args.proofId });
-        await context.runQuery(compact, undefined);
+        const user = context.actAs(args.proofId);
+        await user.runMutation(recordEffect, { proofId: args.proofId });
+        await user.runQuery(readEffect, { proofId: args.proofId });
+        await context.declareSystemRead('compact proof effects').runQuery(compact, undefined);
 
         const compileOnly = () => {
           // @ts-expect-error SPEC §9.6: durable tasks do not receive raw DB handles.

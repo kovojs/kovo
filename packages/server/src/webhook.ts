@@ -1,4 +1,10 @@
 import type { WebhookVerifier } from '@kovojs/core';
+import {
+  actAsNonRequestPrincipal,
+  declareSystemPrincipal,
+  type NonRequestPrincipalPosture,
+  type PrincipalAccessOperation,
+} from './auth-principal.js';
 import type { ChangeRecord } from './change-record.js';
 import { verifiedAccess, type AccessDecision } from './access.js';
 import type { Domain } from './domain.js';
@@ -106,6 +112,19 @@ export interface WebhookRunnableMutation<Input = unknown> {
 export type WebhookRunnableMutationInput<Mutation> =
   Mutation extends WebhookRunnableMutation<infer Input> ? Input : never;
 
+/**
+ * Write scope returned by `context.actAs(id)` or `context.declareSystemWrite(reason)` in a webhook
+ * handler. SPEC §10.3 DEC-G requires machine ingress to choose an explicit owner principal or
+ * audited system posture before using mutation composition or the transaction DB handle.
+ */
+export interface WebhookPrincipalWriteScope<Tx = unknown> {
+  runMutation<const Mutation extends WebhookRunnableMutation<any>>(
+    definition: Mutation,
+    input: WebhookRunnableMutationInput<Mutation>,
+  ): Promise<unknown>;
+  tx: WebhookTxDb<Tx>;
+}
+
 /** Options used when an app dispatch path lets a webhook compose through `runMutation(...)`. */
 export interface RunWebhookOptions<Request extends EndpointRequest = EndpointRequest> {
   mutationOptions?: Omit<RunMutationOptions<Request>, 'csrf'>;
@@ -161,6 +180,13 @@ export interface WebhookHandlerContext<
     payload: Payload,
     options?: { retryAfter?: number; status?: 400 | 401 | 422 | 429 | 500 },
   ): WebhookFail<Code, Payload>;
+  /**
+   * SPEC §10.3 DEC-G: choose the owner principal for scoped webhook writes. A provider payload
+   * field is not authority unless handler code derives and validates this id before calling actAs.
+   */
+  actAs(principalId: string): WebhookPrincipalWriteScope<Tx>;
+  /** SPEC §10.3 DEC-G: audited cross-owner write posture for genuine system webhook work. */
+  declareSystemWrite(reason: string): WebhookPrincipalWriteScope<Tx>;
   rawBody: Uint8Array;
   recordChange<const DomainKey extends WebhookDeclaredWriteKey<Writes>, ChangeInput = Input>(
     domain: Domain<DomainKey>,
@@ -574,12 +600,14 @@ export async function runWebhook<
     const runHandler = async (tx: Tx): Promise<Value> => {
       const managedTx = webhookManagedTransactionDb(tx);
       const context = webhookHandlerContext(
+        declaration.name,
         input,
         endpointRequest,
         rawBody,
         changes,
         declaration.webhookDefinition.writes,
-        async (definition, mutationInput) => {
+        managedTx,
+        async (definition, mutationInput, principalPosture) => {
           if (reserveOutcome.kind !== 'reserved' && reserveOutcome.kind !== 'disabled') {
             throw new Error('Webhook replay reservation is unavailable.');
           }
@@ -593,6 +621,7 @@ export async function runWebhook<
           const result = await runMutation(definition as never, mutationInput, mutationRequest, {
             ...options.mutationOptions,
             csrf: false,
+            principalPosture,
           } as never);
           if (!result.ok) {
             throw new Error(
@@ -605,10 +634,7 @@ export async function runWebhook<
           return result.value;
         },
       );
-      const value = await declaration.webhookDefinition.handler(input, {
-        ...context,
-        tx: managedTx as WebhookTxDb<Tx>,
-      });
+      const value = await declaration.webhookDefinition.handler(input, context);
       if (isWebhookFail(value)) throw new WebhookRollback(value);
       return value as Value;
     };
@@ -818,14 +844,35 @@ async function parseSchema<T>(schema: Schema<T>, input: unknown): Promise<T> {
 }
 
 function webhookHandlerContext<Input, Tx>(
+  name: string,
   input: Input,
   request: EndpointRequest,
   rawBody: Uint8Array,
   changes: ChangeRecord<string, Input>[],
   declaredWrites: readonly Domain[] | undefined,
-  runMutationFromWebhook: WebhookHandlerContext<Input, Tx, WebhookDeclaredWrites>['runMutation'],
+  managedTx: Tx,
+  runMutationFromWebhook: (
+    definition: Parameters<
+      WebhookHandlerContext<Input, Tx, WebhookDeclaredWrites>['runMutation']
+    >[0],
+    input: Parameters<WebhookHandlerContext<Input, Tx, WebhookDeclaredWrites>['runMutation']>[1],
+    posture: NonRequestPrincipalPosture,
+  ) => Promise<unknown>,
 ): WebhookHandlerContext<Input, Tx, WebhookDeclaredWrites> {
+  const writeScope = (posture: NonRequestPrincipalPosture): WebhookPrincipalWriteScope<Tx> => ({
+    runMutation: (definition, mutationInput) =>
+      runMutationFromWebhook(definition, mutationInput, posture),
+    tx: managedTx as WebhookTxDb<Tx>,
+  });
   return {
+    actAs(principalId: string) {
+      return writeScope(
+        actAsNonRequestPrincipal(principalId, webhookPrincipalAudit(name, 'write')),
+      );
+    },
+    declareSystemWrite(reason: string) {
+      return writeScope(declareSystemPrincipal(reason, webhookPrincipalAudit(name, 'write')));
+    },
     fail(code, payload, options = {}) {
       return {
         error: { code, payload },
@@ -848,9 +895,45 @@ function webhookHandlerContext<Input, Tx>(
       return record;
     },
     request,
-    runMutation: runMutationFromWebhook,
-    tx: undefined as unknown as WebhookTxDb<Tx>,
+    runMutation: async () => {
+      throw missingWebhookPrincipalPostureError(name, 'write');
+    },
+    tx: deniedWebhookTx(name) as WebhookTxDb<Tx>,
   };
+}
+
+function webhookPrincipalAudit(
+  name: string,
+  operation: PrincipalAccessOperation,
+): Parameters<typeof actAsNonRequestPrincipal>[1] {
+  return {
+    ingress: 'webhook',
+    operation,
+    surface: name,
+  };
+}
+
+function missingWebhookPrincipalPostureError(
+  name: string,
+  operation: PrincipalAccessOperation,
+): Error {
+  return new Error(
+    `Webhook "${name}" attempted ${operation} owner-table access without actAs(id) or declareSystemWrite(reason). SPEC §10.3 DEC-G requires an explicit non-request principal posture.`,
+  );
+}
+
+function deniedWebhookTx(name: string): unknown {
+  return new Proxy(Object.create(null), {
+    get() {
+      throw missingWebhookPrincipalPostureError(name, 'write');
+    },
+    has() {
+      return false;
+    },
+    ownKeys() {
+      return [];
+    },
+  });
 }
 
 function webhookMutationRequest<Tx>(request: EndpointRequest, tx: Tx): EndpointRequest {

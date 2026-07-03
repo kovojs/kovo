@@ -7,6 +7,7 @@ import { s } from './schema.js';
 import { task } from './task.js';
 import { createDurableTaskRunner } from './task-runner.js';
 import { MemoryDurableTaskQueue } from './task-queue.js';
+import { assertNonRequestPrincipalPosture } from './auth-principal.js';
 
 describe('durable task runner (SPEC §9.6)', () => {
   let uninstallEgressFloor: (() => void) | undefined;
@@ -66,6 +67,48 @@ describe('durable task runner (SPEC §9.6)', () => {
       status: 'dead',
       lastError: 'No durable task is registered for key "missing.task".',
     });
+  });
+
+  it('fails closed on task query access without actAs and threads actAs posture to hooks', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const hookInputs: unknown[] = [];
+    const unsafe = task('owner.read.unsafe', {
+      input: s.object({}),
+      run: (_args, ctx) => ctx.runQuery({ key: 'orders/read' }, undefined),
+    });
+    const scoped = task('owner.read.scoped', {
+      input: s.object({ ownerId: s.string() }),
+      run: (args, ctx) => ctx.actAs(args.ownerId).runQuery({ key: 'orders/read' }, undefined),
+    });
+    await store.enqueue({ task: unsafe.key, args: {}, runAt: new Date('2026-06-30T10:00:00Z') });
+    await store.enqueue({
+      task: scoped.key,
+      args: { ownerId: 'user_1' },
+      runAt: new Date('2026-06-30T10:00:00Z'),
+    });
+    const runner = createDurableTaskRunner({
+      store,
+      tasks: [unsafe, scoped],
+      batchSize: 2,
+      hooks: {
+        runQuery: vi.fn(async (_definition, _input, options) => {
+          assertNonRequestPrincipalPosture(options.principalPosture);
+          hookInputs.push(options.principalPosture);
+          return [];
+        }),
+      },
+    });
+
+    await runner.runOnce(new Date('2026-06-30T10:00:01Z'));
+
+    expect(store.snapshot().map((job) => ({ status: job.status, task: job.task }))).toEqual([
+      { status: 'dead', task: 'owner.read.unsafe' },
+      { status: 'succeeded', task: 'owner.read.scoped' },
+    ]);
+    expect(store.snapshot()[0]!.lastError).toContain(
+      'without actAs(id) or declareSystemRead(reason)',
+    );
+    expect(hookInputs).toHaveLength(1);
   });
 
   it('routes default ctx.fetch through the framework egress allowlist choke', async () => {

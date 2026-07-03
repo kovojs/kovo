@@ -120,6 +120,7 @@ export type {
   WebhookFail,
   WebhookFailureStatus,
   WebhookHandlerContext,
+  WebhookPrincipalWriteScope,
   WebhookRunnableMutation,
   WebhookRunnableMutationInput,
   WebhookReplayReservation,
