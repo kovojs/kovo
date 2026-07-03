@@ -15,18 +15,19 @@ new boundaries:
 
 1. **The RLS provisioner enumerates `{owner, ownerVia-with-owner-parent}` base tables** and misses (a) VIEWS — a
    definer-semantics view (Postgres DEFAULT) granted to `kovo_reader` runs as the view OWNER (superuser) and bypasses
-   RLS *and* column-REVOKE (B1); (b) an ownerVia child whose parent is a NON-owner table gets the engine GRANT but its
+   RLS _and_ column-REVOKE (B1); (b) an ownerVia child whose parent is a NON-owner table gets the engine GRANT but its
    RLS policy is silently skipped — grant-without-RLS = default-allow (B2).
 2. **The DEC-B1 "sole-door" lint enumerates `{static import declarations from the runtime-db module specifier}`** and
    misses (a) an aliased re-export of `appRuntimeDbProvider` through the app's own `db.ts` (B3); (b) a `dynamic
-   import()` of the raw driver (B4) — both open an UNCONFINED superuser connection, anonymous leak on a green build.
+import()` of the raw driver (B4) — both open an UNCONFINED superuser connection, anonymous leak on a green build.
 
 The through-line, restated for this round: **a choke is sound only if every object reachable by the app roles is either
 a base table under FORCE RLS or a view/function PROVEN security-safe — and only if every path that can construct a DB
 handle is covered by the lint.** Both are completeness obligations the current implementation approximates by
 enumeration. The definer-view (B1) is the sharpest: it shows the engine's OWN default (views run as definer) is a
 shape-dependent bypass, so "the engine enforces shape-independently" (followup-6 §2 C4) is false without a provisioning
-+ posture gate on views/definer functions.
+
+- posture gate on views/definer functions.
 
 Baseline: fresh default-Postgres (PGlite) starters linked to the local framework, built + served with
 `KOVO_PARANOID=1`. Each finding independently reproduced by a skeptical verifier; all four roots re-verified first-hand

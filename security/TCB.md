@@ -44,32 +44,33 @@ they are not claimed as the verified TCB.
       "classification": "tcb",
       "wrapper": "securityClassifier",
       "decision": "server.readonly-query.assert"
-    },
+    }
+  ],
+  "entries": [
     {
       "id": "server.postgres-runtime.capability-closure-audit",
       "file": "packages/server/src/postgres-runtime.ts",
       "name": "auditPostgresReachableClosure",
       "kind": "postgres-capability-closure-audit",
       "classification": "tcb",
-      "wrapper": "securityClassifier",
-      "decision": "server.postgres-runtime.capability-closure-audit"
+      "lineBudget": 130
     },
     {
       "id": "server.postgres-runtime.request-scoped-db",
       "file": "packages/server/src/postgres-runtime.ts",
       "name": "createRuntimeClient",
       "kind": "pglite-least-privilege-runtime-path",
-      "classification": "tcb"
+      "classification": "tcb",
+      "lineBudget": 80
     },
     {
       "id": "server.postgres-runtime.internal-framework-capability",
       "file": "packages/server/src/postgres-runtime.ts",
       "name": "assertInternalPostgresRuntimeDbCapability",
       "kind": "pglite-superuser-capability-token-gate",
-      "classification": "tcb"
-    }
-  ],
-  "entries": [
+      "classification": "tcb",
+      "lineBudget": 20
+    },
     {
       "id": "core.security-markers.security-classifier",
       "file": "packages/core/src/internal/security-markers.ts",
