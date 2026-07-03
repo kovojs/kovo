@@ -53,9 +53,12 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
   - Acceptance: an app with `KOVO_DATABASE_URL=postgres://…` connects to an external Postgres and serves owner-scoped reads/writes; with the var unset the same app runs on embedded PGlite. Driver inferred from URL scheme (+ optional `KOVO_DB_DRIVER` override).
   - [x] Verified partial: `createPostgresAppRuntimeDb` now selects embedded PGlite by default and node-postgres Pool when a URL/driver requests it; the generated Postgres scaffold calls that helper instead of constructing PGlite directly.
     - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/create-kovo/templates/src/_kovo/app-runtime-db.ts`; `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-authz.test.ts packages/server/src/managed-db.test.ts --config ./vite.config.ts`.
-  - [ ] Remaining: run an actual external Postgres/Supabase/Neon-style end-to-end probe proving owner-scoped reads/writes over a real Pool.
-- [ ] **A2 — Document + test pool safety: `SET LOCAL ROLE` and `set_config(…, true)` are transaction-local, so a returned pooled connection carries no residual role/principal.** Kovo already wraps every scoped statement in a transaction (`postgresTransaction`, `managed-db.ts:1264-1275`), so RLS-on-a-pool is safe by construction — no per-checkout reset needed.
+  - [x] Verified partial: a local external Postgres cluster driven through a real `pg.Pool` serves owner-scoped reads/writes for separate principals over the node-postgres runtime path.
+    - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
+  - [ ] Remaining: scaffolded app env-var serve probe against external Postgres.
+- [x] **A2 — Document + test pool safety: `SET LOCAL ROLE` and `set_config(…, true)` are transaction-local, so a returned pooled connection carries no residual role/principal.** Kovo already wraps every scoped statement in a transaction (`postgresTransaction`, `managed-db.ts:1264-1275`), so RLS-on-a-pool is safe by construction — no per-checkout reset needed.
   - Acceptance: a probe (see §5) proves N interleaved requests as different principals over a shared `pg` Pool never leak another principal's rows; docs state statement-mode poolers (PgBouncer statement mode) are unsupported and transaction-mode poolers (incl. Supabase's) are supported.
+  - Evidence: `packages/server/src/postgres-external-probe.test.ts`, `site/content/guides/cli.md`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
 
 ### DEC-B — Split provisioning from runtime (Tier-1 #3)
 
@@ -63,12 +66,15 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
   - Acceptance: `kovo db provision` against a fresh external Postgres (admin URL) creates roles + tables + policies; the runtime app (least-priv URL) then serves; re-running provision is a no-op (idempotent). The runtime login role cannot `CREATE ROLE`/`ALTER … FORCE RLS` (proven by attempting it → permission denied).
   - [x] Verified partial: the CLI now dispatches `kovo db provision|migrate|check`, loads `src/schema.ts`, routes external provision/migration through `KOVO_ADMIN_DATABASE_URL` / `--admin-database-url`, and proves the command contract on PGlite without doing DDL from runtime boot.
     - Evidence: `packages/cli/src/commands/db.ts`, `packages/cli/src/index.kovo-db.test.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`.
-  - [ ] Remaining: external Postgres provision probe, least-priv runtime probe, and real migration runner integration.
-- [ ] **B2 — Role adoption for locked-down providers via optional `KOVO_DB_READER_ROLE` / `KOVO_DB_WRITER_ROLE`.** When set, provision SKIPS `CREATE ROLE` and does only the table-ownership-level DDL (`FORCE RLS`, `CREATE POLICY`, `REVOKE/GRANT`); the roles are pre-created by a DBA/IaC. Required in environments that forbid `CREATE ROLE` (Supabase/some Neon/enterprise), that centrally own roles, or that run multiple Kovo apps on one cluster (name collision). The runtime login role must be `GRANT`ed membership of both roles (framework does this in the default path; the DBA must in the adopted path) — documented.
+  - [x] Verified partial: external Postgres provisioning is idempotent, the least-privilege runtime serves owner-scoped reads/writes after provision, and the runtime login cannot `CREATE ROLE` or `ALTER TABLE ... FORCE ROW LEVEL SECURITY`.
+    - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
+  - [ ] Remaining: real migration runner integration.
+- [x] **B2 — Role adoption for locked-down providers via optional `KOVO_DB_READER_ROLE` / `KOVO_DB_WRITER_ROLE`.** When set, provision SKIPS `CREATE ROLE` and does only the table-ownership-level DDL (`FORCE RLS`, `CREATE POLICY`, `REVOKE/GRANT`); the roles are pre-created by a DBA/IaC. Required in environments that forbid `CREATE ROLE` (Supabase/some Neon/enterprise), that centrally own roles, or that run multiple Kovo apps on one cluster (name collision). The runtime login role must be `GRANT`ed membership of both roles (framework does this in the default path; the DBA must in the adopted path) — documented.
   - Acceptance: with the two vars set and `CREATE ROLE` revoked from the admin identity, `kovo db provision` still succeeds using the pre-created roles; with them unset and `CREATEROLE` present, the framework creates `kovo_reader`/`kovo_writer` and grants the login role membership.
   - [x] Verified partial: env-provided reader/writer roles are adopted without `CREATE ROLE`; missing adopted roles fail closed instead of silently creating or falling back to defaults; the CLI guide documents the adopted-role contract.
     - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/server/src/postgres-runtime.test.ts`, `site/content/guides/cli.md`; `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts --config ./vite.config.ts`; `pnpm exec tsc --ignoreConfig --noEmit --pretty false --target ES2024 --module NodeNext --moduleResolution NodeNext --strict --exactOptionalPropertyTypes --noUncheckedIndexedAccess --skipLibCheck --allowImportingTsExtensions --types node,vitest packages/server/src/postgres-runtime.ts packages/server/src/postgres-runtime.test.ts`.
-  - [ ] Remaining: prove the adopted-role path against an external Postgres identity that cannot `CREATE ROLE`.
+  - [x] Verified external: an external Postgres admin identity without `CREATEROLE` adopts pre-created reader/writer roles and the runtime login serves owner-scoped reads/writes through those roles.
+    - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
 
 ### DEC-C — Migrations: migrate tables, re-assert policies (Tier-1 #2)
 
@@ -90,7 +96,8 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
     - Evidence: `packages/server/src/postgres-runtime.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-authz.test.ts packages/server/src/managed-db.test.ts --config ./vite.config.ts`.
   - [x] Verified partial: standalone `kovo db check` runs the same posture report and exits nonzero on an unprovisioned PGlite store.
     - Evidence: `packages/cli/src/index.kovo-db.test.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`.
-  - [ ] Remaining: external least-privilege boot refusal.
+  - [x] Verified external: a real Postgres database with the table present but missing Kovo RLS posture reports `KV433_*` issues and `createPostgresAppRuntimeDb(...).ready` rejects before serving.
+    - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
 
 ### DEC-E — Framework-owned enforcement module (I4; kills papercuts-29 P4)
 
@@ -115,7 +122,9 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
     - Evidence: `packages/server/src/managed-db.ts`, `packages/server/src/guards.ts`, `packages/server/src/postgres-runtime.ts`, `site/content/guides/security.md`; focused G1 vitest command covering runtime, managed-db, guard, explain, and diagnostics tests; strict touched-file `tsc`.
   - [x] Verified partial: public API/export/docs surfaces accept the new audit drain/types and `kovo explain --capabilities` renders a `crossOwnerRead` capability fact.
     - Evidence: API/app/api-ref/public-packages vitest command; `pnpm run check:api-surface`; `node site/scripts/code-snippets-check.mjs`; `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
-  - [ ] Remaining: static source/graph proof that every authored `crossOwnerRead` call is dominated by a `role('admin')` endpoint/query guard, plus an external managed-Postgres probe for the admin role/policy path.
+  - [x] Verified partial: static analysis requires authored `crossOwnerRead(...)` calls in endpoint/query bodies to be dominated by an explicit `guards.role("admin")` or `guards.all(...guards.role("admin")...)` guard, and fails closed for missing, non-admin, dynamic, aliased, shadowed, or helper-hidden cases.
+    - Evidence: `packages/drizzle/src/static.ts`, `packages/drizzle/src/cross-owner-read-static.test.ts`; `pnpm exec vitest --run packages/drizzle/src/authz-census-static.test.ts packages/drizzle/src/cross-owner-read-static.test.ts --config ./vite.config.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-check.test.ts --config ./vite.config.ts`; `pnpm --filter @kovojs/drizzle run build:dist`.
+  - [ ] Remaining: external managed-Postgres probe for the admin role/policy path.
 - [x] **G2 (naming cleanup, separate from this plan's core) — rename the write escape `adminAssign(...)` → `trustedAssign(...)`, pairing it with `trustedSql` under a `trusted*` = "audited by-construction-guard bypass, provenance vouched-for" convention.** `adminAssign` is the lone persona-named escape in an otherwise capability/danger-named family (`trustedSql`/`unsafeRegex`/`rawRead`/`compareAndSet`/`accept.unverified`); the preview-bias rule (no legacy preservation) permits the rename. Hard break, no alias.
   - Acceptance: `grep adminAssign` returns 0 in shipped source; the escape is `trustedAssign`; docs + `kovo explain --capabilities` reflect it.
   - Evidence: `rg -n "adminAssign|AdminAssign|admin-assign|admin assignment" packages site spec docs public-packages.json` returned no matches; `pnpm exec vitest --run packages/server/src/write-governance.test.ts packages/server/src/managed-db.test.ts packages/drizzle/src/index.mass-assignment.test.ts packages/drizzle/src/index.identity-resolver.test.ts packages/core/src/diagnostics.test.ts --config ./vite.config.ts`; `pnpm run check:api-surface`; `pnpm run check:vp`.
@@ -159,14 +168,17 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
 
 ## 5. Probes to run before committing (verify the two load-bearing claims)
 
-- [ ] **Probe-1 — CREATE ROLE / FORCE RLS at boot genuinely fails as a non-superuser managed role** (motivates the provision/runtime split). Create a `NOSUPERUSER NOCREATEROLE` role in PGlite (or a real PG), `SET ROLE` to it, attempt `CREATE ROLE x` and `ALTER TABLE t FORCE ROW LEVEL SECURITY` ⇒ expect `permission denied`. Confirms DEC-B is necessary, not cosmetic.
-- [ ] **Probe-2 — transaction-local role+principal survives a real pooled checkout/return without leaking** (validates DEC-A2 / I1). Over a `pg` Pool (or PGlite proxy), interleave requests as principals A and B through `SET LOCAL ROLE` + `set_config(…, true)` in transactions; assert A never sees B's rows and a fresh checkout has no residual `current_setting('kovo.principal')`.
+- [x] **Probe-1 — CREATE ROLE / FORCE RLS at boot genuinely fails as a non-superuser managed role** (motivates the provision/runtime split). Create a `NOSUPERUSER NOCREATEROLE` role in PGlite (or a real PG), `SET ROLE` to it, attempt `CREATE ROLE x` and `ALTER TABLE t FORCE ROW LEVEL SECURITY` ⇒ expect `permission denied`. Confirms DEC-B is necessary, not cosmetic.
+  - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
+- [x] **Probe-2 — transaction-local role+principal survives a real pooled checkout/return without leaking** (validates DEC-A2 / I1). Over a `pg` Pool (or PGlite proxy), interleave requests as principals A and B through `SET LOCAL ROLE` + `set_config(…, true)` in transactions; assert A never sees B's rows and a fresh checkout has no residual `current_setting('kovo.principal')`.
+  - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
 
 ## 6. Acceptance (v1 Postgres-deployable)
 
 - [ ] A scaffolded app deploys against an EXTERNAL managed Postgres: `kovo db provision` (admin URL) then serve (least-priv URL); owner-scoped isolation holds end-to-end; the runtime role cannot escalate.
 - [ ] Schema evolution works on a DB with data: `kovo db migrate` applies a reviewable, reversible table migration; provision re-asserts policies; the posture check passes.
-- [ ] Un-provisioned / stale DB ⇒ the app refuses to serve (D1), never fails open.
+- [x] Un-provisioned / stale DB ⇒ the app refuses to serve (D1), never fails open.
+  - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
 - [ ] Adding an owner table touches only `schema.ts` (E1); no `_kovo/*` hand-edits.
 - [ ] An empty scoped read is debuggable (F1 names principal-unset vs RLS-filtered vs empty); an admin-guarded endpoint reads across owners (G1); isolation is unit-testable via `withPrincipal` (H1).
 - [ ] A team/org table via `authzPolicy: sql\`…\`` is FORCE-RLS + policy-provisioned and posture-verified, with the documented escape example shipped (I1/I2).
