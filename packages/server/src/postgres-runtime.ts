@@ -162,6 +162,20 @@ export interface KovoPostgresMigrationRunReport {
   skipped: readonly string[];
 }
 
+/** One generated, reviewable Postgres migration plan. */
+export interface KovoPostgresMigrationPlan {
+  /** Runtime driver used to inspect the current database. */
+  driver: KovoPostgresResolvedRuntimeDriver;
+  /** Reversible SQL for rolling back the generated additive changes. */
+  downSql: string;
+  /** True when the current database already matches the schema for supported additive changes. */
+  empty: boolean;
+  /** Human-readable summary of generated operations. */
+  operations: readonly string[];
+  /** Reviewable SQL to apply through `kovo db migrate`. */
+  upSql: string;
+}
+
 /** Created app database runtime used by generated `src/_kovo/app-runtime-db.ts` modules. */
 export interface KovoPostgresAppRuntimeDb {
   db(request?: unknown): KovoPostgresRuntimeDb;
@@ -186,6 +200,9 @@ export interface KovoPostgresMigrateOptions extends KovoPostgresAppRuntimeOption
   /** Reviewed SQL migrations to apply before Kovo reasserts RLS policies/grants. */
   migrations: readonly KovoPostgresMigration[];
 }
+
+/** Options for planning an additive reviewed SQL migration from the current DB to `schema.ts`. */
+export interface KovoPostgresMigrationPlanOptions extends KovoPostgresAppRuntimeOptions {}
 
 /** One failing Postgres schema/RLS/grant posture check. */
 export interface KovoPostgresPostureIssue {
@@ -315,6 +332,28 @@ export async function migratePostgresAppDb(
       schemaTables,
     });
     return { ...migrations, posture };
+  } finally {
+    await client.close();
+  }
+}
+
+/**
+ * Diff the current Postgres schema against the app Drizzle schema and emit a conservative,
+ * reviewable up/down migration (SPEC §10.3). This generator intentionally covers additive table
+ * and column changes only; destructive edits, renames, and data backfills stay hand-authored.
+ */
+export async function planPostgresAppDbMigration(
+  options: KovoPostgresMigrationPlanOptions,
+): Promise<KovoPostgresMigrationPlan> {
+  const config = resolvePostgresRuntimeConfig({
+    ...options,
+    postureCheckOnBoot: false,
+    provisionOnBoot: false,
+  });
+  const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
+  const client = createRuntimeClient(config);
+  try {
+    return await planRuntimeDbMigration(client.sql, schemaTables, config.driver);
   } finally {
     await client.close();
   }
@@ -835,6 +874,81 @@ function schemaDdl(tables: readonly PgTable[]): string {
   ].join('\n');
 }
 
+interface ExistingPostgresTable {
+  columns: ReadonlySet<string>;
+  schema: string;
+  table: string;
+}
+
+async function planRuntimeDbMigration(
+  client: RuntimeSqlClient,
+  schemaTables: readonly PgTable[],
+  driver: KovoPostgresResolvedRuntimeDriver,
+): Promise<KovoPostgresMigrationPlan> {
+  const existingTables = await currentPostgresTables(client);
+  const up: string[] = [];
+  const down: string[] = [];
+  const operations: string[] = [];
+
+  for (const table of schemaTables) {
+    const config = getTableConfig(table);
+    const schemaName = tableSchemaName(config);
+    const existing = existingTables.get(`${schemaName}.${config.name}`);
+    if (existing === undefined) {
+      up.push(createTableMigrationDdl(table));
+      down.unshift(`DROP TABLE ${quoteTable(config)};`);
+      operations.push(`create table ${schemaName}.${config.name}`);
+      continue;
+    }
+
+    for (const column of config.columns) {
+      if (existing.columns.has(column.name)) continue;
+      up.push(addColumnMigrationDdl(table, column));
+      down.unshift(`ALTER TABLE ${quoteTable(config)} DROP COLUMN ${quoteIdent(column.name)};`);
+      operations.push(`add column ${schemaName}.${config.name}.${column.name}`);
+    }
+  }
+
+  const empty = up.length === 0;
+  return {
+    downSql: empty ? '-- No generated schema changes to roll back.\n' : `${down.join('\n')}\n`,
+    driver,
+    empty,
+    operations,
+    upSql: empty ? '-- No supported additive schema changes detected.\n' : `${up.join('\n')}\n`,
+  };
+}
+
+async function currentPostgresTables(
+  client: RuntimeSqlClient,
+): Promise<ReadonlyMap<string, ExistingPostgresTable>> {
+  const tables = await client.query<{ table_name: string; table_schema: string }>(
+    [
+      'SELECT table_schema, table_name',
+      'FROM information_schema.tables',
+      "WHERE table_schema NOT IN ('information_schema', 'pg_catalog')",
+      "AND table_type = 'BASE TABLE'",
+    ].join(' '),
+  );
+  const byName = new Map<string, ExistingPostgresTable>();
+  for (const row of tables.rows) {
+    const columns = await client.query<{ column_name: string }>(
+      [
+        'SELECT column_name',
+        'FROM information_schema.columns',
+        'WHERE table_schema = $1 AND table_name = $2',
+      ].join(' '),
+      [row.table_schema, row.table_name],
+    );
+    byName.set(`${row.table_schema}.${row.table_name}`, {
+      columns: new Set(columns.rows.map((column) => column.column_name)),
+      schema: row.table_schema,
+      table: row.table_name,
+    });
+  }
+  return byName;
+}
+
 function createTableDdl(table: PgTable): string {
   const config = getTableConfig(table);
   const definitions = [
@@ -844,11 +958,21 @@ function createTableDdl(table: PgTable): string {
   return `CREATE TABLE IF NOT EXISTS ${quoteTable(config)} (${definitions.join(', ')});`;
 }
 
+function createTableMigrationDdl(table: PgTable): string {
+  return createTableDdl(table).replace('CREATE TABLE IF NOT EXISTS', 'CREATE TABLE');
+}
+
 function addColumnDdl(table: PgTable, column: PgColumn): string {
   return `ALTER TABLE ${quoteTable(getTableConfig(table))} ADD COLUMN IF NOT EXISTS ${columnDdl(
     column,
     { createTable: false },
   )};`;
+}
+
+function addColumnMigrationDdl(table: PgTable, column: PgColumn): string {
+  return `ALTER TABLE ${quoteTable(getTableConfig(table))} ADD COLUMN ${columnDdl(column, {
+    createTable: false,
+  })};`;
 }
 
 function columnDdl(column: PgColumn, options: { createTable: boolean }): string {
@@ -1426,6 +1550,11 @@ function pgTablePolicyNames(table: unknown): string[] {
 
 function normalizePolicyTable(table: string): string {
   return table.includes('.') ? table : `public.${table}`;
+}
+
+function tableSchemaName(config: PgTableConfig): string {
+  const schema = (config as { schema?: unknown }).schema;
+  return typeof schema === 'string' && schema !== '' ? schema : 'public';
 }
 
 function postgresScopedClientOptions(

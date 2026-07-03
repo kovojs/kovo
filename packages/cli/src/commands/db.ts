@@ -1,4 +1,4 @@
-import { readdir, readFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, writeFile } from 'node:fs/promises';
 import { dirname, extname, relative, resolve } from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -6,8 +6,10 @@ import {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
   migratePostgresAppDb,
+  planPostgresAppDbMigration,
   provisionPostgresAppDb,
   type KovoPostgresAppRuntimeOptions,
+  type KovoPostgresMigrationPlan,
   type KovoPostgresMigration,
   type KovoPostgresMigrationRunReport,
   type KovoPostgresPostureReport,
@@ -23,7 +25,8 @@ import {
 } from '../commands-manifest.js';
 import { dbOutputVersion, stableValue, type CliCommandResult } from '../shared.js';
 
-type KovoDbAction = 'check' | 'migrate' | 'provision';
+type KovoDbAction = 'check' | 'generate' | 'migrate' | 'provision';
+let generatedMigrationSequence = 0;
 
 interface KovoDbOptions {
   action: KovoDbAction;
@@ -49,7 +52,10 @@ export function parseDbArgs(args: readonly string[]): DbArgParseResult {
   }
   const action = parseDbAction(actionValue);
   if (action === undefined) {
-    return { message: `kovo: db requires provision, migrate, or check.\n${dbUsage()}`, ok: false };
+    return {
+      message: `kovo: db requires provision, migrate, generate, or check.\n${dbUsage()}`,
+      ok: false,
+    };
   }
 
   const driverValue = parsedStringOption(parsed.value, '--driver');
@@ -84,6 +90,9 @@ export function parseDbArgs(args: readonly string[]): DbArgParseResult {
 export async function runDbCommand(options: KovoDbOptions): Promise<CliCommandResult> {
   try {
     const schema = await loadSchemaModule(options.schemaPath);
+    if (options.action === 'generate') {
+      return dbGenerateCommandResult(await runDbGenerate({ ...options, schema }));
+    }
     const report = await runDbAction({ ...options, schema });
     return dbCommandResult(options.action, report);
   } catch (error) {
@@ -106,7 +115,9 @@ function dbUsage(): string {
 }
 
 function parseDbAction(value: string | undefined): KovoDbAction | undefined {
-  if (value === 'check' || value === 'migrate' || value === 'provision') return value;
+  if (value === 'check' || value === 'generate' || value === 'migrate' || value === 'provision') {
+    return value;
+  }
   return undefined;
 }
 
@@ -243,6 +254,18 @@ async function runDbMigrate(
   return { migrations: migrated, posture: migrated.posture };
 }
 
+async function runDbGenerate(
+  options: KovoDbOptions & { schema: Record<string, unknown> },
+): Promise<DbGenerateReport> {
+  const migrationsDir = options.migrationsDir ?? 'migrations';
+  const plan = await planPostgresAppDbMigration(
+    runtimeOptions(options, generateDriverOptions(options)),
+  );
+  const files =
+    plan.empty === true ? undefined : await writeGeneratedMigrationFiles(migrationsDir, plan);
+  return files === undefined ? { plan } : { files, plan };
+}
+
 async function runDbCheck(
   options: KovoDbOptions & { schema: Record<string, unknown> },
 ): Promise<DbRunReport> {
@@ -268,7 +291,9 @@ async function loadMigrationFiles(migrationsDir: string): Promise<KovoPostgresMi
     throw error;
   }
   const sqlFiles = entries
-    .filter((entry) => entry.isFile() && entry.name.endsWith('.sql'))
+    .filter(
+      (entry) => entry.isFile() && entry.name.endsWith('.sql') && !entry.name.endsWith('.down.sql'),
+    )
     .map((entry) => entry.name)
     .sort((left, right) => left.localeCompare(right));
   return await Promise.all(
@@ -320,6 +345,23 @@ function shouldMigrateEmbeddedPglite(options: KovoDbOptions): boolean {
   return shouldCheckEmbeddedPglite(options);
 }
 
+function generateDriverOptions(options: KovoDbOptions): Partial<KovoPostgresAppRuntimeOptions> {
+  const driver = options.driver ?? process.env.KOVO_DB_DRIVER;
+  if (driver === 'pglite' || shouldCheckEmbeddedPglite(options)) return { driver: 'pglite' };
+  const databaseUrl = nonEmptyValue(
+    options.adminDatabaseUrl ??
+      process.env.KOVO_ADMIN_DATABASE_URL ??
+      options.databaseUrl ??
+      process.env.KOVO_DATABASE_URL,
+  );
+  if (databaseUrl === undefined) {
+    throw new Error(
+      'kovo db generate requires KOVO_ADMIN_DATABASE_URL, KOVO_DATABASE_URL, --admin-database-url, --database-url, or --driver pglite.',
+    );
+  }
+  return { databaseUrl, driver: 'node-postgres' };
+}
+
 function nonEmptyValue(value: string | undefined): string | undefined {
   return value === undefined || value === '' ? undefined : value;
 }
@@ -327,6 +369,16 @@ function nonEmptyValue(value: string | undefined): string | undefined {
 interface DbRunReport {
   migrations?: KovoPostgresMigrationRunReport;
   posture: KovoPostgresPostureReport;
+}
+
+interface GeneratedMigrationFiles {
+  down: string;
+  up: string;
+}
+
+interface DbGenerateReport {
+  files?: GeneratedMigrationFiles;
+  plan: KovoPostgresMigrationPlan;
 }
 
 function dbCommandResult(action: KovoDbAction, report: DbRunReport): CliCommandResult {
@@ -359,6 +411,55 @@ function dbCommandResult(action: KovoDbAction, report: DbRunReport): CliCommandR
         summary,
       ].join('\n') + '\n',
   };
+}
+
+function dbGenerateCommandResult(report: DbGenerateReport): CliCommandResult {
+  return {
+    exitCode: 0,
+    output:
+      [
+        dbOutputVersion,
+        'ACTION generate',
+        `DRIVER ${report.plan.driver}`,
+        `STATUS ${report.plan.empty ? 'empty' : 'generated'}`,
+        ...report.plan.operations.map((operation) => `OPERATION ${stableValue(operation)}`),
+        ...(report.files === undefined
+          ? []
+          : [
+              `GENERATED up=${stableValue(report.files.up)}`,
+              `GENERATED down=${stableValue(report.files.down)}`,
+            ]),
+        `SUMMARY operations=${report.plan.operations.length}`,
+      ].join('\n') + '\n',
+  };
+}
+
+async function writeGeneratedMigrationFiles(
+  migrationsDir: string,
+  plan: KovoPostgresMigrationPlan,
+): Promise<GeneratedMigrationFiles> {
+  await mkdir(migrationsDir, { recursive: true });
+  const base = `${migrationTimestamp()}_generated`;
+  const up = resolve(migrationsDir, `${base}.up.sql`);
+  const down = resolve(migrationsDir, `${base}.down.sql`);
+  await writeFile(up, generatedMigrationText('up', plan.upSql), 'utf8');
+  await writeFile(down, generatedMigrationText('down', plan.downSql), 'utf8');
+  return { down, up };
+}
+
+function generatedMigrationText(direction: 'down' | 'up', sql: string): string {
+  return [
+    `-- Generated by kovo db generate (${direction}). Review before applying.`,
+    '-- Add data backfills, destructive changes, and rename/drop decisions by hand.',
+    sql.trimEnd(),
+    '',
+  ].join('\n');
+}
+
+function migrationTimestamp(): string {
+  generatedMigrationSequence += 1;
+  const timestamp = new Date().toISOString().replace(/\D/g, '');
+  return `${timestamp}_${String(generatedMigrationSequence).padStart(3, '0')}`;
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

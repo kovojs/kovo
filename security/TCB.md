@@ -290,6 +290,27 @@ they are not claimed as the verified TCB.
       "lineBudget": 25
     },
     {
+      "id": "server.postgres-runtime.provision",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "provisionPostgresAppDb",
+      "kind": "postgres-rls-policy-grant-provisioner",
+      "classification": "inventory-classifier"
+    },
+    {
+      "id": "server.postgres-runtime.migrate",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "migratePostgresAppDb",
+      "kind": "postgres-reviewed-migration-runner",
+      "classification": "inventory-classifier"
+    },
+    {
+      "id": "server.postgres-runtime.generate-migration",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "planPostgresAppDbMigration",
+      "kind": "postgres-reviewed-migration-generator",
+      "classification": "inventory-classifier"
+    },
+    {
       "id": "server.sql-safe-handle.enforce-managed-sql",
       "file": "packages/server/src/sql-safe-handle.ts",
       "name": "enforceManagedSql",

@@ -57,7 +57,7 @@ export const BUILD_USAGE =
 
 /** @internal Usage line emitted for `kovo db` (see `dbUsage`). */
 export const DB_USAGE =
-  'usage: kovo db provision|migrate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]';
+  'usage: kovo db provision|migrate|generate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]';
 
 /** @internal Usage forms emitted for `kovo compile` (see `compileUsage`). */
 export const COMPILE_USAGE = [
@@ -598,6 +598,11 @@ export const COMMANDS_MANIFEST = [
           'Apply reviewed SQL migrations transactionally, then reassert derived RLS policies, grants, and the schema fingerprint.',
       },
       {
+        flag: 'generate',
+        description:
+          'Generate reviewable additive up/down SQL files by diffing the current database against the schema module.',
+      },
+      {
         flag: 'check',
         description:
           'Verify the existing database has the expected schema fingerprint, forced RLS, policies, and secret-column grants.',
@@ -630,6 +635,7 @@ export const COMMANDS_MANIFEST = [
     ],
     examples: [
       'kovo db provision --schema src/schema.ts',
+      'kovo db generate --migrations migrations',
       'kovo db migrate --migrations migrations',
       'KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision',
       'KOVO_DATABASE_URL=postgres://app@db/app kovo db check',

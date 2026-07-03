@@ -48,7 +48,25 @@ const probeNotes = pgTable(
   }),
 );
 
+const probeNotesV2 = pgTable(
+  'kovo_ext_probe_notes',
+  {
+    classified: text('classified').notNull().default(''),
+    id: text('id').primaryKey(),
+    ownerId: text('owner_id').notNull(),
+    summary: text('summary'),
+    title: text('title').notNull(),
+  },
+  kovo({
+    domain: 'external-postgres-probe-notes',
+    key: 'id',
+    owner: 'ownerId',
+    secret: ['classified'],
+  }),
+);
+
 const schema = { probeNotes };
+const evolvedSchema = { probeNotes: probeNotesV2 };
 const createNotesMigration = {
   id: '001-create-probe-notes.sql',
   sql: `
@@ -59,6 +77,10 @@ const createNotesMigration = {
       title text NOT NULL
     );
   `,
+};
+const addSummaryMigration = {
+  id: '002-add-note-summary.sql',
+  sql: 'ALTER TABLE kovo_ext_probe_notes ADD COLUMN summary text;',
 };
 
 const probeRun = `kovo_ext_${process.pid}_${Date.now()}`;
@@ -191,6 +213,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     await expectPooledScopeDoesNotLeak(defaultRuntimeUrl, 'kovo_writer');
     await expectSecretColumnsDenied(defaultRuntimeUrl, 'kovo_reader', 'kovo_admin');
     await expectCrossOwnerRead(defaultRuntimeUrl);
+    await expectSchemaEvolutionWithData(defaultAdminUrl, defaultRuntimeUrl);
 
     await expectPermissionDenied(
       cluster.url(adoptedDb, adoptedAdmin),
@@ -272,6 +295,37 @@ async function expectOwnerIsolation(
     await expect(
       u1Db.select().from(probeNotes).where(eq(probeNotes.ownerId, 'u2')),
     ).resolves.toEqual([]);
+  } finally {
+    await runtime.close();
+  }
+}
+
+async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: string): Promise<void> {
+  const evolved = await migratePostgresAppDb({
+    crossOwnerReadTables: ['kovo_ext_probe_notes'],
+    databaseUrl: adminUrl,
+    migrations: [createNotesMigration, addSummaryMigration],
+    schema: evolvedSchema,
+  });
+  expect(evolved.applied).toEqual(['002-add-note-summary.sql']);
+  expect(evolved.skipped).toEqual(['001-create-probe-notes.sql']);
+  expect(evolved.posture.ok).toBe(true);
+  expect(evolved.posture.issues).toEqual([]);
+
+  const runtime = createPostgresAppRuntimeDb({
+    crossOwnerReadTables: ['kovo_ext_probe_notes'],
+    databaseUrl: runtimeUrl,
+    schema: evolvedSchema,
+  });
+  try {
+    await runtime.ready;
+    const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+    await expect(
+      u1Db
+        .select({ id: probeNotesV2.id, summary: probeNotesV2.summary, title: probeNotesV2.title })
+        .from(probeNotesV2)
+        .where(eq(probeNotesV2.id, 'u1-note')),
+    ).resolves.toEqual([{ id: 'u1-note', summary: null, title: 'One' }]);
   } finally {
     await runtime.close();
   }

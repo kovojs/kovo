@@ -134,6 +134,7 @@ export {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
   migratePostgresAppDb,
+  planPostgresAppDbMigration,
   provisionPostgresAppDb,
 } from '../postgres-runtime.js';
 export type {
@@ -166,6 +167,8 @@ export type {
   KovoPostgresAppRuntimeOptions,
   KovoPostgresMigrateOptions,
   KovoPostgresMigration,
+  KovoPostgresMigrationPlan,
+  KovoPostgresMigrationPlanOptions,
   KovoPostgresMigrationRunReport,
   KovoPostgresPostureIssue,
   KovoPostgresPostureReport,

@@ -168,6 +168,7 @@ External Postgres migration/provisioning uses a privileged admin URL; runtime/ch
 least-privilege app URL.
 
 ```sh
+kovo db generate --migrations migrations
 kovo db migrate --migrations migrations
 KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision
 KOVO_DATABASE_URL=postgres://app@db/app kovo db check
@@ -185,9 +186,9 @@ statement mode is not, because it cannot preserve the transaction boundary that 
 and principal.
 
 `kovo db check` exits non-zero when posture is missing or stale, so production boot and CI can fail
-closed instead of serving an unprotected table. Automatic migration generation is still a roadmap
-item; `kovo db migrate` applies reviewed `.sql` files and then reasserts the derived runtime posture
-against the schema you ship.
+closed instead of serving an unprotected table. `kovo db generate` emits conservative additive
+`*.up.sql` / `*.down.sql` files for missing tables and columns. Review them before `kovo db migrate`;
+renames, destructive changes, and data backfills stay hand-authored.
 
 ### `kovo compile` — emit compiler-backed artifacts
 

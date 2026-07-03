@@ -1,4 +1,12 @@
-import { mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  mkdirSync,
+  mkdtempSync,
+  readdirSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -150,13 +158,113 @@ describe('kovo db', () => {
     expect(changed.stderr).toContain('KV433_MIGRATION_CHECKSUM');
   });
 
+  it('generates reviewable up/down SQL and migrates only the up file', async () => {
+    const { dataDir, migrationsDir, schemaPath } = writeDbCommandFixture('generated');
+
+    const generate = await captureWrites(() =>
+      mainAsync([
+        'db',
+        'generate',
+        '--schema',
+        schemaPath,
+        '--driver',
+        'pglite',
+        '--data-dir',
+        dataDir,
+        '--migrations',
+        migrationsDir,
+      ]),
+    );
+
+    expect(generate.result).toBe(0);
+    expect(generate.stderr).toBe('');
+    expect(generate.stdout).toContain('kovo-db/v1\nACTION generate\nDRIVER pglite\n');
+    expect(generate.stdout).toContain('STATUS generated\n');
+    expect(generate.stdout).toContain('OPERATION "create table public.kovo_cli_db_notes"\n');
+    expect(generate.stdout).toContain('SUMMARY operations=1\n');
+
+    const files = readdirSync(migrationsDir).sort();
+    const upFile = files.find((file) => file.endsWith('.up.sql'));
+    const downFile = files.find((file) => file.endsWith('.down.sql'));
+    expect(upFile).toBeTruthy();
+    expect(downFile).toBeTruthy();
+    expect(readFileSync(join(migrationsDir, upFile ?? ''), 'utf8')).toContain(
+      'CREATE TABLE "kovo_cli_db_notes"',
+    );
+    expect(readFileSync(join(migrationsDir, downFile ?? ''), 'utf8')).toContain(
+      'DROP TABLE "kovo_cli_db_notes";',
+    );
+
+    const migrate = await captureWrites(() =>
+      mainAsync([
+        'db',
+        'migrate',
+        '--schema',
+        schemaPath,
+        '--driver',
+        'pglite',
+        '--data-dir',
+        dataDir,
+        '--migrations',
+        migrationsDir,
+      ]),
+    );
+
+    expect(migrate.result).toBe(0);
+    expect(migrate.stderr).toBe('');
+    expect(migrate.stdout).toContain(`MIGRATION status=applied id="${upFile}"\n`);
+    expect(migrate.stdout).not.toContain(downFile ?? 'missing-down-file');
+    expect(migrate.stdout).toContain('SUMMARY migrationsApplied=1 migrationsSkipped=0 issues=0\n');
+
+    writeFileSync(
+      schemaPath,
+      readFileSync(schemaPath, 'utf8').replace(
+        "    title: text('title').notNull(),",
+        "    title: text('title').notNull(),\n    summary: text('summary'),",
+      ),
+      'utf8',
+    );
+
+    const addColumn = await captureWrites(() =>
+      mainAsync([
+        'db',
+        'generate',
+        '--schema',
+        schemaPath,
+        '--driver',
+        'pglite',
+        '--data-dir',
+        dataDir,
+        '--migrations',
+        migrationsDir,
+      ]),
+    );
+    expect(addColumn.result).toBe(0);
+    expect(addColumn.stderr).toBe('');
+    expect(addColumn.stdout).toContain('OPERATION "add column public.kovo_cli_db_notes.summary"\n');
+
+    const afterColumnFiles = readdirSync(migrationsDir).sort();
+    const newUpFile = afterColumnFiles.find((file) => file.endsWith('.up.sql') && file !== upFile);
+    const newDownFile = afterColumnFiles.find(
+      (file) => file.endsWith('.down.sql') && file !== downFile,
+    );
+    expect(newUpFile).toBeTruthy();
+    expect(newDownFile).toBeTruthy();
+    expect(readFileSync(join(migrationsDir, newUpFile ?? ''), 'utf8')).toContain(
+      'ALTER TABLE "kovo_cli_db_notes" ADD COLUMN "summary" text;',
+    );
+    expect(readFileSync(join(migrationsDir, newDownFile ?? ''), 'utf8')).toContain(
+      'ALTER TABLE "kovo_cli_db_notes" DROP COLUMN "summary";',
+    );
+  });
+
   it('prints usage for missing db actions', async () => {
     const output = await captureWrites(() => mainAsync(['db']));
 
     expect(output.result).toBe(1);
     expect(output.stdout).toBe('');
-    expect(output.stderr).toContain('kovo: db requires provision, migrate, or check.');
-    expect(output.stderr).toContain('usage: kovo db provision|migrate|check');
+    expect(output.stderr).toContain('kovo: db requires provision, migrate, generate, or check.');
+    expect(output.stderr).toContain('usage: kovo db provision|migrate|generate|check');
   });
 
   function writeDbCommandFixture(name: string): {

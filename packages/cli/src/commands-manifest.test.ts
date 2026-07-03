@@ -119,7 +119,7 @@ describe('commands manifest', () => {
       'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache]',
     );
     expect(DB_USAGE).toBe(
-      'usage: kovo db provision|migrate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]',
+      'usage: kovo db provision|migrate|generate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]',
     );
     expect(COMPILE_USAGE[0]).toBe(
       'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--no-cache] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>]',

@@ -80,18 +80,21 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
 
 ### DEC-C — Migrations: migrate tables, re-assert policies (Tier-1 #2)
 
-- [ ] **C1 — `kovo db migrate` generates/applies table-structure migrations from `schema.ts` (drizzle-kit table diff or Kovo-generated up/down), applied transactionally.** Data-bearing structure changes (ALTER TYPE, drop/rename column, backfills) are hand-authorable migrations; the framework does not silently `ADD COLUMN IF NOT EXISTS` against a real DB.
+- [x] **C1 — `kovo db migrate` generates/applies table-structure migrations from `schema.ts` (drizzle-kit table diff or Kovo-generated up/down), applied transactionally.** Data-bearing structure changes (ALTER TYPE, drop/rename column, backfills) are hand-authorable migrations; the framework does not silently `ADD COLUMN IF NOT EXISTS` against a real DB.
   - Acceptance: adding a column + a data backfill to `schema.ts` produces a reviewable migration that applies cleanly and is reversible; the boot posture check (I3/DEC-D) recognizes the new schema version.
   - [x] Verified partial: `kovo db migrate` loads sorted reviewed `.sql` files from `migrations/` / `--migrations`, records checksums in `_kovo_migrations`, idempotently skips already-applied files, and fails if an applied file changes.
     - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/cli/src/commands/db.ts`, `packages/cli/src/index.kovo-db.test.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`.
   - [x] Verified partial: the reviewed migration runner applies, skips, and checksum-fails against a real external Postgres database before posture reassertion.
     - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
-  - [ ] Remaining: automatic migration generation/diffing from `schema.ts` and reversible down migration ergonomics.
-- [ ] **C2 — After every migration, provision re-derives and re-applies the FULL policy/grant set from the current schema (idempotent re-assertion, no policy diff).** Adding a `secret:` column or changing an `owner:`/`ownerVia` annotation needs no bespoke policy migration — the re-assert step (existing `applyPgliteOwnerPolicies`/`…ReaderColumnPrivileges`/narrowed-writer, made driver-generic) picks it up.
+  - [x] Verified partial: `kovo db generate` emits reviewable additive `.up.sql` / `.down.sql` files for missing tables and columns, `kovo db migrate` applies only the up file, and generated down SQL reverses the additive change.
+    - Evidence: `packages/cli/src/commands/db.ts`, `packages/cli/src/index.kovo-db.test.ts`, `site/content/guides/cli.md`, `site/content/guides/data-layer.md`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`; `node site/scripts/code-snippets-check.mjs`; `pnpm run check:api-surface`; `pnpm run check:vp`.
+- [x] **C2 — After every migration, provision re-derives and re-applies the FULL policy/grant set from the current schema (idempotent re-assertion, no policy diff).** Adding a `secret:` column or changing an `owner:`/`ownerVia` annotation needs no bespoke policy migration — the re-assert step (existing `applyPgliteOwnerPolicies`/`…ReaderColumnPrivileges`/narrowed-writer, made driver-generic) picks it up.
   - Acceptance: changing a column from public to secret in `schema.ts` + provision ⇒ the column is `REVOKE`d from `kovo_reader` at the engine (a reader `SELECT` of it errors) with no hand-written policy migration; changing an owner column ⇒ `kovo_owner_scope` predicate updates via `DROP/CREATE POLICY`.
   - [x] Verified partial: the migration/provision path runs pending migrations first, then reasserts derived RLS policies, grants, and the schema fingerprint; the PGlite migration CLI test finishes with posture `STATUS ok`.
     - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/cli/src/index.kovo-db.test.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`.
   - [x] Verified partial: external migration/provision reasserts secret-column reader/admin revocation on a real Postgres owner table with no bespoke policy migration.
+    - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
+  - [x] Verified external: applying a second reviewed migration on a real Postgres database with existing rows reasserts the evolved schema fingerprint/policies and boots the least-privilege runtime over the preserved data.
     - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
 
 ### DEC-D — Fail-closed boot posture verification (Tier-1 #3, soundness — I3)
@@ -107,11 +110,12 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
 
 ### DEC-E — Framework-owned enforcement module (I4; kills papercuts-29 P4)
 
-- [ ] **E1 — Move role setup, policy derivation, scoped-client construction, migration runner, and posture check from the copied `_kovo/app-runtime-db.ts` into `@kovojs/server`; the generated app imports it and passes { schema, connection config, seed }.** `SCHEMA_TABLES` is derived from the app's schema export, not a hand-list.
+- [x] **E1 — Move role setup, policy derivation, scoped-client construction, migration runner, and posture check from the copied `_kovo/app-runtime-db.ts` into `@kovojs/server`; the generated app imports it and passes { schema, connection config, seed }.** `SCHEMA_TABLES` is derived from the app's schema export, not a hand-list.
   - Acceptance: adding an owner table to `schema.ts` requires NO edit to any `_kovo/*` file; `grep SCHEMA_TABLES` in the generated app returns 0 hand-maintained entries; the enforcement code is in one `@kovojs/server` module enrolled in `security/TCB.md`.
   - [x] Verified partial: role setup, policy derivation, grants, scoped-client construction, schema-module table discovery, seed execution, and posture checking now live in `@kovojs/server`; generated Postgres `_kovo/app-runtime-db.ts` passes `{ schema, seedSql }` and contains no `SCHEMA_TABLES`.
     - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/create-kovo/templates/src/_kovo/app-runtime-db.ts`; `pnpm exec vitest --run packages/create-kovo/src/index.test.ts --config ./vite.config.ts`; `pnpm exec vitest --run packages/create-kovo/src/index.build.runtime.test.ts packages/create-kovo/src/index.build.prod-artifact.contacts.test.ts --config ./vite.config.ts`.
-  - [ ] Remaining: migration runner and any TCB enrollment/docs required for the moved module.
+  - [x] Verified partial: migration generation/runner APIs are framework-owned, documented in the CLI/data guides, and enrolled in the security TCB manifest inventory alongside the existing Postgres scoped-client choke.
+    - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/cli/src/commands/db.ts`, `site/content/guides/cli.md`, `site/content/guides/data-layer.md`, `security/TCB.md`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`; `pnpm run check:tcb-boundary`; `node site/scripts/code-snippets-check.mjs`; `pnpm run check:api-surface`; `pnpm run check:vp`.
 
 ### DEC-F — RLS silent-deny diagnostic (Tier-2 #4)
 
@@ -183,10 +187,12 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
 ## 6. Acceptance (v1 Postgres-deployable)
 
 - [ ] A scaffolded app deploys against an EXTERNAL managed Postgres: `kovo db provision` (admin URL) then serve (least-priv URL); owner-scoped isolation holds end-to-end; the runtime role cannot escalate.
-- [ ] Schema evolution works on a DB with data: `kovo db migrate` applies a reviewable, reversible table migration; provision re-asserts policies; the posture check passes.
+- [x] Schema evolution works on a DB with data: `kovo db migrate` applies a reviewable, reversible table migration; provision re-asserts policies; the posture check passes.
+  - Evidence: `packages/server/src/postgres-external-probe.test.ts`, `packages/cli/src/index.kovo-db.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`.
 - [x] Un-provisioned / stale DB ⇒ the app refuses to serve (D1), never fails open.
   - Evidence: `packages/server/src/postgres-external-probe.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts`.
-- [ ] Adding an owner table touches only `schema.ts` (E1); no `_kovo/*` hand-edits.
+- [x] Adding an owner table touches only `schema.ts` (E1); no `_kovo/*` hand-edits.
+  - Evidence: `packages/server/src/postgres-runtime.ts`, `packages/create-kovo/templates/src/_kovo/app-runtime-db.ts`, `packages/cli/src/index.kovo-db.test.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`; `pnpm run check:tcb-boundary`.
 - [ ] An empty scoped read is debuggable (F1 names principal-unset vs RLS-filtered vs empty); an admin-guarded endpoint reads across owners (G1); isolation is unit-testable via `withPrincipal` (H1).
 - [ ] A team/org table via `authzPolicy: sql\`…\`` is FORCE-RLS + policy-provisioned and posture-verified, with the documented escape example shipped (I1/I2).
 
