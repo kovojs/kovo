@@ -223,6 +223,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     expect(defaultReportAgain.issues).toEqual([]);
 
     await expectOwnerIsolation(defaultRuntimeUrl, {});
+    await expectRawRuntimeReconnectHarmless(defaultRuntimeUrl);
     await expectPooledScopeDoesNotLeak(defaultRuntimeUrl, 'kovo_writer');
     await expectSecretColumnsDenied(defaultRuntimeUrl, 'kovo_reader', 'kovo_admin');
     await expectCrossOwnerRead(defaultRuntimeUrl);
@@ -311,6 +312,17 @@ async function expectOwnerIsolation(
   } finally {
     await runtime.close();
   }
+}
+
+async function expectRawRuntimeReconnectHarmless(databaseUrl: string): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    try {
+      const result = await pool.query('SELECT id FROM kovo_ext_probe_notes ORDER BY id');
+      expect(result.rows).toEqual([]);
+    } catch (error) {
+      expect(error).toMatchObject({ code: '42501' });
+    }
+  });
 }
 
 async function expectLeastPrivilegeRuntimeFailure(databaseUrl: string): Promise<void> {

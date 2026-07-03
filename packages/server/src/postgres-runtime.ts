@@ -77,6 +77,13 @@ interface PostgresViewDependency {
   table_schema: string;
 }
 
+interface PostgresRoutineGrant {
+  grantee: string;
+  privilege_type: string;
+  routine_name: string;
+  routine_schema: string;
+}
+
 interface KovoDomainAnnotation {
   authzPolicy?: unknown;
   domain?: unknown;
@@ -498,6 +505,7 @@ async function provisionRuntimeDb(
   );
   await applyPostgresDefaultDenyPrivileges(client, input.schemaTables, input.config);
   await applyPostgresRlsPolicies(client, input.schemaTables, input.metadata, input.config);
+  await applyPostgresViewSecurityInvoker(client, input.schemaTables);
   await applyPostgresReaderColumnPrivileges(
     client,
     input.schemaTables,
@@ -673,6 +681,13 @@ async function checkRuntimeDbPosture(
   }
 
   issues.push(...(await auditPostgresReachableClosure(client, input)));
+  issues.push(
+    ...(await auditPostgresReachableRoutines(
+      client,
+      input.config,
+      postgresSchemaNames(input.schemaTables),
+    )),
+  );
 
   return {
     driver: input.config.driver,
@@ -797,6 +812,40 @@ async function auditPostgresReachableClosure(
     });
   }
   return issues;
+}
+
+async function auditPostgresReachableRoutines(
+  client: RuntimeSqlClient,
+  config: ResolvedPostgresRuntimeConfig,
+  schemas: readonly string[],
+): Promise<KovoPostgresPostureIssue[]> {
+  if (schemas.length === 0) return [];
+  const schemaPlaceholders = schemas.map((_, index) => `$${index + 4}`).join(', ');
+  const routineRows = await safeQuery<PostgresRoutineGrant>(
+    client,
+    [
+      'SELECT DISTINCT routine_schema, routine_name, grantee, privilege_type',
+      'FROM information_schema.routine_privileges',
+      "WHERE grantee IN ($1, $2, $3, 'PUBLIC')",
+      "AND privilege_type = 'EXECUTE'",
+      `AND routine_schema IN (${schemaPlaceholders})`,
+      'ORDER BY routine_schema, routine_name, grantee',
+    ].join(' '),
+    [config.readerRole, config.writerRole, config.adminRole, ...schemas],
+  );
+  if (routineRows === undefined) {
+    return [
+      {
+        code: 'KV433_REACHABILITY_AUDIT',
+        detail:
+          'could not enumerate app-role routine grants from information_schema.routine_privileges',
+      },
+    ];
+  }
+  return routineRows.rows.map((row) => ({
+    code: 'KV433_REACHABLE_ROUTINE',
+    detail: `${row.routine_schema}.${row.routine_name} is executable by ${row.grantee}; routine reachability has no vetted Kovo allowlist`,
+  }));
 }
 
 function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRuntimeClient {
@@ -1709,6 +1758,39 @@ async function applyPostgresRlsPolicies(
   }
 }
 
+async function applyPostgresViewSecurityInvoker(
+  client: RuntimeSqlClient,
+  tables: readonly PgTable[],
+): Promise<void> {
+  const appTableNames = new Set(tables.map((table) => getTableConfig(table).name));
+  const schemas = postgresSchemaNames(tables);
+  if (schemas.length === 0) return;
+  const schemaPlaceholders = schemas.map((_, index) => `$${index + 1}`).join(', ');
+  const views = await safeQuery<{ table_name: string; table_schema: string }>(
+    client,
+    [
+      'SELECT table_schema, table_name',
+      'FROM information_schema.views',
+      `WHERE table_schema IN (${schemaPlaceholders})`,
+      'ORDER BY table_schema, table_name',
+    ].join(' '),
+    schemas,
+  );
+  if (views === undefined) {
+    throw new Error(
+      'KV433_REACHABILITY_AUDIT: could not enumerate app-schema views before Postgres provision.',
+    );
+  }
+  for (const view of views.rows) {
+    const dependencies = await postgresViewDependencies(client, view.table_schema, view.table_name);
+    if (dependencies.some((dependency) => appTableNames.has(dependency.table_name))) {
+      await client.exec(
+        `ALTER VIEW ${quoteQualified(view.table_schema, view.table_name)} SET (security_invoker = true)`,
+      );
+    }
+  }
+}
+
 function customAuthzPolicyPredicatesByTable(
   tables: readonly PgTable[],
 ): ReadonlyMap<string, AuthzPolicyPredicate> {
@@ -2019,6 +2101,10 @@ function tableSchemaName(config: PgTableConfig): string {
   return typeof schema === 'string' && schema !== '' ? schema : 'public';
 }
 
+function postgresSchemaNames(tables: readonly PgTable[]): readonly string[] {
+  return [...new Set(tables.map((table) => tableSchemaName(getTableConfig(table))))];
+}
+
 function postgresScopedClientOptions(
   config: ResolvedPostgresRuntimeConfig,
   principal: string | undefined,
@@ -2098,6 +2184,10 @@ function quoteTable(config: PgTableConfig): string {
   return typeof schema === 'string' && schema !== ''
     ? `${quoteIdent(schema)}.${quoteIdent(config.name)}`
     : quoteIdent(config.name);
+}
+
+function quoteQualified(schema: string, name: string): string {
+  return `${quoteIdent(schema)}.${quoteIdent(name)}`;
 }
 
 function quoteIdent(value: string): string {

@@ -48,23 +48,23 @@ they are not claimed as the verified TCB.
     {
       "id": "server.postgres-runtime.capability-closure-audit",
       "file": "packages/server/src/postgres-runtime.ts",
-      "name": "auditReachableDbCapabilities",
+      "name": "auditPostgresReachableClosure",
       "kind": "postgres-capability-closure-audit",
       "classification": "tcb",
       "wrapper": "securityClassifier",
       "decision": "server.postgres-runtime.capability-closure-audit"
     },
     {
-      "id": "server.managed-db.pglite-runtime-capability",
-      "file": "packages/server/src/managed-db.ts",
-      "name": "appRuntimeDbProvider",
+      "id": "server.postgres-runtime.request-scoped-db",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "createRuntimeClient",
       "kind": "pglite-least-privilege-runtime-path",
       "classification": "tcb"
     },
     {
-      "id": "server.managed-db.internal-framework-capability",
-      "file": "packages/server/src/managed-db.ts",
-      "name": "createInternalFrameworkDb",
+      "id": "server.postgres-runtime.internal-framework-capability",
+      "file": "packages/server/src/postgres-runtime.ts",
+      "name": "assertInternalPostgresRuntimeDbCapability",
       "kind": "pglite-superuser-capability-token-gate",
       "classification": "tcb"
     }
