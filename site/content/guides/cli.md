@@ -160,13 +160,15 @@ kovo build ./src/app.ts --out build --preset vercel
 `--preset` selects the deployment target (`node`, `vercel`, `cloudflare`); `--out` overrides the
 output directory (default `dist`). See [deployment](/guides/deployment/).
 
-### `kovo db` — provision and check Postgres posture
+### `kovo db` — migrate, provision, and check Postgres posture
 
 Applies or verifies the framework-owned Postgres database posture derived from `src/schema.ts`:
-tables, roles, forced RLS, owner policies, grants, and the schema fingerprint. External
-Postgres provisioning uses a privileged admin URL; runtime/checking uses the least-privilege app URL.
+reviewed SQL migrations, roles, forced RLS, owner policies, grants, and the schema fingerprint.
+External Postgres migration/provisioning uses a privileged admin URL; runtime/checking uses the
+least-privilege app URL.
 
 ```sh
+kovo db migrate --migrations migrations
 KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision
 KOVO_DATABASE_URL=postgres://app@db/app kovo db check
 kovo db check --driver pglite --data-dir .kovo/pglite
@@ -177,8 +179,9 @@ If your provider or DBA owns role creation, set `KOVO_DB_READER_ROLE` and
 `CREATE ROLE`; the runtime login still needs membership in both roles.
 
 `kovo db check` exits non-zero when posture is missing or stale, so production boot and CI can fail
-closed instead of serving an unprotected table. Migration generation is still a separate roadmap item;
-this command currently reasserts the derived runtime posture against the schema you ship.
+closed instead of serving an unprotected table. Automatic migration generation is still a roadmap
+item; `kovo db migrate` applies reviewed `.sql` files and then reasserts the derived runtime posture
+against the schema you ship.
 
 ### `kovo compile` — emit compiler-backed artifacts
 

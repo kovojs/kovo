@@ -272,11 +272,17 @@ await pool.query(`
 `);
 ```
 
-Kovo does not scaffold `drizzle-kit`, `drizzle.config.ts`, or a migrations folder. The runtime
-database is ordinary Drizzle, so you can add drizzle-kit yourself, use a managed migration service,
-or keep hand-written DDL checked into your app. The important part is operational: run migrations
-before the new app version receives requests, and keep the Drizzle schema source in lockstep with
-the database objects those migrations create.
+Kovo applies reviewed SQL migrations from a `migrations/` directory:
+
+```sh
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db migrate
+```
+
+The runtime database is still ordinary Drizzle. Automatic migration generation is not scaffolded
+yet, so you can add drizzle-kit yourself, use a managed migration service, or keep hand-written DDL
+checked into your app. The important part is operational: run migrations before the new app version
+receives requests, and keep the Drizzle schema source in lockstep with the database objects those
+migrations create.
 
 Treat schema changes like deploys, not like request-time work. Add nullable or defaulted columns
 before code reads them, backfill separately when needed, then tighten constraints in a later deploy.

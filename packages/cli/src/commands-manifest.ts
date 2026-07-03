@@ -57,7 +57,7 @@ export const BUILD_USAGE =
 
 /** @internal Usage line emitted for `kovo db` (see `dbUsage`). */
 export const DB_USAGE =
-  'usage: kovo db provision|check [--schema <module>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]';
+  'usage: kovo db provision|migrate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]';
 
 /** @internal Usage forms emitted for `kovo compile` (see `compileUsage`). */
 export const COMPILE_USAGE = [
@@ -211,6 +211,11 @@ export const DB_ARGV_SPEC = {
       flag: '--data-dir',
       kind: 'value',
       requiresValueMessage: 'kovo: db --data-dir requires a directory.\n',
+    },
+    {
+      flag: '--migrations',
+      kind: 'value',
+      requiresValueMessage: 'kovo: db --migrations requires a directory.\n',
     },
     {
       flag: '--reader-role',
@@ -577,7 +582,7 @@ export const COMMANDS_MANIFEST = [
     name: 'db',
     noArgsOrder: 5,
     summary:
-      'Provision or check a Postgres app database from the Drizzle schema and framework-owned RLS posture.',
+      'Provision, migrate, or check a Postgres app database from the Drizzle schema and framework-owned RLS posture.',
     unknownOrder: 3,
     usage: DB_USAGE,
     async: true,
@@ -585,7 +590,12 @@ export const COMMANDS_MANIFEST = [
       {
         flag: 'provision',
         description:
-          'Apply schema DDL, roles, RLS policies, grants, and the schema fingerprint. External Postgres uses KOVO_ADMIN_DATABASE_URL unless --admin-database-url is supplied.',
+          'Apply pending migrations, roles, RLS policies, grants, and the schema fingerprint. External Postgres uses KOVO_ADMIN_DATABASE_URL unless --admin-database-url is supplied.',
+      },
+      {
+        flag: 'migrate',
+        description:
+          'Apply reviewed SQL migrations transactionally, then reassert derived RLS policies, grants, and the schema fingerprint.',
       },
       {
         flag: 'check',
@@ -597,6 +607,10 @@ export const COMMANDS_MANIFEST = [
         flag: '--driver <pglite|pg|node-postgres>',
         description:
           'Database driver. Defaults to external Postgres when a URL is present, otherwise PGlite.',
+      },
+      {
+        flag: '--migrations <dir>',
+        description: 'Directory of reviewed .sql migrations (default: migrations).',
       },
       {
         flag: '--database-url <url>',
@@ -616,6 +630,7 @@ export const COMMANDS_MANIFEST = [
     ],
     examples: [
       'kovo db provision --schema src/schema.ts',
+      'kovo db migrate --migrations migrations',
       'KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision',
       'KOVO_DATABASE_URL=postgres://app@db/app kovo db check',
       'kovo db check --driver pglite --data-dir .kovo/pglite',

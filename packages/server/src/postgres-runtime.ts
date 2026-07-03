@@ -25,6 +25,7 @@ import { createSecretBoxingReadDb } from './secret-read-boundary.js';
 const DEFAULT_DATA_DIR = '.kovo/pglite';
 const DEFAULT_READER_ROLE = 'kovo_reader';
 const DEFAULT_WRITER_ROLE = 'kovo_writer';
+const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
 
 type PgTableConfig = ReturnType<typeof getTableConfig>;
@@ -130,6 +131,21 @@ export interface KovoPostgresAppRuntimeOptions {
   writerRole?: string;
 }
 
+/** One reviewed SQL migration file applied by the Postgres migration runner. */
+export interface KovoPostgresMigration {
+  /** Stable migration id, usually the SQL file name. */
+  id: string;
+  /** SQL to apply transactionally. */
+  sql: string;
+}
+
+/** Result of applying reviewed Postgres migrations before reasserting Kovo posture. */
+export interface KovoPostgresMigrationRunReport {
+  applied: readonly string[];
+  posture: KovoPostgresPostureReport;
+  skipped: readonly string[];
+}
+
 /** Created app database runtime used by generated `src/_kovo/app-runtime-db.ts` modules. */
 export interface KovoPostgresAppRuntimeDb {
   db(request?: unknown): KovoPostgresRuntimeDb;
@@ -145,6 +161,14 @@ export interface KovoPostgresProvisionOptions extends KovoPostgresAppRuntimeOpti
    * for external Postgres.
    */
   databaseUrl: string;
+  /** Reviewed SQL migrations to apply before Kovo reasserts RLS policies/grants. */
+  migrations?: readonly KovoPostgresMigration[];
+}
+
+/** Migration runner options for embedded PGlite or external Postgres. */
+export interface KovoPostgresMigrateOptions extends KovoPostgresAppRuntimeOptions {
+  /** Reviewed SQL migrations to apply before Kovo reasserts RLS policies/grants. */
+  migrations: readonly KovoPostgresMigration[];
 }
 
 /** One failing Postgres schema/RLS/grant posture check. */
@@ -220,9 +244,11 @@ export async function provisionPostgresAppDb(
   const client = createRuntimeClient(config);
   try {
     await provisionRuntimeDb(client.sql, {
+      applySchemaDdl: false,
       config,
       fingerprint,
       metadata,
+      migrations: options.migrations ?? [],
       schemaDdl: schemaDdl(schemaTables),
       schemaTables,
     });
@@ -232,6 +258,44 @@ export async function provisionPostgresAppDb(
       metadata,
       schemaTables,
     });
+  } finally {
+    await client.close();
+  }
+}
+
+/**
+ * Apply reviewed table-structure migrations, then re-derive and re-assert framework-owned
+ * Postgres RLS policies, grants, and the schema fingerprint (SPEC §10.3).
+ */
+export async function migratePostgresAppDb(
+  options: KovoPostgresMigrateOptions,
+): Promise<KovoPostgresMigrationRunReport> {
+  const config = resolvePostgresRuntimeConfig({
+    ...options,
+    postureCheckOnBoot: false,
+    provisionOnBoot: false,
+  });
+  const schemaTables = sortTablesByForeignKeyDependencies(postgresTablesFromSchema(config.schema));
+  const metadata = extractKovoRuntimeDbMetadata(schemaTables);
+  const fingerprint = schemaFingerprint(schemaTables, metadata);
+  const client = createRuntimeClient(config);
+  try {
+    const migrations = await provisionRuntimeDb(client.sql, {
+      applySchemaDdl: false,
+      config,
+      fingerprint,
+      metadata,
+      migrations: options.migrations,
+      schemaDdl: schemaDdl(schemaTables),
+      schemaTables,
+    });
+    const posture = await checkRuntimeDbPosture(client.sql, {
+      config,
+      fingerprint,
+      metadata,
+      schemaTables,
+    });
+    return { ...migrations, posture };
   } finally {
     await client.close();
   }
@@ -275,7 +339,7 @@ async function initializeRuntimeDb(
   },
 ): Promise<void> {
   if (input.config.provisionOnBoot) {
-    await provisionRuntimeDb(client, input);
+    await provisionRuntimeDb(client, { ...input, applySchemaDdl: true, migrations: [] });
   }
   if (input.config.postureCheckOnBoot) {
     const report = await checkRuntimeDbPosture(client, input);
@@ -293,16 +357,19 @@ async function initializeRuntimeDb(
 async function provisionRuntimeDb(
   client: RuntimeSqlClient,
   input: {
+    applySchemaDdl: boolean;
     config: ResolvedPostgresRuntimeConfig;
     fingerprint: string;
     metadata: KovoRuntimeDbMetadata;
+    migrations: readonly KovoPostgresMigration[];
     schemaDdl: string;
     schemaTables: readonly PgTable[];
   },
-): Promise<void> {
+): Promise<{ applied: readonly string[]; skipped: readonly string[] }> {
   if (input.config.createReaderRole) await ensurePostgresRole(client, input.config.readerRole);
   if (input.config.createWriterRole) await ensurePostgresRole(client, input.config.writerRole);
-  await client.exec(input.schemaDdl);
+  const migrationReport = await applyPostgresMigrations(client, input.migrations);
+  if (input.applySchemaDdl) await client.exec(input.schemaDdl);
   await client.exec(
     'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
   );
@@ -321,6 +388,7 @@ async function provisionRuntimeDb(
   );
   await persistSchemaFingerprint(client, input.fingerprint);
   for (const statement of input.config.seedSql) await client.exec(statement);
+  return migrationReport;
 }
 
 async function checkRuntimeDbPosture(
@@ -788,6 +856,82 @@ function sortTablesByForeignKeyDependencies(tables: readonly PgTable[]): PgTable
 async function ensurePostgresRole(client: RuntimeSqlClient, role: string): Promise<void> {
   const result = await client.query('SELECT 1 FROM pg_roles WHERE rolname = $1', [role]);
   if (result.rows.length === 0) await client.exec(`CREATE ROLE ${quoteIdent(role)}`);
+}
+
+async function applyPostgresMigrations(
+  client: RuntimeSqlClient,
+  migrations: readonly KovoPostgresMigration[],
+): Promise<{ applied: readonly string[]; skipped: readonly string[] }> {
+  const normalized = normalizePostgresMigrations(migrations);
+  const applied: string[] = [];
+  const skipped: string[] = [];
+  if (normalized.length === 0) return { applied, skipped };
+
+  await client.exec(
+    `CREATE TABLE IF NOT EXISTS ${quoteIdent(
+      MIGRATIONS_TABLE,
+    )} (id text PRIMARY KEY, checksum text NOT NULL, applied_at timestamp NOT NULL DEFAULT now())`,
+  );
+
+  for (const migration of normalized) {
+    const existing = await client.query<{ checksum: string }>(
+      `SELECT checksum FROM ${quoteIdent(MIGRATIONS_TABLE)} WHERE id = $1`,
+      [migration.id],
+    );
+    const existingChecksum = existing.rows[0]?.checksum;
+    if (existingChecksum !== undefined) {
+      if (existingChecksum !== migration.checksum) {
+        throw new Error(
+          [
+            `KV433_MIGRATION_CHECKSUM: Postgres migration ${migration.id} changed after it was applied.`,
+            `expected ${existingChecksum}, saw ${migration.checksum} (SPEC §10.3).`,
+          ].join(' '),
+        );
+      }
+      skipped.push(migration.id);
+      continue;
+    }
+
+    await client.transaction(async (tx) => {
+      await tx.exec(migration.sql);
+      await tx.query(`INSERT INTO ${quoteIdent(MIGRATIONS_TABLE)} (id, checksum) VALUES ($1, $2)`, [
+        migration.id,
+        migration.checksum,
+      ]);
+    });
+    applied.push(migration.id);
+  }
+
+  return { applied, skipped };
+}
+
+interface NormalizedPostgresMigration extends KovoPostgresMigration {
+  checksum: string;
+}
+
+function normalizePostgresMigrations(
+  migrations: readonly KovoPostgresMigration[],
+): NormalizedPostgresMigration[] {
+  const seen = new Set<string>();
+  return migrations.map((migration) => {
+    const id = migration.id.trim();
+    if (id === '') {
+      throw new Error('KV433_MIGRATION_ID: Postgres migration id must be non-empty.');
+    }
+    if (seen.has(id)) {
+      throw new Error(`KV433_MIGRATION_ID: duplicate Postgres migration id ${id}.`);
+    }
+    seen.add(id);
+    const sqlText = migration.sql.trim();
+    if (sqlText === '') {
+      throw new Error(`KV433_MIGRATION_SQL: Postgres migration ${id} has no SQL.`);
+    }
+    return { checksum: postgresMigrationChecksum(sqlText), id, sql: sqlText };
+  });
+}
+
+function postgresMigrationChecksum(sqlText: string): string {
+  return createHash('sha256').update(sqlText).digest('hex');
 }
 
 async function applyPostgresReaderColumnPrivileges(

@@ -119,7 +119,7 @@ describe('commands manifest', () => {
       'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache]',
     );
     expect(DB_USAGE).toBe(
-      'usage: kovo db provision|check [--schema <module>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]',
+      'usage: kovo db provision|migrate|check [--schema <module>] [--migrations <dir>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]',
     );
     expect(COMPILE_USAGE[0]).toBe(
       'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--no-cache] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>]',
@@ -230,15 +230,25 @@ describe('commands manifest', () => {
     });
 
     const db = parseCommandArgv(
-      ['provision', '--schema', 'src/schema.ts', '--driver=pglite', '--data-dir', '.kovo/pglite'],
+      [
+        'migrate',
+        '--schema',
+        'src/schema.ts',
+        '--driver=pglite',
+        '--data-dir',
+        '.kovo/pglite',
+        '--migrations',
+        'migrations',
+      ],
       DB_ARGV_SPEC,
     );
     expect(db).toEqual(expect.objectContaining({ ok: true }));
     if (db.ok) {
-      expect(db.value.positionals).toEqual(['provision']);
+      expect(db.value.positionals).toEqual(['migrate']);
       expect(parsedStringOption(db.value, '--schema')).toBe('src/schema.ts');
       expect(parsedStringOption(db.value, '--driver')).toBe('pglite');
       expect(parsedStringOption(db.value, '--data-dir')).toBe('.kovo/pglite');
+      expect(parsedStringOption(db.value, '--migrations')).toBe('migrations');
     }
   });
 
