@@ -730,6 +730,7 @@ void test('P10 starter template stays wired to the current app-shell contract', 
     'test',
   ]);
   assert.deepEqual(Object.keys(packageJson.dependencies).sort(), [
+    '@electric-sql/pglite',
     '@kovojs/better-auth',
     '@kovojs/browser',
     '@kovojs/core',

@@ -13,6 +13,7 @@
     "test": "vp test"
   },
   "dependencies": {
+    "@electric-sql/pglite": "^0.5.1",
     "@kovojs/better-auth": "{{kovo_better_auth_version}}",
     "@kovojs/browser": "{{kovo_browser_version}}",
     "@kovojs/core": "{{kovo_core_version}}",

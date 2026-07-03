@@ -227,7 +227,7 @@ describe('create-kovo starter (metadata)', () => {
     const packageJson = JSON.parse(files.get('package.json') ?? '{}') as { pnpm?: unknown };
 
     expect(files.get('package.json')).toContain('"pg"');
-    expect(files.get('package.json')).not.toContain('"@electric-sql/pglite"');
+    expect(files.get('package.json')).toContain('"@electric-sql/pglite"');
     expect(files.get('package.json')).not.toContain('"better-sqlite3"');
     expect(packageJson.pnpm).toBeUndefined();
     expect(files.get('src/db.ts')).toContain("import type { Reader } from '@kovojs/server'");

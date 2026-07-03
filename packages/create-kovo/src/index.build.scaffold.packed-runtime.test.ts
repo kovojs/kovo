@@ -1,4 +1,6 @@
 import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
@@ -29,6 +31,9 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
       expectPackedKovoPackageShape(app.root);
       runStarterVpCheck(app.root);
       buildReusableProductionArtifact(app.root);
+      expect(readFileSync(join(app.root, 'dist/server/server/handler.mjs'), 'utf8')).not.toMatch(
+        /from\s+['"]\.\/assets\//,
+      );
 
       server = spawn(process.execPath, ['dist/server/server.mjs'], {
         cwd: app.root,

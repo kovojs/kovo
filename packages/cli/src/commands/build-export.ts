@@ -63,7 +63,12 @@ const requireFromCli = createRequire(new URL('../index.ts', import.meta.url));
 const execFileAsync = promisify(execFile);
 
 function isKovoServerHandlerExternalDependency(id: string): boolean {
-  return id === '@node-rs/argon2' || id.startsWith('@node-rs/argon2-');
+  return (
+    id === '@electric-sql/pglite' ||
+    id.startsWith('@electric-sql/pglite/') ||
+    id === '@node-rs/argon2' ||
+    id.startsWith('@node-rs/argon2-')
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -1613,6 +1618,9 @@ async function bundleKovoServerHandler(
           output: {
             entryFileNames: 'handler.mjs',
             format: 'es',
+            // The neutral build contract accepts serverHandlerSource as one file.
+            // Keep SSR dynamic imports inlined so presets never miss sidecar chunks.
+            inlineDynamicImports: true,
           },
         },
         ssr: true,
