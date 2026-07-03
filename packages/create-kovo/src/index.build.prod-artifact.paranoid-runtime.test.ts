@@ -9,6 +9,7 @@ import { writeKovoProject } from './index.js';
 import {
   addParanoidPhase5AuthorizationProof,
   addParanoidPhase5WriteBoundaryProof,
+  addPostgresParanoidPhase5DogfoodProof,
   addSqliteRuntimeSecretProvenanceProof,
   addStarterMutationDbScopeProof,
   attributeValue,
@@ -58,6 +59,56 @@ const blockedWriteCases = [
 ] as const;
 
 describe('create-kovo starter (build integration: paranoid runtime chokes)', () => {
+  // @kovo-security-certifies KV435 phase-5-postgres-paranoid-dogfood-read-acceptance
+  // @kovo-security-certifies KV406 phase-5-postgres-paranoid-dogfood-write-acceptance
+  it('runs the Phase 5 Postgres/PGlite paranoid dogfood harness from the production artifact', async () => {
+    const tempParent = tmpdir();
+    mkdirSync(tempParent, { recursive: true });
+    const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-postgres-paranoid-'));
+    const port = await reservePort();
+    const jar = new Map<string, string>();
+    let server: ChildProcessWithoutNullStreams | undefined;
+
+    try {
+      writeKovoProject(root, {
+        dialect: 'postgres',
+        name: 'Phase 5 Postgres Paranoid Dogfood Proof',
+      });
+      linkStarterBuildDependencies(root);
+      addPostgresParanoidPhase5DogfoodProof(root);
+
+      buildParanoidProductionArtifact(root);
+
+      server = spawn(process.execPath, ['dist/server/server.mjs'], {
+        cwd: root,
+        detached: process.platform !== 'win32',
+        env: {
+          ...withRepoBinOnPath(),
+          HOST: '127.0.0.1',
+          KOVO_PARANOID: '1',
+          NODE_ENV: 'production',
+          PORT: String(port),
+        },
+      });
+      const output = collectOutput(server);
+      const origin = `http://127.0.0.1:${port}`;
+      const marker = `phase5-pg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+      await signInDemoUser(root, origin, jar, output);
+      await expectPostgresEndpoint(origin, output);
+      await expectPostgresReadonlyStatus(origin, marker);
+      await expectPostgresWriteBoundary(origin);
+      await expectPostgresTaskAndWebhook(origin, marker);
+
+      expect(output()).not.toContain('Kovo SQLite starter is experimental');
+      expect(output()).not.toContain('phase5-pg-secret');
+      expect(output()).not.toContain('cross-owner-write');
+    } finally {
+      await stopProcess(server);
+      rmSync(root, { force: true, recursive: true });
+    }
+  }, 240_000);
+
   // @kovo-security-certifies KV435 phase-5-1-full-paranoid-dogfood-read-acceptance
   // @kovo-security-certifies KV406 phase-5-1-full-paranoid-dogfood-write-acceptance
   it('runs the Phase 5.1 full-paranoid dogfood acceptance across read and write shapes', async () => {
@@ -126,6 +177,100 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
     }
   }, 240_000);
 });
+
+async function expectPostgresEndpoint(origin: string, output: () => string): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-pg-endpoint`);
+  const body = await response.text();
+  expect(response.status, `${body}\n${output()}`).toBe(200);
+  const result = JSON.parse(body) as {
+    aliasRows: { id: string; label: string }[];
+    childRows: { id: string; label: string }[];
+    rows: { id: string; label: string }[];
+    viewRows: { id: string; label: string }[];
+  };
+
+  expect(result.rows).toEqual([{ id: 'phase5-pg-demo', label: 'owner-visible' }]);
+  expect(result.aliasRows).toEqual(result.rows);
+  expect(result.viewRows).toEqual(result.rows);
+  expect(result.childRows).toEqual([{ id: 'phase5-pg-item-demo', label: 'owner-item' }]);
+  expect(body).not.toContain('cross-owner-hidden');
+  expect(body).not.toContain('phase5-pg-secret');
+}
+
+async function expectPostgresReadonlyStatus(origin: string, marker: string): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-pg-status?marker=${marker}`);
+  const body = await response.text();
+  expect(response.status, body).toBe(200);
+  const status = JSON.parse(body) as {
+    events: { id: string; label: string }[];
+    readonlyRows: { id: string; label: string }[];
+    secretReadBlocked: boolean;
+    verificationDenied: boolean;
+  };
+
+  expect(status.readonlyRows).toEqual([]);
+  expect(status.events).toEqual([]);
+  expect(status.secretReadBlocked).toBe(true);
+  expect(status.verificationDenied).toBe(true);
+}
+
+async function expectPostgresWriteBoundary(origin: string): Promise<void> {
+  const response = await fetch(`${origin}/api/phase5-pg-write-boundary`, {
+    method: 'POST',
+  });
+  const body = await response.text();
+  expect(response.status, body).toBe(200);
+  expect(JSON.parse(body)).toEqual({
+    crossOwnerDenied: true,
+    ownWrite: true,
+    verificationDenied: true,
+  });
+}
+
+async function expectPostgresTaskAndWebhook(origin: string, marker: string): Promise<void> {
+  const taskResponse = await fetch(`${origin}/_m/phase5-pg/schedule-task`, {
+    body: new URLSearchParams({ marker }),
+    headers: {
+      'content-type': 'application/x-www-form-urlencoded',
+      origin,
+    },
+    method: 'POST',
+    redirect: 'manual',
+  });
+  await taskResponse.text();
+  expect(taskResponse.status).toBe(303);
+
+  const webhookId = `${marker}-webhook`;
+  const webhookResponse = await fetch(`${origin}/webhooks/phase5-pg-read`, {
+    body: JSON.stringify({ id: webhookId }),
+    headers: { 'content-type': 'application/json' },
+    method: 'POST',
+  });
+  const webhookBody = await webhookResponse.text();
+  expect(webhookResponse.status, webhookBody).toBe(200);
+
+  await expectEventuallyPostgresEvent(origin, marker);
+}
+
+async function expectEventuallyPostgresEvent(origin: string, marker: string): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  let lastBody = '';
+  while (Date.now() < deadline) {
+    const response = await fetch(`${origin}/api/phase5-pg-status?marker=${marker}`);
+    lastBody = await response.text();
+    expect(response.status, lastBody).toBe(200);
+    const status = JSON.parse(lastBody) as { events: { id: string; label: string }[] };
+    if (
+      status.events.some(
+        (event) => event.id === 'phase5-pg-task-event' && event.label === 'owner-visible',
+      )
+    ) {
+      return;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
+  throw new Error(`Timed out waiting for phase5-pg-task-event: ${lastBody}`);
+}
 
 async function expectAuthorizationQueryShapes(
   origin: string,
