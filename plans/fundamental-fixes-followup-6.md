@@ -70,8 +70,8 @@ app-level shape-enumeration proxy — the exact unsound pattern. The two rejecte
 Rationale for (iii): PGlite already runs in-process for dev, so the cost of "no multi-tenant on SQLite" is near zero,
 and (iii) _deletes_ an unsound subsystem instead of hardening it.
 
-- [ ] **A1 — `create-kovo --sqlite` refuses to scaffold unless `KOVO_EXPERIMENTAL_SQLITE=1` (or `--experimental-sqlite`). Postgres (PGlite in-process for dev) is the default with no flag.**
-  - Acceptance: `create-kovo <app> --sqlite` without the flag exits non-zero naming the single-principal limitation; with the flag it scaffolds. Default (`create-kovo <app>`) yields the PGlite/Postgres template.
+- [x] **A1 — `create-kovo --sqlite` refuses to scaffold unless `KOVO_EXPERIMENTAL_SQLITE=1` (or `--experimental-sqlite`). Postgres (PGlite in-process for dev) is the default with no flag.**
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.test.ts --config ./vite.config.ts` passed with CLI coverage for default Postgres, SQLite refusal without opt-in, and SQLite success with `--experimental-sqlite` or `KOVO_EXPERIMENTAL_SQLITE=1`.
 - [ ] **A2 — Remove the SQLite owner-scope proxy entirely (`createSqliteAuthorizationDb` and `sqliteAuthorizationProxy` in `managed-db.ts`); the SQLite managed handle applies read-only + SQL-safety + KV438 floors ONLY, and `kovo({owner})` is a build-time WARNING (not error) on the SQLite dialect stating owner-scoping is not enforced.** No partial proxy that reads as a guarantee.
   - Acceptance: with the flag on, `KOVO_PARANOID=1` + the bugz-31 B1/B2 repro (`readonlyAppDb` endpoint read, `db.query.*` relational read) no longer _claims_ to scope; the boot banner + a per-`kovo({owner})`-table build warning disclaim it; `grep sqliteAuthorizationProxy` returns 0 in shipped source. Multi-owner data on SQLite is documented as visible across principals.
 - [ ] **A3 — The KV414 SQLite insert over-block (papercuts-29 P1) is deleted with the proxy: an owner-self insert on SQLite just succeeds (no owner enforcement to check).** Removes the green-build→HTTP-500 (`assertSqliteInsertIsOwnerCheckable`, `managed-db.ts:1073-1075`).
