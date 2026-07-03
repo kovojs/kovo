@@ -1,0 +1,133 @@
+# Postgres v1 DevEx — connect to, provision, and evolve a real Postgres
+
+Created 2026-07-03. Self-standing. Source of truth for behavior is `SPEC.md`. Depends on
+`plans/fundamental-fixes-followup-6.md` (SQLite quarantined to experimental single-principal; Postgres is the sound,
+supported default; DEC-C a′ narrows the writer grant). This plan is **Postgres-only** and additive — it does not change
+how enforcement works, only how the database is connected, provisioned, and evolved.
+
+## 1. Why this plan exists (the Tier-1 gap)
+
+"Kovo on Postgres" today means "Kovo on an in-process embedded PGlite file." The generated runtime hardcodes
+`new PGlite(process.env.KOVO_DATA_DIR ?? '.kovo/pglite')` (`packages/create-kovo/templates/src/_kovo/app-runtime-db.ts:62`),
+runs **all** schema + role + policy DDL at module load on that one superuser connection (`initializeAppDb`, `:74-85`),
+and has no migration story (`CREATE TABLE IF NOT EXISTS` + `ADD COLUMN IF NOT EXISTS` only, `:158/:162`). None of SPEC,
+the template, or the docs describe connecting to Supabase/Neon/RDS. A managed Postgres forbids exactly what boot does:
+the app's runtime role cannot `CREATE ROLE` (`:282`) or `FORCE ROW LEVEL SECURITY`.
+
+**Root cause — one connection does three jobs that real Postgres separates by privilege:**
+
+| Job | Current (all at boot, one superuser conn) | Privilege it actually needs |
+| --- | --- | --- |
+| **Provision** | `CREATE ROLE` (`:282`), `CREATE TABLE` (`:158`), `FORCE RLS` + `CREATE POLICY` (`:332-339`), `REVOKE/GRANT` (`:296-317`) | DDL owner + `CREATEROLE` (an admin) |
+| **Runtime write** | `SET LOCAL ROLE kovo_writer` + query (`managed-db.ts:1289`) | `kovo_writer`, RLS-subject, least-privilege |
+| **Runtime read** | `SET LOCAL ROLE kovo_reader` + query | `kovo_reader`, RLS-subject, least-privilege |
+
+Split these into **two connections and three phases** and all of Tier 1 falls out. The hard part — per-request
+`SET LOCAL ROLE` + transaction-local `set_config('kovo.principal', …, true)` + single-statement confinement
+(`managed-db.ts:1252-1293`) — already exists and is driver-agnostic. This plan swaps the client constructor, moves the
+privileged DDL out of boot into a command, and re-asserts the (already idempotent) policy functions after migrations.
+
+## 2. Design invariants
+
+- **I1 — Provisioning and runtime are different identities.** Runtime connects as a least-privilege login role that is a
+  member of `kovo_reader`/`kovo_writer`, holds no direct table grants, and is `NOBYPASSRLS`/non-superuser. Provisioning
+  uses a separate admin connection and is never reachable at request time.
+- **I2 — Data-bearing DDL is migrated; declarative security DDL is re-asserted.** Table structure holds data → real
+  up/down migrations. RLS policies, column grants, role grants are *derived from `schema.ts`* and re-applied idempotently
+  after every migration (the `applyPglite*` functions already use `DROP POLICY IF EXISTS` + `CREATE POLICY` and
+  idempotent `REVOKE/GRANT`, `:334-339`), so policies are never diffed — they are re-asserted to match the schema.
+- **I3 — Never serve an unverified security posture (soundness, not just DX).** On managed PG an un-provisioned or
+  stale table has RLS *off* and the runtime role may still hold a grant ⇒ **fail open** (full-table read). Boot must
+  verify FORCE RLS + `kovo_owner_scope` presence for every owner table and refuse to serve otherwise. The engine choke
+  holds only if provisioning is *verified present*, never assumed. (Extends `SPEC.md` §10.3.)
+- **I4 — Enforcement lives in one framework-owned module, not a per-app copy.** The 423-line
+  `_kovo/app-runtime-db.ts` + hand-maintained `SCHEMA_TABLES` (`:36`) becomes a `@kovojs/server` module the app imports
+  with config; the app supplies schema + connection config + seed only. Kills `plans/claude-papercuts-29.md` P4 and
+  shrinks the TCB.
+
+## 3. Decisions / work items
+
+### DEC-A — Driver-selecting connection layer (Tier-1 #1)
+
+- [ ] **A1 — `createAppRuntimeDb` branches on config instead of hardcoding `new PGlite`. No `KOVO_DATABASE_URL` ⇒ embedded PGlite (unchanged dev default). A `postgres://…` URL ⇒ a real driver via Drizzle's existing adapters (`drizzle-orm/node-postgres` Pool, `postgres-js`, or Neon HTTP for serverless).** `createPostgresScopedClient`'s transaction logic is dialect/driver-agnostic and is reused verbatim.
+  - Acceptance: an app with `KOVO_DATABASE_URL=postgres://…` connects to an external Postgres and serves owner-scoped reads/writes; with the var unset the same app runs on embedded PGlite. Driver inferred from URL scheme (+ optional `KOVO_DB_DRIVER` override).
+- [ ] **A2 — Document + test pool safety: `SET LOCAL ROLE` and `set_config(…, true)` are transaction-local, so a returned pooled connection carries no residual role/principal.** Kovo already wraps every scoped statement in a transaction (`postgresTransaction`, `managed-db.ts:1264-1275`), so RLS-on-a-pool is safe by construction — no per-checkout reset needed.
+  - Acceptance: a probe (see §5) proves N interleaved requests as different principals over a shared `pg` Pool never leak another principal's rows; docs state statement-mode poolers (PgBouncer statement mode) are unsupported and transaction-mode poolers (incl. Supabase's) are supported.
+
+### DEC-B — Split provisioning from runtime (Tier-1 #3)
+
+- [ ] **B1 — Lift `initializeAppDb`'s privileged DDL out of module-load into a `kovo db provision` command that connects via `KOVO_ADMIN_DATABASE_URL`.** Runtime boot does nothing privileged. Provision: ensure roles → run pending migrations → re-assert all derived policies/grants (idempotent). The narrowed writer grant from followup-6 DEC-C a′ (unclassified/reference tables un-granted ⇒ engine default-deny) is applied here.
+  - Acceptance: `kovo db provision` against a fresh external Postgres (admin URL) creates roles + tables + policies; the runtime app (least-priv URL) then serves; re-running provision is a no-op (idempotent). The runtime login role cannot `CREATE ROLE`/`ALTER … FORCE RLS` (proven by attempting it → permission denied).
+- [ ] **B2 — Role adoption for locked-down providers via optional `KOVO_DB_READER_ROLE` / `KOVO_DB_WRITER_ROLE`.** When set, provision SKIPS `CREATE ROLE` and does only the table-ownership-level DDL (`FORCE RLS`, `CREATE POLICY`, `REVOKE/GRANT`); the roles are pre-created by a DBA/IaC. Required in environments that forbid `CREATE ROLE` (Supabase/some Neon/enterprise), that centrally own roles, or that run multiple Kovo apps on one cluster (name collision). The runtime login role must be `GRANT`ed membership of both roles (framework does this in the default path; the DBA must in the adopted path) — documented.
+  - Acceptance: with the two vars set and `CREATE ROLE` revoked from the admin identity, `kovo db provision` still succeeds using the pre-created roles; with them unset and `CREATEROLE` present, the framework creates `kovo_reader`/`kovo_writer` and grants the login role membership.
+
+### DEC-C — Migrations: migrate tables, re-assert policies (Tier-1 #2)
+
+- [ ] **C1 — `kovo db migrate` generates/applies table-structure migrations from `schema.ts` (drizzle-kit table diff or Kovo-generated up/down), applied transactionally.** Data-bearing structure changes (ALTER TYPE, drop/rename column, backfills) are hand-authorable migrations; the framework does not silently `ADD COLUMN IF NOT EXISTS` against a real DB.
+  - Acceptance: adding a column + a data backfill to `schema.ts` produces a reviewable migration that applies cleanly and is reversible; the boot posture check (I3/DEC-D) recognizes the new schema version.
+- [ ] **C2 — After every migration, provision re-derives and re-applies the FULL policy/grant set from the current schema (idempotent re-assertion, no policy diff).** Adding a `secret:` column or changing an `owner:`/`ownerVia` annotation needs no bespoke policy migration — the re-assert step (existing `applyPgliteOwnerPolicies`/`…ReaderColumnPrivileges`/narrowed-writer, made driver-generic) picks it up.
+  - Acceptance: changing a column from public to secret in `schema.ts` + provision ⇒ the column is `REVOKE`d from `kovo_reader` at the engine (a reader `SELECT` of it errors) with no hand-written policy migration; changing an owner column ⇒ `kovo_owner_scope` predicate updates via `DROP/CREATE POLICY`.
+
+### DEC-D — Fail-closed boot posture verification (Tier-1 #3, soundness — I3)
+
+- [ ] **D1 — At boot the runtime (least-priv) runs a cheap posture check and fails fast if the DB is un-provisioned or stale: every owner/ownedVia table has `FORCE ROW LEVEL SECURITY` + a live `kovo_owner_scope` policy, secret columns are `REVOKE`d, and a `_kovo_schema_version` + policy fingerprint matches the built schema.** On mismatch: refuse to serve with "run `kovo db provision`" — never serve an unprotected table.
+  - Acceptance: a fresh external Postgres with tables but no policies (or a table added without re-provision) causes the app to refuse startup (non-zero, actionable message), NOT serve cross-owner rows. `kovo db check` runs the same verification standalone for CI/pre-deploy.
+
+### DEC-E — Framework-owned enforcement module (I4; kills papercuts-29 P4)
+
+- [ ] **E1 — Move role setup, policy derivation, scoped-client construction, migration runner, and posture check from the copied `_kovo/app-runtime-db.ts` into `@kovojs/server`; the generated app imports it and passes { schema, connection config, seed }.** `SCHEMA_TABLES` is derived from the app's schema export, not a hand-list.
+  - Acceptance: adding an owner table to `schema.ts` requires NO edit to any `_kovo/*` file; `grep SCHEMA_TABLES` in the generated app returns 0 hand-maintained entries; the enforcement code is in one `@kovojs/server` module enrolled in `security/TCB.md`.
+
+### DEC-F — RLS silent-deny diagnostic (Tier-2 #4)
+
+- [ ] **F1 — A dev-only diagnostic at the scoped-read boundary that distinguishes the three empty-result causes: (a) principal unset (`current_setting('kovo.principal')` NULL) — detectable with zero extra queries, the common case; (b) principal set + 0 rows + table non-empty — dev-only re-count via the internal/privileged handle reports "`kovo_owner_scope` filtered N rows for principal X"; (c) genuinely empty — silent.** Surfaced through the existing Kovo dev-diagnostic channel + `kovo explain`. Prod (least-priv, no superuser handle) never runs the second query.
+  - Acceptance: a dev read that returns empty because the request is unauthenticated emits the "no principal" warning; a read empty because RLS filtered a non-empty table emits the "filtered N rows" warning; a read of a truly empty table is silent. No diagnostic path exists in the prod least-priv runtime.
+
+### DEC-G — Audited admin / cross-owner read (Tier-2 #5)
+
+- [ ] **G1 — Add `adminRead`, the read twin of the existing `adminAssign(...)` audited write escape (`managed-db.ts:819`): an audited capability gated by a static `role('admin')` endpoint guard + runtime role check, logged with reason + principal, surfaced in `kovo explain --capabilities`.** (Named for sibling consistency with `adminAssign`; "admin" here means "audited privileged escape," not a framework-blessed persona — the gating role string is the app's, see below.) Engine mechanism: a per-table permissive admin policy (`CREATE POLICY kovo_admin_scope ON t FOR SELECT TO kovo_admin USING (current_setting('kovo.role',true)='admin')`), NOT global `BYPASSRLS` — surgical, per-table opt-in, auditable. The elevated handle does `SET LOCAL ROLE kovo_admin` + sets `kovo.role`; stays read-only and secret-column-`REVOKE`d unless the escape explicitly elevates those. The API name (`adminRead`) and the app's role string (`'admin'` in the predicate) are conceptually independent — document them separately.
+  - Acceptance: an admin-guarded endpoint reads across all owners of an opted-in table; a non-admin (or a table without `kovo_admin_scope`) cannot; the elevated read is logged and appears in `kovo explain`. Reading *as* one other principal remains `ctx.actAs(id)` (already exists, `endpoint.ts:108`).
+
+### DEC-H — Principal-aware test helper (Tier-2 #6)
+
+- [ ] **H1 — Expose the existing `createRequestScopedDb(client, principal)` (`app-runtime-db.ts:98`) as a test-blessed `withPrincipal(id, fn)` (+ `asSystem`, `asAdmin`) from a `@kovojs/server/testing` subpath, wired to an ephemeral provisioned PGlite.** Tests exercise the REAL RLS engine, not a mock.
+  - Acceptance: a unit test writes rows as `user-a` and asserts `user-b` sees `[]` for an owner table, using only the test helper (no HTTP/auth). The subpath is forbidden in request code by the sole-door lint (followup-6 DEC-B).
+
+### DEC-I — Custom-RLS-policy escape for team/org/RBAC (Tier-3 #7; concretizes followup-5 DEC-J)
+
+- [ ] **I1 — Wire the existing `kovo({ authzPolicy: sql\`<predicate>\` })` annotation (already parsed — `runtime-metadata.test.ts:201`, census-classified `authzPolicy` — `static.ts:2180`) into PG provisioning: emit `ENABLE/FORCE ROW LEVEL SECURITY` + `CREATE POLICY … USING(predicate) WITH CHECK(predicate)` from the predicate.** Distinguish the two `authzPolicy` modes: a **string** justification = guard-governed shared table (no RLS emitted, the starter's `contacts` `schema.ts:21`); a **`sql` predicate** = custom RLS policy. Close the latent gap: today `applyPgliteOwnerPolicies` handles `owner`/`ownerVia` but NOT the `authzPolicy` predicate form, so a custom-predicate table passes the census yet may get no policy (unprotected). The DEC-D posture check must verify FORCE RLS + policy presence for `authzPolicy(sql)` tables too.
+  - Acceptance: a `documents` table with `authzPolicy: sql\`EXISTS(SELECT 1 FROM team_members m WHERE m.team_id = documents.team_id AND m.user_id = current_setting('kovo.principal', true))\`` gets FORCE RLS + a policy at provision; a member of the team reads/writes team documents, a non-member sees `[]`; the posture check treats it as covered.
+- [ ] **I2 — Ship the worked team/org example in the docs (the documented custom-RLS-policy escape).** State the honesty boundary explicitly: Kovo guarantees the table is FORCE-RLS + policy-present + census-covered; the **predicate's correctness is the app's responsibility**, exactly like any custom authz (SPEC §10.3 / followup-5 DEC-J). Show the many-to-many membership shape `ownerVia` cannot express in one hop.
+  - Acceptance: a docs page under `site/content/guides/` demonstrates the membership-join `authzPolicy` end to end (schema annotation, provisioned policy, member vs non-member behavior) with the guarantee boundary called out; follows `rules/docs-style.md`.
+
+## 4. Config surface (new)
+
+- `KOVO_DATABASE_URL` — runtime least-privilege connection (login role, member of reader/writer, `NOBYPASSRLS`). Unset ⇒ embedded PGlite dev default.
+- `KOVO_ADMIN_DATABASE_URL` — provisioning/migration connection (DDL + role rights). Only read by `kovo db provision`/`migrate`, never at request time.
+- `KOVO_DB_READER_ROLE` / `KOVO_DB_WRITER_ROLE` — optional; adopt pre-created roles (skips `CREATE ROLE`). See DEC-B2.
+- `KOVO_DB_DRIVER` — optional driver override when scheme is ambiguous (e.g. Neon HTTP vs TCP).
+- Commands: `kovo db provision` (roles + migrate + re-assert policies), `kovo db migrate` (table migrations), `kovo db check` (drift + posture, = boot check standalone).
+
+## 5. Probes to run before committing (verify the two load-bearing claims)
+
+- [ ] **Probe-1 — CREATE ROLE / FORCE RLS at boot genuinely fails as a non-superuser managed role** (motivates the provision/runtime split). Create a `NOSUPERUSER NOCREATEROLE` role in PGlite (or a real PG), `SET ROLE` to it, attempt `CREATE ROLE x` and `ALTER TABLE t FORCE ROW LEVEL SECURITY` ⇒ expect `permission denied`. Confirms DEC-B is necessary, not cosmetic.
+- [ ] **Probe-2 — transaction-local role+principal survives a real pooled checkout/return without leaking** (validates DEC-A2 / I1). Over a `pg` Pool (or PGlite proxy), interleave requests as principals A and B through `SET LOCAL ROLE` + `set_config(…, true)` in transactions; assert A never sees B's rows and a fresh checkout has no residual `current_setting('kovo.principal')`.
+
+## 6. Acceptance (v1 Postgres-deployable)
+
+- [ ] A scaffolded app deploys against an EXTERNAL managed Postgres: `kovo db provision` (admin URL) then serve (least-priv URL); owner-scoped isolation holds end-to-end; the runtime role cannot escalate.
+- [ ] Schema evolution works on a DB with data: `kovo db migrate` applies a reviewable, reversible table migration; provision re-asserts policies; the posture check passes.
+- [ ] Un-provisioned / stale DB ⇒ the app refuses to serve (D1), never fails open.
+- [ ] Adding an owner table touches only `schema.ts` (E1); no `_kovo/*` hand-edits.
+- [ ] An empty scoped read is debuggable (F1 names principal-unset vs RLS-filtered vs empty); an admin-guarded endpoint reads across owners (G1); isolation is unit-testable via `withPrincipal` (H1).
+- [ ] A team/org table via `authzPolicy: sql\`…\`` is FORCE-RLS + policy-provisioned and posture-verified, with the documented escape example shipped (I1/I2).
+
+## 7. Scope & out of scope
+
+**In scope:** DEC-A–E make Postgres *deployable* (connect, provision, evolve, fail-closed, framework-owned);
+DEC-F–I make the sound model *pleasant* (RLS diagnostics, audited admin read, test helper, custom-policy escape +
+doc). Together these are "Postgres v1 DevEx."
+
+**Out of scope (follow-on):** a full first-class RBAC/ABAC framework beyond the `authzPolicy(sql)` escape (roles,
+permission matrices, policy composition as typed API rather than raw predicate). DEC-I's documented custom-RLS-policy
+escape is the v1 answer for team/org scoping; a richer typed authz DSL is post-v1.
