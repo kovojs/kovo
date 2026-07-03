@@ -342,6 +342,8 @@ projection are all rejected;`db.select({x: sql`upper(name)`}).from(orders)` buil
       `rawRead` (authz); coverage is build-time best-effort + a stated non-goal. Acceptance: a SQLite `rawRead` over an
       owner table without scope is denied; an under-declared `rawRead` on SQLite fails the observed-set check; on PG the
       same `rawRead` is RLS-scoped regardless of declaration.
+  - Partial evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/secret-read-boundary.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` passed; covers SQLite observed-set `observed ⊆ declared`, owner-table rawRead denial without `actAs`, served `/api/sqlite-raw-read-declared` success, and served `/api/sqlite-raw-read-underdeclared` failure.
+  - Remaining gap: PG `rawRead` RLS-scoped regardless of declaration still depends on completing Phase 1.1.
 
 ### Phase 3 — KV438 runtime floor
 

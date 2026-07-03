@@ -257,6 +257,36 @@ describe('secret read boundary', () => {
     expect(revealSecret(row, 'test')).toEqual({ classified: 'runtime-secret-value' });
   });
 
+  it('boxes rawRead results through the same direct read boundary', () => {
+    const db = createSecretBoxingReadDb(
+      {
+        rawRead() {
+          return [{ classified: 'runtime-secret-value' }];
+        },
+      },
+      metadata(),
+      {
+        sqliteColumnOrigins: originClient([
+          { column: 'classified', name: 'classified', table: 'secrets' },
+        ]),
+      },
+    ) as { rawRead(statement: unknown, declaration: unknown): { classified: unknown }[] };
+    const statement = declareSecretReadCapability(
+      { toSQL: () => ({ sql: 'select classified from secrets' }) },
+      {
+        columns: ['classified'],
+        justification: 'test rawRead secret-read path',
+        source: 'test',
+        table: 'secrets',
+      },
+    );
+
+    const [row] = db.rawRead(statement, { reads: ['secrets'] });
+
+    expect(isSecret(row)).toBe(true);
+    expect(revealSecret(row, 'test')).toEqual({ classified: 'runtime-secret-value' });
+  });
+
   it('lets engine-backed readers reject raw secret table reads before boxing', () => {
     const calls: string[] = [];
     const db = createSecretBoxingReadDb(

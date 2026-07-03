@@ -270,6 +270,7 @@ function isReadSurfaceMethod(prop: PropertyKey): boolean {
     prop === 'get' ||
     prop === 'prepare' ||
     prop === 'query' ||
+    prop === 'rawRead' ||
     prop === 'run' ||
     prop === 'select' ||
     prop === 'selectDistinct' ||
@@ -546,6 +547,7 @@ function isDirectSqlReadMethod(prop: PropertyKey): boolean {
     prop === 'get' ||
     prop === 'prepare' ||
     prop === 'query' ||
+    prop === 'rawRead' ||
     prop === 'run' ||
     prop === 'sql' ||
     prop === 'values'

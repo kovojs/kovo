@@ -130,6 +130,79 @@ function fakeDb(log: string[]) {
   };
 }
 
+const SQLITE_RAW_READ_CONSTANTS = {
+  SQLITE_ALTER_TABLE: 1,
+  SQLITE_ATTACH: 2,
+  SQLITE_CREATE_INDEX: 3,
+  SQLITE_CREATE_TABLE: 4,
+  SQLITE_CREATE_TEMP_INDEX: 5,
+  SQLITE_CREATE_TEMP_TABLE: 6,
+  SQLITE_CREATE_TEMP_TRIGGER: 7,
+  SQLITE_CREATE_TEMP_VIEW: 8,
+  SQLITE_CREATE_TRIGGER: 9,
+  SQLITE_CREATE_VIEW: 10,
+  SQLITE_CREATE_VTABLE: 11,
+  SQLITE_DELETE: 12,
+  SQLITE_DENY: 13,
+  SQLITE_DETACH: 14,
+  SQLITE_DROP_INDEX: 15,
+  SQLITE_DROP_TABLE: 16,
+  SQLITE_DROP_TEMP_INDEX: 17,
+  SQLITE_DROP_TEMP_TABLE: 18,
+  SQLITE_DROP_TEMP_TRIGGER: 19,
+  SQLITE_DROP_TEMP_VIEW: 20,
+  SQLITE_DROP_TRIGGER: 21,
+  SQLITE_DROP_VIEW: 22,
+  SQLITE_DROP_VTABLE: 23,
+  SQLITE_INSERT: 24,
+  SQLITE_OK: 25,
+  SQLITE_PRAGMA: 26,
+  SQLITE_REINDEX: 27,
+  SQLITE_UPDATE: 28,
+  SQLITE_READ: 29,
+};
+
+function sqliteRawReadPolicy(
+  observedTables: readonly string[],
+  ownerTables: readonly string[] = [],
+) {
+  let authorize = (
+    _action: number,
+    _objectName: string | null,
+    _columnName: string | null,
+    _databaseName: string | null,
+    _triggerOrView: string | null,
+  ) => SQLITE_RAW_READ_CONSTANTS.SQLITE_OK;
+  return {
+    dialectLabel: 'SQLite',
+    executeMethod: 'all' as const,
+    normalizeTableName: (table: string) => (table.includes('.') ? table : `main.${table}`),
+    ownerTables,
+    sqliteAuthorizer: {
+      constants: SQLITE_RAW_READ_CONSTANTS,
+      openDatabase: () => ({
+        close() {},
+        prepare() {
+          for (const table of observedTables) {
+            authorize(SQLITE_RAW_READ_CONSTANTS.SQLITE_READ, table, 'id', 'main', null);
+          }
+        },
+        setAuthorizer(
+          callback: (
+            action: number,
+            objectName: string | null,
+            columnName: string | null,
+            databaseName: string | null,
+            triggerOrView: string | null,
+          ) => number,
+        ) {
+          authorize = callback;
+        },
+      }),
+    },
+  };
+}
+
 const RUNTIME_SQL_MATRIX_SINKS = [
   'execute',
   'query',
@@ -278,6 +351,7 @@ acceptsReader(reader);
 
 reader.select().from('products');
 reader.with('active').select().from('products');
+reader.rawRead({ sql: 'select id from products', values: [] }, { reads: ['products'] });
 
 // @ts-expect-error SPEC §6.6/§9.4/§10.3: raw provider handles lack the Reader brand.
 acceptsReader(raw);
@@ -527,6 +601,56 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       ).toThrow(/KV433/);
     }
     expect(log).toEqual([]);
+  });
+
+  it('executes declared rawRead statements after SQLite observed-set verification', async () => {
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: sqliteRawReadPolicy(['products']),
+    });
+    const rows = await reader.rawRead<{ id: string }>(
+      stampTrustedSql({ sql: 'select id from products where id = ?', values: ['p1'] }, 'rawRead'),
+      { reads: ['products'] },
+    );
+
+    expect(rows).toMatchObject({ sql: 'select id from products where id = ?' });
+    expect(log).toEqual(['all']);
+  });
+
+  it('rejects SQLite rawRead statements whose observed tables exceed declared reads', () => {
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: sqliteRawReadPolicy(['products', 'accounts']),
+    });
+
+    expect(() =>
+      reader.rawRead(
+        stampTrustedSql({ sql: 'select id from products', values: [] }, 'underdeclared rawRead'),
+        { reads: ['products'] },
+      ),
+    ).toThrow(/KV410[\s\S]*outside the declared reads set/);
+    expect(log).toEqual([]);
+  });
+
+  it('rejects owner-table SQLite rawRead statements without an explicit scope', async () => {
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: sqliteRawReadPolicy(['orders'], ['orders']),
+    });
+
+    const statement = stampTrustedSql(
+      { sql: 'select id from orders where id = ?', values: ['o1'] },
+      'owner rawRead',
+    );
+    expect(() => reader.rawRead(statement, { reads: ['orders'] })).toThrow(
+      /KV414[\s\S]*requires actAs or declarePublicRead/,
+    );
+    await expect(
+      reader.rawRead(statement, { actAs: 'user-1', reads: ['orders'] }),
+    ).resolves.toMatchObject({
+      sql: 'select id from orders where id = ?',
+    });
+    expect(log).toEqual(['all']);
   });
 
   it('passes reads through unchanged', async () => {

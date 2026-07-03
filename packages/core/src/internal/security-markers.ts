@@ -33,6 +33,7 @@ interface EnforcedSecurityCodeRegistryEntry extends BaseSecurityCodeRegistryEntr
   readonly propertyDependsOn: SecurityCodePropertyDependency;
 }
 
+/** @internal Hand-maintained security-code registry entry (SPEC §6.6, §10.3, §11.2). */
 export type SecurityCodeRegistryEntry =
   | BuildOnlySecurityCodeRegistryEntry
   | EnforcedSecurityCodeRegistryEntry;

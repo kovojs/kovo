@@ -79,6 +79,7 @@ export interface DeclaredWriteSqliteAuthorizerConstants {
   SQLITE_INSERT: number;
   SQLITE_OK: number;
   SQLITE_PRAGMA: number;
+  SQLITE_READ?: number;
   SQLITE_REINDEX: number;
   SQLITE_UPDATE: number;
 }
@@ -118,10 +119,27 @@ export interface PostgresReadonlyClientOptions {
   readerRole?: string | false;
 }
 
+/** User-authored declaration for the raw read escape (SPEC §10.2/§10.3 DEC-C). */
+export interface RawReadDeclaration {
+  actAs?: string;
+  declarePublicRead?: { reason: string };
+  reads: readonly string[];
+}
+
+/** Framework-owned rawRead enforcement options for a managed read handle. */
+export interface RawReadPolicyOptions {
+  dialectLabel: string;
+  executeMethod?: 'all' | 'execute' | 'query' | 'values';
+  normalizeTableName: (table: string) => string;
+  ownerTables?: readonly string[];
+  sqliteAuthorizer?: DeclaredWriteSqliteAuthorizerOptions;
+}
+
 const READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$count',
   '$with',
   'query',
+  'rawRead',
   'select',
   'selectDistinct',
   'with',
@@ -141,6 +159,7 @@ const DENIED_READ_CAPABILITY_PROPERTIES = new Set<string>([
 const CALLABLE_READ_CAPABILITY_PROPERTIES = new Set<string>([
   '$count',
   '$with',
+  'rawRead',
   'select',
   'selectDistinct',
   'with',
@@ -306,21 +325,18 @@ const assertSqliteDeclaredWriteStatementAllowed = securityClassifier(
  * floor, and the static KV433 provenance gate remains the by-construction proof. Casts/`any` can
  * defeat this type and must never be accepted as security evidence.
  */
-type ReaderRootCapabilityKeys<Db extends object> = Extract<
-  keyof Db,
-  '$count' | '$with' | 'select' | 'selectDistinct'
->;
-
-type ReaderQueryNamespace<Db extends object> = Db extends { query: infer Query }
-  ? Query extends (...args: any[]) => any
-    ? {}
-    : { query: Query }
-  : {};
-
 export type Reader<Db> = (Db extends object
-  ? Pick<Db, ReaderRootCapabilityKeys<Db>> &
-      ReaderQueryNamespace<Db> &
-      (Db extends { with: (...args: infer Args) => infer Result }
+  ? Pick<Db, Extract<keyof Db, '$count' | '$with' | 'select' | 'selectDistinct'>> &
+      (Db extends { query: infer Query }
+        ? Query extends (...args: any[]) => any
+          ? {}
+          : { query: Query }
+        : {}) & {
+        rawRead<Row = unknown>(
+          statement: unknown,
+          declaration: RawReadDeclaration,
+        ): Promise<Row[]> | Row[];
+      } & (Db extends { with: (...args: infer Args) => infer Result }
         ? {
             with(
               ...args: Args
@@ -526,7 +542,10 @@ export type ManagedDbMode = 'read' | 'write';
  * `readonlyDb(appDb)` instead of importing a broad write handle into a read-only endpoint. It is a
  * fail-closed runtime floor plus a branded type, not the SPEC §6.6 security proof.
  */
-export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
+export function readonlyDb<Db extends object>(
+  db: Db,
+  options: { rawRead?: RawReadPolicyOptions } = {},
+): Reader<Db> {
   const readDb = readonlyDbTarget(db);
   const safe = wrapManagedDbForSqlSafety(
     readDb,
@@ -536,16 +555,20 @@ export function readonlyDb<Db extends object>(db: Db): Reader<Db> {
       engineReadonly: readDb !== db,
     }),
   );
-  return readonlyCapabilityDb(safe as object) as Reader<Db>;
+  return readonlyCapabilityDb(safe as object, options.rawRead) as unknown as Reader<Db>;
 }
 
-function readonlyCapabilityDb<Db extends object>(db: Db): Reader<Db> {
+function readonlyCapabilityDb<Db extends object>(
+  db: Db,
+  rawReadPolicy: RawReadPolicyOptions | undefined,
+): Reader<Db> {
   return new Proxy(db, {
     get(target, prop, receiver) {
       if (prop === 'then') return undefined;
       if (typeof prop === 'string') {
         if (DENIED_READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
         if (!READ_CAPABILITY_PROPERTIES.has(prop)) return readonlyCapabilityError(prop);
+        if (prop === 'rawRead') return rawReadCapability(target, rawReadPolicy);
         const value = Reflect.get(target, prop, receiver);
         if (prop === 'query') {
           if (typeof value === 'function') return readonlyCapabilityError(prop);
@@ -569,8 +592,117 @@ function readonlyCapabilityError(prop: string): () => never {
   };
 }
 
+function rawReadCapability(
+  target: object,
+  policy: RawReadPolicyOptions | undefined,
+): <Row = unknown>(statement: unknown, declaration: RawReadDeclaration) => Promise<Row[]> | Row[] {
+  return <Row = unknown>(statement: unknown, declaration: RawReadDeclaration) => {
+    if (policy === undefined) {
+      throw new KovoReadonlyHandleError(
+        'KV410: rawRead requires a framework-owned read policy; use builder reads unless the adapter wires the declared raw-read escape (SPEC §10.2/§10.3).',
+      );
+    }
+    assertRawReadDeclaration(declaration);
+    const carrier = sqlCarrierFromValue(statement, []);
+    if (carrier === undefined) {
+      throw new Error(
+        'KV410: rawRead requires a SQL statement whose table set can be checked against the declared reads (SPEC §10.2/§10.3).',
+      );
+    }
+    assertRawReadObservedTablesAllowed(carrier.text, declaration, policy);
+    const method = rawReadExecutionMethod(target, policy);
+    return method.call(target, statement) as Promise<Row[]> | Row[];
+  };
+}
+
+function assertRawReadDeclaration(declaration: RawReadDeclaration): void {
+  if (
+    !Array.isArray(declaration.reads) ||
+    declaration.reads.length === 0 ||
+    declaration.reads.some((table) => typeof table !== 'string' || table.trim() === '')
+  ) {
+    throw new Error('KV410: rawRead requires a non-empty declared reads table set.');
+  }
+  if (declaration.actAs !== undefined && declaration.actAs.trim() === '') {
+    throw new Error('KV414: rawRead actAs scope requires a non-empty principal.');
+  }
+  const publicReason = declaration.declarePublicRead?.reason;
+  if (publicReason !== undefined && publicReason.trim() === '') {
+    throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
+  }
+}
+
+function assertRawReadObservedTablesAllowed(
+  sql: string,
+  declaration: RawReadDeclaration,
+  policy: RawReadPolicyOptions,
+): void {
+  const sqliteAuthorizer = policy.sqliteAuthorizer;
+  if (sqliteAuthorizer === undefined) return;
+  const readAction = sqliteAuthorizer.constants.SQLITE_READ;
+  if (readAction === undefined) {
+    throw new Error(
+      'KV410: SQLite rawRead authorizer requires SQLITE_READ support to observe declared reads (SPEC §10.2/§10.3).',
+    );
+  }
+
+  const observed = new Set<string>();
+  const sqlite = sqliteAuthorizer.openDatabase();
+  try {
+    sqlite.setAuthorizer((action, objectName, _columnName, databaseName) => {
+      if (action === readAction && objectName !== null) {
+        observed.add(policy.normalizeTableName(`${databaseName ?? 'main'}.${objectName}`));
+      }
+      return sqliteAuthorizer.constants.SQLITE_OK;
+    });
+    sqlite.prepare(sql);
+  } finally {
+    sqlite.close();
+  }
+
+  const declared = new Set(declaration.reads.map(policy.normalizeTableName));
+  const unexpected = [...observed].filter((table) => !declared.has(table));
+  if (unexpected.length > 0) {
+    throw new Error(
+      [
+        `KV410: ${policy.dialectLabel} rawRead observed table(s) outside the declared reads set (SPEC §10.2/§10.3).`,
+        `  observed: ${[...observed].sort().join(', ') || '<none>'}`,
+        `  declared reads: ${[...declared].sort().join(', ') || '<none>'}`,
+      ].join('\n'),
+    );
+  }
+
+  const ownerTables = new Set((policy.ownerTables ?? []).map(policy.normalizeTableName));
+  const scoped =
+    declaration.actAs !== undefined || declaration.declarePublicRead?.reason !== undefined;
+  const ownerReads = [...observed].filter((table) => ownerTables.has(table));
+  if (!scoped && ownerReads.length > 0) {
+    throw new Error(
+      [
+        `KV414: ${policy.dialectLabel} rawRead of owner-scoped table(s) requires actAs or declarePublicRead scope (SPEC §10.3).`,
+        `  owner tables: ${[...new Set(ownerReads)].sort().join(', ')}`,
+      ].join('\n'),
+    );
+  }
+}
+
+function rawReadExecutionMethod(target: object, policy: RawReadPolicyOptions): Function {
+  const methods =
+    policy.executeMethod === undefined
+      ? (['all', 'query', 'execute', 'values'] as const)
+      : ([policy.executeMethod] as const);
+  for (const method of methods) {
+    const value = Reflect.get(target, method);
+    if (typeof value === 'function') return value;
+  }
+  throw new KovoReadonlyHandleError(
+    `KV410: ${policy.dialectLabel} rawRead could not find an executable read method on the managed DB handle (SPEC §10.2/§10.3).`,
+  );
+}
+
 /** @internal Options for the framework-owned managed DB handle composition point. */
 export interface ManagedDbOptions {
+  rawRead?: RawReadPolicyOptions;
   sqlWritePolicy?: ManagedSqlWritePolicy;
 }
 
@@ -609,7 +741,7 @@ export function managedDb<Db>(
   );
   if (mode === 'write') return safe as Writer<Db>;
   if (typeof safe !== 'object' || safe === null) return safe as Reader<Db>;
-  return readonlyCapabilityDb(safe as unknown as object) as Reader<Db>;
+  return readonlyCapabilityDb(safe as unknown as object, options.rawRead) as unknown as Reader<Db>;
 }
 
 function readonlyDbTarget<Db>(raw: Db): Db {

@@ -127,6 +127,8 @@ export type {
   DeclaredWriteSqliteAuthorizerDatabase,
   DeclaredWriteSqliteAuthorizerOptions,
   PostgresReadonlyClientOptions,
+  RawReadDeclaration,
+  RawReadPolicyOptions,
   Reader,
   Writer,
 } from '../managed-db.js';
