@@ -199,7 +199,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     const sessionProvider = (req: Request) => {
       const cookie = req.headers.get('cookie') ?? '';
       const match = cookie.match(/session=([^;]+)/);
-      return match ? { id: match[1] } : null;
+      return match ? { user: { id: match[1] } } : null;
     };
 
     const app = createApp({
@@ -247,7 +247,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     const sessionProvider = (req: Request) => {
       const cookie = req.headers.get('cookie') ?? '';
       const match = cookie.match(/session=([^;]+)/);
-      return match ? { id: match[1] } : null;
+      return match ? { user: { id: match[1] } } : null;
     };
 
     const app = createApp({ routes: [homeRoute], sessionProvider });
@@ -286,7 +286,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
       routes: [homeRoute],
       sessionProvider(request) {
         const id = request.headers.get('x-session-id');
-        return id ? { id } : null;
+        return id ? { user: { id } } : null;
       },
     });
 
@@ -322,7 +322,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     const sessionProvider = (request: Request) => {
       const cookie = request.headers.get('cookie') ?? '';
       const match = cookie.match(/(?:^|; )sid=([^;]+)/);
-      return match ? { id: match[1] } : null;
+      return match ? { user: { id: match[1] } } : null;
     };
     const app = createApp({ routes: [homeRoute], sessionProvider });
 
@@ -372,7 +372,7 @@ describe('sessionFingerprintFromRequest — session-anchored (K3, SPEC §9.3)', 
     const homeRoute = route('/', { page: () => trustedHtml('<main>Home</main>') });
     const app = createApp({
       routes: [homeRoute],
-      sessionProvider: () => ({ id: 'unknown' }),
+      sessionProvider: () => ({ user: { id: 'unknown' } }),
     });
 
     const response = await renderAppRouteDocumentResponse({
