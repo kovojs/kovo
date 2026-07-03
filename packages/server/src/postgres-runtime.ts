@@ -10,6 +10,7 @@ import { Pool, type PoolClient, type PoolConfig, type QueryConfig, type QueryRes
 
 import {
   assertNonRequestPrincipalPosture,
+  declareSystemPrincipal,
   type NonRequestPrincipalPosture,
 } from './auth-principal.js';
 import {
@@ -214,6 +215,12 @@ export interface KovoPostgresAppRuntimeDb {
   db(request?: unknown): KovoPostgresRuntimeDb;
   readonlyDb: Reader<KovoPostgresRuntimeDb>;
   ready: Promise<void>;
+  /** Framework-owned non-request DB path for generated auth/seed wiring, still RLS-subject. */
+  systemDb(options: {
+    operation: 'read' | 'write';
+    reason: string;
+    surface: string;
+  }): KovoPostgresRuntimeDb;
   close(): Promise<void>;
 }
 
@@ -275,20 +282,31 @@ export function createPostgresAppRuntimeDb(
     schemaTables,
   });
 
+  const dbForRequest = (request?: unknown): KovoPostgresRuntimeDb => {
+    const scope = postgresRequestScope(request, config);
+    return createRequestScopedDb(
+      client.drizzleRequestDb(scope.principal, scope.roleSetting),
+      client,
+      config,
+      metadata,
+      scope,
+      request,
+    );
+  };
+
   return {
-    db(request?: unknown) {
-      const scope = postgresRequestScope(request, config);
-      return createRequestScopedDb(
-        client.drizzleRequestDb(scope.principal, scope.roleSetting),
-        client,
-        config,
-        metadata,
-        scope,
-        request,
-      );
-    },
+    db: dbForRequest,
     readonlyDb: createRequestScopedReadonlyDb(client, config, metadata),
     ready,
+    systemDb(options) {
+      return dbForRequest({
+        principalPosture: declareSystemPrincipal(options.reason, {
+          ingress: 'endpoint',
+          operation: options.operation,
+          surface: options.surface,
+        }),
+      });
+    },
     close: () => client.close(),
   };
 }
@@ -1493,7 +1511,7 @@ async function applyPostgresWriterTablePrivileges(
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<void> {
   const protectedTables = resolveProtectedPostgresTables(tables, metadata);
-  const writableTables = postgresWriterWritableTableNames(protectedTables);
+  const writableTables = postgresWriterWritableTableNames(tables, metadata, protectedTables);
   const authzPolicyDependencyTables = customAuthzPolicyDependencyTableNames(tables);
   for (const table of tables) {
     const tableConfig = getTableConfig(table);
@@ -1522,10 +1540,22 @@ async function applyPostgresWriterTablePrivileges(
 }
 
 function postgresWriterWritableTableNames(
+  tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
   protectedTables: ReadonlyMap<string, ProtectedPostgresTable>,
 ): ReadonlySet<string> {
   const writableTables = new Set<string>();
   for (const tableName of protectedTables.keys()) writableTables.add(tableName);
+  const authzPolicyTables = new Set(customAuthzPolicyPredicatesByTable(tables).keys());
+  for (const [tableName, classifications] of metadata.authorizationClassificationsByTable) {
+    if (
+      classifications.some(
+        (classification) => classification === 'authzPolicy' && !authzPolicyTables.has(tableName),
+      )
+    ) {
+      writableTables.add(tableName);
+    }
+  }
   return writableTables;
 }
 
