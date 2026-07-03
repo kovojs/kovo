@@ -106,6 +106,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     const staleDb = `${probeRun}_stale`;
     const defaultAdmin = `${probeRun}_admin`;
     const defaultRuntime = `${probeRun}_runtime`;
+    const adminMemberRuntime = `${probeRun}_admin_member_runtime`;
     const adoptedAdmin = `${probeRun}_adopt_admin`;
     const adoptedRuntime = `${probeRun}_adopt_runtime`;
     const adoptedReader = `${probeRun}_reader`;
@@ -116,6 +117,9 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       await admin.query(`CREATE ROLE ${quoteIdent(defaultAdmin)} LOGIN CREATEROLE NOBYPASSRLS`);
       await admin.query(
         `CREATE ROLE ${quoteIdent(defaultRuntime)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
+      );
+      await admin.query(
+        `CREATE ROLE ${quoteIdent(adminMemberRuntime)} LOGIN NOSUPERUSER NOCREATEROLE NOBYPASSRLS`,
       );
       await admin.query(
         `CREATE DATABASE ${quoteIdent(defaultDb)} OWNER ${quoteIdent(defaultAdmin)}`,
@@ -165,13 +169,22 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     expect(defaultReport.issues).toEqual([]);
 
     await withPool(cluster.url(defaultDb, 'postgres'), async (superPool) => {
-      await superPool.query(`GRANT kovo_admin TO ${quoteIdent(defaultRuntime)}`);
       await superPool.query(`GRANT kovo_reader TO ${quoteIdent(defaultRuntime)}`);
       await superPool.query(`GRANT kovo_writer TO ${quoteIdent(defaultRuntime)}`);
       await superPool.query(
         `GRANT SELECT ON TABLE kovo_schema_state TO ${quoteIdent(defaultRuntime)}`,
       );
+      await superPool.query(`GRANT kovo_admin TO ${quoteIdent(adminMemberRuntime)}`);
+      await superPool.query(`GRANT kovo_reader TO ${quoteIdent(adminMemberRuntime)}`);
+      await superPool.query(`GRANT kovo_writer TO ${quoteIdent(adminMemberRuntime)}`);
+      await superPool.query(
+        `GRANT SELECT ON TABLE kovo_schema_state TO ${quoteIdent(adminMemberRuntime)}`,
+      );
     });
+    await expectLeastPrivilegeRuntimeFailure(cluster.url(defaultDb, 'postgres'));
+    await expectLeastPrivilegeRuntimeFailure(cluster.url(defaultDb, adminMemberRuntime));
+    await expectLeastPrivilegeRuntimePostureFailure(cluster.url(defaultDb, 'postgres'));
+    await expectLeastPrivilegeRuntimePostureFailure(cluster.url(defaultDb, adminMemberRuntime));
     await expectPermissionDenied(
       defaultRuntimeUrl,
       `CREATE ROLE ${quoteIdent(`${probeRun}_blocked_role`)}`,
@@ -298,6 +311,34 @@ async function expectOwnerIsolation(
   } finally {
     await runtime.close();
   }
+}
+
+async function expectLeastPrivilegeRuntimeFailure(databaseUrl: string): Promise<void> {
+  const runtime = createPostgresAppRuntimeDb({
+    crossOwnerReadTables: ['kovo_ext_probe_notes'],
+    databaseUrl,
+    schema,
+  });
+  try {
+    await expect(runtime.ready).rejects.toThrow(/runtime must be a least-privilege login role/);
+  } finally {
+    await runtime.close();
+  }
+}
+
+async function expectLeastPrivilegeRuntimePostureFailure(databaseUrl: string): Promise<void> {
+  const report = await checkPostgresAppDbPosture({
+    crossOwnerReadTables: ['kovo_ext_probe_notes'],
+    databaseUrl,
+    schema,
+  });
+  expect(report.ok).toBe(false);
+  expect(report.issues).toEqual([
+    {
+      code: 'KV433_RUNTIME_ROLE',
+      detail: 'runtime must be a least-privilege login role',
+    },
+  ]);
 }
 
 async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: string): Promise<void> {

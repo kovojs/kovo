@@ -33,6 +33,10 @@ const DEFAULT_READER_ROLE = 'kovo_reader';
 const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
+const RUNTIME_LEAST_PRIVILEGE_ERROR = 'runtime must be a least-privilege login role';
+const internalPostgresRuntimeDbCapability: unique symbol = Symbol(
+  'kovo.postgres-runtime.internal-db',
+);
 
 type PgTableConfig = ReturnType<typeof getTableConfig>;
 type PgTable = Parameters<typeof getTableConfig>[0];
@@ -95,7 +99,7 @@ interface ResolvedPostgresRuntimeConfig {
 
 interface CreatedRuntimeClient {
   close(): Promise<void>;
-  drizzleInternalDb(): KovoPostgresRuntimeDb;
+  drizzleInternalDb(capability: typeof internalPostgresRuntimeDbCapability): KovoPostgresRuntimeDb;
   drizzleReadonlyDb(
     principal: string | undefined,
     role: string | false,
@@ -253,7 +257,6 @@ export function createPostgresAppRuntimeDb(
 
   return {
     db(request?: unknown) {
-      if (request === undefined) return client.drizzleInternalDb();
       const scope = postgresRequestScope(request, config);
       return createRequestScopedDb(
         client.drizzleRequestDb(scope.principal, scope.roleSetting),
@@ -384,6 +387,17 @@ export async function checkPostgresAppDbPosture(
   const metadata = extractKovoRuntimeDbMetadata(schemaTables);
   const client = createRuntimeClient(config);
   try {
+    if (config.driver === 'node-postgres') {
+      const leastPrivilegeIssue = await runtimeConnectionLeastPrivilegeIssue(client.sql, config);
+      if (leastPrivilegeIssue !== undefined) {
+        return {
+          driver: config.driver,
+          fingerprint: schemaFingerprint(schemaTables, metadata),
+          issues: [leastPrivilegeIssue],
+          ok: false,
+        };
+      }
+    }
     return await checkRuntimeDbPosture(client.sql, {
       config,
       fingerprint: schemaFingerprint(schemaTables, metadata),
@@ -407,6 +421,9 @@ async function initializeRuntimeDb(
 ): Promise<void> {
   if (input.config.provisionOnBoot) {
     await provisionRuntimeDb(client, { ...input, applySchemaDdl: true, migrations: [] });
+  }
+  if (input.config.driver === 'node-postgres') {
+    await assertRuntimeConnectionLeastPrivilege(client, input.config);
   }
   if (input.config.postureCheckOnBoot) {
     const report = await checkRuntimeDbPosture(client, input);
@@ -613,22 +630,6 @@ async function checkRuntimeDbPosture(
           detail: `${input.config.readerRole} must not have SELECT on ${tableName}.${column}`,
         });
       }
-      if (input.config.crossOwnerReadTables.has(tableName)) {
-        const adminGrant = await safeQuery(
-          client,
-          [
-            'SELECT 1 FROM information_schema.column_privileges',
-            'WHERE table_name = $1 AND column_name = $2 AND grantee = $3 AND privilege_type = $4',
-          ].join(' '),
-          [tableName, column, input.config.adminRole, 'SELECT'],
-        );
-        if ((adminGrant?.rows.length ?? 0) > 0) {
-          issues.push({
-            code: 'KV435_SECRET_COLUMN_GRANT',
-            detail: `${input.config.adminRole} must not have SELECT on ${tableName}.${column}`,
-          });
-        }
-      }
     }
   }
 
@@ -649,7 +650,10 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
     const client = new PGlite(config.dataDir);
     return {
       close: () => client.close(),
-      drizzleInternalDb: () => drizzlePglite({ client, relations }),
+      drizzleInternalDb: (capability) => {
+        assertInternalPostgresRuntimeDbCapability(capability);
+        return drizzlePglite({ client, relations });
+      },
       drizzleReadonlyDb: (principal, role, roleSetting) =>
         drizzlePglite({
           client: createPostgresReadonlyClient(
@@ -675,7 +679,10 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
   const transactionalClient = new NodePostgresRuntimeClient(pool);
   return {
     close: () => transactionalClient.close(),
-    drizzleInternalDb: () => drizzleNodePg({ client: pool, relations }),
+    drizzleInternalDb: (capability) => {
+      assertInternalPostgresRuntimeDbCapability(capability);
+      return drizzleNodePg({ client: pool, relations });
+    },
     drizzleReadonlyDb: (principal, role, roleSetting) =>
       drizzleNodePg({
         client: createPostgresReadonlyClient(
@@ -740,7 +747,7 @@ function createRequestScopedReadonlyDb(
   const adminReadDb =
     config.crossOwnerReadTables.size === 0
       ? undefined
-      : client.drizzleReadonlyDb(scope.principal, config.adminRole, 'admin');
+      : client.drizzleReadonlyDb(scope.principal, config.readerRole, 'admin');
   const crossOwnerRead =
     adminReadDb === undefined
       ? undefined
@@ -1136,6 +1143,50 @@ async function ensurePostgresRole(client: RuntimeSqlClient, role: string): Promi
   if (result.rows.length === 0) await client.exec(`CREATE ROLE ${quoteIdent(role)}`);
 }
 
+function assertInternalPostgresRuntimeDbCapability(
+  capability: typeof internalPostgresRuntimeDbCapability,
+): void {
+  if (capability !== internalPostgresRuntimeDbCapability) {
+    throw new Error('KV433: internal Postgres runtime DB handle requires framework capability.');
+  }
+}
+
+async function assertRuntimeConnectionLeastPrivilege(
+  client: RuntimeSqlClient,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<void> {
+  const issue = await runtimeConnectionLeastPrivilegeIssue(client, config);
+  if (issue !== undefined) {
+    throw new Error(`KV433: ${RUNTIME_LEAST_PRIVILEGE_ERROR} (SPEC §10.3).`);
+  }
+}
+
+async function runtimeConnectionLeastPrivilegeIssue(
+  client: RuntimeSqlClient,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<KovoPostgresPostureIssue | undefined> {
+  const role = await client.query<{
+    can_admin: boolean;
+    rolbypassrls: boolean;
+    rolsuper: boolean;
+  }>(
+    [
+      'SELECT r.rolsuper, r.rolbypassrls,',
+      "pg_has_role(current_user, $1, 'USAGE') AS can_admin",
+      'FROM pg_roles r WHERE r.rolname = current_user',
+    ].join(' '),
+    [config.adminRole],
+  );
+  const row = role.rows[0];
+  if (row === undefined || row.rolsuper || row.rolbypassrls || row.can_admin) {
+    return {
+      code: 'KV433_RUNTIME_ROLE',
+      detail: RUNTIME_LEAST_PRIVILEGE_ERROR,
+    };
+  }
+  return undefined;
+}
+
 async function applyPostgresMigrations(
   client: RuntimeSqlClient,
   migrations: readonly KovoPostgresMigration[],
@@ -1231,11 +1282,6 @@ async function applyPostgresReaderColumnPrivileges(
     await client.exec(
       `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.readerRole)}`,
     );
-    if (config.crossOwnerReadTables.has(tableConfig.name)) {
-      await client.exec(
-        `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.adminRole)}`,
-      );
-    }
     if (
       (readableTables.has(tableConfig.name) || authzPolicyDependencyTables.has(tableConfig.name)) &&
       publicColumns.length > 0
@@ -1244,13 +1290,6 @@ async function applyPostgresReaderColumnPrivileges(
         `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
           tableConfig,
         )} TO ${quoteIdent(config.readerRole)}`,
-      );
-    }
-    if (config.crossOwnerReadTables.has(tableConfig.name) && publicColumns.length > 0) {
-      await client.exec(
-        `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
-          tableConfig,
-        )} TO ${quoteIdent(config.adminRole)}`,
       );
     }
   }
@@ -1443,7 +1482,7 @@ async function applyPostgresRlsPolicies(
     await client.exec(
       [
         `CREATE POLICY kovo_admin_scope ON ${table}`,
-        `FOR SELECT TO ${quoteIdent(config.adminRole)}`,
+        `FOR SELECT TO ${quoteIdent(config.readerRole)}`,
         "USING (current_setting('kovo.role', true) = 'admin')",
       ].join(' '),
     );
