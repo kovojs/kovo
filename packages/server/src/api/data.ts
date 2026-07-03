@@ -121,7 +121,6 @@ export {
   createAuthorizationCensusDb,
   createPostgresReadonlyClient,
   createPostgresScopedClient,
-  createSqliteAuthorizationDb,
   declarePublicRead,
   drainPublicReadAuditFacts,
   KovoReadonlyHandleError,
@@ -146,10 +145,6 @@ export type {
   RawReadPolicyOptions,
   Reader,
   SqliteAuthorizationClassification,
-  SqliteAuthorizationDbOptions,
-  SqliteAuthorizationMetadata,
-  SqliteOwnerSource,
-  SqliteOwnerViaSource,
   Writer,
 } from '../managed-db.js';
 export { s, SchemaValidationError } from '../schema.js';

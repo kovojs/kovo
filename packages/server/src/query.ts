@@ -419,6 +419,9 @@ export async function runQuery<const Key extends string, Value, Input, Request>(
     ...(options.clientIp === undefined ? {} : { clientIp: options.clientIp }),
     ...(options.db === undefined ? {} : { db: options.db }),
     ...(options.onError === undefined ? {} : { onError: options.onError }),
+    ...(options.principalPosture === undefined
+      ? {}
+      : { principalPosture: options.principalPosture }),
     ...(options.sessionProvider === undefined ? {} : { sessionProvider: options.sessionProvider }),
     surface: 'query',
   });

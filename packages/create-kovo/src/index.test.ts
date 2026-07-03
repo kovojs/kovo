@@ -282,6 +282,18 @@ describe('create-kovo starter (metadata)', () => {
       'applyPgliteReaderColumnPrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA)',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'applyPgliteWriterTablePrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA)',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const readableTables = pgliteReaderReadableTableNames(metadata)',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'readableTables.has(config.name) && publicColumns.length > 0',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      "classifications.includes('authzPolicy')",
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'Object.defineProperty(db, kovoReadonlyDbHandle',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('request === undefined');
@@ -863,9 +875,10 @@ describe('create-kovo starter (metadata)', () => {
       'const secretReadDb = createSecretBoxingReadDb(',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('RUNTIME_DB_METADATA,');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'createSqliteAuthorizationDb(appDatabase.db',
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'create' + 'SqliteAuthorizationDb',
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('single-principal only');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'function secretBoxingReadDb<Db extends object>',
     );
@@ -903,6 +916,8 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/auth.ts')).toContain('database: drizzleAdapter(appRuntimeDbProvider(),');
     expect(files.get('src/auth.ts')).not.toContain('database: drizzleAdapter(appDb,');
     expect(files.get('README.md')).toContain('opt-in SQLite dialect');
+    expect(files.get('README.md')).toContain('single-principal local-development');
+    expect(files.get('README.md')).toContain('Kovo authorization/confidentiality guarantees');
     expect(files.get('README.md')).toContain('Better Auth currently marks `drizzle-orm@^0.45.2`');
     expect(files.get('README.md')).toContain('peer warning');
     expect(files.get('README.md')).toContain('is expected');
@@ -1035,7 +1050,13 @@ describe('create-kovo starter (CLI)', () => {
       expect(CREATE_KOVO_HELP).toContain('Default: normalized target directory name.');
       expect(CREATE_KOVO_HELP).toContain('Default: postgres.');
       expect(CREATE_KOVO_HELP).toContain('package manager             pnpm@10.12.1.');
-      expect(CREATE_KOVO_HELP).toContain('create-kovo my-app --dialect sqlite');
+      expect(CREATE_KOVO_HELP).toContain('--experimental-sqlite');
+      expect(CREATE_KOVO_HELP).toContain(
+        'Allow SQLite scaffold generation for single-principal local development.',
+      );
+      expect(CREATE_KOVO_HELP).toContain(
+        'create-kovo my-app --dialect sqlite --experimental-sqlite',
+      );
       expect(CREATE_KOVO_HELP).toContain('--disable-git');
     } finally {
       stdout.mockRestore();
@@ -1085,16 +1106,58 @@ describe('create-kovo starter (CLI)', () => {
     }
   });
 
-  it('accepts a SQLite dialect flag', () => {
+  it('refuses a SQLite dialect flag without an explicit experimental opt-in', () => {
     const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-sqlite-'));
+    const root = join(parent, 'Hello SQLite');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      expect(main([root, '--dialect', 'sqlite'])).toBe(1);
+      expect(stdout).not.toHaveBeenCalled();
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('single-principal/local-dev'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('KOVO_EXPERIMENTAL_SQLITE=1'));
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('--experimental-sqlite'));
+      expect(existsSync(root)).toBe(false);
+    } finally {
+      stdout.mockRestore();
+      stderr.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('accepts SQLite when the experimental flag is present', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-sqlite-flag-'));
     const root = join(parent, 'Hello SQLite');
     const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
 
     try {
-      expect(main([root, '--dialect', 'sqlite'])).toBe(0);
+      expect(main([root, '--sqlite', '--experimental-sqlite'])).toBe(0);
       expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     sqlite'));
       expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain("provider: 'sqlite'");
     } finally {
+      stdout.mockRestore();
+      rmSync(parent, { force: true, recursive: true });
+    }
+  });
+
+  it('accepts SQLite when KOVO_EXPERIMENTAL_SQLITE=1 is set', () => {
+    const parent = mkdtempSync(join(tmpdir(), 'create-kovo-cli-sqlite-env-'));
+    const root = join(parent, 'Hello SQLite');
+    const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const previousOptIn = process.env.KOVO_EXPERIMENTAL_SQLITE;
+
+    try {
+      process.env.KOVO_EXPERIMENTAL_SQLITE = '1';
+      expect(main([root, '--dialect=sqlite'])).toBe(0);
+      expect(stdout).toHaveBeenCalledWith(expect.stringContaining('Dialect     sqlite'));
+      expect(readFileSync(join(root, 'src/auth.ts'), 'utf8')).toContain("provider: 'sqlite'");
+    } finally {
+      if (previousOptIn === undefined) {
+        delete process.env.KOVO_EXPERIMENTAL_SQLITE;
+      } else {
+        process.env.KOVO_EXPERIMENTAL_SQLITE = previousOptIn;
+      }
       stdout.mockRestore();
       rmSync(parent, { force: true, recursive: true });
     }

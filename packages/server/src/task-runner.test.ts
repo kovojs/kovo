@@ -3,6 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { installNetConnectFloor, resolveEgressPolicy } from './egress.js';
+import { mutation, runMutation } from './mutation.js';
+import { query, runQuery } from './query.js';
 import { s } from './schema.js';
 import { task } from './task.js';
 import { createDurableTaskRunner } from './task-runner.js';
@@ -109,6 +111,105 @@ describe('durable task runner (SPEC §9.6)', () => {
       'without actAs(id) or declareSystemRead(reason)',
     );
     expect(hookInputs).toHaveLength(1);
+  });
+
+  it('threads task principal posture through runQuery and runMutation lifecycle DB resolution', async () => {
+    const store = new MemoryDurableTaskQueue();
+    const providerPostures: unknown[] = [];
+    const queryResults: unknown[] = [];
+    const mutationValues: unknown[] = [];
+    type ScopedTaskDb = {
+      select(): readonly { id: string; ownerId: string; scope: string }[];
+      recordOrder(input: { id: string }): { id: string; ownerId: string; scope: string };
+    };
+    const readOrders = query('orders/read', {
+      load: async (_input, context?: { db?: ScopedTaskDb }) => context?.db?.select() ?? [],
+    });
+    const recordOrder = mutation('orders/record', {
+      input: s.object({ id: s.string() }),
+      handler: async (input, request: { db?: ScopedTaskDb }) =>
+        request.db?.recordOrder(input) ?? { id: input.id, ownerId: 'missing', scope: 'missing' },
+    });
+    const scoped = task('owner.read-write.scoped', {
+      input: s.object({ ownerId: s.string() }),
+      async run(args, ctx) {
+        queryResults.push(await ctx.actAs(args.ownerId).runQuery(readOrders, undefined));
+        queryResults.push(
+          await ctx.declareSystemRead('compact system audit').runQuery(readOrders, undefined),
+        );
+        mutationValues.push(
+          await ctx.actAs(args.ownerId).runMutation(recordOrder, { id: 'ord_1' }),
+        );
+      },
+    });
+    await store.enqueue({
+      task: scoped.key,
+      args: { ownerId: 'user_1' },
+      runAt: new Date('2026-06-30T10:00:00Z'),
+    });
+    const db = async (request: unknown) => {
+      const posture = (request as { principalPosture?: unknown }).principalPosture;
+      assertNonRequestPrincipalPosture(posture);
+      providerPostures.push(posture);
+      return {
+        select() {
+          return posture.kind === 'act-as'
+            ? [{ id: 'ord_1', ownerId: posture.principal, scope: posture.kind }]
+            : [{ id: 'system_ord', ownerId: '*', scope: posture.kind }];
+        },
+        recordOrder(input) {
+          return {
+            id: input.id,
+            ownerId: posture.kind === 'act-as' ? posture.principal : 'system',
+            scope: posture.kind,
+          };
+        },
+      } satisfies ScopedTaskDb;
+    };
+    const runner = createDurableTaskRunner({
+      store,
+      tasks: [scoped],
+      hooks: {
+        runMutation: (definition, input, options) =>
+          runMutation(
+            definition as never,
+            input,
+            {},
+            {
+              csrf: false,
+              db,
+              principalPosture: options.principalPosture,
+            },
+          ).then((result) => (result.ok ? result.value : result)),
+        runQuery: (definition, input, options) =>
+          runQuery(
+            definition as never,
+            input,
+            {},
+            {
+              db,
+              principalPosture: options.principalPosture,
+            },
+          ).then((result) => (result.ok ? result.value : result)),
+      },
+    });
+
+    await runner.runOnce(new Date('2026-06-30T10:00:01Z'));
+
+    expect(store.snapshot()[0]).toMatchObject({ status: 'succeeded' });
+    expect(providerPostures).toHaveLength(3);
+    expect(providerPostures.map((posture) => (posture as { kind: string }).kind)).toEqual([
+      'act-as',
+      'system',
+      'act-as',
+    ]);
+    expect(providerPostures[0]).toMatchObject({ kind: 'act-as', principal: 'user_1' });
+    expect(providerPostures[1]).toMatchObject({ kind: 'system', reason: 'compact system audit' });
+    expect(queryResults).toEqual([
+      [{ id: 'ord_1', ownerId: 'user_1', scope: 'act-as' }],
+      [{ id: 'system_ord', ownerId: '*', scope: 'system' }],
+    ]);
+    expect(mutationValues).toEqual([{ id: 'ord_1', ownerId: 'user_1', scope: 'act-as' }]);
   });
 
   it('routes default ctx.fetch through the framework egress allowlist choke', async () => {

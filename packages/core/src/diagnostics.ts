@@ -88,7 +88,8 @@ export type DiagnosticCode =
   | 'KV438'
   | 'KV439'
   | 'KV445'
-  | 'KV446';
+  | 'KV446'
+  | 'KV447';
 
 /** A diagnostic's registry entry: its code, severity, message, optional help, and detail labels. */
 export interface DiagnosticDefinition {
@@ -1107,5 +1108,16 @@ export const diagnosticDefinitions = {
     ].join('\n'),
     severity: 'error',
     message: 'SQLite deployments cannot use the node preset durable-task store.',
+  },
+  KV447: {
+    code: 'KV447',
+    help: [
+      'Would lower to: a SQLite owner-annotated table whose owner metadata is available to static audits but is not backed by database roles or RLS at runtime.',
+      "Blocked reason: SQLite has no engine role/RLS layer, so kovo({ owner }) and ownerVia annotations cannot provide Kovo's multi-principal authorization guarantee in the experimental SQLite starter.",
+      'Fixes: use the default PGlite/Postgres runtime for multi-tenant authorization, or treat the SQLite starter as single-principal/local-only and do not rely on owner scoping for confidentiality or integrity.',
+      'SPEC §10.3 and fundamental-fixes-followup-6 DEC-A: SQLite is explicitly experimental and non-guaranteeing for owner-scoped runtime authorization.',
+    ].join('\n'),
+    severity: 'warn',
+    message: 'SQLite owner annotations are advisory only in the experimental SQLite runtime.',
   },
 } as const satisfies Record<DiagnosticCode, DiagnosticDefinition>;

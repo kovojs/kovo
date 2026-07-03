@@ -39,6 +39,7 @@ import {
   type ArrowFunction,
   type FunctionDeclaration,
   type FunctionExpression,
+  type ImportDeclaration,
   type ObjectLiteralExpression,
   type ParameterDeclaration,
   type PropertyAssignment,
@@ -881,6 +882,7 @@ function sqlSafetyDiagnosticsForSourceFile(
   const context = sqlSafetyContextForSourceFile(sourceFile);
   const rawDriverImport = endpointRawDriverImportDiagnostic(file, sourceFile);
   if (rawDriverImport) diagnostics.push(rawDriverImport);
+  diagnostics.push(...sqliteOwnerScopeWarningDiagnostics(file, sourceFile));
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
   // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
   // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
@@ -1125,13 +1127,34 @@ function endpointRawDriverImportDiagnostic(
   file: SourceFileInput,
   sourceFile: SourceFile,
 ): TouchGraphDiagnostic | undefined {
-  if (
-    !sourceFile
-      .getDescendantsOfKind(SyntaxKind.CallExpression)
-      .some((call) => isKovoServerCalleeExpression(call.getExpression(), 'endpoint'))
-  ) {
+  if (!isRequestAuthoredIngressModule(file, sourceFile)) {
     return undefined;
   }
+
+  const runtimeDbImport = sourceFile
+    .getImportDeclarations()
+    .find((candidate) => isRuntimeDbModuleSpecifier(candidate.getModuleSpecifierValue()));
+  if (runtimeDbImport !== undefined && runtimeDbImportHasValueBindings(runtimeDbImport)) {
+    return drizzleDiagnostic({
+      code: 'KV414',
+      detail:
+        'Request-authored endpoint/webhook/task/query/mutation modules must not import value symbols from src/_kovo/app-runtime-db; use framework lifecycle DB capabilities so Postgres role/RLS/column privileges remain the sole authorization/confidentiality door (SPEC §10.3 DEC-B1).',
+      site: `${file.fileName}:${lineForIndex(file.source, runtimeDbImport.getStart())}`,
+    });
+  }
+
+  const unconfinedRuntimeDbCall = sourceFile
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .find((call) => isUnconfinedAppRuntimeDbProviderCall(call, sourceFile));
+  if (unconfinedRuntimeDbCall !== undefined) {
+    return drizzleDiagnostic({
+      code: 'KV414',
+      detail:
+        'Request-authored endpoint/webhook/task/query/mutation modules must not call appRuntimeDbProvider() without a lifecycle request; the undefined path returns the internal framework DB and bypasses the Postgres authorization/confidentiality engine choke (SPEC §10.3 DEC-B1).',
+      site: `${file.fileName}:${lineForIndex(file.source, unconfinedRuntimeDbCall.getStart())}`,
+    });
+  }
+
   const declaration = sourceFile
     .getImportDeclarations()
     .find((candidate) => ENDPOINT_RAW_DRIVER_MODULES.has(candidate.getModuleSpecifierValue()));
@@ -1142,6 +1165,135 @@ function endpointRawDriverImportDiagnostic(
       'endpoint() code must use endpoint({ db: true }) + ctx.actAs(id) managed DB capabilities; raw driver imports bypass the endpoint authorization choke (SPEC §10.3 DEC-H).',
     site: `${file.fileName}:${lineForIndex(file.source, declaration.getStart())}`,
   });
+}
+
+function sqliteOwnerScopeWarningDiagnostics(
+  file: SourceFileInput,
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic[] {
+  const diagnostics: { diagnostic: TouchGraphDiagnostic; index: number }[] = [];
+
+  for (const declaration of sourceFile.getVariableDeclarations()) {
+    const initializer = declaration.getInitializer();
+    if (!initializer || !Node.isCallExpression(initializer)) continue;
+    const rootCall = rootCallExpression(initializer);
+    if (!isSqliteTableFactoryCall(rootCall)) continue;
+    const annotation = tableAnnotation(rootCall);
+    if (!annotation || !isDomainExtractedTableAnnotation(annotation)) continue;
+    const classification =
+      annotation.ownerVia !== undefined
+        ? 'ownerVia'
+        : annotation.owner !== undefined
+          ? 'owner'
+          : null;
+    if (!classification) continue;
+
+    const line = lineForIndex(file.source, rootCall.getStart());
+    const detail = [
+      `Table ${annotation.name} declares ${classification} scoping;`,
+      'SQLite keeps the static metadata but has no engine role/RLS layer,',
+      'so this starter is single-principal only. Use PGlite/Postgres for',
+      "Kovo's multi-tenant authorization guarantees (SPEC §10.3 DEC-A).",
+    ].join(' ');
+    diagnostics.push({
+      diagnostic: drizzleDiagnostic({
+        code: 'KV447',
+        detail,
+        site: `${file.fileName}:${line}`,
+      }),
+      index: line,
+    });
+  }
+
+  return diagnostics
+    .sort((left, right) => left.index - right.index)
+    .map((entry) => entry.diagnostic);
+}
+
+function isSqliteTableFactoryCall(call: CallExpression): boolean {
+  const expression = unwrappedStaticExpressionNode(call.getExpression());
+  const factoryName = Node.isIdentifier(expression)
+    ? (projectDrizzleCoreIdentifierExportName(expression) ?? expression.getText())
+    : Node.isPropertyAccessExpression(expression) &&
+        isDrizzleTableFactoryNamespaceMember(expression)
+      ? expression.getName()
+      : undefined;
+  return factoryName === 'sqliteTable';
+}
+
+function isRequestAuthoredIngressModule(file: SourceFileInput, sourceFile: SourceFile): boolean {
+  if (/(?:^|\/)(?:src\/)?_kovo\/app-runtime-db(?:\.sqlite)?\.ts$/.test(file.fileName)) {
+    return false;
+  }
+  if (
+    /\.(?:endpoint|endpoints|webhook|webhooks|task|tasks|query|queries|mutation|mutations)\.[cm]?[jt]sx?$/u.test(
+      file.fileName,
+    )
+  ) {
+    return true;
+  }
+  const requestSurfaceExports = ['endpoint', 'mutation', 'query', 'task', 'webhook'];
+  return sourceFile
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .some((call) =>
+      requestSurfaceExports.some((name) =>
+        isKovoServerCalleeExpression(call.getExpression(), name),
+      ),
+    );
+}
+
+function isRuntimeDbModuleSpecifier(moduleSpecifier: string): boolean {
+  const normalized = moduleSpecifier.replace(/\\/gu, '/').replace(/\.(?:mjs|cjs|js)$/u, '');
+  return /(?:^|\/)(?:src\/)?_kovo\/app-runtime-db(?:\.sqlite)?$/u.test(normalized);
+}
+
+function runtimeDbImportHasValueBindings(declaration: ImportDeclaration): boolean {
+  if (declaration.isTypeOnly()) return false;
+  const importClause = declaration.getImportClause();
+  if (importClause === undefined) return false;
+  if (importClause.getDefaultImport() !== undefined) return true;
+  if (importClause.getNamespaceImport() !== undefined) return true;
+  return declaration.getNamedImports().some((specifier) => !specifier.isTypeOnly());
+}
+
+function isUnconfinedAppRuntimeDbProviderCall(
+  call: CallExpression,
+  sourceFile: SourceFile,
+): boolean {
+  if (!isUndefinedOrEmptyArguments(call)) return false;
+
+  const expression = call.getExpression();
+  if (Node.isIdentifier(expression) && expression.getText() === 'appRuntimeDbProvider') {
+    return true;
+  }
+  if (
+    Node.isPropertyAccessExpression(expression) &&
+    expression.getName() === 'appRuntimeDbProvider'
+  ) {
+    return true;
+  }
+
+  return runtimeDbProviderImportLocalNames(sourceFile).has(expression.getText());
+}
+
+function isUndefinedOrEmptyArguments(call: CallExpression): boolean {
+  const args = call.getArguments();
+  if (args.length === 0) return true;
+  return args.length === 1 && Node.isIdentifier(args[0]) && args[0].getText() === 'undefined';
+}
+
+function runtimeDbProviderImportLocalNames(sourceFile: SourceFile): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (!isRuntimeDbModuleSpecifier(declaration.getModuleSpecifierValue())) continue;
+    for (const specifier of declaration.getNamedImports()) {
+      if (specifier.getName() !== 'appRuntimeDbProvider') continue;
+      names.add(specifier.getAliasNode()?.getText() ?? specifier.getName());
+    }
+    const namespaceImport = declaration.getImportClause()?.getNamespaceImport();
+    if (namespaceImport) names.add(`${namespaceImport.getText()}.appRuntimeDbProvider`);
+  }
+  return names;
 }
 
 function sqlRawHelperDiagnostic(

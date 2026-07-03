@@ -258,6 +258,8 @@ Normative modules: [spec/11-verification.md](spec/11-verification.md) and [spec/
 
 Kovo's verification surface combines static touch/read extraction, runtime instrumentation, graph inspection, generated diagnostics, and browser-free contract tests. Static analysis over-approximates, runtime instrumentation under-approximates executed paths, and the invariant is that observed behavior remains within static or explicitly declared facts.
 
+For managed Postgres/PGlite writes, dangerous observed-vs-declared escapes are also engine-bounded: owner-table writes are constrained by RLS/WITH CHECK, and unclassified/reference tables are default-denied by writer grants. The declared-write wrapper still carries the coverage/invalidation contract for benign over-declaration among writable tables; §10.3 and §11.2 own the detailed layer split.
+
 The diagnostic registry is split out because it is lookup material with independent generated-reference checks. Its authority remains normative: every framework KV### code, severity, and fix posture must agree with the shared `diagnosticDefinitions` registry and the generated diagnostics reference.
 
 ## 12. Testing API

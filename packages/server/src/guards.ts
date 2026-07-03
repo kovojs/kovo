@@ -9,6 +9,7 @@ import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
 import {
   isProvenPrincipal,
+  type NonRequestPrincipalPosture,
   principalPostureFromRequest,
   provenPrincipalFromRequest,
 } from './auth-principal.js';
@@ -346,6 +347,8 @@ export interface RequestLifecycleOptions<RawRequest, SessionValue = unknown, DbV
    */
   clientIp?: (request: RawRequest) => string | undefined;
   db?: DbProvider<RawRequest, DbValue, SessionValue>;
+  /** @internal Framework-minted task/webhook/endpoint principal posture for non-request DB work. */
+  principalPosture?: NonRequestPrincipalPosture;
   /** @internal Query/list result item ceiling enforced by the query runtime sink (SPEC §9.5). */
   maxListItems?: number;
   /**
@@ -743,6 +746,14 @@ export async function resolveLifecycleRequest<Request, SessionValue = unknown, D
     if (clientIp !== undefined && clientIp !== '') {
       lifecycleRequest = requestWithProperty(lifecycleRequest, 'clientIp', clientIp);
     }
+  }
+
+  if (options.principalPosture !== undefined) {
+    lifecycleRequest = requestWithProperty(
+      lifecycleRequest,
+      'principalPosture',
+      options.principalPosture,
+    );
   }
 
   if (options.db) {

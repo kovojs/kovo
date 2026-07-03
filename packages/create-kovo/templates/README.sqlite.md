@@ -9,6 +9,10 @@ This app was scaffolded with the opt-in SQLite dialect. Postgres is the default
 starter dialect; rerun `create-kovo` without `--dialect sqlite` for the PGlite
 variant.
 
+SQLite is a single-principal local-development scaffold. It does not provide
+Kovo authorization/confidentiality guarantees because SQLite has no engine role,
+RLS, or column-privilege layer.
+
 ```sh
 pnpm run dev         # vp dev — start the dev server
 pnpm run check       # vp check + sound-subset + endpoint posture + kovo build

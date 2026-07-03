@@ -108,6 +108,12 @@ export const CREATE_KOVO_REFERENCE = {
       docsDescription: 'Alias for `--dialect sqlite`.',
     },
     {
+      flag: '--experimental-sqlite',
+      description: 'Allow SQLite scaffold generation for single-principal local development.',
+      docsDescription:
+        'Required for `--sqlite` or `--dialect sqlite` unless `KOVO_EXPERIMENTAL_SQLITE=1` is set. SQLite is a single-principal local-development scaffold and does not provide Kovo authorization/confidentiality guarantees.',
+    },
+    {
       flag: '--disable-git',
       description: 'Do not initialize a Git repository.',
       docsDescription:
@@ -122,7 +128,7 @@ export const CREATE_KOVO_REFERENCE = {
   examples: [
     'create-kovo my-app',
     'create-kovo my-app --name acme-todos',
-    'create-kovo my-app --dialect sqlite',
+    'create-kovo my-app --dialect sqlite --experimental-sqlite',
   ],
   defaults: [
     { label: 'target-directory', value: 'Required.' },
@@ -377,6 +383,7 @@ export function main(args: readonly string[] = process.argv.slice(2)): number {
 
   try {
     const options = readCliOptions(args);
+    assertCliSqliteScaffoldAllowed(options);
     const result = writeKovoProject(options.targetDirectory, {
       ...(options.dialect === undefined ? {} : { dialect: options.dialect }),
       ...(options.name === undefined ? {} : { name: options.name }),
@@ -519,12 +526,14 @@ function isInsideVersionControl(root: string): boolean {
 interface CliOptions {
   disableGit?: boolean;
   dialect?: CreateKovoDialect;
+  experimentalSqlite?: boolean;
   name?: string;
   targetDirectory: string;
 }
 
 function readCliOptions(args: readonly string[]): CliOptions {
   let disableGit: boolean | undefined;
+  let experimentalSqlite: boolean | undefined;
   let targetDirectory: string | undefined;
   let name: string | undefined;
   let dialect: CreateKovoDialect | undefined;
@@ -561,6 +570,11 @@ function readCliOptions(args: readonly string[]): CliOptions {
       continue;
     }
 
+    if (arg === '--experimental-sqlite') {
+      experimentalSqlite = true;
+      continue;
+    }
+
     if (arg === '--postgres') {
       dialect = 'postgres';
       continue;
@@ -588,9 +602,19 @@ function readCliOptions(args: readonly string[]): CliOptions {
   return {
     ...(disableGit === undefined ? {} : { disableGit }),
     ...(dialect === undefined ? {} : { dialect }),
+    ...(experimentalSqlite === undefined ? {} : { experimentalSqlite }),
     ...(name === undefined ? {} : { name }),
     targetDirectory,
   };
+}
+
+function assertCliSqliteScaffoldAllowed(options: CliOptions): void {
+  if (options.dialect !== 'sqlite') return;
+  if (options.experimentalSqlite || process.env.KOVO_EXPERIMENTAL_SQLITE === '1') return;
+
+  throw new Error(
+    'SQLite scaffold is experimental and single-principal/local-dev only; it does not provide Kovo authorization/confidentiality guarantees. Set KOVO_EXPERIMENTAL_SQLITE=1 or pass --experimental-sqlite to scaffold it.',
+  );
 }
 
 function readRequiredOptionValue(args: readonly string[], index: number, option: string): string {
@@ -661,6 +685,7 @@ function renderCliError(error: unknown): string {
       'Choose a new directory path and try again.',
     );
   } else if (
+    message.startsWith('SQLite scaffold is experimental') ||
     message.startsWith('Unsupported dialect: ') ||
     message.startsWith('Unknown option: ') ||
     message.startsWith('Missing value for ') ||

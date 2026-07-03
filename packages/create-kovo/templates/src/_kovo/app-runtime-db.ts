@@ -80,7 +80,7 @@ async function initializeAppDb(client: PGlite): Promise<void> {
   );
   await applyPgliteOwnerPolicies(client, SCHEMA_TABLES, SECRET_READ_METADATA);
   await applyPgliteReaderColumnPrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA);
-  await applyPgliteWriterTablePrivileges(client, SCHEMA_TABLES);
+  await applyPgliteWriterTablePrivileges(client, SCHEMA_TABLES, SECRET_READ_METADATA);
   await client.exec(SEED_CONTACTS);
 }
 
@@ -287,6 +287,7 @@ async function applyPgliteReaderColumnPrivileges(
   tables: readonly PgTable[],
   metadata: KovoRuntimeDbMetadata,
 ): Promise<void> {
+  const readableTables = pgliteReaderReadableTableNames(metadata);
   for (const table of tables) {
     const config = getTableConfig(table);
     const secretColumns = metadata.secretColumnNamesByTable.get(config.name) ?? new Set<string>();
@@ -297,7 +298,7 @@ async function applyPgliteReaderColumnPrivileges(
     await client.exec(
       `REVOKE ALL ON TABLE ${quoteIdent(config.name)} FROM ${quoteIdent(READER_ROLE)}`,
     );
-    if (publicColumns.length > 0) {
+    if (readableTables.has(config.name) && publicColumns.length > 0) {
       await client.exec(
         `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteIdent(
           config.name,
@@ -307,16 +308,53 @@ async function applyPgliteReaderColumnPrivileges(
   }
 }
 
+function pgliteReaderReadableTableNames(metadata: KovoRuntimeDbMetadata): ReadonlySet<string> {
+  const readableTables = new Set<string>();
+  for (const tableName of metadata.ownerSourcesByTable.keys()) readableTables.add(tableName);
+  for (const tableName of metadata.ownerViaSourcesByTable.keys()) readableTables.add(tableName);
+  for (const [tableName, classifications] of metadata.authorizationClassificationsByTable) {
+    if (
+      classifications.some(
+        (classification) =>
+          classification === 'authzPolicy' ||
+          classification === 'owned' ||
+          classification === 'ownedVia' ||
+          classification === 'public' ||
+          classification === 'reference',
+      )
+    ) {
+      readableTables.add(tableName);
+    }
+  }
+  return readableTables;
+}
+
 async function applyPgliteWriterTablePrivileges(
   client: PGlite,
   tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
 ): Promise<void> {
+  const writableTables = pgliteWriterWritableTableNames(metadata);
   for (const table of tables) {
-    const name = quoteIdent(getTableConfig(table).name);
-    await client.exec(
-      `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${name} TO ${quoteIdent(WRITER_ROLE)}`,
-    );
+    const tableName = getTableConfig(table).name;
+    const name = quoteIdent(tableName);
+    await client.exec(`REVOKE ALL ON TABLE ${name} FROM ${quoteIdent(WRITER_ROLE)}`);
+    if (writableTables.has(tableName)) {
+      await client.exec(
+        `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${name} TO ${quoteIdent(WRITER_ROLE)}`,
+      );
+    }
   }
+}
+
+function pgliteWriterWritableTableNames(metadata: KovoRuntimeDbMetadata): ReadonlySet<string> {
+  const writableTables = new Set<string>();
+  for (const tableName of metadata.ownerSourcesByTable.keys()) writableTables.add(tableName);
+  for (const tableName of metadata.ownerViaSourcesByTable.keys()) writableTables.add(tableName);
+  for (const [tableName, classifications] of metadata.authorizationClassificationsByTable) {
+    if (classifications.includes('authzPolicy')) writableTables.add(tableName);
+  }
+  return writableTables;
 }
 
 async function applyPgliteOwnerPolicies(

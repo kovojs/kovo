@@ -181,7 +181,7 @@ they are not claimed as the verified TCB.
       "id": "server.secret-read.sqlite-boundary",
       "file": "packages/server/src/secret-read-boundary.ts",
       "name": "sqliteSecretReadBoundaryForStatement",
-      "kind": "secret-read-refusal",
+      "kind": "secret-read-refusal-experimental-sqlite-runtime-box-not-engine-confidentiality",
       "classification": "tcb",
       "wrapper": "securityClassifier",
       "decision": "server.secret-read.sqlite-boundary",
@@ -260,16 +260,6 @@ they are not claimed as the verified TCB.
       "lineBudget": 70
     },
     {
-      "id": "server.managed-db.sqlite-authorization-db",
-      "file": "packages/server/src/managed-db.ts",
-      "name": "createSqliteAuthorizationDb",
-      "kind": "db-owner-authorization-wrapper",
-      "classification": "tcb",
-      "wrapper": "securityClassifier",
-      "decision": "server.managed-db.sqlite-authorization-db",
-      "lineBudget": 20
-    },
-    {
       "id": "server.managed-db.authorization-census-db",
       "file": "packages/server/src/managed-db.ts",
       "name": "createAuthorizationCensusDb",
@@ -293,7 +283,7 @@ they are not claimed as the verified TCB.
       "id": "server.managed-db.postgres-scoped-client",
       "file": "packages/server/src/managed-db.ts",
       "name": "createPostgresScopedClient",
-      "kind": "db-owner-authorization-wrapper",
+      "kind": "postgres-engine-choke-role-rls-current-principal-authorization",
       "classification": "tcb",
       "wrapper": "securityClassifier",
       "decision": "server.managed-db.postgres-scoped-client",

@@ -973,6 +973,9 @@ function runMutationOptions<Request>(
     ...(csrf === undefined ? {} : { csrf }),
     ...(lifecycle?.db === undefined ? {} : { db: lifecycle.db }),
     ...(lifecycle?.onError === undefined ? {} : { onError: lifecycle.onError }),
+    ...(lifecycle?.principalPosture === undefined
+      ? {}
+      : { principalPosture: lifecycle.principalPosture }),
     ...(lifecycle?.sessionProvider === undefined
       ? {}
       : { sessionProvider: lifecycle.sessionProvider }),
