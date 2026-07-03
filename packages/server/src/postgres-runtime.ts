@@ -2,7 +2,8 @@ import { createHash } from 'node:crypto';
 
 import { PGlite } from '@electric-sql/pglite';
 import { extractKovoRuntimeDbMetadata, type KovoRuntimeDbMetadata } from '@kovojs/drizzle';
-import { getTableConfig } from 'drizzle-orm/pg-core';
+import type { SQL } from 'drizzle-orm';
+import { PgDialect, getTableConfig } from 'drizzle-orm/pg-core';
 import { drizzle as drizzleNodePg, type NodePgDatabase } from 'drizzle-orm/node-postgres';
 import { drizzle as drizzlePglite, type PgliteDatabase } from 'drizzle-orm/pglite';
 import { Pool, type PoolClient, type PoolConfig, type QueryConfig, type QueryResultRow } from 'pg';
@@ -31,9 +32,28 @@ type PgTable = Parameters<typeof getTableConfig>[0];
 type PgColumn = PgTableConfig['columns'][number];
 type PgForeignKey = PgTableConfig['foreignKeys'][number];
 
+const POSTGRES_POLICY_DIALECT = new PgDialect();
+
 interface DeclaredWritePolicy {
   tables?: readonly string[];
   touches?: readonly string[];
+}
+
+interface AuthzPolicyPredicate {
+  dependencyTableNames: readonly string[];
+  predicate: string;
+  tableName: string;
+}
+
+interface KovoDomainAnnotation {
+  authzPolicy?: unknown;
+  domain?: unknown;
+}
+
+interface DrizzleSqlLike {
+  readonly queryChunks?: unknown;
+  toQuery?: unknown;
+  readonly usedTables?: unknown;
 }
 
 interface RuntimeTransactionClient {
@@ -284,7 +304,7 @@ async function provisionRuntimeDb(
   await client.exec(
     'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
   );
-  await applyPostgresOwnerPolicies(client, input.schemaTables, input.metadata, input.config);
+  await applyPostgresRlsPolicies(client, input.schemaTables, input.metadata, input.config);
   await applyPostgresReaderColumnPrivileges(
     client,
     input.schemaTables,
@@ -359,6 +379,33 @@ async function checkRuntimeDbPosture(
       issues.push({
         code: 'KV433_OWNER_VIA_POLICY',
         detail: `${tableName} is missing owner-via policy through ${ownerVia.parentTable}`,
+      });
+    }
+  }
+
+  const authzPolicyPredicates = customAuthzPolicyPredicatesByTable(input.schemaTables);
+  for (const [tableName] of authzPolicyPredicates) {
+    const rls = await safeQuery<{ relforcerowsecurity: boolean; relrowsecurity: boolean }>(
+      client,
+      'SELECT relrowsecurity, relforcerowsecurity FROM pg_class WHERE relname = $1',
+      [tableName],
+    );
+    const row = rls?.rows[0];
+    if (row?.relrowsecurity !== true || row.relforcerowsecurity !== true) {
+      issues.push({
+        code: 'KV433_FORCE_RLS',
+        detail: `${tableName} custom authzPolicy must have row-level security enabled and forced`,
+      });
+    }
+    const policy = await safeQuery(
+      client,
+      'SELECT 1 FROM pg_policies WHERE tablename = $1 AND policyname = $2',
+      [tableName, 'kovo_authz_policy'],
+    );
+    if ((policy?.rows.length ?? 0) === 0) {
+      issues.push({
+        code: 'KV433_AUTHZ_POLICY',
+        detail: `${tableName} is missing kovo_authz_policy for its custom authzPolicy predicate`,
       });
     }
   }
@@ -739,6 +786,7 @@ async function applyPostgresReaderColumnPrivileges(
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<void> {
   const readableTables = postgresReaderReadableTableNames(metadata);
+  const authzPolicyDependencyTables = customAuthzPolicyDependencyTableNames(tables);
   for (const table of tables) {
     const tableConfig = getTableConfig(table);
     const secretColumns =
@@ -750,7 +798,10 @@ async function applyPostgresReaderColumnPrivileges(
     await client.exec(
       `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.readerRole)}`,
     );
-    if (readableTables.has(tableConfig.name) && publicColumns.length > 0) {
+    if (
+      (readableTables.has(tableConfig.name) || authzPolicyDependencyTables.has(tableConfig.name)) &&
+      publicColumns.length > 0
+    ) {
       await client.exec(
         `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
           tableConfig,
@@ -788,8 +839,14 @@ async function applyPostgresWriterTablePrivileges(
   config: ResolvedPostgresRuntimeConfig,
 ): Promise<void> {
   const writableTables = postgresWriterWritableTableNames(metadata);
+  const authzPolicyDependencyTables = customAuthzPolicyDependencyTableNames(tables);
   for (const table of tables) {
     const tableConfig = getTableConfig(table);
+    const secretColumns =
+      metadata.secretColumnNamesByTable.get(tableConfig.name) ?? new Set<string>();
+    const publicColumns = tableConfig.columns
+      .map((column) => column.name)
+      .filter((column) => !secretColumns.has(column));
     await client.exec(
       `REVOKE ALL ON TABLE ${quoteTable(tableConfig)} FROM ${quoteIdent(config.writerRole)}`,
     );
@@ -798,6 +855,12 @@ async function applyPostgresWriterTablePrivileges(
         `GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE ${quoteTable(tableConfig)} TO ${quoteIdent(
           config.writerRole,
         )}`,
+      );
+    } else if (authzPolicyDependencyTables.has(tableConfig.name) && publicColumns.length > 0) {
+      await client.exec(
+        `GRANT SELECT (${publicColumns.map(quoteIdent).join(', ')}) ON TABLE ${quoteTable(
+          tableConfig,
+        )} TO ${quoteIdent(config.writerRole)}`,
       );
     }
   }
@@ -813,7 +876,7 @@ function postgresWriterWritableTableNames(metadata: KovoRuntimeDbMetadata): Read
   return writableTables;
 }
 
-async function applyPostgresOwnerPolicies(
+async function applyPostgresRlsPolicies(
   client: RuntimeSqlClient,
   tables: readonly PgTable[],
   metadata: KovoRuntimeDbMetadata,
@@ -861,6 +924,121 @@ async function applyPostgresOwnerPolicies(
       ].join(' '),
     );
   }
+  for (const { predicate, tableName } of customAuthzPolicyPredicatesByTable(tables).values()) {
+    const table = quoteIdent(tableName);
+    await client.exec(`ALTER TABLE ${table} ENABLE ROW LEVEL SECURITY`);
+    await client.exec(`ALTER TABLE ${table} FORCE ROW LEVEL SECURITY`);
+    await client.exec(`DROP POLICY IF EXISTS kovo_authz_policy ON ${table}`);
+    await client.exec(
+      [
+        `CREATE POLICY kovo_authz_policy ON ${table}`,
+        `FOR ALL TO ${quoteIdent(config.readerRole)}, ${quoteIdent(config.writerRole)}`,
+        `USING (${predicate}) WITH CHECK (${predicate})`,
+      ].join(' '),
+    );
+  }
+}
+
+function customAuthzPolicyPredicatesByTable(
+  tables: readonly PgTable[],
+): ReadonlyMap<string, AuthzPolicyPredicate> {
+  const predicates = new Map<string, AuthzPolicyPredicate>();
+  for (const table of tables) {
+    const tableName = getTableConfig(table).name;
+    const authzPolicy = kovoDomainAnnotation(table)?.authzPolicy;
+    if (authzPolicy === undefined || typeof authzPolicy === 'string') continue;
+    if (!isDrizzleSqlLike(authzPolicy)) {
+      throw unsupportedAuthzPolicyError(
+        tableName,
+        'expected authzPolicy to be a Drizzle sql`...` predicate or a string justification',
+      );
+    }
+    predicates.set(tableName, {
+      dependencyTableNames: authzPolicyUsedTableNames(authzPolicy).filter(
+        (dependency) => dependency !== tableName,
+      ),
+      predicate: renderCustomAuthzPolicyPredicate(tableName, authzPolicy),
+      tableName,
+    });
+  }
+  return predicates;
+}
+
+function renderCustomAuthzPolicyPredicate(tableName: string, authzPolicy: unknown): string {
+  if (!isDrizzleSqlLike(authzPolicy)) {
+    throw unsupportedAuthzPolicyError(
+      tableName,
+      'expected authzPolicy to be a Drizzle sql`...` predicate or a string justification',
+    );
+  }
+  let query: { params?: unknown[]; sql?: unknown };
+  try {
+    query = POSTGRES_POLICY_DIALECT.sqlToQuery(authzPolicy as SQL);
+  } catch (cause) {
+    const reason =
+      cause instanceof Error ? cause.message : typeof cause === 'string' ? cause : 'unknown error';
+    throw unsupportedAuthzPolicyError(tableName, `could not render predicate SQL: ${reason}`);
+  }
+  const params = query.params ?? [];
+  if (params.length > 0) {
+    throw unsupportedAuthzPolicyError(
+      tableName,
+      'predicate SQL must not contain bound parameters; inline only reviewed literal SQL chunks',
+    );
+  }
+  if (typeof query.sql !== 'string' || query.sql.trim() === '') {
+    throw unsupportedAuthzPolicyError(tableName, 'predicate SQL rendered to an empty statement');
+  }
+  return query.sql.trim();
+}
+
+function customAuthzPolicyDependencyTableNames(tables: readonly PgTable[]): ReadonlySet<string> {
+  const dependencyTableNames = new Set<string>();
+  for (const { dependencyTableNames: dependencies } of customAuthzPolicyPredicatesByTable(
+    tables,
+  ).values()) {
+    for (const dependency of dependencies) dependencyTableNames.add(dependency);
+  }
+  return dependencyTableNames;
+}
+
+function authzPolicyUsedTableNames(authzPolicy: DrizzleSqlLike): string[] {
+  return Array.isArray(authzPolicy.usedTables)
+    ? authzPolicy.usedTables.filter(
+        (tableName): tableName is string => typeof tableName === 'string',
+      )
+    : [];
+}
+
+function isDrizzleSqlLike(value: unknown): value is DrizzleSqlLike {
+  return (
+    value !== null &&
+    (typeof value === 'object' || typeof value === 'function') &&
+    Array.isArray((value as DrizzleSqlLike).queryChunks) &&
+    typeof (value as DrizzleSqlLike).toQuery === 'function'
+  );
+}
+
+function unsupportedAuthzPolicyError(tableName: string, detail: string): Error {
+  return new Error(
+    `KV433_AUTHZ_POLICY_UNSUPPORTED: Postgres authzPolicy for ${tableName} must be a conservative no-parameter SQL predicate; ${detail} (SPEC §10.3).`,
+  );
+}
+
+function kovoDomainAnnotation(table: PgTable): KovoDomainAnnotation | undefined {
+  for (const value of [
+    ...Object.values(table as unknown as Record<string, unknown>),
+    ...Object.getOwnPropertySymbols(table).map((symbol) => Reflect.get(table as object, symbol)),
+  ]) {
+    if (
+      value !== null &&
+      (typeof value === 'object' || typeof value === 'function') &&
+      'domain' in value
+    ) {
+      return value as KovoDomainAnnotation;
+    }
+  }
+  return undefined;
 }
 
 async function persistSchemaFingerprint(
@@ -905,10 +1083,14 @@ function schemaFingerprint(tables: readonly PgTable[], metadata: KovoRuntimeDbMe
       schema: (config as { schema?: unknown }).schema,
     };
   });
+  const authzPolicyPredicates = [...customAuthzPolicyPredicatesByTable(tables).values()].map(
+    ({ predicate, tableName }) => [tableName, predicate],
+  );
   return createHash('sha256')
     .update(
       JSON.stringify({
         authorization: [...metadata.authorizationClassificationsByTable.entries()],
+        authzPolicyPredicates,
         owner: [...metadata.ownerSourcesByTable.entries()],
         ownerVia: [...metadata.ownerViaSourcesByTable.entries()],
         secret: [...metadata.secretColumnNamesByTable.entries()].map(([table, columns]) => [
