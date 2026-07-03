@@ -1134,7 +1134,12 @@ function endpointRawDriverImportDiagnostic(
   const runtimeDbImport = sourceFile
     .getImportDeclarations()
     .find((candidate) => isRuntimeDbModuleSpecifier(candidate.getModuleSpecifierValue()));
-  if (runtimeDbImport !== undefined && runtimeDbImportHasValueBindings(runtimeDbImport)) {
+  if (
+    runtimeDbImport !== undefined &&
+    runtimeDbImportHasValueBindings(runtimeDbImport) &&
+    (isRequestAuthoredIngressFileName(file.fileName) ||
+      runtimeDbValueBindingIsReferencedFromRequestSurface(sourceFile))
+  ) {
     return drizzleDiagnostic({
       code: 'KV414',
       detail:
@@ -1225,11 +1230,7 @@ function isRequestAuthoredIngressModule(file: SourceFileInput, sourceFile: Sourc
   if (/(?:^|\/)(?:src\/)?_kovo\/app-runtime-db(?:\.sqlite)?\.ts$/.test(file.fileName)) {
     return false;
   }
-  if (
-    /\.(?:endpoint|endpoints|webhook|webhooks|task|tasks|query|queries|mutation|mutations)\.[cm]?[jt]sx?$/u.test(
-      file.fileName,
-    )
-  ) {
+  if (isRequestAuthoredIngressFileName(file.fileName)) {
     return true;
   }
   const requestSurfaceExports = ['endpoint', 'mutation', 'query', 'task', 'webhook'];
@@ -1240,6 +1241,12 @@ function isRequestAuthoredIngressModule(file: SourceFileInput, sourceFile: Sourc
         isKovoServerCalleeExpression(call.getExpression(), name),
       ),
     );
+}
+
+function isRequestAuthoredIngressFileName(fileName: string): boolean {
+  return /\.(?:endpoint|endpoints|webhook|webhooks|task|tasks|query|queries|mutation|mutations)\.[cm]?[jt]sx?$/u.test(
+    fileName,
+  );
 }
 
 function isRuntimeDbModuleSpecifier(moduleSpecifier: string): boolean {
@@ -1254,6 +1261,49 @@ function runtimeDbImportHasValueBindings(declaration: ImportDeclaration): boolea
   if (importClause.getDefaultImport() !== undefined) return true;
   if (importClause.getNamespaceImport() !== undefined) return true;
   return declaration.getNamedImports().some((specifier) => !specifier.isTypeOnly());
+}
+
+function runtimeDbValueBindingIsReferencedFromRequestSurface(sourceFile: SourceFile): boolean {
+  const localNames = runtimeDbValueImportLocalNames(sourceFile);
+  if (localNames.size === 0) return false;
+
+  const requestSurfaceExports = ['endpoint', 'mutation', 'query', 'task', 'webhook'];
+  return sourceFile
+    .getDescendantsOfKind(SyntaxKind.CallExpression)
+    .some(
+      (call) =>
+        requestSurfaceExports.some((name) =>
+          isKovoServerCalleeExpression(call.getExpression(), name),
+        ) && nodeContainsRuntimeDbValueBinding(call, localNames),
+    );
+}
+
+function runtimeDbValueImportLocalNames(sourceFile: SourceFile): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const declaration of sourceFile.getImportDeclarations()) {
+    if (!isRuntimeDbModuleSpecifier(declaration.getModuleSpecifierValue())) continue;
+    if (declaration.isTypeOnly()) continue;
+
+    const importClause = declaration.getImportClause();
+    const defaultImport = importClause?.getDefaultImport();
+    const namespaceImport = importClause?.getNamespaceImport();
+    if (defaultImport) names.add(defaultImport.getText());
+    if (namespaceImport) names.add(namespaceImport.getText());
+
+    for (const specifier of declaration.getNamedImports()) {
+      if (specifier.isTypeOnly()) continue;
+      names.add(specifier.getAliasNode()?.getText() ?? specifier.getName());
+    }
+  }
+  return names;
+}
+
+function nodeContainsRuntimeDbValueBinding(node: Node, localNames: ReadonlySet<string>): boolean {
+  for (const descendant of [node, ...node.getDescendants()]) {
+    if (!Node.isIdentifier(descendant)) continue;
+    if (localNames.has(descendant.getText())) return true;
+  }
+  return false;
 }
 
 function isUnconfinedAppRuntimeDbProviderCall(

@@ -113,6 +113,7 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
       await expectBlockedWrites(origin, marker);
       await expectWriteStatus(origin, marker, contactEmail);
 
+      expect(output()).toContain('Kovo SQLite starter is experimental and single-principal only');
       expect(output()).toContain('KV435');
       expect(output()).toContain('KV406');
       expect(output()).toContain('KV438');
@@ -134,28 +135,33 @@ async function expectAuthorizationQueryShapes(
     {
       key: 'phase5-authz-builder',
       allowed: 'owner-visible',
-      blocked: 'cross-owner-hidden',
+      visibleCrossOwner: 'cross-owner-hidden',
       status: 200,
     },
     {
       key: 'phase5-authz-alias',
       allowed: 'owner-visible',
-      blocked: 'cross-owner-hidden',
+      visibleCrossOwner: 'cross-owner-hidden',
       status: 200,
     },
     {
       key: 'phase5-authz-view',
       allowed: 'owner-visible',
-      blocked: 'cross-owner-hidden',
+      visibleCrossOwner: 'cross-owner-hidden',
       status: 200,
     },
     {
       key: 'phase5-authz-compound',
       allowed: undefined,
-      blocked: 'cross-owner-hidden',
+      visibleCrossOwner: undefined,
       status: 500,
     },
-    { key: 'phase5-authz-owner-via', allowed: 'owner-item', blocked: 'other-item', status: 200 },
+    {
+      key: 'phase5-authz-owner-via',
+      allowed: 'owner-item',
+      visibleCrossOwner: 'other-item',
+      status: 200,
+    },
   ] as const;
 
   for (const testCase of cases) {
@@ -166,7 +172,9 @@ async function expectAuthorizationQueryShapes(
 
     expect(response.status, `${testCase.key}: ${body}`).toBe(testCase.status);
     if (testCase.allowed !== undefined) expect(body).toContain(testCase.allowed);
-    expect(body).not.toContain(testCase.blocked);
+    if (testCase.visibleCrossOwner !== undefined) {
+      expect(body).toContain(testCase.visibleCrossOwner);
+    }
     expect(body).not.toContain('phase5-authz-secret');
   }
 }
@@ -180,8 +188,18 @@ async function expectAuthorizationEndpoint(origin: string): Promise<void> {
     childRows: { id: string; label: string }[];
     rows: { id: string; label: string }[];
   };
-  expect(result.rows).toEqual([{ id: 'phase5-authz-owned', label: 'owner-visible' }]);
-  expect(result.childRows).toEqual([{ id: 'phase5-authz-item-owned', label: 'owner-item' }]);
+  expect(result.rows).toEqual(
+    expect.arrayContaining([
+      { id: 'phase5-authz-owned', label: 'owner-visible' },
+      { id: 'phase5-authz-other', label: 'cross-owner-hidden' },
+    ]),
+  );
+  expect(result.childRows).toEqual(
+    expect.arrayContaining([
+      { id: 'phase5-authz-item-owned', label: 'owner-item' },
+      { id: 'phase5-authz-item-other', label: 'other-item' },
+    ]),
+  );
 }
 
 async function expectAuthorizationStatus(origin: string): Promise<void> {

@@ -219,6 +219,41 @@ describe('@kovojs/drizzle SQL safety static analysis', () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it('allows app entrypoint framework DB wiring outside request surface bodies', () => {
+    const diagnostics = diagnosticsForFile(
+      'src/app.tsx',
+      `
+        import { createApp, endpoint, publicAccess } from '@kovojs/server';
+        import { appRuntimeDbProvider, appRuntimeDbReady } from './_kovo/app-runtime-db.js';
+        import { contactsQuery } from './queries.js';
+        import { addContact } from './mutations.js';
+
+        await appRuntimeDbReady;
+
+        const healthEndpoint = endpoint('/api/health', {
+          access: publicAccess('public uptime probe'),
+          auth: { justification: 'public uptime probe', kind: 'none' },
+          csrf: false,
+          csrfJustification: 'read-only machine health probe',
+          handler: () => Response.json({ ok: true }),
+          method: 'GET',
+          reason: 'read-only machine health probe',
+          response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },
+        });
+
+        export default createApp({
+          db: appRuntimeDbProvider,
+          endpoints: [healthEndpoint],
+          mutations: [addContact],
+          queries: [contactsQuery],
+          routes: [],
+        });
+      `,
+    );
+
+    expect(diagnostics).toEqual([]);
+  });
+
   it('accepts endpoint db access through the explicit actAs managed handle', () => {
     const diagnostics = diagnosticsFor(`
       import { endpoint } from '@kovojs/server';
