@@ -736,23 +736,28 @@ export function addRuntimeMutationSafetyProofs(
   const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
   const runtimeDbSource = readFileSync(runtimeDbPath, 'utf8');
   const runtimeDb = isSqlite
-    ? runtimeDbSource.replace(
-        '  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT \'\');",\n  // Better Auth tables',
-        [
-          '  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT \'\');",',
-          '  "CREATE TABLE tx_proofs (id text PRIMARY KEY);",',
-          '  "CREATE TABLE raw_runtime_drift (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
-          ...(includeSqliteAuthorizerTriggerDrift
-            ? [
-                '  "CREATE TABLE kovo_authorizer_declared (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
-                '  "CREATE TABLE kovo_authorizer_side_effects (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
-                "  \"INSERT INTO kovo_authorizer_declared (id, label) VALUES ('a1', 'before');\",",
-                '  "CREATE TRIGGER kovo_authorizer_side_effect AFTER UPDATE ON kovo_authorizer_declared BEGIN INSERT INTO kovo_authorizer_side_effects (id, label) VALUES (new.id, new.label); END;",',
-              ]
-            : []),
-          '  // Better Auth tables',
-        ].join('\n'),
-      )
+    ? runtimeDbSource
+        .replace(
+          '  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT \'\');",\n  // Better Auth tables',
+          [
+            '  "CREATE TABLE contacts (id text PRIMARY KEY, name text NOT NULL, email text NOT NULL, company text NOT NULL DEFAULT \'\');",',
+            '  "CREATE TABLE tx_proofs (id text PRIMARY KEY);",',
+            '  "CREATE TABLE raw_runtime_drift (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
+            ...(includeSqliteAuthorizerTriggerDrift
+              ? [
+                  '  "CREATE TABLE kovo_authorizer_declared (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
+                  '  "CREATE TABLE kovo_authorizer_side_effects (id text PRIMARY KEY, label text NOT NULL DEFAULT \'\');",',
+                  "  \"INSERT INTO kovo_authorizer_declared (id, label) VALUES ('a1', 'before');\",",
+                  '  "CREATE TRIGGER kovo_authorizer_side_effect AFTER UPDATE ON kovo_authorizer_declared BEGIN INSERT INTO kovo_authorizer_side_effects (id, label) VALUES (new.id, new.label); END;",',
+                ]
+              : []),
+            '  // Better Auth tables',
+          ].join('\n'),
+        )
+        .replace(
+          'const SCHEMA_TABLES = [\n  schema.contacts,',
+          ['const SCHEMA_TABLES = [', '  schema.contacts,', '  schema.txProofs,'].join('\n'),
+        )
     : runtimeDbSource
         .replace(
           "import { account, contacts, session, user, verification } from '../schema.js';",
@@ -926,7 +931,9 @@ export function addRuntimeMutationSafetyProofs(
             "  verifyJustification: 'local production webhook transaction proof fixture',",
             '  writes: [txProof],',
             '  async handler(input, context) {',
-            '    await context.runMutation(writeTxProof, { id: input.id });',
+            '    await context',
+            "      .actAs('production-webhook-transaction-proof')",
+            '      .runMutation(writeTxProof, { id: input.id });',
             '    return { ok: true };',
             '  },',
             '});',

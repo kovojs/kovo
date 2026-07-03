@@ -6,7 +6,7 @@ paranoid dogfood AFTER `plans/fundamental-fixes-followup-4.md`. Security fail-op
 **Meta-theme — the registry (DEC-D) is the new enumerate-and-classify surface, and it has no invariant that a
 value/effect property must be `runtime-choke`.** That missing invariant is the ROOT of `bugz-30` B1/B2 (authorization,
 projection, invalidation mis-classified `build-only`) and B4 (`by-construction` asserted, not proven). And the round-8
-provenance box still fails the *other* way — over-boxing legit aggregates (P1 below), the dual of `bugz-30` B3.
+provenance box still fails the _other_ way — over-boxing legit aggregates (P1 below), the dual of `bugz-30` B3.
 
 ## Issues
 
@@ -20,7 +20,7 @@ provenance box still fails the *other* way — over-boxing legit aggregates (P1 
   - Observed: authorization (KV414), projection-to-wire (KV439), invalidation (KV407/KV408), output-coverage (KV410) are `build-only` — all value/coverage properties that the plan's own §2.1 taxonomy says must be runtime-enforced. Nothing in the registry tests catches this: DEC-D's drift guard asserts "every emitted code ∈ registry" and "every `runtime-choke` names a live choke," but NOT "every value/effect property is `runtime-choke`."
   - Root cause: `security-markers.ts` classification is hand-assigned with no property-type→enforcement soundness check. The `build-only` bucket is treated as legitimate for any code, but for a value/effect property `build-only` means "static-only," which the whole re-architecture proved unsound.
   - Why it matters: the registry made the incompleteness look like an intentional decision rather than a bug — the enumerate-and-allow pattern moved up one level into the classification itself. This is why `bugz-30` B1 (IDOR) shipped as an accepted `[x]`.
-  - Acceptance: add a registry invariant + test — every code whose `property` is a value/effect authorization/confidentiality/integrity/injection property MUST be `runtime-choke` (or `by-construction` with a *proven* runtime floor); `build-only` is permitted only for genuinely author-time/build-shape properties (e.g. "server-only value captured into the client bundle" KV437, a compile-time bundling fact). Re-audit every current `build-only` code against this and reclassify IDOR/projection/invalidation.
+  - Acceptance: add a registry invariant + test — every code whose `property` is a value/effect authorization/confidentiality/integrity/injection property MUST be `runtime-choke` (or `by-construction` with a _proven_ runtime floor); `build-only` is permitted only for genuinely author-time/build-shape properties (e.g. "server-only value captured into the client bundle" KV437, a compile-time bundling fact). Re-audit every current `build-only` code against this and reclassify IDOR/projection/invalidation.
 
 ## Refuted / Not Carried Forward
 

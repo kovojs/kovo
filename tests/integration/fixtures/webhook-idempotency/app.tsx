@@ -54,7 +54,9 @@ export default defineFixture({
     const replayStore = createReplayStore();
     const idempotentWebhook = webhook('/webhooks/stripe-idempotent', {
       async handler(input, context) {
-        return context.runMutation(recordWebhookAttempt, { id: input.id, type: input.type });
+        return context
+          .declareSystemWrite('record verified Stripe webhook delivery attempt')
+          .runMutation(recordWebhookAttempt, { id: input.id, type: input.type });
       },
       idempotency: (input) => input.id,
       input: webhookEventInput,
