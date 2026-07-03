@@ -118,6 +118,7 @@ export type {
 // `KovoReadonlyHandleError` is the fail-closed runtime throw a read-surface write verb raises.
 export {
   createDeclaredWriteDb,
+  createAuthorizationCensusDb,
   createPostgresReadonlyClient,
   createPostgresScopedClient,
   createSqliteAuthorizationDb,
@@ -133,6 +134,8 @@ export type {
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,
   DeclaredWriteSqliteAuthorizerOptions,
+  AuthorizationCensusDbOptions,
+  AuthorizationCensusMetadata,
   GovernedWriteMetadata,
   PostgresReadonlyClientOptions,
   PostgresScopedClientOptions,

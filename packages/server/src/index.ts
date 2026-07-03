@@ -248,6 +248,7 @@ export type {
 // ./api/rendering.js, and ./api/routing.js.
 export {
   accept,
+  createAuthorizationCensusDb,
   createDeclaredWriteDb,
   createMemoryMutationReplayStore,
   createPostgresReadonlyClient,
@@ -324,6 +325,8 @@ export type {
   MutationSuccess,
   MutationTextCoalescingPolicy,
   NumberSchema,
+  AuthorizationCensusDbOptions,
+  AuthorizationCensusMetadata,
   DeclaredWriteDbOptions,
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,

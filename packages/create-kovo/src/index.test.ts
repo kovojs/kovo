@@ -284,9 +284,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'Object.defineProperty(db, kovoReadonlyDbHandle',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'db: (request?: unknown) => createRequestScopedDb(client, principalFromRequest(request))',
-    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('request === undefined');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createInternalFrameworkDb');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createAuthorizationCensusDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createDeclaredWriteDb(db, policy');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("dialectLabel: 'PGlite'");
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(

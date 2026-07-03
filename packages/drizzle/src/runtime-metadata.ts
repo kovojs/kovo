@@ -95,6 +95,8 @@ export interface KovoRuntimeDbMetadata {
   ownerSourcesByTable: ReadonlyMap<string, KovoRuntimeOwnerSource>;
   /** Transitive owner facts grouped by physical child table. */
   ownerViaSourcesByTable: ReadonlyMap<string, KovoRuntimeOwnerViaSource>;
+  /** Every physical table in the extracted Drizzle schema. */
+  schemaTableNames: ReadonlySet<string>;
   /** Secret Drizzle column keys. */
   secretColumnKeys: ReadonlySet<string>;
   /** Secret physical column names. */
@@ -124,6 +126,7 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
   const governedColumnNamesByTable = new Map<string, ReadonlySet<string>>();
   const ownerSourcesByTable = new Map<string, KovoRuntimeOwnerSource>();
   const ownerViaSourcesByTable = new Map<string, KovoRuntimeOwnerViaSource>();
+  const schemaTableNames = new Set<string>();
   const secretColumnKeys = new Set<string>();
   const secretColumnNames = new Set<string>();
   const secretColumnKeysByTable = new Map<string, ReadonlySet<string>>();
@@ -132,6 +135,7 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
 
   for (const table of tables) {
     const config = getRuntimeTableConfig(table);
+    schemaTableNames.add(config.name);
     const columnKeys = columnKeysByDbName(table as KovoRuntimeDbTable, config.columns);
     for (const key of columnKeys.values()) allColumnKeys.add(key);
     const domainAnnotation = kovoDomainAnnotation(table as KovoRuntimeDbTable);
@@ -212,6 +216,7 @@ export function extractKovoRuntimeDbMetadata(tables: readonly unknown[]): KovoRu
     governedColumnNamesByTable,
     ownerSourcesByTable,
     ownerViaSourcesByTable,
+    schemaTableNames,
     secretColumnKeys,
     secretColumnKeysByTable,
     secretColumnNames,

@@ -6,6 +6,7 @@ import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import {
   KovoReadonlyHandleError,
+  createAuthorizationCensusDb,
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
   createPostgresScopedClient,
@@ -916,6 +917,78 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
+  it('denies schema tables with no DEC-K classification at the managed builder boundary', () => {
+    const log: string[] = [];
+    const raw = {
+      select() {
+        return {
+          from(table: { name: string }) {
+            log.push(`select:${table.name}`);
+            return [];
+          },
+          leftJoin(table: { name: string }) {
+            log.push(`leftJoin:${table.name}`);
+            return [];
+          },
+        };
+      },
+      insert(table: { name: string }) {
+        log.push(`insert:${table.name}`);
+        return { values: () => undefined };
+      },
+    };
+    const handle = createAuthorizationCensusDb(raw, {
+      dialectLabel: 'PGlite',
+      metadata: {
+        authorizationClassificationsByTable: new Map([
+          ['contacts', ['authzPolicy']],
+          ['reference_tags', ['reference']],
+          ['published_posts', ['public']],
+        ]),
+        schemaTableNames: new Set(['contacts', 'reference_tags', 'published_posts', 'drafts']),
+      },
+      normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+      tableNames: (table) => [(table as { name: string }).name],
+    });
+
+    expect(handle.select().from({ name: 'contacts' })).toEqual([]);
+    expect(handle.select().from({ name: 'reference_tags' })).toEqual([]);
+    expect(handle.select().leftJoin({ name: 'published_posts' })).toEqual([]);
+    expect(() => handle.select().from({ name: 'drafts' })).toThrow(
+      /KV414[\s\S]*drafts[\s\S]*no authorization classification/,
+    );
+    expect(() => handle.insert({ name: 'drafts' }).values()).toThrow(/KV414/);
+    expect(log).toEqual(['select:contacts', 'select:reference_tags', 'leftJoin:published_posts']);
+  });
+
+  it('does not census-deny unknown framework or driver tables outside the schema metadata', () => {
+    const log: string[] = [];
+    const handle = createAuthorizationCensusDb(
+      {
+        select() {
+          return {
+            from(table: { name: string }) {
+              log.push(`select:${table.name}`);
+              return [];
+            },
+          };
+        },
+      },
+      {
+        dialectLabel: 'PGlite',
+        metadata: {
+          authorizationClassificationsByTable: new Map(),
+          schemaTableNames: new Set(['drafts']),
+        },
+        normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+        tableNames: (table) => [(table as { name: string }).name],
+      },
+    );
+
+    expect(handle.select().from({ name: '_kovo_jobs' })).toEqual([]);
+    expect(log).toEqual(['select:_kovo_jobs']);
+  });
+
   it('rejects forged direct SQL wrapper policies before exposing DB exec', () => {
     const log: string[] = [];
     const raw = {

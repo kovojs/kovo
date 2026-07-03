@@ -1,5 +1,6 @@
 import { PGlite } from '@electric-sql/pglite';
 import {
+  createAuthorizationCensusDb,
   createSecretBoxingReadDb,
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
@@ -61,7 +62,10 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   const client = new PGlite(process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR);
   const ready = initializeAppDb(client);
   return {
-    db: (request?: unknown) => createRequestScopedDb(client, principalFromRequest(request)),
+    db: (request?: unknown) =>
+      request === undefined
+        ? createInternalFrameworkDb(client)
+        : createRequestScopedDb(client, principalFromRequest(request)),
     readonlyDb: createRequestScopedReadonlyDb(client),
     ready,
   };
@@ -87,10 +91,22 @@ type PgForeignKey = PgTableConfig['foreignKeys'][number];
 
 export { declareSecretReadCapability };
 
+function createInternalFrameworkDb(client: PGlite): AppDb {
+  return drizzle({ client });
+}
+
 function createRequestScopedDb(client: PGlite, principal: string | undefined): AppDb {
-  const db = drizzle({
-    client: createPostgresScopedClient(client, postgresScopedClientOptions(principal)),
-  });
+  const db = createAuthorizationCensusDb(
+    drizzle({
+      client: createPostgresScopedClient(client, postgresScopedClientOptions(principal)),
+    }),
+    {
+      dialectLabel: 'PGlite',
+      metadata: SECRET_READ_METADATA,
+      normalizeTableName: normalizePolicyTable,
+      tableNames: pgTablePolicyNames,
+    },
+  );
   Object.defineProperty(db, kovoReadonlyDbHandle, {
     configurable: true,
     value: () => createRequestScopedReadonlyDb(client, principal),
@@ -247,7 +263,7 @@ function pgTablePolicyNames(table: unknown): string[] {
     const config = getTableConfig(table as PgTable);
     const schema = (config as { schema?: unknown }).schema;
     const schemaName = typeof schema === 'string' ? schema : undefined;
-    const names = [normalizePolicyTable(config.name)];
+    const names = [config.name, normalizePolicyTable(config.name)];
     if (schemaName !== undefined) names.push(`${schemaName}.${config.name}`);
     return [...new Set(names)];
   } catch {

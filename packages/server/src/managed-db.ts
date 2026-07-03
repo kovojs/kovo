@@ -217,6 +217,7 @@ export interface SqliteOwnerViaSource {
 
 /** Structural subset of `@kovojs/drizzle` runtime metadata consumed by SQLite authz. */
 export interface SqliteAuthorizationMetadata {
+  schemaTableNames?: ReadonlySet<string>;
   authorizationClassificationsByTable?: ReadonlyMap<
     string,
     readonly SqliteAuthorizationClassification[]
@@ -229,6 +230,23 @@ export interface SqliteAuthorizationMetadata {
 export interface SqliteAuthorizationDbOptions {
   metadata: SqliteAuthorizationMetadata;
   principal?: string | undefined;
+}
+
+/** Structural subset of `@kovojs/drizzle` runtime metadata consumed by the DEC-K census floor. */
+export interface AuthorizationCensusMetadata {
+  authorizationClassificationsByTable?: ReadonlyMap<
+    string,
+    readonly SqliteAuthorizationClassification[]
+  >;
+  schemaTableNames?: ReadonlySet<string>;
+}
+
+/** Options for the framework-owned managed authorization-census wrapper. */
+export interface AuthorizationCensusDbOptions {
+  dialectLabel: string;
+  metadata: AuthorizationCensusMetadata;
+  normalizeTableName: (table: string) => string;
+  tableNames: (table: unknown) => readonly string[];
 }
 
 interface SqliteAuthorizationApplyState {
@@ -345,6 +363,20 @@ export const createSqliteAuthorizationDb = securityClassifier(
   function <Db extends object>(db: Db, options: SqliteAuthorizationDbOptions): Db {
     const applyStates = new WeakMap<object, SqliteAuthorizationApplyState>();
     return sqliteAuthorizationProxy(db, options, applyStates, undefined) as Db;
+  },
+);
+
+/**
+ * Create a Drizzle handle that denies access to schema tables with no DEC-K authorization
+ * classification. This is the managed-handle runtime floor for the authorization census
+ * (SPEC §10.3 / DEC-K): the wrapper decides only from framework-owned schema metadata and table
+ * objects passed through builder APIs, avoiding SQL text heuristics and avoiding unknown
+ * framework/internal driver tables.
+ */
+export const createAuthorizationCensusDb = securityClassifier(
+  'server.managed-db.authorization-census-db',
+  function <Db extends object>(db: Db, options: AuthorizationCensusDbOptions): Db {
+    return authorizationCensusProxy(db, options, undefined) as Db;
   },
 );
 
@@ -565,6 +597,98 @@ export function drainPublicReadAuditFacts(): PublicReadAuditFact[] {
 
 function isDeclaredWriteDrizzleMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
   return prop === 'delete' || prop === 'insert' || prop === 'update';
+}
+
+function authorizationCensusProxy(
+  value: unknown,
+  options: AuthorizationCensusDbOptions,
+  builderMode: 'select' | undefined,
+): unknown {
+  if (!isRecord(value)) return value;
+  return new Proxy(value, {
+    get(target, prop, receiver) {
+      const item = Reflect.get(target, prop, receiver);
+      if (typeof item !== 'function') return item;
+      if (isDeclaredWriteDrizzleMethod(prop)) {
+        return (table: unknown, ...args: unknown[]) => {
+          assertAuthorizationCensusTablesAllowed(options.tableNames(table), options);
+          return authorizationCensusProxy(
+            Reflect.apply(item, target, [table, ...args]),
+            options,
+            undefined,
+          );
+        };
+      }
+      if (prop === 'select' || prop === 'selectDistinct') {
+        return (...args: unknown[]) =>
+          authorizationCensusProxy(Reflect.apply(item, target, args), options, 'select');
+      }
+      if (builderMode === 'select' && isAuthorizationCensusReadTableMethod(prop)) {
+        return (table: unknown, ...args: unknown[]) => {
+          assertAuthorizationCensusTablesAllowed(options.tableNames(table), options);
+          return authorizationCensusProxy(
+            Reflect.apply(item, target, [table, ...args]),
+            options,
+            builderMode,
+          );
+        };
+      }
+      return (...args: unknown[]) =>
+        authorizationCensusProxy(Reflect.apply(item, target, args), options, builderMode);
+    },
+  });
+}
+
+function isAuthorizationCensusReadTableMethod(prop: PropertyKey): boolean {
+  return (
+    prop === 'from' ||
+    prop === 'innerJoin' ||
+    prop === 'leftJoin' ||
+    prop === 'rightJoin' ||
+    prop === 'fullJoin' ||
+    prop === 'crossJoin' ||
+    prop === 'leftJoinLateral' ||
+    prop === 'innerJoinLateral' ||
+    prop === 'crossJoinLateral'
+  );
+}
+
+function assertAuthorizationCensusTablesAllowed(
+  tableNames: readonly string[],
+  options: AuthorizationCensusDbOptions,
+): void {
+  for (const tableName of tableNames) {
+    const normalizedNames = authorizationCensusLookupNames(tableName, options);
+    const inSchema = normalizedNames.some((name) => options.metadata.schemaTableNames?.has(name));
+    if (!inSchema) continue;
+    const classifications = normalizedNames.flatMap(
+      (name) => options.metadata.authorizationClassificationsByTable?.get(name) ?? [],
+    );
+    if (classifications.length === 1) continue;
+    const reason =
+      classifications.length === 0
+        ? 'has no authorization classification'
+        : `has multiple authorization classifications (${[...new Set(classifications)].join(', ')})`;
+    throw new Error(
+      `KV414: ${options.dialectLabel} managed authorization census denied table ${tableName}: ${reason} (SPEC §10.3).`,
+    );
+  }
+}
+
+function authorizationCensusLookupNames(
+  tableName: string,
+  options: AuthorizationCensusDbOptions,
+): string[] {
+  const normalized = options.normalizeTableName(tableName);
+  const unqualified = tableName.includes('.') ? tableName.split('.').at(-1) : tableName;
+  const normalizedUnqualified =
+    unqualified === undefined ? undefined : options.normalizeTableName(unqualified);
+  return [
+    tableName,
+    normalized,
+    ...(unqualified === undefined ? [] : [unqualified]),
+    ...(normalizedUnqualified === undefined ? [] : [normalizedUnqualified]),
+  ].filter((name, index, names): name is string => name !== '' && names.indexOf(name) === index);
 }
 
 function declaredWriteBuilder(
