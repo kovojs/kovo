@@ -138,10 +138,46 @@ export interface PostgresScopedClientOptions {
   role?: string | false;
 }
 
+/** Row-scope metadata for an audited public raw read (SPEC §10.3 DEC-F). */
+export interface PublicReadRowsScope {
+  /** Audit-readable public predicate, for example `published = true`. */
+  predicate: string;
+  /** Optional physical table the predicate applies to when the raw read spans multiple reads. */
+  table?: string;
+}
+
+/** User-authored public-read authorization escape, distinct from SQL trust and secret reveal. */
+export interface PublicReadDeclaration {
+  /** Columns intentionally exposed by the public read; omitted only when the projection is public. */
+  columns?: readonly string[];
+  /** Required audit reason explaining why this read is public. */
+  reason: string;
+  /** Row predicate or structured row-scope metadata that makes the read public. */
+  rows?: PublicReadRowsScope | string;
+}
+
+/** Recorded public-read authorization audit fact (SPEC §10.3 DEC-F, audit-grade). */
+export interface PublicReadAuditFact {
+  /** Columns declared public for this read. */
+  columns?: readonly string[];
+  /** Declared read table set after dialect normalization. */
+  declaredReads: readonly string[];
+  /** Human-readable dialect label supplied by the adapter. */
+  dialectLabel: string;
+  /** SQLite-observed read table set after dialect normalization, when available. */
+  observedReads?: readonly string[];
+  /** Observed owner-scoped tables covered by this public-read declaration. */
+  ownerReads?: readonly string[];
+  /** Required audit reason explaining why this read is public. */
+  reason: string;
+  /** Row predicate or structured row-scope metadata declared for the public read. */
+  rows?: PublicReadRowsScope | string;
+}
+
 /** User-authored declaration for the raw read escape (SPEC §10.2/§10.3 DEC-C). */
 export interface RawReadDeclaration {
   actAs?: string;
-  declarePublicRead?: { reason: string };
+  declarePublicRead?: PublicReadDeclaration;
   reads: readonly string[];
 }
 
@@ -499,6 +535,32 @@ export type Writer<Db> = Db & {
 interface SqlCarrier {
   params: readonly unknown[];
   text: string;
+}
+
+const publicReadAuditFacts: PublicReadAuditFact[] = [];
+
+/**
+ * Declare an audited public-read authorization scope (SPEC §10.3 DEC-F). This does not assert SQL
+ * injection safety (`trustedSql`) or secret disclosure authority (`reveal`); it only records the
+ * intentional row/column authorization posture for a read.
+ */
+export function declarePublicRead(options: PublicReadDeclaration): PublicReadDeclaration {
+  const normalized = normalizedPublicReadDeclaration(options);
+  return Object.freeze({
+    ...normalized,
+    ...(normalized.columns ? { columns: Object.freeze([...normalized.columns]) } : {}),
+    ...(isPublicReadRowsScope(normalized.rows)
+      ? { rows: Object.freeze({ ...normalized.rows }) }
+      : {}),
+  });
+}
+
+/**
+ * Drain recorded public-read authorization audit facts for `kovo explain`/tests. Returns and clears
+ * the facts accumulated since the last drain.
+ */
+export function drainPublicReadAuditFacts(): PublicReadAuditFact[] {
+  return publicReadAuditFacts.splice(0, publicReadAuditFacts.length);
 }
 
 function isDeclaredWriteDrizzleMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
@@ -1206,10 +1268,8 @@ function assertRawReadDeclaration(declaration: RawReadDeclaration): void {
   if (declaration.actAs !== undefined && declaration.actAs.trim() === '') {
     throw new Error('KV414: rawRead actAs scope requires a non-empty principal.');
   }
-  const publicReason = declaration.declarePublicRead?.reason;
-  if (publicReason !== undefined && publicReason.trim() === '') {
-    throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
-  }
+  if (declaration.declarePublicRead !== undefined)
+    normalizedPublicReadDeclaration(declaration.declarePublicRead);
 }
 
 function assertRawReadObservedTablesAllowed(
@@ -1217,8 +1277,15 @@ function assertRawReadObservedTablesAllowed(
   declaration: RawReadDeclaration,
   policy: RawReadPolicyOptions,
 ): void {
+  const publicRead =
+    declaration.declarePublicRead === undefined
+      ? undefined
+      : normalizedPublicReadDeclaration(declaration.declarePublicRead);
   const sqliteAuthorizer = policy.sqliteAuthorizer;
-  if (sqliteAuthorizer === undefined) return;
+  if (sqliteAuthorizer === undefined) {
+    if (publicRead !== undefined) recordPublicReadAuditFact(publicRead, declaration, policy);
+    return;
+  }
   const readAction = sqliteAuthorizer.constants.SQLITE_READ;
   if (readAction === undefined) {
     throw new Error(
@@ -1253,8 +1320,7 @@ function assertRawReadObservedTablesAllowed(
   }
 
   const ownerTables = new Set((policy.ownerTables ?? []).map(policy.normalizeTableName));
-  const scoped =
-    declaration.actAs !== undefined || declaration.declarePublicRead?.reason !== undefined;
+  const scoped = declaration.actAs !== undefined || publicRead !== undefined;
   const ownerReads = [...observed].filter((table) => ownerTables.has(table));
   if (!scoped && ownerReads.length > 0) {
     throw new Error(
@@ -1264,6 +1330,98 @@ function assertRawReadObservedTablesAllowed(
       ].join('\n'),
     );
   }
+  if (publicRead !== undefined) {
+    recordPublicReadAuditFact(publicRead, declaration, policy, {
+      observedReads: [...observed],
+      ownerReads,
+    });
+  }
+}
+
+function normalizedPublicReadDeclaration(options: PublicReadDeclaration): PublicReadDeclaration {
+  if (!isRecord(options)) {
+    throw new Error(
+      'KV414: rawRead declarePublicRead scope requires a declaration object (SPEC §10.3).',
+    );
+  }
+  const reason = options.reason;
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
+  }
+
+  const normalized: PublicReadDeclaration = { reason: reason.trim() };
+  if (options.rows !== undefined) normalized.rows = normalizedPublicReadRows(options.rows);
+  if (options.columns !== undefined) {
+    normalized.columns = normalizedPublicReadColumns(options.columns);
+  }
+  return normalized;
+}
+
+function normalizedPublicReadRows(
+  rows: PublicReadDeclaration['rows'],
+): PublicReadRowsScope | string {
+  if (typeof rows === 'string') {
+    const predicate = rows.trim();
+    if (predicate === '') {
+      throw new Error(
+        'KV414: rawRead declarePublicRead rows scope requires a non-empty predicate.',
+      );
+    }
+    return predicate;
+  }
+  if (!isPublicReadRowsScope(rows)) {
+    throw new Error(
+      'KV414: rawRead declarePublicRead rows scope requires a predicate string or { predicate, table? }.',
+    );
+  }
+  const predicate = rows.predicate.trim();
+  if (predicate === '') {
+    throw new Error('KV414: rawRead declarePublicRead rows scope requires a non-empty predicate.');
+  }
+  const table = rows.table?.trim();
+  return table === undefined || table === '' ? { predicate } : { predicate, table };
+}
+
+function normalizedPublicReadColumns(columns: readonly string[]): readonly string[] {
+  if (
+    !Array.isArray(columns) ||
+    columns.length === 0 ||
+    columns.some((column) => typeof column !== 'string' || column.trim() === '')
+  ) {
+    throw new Error(
+      'KV414: rawRead declarePublicRead columns scope requires a non-empty column list.',
+    );
+  }
+  return [...new Set(columns.map((column) => column.trim()))];
+}
+
+function recordPublicReadAuditFact(
+  publicRead: PublicReadDeclaration,
+  declaration: RawReadDeclaration,
+  policy: RawReadPolicyOptions,
+  observed: { observedReads?: readonly string[]; ownerReads?: readonly string[] } = {},
+): void {
+  publicReadAuditFacts.push({
+    declaredReads: [...new Set(declaration.reads.map(policy.normalizeTableName))].sort(),
+    dialectLabel: policy.dialectLabel,
+    reason: publicRead.reason,
+    ...(publicRead.rows === undefined ? {} : { rows: publicRead.rows }),
+    ...(publicRead.columns === undefined ? {} : { columns: [...publicRead.columns] }),
+    ...(observed.observedReads === undefined
+      ? {}
+      : { observedReads: [...new Set(observed.observedReads)].sort() }),
+    ...(observed.ownerReads === undefined || observed.ownerReads.length === 0
+      ? {}
+      : { ownerReads: [...new Set(observed.ownerReads)].sort() }),
+  });
+}
+
+function isPublicReadRowsScope(value: unknown): value is PublicReadRowsScope {
+  return (
+    isRecord(value) &&
+    typeof value.predicate === 'string' &&
+    (value.table === undefined || typeof value.table === 'string')
+  );
 }
 
 function rawReadExecutionMethod(target: object, policy: RawReadPolicyOptions): Function {

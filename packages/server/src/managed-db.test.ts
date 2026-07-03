@@ -11,6 +11,8 @@ import {
   createPostgresScopedClient,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
+  declarePublicRead,
+  drainPublicReadAuditFacts,
   managedDb,
   readonlyDb,
 } from './managed-db.js';
@@ -383,7 +385,7 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
       writeFileSync(
         join(root, 'reader-type-proof.ts'),
         `
-import { readonlyDb, type Reader } from '@kovojs/server';
+import { declarePublicRead, readonlyDb, type Reader } from '@kovojs/server';
 
 type FakeDb = {
   $client: { execute(statement: unknown): Promise<unknown> };
@@ -409,6 +411,17 @@ acceptsReader(reader);
 reader.select().from('products');
 reader.with('active').select().from('products');
 reader.rawRead({ sql: 'select id from products', values: [] }, { reads: ['products'] });
+reader.rawRead(
+  { sql: 'select id from products where published = 1', values: [] },
+  {
+    declarePublicRead: declarePublicRead({
+      reason: 'published catalog',
+      rows: { predicate: 'published = true', table: 'products' },
+      columns: ['id'],
+    }),
+    reads: ['products'],
+  },
+);
 
 // @ts-expect-error SPEC §6.6/§9.4/§10.3: raw provider handles lack the Reader brand.
 acceptsReader(raw);
@@ -708,6 +721,94 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       sql: 'select id from orders where id = ?',
     });
     expect(log).toEqual(['all']);
+  });
+
+  it('validates and audits scoped public rawRead declarations', async () => {
+    drainPublicReadAuditFacts();
+    expect(() => declarePublicRead({ reason: '' })).toThrow(/non-empty reason/);
+    expect(() =>
+      declarePublicRead({ reason: 'published orders', rows: { predicate: ' ' } }),
+    ).toThrow(/rows scope/);
+    expect(() => declarePublicRead({ columns: ['id', ' '], reason: 'published orders' })).toThrow(
+      /columns scope/,
+    );
+
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: sqliteRawReadPolicy(['orders'], ['orders']),
+    });
+    const statement = stampTrustedSql(
+      { sql: 'select id, status from orders where published = 1', values: [] },
+      'public owner rawRead',
+    );
+    await expect(
+      reader.rawRead(statement, {
+        declarePublicRead: declarePublicRead({
+          columns: ['id', 'status', 'id'],
+          reason: 'published order status page',
+          rows: { predicate: 'published = true', table: 'orders' },
+        }),
+        reads: ['orders'],
+      }),
+    ).resolves.toMatchObject({
+      sql: 'select id, status from orders where published = 1',
+    });
+
+    expect(drainPublicReadAuditFacts()).toEqual([
+      {
+        columns: ['id', 'status'],
+        declaredReads: ['main.orders'],
+        dialectLabel: 'SQLite',
+        observedReads: ['main.orders'],
+        ownerReads: ['main.orders'],
+        reason: 'published order status page',
+        rows: { predicate: 'published = true', table: 'orders' },
+      },
+    ]);
+    expect(log).toEqual(['all']);
+  });
+
+  it('audits Postgres public rawRead declarations while preserving the scoped read-only client path', async () => {
+    drainPublicReadAuditFacts();
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: {
+        dialectLabel: 'Postgres',
+        executeMethod: 'query',
+        normalizeTableName: (table) => table,
+        ownerTables: ['orders'],
+      },
+    });
+
+    await expect(
+      reader.rawRead(
+        stampTrustedSql(
+          { sql: 'select id from orders where published = true', values: [] },
+          'public postgres owner rawRead',
+        ),
+        {
+          declarePublicRead: declarePublicRead({
+            columns: ['id'],
+            reason: 'published order index',
+            rows: 'published = true',
+          }),
+          reads: ['orders'],
+        },
+      ),
+    ).resolves.toMatchObject({
+      sql: 'select id from orders where published = true',
+    });
+
+    expect(drainPublicReadAuditFacts()).toEqual([
+      {
+        columns: ['id'],
+        declaredReads: ['orders'],
+        dialectLabel: 'Postgres',
+        reason: 'published order index',
+        rows: 'published = true',
+      },
+    ]);
+    expect(log).toEqual(['query']);
   });
 
   it('passes reads through unchanged', async () => {
