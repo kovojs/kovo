@@ -58,11 +58,11 @@ So `npm run check:kovo` → `vp run kovo-check` → `kovo check`. The npm script
 
 ```sh
 $ kovo
-kovo: add, audit, build, check, compile, explain, export, mcp, update-docs
+kovo: add, audit, build, check, db, compile, explain, export, mcp, update-docs
 ```
 
-Every command emits stable, versioned, diffable output (`kovo-check/v1`, `kovo-explain/v1`, …) — the
-same artifact a reviewer reads and an agent consumes.
+Every command emits stable, versioned, diffable output (`kovo-check/v1`, `kovo-explain/v1`,
+`kovo-db/v1`, …) — the same artifact a reviewer reads and an agent consumes.
 
 ### `kovo check` — the graph/coverage check
 
@@ -159,6 +159,22 @@ kovo build ./src/app.ts --out build --preset vercel
 
 `--preset` selects the deployment target (`node`, `vercel`, `cloudflare`); `--out` overrides the
 output directory (default `dist`). See [deployment](/guides/deployment/).
+
+### `kovo db` — provision and check Postgres posture
+
+Applies or verifies the framework-owned Postgres database posture derived from `src/schema.ts`:
+tables, roles, forced RLS, owner policies, grants, and the schema fingerprint. External
+Postgres provisioning uses a privileged admin URL; runtime/checking uses the least-privilege app URL.
+
+```sh
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision
+KOVO_DATABASE_URL=postgres://app@db/app kovo db check
+kovo db check --driver pglite --data-dir .kovo/pglite
+```
+
+`kovo db check` exits non-zero when posture is missing or stale, so production boot and CI can fail
+closed instead of serving an unprotected table. Migration generation is still a separate roadmap item;
+this command currently reasserts the derived runtime posture against the schema you ship.
 
 ### `kovo compile` — emit compiler-backed artifacts
 

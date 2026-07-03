@@ -61,6 +61,9 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
 
 - [ ] **B1 — Lift `initializeAppDb`'s privileged DDL out of module-load into a `kovo db provision` command that connects via `KOVO_ADMIN_DATABASE_URL`.** Runtime boot does nothing privileged. Provision: ensure roles → run pending migrations → re-assert all derived policies/grants (idempotent). The narrowed writer grant from followup-6 DEC-C a′ (unclassified/reference tables un-granted ⇒ engine default-deny) is applied here.
   - Acceptance: `kovo db provision` against a fresh external Postgres (admin URL) creates roles + tables + policies; the runtime app (least-priv URL) then serves; re-running provision is a no-op (idempotent). The runtime login role cannot `CREATE ROLE`/`ALTER … FORCE RLS` (proven by attempting it → permission denied).
+  - [x] Verified partial: the CLI now dispatches `kovo db provision|check`, loads `src/schema.ts`, routes external provision through `KOVO_ADMIN_DATABASE_URL` / `--admin-database-url`, and proves the command contract on PGlite without doing DDL from runtime boot.
+    - Evidence: `packages/cli/src/commands/db.ts`, `packages/cli/src/index.kovo-db.test.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`.
+  - [ ] Remaining: external Postgres provision probe, least-priv runtime probe, and real migration runner integration.
 - [ ] **B2 — Role adoption for locked-down providers via optional `KOVO_DB_READER_ROLE` / `KOVO_DB_WRITER_ROLE`.** When set, provision SKIPS `CREATE ROLE` and does only the table-ownership-level DDL (`FORCE RLS`, `CREATE POLICY`, `REVOKE/GRANT`); the roles are pre-created by a DBA/IaC. Required in environments that forbid `CREATE ROLE` (Supabase/some Neon/enterprise), that centrally own roles, or that run multiple Kovo apps on one cluster (name collision). The runtime login role must be `GRANT`ed membership of both roles (framework does this in the default path; the DBA must in the adopted path) — documented.
   - Acceptance: with the two vars set and `CREATE ROLE` revoked from the admin identity, `kovo db provision` still succeeds using the pre-created roles; with them unset and `CREATEROLE` present, the framework creates `kovo_reader`/`kovo_writer` and grants the login role membership.
 
@@ -77,7 +80,9 @@ privileged DDL out of boot into a command, and re-asserts the (already idempoten
   - Acceptance: a fresh external Postgres with tables but no policies (or a table added without re-provision) causes the app to refuse startup (non-zero, actionable message), NOT serve cross-owner rows. `kovo db check` runs the same verification standalone for CI/pre-deploy.
   - [x] Verified partial: the server runtime writes a schema/policy fingerprint during PGlite provisioning; standalone posture check passes after provisioning and reports `KV433_SCHEMA_FINGERPRINT` on an unprovisioned store.
     - Evidence: `packages/server/src/postgres-runtime.test.ts`; `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-authz.test.ts packages/server/src/managed-db.test.ts --config ./vite.config.ts`.
-  - [ ] Remaining: external least-privilege boot refusal and standalone `kovo db check` command.
+  - [x] Verified partial: standalone `kovo db check` runs the same posture report and exits nonzero on an unprovisioned PGlite store.
+    - Evidence: `packages/cli/src/index.kovo-db.test.ts`; `pnpm exec vitest --run packages/cli/src/index.kovo-db.test.ts packages/cli/src/commands-manifest.test.ts packages/cli/src/index.kovo-check.test.ts site/scripts/cli-ref.test.mjs --config ./vite.config.ts`.
+  - [ ] Remaining: external least-privilege boot refusal.
 
 ### DEC-E — Framework-owned enforcement module (I4; kills papercuts-29 P4)
 

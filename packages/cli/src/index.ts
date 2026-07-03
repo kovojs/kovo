@@ -8,6 +8,7 @@ import {
   runBuildCommand,
   runExportCommand,
 } from './commands/build-export.js';
+import { parseDbArgs, runDbCommand } from './commands/db.js';
 import {
   compileUsage,
   parseAddArgs,
@@ -136,6 +137,11 @@ const ASYNC_COMMAND_HANDLERS: Record<KovoAsyncCommandName, AsyncCommandHandler> 
     const parsed = parseBuildArgs(args);
     if (!parsed.ok) return writeUsageError(parsed.message);
     return writeCommandResult(await runBuildCommand(parsed.options));
+  },
+  async db(args) {
+    const parsed = parseDbArgs(args);
+    if (!parsed.ok) return writeUsageError(parsed.message);
+    return writeCommandResult(await runDbCommand(parsed.options));
   },
   async compile(args) {
     const parsed = parseCompileArgs(args);

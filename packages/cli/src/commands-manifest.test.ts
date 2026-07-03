@@ -11,6 +11,8 @@ import {
   COMPILE_USAGE,
   COMPILE_USAGE_LINE,
   COMMANDS_MANIFEST,
+  DB_ARGV_SPEC,
+  DB_USAGE,
   EXPLAIN_USAGE,
   EXPLAIN_USAGE_LINE,
   EXPORT_USAGE,
@@ -43,6 +45,7 @@ describe('commands manifest', () => {
     './index.ts',
     './commands/build-export.ts',
     './commands/compile.ts',
+    './commands/db.ts',
     './commands/mcp.ts',
     './graph-output.ts',
   ]
@@ -51,8 +54,10 @@ describe('commands manifest', () => {
 
   it('is the command registry used by the bin dispatch tables', () => {
     const manifestNames = COMMANDS_MANIFEST.map((entry) => entry.name);
-    const syncNames = COMMANDS_MANIFEST.filter((entry) => !entry.async).map((entry) => entry.name);
-    const asyncNames = COMMANDS_MANIFEST.filter((entry) => entry.async).map((entry) => entry.name);
+    const syncNames = COMMANDS_MANIFEST.filter((entry) => !isAsyncManifestEntry(entry)).map(
+      (entry) => entry.name,
+    );
+    const asyncNames = COMMANDS_MANIFEST.filter(isAsyncManifestEntry).map((entry) => entry.name);
 
     expect(CLI_COMMAND_DISPATCHER_NAMES.sync).toEqual([...syncNames].sort());
     expect(CLI_COMMAND_DISPATCHER_NAMES.async).toEqual([...asyncNames].sort());
@@ -67,6 +72,7 @@ describe('commands manifest', () => {
         'build',
         'check',
         'compile',
+        'db',
         'explain',
         'export',
         'mcp',
@@ -77,10 +83,10 @@ describe('commands manifest', () => {
 
   it('drives no-args and unknown-command diagnostics from the registry', () => {
     expect(formatNoArgsMessage()).toBe(
-      'kovo: add, audit, build, check, compile, explain, export, mcp, update-docs\n',
+      'kovo: add, audit, build, check, db, compile, explain, export, mcp, update-docs\n',
     );
     expect(formatUnknownCommandMessage('nope')).toBe(
-      'kovo: unknown command "nope". expected add, build, compile, explain, check, audit, export, mcp, or update-docs.\n',
+      'kovo: unknown command "nope". expected add, build, db, compile, explain, check, audit, export, mcp, or update-docs.\n',
     );
 
     const noArgs = captureWrites(() => main([]));
@@ -94,9 +100,11 @@ describe('commands manifest', () => {
     expect(unknown.stderr).toBe(formatUnknownCommandMessage('nope'));
   });
 
-  it('marks the async-dispatched commands (build, compile, export, mcp, update-docs) as async', () => {
-    const asyncNames = COMMANDS_MANIFEST.filter((entry) => entry.async).map((entry) => entry.name);
-    expect(asyncNames.sort()).toEqual(['build', 'compile', 'export', 'mcp', 'update-docs'].sort());
+  it('marks the async-dispatched commands (build, db, compile, export, mcp, update-docs) as async', () => {
+    const asyncNames = COMMANDS_MANIFEST.filter(isAsyncManifestEntry).map((entry) => entry.name);
+    expect(asyncNames.sort()).toEqual(
+      ['build', 'compile', 'db', 'export', 'mcp', 'update-docs'].sort(),
+    );
   });
 
   it('exposes every usage constant the bin references', () => {
@@ -109,6 +117,9 @@ describe('commands manifest', () => {
     expect(ADD_USAGE).toBe('usage: kovo add <component...> [--out <dir>]');
     expect(BUILD_USAGE).toBe(
       'usage: kovo build <app-module> [--out <dir>] [--preset <name>] [--check] [--no-cache]',
+    );
+    expect(DB_USAGE).toBe(
+      'usage: kovo db provision|check [--schema <module>] [--driver <pglite|pg|node-postgres>] [--database-url <url>] [--admin-database-url <url>] [--data-dir <dir>] [--reader-role <role>] [--writer-role <role>]',
     );
     expect(COMPILE_USAGE[0]).toBe(
       'usage: kovo compile component <source.tsx> --out <artifact.tsx> [--file-name <name>] [--check] [--no-cache] [--fixpoint] [--render-equivalence] [--registry-facts <json>] [--query-shape-facts <json>] [--facts-out <json>] [--emit-client-files] [--allow-diagnostic <code>]',
@@ -145,6 +156,7 @@ describe('commands manifest', () => {
     expect(byName.audit?.usage).toBe(AUDIT_USAGE);
     expect(byName.add?.usage).toBe(ADD_USAGE);
     expect(byName.build?.usage).toBe(BUILD_USAGE);
+    expect(byName.db?.usage).toBe(DB_USAGE);
     expect(byName.compile?.usage).toBe(COMPILE_USAGE);
     expect(byName.export?.usage).toBe(EXPORT_USAGE);
     expect(byName.mcp?.usage).toBe(MCP_USAGE);
@@ -160,6 +172,7 @@ describe('commands manifest', () => {
       'ADD_USAGE',
       'BUILD_USAGE',
       'COMPILE_USAGE',
+      'DB_USAGE',
       'EXPORT_USAGE',
       'MCP_USAGE',
       'UPDATE_DOCS_USAGE',
@@ -215,6 +228,18 @@ describe('commands manifest', () => {
       ok: false,
       option: '--check=false',
     });
+
+    const db = parseCommandArgv(
+      ['provision', '--schema', 'src/schema.ts', '--driver=pglite', '--data-dir', '.kovo/pglite'],
+      DB_ARGV_SPEC,
+    );
+    expect(db).toEqual(expect.objectContaining({ ok: true }));
+    if (db.ok) {
+      expect(db.value.positionals).toEqual(['provision']);
+      expect(parsedStringOption(db.value, '--schema')).toBe('src/schema.ts');
+      expect(parsedStringOption(db.value, '--driver')).toBe('pglite');
+      expect(parsedStringOption(db.value, '--data-dir')).toBe('.kovo/pglite');
+    }
   });
 
   it('renders shared argv errors and single-positional diagnostics', () => {
@@ -276,4 +301,8 @@ function captureWrites(run: () => number) {
     process.stdout.write = stdoutWrite;
     process.stderr.write = stderrWrite;
   }
+}
+
+function isAsyncManifestEntry(entry: (typeof COMMANDS_MANIFEST)[number]): boolean {
+  return 'async' in entry && entry.async === true;
 }

@@ -17,6 +17,7 @@ export const compileCommandOutputVersion = 'kovo-compile/v1';
 export const addOutputVersion = 'kovo-add/v1';
 export const mcpOutputVersion = 'kovo-mcp/v1';
 export const buildOutputVersion = 'kovo-build/v1';
+export const dbOutputVersion = 'kovo-db/v1';
 
 export function writeCommandResult(result: CliCommandResult): 0 | 1 {
   if ('error' in result) {

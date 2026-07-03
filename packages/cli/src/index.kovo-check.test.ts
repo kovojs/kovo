@@ -2496,7 +2496,7 @@ describe('kovo check', () => {
       });
 
       expect(output).toBe(
-        'kovo: add, audit, build, check, compile, explain, export, mcp, update-docs\n',
+        'kovo: add, audit, build, check, db, compile, explain, export, mcp, update-docs\n',
       );
     } finally {
       rmSync(parent, { force: true, recursive: true });
