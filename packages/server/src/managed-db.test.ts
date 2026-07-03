@@ -1726,6 +1726,9 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         expect(() => handle.update(table).set({ role })).toThrow(/KV438[\s\S]*<input>\.role/);
         expect(() => handle.insert(table).values({ ...input })).toThrow(/KV438/);
         expect(() => handle.insert(table).values(input)).toThrow(/KV438/);
+        expect(() =>
+          handle.insert(table).values([{ id: 'server-id', name: 'Grace', role: input.role }]),
+        ).toThrow(/KV438/);
         expect(log).toEqual([]);
       },
     );

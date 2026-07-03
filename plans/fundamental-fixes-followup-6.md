@@ -117,8 +117,8 @@ answer but hard — declared-write scope is _dynamic per mutation_ while grants 
 
 ### DEC-F — Dialect-independent floors (confirm, don't rebuild)
 
-- [ ] **F1 — Confirm the KV438 mass-assignment runtime floor is live for every write shape** (present at `managed-db.ts:818`; tests `managed-db.test.ts:1724-1780`). Verify it fires under `KOVO_PARANOID=1` for insert/update/onConflict on a governed column bound to client input — closing bugz-30 B4 on the supported (PG) path.
-  - Acceptance: paranoid test — a governed-column write from a declared input field is rejected on PG with the static gate stubbed.
+- [x] **F1 — Confirm the KV438 mass-assignment runtime floor is live for every write shape** (present at `managed-db.ts:818`; tests `managed-db.test.ts:1724-1780`). Verify it fires under `KOVO_PARANOID=1` for insert/update/onConflict on a governed column bound to client input — closing bugz-30 B4 on the supported (PG) path.
+  - Evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts --config ./vite.config.ts` passed after adding array `.values([...])` governed-column coverage alongside update, insert, spread, and `onConflictDoUpdate`.
 - [ ] **F2 — Re-audit the security-marker registry for C4: any code whose property is authorization/confidentiality must name the engine choke (role/RLS/column-privilege) as its enforcement on PG, not an app-level proxy.** SQLite entries are marked experimental/unsound.
   - Acceptance: registry test asserts every value/effect authorization/confidentiality code maps to an engine mechanism on the supported dialect; the SQLite dialect is flagged non-guaranteeing.
 
