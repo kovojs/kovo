@@ -7,7 +7,11 @@ import {
 import { managedDb, type ManagedDbMode } from './managed-db.js';
 import type { ManagedSqlWritePolicy } from './sql-safe-handle.js';
 import type { ServerErrorHandler } from './diagnostics.js';
-import { principalPostureFromRequest, provenPrincipalFromRequest } from './auth-principal.js';
+import {
+  isProvenPrincipal,
+  principalPostureFromRequest,
+  provenPrincipalFromRequest,
+} from './auth-principal.js';
 import { matchRoute, type RouteLike } from './match.js';
 import {
   blessRedirectResponse,
@@ -1069,8 +1073,8 @@ function rateLimitKey<Request extends SessionRequestLike>(
     );
   }
 
-  const principal = provenPrincipalFromRequest(request);
-  if (principal !== undefined) return `principal:${principal}`;
+  const sessionKey = sessionRateLimitKey(request);
+  if (sessionKey !== undefined) return sessionKey;
 
   // Security finding M3: with default (`per:'session'`) keying and no session id,
   // collapsing every anonymous client onto a single shared bucket lets one
@@ -1087,4 +1091,25 @@ function rateLimitKey<Request extends SessionRequestLike>(
       "public endpoints, compose `guards.authed` before `rateLimit`, or set `per:'global'` to " +
       'throttle all clients together.',
   );
+}
+
+function sessionRateLimitKey(request: unknown): string | undefined {
+  if (!isObjectLike(request) || !('session' in request)) return undefined;
+
+  const sessionValue = request.session;
+  if (isProvenPrincipal(sessionValue)) return `session:${sessionValue}`;
+  if (!isObjectLike(sessionValue)) return undefined;
+
+  const sessionId = sessionValue.id;
+  if (isProvenPrincipal(sessionId)) return `session:${sessionId}`;
+
+  const user = sessionValue.user;
+  if (isProvenPrincipal(user)) return `principal:${user}`;
+  if (isObjectLike(user) && isProvenPrincipal(user.id)) return `principal:${user.id}`;
+
+  return undefined;
+}
+
+function isObjectLike(value: unknown): value is Record<PropertyKey, unknown> {
+  return (typeof value === 'object' || typeof value === 'function') && value !== null;
 }
