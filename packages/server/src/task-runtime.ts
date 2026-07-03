@@ -76,7 +76,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
   }
 
   private async start(request: Request): Promise<void> {
-    const db = await this.resolveRootDb(request);
+    const db = await this.resolveRootDb();
     const executor = createDurableTaskSqlExecutor(db);
     const store = new PostgresDurableTaskQueue(executor);
     await ensureDurableTaskSchema(executor);
@@ -193,13 +193,13 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
     );
   }
 
-  private async resolveRootDb(request: Request): Promise<unknown> {
+  private async resolveRootDb(): Promise<unknown> {
     if (this.app.db === undefined) {
       throw new TypeError(
         'createRequestHandler() cannot run durable tasks without createApp({ db }) (SPEC §9.6).',
       );
     }
-    return this.app.db(request as never);
+    return this.app.db(undefined as never);
   }
 
   private queueForRequest(request: unknown): DurableTaskQueueStore {
