@@ -281,6 +281,8 @@ reader.with('active').select().from('products');
 
 // @ts-expect-error SPEC §6.6/§9.4/§10.3: raw provider handles lack the Reader brand.
 acceptsReader(raw);
+// @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides callable raw query handles.
+reader.query({ text: 'select 1', values: [] });
 // @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides write builders.
 reader.insert('products');
 // @ts-expect-error SPEC §9.4/KV433: Reader<Db> hides write builders.
@@ -297,6 +299,17 @@ reader.get({ sql: 'select 1', values: [] });
 reader.values({ sql: 'select 1', values: [] });
 // @ts-expect-error SPEC §9.4/KV433: Reader<Db> narrows CTE-prefixed builders to reads.
 reader.with('active').update('products');
+
+type RelationalDb = {
+  query: {
+    products: {
+      findMany(): Promise<unknown[]>;
+    };
+  };
+};
+
+declare const relationalRaw: RelationalDb;
+readonlyDb(relationalRaw).query.products.findMany();
 
 `,
         'utf8',
@@ -427,6 +440,8 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       reader.all({ text: 'select 1', values: [] });
       // @ts-expect-error Reader<Db> hides SQLite .get sinks by default.
       reader.get({ text: 'select 1', values: [] });
+      // @ts-expect-error Reader<Db> hides callable raw query handles by default.
+      reader.query({ text: 'select 1', values: [] });
       // @ts-expect-error Reader<Db> hides SQLite .values sinks by default.
       reader.values({ text: 'select 1', values: [] });
       const withReader = readonlyDb({
@@ -451,6 +466,8 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
       acceptsReader(readHandle);
       // @ts-expect-error managedDb(..., 'read') returns the branded read-only surface.
       readHandle.update('products');
+      // @ts-expect-error managedDb(..., 'read') does not expose callable raw query handles.
+      readHandle.query({ text: 'select 1', values: [] });
       // @ts-expect-error managedDb(..., 'read') exposes only the read capability allowlist.
       readHandle.transaction(() => undefined);
       // @ts-expect-error managedDb(..., 'read') does not expose raw driver escape handles.
@@ -482,31 +499,34 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     }
   });
 
-  it('routes SQL-shaped driver methods through the parser instead of denying by name', async () => {
+  it('denies root raw/FROM-source read methods even when the target exposes them', () => {
     const log: string[] = [];
     const reader = readonlyDb(fakeDb(log)) as unknown as Record<
-      'all' | 'execute' | 'futureStatement' | 'get' | 'run' | 'values',
+      'all' | 'exec' | 'execute' | 'futureStatement' | 'get' | 'prepare' | 'run' | 'sql' | 'values',
       (statement: unknown) => Promise<unknown>
     >;
 
-    for (const method of ['all', 'execute', 'futureStatement', 'get', 'run', 'values'] as const) {
-      await expect(
-        reader[method]({ sql: 'select id from products where id = ?', values: ['p1'] }),
-      ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
-    }
-    expect(log).toEqual(['all', 'execute', 'futureStatement', 'get', 'run', 'values']);
-
-    for (const method of ['all', 'execute', 'futureStatement', 'get', 'run', 'values'] as const) {
+    for (const method of [
+      'all',
+      'exec',
+      'execute',
+      'futureStatement',
+      'get',
+      'prepare',
+      'run',
+      'sql',
+      'values',
+    ] as const) {
       expect(() =>
         reader[method](
           stampTrustedSql(
-            { sql: 'delete from products where id = ? returning id', values: ['p1'] },
-            `${method} read-handle write attempt`,
+            { sql: 'select id from products where id = ?', values: ['p1'] },
+            `${method} read-handle raw read attempt`,
           ),
         ),
       ).toThrow(/KV433/);
     }
-    expect(log).toEqual(['all', 'execute', 'futureStatement', 'get', 'run', 'values']);
+    expect(log).toEqual([]);
   });
 
   it('passes reads through unchanged', async () => {
@@ -517,15 +537,48 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(log).toEqual(['select:products']);
   });
 
-  it('parses allowed SQL-shaped read methods instead of trusting the allowlist alone', async () => {
+  it('preserves builder terminals returned after select().from()', () => {
     const log: string[] = [];
-    const reader = readonlyDb(fakeDb(log));
-    const queryMethod = (reader as unknown as { query(statement: unknown): Promise<unknown> })
-      .query;
+    const raw = {
+      all(statement: unknown) {
+        log.push(`root.all:${String(statement)}`);
+        return [];
+      },
+      select() {
+        log.push('select');
+        return {
+          from(table: string) {
+            log.push(`from:${table}`);
+            return {
+              all() {
+                log.push('builder.all');
+                return [{ id: 'p1' }];
+              },
+            };
+          },
+        };
+      },
+    };
+    const reader = readonlyDb(raw) as unknown as typeof raw;
 
-    expect(() => queryMethod('select * from products')).toThrow(/KV422/);
     expect(() =>
-      queryMethod(
+      reader.all(stampTrustedSql({ sql: 'select id from products' }, 'root all raw read')),
+    ).toThrow(/KV433/);
+    expect(reader.select().from('products').all()).toEqual([{ id: 'p1' }]);
+    expect(log).toEqual(['select', 'from:products', 'builder.all']);
+  });
+
+  it('denies callable raw query while preserving relational query namespaces', async () => {
+    const log: string[] = [];
+    const callableReader = readonlyDb(fakeDb(log)) as unknown as {
+      query(statement: unknown): Promise<unknown>;
+    };
+
+    expect(() =>
+      callableReader.query({ sql: 'select id from products where id = ?', values: ['p1'] }),
+    ).toThrow(/KV433/);
+    expect(() =>
+      callableReader.query(
         stampTrustedSql(
           { sql: 'delete from products where id = ? returning id', values: ['p1'] },
           'attempted public read-handle write',
@@ -534,10 +587,18 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     ).toThrow(/KV433/);
     expect(log).toEqual([]);
 
-    await expect(
-      queryMethod({ sql: 'select id from products where id = ?', values: ['p1'] }),
-    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
-    expect(log).toEqual(['query']);
+    const relationalRaw = {
+      query: {
+        users: {
+          findMany() {
+            log.push('query.users.findMany');
+            return Promise.resolve([{ id: 'u1' }]);
+          },
+        },
+      },
+    };
+    await expect(readonlyDb(relationalRaw).query.users.findMany()).resolves.toEqual([{ id: 'u1' }]);
+    expect(log).toEqual(['query.users.findMany']);
   });
 
   it('binds allowed read methods to the wrapped DB target', async () => {
@@ -605,17 +666,17 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(log).toEqual(['execute']);
   });
 
-  it('read mode rejects writes AND raw-string SQL (the unification)', () => {
+  it('read mode rejects writes AND callable raw query handles', () => {
     const handle = managedDb(fakeDb([]), 'read');
     // KV433: write verb throws the readonly error.
     expect(() => (handle as unknown as { insert(t: string): unknown }).insert('products')).toThrow(
       KovoReadonlyHandleError,
     );
-    // KV422: a raw string statement is rejected by the same handle.
-    expect(() => (handle as { query(s: unknown): unknown }).query('SELECT 1')).toThrow(/KV422/);
+    // DEC-C: callable root query() is a FROM-source raw read and is outside the strict allowlist.
+    expect(() => (handle as { query(s: unknown): unknown }).query('SELECT 1')).toThrow(/KV433/);
   });
 
-  it('read mode rejects SQL writes even through allowed read-shaped SQL methods', () => {
+  it('read mode denies callable query while preserving builder reads', async () => {
     const handle = managedDb(fakeDb([]), 'read', {
       sqlWritePolicy: { dialect: 'sqlite' },
     });
@@ -628,16 +689,19 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         ),
       ),
     ).toThrow(/KV433/);
-
     expect(() =>
       (handle as { query(s: unknown): unknown }).query({
         sql: 'select id from products where id = ?',
         values: ['p1'],
       }),
-    ).not.toThrow();
+    ).toThrow(/KV433/);
+
+    await expect(
+      (handle as unknown as ReturnType<typeof fakeDb>).select().from('products'),
+    ).resolves.toEqual([{ id: 'p1' }]);
   });
 
-  it('uses a dedicated engine read-only target and keeps writer lifecycle isolated', async () => {
+  it('uses a dedicated engine read-only target without exposing its callable query sink', async () => {
     const log: string[] = [];
     const raw = {
       readonlyState: false,
@@ -671,29 +735,24 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     const reader = managedDb(raw, 'read') as unknown as {
       query(statement: unknown): Promise<unknown>;
     };
-    await expect(
+    expect(() =>
       reader.query({
         text: "select string_agg(name, ',') from contacts where created_at < date_trunc('day', now()) and id <> $1",
         values: ['archived'],
       }),
-    ).resolves.toMatchObject({ text: expect.stringContaining('string_agg') });
+    ).toThrow(/KV433/);
     expect(() =>
       reader.query(
         stampTrustedSql({ text: "select setval('contact_id_seq', 1)" }, 'engine-readonly setval'),
       ),
-    ).toThrow(/KV433[\s\S]*read-only transaction/);
+    ).toThrow(/KV433/);
 
     const writer = managedDb(raw, 'write') as unknown as {
       insert(table: string): { values(): Promise<void> };
     };
     await expect(writer.insert('contacts').values()).resolves.toBeUndefined();
 
-    expect(log).toEqual([
-      'readonly-target-created',
-      'readonly.query',
-      'readonly.query',
-      'writer.insert:contacts:readonly=false',
-    ]);
+    expect(log).toEqual(['readonly-target-created', 'writer.insert:contacts:readonly=false']);
   });
 
   it('fails closed when an engine read-only hook returns the writer handle', () => {
@@ -709,7 +768,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(() => managedDb(raw, 'read')).toThrow(/KV433[\s\S]*dedicated engine read-only handle/);
   });
 
-  it('read mode parses SQLite sinks and blocks mutating statements before execution', async () => {
+  it('read mode denies SQLite root sinks before execution', async () => {
     const log: string[] = [];
     const handle = managedDb(fakeDb(log), 'read', {
       sqlWritePolicy: { dialect: 'sqlite' },
@@ -737,12 +796,12 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       ).toThrow(/KV433/);
     }
 
-    await expect(
+    expect(() =>
       (handle as unknown as { all(statement: unknown): Promise<unknown> }).all({
         sql: 'select id from products where id = ?',
         values: ['p1'],
       }),
-    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    ).toThrow(/KV433/);
     expect(() =>
       (
         handle as unknown as { transaction(callback: (tx: unknown) => unknown): unknown }
@@ -750,7 +809,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         log.push('callback-entered');
       }),
     ).toThrow(KovoReadonlyHandleError);
-    expect(log).toEqual(['all']);
+    expect(log).toEqual([]);
   });
 
   it.each([
@@ -766,7 +825,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       },
       name: "managedDb('read')",
     },
-  ])('$name parses SQLite read sinks and rejects write-shaped reads', async ({ create }) => {
+  ])('$name denies SQLite read sinks and preserves builder terminals', async ({ create }) => {
     const log: string[] = [];
     const handle = create(log);
 
@@ -791,12 +850,12 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
         ),
       ).toThrow(/KV433/);
     }
-    await expect(
+    expect(() =>
       (handle as unknown as { get(statement: unknown): Promise<unknown> }).get({
         sql: 'select id from products where id = ?',
         values: ['p1'],
       }),
-    ).resolves.toMatchObject({ sql: 'select id from products where id = ?' });
+    ).toThrow(/KV433/);
     expect(() =>
       (
         handle as unknown as { transaction(callback: (tx: unknown) => unknown): unknown }
@@ -807,7 +866,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
     const rows = await (handle as unknown as ReturnType<typeof fakeDb>).select().from('products');
     expect(rows).toEqual([{ id: 'p1' }]);
-    expect(log).toEqual(['get', 'select:products']);
+    expect(log).toEqual(['select:products']);
   });
 
   it.each([
@@ -823,7 +882,7 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       },
       name: "managedDb('read')",
     },
-  ])('$name denies raw driver escape properties and parses future methods', async ({ create }) => {
+  ])('$name denies raw driver escape properties and future root methods', async ({ create }) => {
     const log: string[] = [];
     const handle = create({
       $client: {
@@ -866,13 +925,13 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     ).toThrow(/KV433/);
     expect(log).toEqual([]);
 
-    expect(
+    expect(() =>
       (handle as unknown as { futureStatement(statement: unknown): unknown }).futureStatement({
         sql: 'select id from products where id = ?',
         values: ['p1'],
       }),
-    ).toMatchObject({ sql: 'select id from products where id = ?' });
-    expect(log).toEqual(['futureStatement:[object Object]']);
+    ).toThrow(/KV433/);
+    expect(log).toEqual([]);
   });
 
   it("managedDb('read') exposes only the read half of CTE-prefixed .with() builders", async () => {
@@ -1120,8 +1179,8 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       write: { text: 'insert into products (id) values ($1)', values: ['p1'] },
     },
   ])(
-    'read mode $name rejects raw strings and mutating statements before execution',
-    async ({ dialect, log: expectedLog, method, read, rawDb, write }) => {
+    'read mode $name denies root SQL methods before execution',
+    async ({ dialect, method, read, rawDb, write }) => {
       const log: string[] = [];
       const handle = managedDb(rawDb(log), 'read', {
         sqlWritePolicy: dialect === undefined ? {} : { dialect },
@@ -1129,16 +1188,16 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
 
       const execute = (statement: unknown) => handle[method]!(statement);
 
-      expect(() => execute('select id from products')).toThrow(/KV422/);
+      expect(() => execute('select id from products')).toThrow(/KV433/);
       expect(log).toEqual([]);
 
-      await expect(Promise.resolve(execute(read))).resolves.toMatchObject(read);
-      expect(log).toEqual([expectedLog]);
+      expect(() => execute(read)).toThrow(/KV433/);
+      expect(log).toEqual([]);
 
       expect(() => execute(stampTrustedSql(write, `read-mode ${method} write attempt`))).toThrow(
         /KV433/,
       );
-      expect(log).toEqual([expectedLog]);
+      expect(log).toEqual([]);
     },
   );
 
