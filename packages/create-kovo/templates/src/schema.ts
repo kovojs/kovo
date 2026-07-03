@@ -54,7 +54,12 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: 'cascade' }),
   },
-  kovo({ domain: 'auth', key: 'userId', secret: ['token'] }),
+  kovo({
+    domain: 'auth',
+    key: 'userId',
+    owner: 'userId',
+    secret: ['token'],
+  }),
 );
 
 export const account = pgTable(
@@ -79,6 +84,7 @@ export const account = pgTable(
   kovo({
     domain: 'auth',
     key: 'userId',
+    owner: 'userId',
     secret: ['password', 'accessToken', 'refreshToken', 'idToken'],
   }),
 );

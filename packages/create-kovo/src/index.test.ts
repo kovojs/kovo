@@ -362,9 +362,10 @@ describe('create-kovo starter (metadata)', () => {
       // SPEC.md §6.6 / §10.1: classification is carried by the schema annotation the
       // compiler reads, not by TypeScript-only branding. KV435 rejects projections from
       // these columns once the build graph ingests this starter schema.
-      expect(schemaSource).toContain("kovo({ domain: 'auth', key: 'userId', secret: ['token'] })");
       expect(schemaSource).toContain("domain: 'auth'");
       expect(schemaSource).toContain("key: 'userId'");
+      expect(schemaSource).toContain("owner: 'userId'");
+      expect(schemaSource).toContain("secret: ['token']");
       expect(schemaSource).toContain(
         "secret: ['password', 'accessToken', 'refreshToken', 'idToken']",
       );
