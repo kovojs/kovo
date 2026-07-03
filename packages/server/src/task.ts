@@ -1,4 +1,5 @@
 import type { InferSchema, Schema } from './schema.js';
+import type { NonRequestPrincipalPosture } from './auth-principal.js';
 import { validateCronExpression } from './task-cron.js';
 
 const UNASSIGNED_DERIVED_TASK_KEY = '\0kovo:unassigned-task-key';
@@ -55,6 +56,43 @@ export type TaskRunnableQueryInput<Query> = Query extends { args: Schema<infer I
   ? Input
   : undefined;
 
+/** @internal Principal posture threaded from task ctx helpers to framework-owned ingress hooks. */
+export interface TaskIngressRunOptions {
+  readonly principalPosture: NonRequestPrincipalPosture;
+}
+
+/**
+ * Read-only task scope returned by `ctx.actAs(id)` or `ctx.declareSystemRead(reason)`.
+ *
+ * SPEC §10.3 DEC-G: durable tasks have no ambient request principal, so owner-scoped reads must
+ * name an explicit principal or audited system posture before entering the query runtime.
+ */
+export interface TaskPrincipalReadScope {
+  runQuery<const Query extends TaskRunnableQuery<any>>(
+    definition: Query,
+    input: TaskRunnableQueryInput<Query>,
+  ): Promise<unknown>;
+}
+
+/**
+ * Write-only task scope returned by `ctx.actAs(id)` or `ctx.declareSystemWrite(reason)`.
+ *
+ * SPEC §10.3 DEC-G: durable tasks have no ambient request principal, so owner-scoped writes must
+ * name an explicit principal or audited system posture before entering the mutation runtime.
+ */
+export interface TaskPrincipalWriteScope {
+  runMutation<const Mutation extends TaskRunnableMutation<any>>(
+    definition: Mutation,
+    input: TaskRunnableMutationInput<Mutation>,
+  ): Promise<unknown>;
+}
+
+/**
+ * Read/write task scope returned by `ctx.actAs(id)` for work derived to a single owner principal
+ * (SPEC §10.3 DEC-G).
+ */
+export interface TaskPrincipalScope extends TaskPrincipalReadScope, TaskPrincipalWriteScope {}
+
 /**
  * Context available to durable task bodies (SPEC §9.6: composition only, no raw db).
  *
@@ -67,6 +105,15 @@ export interface TaskRunContext {
   /** Stable idempotency key for external APIs; equal to the durable job id (SPEC §9.6). */
   readonly idempotencyKey: string;
   readonly fetch: typeof globalThis.fetch;
+  /**
+   * SPEC §10.3 DEC-G: choose the owner principal for scoped background work. Payload fields do
+   * not become authority unless task code explicitly derives and validates this id first.
+   */
+  actAs(principalId: string): TaskPrincipalScope;
+  /** SPEC §10.3 DEC-G: audited cross-owner read posture for genuine system work. */
+  declareSystemRead(reason: string): TaskPrincipalReadScope;
+  /** SPEC §10.3 DEC-G: audited cross-owner write posture for genuine system work. */
+  declareSystemWrite(reason: string): TaskPrincipalWriteScope;
   runMutation<const Mutation extends TaskRunnableMutation<any>>(
     definition: Mutation,
     input: TaskRunnableMutationInput<Mutation>,

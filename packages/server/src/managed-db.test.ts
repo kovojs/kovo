@@ -6,10 +6,14 @@ import { drainSecretRevealAuditFacts, secret } from '@kovojs/core';
 import { stampTrustedSql } from '@kovojs/core/internal/sql-safety';
 import {
   KovoReadonlyHandleError,
+  createAuthorizationCensusDb,
   createDeclaredWriteDb,
   createPostgresReadonlyClient,
+  createPostgresScopedClient,
   kovoDeclaredWriteDbHandle,
   kovoReadonlyDbHandle,
+  declarePublicRead,
+  drainPublicReadAuditFacts,
   managedDb,
   readonlyDb,
 } from './managed-db.js';
@@ -382,7 +386,7 @@ describe('readonlyDb (KV433 Stage 1 runtime proxy)', () => {
       writeFileSync(
         join(root, 'reader-type-proof.ts'),
         `
-import { readonlyDb, type Reader } from '@kovojs/server';
+import { declarePublicRead, readonlyDb, type Reader } from '@kovojs/server';
 
 type FakeDb = {
   $client: { execute(statement: unknown): Promise<unknown> };
@@ -408,6 +412,17 @@ acceptsReader(reader);
 reader.select().from('products');
 reader.with('active').select().from('products');
 reader.rawRead({ sql: 'select id from products', values: [] }, { reads: ['products'] });
+reader.rawRead(
+  { sql: 'select id from products where published = 1', values: [] },
+  {
+    declarePublicRead: declarePublicRead({
+      reason: 'published catalog',
+      rows: { predicate: 'published = true', table: 'products' },
+      columns: ['id'],
+    }),
+    reads: ['products'],
+  },
+);
 
 // @ts-expect-error SPEC §6.6/§9.4/§10.3: raw provider handles lack the Reader brand.
 acceptsReader(raw);
@@ -709,6 +724,94 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
     expect(log).toEqual(['all']);
   });
 
+  it('validates and audits scoped public rawRead declarations', async () => {
+    drainPublicReadAuditFacts();
+    expect(() => declarePublicRead({ reason: '' })).toThrow(/non-empty reason/);
+    expect(() =>
+      declarePublicRead({ reason: 'published orders', rows: { predicate: ' ' } }),
+    ).toThrow(/rows scope/);
+    expect(() => declarePublicRead({ columns: ['id', ' '], reason: 'published orders' })).toThrow(
+      /columns scope/,
+    );
+
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: sqliteRawReadPolicy(['orders'], ['orders']),
+    });
+    const statement = stampTrustedSql(
+      { sql: 'select id, status from orders where published = 1', values: [] },
+      'public owner rawRead',
+    );
+    await expect(
+      reader.rawRead(statement, {
+        declarePublicRead: declarePublicRead({
+          columns: ['id', 'status', 'id'],
+          reason: 'published order status page',
+          rows: { predicate: 'published = true', table: 'orders' },
+        }),
+        reads: ['orders'],
+      }),
+    ).resolves.toMatchObject({
+      sql: 'select id, status from orders where published = 1',
+    });
+
+    expect(drainPublicReadAuditFacts()).toEqual([
+      {
+        columns: ['id', 'status'],
+        declaredReads: ['main.orders'],
+        dialectLabel: 'SQLite',
+        observedReads: ['main.orders'],
+        ownerReads: ['main.orders'],
+        reason: 'published order status page',
+        rows: { predicate: 'published = true', table: 'orders' },
+      },
+    ]);
+    expect(log).toEqual(['all']);
+  });
+
+  it('audits Postgres public rawRead declarations while preserving the scoped read-only client path', async () => {
+    drainPublicReadAuditFacts();
+    const log: string[] = [];
+    const reader = readonlyDb(fakeDb(log), {
+      rawRead: {
+        dialectLabel: 'Postgres',
+        executeMethod: 'query',
+        normalizeTableName: (table) => table,
+        ownerTables: ['orders'],
+      },
+    });
+
+    await expect(
+      reader.rawRead(
+        stampTrustedSql(
+          { sql: 'select id from orders where published = true', values: [] },
+          'public postgres owner rawRead',
+        ),
+        {
+          declarePublicRead: declarePublicRead({
+            columns: ['id'],
+            reason: 'published order index',
+            rows: 'published = true',
+          }),
+          reads: ['orders'],
+        },
+      ),
+    ).resolves.toMatchObject({
+      sql: 'select id from orders where published = true',
+    });
+
+    expect(drainPublicReadAuditFacts()).toEqual([
+      {
+        columns: ['id'],
+        declaredReads: ['orders'],
+        dialectLabel: 'Postgres',
+        reason: 'published order index',
+        rows: 'published = true',
+      },
+    ]);
+    expect(log).toEqual(['query']);
+  });
+
   it('passes reads through unchanged', async () => {
     const log: string[] = [];
     const reader = readonlyDb(fakeDb(log));
@@ -814,6 +917,78 @@ wrapManagedDbForSqlSafety(raw, undefined, { capability: 'write' });
 });
 
 describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
+  it('denies schema tables with no DEC-K classification at the managed builder boundary', () => {
+    const log: string[] = [];
+    const raw = {
+      select() {
+        return {
+          from(table: { name: string }) {
+            log.push(`select:${table.name}`);
+            return [];
+          },
+          leftJoin(table: { name: string }) {
+            log.push(`leftJoin:${table.name}`);
+            return [];
+          },
+        };
+      },
+      insert(table: { name: string }) {
+        log.push(`insert:${table.name}`);
+        return { values: () => undefined };
+      },
+    };
+    const handle = createAuthorizationCensusDb(raw, {
+      dialectLabel: 'PGlite',
+      metadata: {
+        authorizationClassificationsByTable: new Map([
+          ['contacts', ['authzPolicy']],
+          ['reference_tags', ['reference']],
+          ['published_posts', ['public']],
+        ]),
+        schemaTableNames: new Set(['contacts', 'reference_tags', 'published_posts', 'drafts']),
+      },
+      normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+      tableNames: (table) => [(table as { name: string }).name],
+    });
+
+    expect(handle.select().from({ name: 'contacts' })).toEqual([]);
+    expect(handle.select().from({ name: 'reference_tags' })).toEqual([]);
+    expect(handle.select().leftJoin({ name: 'published_posts' })).toEqual([]);
+    expect(() => handle.select().from({ name: 'drafts' })).toThrow(
+      /KV414[\s\S]*drafts[\s\S]*no authorization classification/,
+    );
+    expect(() => handle.insert({ name: 'drafts' }).values()).toThrow(/KV414/);
+    expect(log).toEqual(['select:contacts', 'select:reference_tags', 'leftJoin:published_posts']);
+  });
+
+  it('does not census-deny unknown framework or driver tables outside the schema metadata', () => {
+    const log: string[] = [];
+    const handle = createAuthorizationCensusDb(
+      {
+        select() {
+          return {
+            from(table: { name: string }) {
+              log.push(`select:${table.name}`);
+              return [];
+            },
+          };
+        },
+      },
+      {
+        dialectLabel: 'PGlite',
+        metadata: {
+          authorizationClassificationsByTable: new Map(),
+          schemaTableNames: new Set(['drafts']),
+        },
+        normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+        tableNames: (table) => [(table as { name: string }).name],
+      },
+    );
+
+    expect(handle.select().from({ name: '_kovo_jobs' })).toEqual([]);
+    expect(log).toEqual(['select:_kovo_jobs']);
+  });
+
   it('rejects forged direct SQL wrapper policies before exposing DB exec', () => {
     const log: string[] = [];
     const raw = {
@@ -1707,6 +1882,39 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
       'exec:SET LOCAL ROLE "kovo_reader"',
       'query:select id from contacts',
     ]);
+  });
+
+  it('server-owned Postgres scoped client parameterizes the principal before assuming the app role', async () => {
+    const log: string[] = [];
+    const client = {
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        log.push('transaction');
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: string, params?: unknown[]) {
+        log.push(`query:${statement}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve([{ id: 'c1' }]);
+      },
+    };
+    const scoped = createPostgresScopedClient(client, {
+      principal: 'user-1',
+      readOnly: true,
+      role: 'kovo_reader',
+    });
+
+    await expect(scoped.query('select id from contacts')).resolves.toEqual([{ id: 'c1' }]);
+    expect(log).toEqual([
+      'transaction',
+      'exec:SET TRANSACTION READ ONLY',
+      `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
+      'exec:SET LOCAL ROLE "kovo_reader"',
+      'query:select id from contacts:[]',
+    ]);
+    expect(() => scoped.exec('select 1')).toThrow(/parameterized db\.query/);
   });
 
   it('refuses Secret boxes at builder values and set write boundaries', () => {

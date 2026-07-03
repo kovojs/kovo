@@ -92,7 +92,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
         onError: async (error, context) => {
           this.reportTaskError(error, context, request);
         },
-        runMutation: async (definition, input) => {
+        runMutation: async (definition, input, ingressOptions) => {
           const result = await runMutation(
             definition as never,
             input,
@@ -104,8 +104,9 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
               ...(this.app.sessionProvider === undefined
                 ? {}
                 : { sessionProvider: this.app.sessionProvider }),
+              principalPosture: ingressOptions.principalPosture,
               taskScheduler: this.scheduler,
-            },
+            } as never,
           );
           if (!result.ok) {
             throw new Error(
@@ -114,7 +115,7 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
           }
           return result.value;
         },
-        runQuery: async (definition, input) => {
+        runQuery: async (definition, input, ingressOptions) => {
           const result = await runQuery(
             definition as never,
             input,
@@ -126,7 +127,8 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
               ...(this.app.sessionProvider === undefined
                 ? {}
                 : { sessionProvider: this.app.sessionProvider }),
-            },
+              principalPosture: ingressOptions.principalPosture,
+            } as never,
           );
           if (!result.ok) {
             throw new Error(

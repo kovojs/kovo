@@ -879,6 +879,8 @@ function sqlSafetyDiagnosticsForSourceFile(
 ): TouchGraphDiagnostic[] {
   const diagnostics: TouchGraphDiagnostic[] = [];
   const context = sqlSafetyContextForSourceFile(sourceFile);
+  const rawDriverImport = endpointRawDriverImportDiagnostic(file, sourceFile);
+  if (rawDriverImport) diagnostics.push(rawDriverImport);
   // SPEC §10.2 non-goal: KV422 "does not prove safety for driver handles captured before the
   // framework wraps them." A raw driver client constructed in app code (e.g. `const client = new
   // PGlite()`) is such a handle, so its `.exec()`/`.query()` sinks are out of KV422 scope. Managed
@@ -1109,6 +1111,36 @@ function mutationSecretReturnDiagnostic(
     code: 'KV435',
     detail: `Mutation handler result ${mutationKey} reads a secret-classified column before the mutation response is redirected or streamed to the wire. Prove the read stays off the mutation wire, select explicit non-secret columns, or wrap a reviewed projection in trustedReveal(...).`,
     site: site ?? `${file.fileName}:${lineForIndex(file.source, siteNode.getStart())}`,
+  });
+}
+
+const ENDPOINT_RAW_DRIVER_MODULES = new Set([
+  '@electric-sql/pglite',
+  'better-sqlite3',
+  'drizzle-orm/better-sqlite3',
+  'drizzle-orm/pglite',
+]);
+
+function endpointRawDriverImportDiagnostic(
+  file: SourceFileInput,
+  sourceFile: SourceFile,
+): TouchGraphDiagnostic | undefined {
+  if (
+    !sourceFile
+      .getDescendantsOfKind(SyntaxKind.CallExpression)
+      .some((call) => isKovoServerCalleeExpression(call.getExpression(), 'endpoint'))
+  ) {
+    return undefined;
+  }
+  const declaration = sourceFile
+    .getImportDeclarations()
+    .find((candidate) => ENDPOINT_RAW_DRIVER_MODULES.has(candidate.getModuleSpecifierValue()));
+  if (declaration === undefined) return undefined;
+  return drizzleDiagnostic({
+    code: 'KV414',
+    detail:
+      'endpoint() code must use endpoint({ db: true }) + ctx.actAs(id) managed DB capabilities; raw driver imports bypass the endpoint authorization choke (SPEC §10.3 DEC-H).',
+    site: `${file.fileName}:${lineForIndex(file.source, declaration.getStart())}`,
   });
 }
 

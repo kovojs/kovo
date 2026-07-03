@@ -111,6 +111,35 @@ describe('@kovojs/drizzle authorization census static gate (DEC-K/C7)', () => {
     expect(diagnostics).toEqual([]);
   });
 
+  it('flags a request-reachable FK child table when ownerVia is missing', () => {
+    const diagnostics = censusDiagnostics(
+      [
+        'import { query } from "@kovojs/server";',
+        'import { kovo } from "@kovojs/drizzle";',
+        'import { pgTable, text } from "drizzle-orm/pg-core";',
+        'import type { PgAsyncDatabase } from "drizzle-orm/pg-core";',
+        '',
+        'export const orders = pgTable("orders", { id: text("id").primaryKey(), userId: text("user_id").notNull() }, kovo({ domain: "order", key: "id", owner: "userId" }));',
+        'export const orderItems = pgTable("order_items", { id: text("id").primaryKey(), orderId: text("order_id").notNull().references(() => orders.id) }, kovo({ domain: "orderItem", key: "id" }));',
+        '',
+        'export const childQuery = query("child", {',
+        '  load(_input: unknown, db: PgAsyncDatabase<any, any>) {',
+        '    return db.select({ id: orderItems.id }).from(orderItems);',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        message: expect.stringContaining(
+          'Authorization census table order_items is request-reachable but has no authorization classification',
+        ),
+        site: 'src/authz-census.ts:9',
+      }),
+    ]);
+  });
+
   it('includes mutation/write graph tables in the request-reachable denominator', () => {
     const diagnostics = censusDiagnostics(
       [

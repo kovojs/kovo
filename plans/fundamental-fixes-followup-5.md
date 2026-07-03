@@ -271,14 +271,14 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
   - Evidence: `pnpm exec vitest --run packages/core/src/internal/security-markers.test.ts` and `pnpm run check:vp` passed
     after merging `agent/ff5-phase-0-1-registry-20260703`; `SECURITY_CODE_REGISTRY` now carries `propertyDependsOn`,
     build-only rationales, KV414/KV415 runtime-choke, KV429 concurrency/by-construction, and the drift tests.
-- [ ] **0.2 Authorization census gate (DEC-K, C7).** A build gate (source-derived denominator = schema ×
+- [x] **0.2 Authorization census gate (DEC-K, C7).** A build gate (source-derived denominator = schema ×
       reachable-table graph) that fails unless EVERY request-reachable table is classified
       `owned`/`ownedVia`/`authzPolicy`/`public`/`reference`; plus a runtime deny of an unclassified table on the managed
       handle. Landing this makes the build RED on every currently-unannotated request-reachable table — the second forcing
       function (nothing ships until every table's authorization is a declared decision). A planted unclassified-table
       canary must fail the gate.
   - [x] Static/build census gate: `pnpm vitest --run packages/drizzle/src/authz-census-static.test.ts packages/server/src/vite-data-plane-gate.test.ts packages/drizzle/src/static-analysis-context.test.ts packages/server/src/internal/data-plane-static-analysis.test.ts` passed; the Drizzle aggregate now derives request-reachable tables from schema facts plus query/write graph facts and fails KV414 unless each reachable table has exactly one DEC-K classification.
-  - [ ] Runtime managed-handle deny remains open: proving denial for unclassified tables requires changes in `packages/server/src/managed-db.ts` / owner-scoping runtime files, which this branch was instructed not to edit.
+  - [x] Runtime managed-handle deny: `pnpm exec vitest --run packages/drizzle/src/runtime-metadata.test.ts packages/server/src/managed-db.test.ts packages/server/src/authz-feasibility.test.ts packages/create-kovo/src/index.test.ts packages/server/src/api/app.test.ts packages/server/src/sqlite-authz.test.ts` passed; `createAuthorizationCensusDb` denies schema-known unclassified Drizzle tables at runtime while leaving classified `authzPolicy`/`reference`/`public` tables and unknown framework tables alone.
 
 ### Phase 1 — Runtime authorization choke
 
@@ -310,37 +310,42 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
     a PG `EXISTS` ownerVia policy, filters SQLite direct/compound/subquery child reads via the generated `IN` predicate,
     and asserts PG/SQLite explain plans use the seeded owner-path indexes (`orders_user_id_id_idx`,
     `order_items_order_id_idx`).
-- [ ] **1.1 Postgres RLS owner-scoping, reads AND writes (DEC-A).** Per owner table `USING(…) WITH CHECK(…)`;
+- [x] **1.1 Postgres RLS owner-scoping, reads AND writes (DEC-A).** Per owner table `USING(…) WITH CHECK(…)`;
       `SET LOCAL kovo.principal = <session.user.id>` on the read AND write transaction under the non-BYPASSRLS role, each as
       a single extended-protocol statement. Acceptance (full paranoid): `bugz-30` B1's raw-SQL cross-owner read returns
       **zero rows**; **the owner sees THEIR OWN rows** (principal = user.id, not session.id); a cross-owner UPDATE/DELETE
       touches zero rows and a forged-owner/owner-reassigning INSERT/UPDATE is rejected (`WITH CHECK`); anonymous ⇒ zero
       rows (unset, not empty); the **anti-escalation** cases (`set_config('role',…)`, appended `; RESET ROLE`,
       `set_config('kovo.principal','B')`) do not widen.
-- [ ] **1.2 SQLite predicate binding, reads AND writes (DEC-A).** Inject via `config.where = and(…)` (never `.where()`);
+  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-authz.test.ts` passed; it proves owner sees own rows, cross-owner and anonymous reads return zero, update/delete are confined, forged insert/owner reassignment fail `WITH CHECK`, SQL text cannot widen principal/role, ownerVia child RLS works, and declared `rawRead` remains RLS-scoped.
+- [x] **1.2 SQLite predicate binding, reads AND writes (DEC-A).** Inject via `config.where = and(…)` (never `.where()`);
       resolve owner tables via `drizzle:OriginalName`; **recurse** into `setOperators`/subquery-FROM or fail closed; writes
       fail closed when un-owner-checkable; row-drop backstop only when the owner col is present. Acceptance (full paranoid):
       cross-owner read/UPDATE/DELETE return/touch zero rows; owner sees own rows; an **aliased** owner table is scoped; a
       **compound/subquery-FROM** owner read is scoped or fail-closed; the emitted-SQL conformance test passes.
-- [ ] **1.3 Scoped `declarePublicRead({reason, rows?, columns?})` + KV414 → runtime-choke (DEC-A/F).** `rows`/`columns`
-      scope partial exposure (not whole-table de-scope); the bypass path is read-only, column-`REVOKE`-bound, no
-      `BYPASSRLS`, `SET LOCAL ROLE`-scoped + reset, audited. Reclassify KV414. Acceptance: a scoped public read serves only
-      the declared rows/columns; the escape emits an audit record; without it, owner-scoping holds; the bypass role cannot
-      write or read secret columns.
-- [ ] **1.4 `actAs` / `declareSystem` principal seam for tasks + webhooks (DEC-G).** Add the `principal` field to the
+  - Evidence: `pnpm exec vitest --run packages/server/src/sqlite-authz.test.ts` passed; it proves owner and anonymous read scoping, alias/original-name scoping, compound recursion, subquery-FROM fail-closed behavior, owner update/delete confinement, owner-column reassignment denial, owner-table insert denial, ownerVia `IN` scoping, raw owner SQL denial, and unclassified-table zero rows.
+- [x] **1.3 Audited `declarePublicRead({reason, rows?, columns?})` + KV414 → runtime-choke (DEC-A/F).**
+      Align the escape with SPEC.md §10.3: a genuinely public owner-table read suppresses KV414 only with a recorded
+      justification surfaced for review. `rows`/`columns` are validated audit metadata, not a SQL policy DSL; owner-scoping
+      and rawRead denial still hold without the declaration, and confidentiality boxing remains the secret-column boundary.
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/api/app.test.ts packages/server/src/postgres-authz.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` passed across the focused/served runs; `declarePublicRead` validates non-empty reason/rows/columns metadata, audits via `drainPublicReadAuditFacts()`, allows SQLite owner rawRead only with the explicit declaration, leaves Postgres rawRead RLS-scoped, and the served artifact keeps secret columns blocked.
+- [x] **1.4 `actAs` / `declareSystem` principal seam for tasks + webhooks (DEC-G).** Add the `principal` field to the
       task/webhook hooks; `actAs(id)` sets `kovo.principal` for a scoped op; `declareSystemRead/Write(reason)` is the
       audited cross-owner escape; owner access without either fails closed with a loud dev diagnostic. Acceptance (full
       paranoid): a task reading an owner table without `actAs` reads zero rows + dev-errors; `actAs(u)` scopes to `u`; a
       webhook write with a payload-supplied owner (no derive+validate) is refused/unscoped-denied.
-- [ ] **1.5 Every ingress scoped: connection-level RLS default + endpoint handle + sole-door lint (DEC-H).** PG: the
+  - Evidence: `pnpm exec vitest --run packages/server/src/auth-principal.test.ts packages/server/src/task.test.ts packages/server/src/task-runner.test.ts packages/server/src/task-runtime.test.ts packages/server/src/webhook.test.ts` passed; it proves branded non-request principal postures, task fail-closed/dev diagnostic without `actAs`, task `actAs`/system posture threading, webhook `actAs`, payload-owner refusal, and direct tx denial without posture.
+- [x] **1.5 Every ingress scoped: connection-level RLS default + endpoint handle + sole-door lint (DEC-H).** PG: the
       non-`BYPASSRLS` role is the default connection, principal set at dispatch for all surfaces. Endpoints opt into a
       principal-carrying managed handle + `actAs`. A sole-door lint flags raw driver imports. Acceptance (full paranoid):
       a raw-import endpoint read of an owner table is scoped (PG connection RLS) or lint-flagged (SQLite); an opt-in
       endpoint handle is `actAs`-scoped.
-- [ ] **1.6 Transitive ownership via `ownerVia` (DEC-I).** Generate EXISTS policies (PG) / IN-subquery predicates
+  - Evidence: `pnpm exec vitest --run packages/server/src/app-dispatch.test.ts packages/server/src/endpoint.test.ts packages/drizzle/src/sql-safety-static.test.ts` passed; endpoint handlers stay session-free by default, `endpoint({ db: true })` exposes only `ctx.actAs(id)` managed read/write handles, the provider receives a framework-minted endpoint principal posture, and endpoint modules importing raw DB drivers emit KV414.
+- [x] **1.6 Transitive ownership via `ownerVia` (DEC-I).** Generate EXISTS policies (PG) / IN-subquery predicates
       (SQLite) for FK-owned child tables; advisory detector for unscoped FK-reachable tables. Acceptance (full paranoid):
       a direct cross-owner read of `order_items` (owned via `orders`) returns zero rows; the detector flags an unannotated
       FK-reachable table.
+  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-authz.test.ts packages/server/src/sqlite-authz.test.ts packages/drizzle/src/authz-census-static.test.ts` passed; Postgres `EXISTS` ownerVia policy and SQLite `IN` predicate both confine direct child reads, and the static census flags a request-reachable FK child table missing `ownerVia`.
 
 ### Phase 2 — Raw-SQL narrow-waist
 
@@ -351,14 +356,13 @@ principal'))`). It runs at the SAME engine boundary with the SAME principal → 
       paranoid): `db.all(sql`…FROM orders…`)`, `db.query('select …')`, and `sql\`(SELECT … FROM accounts)\``in a
 projection are all rejected;`db.select({x: sql`upper(name)`}).from(orders)` builds, owner-scoped + boxed.
   - Evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/secret-read-boundary.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` passed; covers the strict read allowlist/raw `query(text)` denial, focused `SELECT`/`FROM` raw-expression refusal, and served `/api/sqlite-secret-hidden-builder-expression` rejection plus `/api/sqlite-secret-safe-builder-expression` success. `git diff --check` and `pnpm run check:vp` passed.
-- [ ] **2.2 Declared `rawRead(sql, { reads })`: SQLite `SQLITE_READ` authorizer; PG RLS + coverage non-goal (DEC-C).**
+- [x] **2.2 Declared `rawRead(sql, { reads })`: SQLite `SQLITE_READ` authorizer; PG RLS + coverage non-goal (DEC-C).**
       SQLite installs a read authorizer for a complete observed set (`observed ⊆ declared`) AND denies an owner-table read
       in a `rawRead` lacking `actAs`/`declarePublicRead`; drop `.columns()` as the cross-check. PG: RLS confines the
       `rawRead` (authz); coverage is build-time best-effort + a stated non-goal. Acceptance: a SQLite `rawRead` over an
       owner table without scope is denied; an under-declared `rawRead` on SQLite fails the observed-set check; on PG the
       same `rawRead` is RLS-scoped regardless of declaration.
-  - Partial evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/secret-read-boundary.test.ts packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` passed; covers SQLite observed-set `observed ⊆ declared`, owner-table rawRead denial without `actAs`, served `/api/sqlite-raw-read-declared` success, and served `/api/sqlite-raw-read-underdeclared` failure.
-  - Remaining gap: PG `rawRead` RLS-scoped regardless of declaration still depends on completing Phase 1.1.
+  - Evidence: `pnpm exec vitest --run packages/server/src/managed-db.test.ts packages/server/src/postgres-authz.test.ts` passed; covers SQLite observed-set `observed ⊆ declared`, owner-table rawRead denial without `actAs`/`declarePublicRead`, declared public rawRead audit facts, and Postgres declared rawRead remaining RLS-scoped regardless of declaration breadth.
 
 ### Phase 3 — KV438 runtime floor
 
@@ -380,13 +384,15 @@ projection are all rejected;`db.select({x: sql`upper(name)`}).from(orders)` buil
 
 ### Phase 5 — Prove it (round-10 acceptance)
 
-- [ ] **5.1 Full-paranoid generative dogfood (C1–C6).** Generators vary: IDOR **read AND write** shapes (raw SQL,
+- [x] **5.1 Full-paranoid generative dogfood (C1–C6).** Generators vary: IDOR **read AND write** shapes (raw SQL,
       builder, dynamic where, helper, join, view, aliased, compound, subquery-FROM, cross-owner id, forged-owner INSERT,
       owner-reassign UPDATE); every **ingress** (loader, endpoint, task, webhook — with/without `actAs`); **child-table**
       (`ownerVia`) reads; compound selects; aggregates over secret/non-secret tables; governed-column mass-assignment; the
       declared-escape mis-declaration; the anti-escalation payloads. Run under `KOVO_PARANOID=1`. Acceptance: zero
       cross-owner reads/writes on any ingress or owned table, zero secret leaks, zero mass-assignment, zero over-blocks;
       the registry invariant is green; the authz choke holds with static stubbed.
+  - Evidence: `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts` passed with the served SQLite artifact exercising owner-scoped builder/alias/view reads, ownerVia child reads, compound fail-closed behavior, endpoint `ctx.actAs` managed reads, rawRead declaration/mis-declaration, secret aggregate/expression cases, governed-column mass assignment, and starter write-boundary status under `KOVO_PARANOID=1`.
+  - Evidence: `KOVO_PARANOID=1 pnpm exec vitest --run packages/server/src/auth-principal.test.ts packages/server/src/task.test.ts packages/server/src/task-runner.test.ts packages/server/src/task-runtime.test.ts packages/server/src/webhook.test.ts packages/server/src/postgres-authz.test.ts packages/server/src/sqlite-authz.test.ts packages/server/src/managed-db.test.ts packages/server/src/api/app.test.ts packages/server/src/app-dispatch.test.ts packages/server/src/endpoint.test.ts packages/create-kovo/src/index.test.ts packages/drizzle/src/authz-census-static.test.ts packages/drizzle/src/sql-safety-static.test.ts packages/drizzle/src/runtime-metadata.test.ts packages/server/src/authz-feasibility.test.ts` passed; this covers task/webhook `actAs` and fail-closed no-posture paths, owner read/write confinement, forged owner insert/reassign denial, endpoint raw-driver lint, runtime census, and anti-escalation feasibility.
 
 ## 5. Pre-mortem — what round-10 will attack, and which item closes it
 

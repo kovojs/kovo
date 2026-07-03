@@ -123,7 +123,11 @@ export async function dispatchMatchedAppRequest({
       return finalizeRawWebResponse(response, request, match.endpoint.response);
     }
     return finalizeRawWebResponse(
-      await runEndpoint(match.endpoint, endpointRequest),
+      await runEndpoint(
+        match.endpoint,
+        endpointRequest,
+        app.db === undefined ? {} : { db: app.db },
+      ),
       request,
       match.endpoint.response,
     );

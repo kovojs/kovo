@@ -215,6 +215,9 @@ describe('runtime metadata extraction', () => {
         ['shares', ['authzPolicy']],
       ]),
     );
+    expect(metadata.schemaTableNames).toEqual(
+      new Set(['users', 'orders', 'order_items', 'posts', 'shares']),
+    );
     expect(metadata.ownerViaSourcesByTable.get('order_items')).toEqual({
       fkColumnKey: 'orderId',
       fkColumnName: 'order_id',

@@ -22,6 +22,8 @@ import {
   type ManagedSqlWritePolicy,
 } from './sql-safe-handle.js';
 import { securityClassifier } from '@kovojs/core/internal/security-markers';
+import { and, eq, sql } from 'drizzle-orm';
+import type { SQLWrapper } from 'drizzle-orm';
 import { requestInputProvenanceForValue } from './request-input-provenance.js';
 
 declare const readerDbBrand: unique symbol;
@@ -123,14 +125,59 @@ export interface DeclaredWriteDbOptions {
 
 /** Options for a Postgres/PGlite read-only transaction client. */
 export interface PostgresReadonlyClientOptions {
+  principal?: string | undefined;
   quoteIdentifier?: (value: string) => string;
   readerRole?: string | false;
+}
+
+/** Options for a Postgres/PGlite request-scoped transaction client. */
+export interface PostgresScopedClientOptions {
+  principal?: string | undefined;
+  quoteIdentifier?: (value: string) => string;
+  readOnly?: boolean;
+  role?: string | false;
+}
+
+/** Row-scope metadata for an audited public raw read (SPEC §10.3 DEC-F). */
+export interface PublicReadRowsScope {
+  /** Audit-readable public predicate, for example `published = true`. */
+  predicate: string;
+  /** Optional physical table the predicate applies to when the raw read spans multiple reads. */
+  table?: string;
+}
+
+/** User-authored public-read authorization escape, distinct from SQL trust and secret reveal. */
+export interface PublicReadDeclaration {
+  /** Columns intentionally exposed by the public read; omitted only when the projection is public. */
+  columns?: readonly string[];
+  /** Required audit reason explaining why this read is public. */
+  reason: string;
+  /** Row predicate or structured row-scope metadata that makes the read public. */
+  rows?: PublicReadRowsScope | string;
+}
+
+/** Recorded public-read authorization audit fact (SPEC §10.3 DEC-F, audit-grade). */
+export interface PublicReadAuditFact {
+  /** Columns declared public for this read. */
+  columns?: readonly string[];
+  /** Declared read table set after dialect normalization. */
+  declaredReads: readonly string[];
+  /** Human-readable dialect label supplied by the adapter. */
+  dialectLabel: string;
+  /** SQLite-observed read table set after dialect normalization, when available. */
+  observedReads?: readonly string[];
+  /** Observed owner-scoped tables covered by this public-read declaration. */
+  ownerReads?: readonly string[];
+  /** Required audit reason explaining why this read is public. */
+  reason: string;
+  /** Row predicate or structured row-scope metadata declared for the public read. */
+  rows?: PublicReadRowsScope | string;
 }
 
 /** User-authored declaration for the raw read escape (SPEC §10.2/§10.3 DEC-C). */
 export interface RawReadDeclaration {
   actAs?: string;
-  declarePublicRead?: { reason: string };
+  declarePublicRead?: PublicReadDeclaration;
   reads: readonly string[];
 }
 
@@ -141,6 +188,70 @@ export interface RawReadPolicyOptions {
   normalizeTableName: (table: string) => string;
   ownerTables?: readonly string[];
   sqliteAuthorizer?: DeclaredWriteSqliteAuthorizerOptions;
+}
+
+/** Runtime authorization classifications grouped by physical SQLite table. */
+export type SqliteAuthorizationClassification =
+  | 'authzPolicy'
+  | 'owned'
+  | 'ownedVia'
+  | 'public'
+  | 'reference';
+
+/** Direct owner-column source metadata for a physical SQLite table. */
+export interface SqliteOwnerSource {
+  columnKey: string;
+  columnName: string;
+  table: string;
+}
+
+/** Transitive owner source metadata for an ownerVia-classified SQLite table. */
+export interface SqliteOwnerViaSource {
+  fkColumnKey: string;
+  fkColumnName: string;
+  parentKeyColumnKey: string;
+  parentKeyColumnName: string;
+  parentTable: string;
+  table: string;
+}
+
+/** Structural subset of `@kovojs/drizzle` runtime metadata consumed by SQLite authz. */
+export interface SqliteAuthorizationMetadata {
+  schemaTableNames?: ReadonlySet<string>;
+  authorizationClassificationsByTable?: ReadonlyMap<
+    string,
+    readonly SqliteAuthorizationClassification[]
+  >;
+  ownerSourcesByTable?: ReadonlyMap<string, SqliteOwnerSource>;
+  ownerViaSourcesByTable?: ReadonlyMap<string, SqliteOwnerViaSource>;
+}
+
+/** Options for the framework-owned SQLite predicate-binding authorization wrapper. */
+export interface SqliteAuthorizationDbOptions {
+  metadata: SqliteAuthorizationMetadata;
+  principal?: string | undefined;
+}
+
+/** Structural subset of `@kovojs/drizzle` runtime metadata consumed by the DEC-K census floor. */
+export interface AuthorizationCensusMetadata {
+  authorizationClassificationsByTable?: ReadonlyMap<
+    string,
+    readonly SqliteAuthorizationClassification[]
+  >;
+  schemaTableNames?: ReadonlySet<string>;
+}
+
+/** Options for the framework-owned managed authorization-census wrapper. */
+export interface AuthorizationCensusDbOptions {
+  dialectLabel: string;
+  metadata: AuthorizationCensusMetadata;
+  normalizeTableName: (table: string) => string;
+  tableNames: (table: unknown) => readonly string[];
+}
+
+interface SqliteAuthorizationApplyState {
+  appliedWhere: SQLWrapper | undefined;
+  sourceWhere: SQLWrapper | undefined;
 }
 
 const READ_CAPABILITY_PROPERTIES = new Set<string>([
@@ -172,6 +283,28 @@ const CALLABLE_READ_CAPABILITY_PROPERTIES = new Set<string>([
   'selectDistinct',
   'with',
 ]);
+const SQLITE_AUTHZ_DIRECT_SQL_METHODS = new Set<PropertyKey>([
+  'all',
+  'execute',
+  'get',
+  'prepare',
+  'query',
+  'run',
+  'sql',
+  'values',
+]);
+const SQLITE_AUTHZ_TERMINALS = new Set<PropertyKey>([
+  'all',
+  'execute',
+  'get',
+  'run',
+  'then',
+  'toSQL',
+  'values',
+]);
+const DRIZZLE_NAME_SYMBOL = Symbol.for('drizzle:Name');
+const DRIZZLE_ORIGINAL_NAME_SYMBOL = Symbol.for('drizzle:OriginalName');
+const DRIZZLE_BASE_NAME_SYMBOL = Symbol.for('drizzle:BaseName');
 
 /**
  * Create a framework-owned declared-write DB wrapper (SPEC §10.3/§11.2). Generated adapters pass
@@ -219,6 +352,35 @@ export const createDeclaredWriteDb = securityClassifier(
 );
 
 /**
+ * Create a SQLite Drizzle handle that binds Kovo owner/ownerVia predicates at runtime.
+ *
+ * SQLite has no storage-engine RLS, so the framework-owned managed handle is the DEC-A choke:
+ * owned reads/writes are scoped to the proven owner principal, unclassified reachable tables deny
+ * at runtime, and shapes the wrapper cannot safely introspect fail closed (SPEC §10.3/§11.2).
+ */
+export const createSqliteAuthorizationDb = securityClassifier(
+  'server.managed-db.sqlite-authorization-db',
+  function <Db extends object>(db: Db, options: SqliteAuthorizationDbOptions): Db {
+    const applyStates = new WeakMap<object, SqliteAuthorizationApplyState>();
+    return sqliteAuthorizationProxy(db, options, applyStates, undefined) as Db;
+  },
+);
+
+/**
+ * Create a Drizzle handle that denies access to schema tables with no DEC-K authorization
+ * classification. This is the managed-handle runtime floor for the authorization census
+ * (SPEC §10.3 / DEC-K): the wrapper decides only from framework-owned schema metadata and table
+ * objects passed through builder APIs, avoiding SQL text heuristics and avoiding unknown
+ * framework/internal driver tables.
+ */
+export const createAuthorizationCensusDb = securityClassifier(
+  'server.managed-db.authorization-census-db',
+  function <Db extends object>(db: Db, options: AuthorizationCensusDbOptions): Db {
+    return authorizationCensusProxy(db, options, undefined) as Db;
+  },
+);
+
+/**
  * Create a Postgres/PGlite client whose `query`/`exec` methods always run inside a read-only
  * transaction, optionally assuming a reader role before app SQL executes (SPEC §10.3 KV433).
  */
@@ -228,10 +390,31 @@ export const createPostgresReadonlyClient = securityClassifier(
     client: Client,
     options: PostgresReadonlyClientOptions = {},
   ): Client {
+    const scopedOptions: PostgresScopedClientOptions = { readOnly: true };
+    if (options.principal !== undefined) scopedOptions.principal = options.principal;
+    if (options.quoteIdentifier !== undefined)
+      scopedOptions.quoteIdentifier = options.quoteIdentifier;
+    if (options.readerRole !== undefined) scopedOptions.role = options.readerRole;
+    return createPostgresScopedClient(client, scopedOptions);
+  },
+);
+
+/**
+ * Create a Postgres/PGlite client whose app SQL runs as one extended-protocol statement inside a
+ * transaction-scoped role/principal frame (SPEC §10.3 RLS owner scoping). The framework binds
+ * `kovo.principal` with parameters before assuming the app role; direct `exec` is blocked for
+ * role/principal-scoped handles so appended simple-query control text cannot widen the frame.
+ */
+export const createPostgresScopedClient = securityClassifier(
+  'server.managed-db.postgres-scoped-client',
+  function <Client extends object>(
+    client: Client,
+    options: PostgresScopedClientOptions = {},
+  ): Client {
     return new Proxy(client as Record<PropertyKey, unknown>, {
       get(target, prop, receiver) {
-        if (prop === 'query') return readonlyPostgresQuery.bind(undefined, target, options);
-        if (prop === 'exec') return readonlyPostgresExec.bind(undefined, target, options);
+        if (prop === 'query') return scopedPostgresQuery.bind(undefined, target, options);
+        if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
         return Reflect.get(target, prop, receiver);
       },
     }) as Client;
@@ -386,8 +569,126 @@ interface SqlCarrier {
   text: string;
 }
 
+const publicReadAuditFacts: PublicReadAuditFact[] = [];
+
+/**
+ * Declare an audited public-read authorization scope (SPEC §10.3 DEC-F). This does not assert SQL
+ * injection safety (`trustedSql`) or secret disclosure authority (`reveal`); it only records the
+ * intentional row/column authorization posture for a read.
+ */
+export function declarePublicRead(options: PublicReadDeclaration): PublicReadDeclaration {
+  const normalized = normalizedPublicReadDeclaration(options);
+  return Object.freeze({
+    ...normalized,
+    ...(normalized.columns ? { columns: Object.freeze([...normalized.columns]) } : {}),
+    ...(isPublicReadRowsScope(normalized.rows)
+      ? { rows: Object.freeze({ ...normalized.rows }) }
+      : {}),
+  });
+}
+
+/**
+ * Drain recorded public-read authorization audit facts for `kovo explain`/tests. Returns and clears
+ * the facts accumulated since the last drain.
+ */
+export function drainPublicReadAuditFacts(): PublicReadAuditFact[] {
+  return publicReadAuditFacts.splice(0, publicReadAuditFacts.length);
+}
+
 function isDeclaredWriteDrizzleMethod(prop: PropertyKey): prop is 'delete' | 'insert' | 'update' {
   return prop === 'delete' || prop === 'insert' || prop === 'update';
+}
+
+function authorizationCensusProxy(
+  value: unknown,
+  options: AuthorizationCensusDbOptions,
+  builderMode: 'select' | undefined,
+): unknown {
+  if (!isRecord(value)) return value;
+  return new Proxy(value, {
+    get(target, prop, receiver) {
+      const item = Reflect.get(target, prop, receiver);
+      if (typeof item !== 'function') return item;
+      if (isDeclaredWriteDrizzleMethod(prop)) {
+        return (table: unknown, ...args: unknown[]) => {
+          assertAuthorizationCensusTablesAllowed(options.tableNames(table), options);
+          return authorizationCensusProxy(
+            Reflect.apply(item, target, [table, ...args]),
+            options,
+            undefined,
+          );
+        };
+      }
+      if (prop === 'select' || prop === 'selectDistinct') {
+        return (...args: unknown[]) =>
+          authorizationCensusProxy(Reflect.apply(item, target, args), options, 'select');
+      }
+      if (builderMode === 'select' && isAuthorizationCensusReadTableMethod(prop)) {
+        return (table: unknown, ...args: unknown[]) => {
+          assertAuthorizationCensusTablesAllowed(options.tableNames(table), options);
+          return authorizationCensusProxy(
+            Reflect.apply(item, target, [table, ...args]),
+            options,
+            builderMode,
+          );
+        };
+      }
+      return (...args: unknown[]) =>
+        authorizationCensusProxy(Reflect.apply(item, target, args), options, builderMode);
+    },
+  });
+}
+
+function isAuthorizationCensusReadTableMethod(prop: PropertyKey): boolean {
+  return (
+    prop === 'from' ||
+    prop === 'innerJoin' ||
+    prop === 'leftJoin' ||
+    prop === 'rightJoin' ||
+    prop === 'fullJoin' ||
+    prop === 'crossJoin' ||
+    prop === 'leftJoinLateral' ||
+    prop === 'innerJoinLateral' ||
+    prop === 'crossJoinLateral'
+  );
+}
+
+function assertAuthorizationCensusTablesAllowed(
+  tableNames: readonly string[],
+  options: AuthorizationCensusDbOptions,
+): void {
+  for (const tableName of tableNames) {
+    const normalizedNames = authorizationCensusLookupNames(tableName, options);
+    const inSchema = normalizedNames.some((name) => options.metadata.schemaTableNames?.has(name));
+    if (!inSchema) continue;
+    const classifications = normalizedNames.flatMap(
+      (name) => options.metadata.authorizationClassificationsByTable?.get(name) ?? [],
+    );
+    if (classifications.length === 1) continue;
+    const reason =
+      classifications.length === 0
+        ? 'has no authorization classification'
+        : `has multiple authorization classifications (${[...new Set(classifications)].join(', ')})`;
+    throw new Error(
+      `KV414: ${options.dialectLabel} managed authorization census denied table ${tableName}: ${reason} (SPEC §10.3).`,
+    );
+  }
+}
+
+function authorizationCensusLookupNames(
+  tableName: string,
+  options: AuthorizationCensusDbOptions,
+): string[] {
+  const normalized = options.normalizeTableName(tableName);
+  const unqualified = tableName.includes('.') ? tableName.split('.').at(-1) : tableName;
+  const normalizedUnqualified =
+    unqualified === undefined ? undefined : options.normalizeTableName(unqualified);
+  return [
+    tableName,
+    normalized,
+    ...(unqualified === undefined ? [] : [unqualified]),
+    ...(normalizedUnqualified === undefined ? [] : [normalizedUnqualified]),
+  ].filter((name, index, names): name is string => name !== '' && names.indexOf(name) === index);
 }
 
 function declaredWriteBuilder(
@@ -549,6 +850,305 @@ function isDeclaredWriteDirectSqlMethod(
   );
 }
 
+function sqliteAuthorizationProxy(
+  value: unknown,
+  options: SqliteAuthorizationDbOptions,
+  applyStates: WeakMap<object, SqliteAuthorizationApplyState>,
+  builderMode: 'delete' | 'insert' | 'select' | 'update' | undefined,
+): unknown {
+  if (!isRecord(value)) return value;
+  return new Proxy(value, {
+    get(target, prop, receiver) {
+      if (prop === 'then') {
+        applySqliteAuthorizationToBuilder(target, options, applyStates, builderMode);
+      }
+      const item = Reflect.get(target, prop, receiver);
+      if (typeof item !== 'function') return item;
+      const isBuilder = isRecord((target as { config?: unknown }).config);
+      if (builderMode === undefined && !isBuilder && SQLITE_AUTHZ_DIRECT_SQL_METHODS.has(prop)) {
+        return (...args: unknown[]) => {
+          assertSqliteAuthorizationDirectSqlAllowed(args[0], options);
+          return Reflect.apply(item, target, args);
+        };
+      }
+      if (SQLITE_AUTHZ_TERMINALS.has(prop)) {
+        return (...args: unknown[]) => {
+          applySqliteAuthorizationToBuilder(target, options, applyStates, builderMode);
+          const result = Reflect.apply(item, target, args);
+          if (builderMode === 'insert' && prop === 'values' && isRecord(result)) {
+            applySqliteAuthorizationToBuilder(result, options, applyStates, builderMode);
+            return sqliteAuthorizationProxy(result, options, applyStates, builderMode);
+          }
+          return result;
+        };
+      }
+      if (prop === 'select' || prop === 'selectDistinct') {
+        return (...args: unknown[]) =>
+          sqliteAuthorizationProxy(
+            Reflect.apply(item, target, args),
+            options,
+            applyStates,
+            'select',
+          );
+      }
+      if (prop === 'update' || prop === 'delete' || prop === 'insert') {
+        return (...args: unknown[]) =>
+          sqliteAuthorizationProxy(Reflect.apply(item, target, args), options, applyStates, prop);
+      }
+      return (...args: unknown[]) => {
+        const result = Reflect.apply(item, target, args);
+        return sqliteAuthorizationProxy(result, options, applyStates, builderMode);
+      };
+    },
+  });
+}
+
+function applySqliteAuthorizationToBuilder(
+  builder: object,
+  options: SqliteAuthorizationDbOptions,
+  applyStates: WeakMap<object, SqliteAuthorizationApplyState>,
+  builderMode: 'delete' | 'insert' | 'select' | 'update' | undefined,
+): void {
+  const config = (builder as { config?: unknown }).config;
+  if (!isRecord(config)) return;
+  if (builderMode === 'insert') {
+    assertSqliteInsertIsOwnerCheckable(config, options);
+    return;
+  }
+  if (builderMode === 'update') assertSqliteUpdateDoesNotReassignOwner(config, options);
+  const predicates = sqliteAuthorizationPredicatesForConfig(config, options);
+  if (predicates.length === 0) {
+    applySqliteAuthorizationToSetOperatorArms(config, options, applyStates);
+    return;
+  }
+
+  const sourceWhere = (
+    applyStates.get(config)?.appliedWhere === config.where
+      ? applyStates.get(config)?.sourceWhere
+      : config.where
+  ) as SQLWrapper | undefined;
+  const nextWhere = and(...[sourceWhere, ...predicates].filter(Boolean));
+  config.where = nextWhere;
+  applyStates.set(config, { appliedWhere: nextWhere, sourceWhere });
+  applySqliteAuthorizationToSetOperatorArms(config, options, applyStates);
+}
+
+function sqliteAuthorizationPredicatesForConfig(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+): SQLWrapper[] {
+  const predicates: SQLWrapper[] = [];
+  const seenSelects = new WeakSet<object>();
+  collectSqliteAuthorizationPredicatesForSelectConfig(config, options, predicates, seenSelects);
+  return predicates;
+}
+
+function collectSqliteAuthorizationPredicatesForSelectConfig(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+  predicates: SQLWrapper[],
+  seenSelects: WeakSet<object>,
+): void {
+  if (seenSelects.has(config)) return;
+  seenSelects.add(config);
+  collectSqliteAuthorizationPredicateForTable(config.table, options, predicates, 'where');
+  const joins = config.joins;
+  if (Array.isArray(joins)) {
+    for (const join of joins) {
+      collectSqliteAuthorizationPredicateForTable(
+        (join as { table?: unknown }).table,
+        options,
+        predicates,
+        'where',
+      );
+    }
+  }
+  const setOperators = config.setOperators;
+  if (
+    Array.isArray(setOperators) &&
+    setOperators.some(
+      (operator) =>
+        !isRecord((operator as { rightSelect?: { config?: unknown } }).rightSelect?.config),
+    )
+  ) {
+    predicates.push(sql`1 = 0`);
+  }
+}
+
+function applySqliteAuthorizationToSetOperatorArms(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+  applyStates: WeakMap<object, SqliteAuthorizationApplyState>,
+): void {
+  const setOperators = config.setOperators;
+  if (!Array.isArray(setOperators)) return;
+  for (const operator of setOperators) {
+    const rightSelect = (operator as { rightSelect?: unknown }).rightSelect;
+    if (isRecord(rightSelect)) {
+      applySqliteAuthorizationToBuilder(rightSelect, options, applyStates, 'select');
+    }
+  }
+}
+
+function collectSqliteAuthorizationPredicateForTable(
+  table: unknown,
+  options: SqliteAuthorizationDbOptions,
+  predicates: SQLWrapper[],
+  scope: 'direct' | 'where',
+): void {
+  if (table === undefined || table === null) return;
+  const tableName = sqlitePhysicalTableName(table);
+  if (tableName === undefined) {
+    if (sqliteSubqueryUsesDeniedTable(table, options)) predicates.push(sql`1 = 0`);
+    return;
+  }
+  const predicate = sqliteAuthorizationPredicateForTable(table, tableName, options, scope);
+  if (predicate !== undefined) predicates.push(predicate);
+}
+
+function sqliteAuthorizationPredicateForTable(
+  table: unknown,
+  tableName: string,
+  options: SqliteAuthorizationDbOptions,
+  scope: 'direct' | 'where',
+): SQLWrapper | undefined {
+  const classifications = options.metadata.authorizationClassificationsByTable?.get(tableName);
+  if (classifications === undefined || classifications.length === 0) return sql`1 = 0`;
+  if (classifications.includes('public') || classifications.includes('reference')) return undefined;
+  if (classifications.includes('authzPolicy')) return undefined;
+
+  const owner = options.metadata.ownerSourcesByTable?.get(tableName);
+  if (owner !== undefined) {
+    const column = sqliteColumnForKey(table, owner.columnKey, owner.columnName);
+    if (column === undefined || options.principal === undefined) return sql`1 = 0`;
+    return eq(column as Parameters<typeof eq>[0], options.principal);
+  }
+
+  const ownerVia = options.metadata.ownerViaSourcesByTable?.get(tableName);
+  if (ownerVia !== undefined) {
+    const fkColumn = sqliteColumnForKey(table, ownerVia.fkColumnKey, ownerVia.fkColumnName);
+    const parentOwner = options.metadata.ownerSourcesByTable?.get(ownerVia.parentTable);
+    if (fkColumn === undefined || parentOwner === undefined || options.principal === undefined) {
+      return sql`1 = 0`;
+    }
+    return sql`${fkColumn} in (select ${sql.raw(quoteSqlIdentifier(ownerVia.parentKeyColumnName))} from ${sql.raw(quoteSqlIdentifier(ownerVia.parentTable))} where ${sql.raw(quoteSqlIdentifier(parentOwner.columnName))} = ${options.principal})`;
+  }
+
+  return scope === 'where' ? sql`1 = 0` : undefined;
+}
+
+function sqliteSubqueryUsesDeniedTable(
+  table: unknown,
+  options: SqliteAuthorizationDbOptions,
+): boolean {
+  const usedTables = (table as { _?: { usedTables?: unknown } })?._?.usedTables;
+  if (!Array.isArray(usedTables)) return true;
+  return usedTables.some((entry) => {
+    if (typeof entry !== 'string') return true;
+    const classifications = options.metadata.authorizationClassificationsByTable?.get(entry);
+    return (
+      classifications === undefined ||
+      classifications.includes('owned') ||
+      classifications.includes('ownedVia') ||
+      classifications.includes('authzPolicy')
+    );
+  });
+}
+
+function assertSqliteInsertIsOwnerCheckable(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+): void {
+  const tableName = sqlitePhysicalTableName(config.table);
+  if (tableName === undefined) return;
+  const classifications = options.metadata.authorizationClassificationsByTable?.get(tableName);
+  if (
+    classifications?.includes('owned') !== true &&
+    classifications?.includes('ownedVia') !== true
+  ) {
+    if (classifications === undefined || classifications.length === 0) throwSqliteAuthzDeny();
+    return;
+  }
+  throw new Error(
+    'KV414: SQLite managed insert into an owner-scoped table requires owner-checkable framework proof (SPEC §10.3).',
+  );
+}
+
+function assertSqliteUpdateDoesNotReassignOwner(
+  config: Record<PropertyKey, unknown>,
+  options: SqliteAuthorizationDbOptions,
+): void {
+  const tableName = sqlitePhysicalTableName(config.table);
+  if (tableName === undefined) return;
+  const owner = options.metadata.ownerSourcesByTable?.get(tableName);
+  if (owner === undefined || !isRecord(config.set)) return;
+  if (owner.columnKey in config.set || owner.columnName in config.set) {
+    throw new Error(
+      'KV414: SQLite managed update cannot reassign an owner column through an owner-scoped write (SPEC §10.3).',
+    );
+  }
+}
+
+function assertSqliteAuthorizationDirectSqlAllowed(
+  statement: unknown,
+  options: SqliteAuthorizationDbOptions,
+): void {
+  const sqlText = sqlTextFromValue(statement);
+  if (sqlText === undefined) return;
+  for (const table of sqliteAuthzDeniedRawTables(options)) {
+    if (sqlTextReferencesTable(sqlText, table)) throwSqliteAuthzDeny();
+  }
+}
+
+function sqliteAuthzDeniedRawTables(options: SqliteAuthorizationDbOptions): string[] {
+  const tables = new Set<string>();
+  for (const [table, classifications] of options.metadata.authorizationClassificationsByTable ??
+    []) {
+    if (
+      classifications.length === 0 ||
+      classifications.includes('owned') ||
+      classifications.includes('ownedVia') ||
+      classifications.includes('authzPolicy')
+    ) {
+      tables.add(table);
+    }
+  }
+  for (const table of options.metadata.ownerSourcesByTable?.keys() ?? []) tables.add(table);
+  for (const table of options.metadata.ownerViaSourcesByTable?.keys() ?? []) tables.add(table);
+  return [...tables];
+}
+
+function sqlitePhysicalTableName(table: unknown): string | undefined {
+  if (!isRecord(table)) return undefined;
+  const original = table[DRIZZLE_ORIGINAL_NAME_SYMBOL];
+  if (typeof original === 'string' && original !== '') return original;
+  const base = table[DRIZZLE_BASE_NAME_SYMBOL];
+  if (typeof base === 'string' && base !== '') return base;
+  const name = table[DRIZZLE_NAME_SYMBOL];
+  return typeof name === 'string' && name !== '' ? name : undefined;
+}
+
+function sqliteColumnForKey(table: unknown, key: string, columnName: string): object | undefined {
+  if (!isRecord(table)) return undefined;
+  const byKey = table[key];
+  if (isColumnLike(byKey)) return byKey;
+  for (const value of Object.values(table)) {
+    if (isColumnLike(value) && value.name === columnName) return value;
+  }
+  return undefined;
+}
+
+function sqlTextReferencesTable(sqlText: string, table: string): boolean {
+  const escaped = table.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(?:^|[^A-Za-z0-9_])"?${escaped}"?(?:$|[^A-Za-z0-9_])`, 'iu').test(sqlText);
+}
+
+function throwSqliteAuthzDeny(): never {
+  throw new Error(
+    'KV414: SQLite managed authorization denied an owner-scoped or unclassified table access (SPEC §10.3).',
+  );
+}
+
 function sqlCarrierFromValue(value: unknown, params: readonly unknown[]): SqlCarrier | undefined {
   if (typeof value === 'string') return { params, text: value };
   const toSQL = (value as { toSQL?: unknown }).toSQL;
@@ -634,31 +1234,30 @@ type PostgresTransactionClient = {
   ): Promise<Result>;
 };
 
-function readonlyPostgresQuery(
+function scopedPostgresQuery(
   client: Record<PropertyKey, unknown>,
-  options: PostgresReadonlyClientOptions,
+  options: PostgresScopedClientOptions,
   query: string,
   params?: unknown[],
   queryOptions?: unknown,
 ): Promise<unknown> {
   return postgresTransaction(client, async (tx) => {
-    await runPostgresReadOnlyTransactionControl(tx, options);
+    await runPostgresTransactionControl(tx, options);
     const queryMethod = tx.query.bind(tx);
     return queryMethod(query, params, queryOptions) as Promise<unknown>;
   });
 }
 
-function readonlyPostgresExec(
-  client: Record<PropertyKey, unknown>,
-  options: PostgresReadonlyClientOptions,
-  query: string,
-  execOptions?: unknown,
-): Promise<unknown> {
-  return postgresTransaction(client, async (tx) => {
-    await runPostgresReadOnlyTransactionControl(tx, options);
-    const execMethod = tx.exec.bind(tx);
-    return execMethod(query, execOptions) as Promise<unknown>;
-  });
+function scopedPostgresExec(options: PostgresScopedClientOptions, query: string): Promise<unknown> {
+  if (options.role !== false && options.role !== undefined) {
+    throw new KovoReadonlyHandleError(
+      'KV414: Postgres role-scoped managed clients require parameterized db.query(...) so app SQL executes as one extended-protocol statement (SPEC §10.3/§11.1).',
+    );
+  }
+  void query;
+  throw new KovoReadonlyHandleError(
+    'KV414: Postgres managed clients reject db.exec(...) on the request-scoped path; use parameterized db.query(...) instead (SPEC §10.3/§11.1).',
+  );
 }
 
 function postgresTransaction<Result>(
@@ -674,15 +1273,21 @@ function postgresTransaction<Result>(
   return Reflect.apply(transaction, client, [callback]) as Promise<Result>;
 }
 
-async function runPostgresReadOnlyTransactionControl(
+async function runPostgresTransactionControl(
   tx: PostgresTransactionClient,
-  options: PostgresReadonlyClientOptions,
+  options: PostgresScopedClientOptions,
 ): Promise<void> {
   const exec = tx.exec.bind(tx);
-  await (exec('SET TRANSACTION READ ONLY') as Promise<unknown>);
-  if (options.readerRole !== false && options.readerRole !== undefined) {
+  const query = tx.query.bind(tx);
+  if (options.readOnly === true) await (exec('SET TRANSACTION READ ONLY') as Promise<unknown>);
+  if (options.principal !== undefined) {
+    await (query("SELECT set_config('kovo.principal', $1, true)", [
+      options.principal,
+    ]) as Promise<unknown>);
+  }
+  if (options.role !== false && options.role !== undefined) {
     const quote = options.quoteIdentifier ?? quoteSqlIdentifier;
-    await (exec(`SET LOCAL ROLE ${quote(options.readerRole)}`) as Promise<unknown>);
+    await (exec(`SET LOCAL ROLE ${quote(options.role)}`) as Promise<unknown>);
   }
 }
 
@@ -787,10 +1392,8 @@ function assertRawReadDeclaration(declaration: RawReadDeclaration): void {
   if (declaration.actAs !== undefined && declaration.actAs.trim() === '') {
     throw new Error('KV414: rawRead actAs scope requires a non-empty principal.');
   }
-  const publicReason = declaration.declarePublicRead?.reason;
-  if (publicReason !== undefined && publicReason.trim() === '') {
-    throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
-  }
+  if (declaration.declarePublicRead !== undefined)
+    normalizedPublicReadDeclaration(declaration.declarePublicRead);
 }
 
 function assertRawReadObservedTablesAllowed(
@@ -798,8 +1401,15 @@ function assertRawReadObservedTablesAllowed(
   declaration: RawReadDeclaration,
   policy: RawReadPolicyOptions,
 ): void {
+  const publicRead =
+    declaration.declarePublicRead === undefined
+      ? undefined
+      : normalizedPublicReadDeclaration(declaration.declarePublicRead);
   const sqliteAuthorizer = policy.sqliteAuthorizer;
-  if (sqliteAuthorizer === undefined) return;
+  if (sqliteAuthorizer === undefined) {
+    if (publicRead !== undefined) recordPublicReadAuditFact(publicRead, declaration, policy);
+    return;
+  }
   const readAction = sqliteAuthorizer.constants.SQLITE_READ;
   if (readAction === undefined) {
     throw new Error(
@@ -834,8 +1444,7 @@ function assertRawReadObservedTablesAllowed(
   }
 
   const ownerTables = new Set((policy.ownerTables ?? []).map(policy.normalizeTableName));
-  const scoped =
-    declaration.actAs !== undefined || declaration.declarePublicRead?.reason !== undefined;
+  const scoped = declaration.actAs !== undefined || publicRead !== undefined;
   const ownerReads = [...observed].filter((table) => ownerTables.has(table));
   if (!scoped && ownerReads.length > 0) {
     throw new Error(
@@ -845,6 +1454,98 @@ function assertRawReadObservedTablesAllowed(
       ].join('\n'),
     );
   }
+  if (publicRead !== undefined) {
+    recordPublicReadAuditFact(publicRead, declaration, policy, {
+      observedReads: [...observed],
+      ownerReads,
+    });
+  }
+}
+
+function normalizedPublicReadDeclaration(options: PublicReadDeclaration): PublicReadDeclaration {
+  if (!isRecord(options)) {
+    throw new Error(
+      'KV414: rawRead declarePublicRead scope requires a declaration object (SPEC §10.3).',
+    );
+  }
+  const reason = options.reason;
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    throw new Error('KV414: rawRead declarePublicRead scope requires a non-empty reason.');
+  }
+
+  const normalized: PublicReadDeclaration = { reason: reason.trim() };
+  if (options.rows !== undefined) normalized.rows = normalizedPublicReadRows(options.rows);
+  if (options.columns !== undefined) {
+    normalized.columns = normalizedPublicReadColumns(options.columns);
+  }
+  return normalized;
+}
+
+function normalizedPublicReadRows(
+  rows: PublicReadDeclaration['rows'],
+): PublicReadRowsScope | string {
+  if (typeof rows === 'string') {
+    const predicate = rows.trim();
+    if (predicate === '') {
+      throw new Error(
+        'KV414: rawRead declarePublicRead rows scope requires a non-empty predicate.',
+      );
+    }
+    return predicate;
+  }
+  if (!isPublicReadRowsScope(rows)) {
+    throw new Error(
+      'KV414: rawRead declarePublicRead rows scope requires a predicate string or { predicate, table? }.',
+    );
+  }
+  const predicate = rows.predicate.trim();
+  if (predicate === '') {
+    throw new Error('KV414: rawRead declarePublicRead rows scope requires a non-empty predicate.');
+  }
+  const table = rows.table?.trim();
+  return table === undefined || table === '' ? { predicate } : { predicate, table };
+}
+
+function normalizedPublicReadColumns(columns: readonly string[]): readonly string[] {
+  if (
+    !Array.isArray(columns) ||
+    columns.length === 0 ||
+    columns.some((column) => typeof column !== 'string' || column.trim() === '')
+  ) {
+    throw new Error(
+      'KV414: rawRead declarePublicRead columns scope requires a non-empty column list.',
+    );
+  }
+  return [...new Set(columns.map((column) => column.trim()))];
+}
+
+function recordPublicReadAuditFact(
+  publicRead: PublicReadDeclaration,
+  declaration: RawReadDeclaration,
+  policy: RawReadPolicyOptions,
+  observed: { observedReads?: readonly string[]; ownerReads?: readonly string[] } = {},
+): void {
+  publicReadAuditFacts.push({
+    declaredReads: [...new Set(declaration.reads.map(policy.normalizeTableName))].sort(),
+    dialectLabel: policy.dialectLabel,
+    reason: publicRead.reason,
+    ...(publicRead.rows === undefined ? {} : { rows: publicRead.rows }),
+    ...(publicRead.columns === undefined ? {} : { columns: [...publicRead.columns] }),
+    ...(observed.observedReads === undefined
+      ? {}
+      : { observedReads: [...new Set(observed.observedReads)].sort() }),
+    ...(observed.ownerReads === undefined || observed.ownerReads.length === 0
+      ? {}
+      : { ownerReads: [...new Set(observed.ownerReads)].sort() }),
+  });
+}
+
+function isPublicReadRowsScope(value: unknown): value is PublicReadRowsScope {
+  return (
+    isRecord(value) &&
+    typeof value.predicate === 'string' &&
+    (value.table === undefined || typeof value.table === 'string')
+  );
 }
 
 function rawReadExecutionMethod(target: object, policy: RawReadPolicyOptions): Function {
@@ -931,4 +1632,12 @@ function declaredWriteDbTarget<Db>(raw: Db, writePolicy: ManagedSqlWritePolicy |
 
 function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function isColumnLike(value: unknown): value is { name: string } {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    typeof (value as { name?: unknown }).name === 'string'
+  );
 }

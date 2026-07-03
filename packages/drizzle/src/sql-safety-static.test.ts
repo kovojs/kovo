@@ -14,6 +14,55 @@ function diagnosticsFor(source: string) {
 }
 
 describe('@kovojs/drizzle SQL safety static analysis', () => {
+  it('flags raw driver imports in endpoint modules instead of the managed actAs db seam', () => {
+    const diagnostics = diagnosticsFor(`
+      import Database from 'better-sqlite3';
+      import { endpoint } from '@kovojs/server';
+
+      const raw = new Database(':memory:');
+      void raw;
+
+      export const status = endpoint('/status', {
+        method: 'GET',
+        reason: 'raw endpoint driver import proof',
+        csrf: false,
+        csrfJustification: 'read-only proof endpoint',
+        response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+        handler: () => new Response('ok'),
+      });
+    `);
+
+    expect(diagnostics).toEqual([
+      expect.objectContaining({
+        code: 'KV414',
+        message: expect.stringContaining('endpoint({ db: true }) + ctx.actAs(id)'),
+        site: 'app.ts:2',
+      }),
+    ]);
+  });
+
+  it('accepts endpoint db access through the explicit actAs managed handle', () => {
+    const diagnostics = diagnosticsFor(`
+      import { endpoint } from '@kovojs/server';
+
+      export const status = endpoint('/status', {
+        db: true,
+        method: 'GET',
+        reason: 'managed endpoint db proof',
+        csrf: false,
+        csrfJustification: 'read-only proof endpoint',
+        response: { appOwnedSafety: true, body: 'text', cache: 'no-store' },
+        async handler(_request, context) {
+          const scoped = await context.actAs('user_1');
+          void scoped.db.read;
+          return new Response('ok');
+        },
+      });
+    `);
+
+    expect(diagnostics).toEqual([]);
+  });
+
   it('flags request-derived raw SQL construction at managed sinks', () => {
     const diagnostics = diagnosticsFor(`
       export async function loadProducts(input: { id: string }, req: { search: Record<string, string>, params: Record<string, string> }, db: any) {

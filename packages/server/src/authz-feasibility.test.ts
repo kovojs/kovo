@@ -2,6 +2,9 @@ import { createRequire } from 'node:module';
 import { describe, expect, it } from 'vitest';
 import { createPgliteTestDb, type PgliteTestDb } from '@kovojs/test/pglite';
 import { createSqliteTestDb, type SqliteTestDb } from '@kovojs/test/sqlite';
+import { drizzle } from 'drizzle-orm/pglite';
+import { getTableConfig, pgTable, text } from 'drizzle-orm/pg-core';
+import { createAuthorizationCensusDb } from './managed-db.js';
 
 // SPEC section 2 / plans/fundamental-fixes-followup-5.md DEC-A/DEC-I:
 // feasibility probes for the runtime authorization choke substrate. These helpers
@@ -12,6 +15,11 @@ const DRIZZLE_ORIGINAL_NAME = Symbol.for('drizzle:OriginalName');
 const DRIZZLE_BASE_NAME = Symbol.for('drizzle:BaseName');
 const DRIZZLE_TABLE_NAME = Symbol.for('drizzle:Name');
 const DRIZZLE_IS_ALIAS = Symbol.for('drizzle:IsAlias');
+
+const censusContacts = pgTable('contacts', { id: text('id').primaryKey() });
+const censusTags = pgTable('reference_tags', { id: text('id').primaryKey() });
+const censusPosts = pgTable('published_posts', { id: text('id').primaryKey() });
+const censusDrafts = pgTable('drafts', { id: text('id').primaryKey() });
 
 async function setupPgliteAuthorizationProbe(options: {
   revokeSetConfigFromAppRole: boolean;
@@ -132,6 +140,50 @@ async function pgliteIds(
 }
 
 describe('authorization feasibility gates (followup-5 phase 1.0/1.0b)', () => {
+  it('proves the PGlite managed census wrapper denies unclassified schema tables only', async () => {
+    const db = await createPgliteTestDb();
+    try {
+      await db.exec(`
+        create table contacts (id text primary key);
+        create table reference_tags (id text primary key);
+        create table published_posts (id text primary key);
+        create table drafts (id text primary key);
+        insert into contacts (id) values ('c1');
+        insert into reference_tags (id) values ('t1');
+        insert into published_posts (id) values ('p1');
+        insert into drafts (id) values ('d1');
+      `);
+      const handle = createAuthorizationCensusDb(drizzle({ client: db.pglite }), {
+        dialectLabel: 'PGlite',
+        metadata: {
+          authorizationClassificationsByTable: new Map([
+            ['contacts', ['authzPolicy']],
+            ['reference_tags', ['reference']],
+            ['published_posts', ['public']],
+          ]),
+          schemaTableNames: new Set(['contacts', 'reference_tags', 'published_posts', 'drafts']),
+        },
+        normalizeTableName: (table) => (table.includes('.') ? table : `public.${table}`),
+        tableNames: (table) => [getTableConfig(table as Parameters<typeof getTableConfig>[0]).name],
+      });
+
+      await expect(handle.select({ id: censusContacts.id }).from(censusContacts)).resolves.toEqual([
+        { id: 'c1' },
+      ]);
+      await expect(handle.select({ id: censusTags.id }).from(censusTags)).resolves.toEqual([
+        { id: 't1' },
+      ]);
+      await expect(handle.select({ id: censusPosts.id }).from(censusPosts)).resolves.toEqual([
+        { id: 'p1' },
+      ]);
+      expect(() => handle.select({ id: censusDrafts.id }).from(censusDrafts)).toThrow(
+        /KV414[\s\S]*drafts[\s\S]*no authorization classification/,
+      );
+    } finally {
+      await db.close();
+    }
+  });
+
   it('proves the PGlite RLS path is single-statement and fail-closed under the locked app role', async () => {
     const db = await setupPgliteAuthorizationProbe({ revokeSetConfigFromAppRole: true });
     try {

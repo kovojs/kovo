@@ -115,6 +115,86 @@ describe('server app matched dispatch boundary', () => {
     await expect(response.text()).resolves.toBe('db:false');
   });
 
+  it('keeps endpoint db opt-in free of ambient owner authority', async () => {
+    let dbProviderCalls = 0;
+    const status = endpoint('/status', {
+      db: true,
+      handler(_request, context) {
+        return new Response(`ctx-db:${'db' in context}`);
+      },
+      method: 'GET',
+      reason: 'status endpoint scoped db isolation test',
+      response: rawTextResponse,
+    });
+    const app = createApp({
+      db: () => {
+        dbProviderCalls += 1;
+        return {};
+      },
+      endpoints: [status],
+    });
+    const request = new Request('https://shop.example.test/status');
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('ctx-db:false');
+    expect(dbProviderCalls).toBe(0);
+  });
+
+  it('threads an actAs-scoped endpoint principal to the db provider and managed handles', async () => {
+    const providerRequests: unknown[] = [];
+    const rawDb = {
+      insert() {
+        return 'write-ok';
+      },
+      select() {
+        return 'read-ok';
+      },
+    };
+    const status = endpoint('/orders', {
+      db: true,
+      async handler(_request, context) {
+        const scoped = await context.actAs('user-1');
+        return new Response(`${scoped.db.read.select()}:${scoped.db.write.insert()}`);
+      },
+      method: 'GET',
+      reason: 'orders endpoint actAs scoped db test',
+      response: rawTextResponse,
+    });
+    const app = createApp({
+      db(request) {
+        providerRequests.push(request);
+        return rawDb;
+      },
+      endpoints: [status],
+      sessionProvider() {
+        return { user: { id: 'ambient-session-user' } };
+      },
+    });
+    const request = new Request('https://shop.example.test/orders');
+
+    const response = await dispatchMatchedAppRequest(matchedAppRequest(app, request));
+
+    expect(response.status).toBe(200);
+    await expect(response.text()).resolves.toBe('read-ok:write-ok');
+    expect(providerRequests).toHaveLength(1);
+    const providerRequest = providerRequests[0] as {
+      principalPosture?: {
+        audit?: { ingress?: string; surface?: string };
+        kind?: string;
+        principal?: string;
+      };
+      session?: unknown;
+    };
+    expect('session' in providerRequest).toBe(false);
+    expect(providerRequest.principalPosture).toMatchObject({
+      audit: { ingress: 'endpoint', surface: '/orders' },
+      kind: 'act-as',
+      principal: 'user-1',
+    });
+  });
+
   it('finalizes raw endpoint Set-Cookie and redirect headers at the app shell boundary', async () => {
     const cookieEndpoint = endpoint('/raw-cookie', {
       handler() {
