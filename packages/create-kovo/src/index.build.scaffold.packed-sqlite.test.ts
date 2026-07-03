@@ -14,6 +14,7 @@ describe('create-kovo starter (build integration: packed SQLite scaffold)', () =
   it('installs the packed sqlite starter from published-shape tarballs', () => {
     const app = createStarterApp({
       dialect: 'sqlite',
+      experimentalSqlite: true,
       install: 'packed',
       name: 'Packed sqlite Shape Proof',
       scaffold: 'packed-bin',

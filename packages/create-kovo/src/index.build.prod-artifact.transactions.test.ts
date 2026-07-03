@@ -51,7 +51,7 @@ async function expectReadonlyAttemptBlocked(origin: string): Promise<void> {
 
 describe('create-kovo starter (build integration: production transaction artifacts)', () => {
   // @kovo-security-certifies KV433 readonly-managed-handle-prod-artifact
-  it('rolls back default mutation transactions and executes webhooks in the production build artifact', async () => {
+  it('rolls back default mutation transactions and executes webhook mutation composition in the production build artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-default-tx-'));
@@ -171,7 +171,7 @@ describe('create-kovo starter (build integration: production transaction artifac
     }
   }, 120_000);
 
-  it('keeps SQLite readonly handles isolated and executes webhook transactions in the production artifact', async () => {
+  it('keeps SQLite readonly handles isolated and executes webhook mutation composition in the production artifact', async () => {
     const tempParent = tmpdir();
     mkdirSync(tempParent, { recursive: true });
     const root = mkdtempSync(join(tempParent, 'create-kovo-prod-sqlite-readonly-handle-'));

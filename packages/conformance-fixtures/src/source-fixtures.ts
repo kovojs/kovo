@@ -311,18 +311,18 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
       {
         fileName: 'sqlite.domain.ts',
         source: `
-          import type { BaseSQLiteDatabase } from "drizzle-orm/sqlite-core";
+          import type { SQLiteAsyncDatabase } from "drizzle-orm/sqlite-core";
           import { eq, sql } from "drizzle-orm";
           import { products, productSearch } from "./sqlite.schema";
 
-          export async function reserveProduct(db: BaseSQLiteDatabase, productId: string) {
+          export async function reserveProduct(db: SQLiteAsyncDatabase, productId: string) {
             await db.update(products)
               .set({ stock: sql\`\${products.stock} - 1\` })
               .where(eq(products.id, productId));
           }
 
           export const productQuery = query("product/sqlite", {
-            load(input, db: BaseSQLiteDatabase) {
+            load(input, db: SQLiteAsyncDatabase) {
               return db.select({
                 active: products.active,
                 id: products.id,
@@ -335,7 +335,7 @@ export function drizzleQueryBehaviorSourceFixtures(): DrizzleQueryBehaviorSource
           export const searchQuery = query("search/sqlite", {
             output: s.object({ id: s.string() }),
             reads: [productSearch],
-            load(_input, db: BaseSQLiteDatabase) {
+            load(_input, db: SQLiteAsyncDatabase) {
               return db.select({ id: sql<string>\`id\` }).from(productSearch);
             },
           });

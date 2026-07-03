@@ -696,7 +696,7 @@ export const SECURITY_BUILD_PROOFS = [
     requiredProofFileNeedles: ['/api/readonly-mutation-attempt', 'futureStatement'],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
     testName:
-      'rolls back default mutation transactions and executes webhooks in the production build artifact',
+      'rolls back default mutation transactions and executes webhook mutation composition in the production build artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',

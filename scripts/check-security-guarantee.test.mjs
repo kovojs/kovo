@@ -62,7 +62,7 @@ function run(files, options = {}) {
         claimId: 'readonly-managed-handle-prod-artifact',
         requiredNeedles: ['expectReadonlyAttemptBlocked(origin)'],
         testName:
-          'rolls back default mutation transactions and executes webhooks in the production build artifact',
+          'rolls back default mutation transactions and executes webhook mutation composition in the production build artifact',
       },
     ],
     readText: (relativePath) => files[relativePath] ?? '',

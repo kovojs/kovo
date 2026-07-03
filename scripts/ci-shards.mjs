@@ -217,7 +217,7 @@ const STARTER_ENTRIES = [
   {
     id: 'transaction-default-served-artifact',
     file: 'packages/create-kovo/src/index.build.prod-artifact.transactions.test.ts',
-    testName: 'rolls back default mutation transactions and executes webhooks',
+    testName: 'rolls back default mutation transactions and executes webhook mutation composition',
     seconds: 78,
   },
   {

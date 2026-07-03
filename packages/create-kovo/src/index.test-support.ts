@@ -22,6 +22,7 @@ type StarterScaffoldMode = 'packed-bin' | 'source';
 
 interface StarterAppOptions {
   dialect?: CreateKovoDialect;
+  experimentalSqlite?: boolean;
   install?: StarterInstallMode;
   name: string;
   scaffold?: StarterScaffoldMode;
@@ -410,6 +411,9 @@ function scaffoldWithPackedCreateKovo(
   const args = [root, '--name', options.name, '--disable-git'];
   if (options.dialect === 'sqlite') {
     args.push('--sqlite');
+    if (options.experimentalSqlite === true) {
+      args.push('--experimental-sqlite');
+    }
   } else if (options.dialect === 'postgres') {
     args.push('--postgres');
   }

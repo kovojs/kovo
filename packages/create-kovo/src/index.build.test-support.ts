@@ -703,7 +703,11 @@ export function addRuntimeMutationSafetyProofs(
         `export const rawRuntimeDrift = ${tableFactory}('raw_runtime_drift', {`,
         "  id: text('id').primaryKey(),",
         "  label: text('label').notNull().default(''),",
-        '});',
+        '}, kovo({',
+        "  authzPolicy: 'runtime drift proof rows are fixture-controlled regression evidence',",
+        "  domain: 'raw_runtime_drift',",
+        "  key: 'id',",
+        '}));',
         ...(includeSqliteAuthorizerTriggerDrift
           ? [
               '',
@@ -756,7 +760,12 @@ export function addRuntimeMutationSafetyProofs(
         )
         .replace(
           'const SCHEMA_TABLES = [\n  schema.contacts,',
-          ['const SCHEMA_TABLES = [', '  schema.contacts,', '  schema.txProofs,'].join('\n'),
+          [
+            'const SCHEMA_TABLES = [',
+            '  schema.contacts,',
+            '  schema.txProofs,',
+            '  schema.rawRuntimeDrift,',
+          ].join('\n'),
         )
     : runtimeDbSource
         .replace(
@@ -791,7 +800,6 @@ export function addRuntimeMutationSafetyProofs(
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, s, serverValue, webhook, write, type MutationContext } from '@kovojs/server';",
       '',
-      "import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';",
       "import { readonlyAppDb } from './db.js';",
       [
         'import {',
@@ -924,9 +932,6 @@ export function addRuntimeMutationSafetyProofs(
             '  idempotency: (input) => input.id,',
             '  input: webhookTxProofInput,',
             '  replayStore: webhookReplayStore,',
-            '  async transaction(_context, run) {',
-            '    return run(appRuntimeDbProvider());',
-            '  },',
             "  verify: 'none',",
             "  verifyJustification: 'local production webhook transaction proof fixture',",
             '  writes: [txProof],',
@@ -948,7 +953,7 @@ export function addRuntimeMutationSafetyProofs(
             '  input: webhookTxProofInput,',
             '  replayStore: webhookReplayStore,',
             '  async transaction(_context, run) {',
-            '    return run(appRuntimeDbProvider());',
+            '    return run({ $client: {}, insert() {}, session: {} });',
             '  },',
             "  verify: 'none',",
             "  verifyJustification: 'local production webhook transaction proof fixture',",
