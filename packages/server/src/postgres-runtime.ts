@@ -51,10 +51,16 @@ const POSTGRES_REACHABLE_RELATIONS_SQL = [
   'SELECT n.nspname AS schema_name, c.relname AS table_name, c.relkind,',
   'c.relrowsecurity, c.relforcerowsecurity, c.reloptions,',
   'r.rolname AS role_name,',
-  "has_table_privilege(r.oid, c.oid, 'SELECT') AS can_select,",
-  "has_table_privilege(r.oid, c.oid, 'INSERT') AS can_insert,",
-  "has_table_privilege(r.oid, c.oid, 'UPDATE') AS can_update,",
-  "has_table_privilege(r.oid, c.oid, 'DELETE') AS can_delete",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN has_table_privilege(r.oid, c.oid, 'SELECT') ELSE false END AS can_select,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN has_table_privilege(r.oid, c.oid, 'INSERT') ELSE false END AS can_insert,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN has_table_privilege(r.oid, c.oid, 'UPDATE') ELSE false END AS can_update,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN has_table_privilege(r.oid, c.oid, 'DELETE') ELSE false END AS can_delete,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND has_column_privilege(r.oid, c.oid, a.attname, 'SELECT')) ELSE false END AS can_select_column,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND has_column_privilege(r.oid, c.oid, a.attname, 'INSERT')) ELSE false END AS can_insert_column,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND has_column_privilege(r.oid, c.oid, a.attname, 'UPDATE')) ELSE false END AS can_update_column,",
+  "CASE WHEN c.relkind = 'S' THEN has_sequence_privilege(r.oid, c.oid, 'USAGE') ELSE false END AS can_use_sequence,",
+  "CASE WHEN c.relkind = 'S' THEN has_sequence_privilege(r.oid, c.oid, 'SELECT') ELSE false END AS can_select_sequence,",
+  "CASE WHEN c.relkind = 'S' THEN has_sequence_privilege(r.oid, c.oid, 'UPDATE') ELSE false END AS can_update_sequence",
   'FROM pg_class c',
   'JOIN pg_namespace n ON n.oid = c.relnamespace',
   'JOIN existing_roles r ON true',
@@ -110,8 +116,14 @@ interface PostgresViewDependency {
 interface PostgresReachableRelationRow extends PostgresCatalogRelation {
   can_delete: boolean;
   can_insert: boolean;
+  can_insert_column: boolean;
   can_select: boolean;
+  can_select_column: boolean;
+  can_select_sequence: boolean;
   can_update: boolean;
+  can_update_column: boolean;
+  can_update_sequence: boolean;
+  can_use_sequence: boolean;
   role_name: string;
 }
 
@@ -126,6 +138,19 @@ interface PostgresReachableRoutineRow {
   role_name: string;
   routine_name: string;
   routine_schema: string;
+}
+
+interface PostgresReachableSequenceRow {
+  sequence_name: string;
+  sequence_schema: string;
+  table_name: string;
+}
+
+interface PostgresUnexpectedPrivilegeRow {
+  object_kind: string;
+  object_name: string;
+  privilege_type: string;
+  role_name: string;
 }
 
 interface KovoDomainAnnotation {
@@ -607,6 +632,12 @@ async function provisionRuntimeDb(
     await applyPostgresViewSecurityInvoker(tx, input.schemaTables);
     await applyPostgresReaderColumnPrivileges(tx, input.schemaTables, input.metadata, input.config);
     await applyPostgresWriterTablePrivileges(tx, input.schemaTables, input.metadata, input.config);
+    await applyPostgresWriterSequencePrivileges(
+      tx,
+      input.schemaTables,
+      input.metadata,
+      input.config,
+    );
     await ensurePostgresSchemaStateTable(tx);
     await grantPostgresRuntimeLoginRole(tx, input.config, input.runtimeLoginRole);
     for (const statement of input.config.seedSql) await tx.exec(statement);
@@ -749,31 +780,30 @@ async function checkRuntimeDbPosture(
     const tableName = getTableConfig(table).name;
     const secretColumns = input.metadata.secretColumnNamesByTable.get(tableName) ?? new Set();
     for (const column of secretColumns) {
-      const grant = await safeQuery(
+      const grant = await safeQuery<{ can_select: boolean }>(
         client,
-        [
-          'SELECT 1 FROM information_schema.column_privileges',
-          'WHERE table_name = $1 AND column_name = $2 AND grantee = $3 AND privilege_type = $4',
-        ].join(' '),
-        [tableName, column, input.config.readerRole, 'SELECT'],
+        ["SELECT has_column_privilege($1, $2, $3, 'SELECT') AS can_select"].join(' '),
+        [input.config.readerRole, tableName, column],
       );
-      if ((grant?.rows.length ?? 0) > 0) {
+      if (grant === undefined) {
+        issues.push({
+          code: 'KV433_REACHABILITY_AUDIT',
+          detail: `could not verify effective secret-column privilege for ${tableName}.${column}`,
+        });
+        continue;
+      }
+      if (grant.rows[0]?.can_select === true) {
         issues.push({
           code: 'KV435_SECRET_COLUMN_GRANT',
-          detail: `${input.config.readerRole} must not have SELECT on ${tableName}.${column}`,
+          detail: `${input.config.readerRole} must not have effective SELECT on ${tableName}.${column}`,
         });
       }
     }
   }
 
   issues.push(...(await auditPostgresReachableClosure(client, input)));
-  issues.push(
-    ...(await auditPostgresReachableRoutines(
-      client,
-      input.config,
-      postgresSchemaNames(input.schemaTables),
-    )),
-  );
+  issues.push(...(await auditPostgresReachableRoutines(client, input.config)));
+  issues.push(...(await auditPostgresUnexpectedPrivileges(client, input.config)));
 
   return {
     driver: input.config.driver,
@@ -797,6 +827,14 @@ async function auditPostgresReachableClosure(
     ...input.config.crossOwnerReadTables,
   ]);
   const allowlistedTables = postgresReachabilityAllowlist(input.schemaTables, input.metadata);
+  const allowlistedSequences = await postgresProtectedSerialSequences(client, protectedTableNames);
+  if (allowlistedSequences === undefined) {
+    issues.push({
+      code: 'KV433_REACHABILITY_AUDIT',
+      detail: 'could not enumerate protected-table serial/identity sequence dependencies',
+    });
+    return issues;
+  }
   const publicRelations = input.config.publicRelations;
   const reachableRows = await safeQuery<PostgresReachableRelationRow>(
     client,
@@ -807,7 +845,7 @@ async function auditPostgresReachableClosure(
     issues.push({
       code: 'KV433_REACHABILITY_AUDIT',
       detail:
-        'could not enumerate app-role relation reachability from pg_class/has_table_privilege',
+        'could not enumerate app-role relation reachability from pg_class/effective privilege checks',
     });
     return issues;
   }
@@ -889,6 +927,14 @@ async function auditPostgresReachableClosure(
       });
       continue;
     }
+    if (relation.relkind === 'S') {
+      if (allowlistedSequences.has(postgresRelationKey(relation.schema, relation.table))) continue;
+      issues.push({
+        code: 'KV433_REACHABLE_OBJECT',
+        detail: `${relation.schema}.${relation.table} is a sequence reachable by ${relation.roles.join(', ')} but does not back a protected table serial/identity column`,
+      });
+      continue;
+    }
     if (relation.relkind === 'f') {
       issues.push({
         code: 'KV433_REACHABLE_OBJECT',
@@ -922,6 +968,12 @@ function reachableRelationsFromRows(
       row.can_insert ? 'INSERT' : undefined,
       row.can_update ? 'UPDATE' : undefined,
       row.can_delete ? 'DELETE' : undefined,
+      row.can_select_column ? 'SELECT_COLUMN' : undefined,
+      row.can_insert_column ? 'INSERT_COLUMN' : undefined,
+      row.can_update_column ? 'UPDATE_COLUMN' : undefined,
+      row.can_use_sequence ? 'USAGE_SEQUENCE' : undefined,
+      row.can_select_sequence ? 'SELECT_SEQUENCE' : undefined,
+      row.can_update_sequence ? 'UPDATE_SEQUENCE' : undefined,
     ].filter((privilege): privilege is string => privilege !== undefined);
     if (privileges.length === 0) continue;
     const key = `${row.schema_name}.${row.table_name}`;
@@ -969,10 +1021,7 @@ async function provisionPostgresFrameworkTaskStore(
 async function auditPostgresReachableRoutines(
   client: RuntimeSqlClient,
   config: ResolvedPostgresRuntimeConfig,
-  schemas: readonly string[],
 ): Promise<KovoPostgresPostureIssue[]> {
-  if (schemas.length === 0) return [];
-  const schemaPlaceholders = schemas.map((_, index) => `$${index + 4}`).join(', ');
   const routineRows = await safeQuery<PostgresReachableRoutineRow>(
     client,
     [
@@ -987,12 +1036,12 @@ async function auditPostgresReachableRoutines(
       'FROM pg_proc p',
       'JOIN pg_namespace n ON n.oid = p.pronamespace',
       'JOIN existing_roles r ON true',
-      `WHERE n.nspname IN (${schemaPlaceholders})`,
+      "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
       'AND p.prosecdef = true',
       "AND has_function_privilege(r.oid, p.oid, 'EXECUTE')",
       'ORDER BY n.nspname, p.proname, r.rolname',
     ].join(' '),
-    [config.readerRole, config.writerRole, config.adminRole, ...schemas],
+    [config.readerRole, config.writerRole, config.adminRole],
   );
   if (routineRows === undefined) {
     return [
@@ -1007,6 +1056,142 @@ async function auditPostgresReachableRoutines(
     code: 'KV433_REACHABLE_ROUTINE',
     detail: `${row.routine_schema}.${row.routine_name} is a SECURITY DEFINER routine executable by ${row.role_name}; routine reachability has no vetted Kovo allowlist`,
   }));
+}
+
+async function auditPostgresUnexpectedPrivileges(
+  client: RuntimeSqlClient,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<KovoPostgresPostureIssue[]> {
+  const queries = [
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      ')',
+      "SELECT 'foreign_data_wrapper' AS object_kind, f.fdwname AS object_name,",
+      'acl.privilege_type, r.rolname AS role_name',
+      'FROM pg_foreign_data_wrapper f',
+      'CROSS JOIN LATERAL aclexplode(f.fdwacl) acl',
+      'JOIN existing_roles r ON true',
+      "WHERE acl.privilege_type = 'USAGE'",
+      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+    ].join(' '),
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      ')',
+      "SELECT 'foreign_server' AS object_kind, s.srvname AS object_name,",
+      'acl.privilege_type, r.rolname AS role_name',
+      'FROM pg_foreign_server s',
+      'CROSS JOIN LATERAL aclexplode(s.srvacl) acl',
+      'JOIN existing_roles r ON true',
+      "WHERE acl.privilege_type = 'USAGE'",
+      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+    ].join(' '),
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      ')',
+      "SELECT 'language' AS object_kind, l.lanname AS object_name,",
+      'acl.privilege_type, r.rolname AS role_name',
+      'FROM pg_language l',
+      'CROSS JOIN LATERAL aclexplode(l.lanacl) acl',
+      'JOIN existing_roles r ON true',
+      "WHERE l.lanname NOT IN ('internal')",
+      "AND acl.privilege_type = 'USAGE'",
+      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+    ].join(' '),
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      ')',
+      "SELECT 'large_object' AS object_kind, m.oid::text AS object_name,",
+      'acl.privilege_type, r.rolname AS role_name',
+      'FROM pg_largeobject_metadata m',
+      'CROSS JOIN LATERAL aclexplode(m.lomacl) acl',
+      'JOIN existing_roles r ON true',
+      "WHERE acl.privilege_type IN ('SELECT', 'UPDATE')",
+      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+    ].join(' '),
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      '), expanded_default_acl AS (',
+      '  SELECT n.nspname, d.defaclobjtype, acl.grantee, acl.privilege_type',
+      '  FROM pg_default_acl d',
+      '  LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace',
+      '  CROSS JOIN LATERAL aclexplode(d.defaclacl) acl',
+      ')',
+      "SELECT 'default_acl' AS object_kind,",
+      "COALESCE(nspname, '*') || ':' || defaclobjtype::text AS object_name,",
+      'privilege_type, r.rolname AS role_name',
+      'FROM expanded_default_acl acl',
+      "JOIN existing_roles r ON acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE')",
+    ].join(' '),
+  ];
+  const issues: KovoPostgresPostureIssue[] = [];
+  for (const query of queries) {
+    const rows = await safeQuery<PostgresUnexpectedPrivilegeRow>(client, query, [
+      config.readerRole,
+      config.writerRole,
+      config.adminRole,
+    ]);
+    if (rows === undefined) {
+      issues.push({
+        code: 'KV433_REACHABILITY_AUDIT',
+        detail: 'could not enumerate unexpected app-role ACL-bearing catalog privileges',
+      });
+      continue;
+    }
+    for (const row of rows.rows) {
+      issues.push({
+        code: 'KV433_UNEXPECTED_PRIVILEGE',
+        detail: `${row.role_name} has ${row.privilege_type} on ${row.object_kind} ${row.object_name}; app roles may only reach audited relations, columns, routines, and protected-table sequences`,
+      });
+    }
+  }
+  return issues;
+}
+
+async function postgresProtectedSerialSequences(
+  client: RuntimeTransactionClient,
+  protectedTableNames: ReadonlySet<string>,
+): Promise<ReadonlySet<string> | undefined> {
+  const rows = await safeQuery<PostgresReachableSequenceRow>(
+    client,
+    [
+      'SELECT DISTINCT seq_ns.nspname AS sequence_schema, seq.relname AS sequence_name',
+      ', tbl.relname AS table_name',
+      'FROM pg_class seq',
+      'JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace',
+      'JOIN pg_depend dep ON dep.classid = $1::regclass AND dep.objid = seq.oid',
+      'JOIN pg_class tbl ON tbl.oid = dep.refobjid',
+      "WHERE seq.relkind = 'S'",
+      "AND dep.deptype IN ('a', 'i')",
+    ].join(' '),
+    ['pg_class'],
+  );
+  return rows === undefined
+    ? undefined
+    : new Set(
+        rows.rows
+          .filter((row) => protectedTableNames.has(row.table_name))
+          .map((row) => postgresRelationKey(row.sequence_schema, row.sequence_name)),
+      );
 }
 
 function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRuntimeClient {
@@ -1931,6 +2116,25 @@ async function applyPostgresWriterTablePrivileges(
         )} TO ${quoteIdent(config.writerRole)}`,
       );
     }
+  }
+}
+
+async function applyPostgresWriterSequencePrivileges(
+  client: RuntimeTransactionClient,
+  tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<void> {
+  const protectedTables = resolveProtectedPostgresTables(tables, metadata);
+  const writableTables = postgresWriterWritableTableNames(tables, metadata, protectedTables);
+  const sequences = await postgresProtectedSerialSequences(client, writableTables);
+  if (sequences === undefined) return;
+  for (const sequence of sequences) {
+    const [schema, name] = sequence.split('.', 2);
+    if (schema === undefined || name === undefined) continue;
+    await client.exec(
+      `GRANT USAGE ON SEQUENCE ${quoteQualified(schema, name)} TO ${quoteIdent(config.writerRole)}`,
+    );
   }
 }
 

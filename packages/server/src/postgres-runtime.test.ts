@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { PGlite } from '@electric-sql/pglite';
 import { kovo, sql, trustedSql } from '@kovojs/drizzle';
 import { eq } from 'drizzle-orm';
-import { pgTable, text } from 'drizzle-orm/pg-core';
+import { pgTable, serial, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
@@ -63,6 +63,20 @@ const shadowNotes = pgTable(
   },
   kovo({
     domain: 'runtime-shadow-notes',
+    key: 'id',
+    owner: 'ownerId',
+  }),
+);
+
+const serialNotes = pgTable(
+  'kovo_runtime_serial_notes',
+  {
+    id: serial('id').primaryKey(),
+    ownerId: text('ownerId').notNull(),
+    title: text('title').notNull(),
+  },
+  kovo({
+    domain: 'runtime-serial-notes',
     key: 'id',
     owner: 'ownerId',
   }),
@@ -708,6 +722,62 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('refuses column-only grants to app roles or PUBLIC on unprotected tables', async () => {
+    for (const [suffix, grantee] of [
+      ['reader', 'kovo_reader'],
+      ['public', 'PUBLIC'],
+    ] as const) {
+      const dataDir = mkdtempSync(join(tmpdir(), `kovo-postgres-runtime-column-${suffix}-`));
+      roots.push(dataDir);
+      const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+      try {
+        await runtime.ready;
+      } finally {
+        await runtime.close();
+      }
+
+      await execPglite(
+        dataDir,
+        [
+          `CREATE TABLE kovo_runtime_column_leak_${suffix} (id text PRIMARY KEY, secret text NOT NULL)`,
+          `INSERT INTO kovo_runtime_column_leak_${suffix} (id, secret) VALUES ('leak', 'SECRET')`,
+          `GRANT SELECT (secret) ON TABLE kovo_runtime_column_leak_${suffix} TO ${grantee}`,
+        ].join('; '),
+      );
+
+      const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+      expect(report.ok).toBe(false);
+      expect(report.issues).toContainEqual(
+        expect.objectContaining({
+          code: 'KV433_REACHABLE_TABLE',
+          detail: expect.stringContaining(`kovo_runtime_column_leak_${suffix}`),
+        }),
+      );
+    }
+  });
+
+  it('refuses effective PUBLIC access to a protected secret column', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-secret-public-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(dataDir, 'GRANT SELECT ("secretNote") ON TABLE kovo_runtime_notes TO PUBLIC');
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV435_SECRET_COLUMN_GRANT',
+        detail: expect.stringContaining('effective SELECT on kovo_runtime_notes.secretNote'),
+      }),
+    );
+  });
+
   it('refuses boot when an app role can execute an app-schema routine', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-granted-routine-'));
     roots.push(dataDir);
@@ -740,6 +810,107 @@ describe('createPostgresAppRuntimeDb', () => {
     } finally {
       await drifted.close();
     }
+  });
+
+  it('refuses cross-schema SECURITY DEFINER routines executable by app roles', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-cross-schema-routine-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE SCHEMA kovo_runtime_extra',
+        "CREATE FUNCTION kovo_runtime_extra.leak() RETURNS text LANGUAGE SQL SECURITY DEFINER AS $$ SELECT 'leak' $$",
+        'GRANT EXECUTE ON FUNCTION kovo_runtime_extra.leak() TO kovo_reader',
+      ].join('; '),
+    );
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_REACHABLE_ROUTINE',
+        detail: expect.stringContaining('kovo_runtime_extra.leak'),
+      }),
+    );
+  });
+
+  it('allows protected-table serial sequences but refuses unrelated reachable sequences', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-sequences-'));
+    roots.push(dataDir);
+    const serialSchema = { serialNotes };
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: serialSchema,
+      seedSql: ["INSERT INTO kovo_runtime_serial_notes (\"ownerId\", title) VALUES ('u1', 'One')"],
+    });
+    try {
+      await runtime.ready;
+      const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      await expect(
+        u1Db.insert(serialNotes).values({ ownerId: 'u1', title: 'Two' }).returning(),
+      ).resolves.toEqual([expect.objectContaining({ ownerId: 'u1', title: 'Two' })]);
+    } finally {
+      await runtime.close();
+    }
+
+    const clean = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema: serialSchema,
+    });
+    expect(clean.ok).toBe(true);
+    expect(clean.issues).toEqual([]);
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE SEQUENCE kovo_runtime_sensitive_seq',
+        'GRANT USAGE ON SEQUENCE kovo_runtime_sensitive_seq TO kovo_reader',
+      ].join('; '),
+    );
+
+    const drifted = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema: serialSchema,
+    });
+    expect(drifted.ok).toBe(false);
+    expect(drifted.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_REACHABLE_OBJECT',
+        detail: expect.stringContaining('kovo_runtime_sensitive_seq'),
+      }),
+    );
+  });
+
+  it('refuses default ACL grants that would give future objects to app roles', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-default-acl-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(dataDir, 'ALTER DEFAULT PRIVILEGES GRANT SELECT ON TABLES TO kovo_reader');
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_UNEXPECTED_PRIVILEGE',
+        detail: expect.stringContaining('default_acl'),
+      }),
+    );
   });
 
   it('fails ownerVia whose parent chain cannot resolve to an owner before granting the child table', async () => {
