@@ -20,6 +20,7 @@ export type {
 export {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
+  declarePublicRelation,
   migratePostgresAppDb,
   planPostgresAppDbMigration,
   provisionPostgresAppDb,
@@ -35,6 +36,8 @@ export type {
   KovoPostgresPostureIssue,
   KovoPostgresPostureReport,
   KovoPostgresProvisionOptions,
+  KovoPostgresPublicRelationDeclaration,
+  KovoPostgresPublicRelationDeclarationOptions,
   KovoPostgresResolvedRuntimeDriver,
   KovoPostgresRuntimeDb,
   KovoPostgresRuntimeDriver,

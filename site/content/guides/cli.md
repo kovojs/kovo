@@ -128,7 +128,8 @@ kovo explain --cookies [graph.json]                          # cookie downgrade 
   review.
 - **`--access`** lists explicit public/authenticated/machine access decisions.
 - **`--capabilities`** lists held dangerous capabilities: agent tools, audit-grade reveals,
-  cross-owner admin reads, and signed download/capability URL mints.
+  cross-owner admin reads, declared public database relations, and signed download/capability URL
+  mints.
 - **`--cookies`** lists cookie posture and downgrade findings.
 
 ### `kovo add` — vendor a UI component
@@ -163,22 +164,27 @@ output directory (default `dist`). See [deployment](/guides/deployment/).
 ### `kovo db` — migrate, provision, and check Postgres posture
 
 Applies or verifies the framework-owned Postgres database posture derived from `src/schema.ts`:
-reviewed SQL migrations, roles, forced RLS, owner policies, grants, and the schema fingerprint.
-External Postgres migration/provisioning uses a privileged admin URL; runtime/checking uses the
-least-privilege app URL.
+reviewed SQL migrations, roles, forced RLS, owner policies, grants, and the closure audit. External
+Postgres migration/provisioning uses a privileged admin URL; runtime/checking uses the
+least-privilege app URL. Pass both URLs to provision so Kovo can grant the runtime login role the
+derived reader/writer roles and `kovo_schema_state` read access.
 
 ```sh
 kovo db generate --migrations migrations
-kovo db migrate --migrations migrations
-KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app kovo db provision
+KOVO_ADMIN_DATABASE_URL=postgres://admin@db/app KOVO_DATABASE_URL=postgres://app@db/app \
+  kovo db provision --migrations migrations
 KOVO_DATABASE_URL=postgres://app@db/app kovo db check
 kovo db check --driver pglite --data-dir .kovo/pglite
 ```
 
+If a reporting view or materialized view is intentionally public, declare it in the app runtime
+config with `declarePublicRelation(...)`. Otherwise the closure audit refuses reachable relations
+that cannot prove Kovo RLS.
+
 If your provider or DBA owns role creation, set `KOVO_DB_READER_ROLE`,
 `KOVO_DB_WRITER_ROLE`, and, when using `crossOwnerRead`, `KOVO_DB_ADMIN_ROLE` before
 `kovo db provision`. Kovo adopts those pre-created roles and skips `CREATE ROLE`; the runtime login
-still needs membership in each configured role.
+still receives membership in each configured role when the runtime URL is present.
 
 Kovo's scoped Postgres runtime depends on transaction-local `SET LOCAL ROLE` and
 `set_config(..., true)`. Direct Postgres pools and transaction-mode poolers are supported; PgBouncer

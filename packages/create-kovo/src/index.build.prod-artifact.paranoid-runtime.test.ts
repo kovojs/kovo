@@ -67,6 +67,7 @@ const blockedWriteCases = [
 const POSTGRES_BINARIES = ['initdb', 'postgres'] as const;
 const postgresToolchain = localPostgresToolchain();
 const describeIfPostgres = postgresToolchain.available ? describe : describe.skip;
+const itIfPostgres = postgresToolchain.available ? it : it.skip;
 const require = createRequire(import.meta.url);
 const { Pool } = require(resolveDependencyRoot('pg')) as {
   Pool: new (options: { connectionString: string; max: number }) => PgPool;
@@ -75,55 +76,104 @@ const { Pool } = require(resolveDependencyRoot('pg')) as {
 describe('create-kovo starter (build integration: paranoid runtime chokes)', () => {
   // @kovo-security-certifies KV435 phase-5-postgres-paranoid-dogfood-read-acceptance
   // @kovo-security-certifies KV406 phase-5-postgres-paranoid-dogfood-write-acceptance
-  it('runs the Phase 5 Postgres/PGlite paranoid dogfood harness from the production artifact', async () => {
-    const tempParent = tmpdir();
-    mkdirSync(tempParent, { recursive: true });
-    const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-postgres-paranoid-'));
-    const port = await reservePort();
-    const jar = new Map<string, string>();
-    let server: ChildProcessWithoutNullStreams | undefined;
+  itIfPostgres(
+    'runs the Phase 5 Postgres paranoid dogfood harness from the production artifact',
+    async () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-phase5-postgres-paranoid-'));
+      const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-phase5-postgres-cluster-'));
+      const port = await reservePort();
+      const jar = new Map<string, string>();
+      let cluster: LocalPostgresCluster | undefined;
+      let server: ChildProcessWithoutNullStreams | undefined;
 
-    try {
-      writeKovoProject(root, {
-        dialect: 'postgres',
-        name: 'Phase 5 Postgres Paranoid Dogfood Proof',
-      });
-      linkStarterBuildDependencies(root);
-      addPostgresParanoidPhase5DogfoodProof(root);
-      addPostgresParanoidFollowup8Shapes(root);
+      try {
+        writeKovoProject(root, {
+          dialect: 'postgres',
+          name: 'Phase 5 Postgres Paranoid Dogfood Proof',
+        });
+        linkStarterBuildDependencies(root);
+        allowExternalPostgresEgress(root);
+        addPostgresParanoidPhase5DogfoodProof(root);
+        addPostgresParanoidFollowup8Shapes(root);
+        disableRuntimeSeedSql(root);
 
-      buildParanoidProductionArtifact(root);
+        buildParanoidProductionArtifact(root);
+        cluster = await startLocalPostgres(clusterRoot);
+        const database = `kovo_phase5_pg_${Date.now()}`;
+        const adminRole = `kovo_phase5_pg_admin_${Date.now()}`;
+        const runtimeRole = `kovo_phase5_pg_runtime_${Date.now()}`;
+        await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
+        const adminUrl = cluster.url(database, adminRole);
+        const runtimeUrl = cluster.url(database, runtimeRole);
 
-      server = spawn(process.execPath, ['dist/server/server.mjs'], {
-        cwd: root,
-        detached: process.platform !== 'win32',
-        env: {
-          ...withRepoBinOnPath(),
-          HOST: '127.0.0.1',
-          KOVO_PARANOID: '1',
-          NODE_ENV: 'production',
-          PORT: String(port),
-        },
-      });
-      const output = collectOutput(server);
-      const origin = `http://127.0.0.1:${port}`;
-      const marker = `phase5-pg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+        const generateOutput = execKovo(root, [
+          'db',
+          'generate',
+          '--schema',
+          'src/schema.ts',
+          '--migrations',
+          'migrations',
+          '--admin-database-url',
+          adminUrl,
+          '--database-url',
+          runtimeUrl,
+        ]);
+        expect(generateOutput).toMatch(/STATUS (generated|empty)/u);
 
-      await signInDemoUser(root, origin, jar, output);
-      await expectPostgresEndpoint(origin, output);
-      await expectPostgresReferenceMemberships(origin);
-      await expectPostgresReadonlyStatus(origin, marker);
-      await expectPostgresWriteBoundary(origin, jar);
-      await expectPostgresTaskAndWebhook(origin, marker, output);
+        const provisionOutput = execKovo(root, [
+          'db',
+          'provision',
+          '--schema',
+          'src/schema.ts',
+          '--migrations',
+          'migrations',
+          '--admin-database-url',
+          adminUrl,
+          '--database-url',
+          runtimeUrl,
+        ]);
+        expect(provisionOutput).toContain('STATUS ok');
+        await installPhase5PostgresParanoidFixtures(cluster.url(database, 'postgres'));
 
-      expect(output()).not.toContain('Kovo SQLite starter is experimental');
-      expect(output()).not.toContain('phase5-pg-secret');
-      expect(output()).not.toContain('cross-owner-write');
-    } finally {
-      await stopProcess(server);
-      rmSync(root, { force: true, recursive: true });
-    }
-  }, 240_000);
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: {
+            ...withRepoBinOnPath(),
+            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            HOST: '127.0.0.1',
+            KOVO_DATABASE_URL: runtimeUrl,
+            KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL: `127.0.0.1:${cluster.port}`,
+            KOVO_PARANOID: '1',
+            NODE_ENV: 'production',
+            PORT: String(port),
+          },
+        });
+        const output = collectOutput(server);
+        const origin = `http://127.0.0.1:${port}`;
+        const marker = `phase5-pg-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        await signInDemoUser(root, origin, jar, output);
+        await expectPostgresEndpoint(origin, output);
+        await expectPostgresReferenceMemberships(origin);
+        await expectPostgresReadonlyStatus(origin, marker);
+        await expectPostgresWriteBoundary(origin, jar);
+        await expectPostgresTaskAndWebhook(origin, marker, output);
+
+        expect(output()).not.toContain('Kovo SQLite starter is experimental');
+        expect(output()).not.toContain('phase5-pg-secret');
+        expect(output()).not.toContain('cross-owner-write');
+      } finally {
+        await stopProcess(server);
+        await cluster?.stop();
+        rmSync(root, { force: true, recursive: true });
+        rmSync(clusterRoot, { force: true, recursive: true });
+      }
+    },
+    240_000,
+  );
 
   // @kovo-security-certifies KV435 phase-5-1-full-paranoid-dogfood-read-acceptance
   // @kovo-security-certifies KV406 phase-5-1-full-paranoid-dogfood-write-acceptance
@@ -205,97 +255,23 @@ describeIfPostgres(
       for (const root of roots.splice(0)) rmSync(root, { force: true, recursive: true });
     });
 
-    it(
-      'runs provision -> check -> boot for the paranoid served artifact without manual runtime grants',
-      async () => {
-        const tempParent = tmpdir();
-        mkdirSync(tempParent, { recursive: true });
-        const root = mkdtempSync(join(tempParent, 'create-kovo-authz-paranoid-external-'));
-        const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-authz-paranoid-cluster-'));
-        roots.push(root, clusterRoot);
-        const cluster = await startLocalPostgres(clusterRoot);
-        clusters.push(cluster);
-        const port = await reservePort();
-        let server: ChildProcessWithoutNullStreams | undefined;
+    it('runs provision -> check -> boot for the paranoid served artifact without manual runtime grants', async () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-authz-paranoid-external-'));
+      const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-authz-paranoid-cluster-'));
+      roots.push(root, clusterRoot);
+      const cluster = await startLocalPostgres(clusterRoot);
+      clusters.push(cluster);
+      const port = await reservePort();
+      let server: ChildProcessWithoutNullStreams | undefined;
 
-        const database = `kovo_authz_paranoid_${Date.now()}`;
-        const adminRole = `kovo_authz_admin_${Date.now()}`;
-        const runtimeRole = `kovo_authz_runtime_${Date.now()}`;
+      const database = `kovo_authz_paranoid_${Date.now()}`;
+      const adminRole = `kovo_authz_admin_${Date.now()}`;
+      const runtimeRole = `kovo_authz_runtime_${Date.now()}`;
 
-        try {
-          writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid External Proof' });
-          linkStarterBuildDependencies(root);
-          allowExternalPostgresEgress(root);
-          writeProductionEquivalentSchemaModule(root);
-          writeStarterPostgresMigration(root);
-          buildParanoidProductionArtifact(root);
-
-          await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
-          const adminUrl = cluster.url(database, adminRole);
-          const runtimeUrl = cluster.url(database, runtimeRole);
-
-          const provisionOutput = execKovo(root, [
-            'db',
-            'provision',
-            '--schema',
-            '.kovo/external-postgres-schema.mjs',
-            '--migrations',
-            'migrations',
-            '--admin-database-url',
-            adminUrl,
-          ]);
-          expect(provisionOutput).toContain('STATUS ok');
-
-          const runtimeCheckOutput = execKovo(root, [
-            'db',
-            'check',
-            '--schema',
-            '.kovo/external-postgres-schema.mjs',
-            '--database-url',
-            runtimeUrl,
-          ]);
-          expect(runtimeCheckOutput).toContain('STATUS ok');
-
-          server = spawn(process.execPath, ['dist/server/server.mjs'], {
-            cwd: root,
-            detached: process.platform !== 'win32',
-            env: {
-              ...withRepoBinOnPath(),
-              BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
-              HOST: '127.0.0.1',
-              KOVO_DATABASE_URL: runtimeUrl,
-              KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL: `127.0.0.1:${cluster.port}`,
-              KOVO_PARANOID: '1',
-              NODE_ENV: 'production',
-              PORT: String(port),
-            },
-          });
-          const output = collectOutput(server);
-          const loginHtml = await fetchTextWhenReady(`http://127.0.0.1:${port}/login`, output);
-          expect(loginHtml).toContain('Demo account');
-        } finally {
-          await stopProcess(server);
-        }
-      },
-      240_000,
-    );
-
-    it(
-      'refuses a materialized-view leak and a PUBLIC-granted leak in the paranoid external Postgres check',
-      async () => {
-        const tempParent = tmpdir();
-        mkdirSync(tempParent, { recursive: true });
-        const root = mkdtempSync(join(tempParent, 'create-kovo-authz-refusal-external-'));
-        const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-authz-refusal-cluster-'));
-        roots.push(root, clusterRoot);
-        const cluster = await startLocalPostgres(clusterRoot);
-        clusters.push(cluster);
-
-        const database = `kovo_authz_refusal_${Date.now()}`;
-        const adminRole = `kovo_authz_refusal_admin_${Date.now()}`;
-        const runtimeRole = `kovo_authz_refusal_runtime_${Date.now()}`;
-
-        writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid Refusal Proof' });
+      try {
+        writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid External Proof' });
         linkStarterBuildDependencies(root);
         allowExternalPostgresEgress(root);
         writeProductionEquivalentSchemaModule(root);
@@ -305,7 +281,6 @@ describeIfPostgres(
         await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
         const adminUrl = cluster.url(database, adminRole);
         const runtimeUrl = cluster.url(database, runtimeRole);
-        const postgresUrl = cluster.url(database, 'postgres');
 
         const provisionOutput = execKovo(root, [
           'db',
@@ -316,14 +291,12 @@ describeIfPostgres(
           'migrations',
           '--admin-database-url',
           adminUrl,
+          '--database-url',
+          runtimeUrl,
         ]);
         expect(provisionOutput).toContain('STATUS ok');
-        await grantRuntimeDataRoles(postgresUrl, runtimeRole);
-        await ensureRole(postgresUrl, 'kovo_admin');
-        await installFixtureUsers(postgresUrl);
-        await createUnsafeReachableObjects(adminUrl);
 
-        const failure = execKovoFailure(root, [
+        const runtimeCheckOutput = execKovo(root, [
           'db',
           'check',
           '--schema',
@@ -331,10 +304,84 @@ describeIfPostgres(
           '--database-url',
           runtimeUrl,
         ]);
-        expect(failure).toMatch(/kovo_paranoid_user_mv|kovo_public_leak/u);
-      },
-      240_000,
-    );
+        expect(runtimeCheckOutput).toContain('STATUS ok');
+
+        server = spawn(process.execPath, ['dist/server/server.mjs'], {
+          cwd: root,
+          detached: process.platform !== 'win32',
+          env: {
+            ...withRepoBinOnPath(),
+            BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
+            HOST: '127.0.0.1',
+            KOVO_DATABASE_URL: runtimeUrl,
+            KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL: `127.0.0.1:${cluster.port}`,
+            KOVO_PARANOID: '1',
+            NODE_ENV: 'production',
+            PORT: String(port),
+          },
+        });
+        const output = collectOutput(server);
+        const loginHtml = await fetchTextWhenReady(`http://127.0.0.1:${port}/login`, output);
+        expect(loginHtml).toContain('Sign in');
+      } finally {
+        await stopProcess(server);
+      }
+    }, 240_000);
+
+    it('refuses a materialized-view leak and a PUBLIC-granted leak in the paranoid external Postgres check', async () => {
+      const tempParent = tmpdir();
+      mkdirSync(tempParent, { recursive: true });
+      const root = mkdtempSync(join(tempParent, 'create-kovo-authz-refusal-external-'));
+      const clusterRoot = mkdtempSync(join(tempParent, 'create-kovo-authz-refusal-cluster-'));
+      roots.push(root, clusterRoot);
+      const cluster = await startLocalPostgres(clusterRoot);
+      clusters.push(cluster);
+
+      const database = `kovo_authz_refusal_${Date.now()}`;
+      const adminRole = `kovo_authz_refusal_admin_${Date.now()}`;
+      const runtimeRole = `kovo_authz_refusal_runtime_${Date.now()}`;
+
+      writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid Refusal Proof' });
+      linkStarterBuildDependencies(root);
+      allowExternalPostgresEgress(root);
+      writeProductionEquivalentSchemaModule(root);
+      writeStarterPostgresMigration(root);
+      buildParanoidProductionArtifact(root);
+
+      await createExternalDatabase(cluster, { adminRole, database, runtimeRole });
+      const adminUrl = cluster.url(database, adminRole);
+      const runtimeUrl = cluster.url(database, runtimeRole);
+      const postgresUrl = cluster.url(database, 'postgres');
+
+      const provisionOutput = execKovo(root, [
+        'db',
+        'provision',
+        '--schema',
+        '.kovo/external-postgres-schema.mjs',
+        '--migrations',
+        'migrations',
+        '--admin-database-url',
+        adminUrl,
+        '--database-url',
+        runtimeUrl,
+      ]);
+      expect(provisionOutput).toContain('STATUS ok');
+      await installFixtureUsers(postgresUrl);
+      await createUnsafeReachableObjects(adminUrl);
+      const createdForeignLeak = await createUnsafeForeignTable(postgresUrl);
+
+      const failure = execKovoFailure(root, [
+        'db',
+        'check',
+        '--schema',
+        '.kovo/external-postgres-schema.mjs',
+        '--database-url',
+        runtimeUrl,
+      ]);
+      expect(failure).toMatch(/kovo_paranoid_user_mv/u);
+      expect(failure).toMatch(/kovo_public_leak/u);
+      if (createdForeignLeak) expect(failure).toMatch(/kovo_foreign_leak/u);
+    }, 240_000);
   },
 );
 
@@ -753,6 +800,15 @@ function allowExternalPostgresEgress(root: string): void {
   writeFileSync(appPath, source, 'utf8');
 }
 
+function disableRuntimeSeedSql(root: string): void {
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  const runtimeDb = readFileSync(runtimeDbPath, 'utf8').replace(
+    '  seedSql: [SEED_CONTACTS, ...PHASE5_PG_PARANOID_SEED],',
+    '  seedSql: [],',
+  );
+  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
+}
+
 function writeProductionEquivalentSchemaModule(root: string): void {
   mkdirSync(join(root, '.kovo'), { recursive: true });
   writeFileSync(
@@ -897,6 +953,40 @@ async function installFixtureUsers(databaseUrl: string): Promise<void> {
   });
 }
 
+async function installPhase5PostgresParanoidFixtures(databaseUrl: string): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    await pool.query(
+      [
+        'INSERT INTO phase5_pg_orders (id, user_id, label, classified) VALUES',
+        "('phase5-pg-demo', 'demo-user', 'owner-visible', 'phase5-pg-secret-demo'),",
+        "('phase5-pg-other', 'other-user', 'cross-owner-hidden', 'phase5-pg-secret-other')",
+        'ON CONFLICT (id) DO NOTHING',
+      ].join(' '),
+    );
+    await pool.query(
+      [
+        'INSERT INTO phase5_pg_items (id, order_id, label) VALUES',
+        "('phase5-pg-item-demo', 'phase5-pg-demo', 'owner-item'),",
+        "('phase5-pg-item-other', 'phase5-pg-other', 'other-item')",
+        'ON CONFLICT (id) DO NOTHING',
+      ].join(' '),
+    );
+    await pool.query(
+      [
+        'INSERT INTO phase5_pg_reference_memberships (id, team_id, user_id, label) VALUES',
+        "('phase5-pg-membership-demo', 'team-demo', 'demo-user', 'owner-membership'),",
+        "('phase5-pg-membership-other', 'team-other', 'other-user', 'cross-tenant-membership')",
+        'ON CONFLICT (id) DO NOTHING',
+      ].join(' '),
+    );
+    await pool.query('DROP VIEW IF EXISTS phase5_pg_order_view');
+    await pool.query(
+      'CREATE VIEW phase5_pg_order_view WITH (security_invoker=true) AS SELECT id, user_id, label FROM phase5_pg_orders',
+    );
+    await pool.query('GRANT SELECT ON phase5_pg_order_view TO kovo_reader');
+  });
+}
+
 async function createExternalDatabase(
   cluster: LocalPostgresCluster,
   names: { adminRole: string; database: string; runtimeRole: string },
@@ -912,25 +1002,6 @@ async function createExternalDatabase(
   });
 }
 
-async function grantRuntimeDataRoles(databaseUrl: string, runtimeRole: string): Promise<void> {
-  await withPool(databaseUrl, async (pool) => {
-    await pool.query(`GRANT kovo_reader TO ${quoteIdent(runtimeRole)}`);
-    await pool.query(`GRANT kovo_writer TO ${quoteIdent(runtimeRole)}`);
-    await pool.query(`GRANT SELECT ON TABLE kovo_schema_state TO ${quoteIdent(runtimeRole)}`);
-  });
-}
-
-async function ensureRole(databaseUrl: string, roleName: string): Promise<void> {
-  await withPool(databaseUrl, async (pool) => {
-    const existing = await pool.query<{ exists: boolean }>(
-      'SELECT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = $1) AS exists',
-      [roleName],
-    );
-    if (existing.rows[0]?.exists) return;
-    await pool.query(`CREATE ROLE ${quoteIdent(roleName)} NOBYPASSRLS`);
-  });
-}
-
 async function createUnsafeReachableObjects(databaseUrl: string): Promise<void> {
   await withPool(databaseUrl, async (pool) => {
     await pool.query('DROP MATERIALIZED VIEW IF EXISTS kovo_paranoid_user_mv');
@@ -939,10 +1010,27 @@ async function createUnsafeReachableObjects(databaseUrl: string): Promise<void> 
       'CREATE MATERIALIZED VIEW kovo_paranoid_user_mv AS SELECT id, email FROM "user"',
     );
     await pool.query('GRANT SELECT ON kovo_paranoid_user_mv TO kovo_reader');
-    await pool.query(
-      'CREATE TABLE kovo_public_leak AS SELECT id, email FROM "user" WITH NO DATA',
-    );
+    await pool.query('CREATE TABLE kovo_public_leak AS SELECT id, email FROM "user" WITH NO DATA');
     await pool.query('GRANT SELECT ON kovo_public_leak TO PUBLIC');
+  });
+}
+
+async function createUnsafeForeignTable(databaseUrl: string): Promise<boolean> {
+  return await withPool(databaseUrl, async (pool) => {
+    const available = await pool.query<{ available: boolean }>(
+      "SELECT EXISTS (SELECT 1 FROM pg_available_extensions WHERE name = 'file_fdw') AS available",
+    );
+    if (available.rows[0]?.available !== true) return false;
+
+    await pool.query('CREATE EXTENSION IF NOT EXISTS file_fdw');
+    await pool.query('DROP FOREIGN TABLE IF EXISTS kovo_foreign_leak');
+    await pool.query('DROP SERVER IF EXISTS kovo_file_fdw CASCADE');
+    await pool.query('CREATE SERVER kovo_file_fdw FOREIGN DATA WRAPPER file_fdw');
+    await pool.query(
+      "CREATE FOREIGN TABLE kovo_foreign_leak (id text, secret text) SERVER kovo_file_fdw OPTIONS (filename '/tmp/kovo-missing.csv', format 'csv')",
+    );
+    await pool.query('GRANT SELECT ON TABLE kovo_foreign_leak TO kovo_reader');
+    return true;
   });
 }
 

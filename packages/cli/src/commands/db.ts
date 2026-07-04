@@ -183,9 +183,7 @@ async function loadDbConfig(schemaPath: string): Promise<LoadedDbConfig> {
   return { schema: await loadSchemaModule(resolvedSchemaPath) };
 }
 
-function schemaFromRuntimeOptions(
-  options: KovoPostgresAppRuntimeOptions,
-): Record<string, unknown> {
+function schemaFromRuntimeOptions(options: KovoPostgresAppRuntimeOptions): Record<string, unknown> {
   return schemaExports(options.schema);
 }
 
@@ -207,7 +205,8 @@ function isPostgresRuntimeOptions(value: unknown): value is KovoPostgresAppRunti
 
 async function resolveRuntimeOptionsModulePath(schemaPath: string): Promise<string | undefined> {
   const extension = extname(schemaPath);
-  const candidates = extension === '' ? ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs'] : [extension];
+  const candidates =
+    extension === '' ? ['.ts', '.tsx', '.js', '.jsx', '.mts', '.mjs'] : [extension];
   for (const candidate of candidates) {
     const filePath = resolve(dirname(schemaPath), '_kovo', `app-runtime-db${candidate}`);
     try {
@@ -267,9 +266,11 @@ async function runDbProvision(
     );
   }
   if (migrations.length > 0) {
+    const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
     const migrated = await migratePostgresAppDb({
       ...runtimeOptions(options, { databaseUrl: adminDatabaseUrl, driver: 'node-postgres' }),
       migrations,
+      ...(runtimeDatabaseUrl === undefined ? {} : { runtimeDatabaseUrl }),
     });
     return { migrations: migrated, posture: migrated.posture };
   }
@@ -307,9 +308,11 @@ async function runDbMigrate(
       'kovo db migrate requires KOVO_ADMIN_DATABASE_URL, --admin-database-url, or --driver pglite.',
     );
   }
+  const runtimeDatabaseUrl = resolveRuntimeDatabaseUrl(options);
   const migrated = await migratePostgresAppDb({
     ...runtimeOptions(options, { databaseUrl, driver: 'node-postgres' }),
     migrations,
+    ...(runtimeDatabaseUrl === undefined ? {} : { runtimeDatabaseUrl }),
   });
   return { migrations: migrated, posture: migrated.posture };
 }
@@ -369,18 +372,40 @@ function runtimeOptions(
   overrides: Partial<KovoPostgresAppRuntimeOptions> = {},
 ): KovoPostgresAppRuntimeOptions {
   const runtimeOptions = options.dbConfig.runtimeOptions;
-  return {
+  const result: KovoPostgresAppRuntimeOptions = {
     ...(runtimeOptions ?? { schema: options.dbConfig.schema }),
     schema: options.dbConfig.schema,
-    ...(options.dataDir === undefined ? {} : { dataDir: options.dataDir }),
-    ...(resolveRuntimeDatabaseUrl(options) === undefined
-      ? {}
-      : { databaseUrl: resolveRuntimeDatabaseUrl(options) }),
-    ...(options.driver === undefined ? {} : { driver: options.driver }),
-    ...(options.readerRole === undefined ? {} : { readerRole: options.readerRole }),
-    ...(options.writerRole === undefined ? {} : { writerRole: options.writerRole }),
-    ...overrides,
   };
+  const databaseUrl = resolveRuntimeDatabaseUrl(options);
+  if (options.dataDir !== undefined) result.dataDir = options.dataDir;
+  if (databaseUrl !== undefined) result.databaseUrl = databaseUrl;
+  if (options.driver !== undefined) result.driver = options.driver;
+  if (options.readerRole !== undefined) result.readerRole = options.readerRole;
+  if (options.writerRole !== undefined) result.writerRole = options.writerRole;
+  applyRuntimeOptionOverrides(result, overrides);
+  return result;
+}
+
+function applyRuntimeOptionOverrides(
+  result: KovoPostgresAppRuntimeOptions,
+  overrides: Partial<KovoPostgresAppRuntimeOptions>,
+): void {
+  if (overrides.schema !== undefined) result.schema = overrides.schema;
+  if (overrides.dataDir !== undefined) result.dataDir = overrides.dataDir;
+  if (overrides.databaseUrl !== undefined) result.databaseUrl = overrides.databaseUrl;
+  if (overrides.driver !== undefined) result.driver = overrides.driver;
+  if (overrides.provisionOnBoot !== undefined) result.provisionOnBoot = overrides.provisionOnBoot;
+  if (overrides.postureCheckOnBoot !== undefined)
+    result.postureCheckOnBoot = overrides.postureCheckOnBoot;
+  if (overrides.principalFromRequest !== undefined)
+    result.principalFromRequest = overrides.principalFromRequest;
+  if (overrides.readerRole !== undefined) result.readerRole = overrides.readerRole;
+  if (overrides.adminRole !== undefined) result.adminRole = overrides.adminRole;
+  if (overrides.crossOwnerReadTables !== undefined)
+    result.crossOwnerReadTables = overrides.crossOwnerReadTables;
+  if (overrides.publicRelations !== undefined) result.publicRelations = overrides.publicRelations;
+  if (overrides.seedSql !== undefined) result.seedSql = overrides.seedSql;
+  if (overrides.writerRole !== undefined) result.writerRole = overrides.writerRole;
 }
 
 function shouldProvisionEmbeddedPglite(options: KovoDbOptions): boolean {
@@ -427,9 +452,7 @@ function resolveAdminDatabaseUrl(options: KovoDbOptions): string | undefined {
 
 function resolveRuntimeDatabaseUrl(options: KovoDbOptions): string | undefined {
   return nonEmptyValue(
-    options.databaseUrl ??
-      process.env.KOVO_RUNTIME_DATABASE_URL ??
-      process.env.KOVO_DATABASE_URL,
+    options.databaseUrl ?? process.env.KOVO_RUNTIME_DATABASE_URL ?? process.env.KOVO_DATABASE_URL,
   );
 }
 

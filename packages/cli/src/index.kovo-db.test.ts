@@ -56,7 +56,7 @@ describe('kovo db', () => {
         'export const appRuntimeDbOptions = {',
         '  schema,',
         "  seedSql: \"INSERT INTO kovo_cli_db_notes (id, \\\"ownerId\\\", title) VALUES ('seeded-note', 'seed-user', 'Seeded from runtime options') ON CONFLICT (id) DO NOTHING;\",",
-        "} satisfies KovoPostgresAppRuntimeOptions;",
+        '} satisfies KovoPostgresAppRuntimeOptions;',
         '',
       ].join('\n'),
       'utf8',

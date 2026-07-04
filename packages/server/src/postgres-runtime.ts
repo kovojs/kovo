@@ -47,6 +47,7 @@ const RUNTIME_LEAST_PRIVILEGE_ERROR = 'runtime must be a least-privilege login r
 const internalPostgresRuntimeDbCapability: unique symbol = Symbol(
   'kovo.postgres-runtime.internal-db',
 );
+const publicPostgresRelationBrand: unique symbol = Symbol('kovo.postgres-public-relation');
 
 type PgTableConfig = ReturnType<typeof getTableConfig>;
 type PgTable = Parameters<typeof getTableConfig>[0];
@@ -142,6 +143,7 @@ interface ResolvedPostgresRuntimeConfig {
   postureCheckOnBoot: boolean;
   principalFromRequest: (request: unknown) => string | undefined;
   provisionOnBoot: boolean;
+  publicRelations: ReadonlyMap<string, KovoPostgresPublicRelationDeclaration>;
   readerRole: string;
   schema: Record<string, unknown>;
   seedSql: readonly string[];
@@ -207,8 +209,54 @@ export interface KovoPostgresAppRuntimeOptions {
   adminRole?: string;
   /** Physical owner/authz table names that should receive the per-table `kovo_admin_scope` policy. */
   crossOwnerReadTables?: readonly string[];
+  /**
+   * Reviewed database relations intentionally exposed as public read surfaces even though they
+   * cannot prove Kovo row-level security, such as reporting materialized views (SPEC §10.3).
+   * Use {@link declarePublicRelation}; plain objects are intentionally not accepted.
+   */
+  publicRelations?: readonly KovoPostgresPublicRelationDeclaration[];
   seedSql?: string | readonly string[];
   writerRole?: string;
+}
+
+/** Options accepted by {@link declarePublicRelation}. */
+export interface KovoPostgresPublicRelationDeclarationOptions {
+  /** Relation name, either `table_or_view_name` in `public` or `schema.table_or_view_name`. */
+  relation: string;
+  /** Required audit reason explaining why this relation is safe to expose publicly. */
+  reason: string;
+  /** Optional source span or config-site label surfaced in capability ledgers. */
+  site?: string;
+}
+
+/**
+ * Declare a vetted public Postgres relation for the boot-time closure audit (SPEC §10.3).
+ *
+ * The declaration is the only supported escape for reachable relations that cannot carry Kovo RLS,
+ * such as materialized views. Base tables must use ordinary schema classifications (`public`,
+ * `reference`, `owner`, `ownerVia`, or `authzPolicy`) instead.
+ */
+export interface KovoPostgresPublicRelationDeclaration extends KovoPostgresPublicRelationDeclarationOptions {
+  /** Module-private witness so app config normally routes through declarePublicRelation(...). */
+  readonly [publicPostgresRelationBrand]: {
+    readonly scope: 'postgres-public-relation';
+  };
+}
+
+/**
+ * Construct a reviewed public relation declaration for `createPostgresAppRuntimeDb({ publicRelations })`.
+ */
+export function declarePublicRelation(
+  options: KovoPostgresPublicRelationDeclarationOptions,
+): KovoPostgresPublicRelationDeclaration {
+  const normalized = normalizedPublicRelationDeclaration(options);
+  const declaration = {
+    [publicPostgresRelationBrand]: { scope: 'postgres-public-relation' as const },
+    relation: normalized.relation,
+    reason: normalized.reason,
+    ...(normalized.site === undefined ? {} : { site: normalized.site }),
+  };
+  return Object.freeze(declaration);
 }
 
 /** One reviewed SQL migration file applied by the Postgres migration runner. */
@@ -488,7 +536,12 @@ async function initializeRuntimeDb(
   },
 ): Promise<void> {
   if (input.config.provisionOnBoot) {
-    await provisionRuntimeDb(client, { ...input, applySchemaDdl: true, migrations: [] });
+    await provisionRuntimeDb(client, {
+      ...input,
+      applySchemaDdl: true,
+      migrations: [],
+      runtimeLoginRole: undefined,
+    });
   }
   if (input.config.driver === 'node-postgres') {
     await assertRuntimeConnectionLeastPrivilege(client, input.config);
@@ -513,7 +566,7 @@ async function provisionRuntimeDb(
     config: ResolvedPostgresRuntimeConfig;
     metadata: KovoRuntimeDbMetadata;
     migrations: readonly KovoPostgresMigration[];
-    runtimeLoginRole?: string;
+    runtimeLoginRole: string | undefined;
     schemaDdl: string;
     schemaTables: readonly PgTable[];
   },
@@ -525,23 +578,15 @@ async function provisionRuntimeDb(
     if (input.config.createReaderRole) await ensurePostgresRole(tx, input.config.readerRole);
     if (input.config.createWriterRole) await ensurePostgresRole(tx, input.config.writerRole);
     if (input.applySchemaDdl) await tx.exec(input.schemaDdl);
-    await tx.exec('REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC');
+    await tx.exec(
+      'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
+    );
     await applyPostgresDefaultDenyPrivileges(tx, input.schemaTables, input.config);
     await provisionPostgresFrameworkTaskStore(tx, input.config);
     await applyPostgresRlsPolicies(tx, input.schemaTables, input.metadata, input.config);
     await applyPostgresViewSecurityInvoker(tx, input.schemaTables);
-    await applyPostgresReaderColumnPrivileges(
-      tx,
-      input.schemaTables,
-      input.metadata,
-      input.config,
-    );
-    await applyPostgresWriterTablePrivileges(
-      tx,
-      input.schemaTables,
-      input.metadata,
-      input.config,
-    );
+    await applyPostgresReaderColumnPrivileges(tx, input.schemaTables, input.metadata, input.config);
+    await applyPostgresWriterTablePrivileges(tx, input.schemaTables, input.metadata, input.config);
     await ensurePostgresSchemaStateTable(tx);
     await grantPostgresRuntimeLoginRole(tx, input.config, input.runtimeLoginRole);
     for (const statement of input.config.seedSql) await tx.exec(statement);
@@ -732,6 +777,7 @@ async function auditPostgresReachableClosure(
     ...input.config.crossOwnerReadTables,
   ]);
   const allowlistedTables = postgresReachabilityAllowlist(input.schemaTables, input.metadata);
+  const publicRelations = input.config.publicRelations;
   const reachableRows = await safeQuery<PostgresReachableRelationRow>(
     client,
     [
@@ -759,7 +805,8 @@ async function auditPostgresReachableClosure(
   if (reachableRows === undefined) {
     issues.push({
       code: 'KV433_REACHABILITY_AUDIT',
-      detail: 'could not enumerate app-role relation reachability from pg_class/has_table_privilege',
+      detail:
+        'could not enumerate app-role relation reachability from pg_class/has_table_privilege',
     });
     return issues;
   }
@@ -767,6 +814,19 @@ async function auditPostgresReachableClosure(
   const reachable = reachableRelationsFromRows(reachableRows.rows);
 
   for (const relation of reachable.values()) {
+    const declaredPublicRelation = publicRelations.get(
+      postgresRelationKey(relation.schema, relation.table),
+    );
+    if (declaredPublicRelation !== undefined) {
+      if (relation.relkind === 'v' || relation.relkind === 'm' || relation.relkind === 'f') {
+        continue;
+      }
+      issues.push({
+        code: 'KV433_PUBLIC_RELATION',
+        detail: `${relation.schema}.${relation.table} is declared public, but relkind ${relation.relkind} can carry Kovo RLS; use schema public/reference metadata or FORCE RLS instead`,
+      });
+      continue;
+    }
     if (relation.relkind === 'r' || relation.relkind === 'p') {
       if (FRAMEWORK_INTERNAL_REACHABLE_TABLES.has(relation.table)) continue;
       if (allowlistedTables.has(relation.table)) continue;
@@ -937,7 +997,8 @@ async function auditPostgresReachableRoutines(
     return [
       {
         code: 'KV433_REACHABILITY_AUDIT',
-        detail: 'could not enumerate app-role routine reachability from pg_proc/has_function_privilege',
+        detail:
+          'could not enumerate app-role routine reachability from pg_proc/has_function_privilege',
       },
     ];
   }
@@ -1157,6 +1218,7 @@ function resolvePostgresRuntimeConfig(
   const envReaderRole = nonEmptyEnv('KOVO_DB_READER_ROLE');
   const envWriterRole = nonEmptyEnv('KOVO_DB_WRITER_ROLE');
   const crossOwnerReadTables = normalizeStringSet(options.crossOwnerReadTables);
+  const publicRelations = normalizePublicRelationDeclarations(options.publicRelations);
   const config: ResolvedPostgresRuntimeConfig = {
     adminRole: options.adminRole ?? envAdminRole ?? DEFAULT_ADMIN_ROLE,
     createAdminRole:
@@ -1172,6 +1234,7 @@ function resolvePostgresRuntimeConfig(
       (driver === 'node-postgres' && options.provisionOnBoot !== true),
     principalFromRequest: options.principalFromRequest ?? principalFromRequest,
     provisionOnBoot: options.provisionOnBoot ?? driver === 'pglite',
+    publicRelations,
     readerRole: options.readerRole ?? envReaderRole ?? DEFAULT_READER_ROLE,
     schema: options.schema,
     seedSql: normalizeSeedSql(options.seedSql),
@@ -1189,6 +1252,105 @@ function nonEmptyEnv(name: string): string | undefined {
 function normalizeStringSet(values: readonly string[] | undefined): ReadonlySet<string> {
   if (values === undefined) return new Set();
   return new Set(values.map((value) => value.trim()).filter((value) => value !== ''));
+}
+
+function normalizedPublicRelationDeclaration(
+  value: KovoPostgresPublicRelationDeclarationOptions,
+): KovoPostgresPublicRelationDeclarationOptions {
+  if (!isRecord(value)) {
+    throw new Error('KV433: declarePublicRelation requires a declaration object (SPEC §10.3).');
+  }
+  const relation = normalizePostgresRelationName(value.relation);
+  const reason = value.reason;
+  if (typeof reason !== 'string' || reason.trim() === '') {
+    throw new Error('KV433: declarePublicRelation requires a non-empty reason (SPEC §10.3).');
+  }
+  const site = value.site;
+  if (site !== undefined && (typeof site !== 'string' || site.trim() === '')) {
+    throw new Error('KV433: declarePublicRelation site must be a non-empty string.');
+  }
+  return {
+    relation,
+    reason: reason.trim(),
+    ...(site === undefined ? {} : { site: site.trim() }),
+  };
+}
+
+function normalizePublicRelationDeclarations(
+  declarations: readonly KovoPostgresPublicRelationDeclaration[] | undefined,
+): ReadonlyMap<string, KovoPostgresPublicRelationDeclaration> {
+  const publicRelations = new Map<string, KovoPostgresPublicRelationDeclaration>();
+  if (declarations === undefined) return publicRelations;
+  for (const declaration of declarations) {
+    if (!isPublicRelationDeclaration(declaration)) {
+      throw new Error(
+        'KV433: publicRelations entries must be created with declarePublicRelation(...) (SPEC §10.3).',
+      );
+    }
+    const key = normalizePostgresRelationName(declaration.relation);
+    if (publicRelations.has(key)) {
+      throw new Error(`KV433: duplicate declarePublicRelation entry for ${key}.`);
+    }
+    publicRelations.set(key, declaration);
+  }
+  return publicRelations;
+}
+
+function isPublicRelationDeclaration(
+  value: unknown,
+): value is KovoPostgresPublicRelationDeclaration {
+  return (
+    isRecord(value) &&
+    Reflect.get(value, publicPostgresRelationBrand) !== undefined &&
+    typeof Reflect.get(value, 'relation') === 'string' &&
+    typeof Reflect.get(value, 'reason') === 'string'
+  );
+}
+
+function normalizePostgresRelationName(relation: unknown): string {
+  if (typeof relation !== 'string') {
+    throw new Error('KV433: declarePublicRelation relation must be a string (SPEC §10.3).');
+  }
+  const parts = relation
+    .trim()
+    .split('.')
+    .map((part) => part.trim());
+  if (parts.length === 1) {
+    const [table] = parts;
+    if (table === undefined) {
+      throw new Error('KV433: declarePublicRelation relation must name a relation.');
+    }
+    return postgresRelationKey('public', normalizedIdentifierPart(table));
+  }
+  if (parts.length === 2) {
+    const [schema, table] = parts;
+    if (schema === undefined || table === undefined) {
+      throw new Error('KV433: declarePublicRelation relation must name a relation.');
+    }
+    return postgresRelationKey(normalizedIdentifierPart(schema), normalizedIdentifierPart(table));
+  }
+  throw new Error(
+    'KV433: declarePublicRelation relation must be `name` or `schema.name` (SPEC §10.3).',
+  );
+}
+
+function normalizedIdentifierPart(part: string): string {
+  if (!/^[A-Za-z_][A-Za-z0-9_$]*$/u.test(part)) {
+    throw new Error(
+      `KV433: declarePublicRelation relation part ${JSON.stringify(
+        part,
+      )} must be an unquoted Postgres identifier.`,
+    );
+  }
+  return part;
+}
+
+function postgresRelationKey(schema: string, table: string): string {
+  return `${schema}.${table}`;
+}
+
+function isRecord(value: unknown): value is Record<PropertyKey, unknown> {
+  return typeof value === 'object' && value !== null;
 }
 
 function resolveDriver(options: KovoPostgresAppRuntimeOptions): KovoPostgresResolvedRuntimeDriver {
@@ -2064,7 +2226,7 @@ function postgresReachabilityAllowlist(
 }
 
 async function postgresCatalogRelation(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   schema: string,
   table: string,
 ): Promise<PostgresCatalogRelation | undefined> {
@@ -2083,7 +2245,7 @@ async function postgresCatalogRelation(
 }
 
 async function postgresHasLiveKovoPolicy(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   table: string,
 ): Promise<boolean> {
   const result = await safeQuery(
@@ -2099,7 +2261,7 @@ async function postgresHasLiveKovoPolicy(
 }
 
 async function postgresBaseTableHasProtectedPosture(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   relation: PostgresViewDependency,
 ): Promise<boolean> {
   const catalog = await postgresCatalogRelation(client, relation.table_schema, relation.table_name);
@@ -2119,19 +2281,28 @@ function postgresViewIsSecurityInvoker(relation: PostgresCatalogRelation): boole
 }
 
 async function postgresViewDependencies(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   schema: string,
   table: string,
 ): Promise<readonly PostgresViewDependency[]> {
   const usage = await safeQuery<PostgresViewDependency>(
     client,
     [
-      'SELECT table_schema, table_name',
-      'FROM information_schema.view_table_usage',
-      'WHERE view_schema = $1 AND view_name = $2',
-      'ORDER BY table_schema, table_name',
+      'SELECT DISTINCT base_ns.nspname AS table_schema, base.relname AS table_name',
+      'FROM pg_class view_rel',
+      'JOIN pg_namespace view_ns ON view_ns.oid = view_rel.relnamespace',
+      'JOIN pg_rewrite rewrite ON rewrite.ev_class = view_rel.oid',
+      'JOIN pg_depend dep ON dep.classid = $3::regclass',
+      '  AND dep.objid = rewrite.oid',
+      '  AND dep.refclassid = $4::regclass',
+      'JOIN pg_class base ON base.oid = dep.refobjid',
+      'JOIN pg_namespace base_ns ON base_ns.oid = base.relnamespace',
+      'WHERE view_ns.nspname = $1 AND view_rel.relname = $2',
+      'AND base.oid <> view_rel.oid',
+      "AND base_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      'ORDER BY base_ns.nspname, base.relname',
     ].join(' '),
-    [schema, table],
+    [schema, table, 'pg_rewrite', 'pg_class'],
   );
   return usage?.rows ?? [];
 }

@@ -43,7 +43,7 @@ function getAppDatabase(): KovoPostgresAppRuntimeDb {
 function lazyAppDatabaseValue<T extends object>(load: () => T): T {
   return new Proxy(Object.create(null) as T, {
     get(_target, property) {
-      const value = load()[property];
+      const value = Reflect.get(load(), property);
       return typeof value === 'function' ? value.bind(load()) : value;
     },
     getOwnPropertyDescriptor(_target, property) {

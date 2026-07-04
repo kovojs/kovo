@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { PGlite } from '@electric-sql/pglite';
 import { kovo, sql, trustedSql } from '@kovojs/drizzle';
+import { eq } from 'drizzle-orm';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -19,6 +20,7 @@ import { guards } from './guards.js';
 import {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
+  declarePublicRelation,
   type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
@@ -83,7 +85,7 @@ const teamMemberships = pgTable(
   kovo({
     domain: 'runtime-team-memberships',
     key: 'id',
-    reference: true,
+    owner: 'userId',
   }),
 );
 
@@ -195,9 +197,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const previousNodeEnv = process.env.NODE_ENV;
     process.env.NODE_ENV = 'production';
     try {
-      expect(() =>
-        createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema }),
-      ).toThrow(
+      expect(() => createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema })).toThrow(
         /KV433: production requires a least-privilege external Postgres via KOVO_DATABASE_URL; PGlite is dev\/test-only and runs in-process as superuser \(SPEC §10\.3\)\./,
       );
     } finally {
@@ -544,6 +544,49 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('admits a reachable public materialized view only when declared', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-public-matview-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE MATERIALIZED VIEW kovo_runtime_public_notes_mv AS SELECT id, title FROM kovo_runtime_notes',
+        'GRANT SELECT ON TABLE kovo_runtime_public_notes_mv TO kovo_reader',
+      ].join('; '),
+    );
+
+    const undeclared = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(undeclared.ok).toBe(false);
+    expect(undeclared.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_REACHABLE_OBJECT',
+        detail: expect.stringContaining('materialized views cannot enforce row-level security'),
+      }),
+    );
+
+    const declared = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      publicRelations: [
+        declarePublicRelation({
+          reason: 'public report projects non-secret note titles only',
+          relation: 'kovo_runtime_public_notes_mv',
+          site: 'postgres-runtime.test.ts',
+        }),
+      ],
+      schema,
+    });
+    expect(declared.ok).toBe(true);
+    expect(declared.issues).toEqual([]);
+  });
+
   it('refuses boot when PUBLIC grants make an unprotected table reachable', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-public-grant-'));
     roots.push(dataDir);
@@ -569,6 +612,25 @@ describe('createPostgresAppRuntimeDb', () => {
       expect.objectContaining({
         code: 'KV433_REACHABLE_TABLE',
         detail: expect.stringContaining('kovo_runtime_public_leak'),
+      }),
+    );
+
+    const declared = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      publicRelations: [
+        declarePublicRelation({
+          reason: 'attempting to bypass ordinary table posture',
+          relation: 'kovo_runtime_public_leak',
+        }),
+      ],
+      schema,
+    });
+    expect(declared.ok).toBe(false);
+    expect(declared.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_PUBLIC_RELATION',
+        detail: expect.stringContaining('can carry Kovo RLS'),
       }),
     );
   });
@@ -836,6 +898,23 @@ describe('createPostgresAppRuntimeDb', () => {
       ]);
       await expect(u2Db.select().from(teamDocuments)).resolves.toEqual([
         { id: 'd2', teamId: 'team-b', title: 'Beta' },
+      ]);
+
+      await u1Db.insert(teamMemberships).values({
+        id: 'm3',
+        teamId: 'team-c',
+        userId: 'u1',
+      });
+      await expect(
+        u1Db.insert(teamMemberships).values({
+          id: 'blocked-membership',
+          teamId: 'team-c',
+          userId: 'u2',
+        }),
+      ).rejects.toThrow(/Failed query|row-level security/i);
+      await u1Db.delete(teamMemberships).where(eq(teamMemberships.id, 'm3'));
+      await expect(u1Db.select().from(teamMemberships)).resolves.toEqual([
+        { id: 'm1', teamId: 'team-a', userId: 'u1' },
       ]);
 
       await u1Db.insert(teamDocuments).values({

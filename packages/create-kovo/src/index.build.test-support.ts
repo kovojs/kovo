@@ -3657,7 +3657,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
   let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
   runtimeDb = replaceRequired(
     runtimeDb,
-    'const appDatabase = createPostgresAppRuntimeDb({',
+    'export const appRuntimeDbOptions = {',
     [
       'const PHASE5_PG_PARANOID_SEED = [',
       "  \"INSERT INTO phase5_pg_orders (id, user_id, label, classified) VALUES ('phase5-pg-demo', 'demo-user', 'owner-visible', 'phase5-pg-secret-demo'), ('phase5-pg-other', 'other-user', 'cross-owner-hidden', 'phase5-pg-secret-other') ON CONFLICT (id) DO NOTHING;\",",
@@ -3667,7 +3667,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       '  "GRANT SELECT ON phase5_pg_order_view TO kovo_reader;",',
       '];',
       '',
-      'const appDatabase = createPostgresAppRuntimeDb({',
+      'export const appRuntimeDbOptions = {',
     ].join('\n'),
     'phase 5 postgres seed const',
   );
@@ -4045,7 +4045,7 @@ export function addPostgresParanoidFollowup8Shapes(root: string): void {
       '  kovo({',
       "    domain: 'phase5-pg-reference-membership',",
       "    key: 'id',",
-      '    reference: true,',
+      "    owner: 'userId',",
       '  }),',
       ');',
       '',
@@ -4062,7 +4062,7 @@ export function addPostgresParanoidFollowup8Shapes(root: string): void {
     '  "GRANT SELECT ON phase5_pg_order_view TO kovo_reader;",',
     [
       '  "GRANT SELECT ON phase5_pg_order_view TO kovo_reader;",',
-      '  "INSERT INTO phase5_pg_reference_memberships (id, team_id, user_id, label) VALUES (\'phase5-pg-membership-demo\', \'team-demo\', \'demo-user\', \'owner-membership\'), (\'phase5-pg-membership-other\', \'team-other\', \'other-user\', \'cross-tenant-membership\') ON CONFLICT (id) DO NOTHING;",',
+      "  \"INSERT INTO phase5_pg_reference_memberships (id, team_id, user_id, label) VALUES ('phase5-pg-membership-demo', 'team-demo', 'demo-user', 'owner-membership'), ('phase5-pg-membership-other', 'team-other', 'other-user', 'cross-tenant-membership') ON CONFLICT (id) DO NOTHING;\",",
     ].join('\n'),
     'phase 5 postgres followup 8 seed registration',
   );

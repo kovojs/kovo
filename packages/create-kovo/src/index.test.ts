@@ -252,11 +252,9 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/db.ts')).not.toContain('appDbReady');
     expect(files.get('src/db.ts')).not.toContain('export function appDbProvider');
     expect(files.get('src/db.ts')).not.toContain('export const appDb = appDatabase.db');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('type KovoPostgresAppRuntimeDb,');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "type KovoPostgresAppRuntimeDb,",
-    );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      "type KovoPostgresAppRuntimeOptions,",
+      'type KovoPostgresAppRuntimeOptions,',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "import * as schema from '../schema.js'",
