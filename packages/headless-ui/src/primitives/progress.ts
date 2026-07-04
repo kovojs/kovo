@@ -9,7 +9,7 @@ import { type PrimitiveDataAttributes } from '../lib/index.js';
  * ```ts
  * import type { ProgressDataState } from '@kovojs/headless-ui/progress';
  *
- * const value: ProgressDataState = {} as ProgressDataState;
+ * declare const value: ProgressDataState;
  * ```
  */
 export type ProgressDataState = 'complete' | 'indeterminate' | 'loading';
@@ -23,7 +23,7 @@ export type ProgressDataState = 'complete' | 'indeterminate' | 'loading';
  * ```ts
  * import type { ProgressAttributeOptions } from '@kovojs/headless-ui/progress';
  *
- * const value: ProgressAttributeOptions = {} as ProgressAttributeOptions;
+ * declare const value: ProgressAttributeOptions;
  * ```
  */
 export interface ProgressAttributeOptions {
@@ -41,7 +41,7 @@ export interface ProgressAttributeOptions {
  * ```ts
  * import type { ProgressComputedState } from '@kovojs/headless-ui/progress';
  *
- * const value: ProgressComputedState = {} as ProgressComputedState;
+ * declare const value: ProgressComputedState;
  * ```
  */
 export interface ProgressComputedState {
@@ -60,7 +60,7 @@ export interface ProgressComputedState {
  * ```ts
  * import type { ProgressPrimitiveAttributes } from '@kovojs/headless-ui/progress';
  *
- * const value: ProgressPrimitiveAttributes = {} as ProgressPrimitiveAttributes;
+ * declare const value: ProgressPrimitiveAttributes;
  * ```
  */
 export type ProgressPrimitiveAttributes = PrimitiveDataAttributes &
@@ -75,7 +75,7 @@ export type ProgressPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import { progressValueState } from '@kovojs/headless-ui/progress';
  *
- * const input = {} as Parameters<typeof progressValueState>[0];
+ * declare const input: Parameters<typeof progressValueState>[0];
  * const result = progressValueState(input);
  * ```
  */
@@ -111,7 +111,7 @@ export function progressValueState(options: ProgressAttributeOptions = {}): Prog
  * ```ts
  * import { progressRootAttributes } from '@kovojs/headless-ui/progress';
  *
- * const input = {} as Parameters<typeof progressRootAttributes>[0];
+ * declare const input: Parameters<typeof progressRootAttributes>[0];
  * const result = progressRootAttributes(input);
  * ```
  */

@@ -18,7 +18,7 @@ import {
  * ```ts
  * import type { PopoverChangeReason } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverChangeReason = {} as PopoverChangeReason;
+ * declare const value: PopoverChangeReason;
  * ```
  */
 export type PopoverChangeReason =
@@ -36,7 +36,7 @@ export type PopoverChangeReason =
  * ```ts
  * import type { PopoverChangeDetail } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverChangeDetail = {} as PopoverChangeDetail;
+ * declare const value: PopoverChangeDetail;
  * ```
  */
 export type PopoverChangeDetail = PrimitiveChangeDetail<PopoverChangeReason, boolean>;
@@ -50,7 +50,7 @@ export type PopoverChangeDetail = PrimitiveChangeDetail<PopoverChangeReason, boo
  * ```ts
  * import type { PopoverState } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverState = {} as PopoverState;
+ * declare const value: PopoverState;
  * ```
  */
 export interface PopoverState {
@@ -67,7 +67,7 @@ export interface PopoverState {
  * ```ts
  * import type { PopoverAttributeOptions } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverAttributeOptions = {} as PopoverAttributeOptions;
+ * declare const value: PopoverAttributeOptions;
  * ```
  */
 export interface PopoverAttributeOptions extends PopoverState {
@@ -83,7 +83,7 @@ export interface PopoverAttributeOptions extends PopoverState {
  * ```ts
  * import type { PopoverChangeOptions } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverChangeOptions = {} as PopoverChangeOptions;
+ * declare const value: PopoverChangeOptions;
  * ```
  */
 export interface PopoverChangeOptions {
@@ -99,7 +99,7 @@ export interface PopoverChangeOptions {
  * ```ts
  * import type { PopoverChangeResult } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverChangeResult = {} as PopoverChangeResult;
+ * declare const value: PopoverChangeResult;
  * ```
  */
 export interface PopoverChangeResult {
@@ -117,7 +117,7 @@ export interface PopoverChangeResult {
  * ```ts
  * import type { PopoverPrimitiveAttributes } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverPrimitiveAttributes = {} as PopoverPrimitiveAttributes;
+ * declare const value: PopoverPrimitiveAttributes;
  * ```
  */
 export type PopoverPrimitiveAttributes = PrimitiveDataAttributes &
@@ -132,7 +132,7 @@ export type PopoverPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { PopoverTriggerEvent } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverTriggerEvent = {} as PopoverTriggerEvent;
+ * declare const value: PopoverTriggerEvent;
  * ```
  */
 export type PopoverTriggerEvent = Event;
@@ -146,7 +146,7 @@ export type PopoverTriggerEvent = Event;
  * ```ts
  * import type { PopoverEscapeEvent } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverEscapeEvent = {} as PopoverEscapeEvent;
+ * declare const value: PopoverEscapeEvent;
  * ```
  */
 export type PopoverEscapeEvent = Event & Readonly<{ key?: string }>;
@@ -160,7 +160,7 @@ export type PopoverEscapeEvent = Event & Readonly<{ key?: string }>;
  * ```ts
  * import type { PopoverBeforeToggleEvent } from '@kovojs/headless-ui/popover';
  *
- * const value: PopoverBeforeToggleEvent = {} as PopoverBeforeToggleEvent;
+ * declare const value: PopoverBeforeToggleEvent;
  * ```
  */
 export type PopoverBeforeToggleEvent = Event &
@@ -177,7 +177,7 @@ export type PopoverBeforeToggleEvent = Event &
  * ```ts
  * import { popoverRootAttributes } from '@kovojs/headless-ui/popover';
  *
- * const input = {} as Parameters<typeof popoverRootAttributes>[0];
+ * declare const input: Parameters<typeof popoverRootAttributes>[0];
  * const result = popoverRootAttributes(input);
  * ```
  */
@@ -198,7 +198,7 @@ export function popoverRootAttributes(state: PopoverState): PopoverPrimitiveAttr
  * ```ts
  * import { popoverTriggerAttributes } from '@kovojs/headless-ui/popover';
  *
- * const input = {} as Parameters<typeof popoverTriggerAttributes>[0];
+ * declare const input: Parameters<typeof popoverTriggerAttributes>[0];
  * const result = popoverTriggerAttributes(input);
  * ```
  */
@@ -231,7 +231,7 @@ export function popoverTriggerAttributes(
  * ```ts
  * import { popoverContentAttributes } from '@kovojs/headless-ui/popover';
  *
- * const input = {} as Parameters<typeof popoverContentAttributes>[0];
+ * declare const input: Parameters<typeof popoverContentAttributes>[0];
  * const result = popoverContentAttributes(input);
  * ```
  */
@@ -254,10 +254,10 @@ export function popoverContentAttributes(
  * ```ts
  * import { setPopoverOpen } from '@kovojs/headless-ui/popover';
  *
- * const input = {} as Parameters<typeof setPopoverOpen>[0];
- * const state = {} as Parameters<typeof setPopoverOpen>[1];
- * const options = {} as Parameters<typeof setPopoverOpen>[2];
- * const detail = {} as Parameters<typeof setPopoverOpen>[3];
+ * declare const input: Parameters<typeof setPopoverOpen>[0];
+ * declare const state: Parameters<typeof setPopoverOpen>[1];
+ * declare const options: Parameters<typeof setPopoverOpen>[2];
+ * declare const detail: Parameters<typeof setPopoverOpen>[3];
  * const result = setPopoverOpen(input, state, options, detail);
  * ```
  *
@@ -281,9 +281,9 @@ export function setPopoverOpen(
  * ```ts
  * import { togglePopover } from '@kovojs/headless-ui/popover';
  *
- * const input = {} as Parameters<typeof togglePopover>[0];
- * const state = {} as Parameters<typeof togglePopover>[1];
- * const options = {} as Parameters<typeof togglePopover>[2];
+ * declare const input: Parameters<typeof togglePopover>[0];
+ * declare const state: Parameters<typeof togglePopover>[1];
+ * declare const options: Parameters<typeof togglePopover>[2];
  * const result = togglePopover(input, state, options);
  * ```
  *
@@ -304,9 +304,9 @@ export function togglePopover(
  * ```ts
  * import { popoverTriggerClick } from '@kovojs/headless-ui/popover';
  *
- * const input = {} as Parameters<typeof popoverTriggerClick>[0];
- * const state = {} as Parameters<typeof popoverTriggerClick>[1];
- * const options = {} as Parameters<typeof popoverTriggerClick>[2];
+ * declare const input: Parameters<typeof popoverTriggerClick>[0];
+ * declare const state: Parameters<typeof popoverTriggerClick>[1];
+ * declare const options: Parameters<typeof popoverTriggerClick>[2];
  * const result = popoverTriggerClick(input, state, options);
  * ```
  *
@@ -338,9 +338,9 @@ export function popoverTriggerClick(
  * ```ts
  * import { popoverBeforeToggle } from '@kovojs/headless-ui/popover';
  *
- * const input = {} as Parameters<typeof popoverBeforeToggle>[0];
- * const state = {} as Parameters<typeof popoverBeforeToggle>[1];
- * const options = {} as Parameters<typeof popoverBeforeToggle>[2];
+ * declare const input: Parameters<typeof popoverBeforeToggle>[0];
+ * declare const state: Parameters<typeof popoverBeforeToggle>[1];
+ * declare const options: Parameters<typeof popoverBeforeToggle>[2];
  * const result = popoverBeforeToggle(input, state, options);
  * ```
  *
@@ -374,9 +374,9 @@ export function popoverBeforeToggle(
  * ```ts
  * import { popoverEscapeKeyDown } from '@kovojs/headless-ui/popover';
  *
- * const input = {} as Parameters<typeof popoverEscapeKeyDown>[0];
- * const state = {} as Parameters<typeof popoverEscapeKeyDown>[1];
- * const options = {} as Parameters<typeof popoverEscapeKeyDown>[2];
+ * declare const input: Parameters<typeof popoverEscapeKeyDown>[0];
+ * declare const state: Parameters<typeof popoverEscapeKeyDown>[1];
+ * declare const options: Parameters<typeof popoverEscapeKeyDown>[2];
  * const result = popoverEscapeKeyDown(input, state, options);
  * ```
  *

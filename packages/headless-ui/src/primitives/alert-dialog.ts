@@ -19,7 +19,7 @@ import { runDialogInvokerCommand, type DialogInvokerEvent } from '../lib/dialog-
  * ```ts
  * import type { AlertDialogChangeReason } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogChangeReason = {} as AlertDialogChangeReason;
+ * declare const value: AlertDialogChangeReason;
  * ```
  */
 export type AlertDialogChangeReason =
@@ -39,7 +39,7 @@ export type AlertDialogChangeReason =
  * ```ts
  * import type { AlertDialogChangeDetail } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogChangeDetail = {} as AlertDialogChangeDetail;
+ * declare const value: AlertDialogChangeDetail;
  * ```
  */
 export type AlertDialogChangeDetail = PrimitiveChangeDetail<AlertDialogChangeReason, boolean>;
@@ -53,7 +53,7 @@ export type AlertDialogChangeDetail = PrimitiveChangeDetail<AlertDialogChangeRea
  * ```ts
  * import type { AlertDialogActionIntent } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogActionIntent = {} as AlertDialogActionIntent;
+ * declare const value: AlertDialogActionIntent;
  * ```
  */
 export type AlertDialogActionIntent = 'confirm' | 'destructive';
@@ -67,7 +67,7 @@ export type AlertDialogActionIntent = 'confirm' | 'destructive';
  * ```ts
  * import type { AlertDialogState } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogState = {} as AlertDialogState;
+ * declare const value: AlertDialogState;
  * ```
  */
 export interface AlertDialogState {
@@ -84,7 +84,7 @@ export interface AlertDialogState {
  * ```ts
  * import type { AlertDialogAttributeOptions } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogAttributeOptions = {} as AlertDialogAttributeOptions;
+ * declare const value: AlertDialogAttributeOptions;
  * ```
  */
 export interface AlertDialogAttributeOptions extends AlertDialogState {
@@ -102,7 +102,7 @@ export interface AlertDialogAttributeOptions extends AlertDialogState {
  * ```ts
  * import type { AlertDialogActionAttributeOptions } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogActionAttributeOptions = {} as AlertDialogActionAttributeOptions;
+ * declare const value: AlertDialogActionAttributeOptions;
  * ```
  */
 export interface AlertDialogActionAttributeOptions extends AlertDialogAttributeOptions {
@@ -118,7 +118,7 @@ export interface AlertDialogActionAttributeOptions extends AlertDialogAttributeO
  * ```ts
  * import type { AlertDialogCancelAttributeOptions } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogCancelAttributeOptions = {} as AlertDialogCancelAttributeOptions;
+ * declare const value: AlertDialogCancelAttributeOptions;
  * ```
  */
 export interface AlertDialogCancelAttributeOptions extends AlertDialogAttributeOptions {
@@ -134,7 +134,7 @@ export interface AlertDialogCancelAttributeOptions extends AlertDialogAttributeO
  * ```ts
  * import type { AlertDialogChangeOptions } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogChangeOptions = {} as AlertDialogChangeOptions;
+ * declare const value: AlertDialogChangeOptions;
  * ```
  */
 export interface AlertDialogChangeOptions {
@@ -150,7 +150,7 @@ export interface AlertDialogChangeOptions {
  * ```ts
  * import type { AlertDialogChangeResult } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogChangeResult = {} as AlertDialogChangeResult;
+ * declare const value: AlertDialogChangeResult;
  * ```
  */
 export interface AlertDialogChangeResult {
@@ -168,7 +168,7 @@ export interface AlertDialogChangeResult {
  * ```ts
  * import type { AlertDialogPrimitiveAttributes } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogPrimitiveAttributes = {} as AlertDialogPrimitiveAttributes;
+ * declare const value: AlertDialogPrimitiveAttributes;
  * ```
  */
 export type AlertDialogPrimitiveAttributes = PrimitiveDataAttributes &
@@ -183,7 +183,7 @@ export type AlertDialogPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { AlertDialogTriggerEvent } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogTriggerEvent = {} as AlertDialogTriggerEvent;
+ * declare const value: AlertDialogTriggerEvent;
  * ```
  */
 export type AlertDialogTriggerEvent = Event & DialogInvokerEvent;
@@ -197,7 +197,7 @@ export type AlertDialogTriggerEvent = Event & DialogInvokerEvent;
  * ```ts
  * import type { AlertDialogActionEvent } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogActionEvent = {} as AlertDialogActionEvent;
+ * declare const value: AlertDialogActionEvent;
  * ```
  */
 export type AlertDialogActionEvent = Event & DialogInvokerEvent;
@@ -211,7 +211,7 @@ export type AlertDialogActionEvent = Event & DialogInvokerEvent;
  * ```ts
  * import type { AlertDialogCancelButtonEvent } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogCancelButtonEvent = {} as AlertDialogCancelButtonEvent;
+ * declare const value: AlertDialogCancelButtonEvent;
  * ```
  */
 export type AlertDialogCancelButtonEvent = Event & DialogInvokerEvent;
@@ -225,7 +225,7 @@ export type AlertDialogCancelButtonEvent = Event & DialogInvokerEvent;
  * ```ts
  * import type { AlertDialogCancelEvent } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogCancelEvent = {} as AlertDialogCancelEvent;
+ * declare const value: AlertDialogCancelEvent;
  * ```
  */
 export type AlertDialogCancelEvent = Event;
@@ -239,7 +239,7 @@ export type AlertDialogCancelEvent = Event;
  * ```ts
  * import type { AlertDialogBeforeToggleEvent } from '@kovojs/headless-ui/alert-dialog';
  *
- * const value: AlertDialogBeforeToggleEvent = {} as AlertDialogBeforeToggleEvent;
+ * declare const value: AlertDialogBeforeToggleEvent;
  * ```
  */
 export type AlertDialogBeforeToggleEvent = Event &
@@ -256,7 +256,7 @@ export type AlertDialogBeforeToggleEvent = Event &
  * ```ts
  * import { alertDialogRootAttributes } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogRootAttributes>[0];
+ * declare const input: Parameters<typeof alertDialogRootAttributes>[0];
  * const result = alertDialogRootAttributes(input);
  * ```
  */
@@ -277,7 +277,7 @@ export function alertDialogRootAttributes(state: AlertDialogState): AlertDialogP
  * ```ts
  * import { alertDialogTriggerAttributes } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogTriggerAttributes>[0];
+ * declare const input: Parameters<typeof alertDialogTriggerAttributes>[0];
  * const result = alertDialogTriggerAttributes(input);
  * ```
  */
@@ -313,7 +313,7 @@ export function alertDialogTriggerAttributes(
  * ```ts
  * import { alertDialogContentAttributes } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogContentAttributes>[0];
+ * declare const input: Parameters<typeof alertDialogContentAttributes>[0];
  * const result = alertDialogContentAttributes(input);
  * ```
  */
@@ -342,7 +342,7 @@ export function alertDialogContentAttributes(
  * ```ts
  * import { alertDialogCancelAttributes } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogCancelAttributes>[0];
+ * declare const input: Parameters<typeof alertDialogCancelAttributes>[0];
  * const result = alertDialogCancelAttributes(input);
  * ```
  */
@@ -377,7 +377,7 @@ export function alertDialogCancelAttributes(
  * ```ts
  * import { alertDialogActionAttributes } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogActionAttributes>[0];
+ * declare const input: Parameters<typeof alertDialogActionAttributes>[0];
  * const result = alertDialogActionAttributes(input);
  * ```
  */
@@ -409,10 +409,10 @@ export function alertDialogActionAttributes(
  * ```ts
  * import { setAlertDialogOpen } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof setAlertDialogOpen>[0];
- * const state = {} as Parameters<typeof setAlertDialogOpen>[1];
- * const options = {} as Parameters<typeof setAlertDialogOpen>[2];
- * const detail = {} as Parameters<typeof setAlertDialogOpen>[3];
+ * declare const input: Parameters<typeof setAlertDialogOpen>[0];
+ * declare const state: Parameters<typeof setAlertDialogOpen>[1];
+ * declare const options: Parameters<typeof setAlertDialogOpen>[2];
+ * declare const detail: Parameters<typeof setAlertDialogOpen>[3];
  * const result = setAlertDialogOpen(input, state, options, detail);
  * ```
  *
@@ -436,9 +436,9 @@ export function setAlertDialogOpen(
  * ```ts
  * import { toggleAlertDialog } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof toggleAlertDialog>[0];
- * const state = {} as Parameters<typeof toggleAlertDialog>[1];
- * const options = {} as Parameters<typeof toggleAlertDialog>[2];
+ * declare const input: Parameters<typeof toggleAlertDialog>[0];
+ * declare const state: Parameters<typeof toggleAlertDialog>[1];
+ * declare const options: Parameters<typeof toggleAlertDialog>[2];
  * const result = toggleAlertDialog(input, state, options);
  * ```
  *
@@ -459,9 +459,9 @@ export function toggleAlertDialog(
  * ```ts
  * import { alertDialogTriggerClick } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogTriggerClick>[0];
- * const state = {} as Parameters<typeof alertDialogTriggerClick>[1];
- * const options = {} as Parameters<typeof alertDialogTriggerClick>[2];
+ * declare const input: Parameters<typeof alertDialogTriggerClick>[0];
+ * declare const state: Parameters<typeof alertDialogTriggerClick>[1];
+ * declare const options: Parameters<typeof alertDialogTriggerClick>[2];
  * const result = alertDialogTriggerClick(input, state, options);
  * ```
  *
@@ -494,9 +494,9 @@ export function alertDialogTriggerClick(
  * ```ts
  * import { alertDialogCancelClick } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogCancelClick>[0];
- * const state = {} as Parameters<typeof alertDialogCancelClick>[1];
- * const options = {} as Parameters<typeof alertDialogCancelClick>[2];
+ * declare const input: Parameters<typeof alertDialogCancelClick>[0];
+ * declare const state: Parameters<typeof alertDialogCancelClick>[1];
+ * declare const options: Parameters<typeof alertDialogCancelClick>[2];
  * const result = alertDialogCancelClick(input, state, options);
  * ```
  *
@@ -529,9 +529,9 @@ export function alertDialogCancelClick(
  * ```ts
  * import { alertDialogActionClick } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogActionClick>[0];
- * const state = {} as Parameters<typeof alertDialogActionClick>[1];
- * const options = {} as Parameters<typeof alertDialogActionClick>[2];
+ * declare const input: Parameters<typeof alertDialogActionClick>[0];
+ * declare const state: Parameters<typeof alertDialogActionClick>[1];
+ * declare const options: Parameters<typeof alertDialogActionClick>[2];
  * const result = alertDialogActionClick(input, state, options);
  * ```
  *
@@ -564,9 +564,9 @@ export function alertDialogActionClick(
  * ```ts
  * import { alertDialogCancel } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogCancel>[0];
- * const state = {} as Parameters<typeof alertDialogCancel>[1];
- * const options = {} as Parameters<typeof alertDialogCancel>[2];
+ * declare const input: Parameters<typeof alertDialogCancel>[0];
+ * declare const state: Parameters<typeof alertDialogCancel>[1];
+ * declare const options: Parameters<typeof alertDialogCancel>[2];
  * const result = alertDialogCancel(input, state, options);
  * ```
  *
@@ -598,9 +598,9 @@ export function alertDialogCancel(
  * ```ts
  * import { alertDialogBeforeToggle } from '@kovojs/headless-ui/alert-dialog';
  *
- * const input = {} as Parameters<typeof alertDialogBeforeToggle>[0];
- * const state = {} as Parameters<typeof alertDialogBeforeToggle>[1];
- * const options = {} as Parameters<typeof alertDialogBeforeToggle>[2];
+ * declare const input: Parameters<typeof alertDialogBeforeToggle>[0];
+ * declare const state: Parameters<typeof alertDialogBeforeToggle>[1];
+ * declare const options: Parameters<typeof alertDialogBeforeToggle>[2];
  * const result = alertDialogBeforeToggle(input, state, options);
  * ```
  *

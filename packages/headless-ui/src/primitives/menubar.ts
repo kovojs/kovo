@@ -25,7 +25,7 @@ import {
  * ```ts
  * import type { MenubarItem } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarItem = {} as MenubarItem;
+ * declare const value: MenubarItem;
  * ```
  *
  *
@@ -48,7 +48,7 @@ export interface MenubarItem {
  * ```ts
  * import type { MenubarState } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarState = {} as MenubarState;
+ * declare const value: MenubarState;
  * ```
  */
 export interface MenubarState {
@@ -70,7 +70,7 @@ export interface MenubarState {
  * ```ts
  * import type { MenubarRootAttributeOptions } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarRootAttributeOptions = {} as MenubarRootAttributeOptions;
+ * declare const value: MenubarRootAttributeOptions;
  * ```
  */
 export interface MenubarRootAttributeOptions extends MenubarState {
@@ -89,7 +89,7 @@ export interface MenubarRootAttributeOptions extends MenubarState {
  * ```ts
  * import type { MenubarItemAttributeOptions } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarItemAttributeOptions = {} as MenubarItemAttributeOptions;
+ * declare const value: MenubarItemAttributeOptions;
  * ```
  */
 export interface MenubarItemAttributeOptions extends MenubarState {
@@ -110,7 +110,7 @@ export interface MenubarItemAttributeOptions extends MenubarState {
  * ```ts
  * import type { MenubarSubmenuAttributeOptions } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarSubmenuAttributeOptions = {} as MenubarSubmenuAttributeOptions;
+ * declare const value: MenubarSubmenuAttributeOptions;
  * ```
  */
 export interface MenubarSubmenuAttributeOptions extends MenubarState {
@@ -128,7 +128,7 @@ export interface MenubarSubmenuAttributeOptions extends MenubarState {
  * ```ts
  * import type { MenubarGroupAttributeOptions } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarGroupAttributeOptions = {} as MenubarGroupAttributeOptions;
+ * declare const value: MenubarGroupAttributeOptions;
  * ```
  */
 export interface MenubarGroupAttributeOptions extends MenubarState {
@@ -145,7 +145,7 @@ export interface MenubarGroupAttributeOptions extends MenubarState {
  * ```ts
  * import type { MenubarSeparatorAttributeOptions } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarSeparatorAttributeOptions = {} as MenubarSeparatorAttributeOptions;
+ * declare const value: MenubarSeparatorAttributeOptions;
  * ```
  */
 export interface MenubarSeparatorAttributeOptions {
@@ -161,7 +161,7 @@ export interface MenubarSeparatorAttributeOptions {
  * ```ts
  * import type { MenubarOpenChangeReason } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarOpenChangeReason = {} as MenubarOpenChangeReason;
+ * declare const value: MenubarOpenChangeReason;
  * ```
  */
 export type MenubarOpenChangeReason =
@@ -181,7 +181,7 @@ export type MenubarOpenChangeReason =
  * ```ts
  * import type { MenubarSelectReason } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarSelectReason = {} as MenubarSelectReason;
+ * declare const value: MenubarSelectReason;
  * ```
  */
 export type MenubarSelectReason = 'item-click' | 'keyboard' | 'programmatic';
@@ -195,7 +195,7 @@ export type MenubarSelectReason = 'item-click' | 'keyboard' | 'programmatic';
  * ```ts
  * import type { MenubarOpenChangeDetail } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarOpenChangeDetail = {} as MenubarOpenChangeDetail;
+ * declare const value: MenubarOpenChangeDetail;
  * ```
  */
 export type MenubarOpenChangeDetail = PrimitiveChangeDetail<
@@ -212,7 +212,7 @@ export type MenubarOpenChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { MenubarSelectDetail } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarSelectDetail = {} as MenubarSelectDetail;
+ * declare const value: MenubarSelectDetail;
  * ```
  */
 export type MenubarSelectDetail = PrimitiveChangeDetail<MenubarSelectReason, string>;
@@ -226,7 +226,7 @@ export type MenubarSelectDetail = PrimitiveChangeDetail<MenubarSelectReason, str
  * ```ts
  * import type { MenubarChangeOptions } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarChangeOptions = {} as MenubarChangeOptions;
+ * declare const value: MenubarChangeOptions;
  * ```
  */
 export interface MenubarChangeOptions {
@@ -243,7 +243,7 @@ export interface MenubarChangeOptions {
  * ```ts
  * import type { MenubarOpenChangeResult } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarOpenChangeResult = {} as MenubarOpenChangeResult;
+ * declare const value: MenubarOpenChangeResult;
  * ```
  */
 export interface MenubarOpenChangeResult {
@@ -261,7 +261,7 @@ export interface MenubarOpenChangeResult {
  * ```ts
  * import type { MenubarSelectResult } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarSelectResult = {} as MenubarSelectResult;
+ * declare const value: MenubarSelectResult;
  * ```
  */
 export interface MenubarSelectResult {
@@ -280,7 +280,7 @@ export interface MenubarSelectResult {
  * ```ts
  * import type { MenubarMoveOptions } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarMoveOptions = {} as MenubarMoveOptions;
+ * declare const value: MenubarMoveOptions;
  * ```
  */
 export interface MenubarMoveOptions {
@@ -297,7 +297,7 @@ export interface MenubarMoveOptions {
  * ```ts
  * import type { MenubarMoveResult } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarMoveResult = {} as MenubarMoveResult;
+ * declare const value: MenubarMoveResult;
  * ```
  */
 export interface MenubarMoveResult {
@@ -315,7 +315,7 @@ export interface MenubarMoveResult {
  * ```ts
  * import type { MenubarTypeaheadOptions } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarTypeaheadOptions = {} as MenubarTypeaheadOptions;
+ * declare const value: MenubarTypeaheadOptions;
  * ```
  */
 export interface MenubarTypeaheadOptions extends MenubarMoveOptions {
@@ -334,7 +334,7 @@ export interface MenubarTypeaheadOptions extends MenubarMoveOptions {
  * ```ts
  * import type { MenubarTypeaheadResult } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarTypeaheadResult = {} as MenubarTypeaheadResult;
+ * declare const value: MenubarTypeaheadResult;
  * ```
  */
 export interface MenubarTypeaheadResult extends MenubarMoveResult {
@@ -350,7 +350,7 @@ export interface MenubarTypeaheadResult extends MenubarMoveResult {
  * ```ts
  * import type { MenubarPrimitiveAttributes } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarPrimitiveAttributes = {} as MenubarPrimitiveAttributes;
+ * declare const value: MenubarPrimitiveAttributes;
  * ```
  */
 export type MenubarPrimitiveAttributes = PrimitiveDataAttributes &
@@ -365,7 +365,7 @@ export type MenubarPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { MenubarItemEvent } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarItemEvent = {} as MenubarItemEvent;
+ * declare const value: MenubarItemEvent;
  * ```
  */
 export type MenubarItemEvent = Event;
@@ -379,7 +379,7 @@ export type MenubarItemEvent = Event;
  * ```ts
  * import type { MenubarKeyboardEvent } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarKeyboardEvent = {} as MenubarKeyboardEvent;
+ * declare const value: MenubarKeyboardEvent;
  * ```
  */
 export type MenubarKeyboardEvent = Event & { readonly key: string };
@@ -393,7 +393,7 @@ export type MenubarKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import type { MenubarFocusEvent } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarFocusEvent = {} as MenubarFocusEvent;
+ * declare const value: MenubarFocusEvent;
  * ```
  */
 export type MenubarFocusEvent = Event & {
@@ -418,7 +418,7 @@ export type MenubarFocusEvent = Event & {
  * ```ts
  * import type { MenubarFocusOptions } from '@kovojs/headless-ui/menubar';
  *
- * const value: MenubarFocusOptions = {} as MenubarFocusOptions;
+ * declare const value: MenubarFocusOptions;
  * ```
  */
 export interface MenubarFocusOptions {
@@ -437,7 +437,7 @@ export interface MenubarFocusOptions {
  * ```ts
  * import { menubarRootAttributes } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarRootAttributes>[0];
+ * declare const input: Parameters<typeof menubarRootAttributes>[0];
  * const result = menubarRootAttributes(input);
  * ```
  */
@@ -469,7 +469,7 @@ export function menubarRootAttributes(
  * ```ts
  * import { menubarItemAttributes } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarItemAttributes>[0];
+ * declare const input: Parameters<typeof menubarItemAttributes>[0];
  * const result = menubarItemAttributes(input);
  * ```
  */
@@ -512,7 +512,7 @@ export function menubarItemAttributes(
  * ```ts
  * import { menubarSubmenuAttributes } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarSubmenuAttributes>[0];
+ * declare const input: Parameters<typeof menubarSubmenuAttributes>[0];
  * const result = menubarSubmenuAttributes(input);
  * ```
  */
@@ -542,7 +542,7 @@ export function menubarSubmenuAttributes(
  * ```ts
  * import { menubarGroupAttributes } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarGroupAttributes>[0];
+ * declare const input: Parameters<typeof menubarGroupAttributes>[0];
  * const result = menubarGroupAttributes(input);
  * ```
  */
@@ -566,7 +566,7 @@ export function menubarGroupAttributes(
  * ```ts
  * import { menubarSeparatorAttributes } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarSeparatorAttributes>[0];
+ * declare const input: Parameters<typeof menubarSeparatorAttributes>[0];
  * const result = menubarSeparatorAttributes(input);
  * ```
  */
@@ -588,7 +588,7 @@ export function menubarSeparatorAttributes(
  * ```ts
  * import { menubarItemHighlighted } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarItemHighlighted>[0];
+ * declare const input: Parameters<typeof menubarItemHighlighted>[0];
  * const result = menubarItemHighlighted(input);
  * ```
  */
@@ -605,7 +605,7 @@ export function menubarItemHighlighted(options: MenubarItemAttributeOptions): bo
  * ```ts
  * import { menubarItemOpen } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarItemOpen>[0];
+ * declare const input: Parameters<typeof menubarItemOpen>[0];
  * const result = menubarItemOpen(input);
  * ```
  */
@@ -622,10 +622,10 @@ export function menubarItemOpen(options: MenubarItemAttributeOptions): boolean {
  * ```ts
  * import { setMenubarOpenValue } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof setMenubarOpenValue>[0];
- * const state = {} as Parameters<typeof setMenubarOpenValue>[1];
- * const options = {} as Parameters<typeof setMenubarOpenValue>[2];
- * const detail = {} as Parameters<typeof setMenubarOpenValue>[3];
+ * declare const input: Parameters<typeof setMenubarOpenValue>[0];
+ * declare const state: Parameters<typeof setMenubarOpenValue>[1];
+ * declare const options: Parameters<typeof setMenubarOpenValue>[2];
+ * declare const detail: Parameters<typeof setMenubarOpenValue>[3];
  * const result = setMenubarOpenValue(input, state, options, detail);
  * ```
  *
@@ -658,10 +658,10 @@ export function setMenubarOpenValue(
  * ```ts
  * import { toggleMenubarOpenValue } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof toggleMenubarOpenValue>[0];
- * const state = {} as Parameters<typeof toggleMenubarOpenValue>[1];
- * const options = {} as Parameters<typeof toggleMenubarOpenValue>[2];
- * const detail = {} as Parameters<typeof toggleMenubarOpenValue>[3];
+ * declare const input: Parameters<typeof toggleMenubarOpenValue>[0];
+ * declare const state: Parameters<typeof toggleMenubarOpenValue>[1];
+ * declare const options: Parameters<typeof toggleMenubarOpenValue>[2];
+ * declare const detail: Parameters<typeof toggleMenubarOpenValue>[3];
  * const result = toggleMenubarOpenValue(input, state, options, detail);
  * ```
  *
@@ -685,10 +685,10 @@ export function toggleMenubarOpenValue(
  * ```ts
  * import { selectMenubarItem } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof selectMenubarItem>[0];
- * const state = {} as Parameters<typeof selectMenubarItem>[1];
- * const options = {} as Parameters<typeof selectMenubarItem>[2];
- * const detail = {} as Parameters<typeof selectMenubarItem>[3];
+ * declare const input: Parameters<typeof selectMenubarItem>[0];
+ * declare const state: Parameters<typeof selectMenubarItem>[1];
+ * declare const options: Parameters<typeof selectMenubarItem>[2];
+ * declare const detail: Parameters<typeof selectMenubarItem>[3];
  * const result = selectMenubarItem(input, state, options, detail);
  * ```
  *
@@ -745,9 +745,9 @@ export function selectMenubarItem(
  * ```ts
  * import { menubarMove } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarMove>[0];
- * const state = {} as Parameters<typeof menubarMove>[1];
- * const options = {} as Parameters<typeof menubarMove>[2];
+ * declare const input: Parameters<typeof menubarMove>[0];
+ * declare const state: Parameters<typeof menubarMove>[1];
+ * declare const options: Parameters<typeof menubarMove>[2];
  * const result = menubarMove(input, state, options);
  * ```
  *
@@ -789,9 +789,9 @@ export function menubarMove(
  * ```ts
  * import { menubarTypeahead } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarTypeahead>[0];
- * const state = {} as Parameters<typeof menubarTypeahead>[1];
- * const options = {} as Parameters<typeof menubarTypeahead>[2];
+ * declare const input: Parameters<typeof menubarTypeahead>[0];
+ * declare const state: Parameters<typeof menubarTypeahead>[1];
+ * declare const options: Parameters<typeof menubarTypeahead>[2];
  * const result = menubarTypeahead(input, state, options);
  * ```
  *
@@ -832,9 +832,9 @@ export function menubarTypeahead(
  * ```ts
  * import { menubarSubmenuTriggerClick } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarSubmenuTriggerClick>[0];
- * const state = {} as Parameters<typeof menubarSubmenuTriggerClick>[1];
- * const options = {} as Parameters<typeof menubarSubmenuTriggerClick>[2];
+ * declare const input: Parameters<typeof menubarSubmenuTriggerClick>[0];
+ * declare const state: Parameters<typeof menubarSubmenuTriggerClick>[1];
+ * declare const options: Parameters<typeof menubarSubmenuTriggerClick>[2];
  * const result = menubarSubmenuTriggerClick(input, state, options);
  * ```
  *
@@ -866,9 +866,9 @@ export function menubarSubmenuTriggerClick(
  * ```ts
  * import { menubarItemPointerEnter } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarItemPointerEnter>[0];
- * const state = {} as Parameters<typeof menubarItemPointerEnter>[1];
- * const options = {} as Parameters<typeof menubarItemPointerEnter>[2];
+ * declare const input: Parameters<typeof menubarItemPointerEnter>[0];
+ * declare const state: Parameters<typeof menubarItemPointerEnter>[1];
+ * declare const options: Parameters<typeof menubarItemPointerEnter>[2];
  * const result = menubarItemPointerEnter(input, state, options);
  * ```
  *
@@ -896,9 +896,9 @@ export function menubarItemPointerEnter(
  * ```ts
  * import { menubarItemClick } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarItemClick>[0];
- * const state = {} as Parameters<typeof menubarItemClick>[1];
- * const options = {} as Parameters<typeof menubarItemClick>[2];
+ * declare const input: Parameters<typeof menubarItemClick>[0];
+ * declare const state: Parameters<typeof menubarItemClick>[1];
+ * declare const options: Parameters<typeof menubarItemClick>[2];
  * const result = menubarItemClick(input, state, options);
  * ```
  *
@@ -930,9 +930,9 @@ export function menubarItemClick(
  * ```ts
  * import { menubarItemKeyDown } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarItemKeyDown>[0];
- * const state = {} as Parameters<typeof menubarItemKeyDown>[1];
- * const options = {} as Parameters<typeof menubarItemKeyDown>[2];
+ * declare const input: Parameters<typeof menubarItemKeyDown>[0];
+ * declare const state: Parameters<typeof menubarItemKeyDown>[1];
+ * declare const options: Parameters<typeof menubarItemKeyDown>[2];
  * const result = menubarItemKeyDown(input, state, options);
  * ```
  *
@@ -963,9 +963,9 @@ export function menubarItemKeyDown(
  * ```ts
  * import { menubarKeyDown } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarKeyDown>[0];
- * const state = {} as Parameters<typeof menubarKeyDown>[1];
- * const options = {} as Parameters<typeof menubarKeyDown>[2];
+ * declare const input: Parameters<typeof menubarKeyDown>[0];
+ * declare const state: Parameters<typeof menubarKeyDown>[1];
+ * declare const options: Parameters<typeof menubarKeyDown>[2];
  * const result = menubarKeyDown(input, state, options);
  * ```
  *
@@ -1010,9 +1010,9 @@ export function menubarKeyDown(
  * ```ts
  * import { menubarFocusElement } from '@kovojs/headless-ui/menubar';
  *
- * const input = {} as Parameters<typeof menubarFocusElement>[0];
- * const state = {} as Parameters<typeof menubarFocusElement>[1];
- * const options = {} as Parameters<typeof menubarFocusElement>[2];
+ * declare const input: Parameters<typeof menubarFocusElement>[0];
+ * declare const state: Parameters<typeof menubarFocusElement>[1];
+ * declare const options: Parameters<typeof menubarFocusElement>[2];
  * const result = menubarFocusElement(input, state, options);
  * ```
  */

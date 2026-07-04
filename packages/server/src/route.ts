@@ -351,7 +351,7 @@ export interface RouteFactory<Request = unknown> {
  * @param definition - The `page` handler plus optional `params`/`search` schemas, guards, and meta.
  * @returns A `RouteDeclaration` carrying `path`.
  * @example
- * import { notFound, route, s } from '@kovojs/server';
+ * import { notFound, route, s, trustedHtml } from '@kovojs/server';
  *
  * const catalog = new Map<string, { name: string }>();
  *
@@ -360,7 +360,7 @@ export interface RouteFactory<Request = unknown> {
  *   page({ params }) {
  *     const product = catalog.get(params.id);
  *     if (!product) return notFound();
- *     return `<h1>${product.name}</h1>`;
+ *     return trustedHtml(`<h1>${product.name}</h1>`);
  *   },
  * });
  */

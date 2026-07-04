@@ -23,7 +23,7 @@ import {
  * ```ts
  * import type { ContextMenuPoint } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuPoint = {} as ContextMenuPoint;
+ * declare const value: ContextMenuPoint;
  * ```
  *
  *
@@ -42,7 +42,7 @@ export interface ContextMenuPoint {
  * ```ts
  * import type { ContextMenuItem } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuItem = {} as ContextMenuItem;
+ * declare const value: ContextMenuItem;
  * ```
  */
 export interface ContextMenuItem {
@@ -61,7 +61,7 @@ export interface ContextMenuItem {
  * ```ts
  * import type { ContextMenuState } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuState = {} as ContextMenuState;
+ * declare const value: ContextMenuState;
  * ```
  */
 export interface ContextMenuState {
@@ -81,7 +81,7 @@ export interface ContextMenuState {
  * ```ts
  * import type { ContextMenuRootAttributeOptions } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuRootAttributeOptions = {} as ContextMenuRootAttributeOptions;
+ * declare const value: ContextMenuRootAttributeOptions;
  * ```
  */
 export interface ContextMenuRootAttributeOptions extends ContextMenuState {
@@ -97,7 +97,7 @@ export interface ContextMenuRootAttributeOptions extends ContextMenuState {
  * ```ts
  * import type { ContextMenuTriggerAttributeOptions } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuTriggerAttributeOptions = {} as ContextMenuTriggerAttributeOptions;
+ * declare const value: ContextMenuTriggerAttributeOptions;
  * ```
  */
 export interface ContextMenuTriggerAttributeOptions extends ContextMenuState {
@@ -115,7 +115,7 @@ export interface ContextMenuTriggerAttributeOptions extends ContextMenuState {
  * ```ts
  * import type { ContextMenuContentAttributeOptions } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuContentAttributeOptions = {} as ContextMenuContentAttributeOptions;
+ * declare const value: ContextMenuContentAttributeOptions;
  * ```
  */
 export interface ContextMenuContentAttributeOptions extends ContextMenuState {
@@ -132,7 +132,7 @@ export interface ContextMenuContentAttributeOptions extends ContextMenuState {
  * ```ts
  * import type { ContextMenuItemAttributeOptions } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuItemAttributeOptions = {} as ContextMenuItemAttributeOptions;
+ * declare const value: ContextMenuItemAttributeOptions;
  * ```
  */
 export interface ContextMenuItemAttributeOptions extends ContextMenuState {
@@ -151,7 +151,7 @@ export interface ContextMenuItemAttributeOptions extends ContextMenuState {
  * ```ts
  * import type { ContextMenuGroupAttributeOptions } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuGroupAttributeOptions = {} as ContextMenuGroupAttributeOptions;
+ * declare const value: ContextMenuGroupAttributeOptions;
  * ```
  */
 export interface ContextMenuGroupAttributeOptions extends ContextMenuState {
@@ -168,7 +168,7 @@ export interface ContextMenuGroupAttributeOptions extends ContextMenuState {
  * ```ts
  * import type { ContextMenuSeparatorAttributeOptions } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuSeparatorAttributeOptions = {} as ContextMenuSeparatorAttributeOptions;
+ * declare const value: ContextMenuSeparatorAttributeOptions;
  * ```
  */
 export interface ContextMenuSeparatorAttributeOptions {
@@ -184,7 +184,7 @@ export interface ContextMenuSeparatorAttributeOptions {
  * ```ts
  * import type { ContextMenuOpenChangeReason } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuOpenChangeReason = {} as ContextMenuOpenChangeReason;
+ * declare const value: ContextMenuOpenChangeReason;
  * ```
  */
 export type ContextMenuOpenChangeReason =
@@ -203,7 +203,7 @@ export type ContextMenuOpenChangeReason =
  * ```ts
  * import type { ContextMenuSelectReason } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuSelectReason = {} as ContextMenuSelectReason;
+ * declare const value: ContextMenuSelectReason;
  * ```
  */
 export type ContextMenuSelectReason = 'item-click' | 'item-keyboard' | 'programmatic';
@@ -217,7 +217,7 @@ export type ContextMenuSelectReason = 'item-click' | 'item-keyboard' | 'programm
  * ```ts
  * import type { ContextMenuOpenChangeDetail } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuOpenChangeDetail = {} as ContextMenuOpenChangeDetail;
+ * declare const value: ContextMenuOpenChangeDetail;
  * ```
  */
 export type ContextMenuOpenChangeDetail = PrimitiveChangeDetail<
@@ -234,7 +234,7 @@ export type ContextMenuOpenChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { ContextMenuSelectDetail } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuSelectDetail = {} as ContextMenuSelectDetail;
+ * declare const value: ContextMenuSelectDetail;
  * ```
  */
 export type ContextMenuSelectDetail = PrimitiveChangeDetail<ContextMenuSelectReason, string>;
@@ -248,7 +248,7 @@ export type ContextMenuSelectDetail = PrimitiveChangeDetail<ContextMenuSelectRea
  * ```ts
  * import type { ContextMenuChangeOptions } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuChangeOptions = {} as ContextMenuChangeOptions;
+ * declare const value: ContextMenuChangeOptions;
  * ```
  */
 export interface ContextMenuChangeOptions {
@@ -265,7 +265,7 @@ export interface ContextMenuChangeOptions {
  * ```ts
  * import type { ContextMenuOpenChangeResult } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuOpenChangeResult = {} as ContextMenuOpenChangeResult;
+ * declare const value: ContextMenuOpenChangeResult;
  * ```
  */
 export interface ContextMenuOpenChangeResult {
@@ -284,7 +284,7 @@ export interface ContextMenuOpenChangeResult {
  * ```ts
  * import type { ContextMenuSelectResult } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuSelectResult = {} as ContextMenuSelectResult;
+ * declare const value: ContextMenuSelectResult;
  * ```
  */
 export interface ContextMenuSelectResult {
@@ -303,7 +303,7 @@ export interface ContextMenuSelectResult {
  * ```ts
  * import type { ContextMenuMoveResult } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuMoveResult = {} as ContextMenuMoveResult;
+ * declare const value: ContextMenuMoveResult;
  * ```
  */
 export interface ContextMenuMoveResult {
@@ -320,7 +320,7 @@ export interface ContextMenuMoveResult {
  * ```ts
  * import type { ContextMenuTypeaheadOptions } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuTypeaheadOptions = {} as ContextMenuTypeaheadOptions;
+ * declare const value: ContextMenuTypeaheadOptions;
  * ```
  */
 export interface ContextMenuTypeaheadOptions {
@@ -340,7 +340,7 @@ export interface ContextMenuTypeaheadOptions {
  * ```ts
  * import type { ContextMenuTypeaheadResult } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuTypeaheadResult = {} as ContextMenuTypeaheadResult;
+ * declare const value: ContextMenuTypeaheadResult;
  * ```
  */
 export interface ContextMenuTypeaheadResult extends ContextMenuMoveResult {
@@ -356,7 +356,7 @@ export interface ContextMenuTypeaheadResult extends ContextMenuMoveResult {
  * ```ts
  * import type { ContextMenuPrimitiveAttributes } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuPrimitiveAttributes = {} as ContextMenuPrimitiveAttributes;
+ * declare const value: ContextMenuPrimitiveAttributes;
  * ```
  */
 export type ContextMenuPrimitiveAttributes = PrimitiveDataAttributes &
@@ -371,7 +371,7 @@ export type ContextMenuPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { ContextMenuTriggerEvent } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuTriggerEvent = {} as ContextMenuTriggerEvent;
+ * declare const value: ContextMenuTriggerEvent;
  * ```
  */
 export type ContextMenuTriggerEvent = Event &
@@ -395,7 +395,7 @@ export type ContextMenuTriggerEvent = Event &
  * ```ts
  * import type { ContextMenuItemEvent } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuItemEvent = {} as ContextMenuItemEvent;
+ * declare const value: ContextMenuItemEvent;
  * ```
  */
 export type ContextMenuItemEvent = Event;
@@ -409,7 +409,7 @@ export type ContextMenuItemEvent = Event;
  * ```ts
  * import type { ContextMenuKeyboardEvent } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuKeyboardEvent = {} as ContextMenuKeyboardEvent;
+ * declare const value: ContextMenuKeyboardEvent;
  * ```
  */
 export type ContextMenuKeyboardEvent = Event & {
@@ -426,7 +426,7 @@ export type ContextMenuKeyboardEvent = Event & {
  * ```ts
  * import type { ContextMenuFocusEvent } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuFocusEvent = {} as ContextMenuFocusEvent;
+ * declare const value: ContextMenuFocusEvent;
  * ```
  */
 export type ContextMenuFocusEvent = Event & {
@@ -451,7 +451,7 @@ export type ContextMenuFocusEvent = Event & {
  * ```ts
  * import type { ContextMenuFocusOptions } from '@kovojs/headless-ui/context-menu';
  *
- * const value: ContextMenuFocusOptions = {} as ContextMenuFocusOptions;
+ * declare const value: ContextMenuFocusOptions;
  * ```
  */
 export interface ContextMenuFocusOptions {
@@ -468,7 +468,7 @@ export interface ContextMenuFocusOptions {
  * ```ts
  * import { contextMenuRootAttributes } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuRootAttributes>[0];
+ * declare const input: Parameters<typeof contextMenuRootAttributes>[0];
  * const result = contextMenuRootAttributes(input);
  * ```
  */
@@ -492,7 +492,7 @@ export function contextMenuRootAttributes(
  * ```ts
  * import { contextMenuTriggerAttributes } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuTriggerAttributes>[0];
+ * declare const input: Parameters<typeof contextMenuTriggerAttributes>[0];
  * const result = contextMenuTriggerAttributes(input);
  * ```
  */
@@ -531,7 +531,7 @@ export function contextMenuTriggerAttributes(
  * ```ts
  * import { contextMenuContentAttributes } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuContentAttributes>[0];
+ * declare const input: Parameters<typeof contextMenuContentAttributes>[0];
  * const result = contextMenuContentAttributes(input);
  * ```
  */
@@ -565,7 +565,7 @@ export function contextMenuContentAttributes(
  * ```ts
  * import { contextMenuItemAttributes } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuItemAttributes>[0];
+ * declare const input: Parameters<typeof contextMenuItemAttributes>[0];
  * const result = contextMenuItemAttributes(input);
  * ```
  */
@@ -597,7 +597,7 @@ export function contextMenuItemAttributes(
  * ```ts
  * import { contextMenuGroupAttributes } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuGroupAttributes>[0];
+ * declare const input: Parameters<typeof contextMenuGroupAttributes>[0];
  * const result = contextMenuGroupAttributes(input);
  * ```
  */
@@ -621,7 +621,7 @@ export function contextMenuGroupAttributes(
  * ```ts
  * import { contextMenuSeparatorAttributes } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuSeparatorAttributes>[0];
+ * declare const input: Parameters<typeof contextMenuSeparatorAttributes>[0];
  * const result = contextMenuSeparatorAttributes(input);
  * ```
  */
@@ -643,7 +643,7 @@ export function contextMenuSeparatorAttributes(
  * ```ts
  * import { contextMenuItemHighlighted } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuItemHighlighted>[0];
+ * declare const input: Parameters<typeof contextMenuItemHighlighted>[0];
  * const result = contextMenuItemHighlighted(input);
  * ```
  */
@@ -660,11 +660,11 @@ export function contextMenuItemHighlighted(options: ContextMenuItemAttributeOpti
  * ```ts
  * import { setContextMenuOpen } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof setContextMenuOpen>[0];
- * const state = {} as Parameters<typeof setContextMenuOpen>[1];
- * const options = {} as Parameters<typeof setContextMenuOpen>[2];
- * const detail = {} as Parameters<typeof setContextMenuOpen>[3];
- * const extra = {} as Parameters<typeof setContextMenuOpen>[4];
+ * declare const input: Parameters<typeof setContextMenuOpen>[0];
+ * declare const state: Parameters<typeof setContextMenuOpen>[1];
+ * declare const options: Parameters<typeof setContextMenuOpen>[2];
+ * declare const detail: Parameters<typeof setContextMenuOpen>[3];
+ * declare const extra: Parameters<typeof setContextMenuOpen>[4];
  * const result = setContextMenuOpen(input, state, options, detail, extra);
  * ```
  *
@@ -701,10 +701,10 @@ export function setContextMenuOpen(
  * ```ts
  * import { toggleContextMenu } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof toggleContextMenu>[0];
- * const state = {} as Parameters<typeof toggleContextMenu>[1];
- * const options = {} as Parameters<typeof toggleContextMenu>[2];
- * const detail = {} as Parameters<typeof toggleContextMenu>[3];
+ * declare const input: Parameters<typeof toggleContextMenu>[0];
+ * declare const state: Parameters<typeof toggleContextMenu>[1];
+ * declare const options: Parameters<typeof toggleContextMenu>[2];
+ * declare const detail: Parameters<typeof toggleContextMenu>[3];
  * const result = toggleContextMenu(input, state, options, detail);
  * ```
  *
@@ -728,10 +728,10 @@ export function toggleContextMenu(
  * ```ts
  * import { selectContextMenuItem } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof selectContextMenuItem>[0];
- * const state = {} as Parameters<typeof selectContextMenuItem>[1];
- * const options = {} as Parameters<typeof selectContextMenuItem>[2];
- * const detail = {} as Parameters<typeof selectContextMenuItem>[3];
+ * declare const input: Parameters<typeof selectContextMenuItem>[0];
+ * declare const state: Parameters<typeof selectContextMenuItem>[1];
+ * declare const options: Parameters<typeof selectContextMenuItem>[2];
+ * declare const detail: Parameters<typeof selectContextMenuItem>[3];
  * const result = selectContextMenuItem(input, state, options, detail);
  * ```
  *
@@ -796,9 +796,9 @@ export function selectContextMenuItem(
  * ```ts
  * import { contextMenuMove } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuMove>[0];
- * const state = {} as Parameters<typeof contextMenuMove>[1];
- * const options = {} as Parameters<typeof contextMenuMove>[2];
+ * declare const input: Parameters<typeof contextMenuMove>[0];
+ * declare const state: Parameters<typeof contextMenuMove>[1];
+ * declare const options: Parameters<typeof contextMenuMove>[2];
  * const result = contextMenuMove(input, state, options);
  * ```
  *
@@ -826,9 +826,9 @@ export function contextMenuMove(
  * ```ts
  * import { contextMenuTypeahead } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuTypeahead>[0];
- * const state = {} as Parameters<typeof contextMenuTypeahead>[1];
- * const options = {} as Parameters<typeof contextMenuTypeahead>[2];
+ * declare const input: Parameters<typeof contextMenuTypeahead>[0];
+ * declare const state: Parameters<typeof contextMenuTypeahead>[1];
+ * declare const options: Parameters<typeof contextMenuTypeahead>[2];
  * const result = contextMenuTypeahead(input, state, options);
  * ```
  *
@@ -862,9 +862,9 @@ export function contextMenuTypeahead(
  * ```ts
  * import { contextMenuTriggerContextMenu } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuTriggerContextMenu>[0];
- * const state = {} as Parameters<typeof contextMenuTriggerContextMenu>[1];
- * const options = {} as Parameters<typeof contextMenuTriggerContextMenu>[2];
+ * declare const input: Parameters<typeof contextMenuTriggerContextMenu>[0];
+ * declare const state: Parameters<typeof contextMenuTriggerContextMenu>[1];
+ * declare const options: Parameters<typeof contextMenuTriggerContextMenu>[2];
  * const result = contextMenuTriggerContextMenu(input, state, options);
  * ```
  *
@@ -906,9 +906,9 @@ export function contextMenuTriggerContextMenu(
  * ```ts
  * import { contextMenuTriggerKeyDown } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuTriggerKeyDown>[0];
- * const state = {} as Parameters<typeof contextMenuTriggerKeyDown>[1];
- * const options = {} as Parameters<typeof contextMenuTriggerKeyDown>[2];
+ * declare const input: Parameters<typeof contextMenuTriggerKeyDown>[0];
+ * declare const state: Parameters<typeof contextMenuTriggerKeyDown>[1];
+ * declare const options: Parameters<typeof contextMenuTriggerKeyDown>[2];
  * const result = contextMenuTriggerKeyDown(input, state, options);
  * ```
  *
@@ -941,9 +941,9 @@ export function contextMenuTriggerKeyDown(
  * ```ts
  * import { contextMenuItemClick } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuItemClick>[0];
- * const state = {} as Parameters<typeof contextMenuItemClick>[1];
- * const options = {} as Parameters<typeof contextMenuItemClick>[2];
+ * declare const input: Parameters<typeof contextMenuItemClick>[0];
+ * declare const state: Parameters<typeof contextMenuItemClick>[1];
+ * declare const options: Parameters<typeof contextMenuItemClick>[2];
  * const result = contextMenuItemClick(input, state, options);
  * ```
  *
@@ -975,9 +975,9 @@ export function contextMenuItemClick(
  * ```ts
  * import { contextMenuItemKeyDown } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuItemKeyDown>[0];
- * const state = {} as Parameters<typeof contextMenuItemKeyDown>[1];
- * const options = {} as Parameters<typeof contextMenuItemKeyDown>[2];
+ * declare const input: Parameters<typeof contextMenuItemKeyDown>[0];
+ * declare const state: Parameters<typeof contextMenuItemKeyDown>[1];
+ * declare const options: Parameters<typeof contextMenuItemKeyDown>[2];
  * const result = contextMenuItemKeyDown(input, state, options);
  * ```
  *
@@ -1008,9 +1008,9 @@ export function contextMenuItemKeyDown(
  * ```ts
  * import { contextMenuKeyDown } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuKeyDown>[0];
- * const state = {} as Parameters<typeof contextMenuKeyDown>[1];
- * const options = {} as Parameters<typeof contextMenuKeyDown>[2];
+ * declare const input: Parameters<typeof contextMenuKeyDown>[0];
+ * declare const state: Parameters<typeof contextMenuKeyDown>[1];
+ * declare const options: Parameters<typeof contextMenuKeyDown>[2];
  * const result = contextMenuKeyDown(input, state, options);
  * ```
  *
@@ -1045,7 +1045,7 @@ export function contextMenuKeyDown(
  * ```ts
  * import { contextMenuPointFromEvent } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuPointFromEvent>[0];
+ * declare const input: Parameters<typeof contextMenuPointFromEvent>[0];
  * const result = contextMenuPointFromEvent(input);
  * ```
  */
@@ -1062,9 +1062,9 @@ export function contextMenuPointFromEvent(event: ContextMenuTriggerEvent): Conte
  * ```ts
  * import { contextMenuFocusElement } from '@kovojs/headless-ui/context-menu';
  *
- * const input = {} as Parameters<typeof contextMenuFocusElement>[0];
- * const state = {} as Parameters<typeof contextMenuFocusElement>[1];
- * const options = {} as Parameters<typeof contextMenuFocusElement>[2];
+ * declare const input: Parameters<typeof contextMenuFocusElement>[0];
+ * declare const state: Parameters<typeof contextMenuFocusElement>[1];
+ * declare const options: Parameters<typeof contextMenuFocusElement>[2];
  * const result = contextMenuFocusElement(input, state, options);
  * ```
  */

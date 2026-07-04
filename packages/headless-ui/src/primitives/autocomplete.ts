@@ -23,7 +23,7 @@ import { activeDescendantId, describedByIds } from '../lib/active-descendant.js'
  * ```ts
  * import type { AutocompleteItem } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteItem = {} as AutocompleteItem;
+ * declare const value: AutocompleteItem;
  * ```
  *
  *
@@ -45,7 +45,7 @@ export interface AutocompleteItem {
  * ```ts
  * import type { AutocompleteState } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteState = {} as AutocompleteState;
+ * declare const value: AutocompleteState;
  * ```
  */
 export interface AutocompleteState {
@@ -72,7 +72,7 @@ export interface AutocompleteState {
  * ```ts
  * import type { AutocompleteRootAttributeOptions } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteRootAttributeOptions = {} as AutocompleteRootAttributeOptions;
+ * declare const value: AutocompleteRootAttributeOptions;
  * ```
  */
 export interface AutocompleteRootAttributeOptions extends AutocompleteState {
@@ -88,7 +88,7 @@ export interface AutocompleteRootAttributeOptions extends AutocompleteState {
  * ```ts
  * import type { AutocompleteInputAttributeOptions } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteInputAttributeOptions = {} as AutocompleteInputAttributeOptions;
+ * declare const value: AutocompleteInputAttributeOptions;
  * ```
  */
 export interface AutocompleteInputAttributeOptions extends AutocompleteState {
@@ -108,7 +108,7 @@ export interface AutocompleteInputAttributeOptions extends AutocompleteState {
  * ```ts
  * import type { AutocompleteListAttributeOptions } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteListAttributeOptions = {} as AutocompleteListAttributeOptions;
+ * declare const value: AutocompleteListAttributeOptions;
  * ```
  */
 export interface AutocompleteListAttributeOptions extends AutocompleteState {
@@ -125,7 +125,7 @@ export interface AutocompleteListAttributeOptions extends AutocompleteState {
  * ```ts
  * import type { AutocompleteOptionAttributeOptions } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteOptionAttributeOptions = {} as AutocompleteOptionAttributeOptions;
+ * declare const value: AutocompleteOptionAttributeOptions;
  * ```
  */
 export interface AutocompleteOptionAttributeOptions extends AutocompleteState {
@@ -144,7 +144,7 @@ export interface AutocompleteOptionAttributeOptions extends AutocompleteState {
  * ```ts
  * import type { AutocompleteValueAttributeOptions } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteValueAttributeOptions = {} as AutocompleteValueAttributeOptions;
+ * declare const value: AutocompleteValueAttributeOptions;
  * ```
  */
 export interface AutocompleteValueAttributeOptions extends AutocompleteState {
@@ -160,7 +160,7 @@ export interface AutocompleteValueAttributeOptions extends AutocompleteState {
  * ```ts
  * import type { AutocompleteInputChangeReason } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteInputChangeReason = {} as AutocompleteInputChangeReason;
+ * declare const value: AutocompleteInputChangeReason;
  * ```
  */
 export type AutocompleteInputChangeReason = 'input' | 'option-select' | 'programmatic';
@@ -174,7 +174,7 @@ export type AutocompleteInputChangeReason = 'input' | 'option-select' | 'program
  * ```ts
  * import type { AutocompleteValueChangeReason } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteValueChangeReason = {} as AutocompleteValueChangeReason;
+ * declare const value: AutocompleteValueChangeReason;
  * ```
  */
 export type AutocompleteValueChangeReason = 'option-select' | 'programmatic' | 'typeahead';
@@ -188,7 +188,7 @@ export type AutocompleteValueChangeReason = 'option-select' | 'programmatic' | '
  * ```ts
  * import type { AutocompleteOpenChangeReason } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteOpenChangeReason = {} as AutocompleteOpenChangeReason;
+ * declare const value: AutocompleteOpenChangeReason;
  * ```
  */
 export type AutocompleteOpenChangeReason =
@@ -208,7 +208,7 @@ export type AutocompleteOpenChangeReason =
  * ```ts
  * import type { AutocompleteInputChangeDetail } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteInputChangeDetail = {} as AutocompleteInputChangeDetail;
+ * declare const value: AutocompleteInputChangeDetail;
  * ```
  */
 export type AutocompleteInputChangeDetail = PrimitiveChangeDetail<
@@ -225,7 +225,7 @@ export type AutocompleteInputChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { AutocompleteValueChangeDetail } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteValueChangeDetail = {} as AutocompleteValueChangeDetail;
+ * declare const value: AutocompleteValueChangeDetail;
  * ```
  */
 export type AutocompleteValueChangeDetail = PrimitiveChangeDetail<
@@ -242,7 +242,7 @@ export type AutocompleteValueChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { AutocompleteOpenChangeDetail } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteOpenChangeDetail = {} as AutocompleteOpenChangeDetail;
+ * declare const value: AutocompleteOpenChangeDetail;
  * ```
  */
 export type AutocompleteOpenChangeDetail = PrimitiveChangeDetail<
@@ -259,7 +259,7 @@ export type AutocompleteOpenChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { AutocompleteChangeOptions } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteChangeOptions = {} as AutocompleteChangeOptions;
+ * declare const value: AutocompleteChangeOptions;
  * ```
  */
 export interface AutocompleteChangeOptions {
@@ -277,7 +277,7 @@ export interface AutocompleteChangeOptions {
  * ```ts
  * import type { AutocompleteInputChangeResult } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteInputChangeResult = {} as AutocompleteInputChangeResult;
+ * declare const value: AutocompleteInputChangeResult;
  * ```
  */
 export interface AutocompleteInputChangeResult {
@@ -295,7 +295,7 @@ export interface AutocompleteInputChangeResult {
  * ```ts
  * import type { AutocompleteValueChangeResult } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteValueChangeResult = {} as AutocompleteValueChangeResult;
+ * declare const value: AutocompleteValueChangeResult;
  * ```
  */
 export interface AutocompleteValueChangeResult {
@@ -313,7 +313,7 @@ export interface AutocompleteValueChangeResult {
  * ```ts
  * import type { AutocompleteOpenChangeResult } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteOpenChangeResult = {} as AutocompleteOpenChangeResult;
+ * declare const value: AutocompleteOpenChangeResult;
  * ```
  */
 export interface AutocompleteOpenChangeResult {
@@ -331,7 +331,7 @@ export interface AutocompleteOpenChangeResult {
  * ```ts
  * import type { AutocompleteMoveResult } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteMoveResult = {} as AutocompleteMoveResult;
+ * declare const value: AutocompleteMoveResult;
  * ```
  */
 export interface AutocompleteMoveResult {
@@ -348,7 +348,7 @@ export interface AutocompleteMoveResult {
  * ```ts
  * import type { AutocompleteOptionSelectResult } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteOptionSelectResult = {} as AutocompleteOptionSelectResult;
+ * declare const value: AutocompleteOptionSelectResult;
  * ```
  */
 export interface AutocompleteOptionSelectResult {
@@ -366,7 +366,7 @@ export interface AutocompleteOptionSelectResult {
  * ```ts
  * import type { AutocompleteTypeaheadOptions } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteTypeaheadOptions = {} as AutocompleteTypeaheadOptions;
+ * declare const value: AutocompleteTypeaheadOptions;
  * ```
  */
 export interface AutocompleteTypeaheadOptions {
@@ -386,7 +386,7 @@ export interface AutocompleteTypeaheadOptions {
  * ```ts
  * import type { AutocompleteTypeaheadResult } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteTypeaheadResult = {} as AutocompleteTypeaheadResult;
+ * declare const value: AutocompleteTypeaheadResult;
  * ```
  */
 export interface AutocompleteTypeaheadResult {
@@ -404,7 +404,7 @@ export interface AutocompleteTypeaheadResult {
  * ```ts
  * import type { AutocompletePrimitiveAttributes } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompletePrimitiveAttributes = {} as AutocompletePrimitiveAttributes;
+ * declare const value: AutocompletePrimitiveAttributes;
  * ```
  */
 export type AutocompletePrimitiveAttributes = PrimitiveDataAttributes &
@@ -419,7 +419,7 @@ export type AutocompletePrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { AutocompleteInputEvent } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteInputEvent = {} as AutocompleteInputEvent;
+ * declare const value: AutocompleteInputEvent;
  * ```
  */
 export type AutocompleteInputEvent = Event & {
@@ -436,7 +436,7 @@ export type AutocompleteInputEvent = Event & {
  * ```ts
  * import type { AutocompleteOptionEvent } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteOptionEvent = {} as AutocompleteOptionEvent;
+ * declare const value: AutocompleteOptionEvent;
  * ```
  */
 export type AutocompleteOptionEvent = Event;
@@ -450,7 +450,7 @@ export type AutocompleteOptionEvent = Event;
  * ```ts
  * import type { AutocompleteKeyboardEvent } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteKeyboardEvent = {} as AutocompleteKeyboardEvent;
+ * declare const value: AutocompleteKeyboardEvent;
  * ```
  */
 export type AutocompleteKeyboardEvent = Event & { readonly key: string };
@@ -464,7 +464,7 @@ export type AutocompleteKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import type { AutocompleteKeyboardResult } from '@kovojs/headless-ui/autocomplete';
  *
- * const value: AutocompleteKeyboardResult = {} as AutocompleteKeyboardResult;
+ * declare const value: AutocompleteKeyboardResult;
  * ```
  */
 export type AutocompleteKeyboardResult =
@@ -481,7 +481,7 @@ export type AutocompleteKeyboardResult =
  * ```ts
  * import { autocompleteOptionSelected } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteOptionSelected>[0];
+ * declare const input: Parameters<typeof autocompleteOptionSelected>[0];
  * const result = autocompleteOptionSelected(input);
  * ```
  */
@@ -498,7 +498,7 @@ export function autocompleteOptionSelected(options: AutocompleteOptionAttributeO
  * ```ts
  * import { autocompleteOptionHighlighted } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteOptionHighlighted>[0];
+ * declare const input: Parameters<typeof autocompleteOptionHighlighted>[0];
  * const result = autocompleteOptionHighlighted(input);
  * ```
  */
@@ -517,7 +517,7 @@ export function autocompleteOptionHighlighted(
  * ```ts
  * import { autocompleteValueText } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteValueText>[0];
+ * declare const input: Parameters<typeof autocompleteValueText>[0];
  * const result = autocompleteValueText(input);
  * ```
  */
@@ -537,7 +537,7 @@ export function autocompleteValueText(state: AutocompleteState): string {
  * ```ts
  * import { autocompleteSuggestions } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteSuggestions>[0];
+ * declare const input: Parameters<typeof autocompleteSuggestions>[0];
  * const result = autocompleteSuggestions(input);
  * ```
  */
@@ -561,7 +561,7 @@ export function autocompleteSuggestions(state: AutocompleteState): readonly Auto
  * ```ts
  * import { autocompleteRootAttributes } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteRootAttributes>[0];
+ * declare const input: Parameters<typeof autocompleteRootAttributes>[0];
  * const result = autocompleteRootAttributes(input);
  * ```
  */
@@ -585,7 +585,7 @@ export function autocompleteRootAttributes(
  * ```ts
  * import { autocompleteInputAttributes } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteInputAttributes>[0];
+ * declare const input: Parameters<typeof autocompleteInputAttributes>[0];
  * const result = autocompleteInputAttributes(input);
  * ```
  */
@@ -634,7 +634,7 @@ export function autocompleteInputAttributes(
  * ```ts
  * import { autocompleteListAttributes } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteListAttributes>[0];
+ * declare const input: Parameters<typeof autocompleteListAttributes>[0];
  * const result = autocompleteListAttributes(input);
  * ```
  */
@@ -659,7 +659,7 @@ export function autocompleteListAttributes(
  * ```ts
  * import { autocompleteOptionAttributes } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteOptionAttributes>[0];
+ * declare const input: Parameters<typeof autocompleteOptionAttributes>[0];
  * const result = autocompleteOptionAttributes(input);
  * ```
  */
@@ -695,7 +695,7 @@ export function autocompleteOptionAttributes(
  * ```ts
  * import { autocompleteValueAttributes } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteValueAttributes>[0];
+ * declare const input: Parameters<typeof autocompleteValueAttributes>[0];
  * const result = autocompleteValueAttributes(input);
  * ```
  */
@@ -717,10 +717,10 @@ export function autocompleteValueAttributes(
  * ```ts
  * import { setAutocompleteInputValue } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof setAutocompleteInputValue>[0];
- * const state = {} as Parameters<typeof setAutocompleteInputValue>[1];
- * const options = {} as Parameters<typeof setAutocompleteInputValue>[2];
- * const detail = {} as Parameters<typeof setAutocompleteInputValue>[3];
+ * declare const input: Parameters<typeof setAutocompleteInputValue>[0];
+ * declare const state: Parameters<typeof setAutocompleteInputValue>[1];
+ * declare const options: Parameters<typeof setAutocompleteInputValue>[2];
+ * declare const detail: Parameters<typeof setAutocompleteInputValue>[3];
  * const result = setAutocompleteInputValue(input, state, options, detail);
  * ```
  *
@@ -757,10 +757,10 @@ export function setAutocompleteInputValue(
  * ```ts
  * import { setAutocompleteValue } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof setAutocompleteValue>[0];
- * const state = {} as Parameters<typeof setAutocompleteValue>[1];
- * const options = {} as Parameters<typeof setAutocompleteValue>[2];
- * const detail = {} as Parameters<typeof setAutocompleteValue>[3];
+ * declare const input: Parameters<typeof setAutocompleteValue>[0];
+ * declare const state: Parameters<typeof setAutocompleteValue>[1];
+ * declare const options: Parameters<typeof setAutocompleteValue>[2];
+ * declare const detail: Parameters<typeof setAutocompleteValue>[3];
  * const result = setAutocompleteValue(input, state, options, detail);
  * ```
  *
@@ -793,10 +793,10 @@ export function setAutocompleteValue(
  * ```ts
  * import { setAutocompleteOpen } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof setAutocompleteOpen>[0];
- * const state = {} as Parameters<typeof setAutocompleteOpen>[1];
- * const options = {} as Parameters<typeof setAutocompleteOpen>[2];
- * const detail = {} as Parameters<typeof setAutocompleteOpen>[3];
+ * declare const input: Parameters<typeof setAutocompleteOpen>[0];
+ * declare const state: Parameters<typeof setAutocompleteOpen>[1];
+ * declare const options: Parameters<typeof setAutocompleteOpen>[2];
+ * declare const detail: Parameters<typeof setAutocompleteOpen>[3];
  * const result = setAutocompleteOpen(input, state, options, detail);
  * ```
  *
@@ -822,9 +822,9 @@ export function setAutocompleteOpen(
  * ```ts
  * import { selectAutocompleteOption } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof selectAutocompleteOption>[0];
- * const state = {} as Parameters<typeof selectAutocompleteOption>[1];
- * const options = {} as Parameters<typeof selectAutocompleteOption>[2];
+ * declare const input: Parameters<typeof selectAutocompleteOption>[0];
+ * declare const state: Parameters<typeof selectAutocompleteOption>[1];
+ * declare const options: Parameters<typeof selectAutocompleteOption>[2];
  * const result = selectAutocompleteOption(input, state, options);
  * ```
  *
@@ -892,9 +892,9 @@ export function selectAutocompleteOption(
  * ```ts
  * import { autocompleteTypeahead } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteTypeahead>[0];
- * const state = {} as Parameters<typeof autocompleteTypeahead>[1];
- * const options = {} as Parameters<typeof autocompleteTypeahead>[2];
+ * declare const input: Parameters<typeof autocompleteTypeahead>[0];
+ * declare const state: Parameters<typeof autocompleteTypeahead>[1];
+ * declare const options: Parameters<typeof autocompleteTypeahead>[2];
  * const result = autocompleteTypeahead(input, state, options);
  * ```
  *
@@ -925,9 +925,9 @@ export function autocompleteTypeahead(
  * ```ts
  * import { autocompleteMove } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteMove>[0];
- * const state = {} as Parameters<typeof autocompleteMove>[1];
- * const options = {} as Parameters<typeof autocompleteMove>[2];
+ * declare const input: Parameters<typeof autocompleteMove>[0];
+ * declare const state: Parameters<typeof autocompleteMove>[1];
+ * declare const options: Parameters<typeof autocompleteMove>[2];
  * const result = autocompleteMove(input, state, options);
  * ```
  *
@@ -953,9 +953,9 @@ export function autocompleteMove(
  * ```ts
  * import { autocompleteInput } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteInput>[0];
- * const state = {} as Parameters<typeof autocompleteInput>[1];
- * const options = {} as Parameters<typeof autocompleteInput>[2];
+ * declare const input: Parameters<typeof autocompleteInput>[0];
+ * declare const state: Parameters<typeof autocompleteInput>[1];
+ * declare const options: Parameters<typeof autocompleteInput>[2];
  * const result = autocompleteInput(input, state, options);
  * ```
  *
@@ -992,9 +992,9 @@ export function autocompleteInput(
  * ```ts
  * import { autocompleteOptionClick } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteOptionClick>[0];
- * const state = {} as Parameters<typeof autocompleteOptionClick>[1];
- * const options = {} as Parameters<typeof autocompleteOptionClick>[2];
+ * declare const input: Parameters<typeof autocompleteOptionClick>[0];
+ * declare const state: Parameters<typeof autocompleteOptionClick>[1];
+ * declare const options: Parameters<typeof autocompleteOptionClick>[2];
  * const result = autocompleteOptionClick(input, state, options);
  * ```
  *
@@ -1026,9 +1026,9 @@ export function autocompleteOptionClick(
  * ```ts
  * import { autocompleteKeyDown } from '@kovojs/headless-ui/autocomplete';
  *
- * const input = {} as Parameters<typeof autocompleteKeyDown>[0];
- * const state = {} as Parameters<typeof autocompleteKeyDown>[1];
- * const options = {} as Parameters<typeof autocompleteKeyDown>[2];
+ * declare const input: Parameters<typeof autocompleteKeyDown>[0];
+ * declare const state: Parameters<typeof autocompleteKeyDown>[1];
+ * declare const options: Parameters<typeof autocompleteKeyDown>[2];
  * const result = autocompleteKeyDown(input, state, options);
  * ```
  *

@@ -16,7 +16,7 @@ import {
  * ```ts
  * import type { SwitchChangeReason } from '@kovojs/headless-ui/switch';
  *
- * const value: SwitchChangeReason = {} as SwitchChangeReason;
+ * declare const value: SwitchChangeReason;
  * ```
  */
 export type SwitchChangeReason = 'programmatic' | 'trigger-click';
@@ -30,7 +30,7 @@ export type SwitchChangeReason = 'programmatic' | 'trigger-click';
  * ```ts
  * import type { SwitchChangeDetail } from '@kovojs/headless-ui/switch';
  *
- * const value: SwitchChangeDetail = {} as SwitchChangeDetail;
+ * declare const value: SwitchChangeDetail;
  * ```
  */
 export type SwitchChangeDetail = PrimitiveChangeDetail<SwitchChangeReason, boolean>;
@@ -44,7 +44,7 @@ export type SwitchChangeDetail = PrimitiveChangeDetail<SwitchChangeReason, boole
  * ```ts
  * import type { SwitchState } from '@kovojs/headless-ui/switch';
  *
- * const value: SwitchState = {} as SwitchState;
+ * declare const value: SwitchState;
  * ```
  */
 export interface SwitchState {
@@ -65,7 +65,7 @@ export interface SwitchState {
  * ```ts
  * import type { SwitchChangeOptions } from '@kovojs/headless-ui/switch';
  *
- * const value: SwitchChangeOptions = {} as SwitchChangeOptions;
+ * declare const value: SwitchChangeOptions;
  * ```
  */
 export interface SwitchChangeOptions {
@@ -81,7 +81,7 @@ export interface SwitchChangeOptions {
  * ```ts
  * import type { SwitchChangeResult } from '@kovojs/headless-ui/switch';
  *
- * const value: SwitchChangeResult = {} as SwitchChangeResult;
+ * declare const value: SwitchChangeResult;
  * ```
  */
 export interface SwitchChangeResult {
@@ -99,7 +99,7 @@ export interface SwitchChangeResult {
  * ```ts
  * import type { SwitchPrimitiveAttributes } from '@kovojs/headless-ui/switch';
  *
- * const value: SwitchPrimitiveAttributes = {} as SwitchPrimitiveAttributes;
+ * declare const value: SwitchPrimitiveAttributes;
  * ```
  */
 export type SwitchPrimitiveAttributes = PrimitiveDataAttributes &
@@ -114,7 +114,7 @@ export type SwitchPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { SwitchTriggerEvent } from '@kovojs/headless-ui/switch';
  *
- * const value: SwitchTriggerEvent = {} as SwitchTriggerEvent;
+ * declare const value: SwitchTriggerEvent;
  * ```
  */
 export type SwitchTriggerEvent = Event;
@@ -130,7 +130,7 @@ export type SwitchTriggerEvent = Event;
  * ```ts
  * import { switchRootAttributes } from '@kovojs/headless-ui/switch';
  *
- * const input = {} as Parameters<typeof switchRootAttributes>[0];
+ * declare const input: Parameters<typeof switchRootAttributes>[0];
  * const result = switchRootAttributes(input);
  * ```
  */
@@ -160,10 +160,10 @@ export function switchRootAttributes(state: SwitchState): SwitchPrimitiveAttribu
  * ```ts
  * import { setSwitchChecked } from '@kovojs/headless-ui/switch';
  *
- * const input = {} as Parameters<typeof setSwitchChecked>[0];
- * const state = {} as Parameters<typeof setSwitchChecked>[1];
- * const options = {} as Parameters<typeof setSwitchChecked>[2];
- * const detail = {} as Parameters<typeof setSwitchChecked>[3];
+ * declare const input: Parameters<typeof setSwitchChecked>[0];
+ * declare const state: Parameters<typeof setSwitchChecked>[1];
+ * declare const options: Parameters<typeof setSwitchChecked>[2];
+ * declare const detail: Parameters<typeof setSwitchChecked>[3];
  * const result = setSwitchChecked(input, state, options, detail);
  * ```
  *
@@ -196,9 +196,9 @@ export function setSwitchChecked(
  * ```ts
  * import { toggleSwitch } from '@kovojs/headless-ui/switch';
  *
- * const input = {} as Parameters<typeof toggleSwitch>[0];
- * const state = {} as Parameters<typeof toggleSwitch>[1];
- * const options = {} as Parameters<typeof toggleSwitch>[2];
+ * declare const input: Parameters<typeof toggleSwitch>[0];
+ * declare const state: Parameters<typeof toggleSwitch>[1];
+ * declare const options: Parameters<typeof toggleSwitch>[2];
  * const result = toggleSwitch(input, state, options);
  * ```
  *
@@ -219,9 +219,9 @@ export function toggleSwitch(
  * ```ts
  * import { switchTriggerClick } from '@kovojs/headless-ui/switch';
  *
- * const input = {} as Parameters<typeof switchTriggerClick>[0];
- * const state = {} as Parameters<typeof switchTriggerClick>[1];
- * const options = {} as Parameters<typeof switchTriggerClick>[2];
+ * declare const input: Parameters<typeof switchTriggerClick>[0];
+ * declare const state: Parameters<typeof switchTriggerClick>[1];
+ * declare const options: Parameters<typeof switchTriggerClick>[2];
  * const result = switchTriggerClick(input, state, options);
  * ```
  *

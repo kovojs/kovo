@@ -12,14 +12,14 @@ import {
 
 /**
  * The kind of graph subject a targeted `kovo explain` describes — a component,
- * request context, mutation, query, or page (SPEC.md §5.3).
+ * request context, mutation, query, page, or durable task (SPEC.md §5.3/§9.6).
  */
 export type ExplainKind = 'component' | 'context' | 'mutation' | 'page' | 'query' | 'task';
 
 /**
  * Options selecting which `kovo explain` view `kovoExplain` produces: a targeted
- * component/mutation/query/page subject, the `--endpoints` machine-ingress audit,
- * or one of the access audits (SPEC.md §5.3 and §11.4).
+ * component/mutation/query/page/task subject, the `--endpoints` machine-ingress
+ * audit, or one of the security review modes (SPEC.md §5.3 and §11.4).
  */
 export type KovoExplainOptions =
   | KovoAccessExplainOptions

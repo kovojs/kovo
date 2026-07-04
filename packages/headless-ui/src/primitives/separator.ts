@@ -9,7 +9,7 @@ import { dataOrientation, type PrimitiveDataAttributes } from '../lib/index.js';
  * ```ts
  * import type { SeparatorOrientation } from '@kovojs/headless-ui/separator';
  *
- * const value: SeparatorOrientation = {} as SeparatorOrientation;
+ * declare const value: SeparatorOrientation;
  * ```
  */
 export type SeparatorOrientation = 'horizontal' | 'vertical';
@@ -23,7 +23,7 @@ export type SeparatorOrientation = 'horizontal' | 'vertical';
  * ```ts
  * import type { SeparatorAttributeOptions } from '@kovojs/headless-ui/separator';
  *
- * const value: SeparatorAttributeOptions = {} as SeparatorAttributeOptions;
+ * declare const value: SeparatorAttributeOptions;
  * ```
  */
 export interface SeparatorAttributeOptions {
@@ -40,7 +40,7 @@ export interface SeparatorAttributeOptions {
  * ```ts
  * import type { SeparatorPrimitiveAttributes } from '@kovojs/headless-ui/separator';
  *
- * const value: SeparatorPrimitiveAttributes = {} as SeparatorPrimitiveAttributes;
+ * declare const value: SeparatorPrimitiveAttributes;
  * ```
  */
 export type SeparatorPrimitiveAttributes = PrimitiveDataAttributes &
@@ -57,7 +57,7 @@ export type SeparatorPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import { separatorRootAttributes } from '@kovojs/headless-ui/separator';
  *
- * const input = {} as Parameters<typeof separatorRootAttributes>[0];
+ * declare const input: Parameters<typeof separatorRootAttributes>[0];
  * const result = separatorRootAttributes(input);
  * ```
  */

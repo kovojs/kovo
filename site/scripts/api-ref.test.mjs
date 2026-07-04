@@ -264,6 +264,30 @@ describe('api-ref generator', () => {
     expect(uiPage).not.toContain('const state: SelectStateProps = {};');
   });
 
+  it('does not render mechanical cast-placeholder examples for public headless/ui refs', () => {
+    expect(headlessUiPage).not.toMatch(/\{\} as [A-Z][A-Za-z0-9_$]*/);
+    expect(headlessUiPage).not.toMatch(/\{\} as Parameters<typeof [A-Za-z0-9_$]+>\[\d+\]/);
+    expect(uiPage).not.toMatch(/\{\} as [A-Z][A-Za-z0-9_$]*/);
+    expect(uiPage).not.toMatch(/\{\} as Parameters<typeof [A-Za-z0-9_$]+>\[\d+\]/);
+  });
+
+  it('documents every public @kovojs/drizzle export including runtime metadata helpers', () => {
+    const drizzle = result.packages.find((pkg) => pkg.name === '@kovojs/drizzle');
+    expect(drizzle.exports).toBe(38);
+    expect(drizzle.documented).toBe(38);
+    expect(drizzlePage).toContain('runtime database metadata extraction');
+    for (const name of [
+      'extractKovoRuntimeDbMetadata',
+      'KovoRuntimeDbMetadata',
+      'KovoRuntimeDbTable',
+      'KovoRuntimeAuthorizationClassification',
+    ]) {
+      expect(drizzlePage, `missing Drizzle runtime metadata export "${name}"`).toContain(
+        `#### \`${name}\``,
+      );
+    }
+  });
+
   it('emits a per-package sidebar manifest grouped by subpath, with anchors and source links', async () => {
     const manifest = JSON.parse(await readFile(path.join(outDir, 'core.sidebar.json'), 'utf8'));
     expect(manifest.package).toBe('@kovojs/core');
@@ -324,7 +348,7 @@ describe('api-ref generator', () => {
     // Remove), so those packages' documented floors drop by one.
     const expected = {
       '@kovojs/core': 68,
-      '@kovojs/drizzle': 4,
+      '@kovojs/drizzle': 38,
       '@kovojs/headless-ui': 103,
       '@kovojs/icons': 1,
       '@kovojs/browser': 39,

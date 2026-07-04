@@ -16,7 +16,7 @@ import {
  * ```ts
  * import type { HoverCardChangeReason } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardChangeReason = {} as HoverCardChangeReason;
+ * declare const value: HoverCardChangeReason;
  * ```
  */
 export type HoverCardChangeReason =
@@ -40,7 +40,7 @@ export type HoverCardChangeReason =
  * ```ts
  * import type { HoverCardChangeDetail } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardChangeDetail = {} as HoverCardChangeDetail;
+ * declare const value: HoverCardChangeDetail;
  * ```
  */
 export type HoverCardChangeDetail = PrimitiveChangeDetail<HoverCardChangeReason, boolean>;
@@ -54,7 +54,7 @@ export type HoverCardChangeDetail = PrimitiveChangeDetail<HoverCardChangeReason,
  * ```ts
  * import type { HoverCardState } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardState = {} as HoverCardState;
+ * declare const value: HoverCardState;
  * ```
  */
 export interface HoverCardState {
@@ -71,7 +71,7 @@ export interface HoverCardState {
  * ```ts
  * import type { HoverCardAttributeOptions } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardAttributeOptions = {} as HoverCardAttributeOptions;
+ * declare const value: HoverCardAttributeOptions;
  * ```
  */
 export interface HoverCardAttributeOptions extends HoverCardState {
@@ -87,7 +87,7 @@ export interface HoverCardAttributeOptions extends HoverCardState {
  * ```ts
  * import type { HoverCardChangeOptions } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardChangeOptions = {} as HoverCardChangeOptions;
+ * declare const value: HoverCardChangeOptions;
  * ```
  */
 export interface HoverCardChangeOptions {
@@ -103,7 +103,7 @@ export interface HoverCardChangeOptions {
  * ```ts
  * import type { HoverCardChangeResult } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardChangeResult = {} as HoverCardChangeResult;
+ * declare const value: HoverCardChangeResult;
  * ```
  */
 export interface HoverCardChangeResult {
@@ -121,7 +121,7 @@ export interface HoverCardChangeResult {
  * ```ts
  * import type { HoverCardPrimitiveAttributes } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardPrimitiveAttributes = {} as HoverCardPrimitiveAttributes;
+ * declare const value: HoverCardPrimitiveAttributes;
  * ```
  */
 export type HoverCardPrimitiveAttributes = PrimitiveDataAttributes &
@@ -136,7 +136,7 @@ export type HoverCardPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { HoverCardTriggerEvent } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardTriggerEvent = {} as HoverCardTriggerEvent;
+ * declare const value: HoverCardTriggerEvent;
  * ```
  */
 export type HoverCardTriggerEvent = Event;
@@ -150,7 +150,7 @@ export type HoverCardTriggerEvent = Event;
  * ```ts
  * import type { HoverCardContentEvent } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardContentEvent = {} as HoverCardContentEvent;
+ * declare const value: HoverCardContentEvent;
  * ```
  */
 export type HoverCardContentEvent = Event;
@@ -164,7 +164,7 @@ export type HoverCardContentEvent = Event;
  * ```ts
  * import type { HoverCardEscapeEvent } from '@kovojs/headless-ui/hover-card';
  *
- * const value: HoverCardEscapeEvent = {} as HoverCardEscapeEvent;
+ * declare const value: HoverCardEscapeEvent;
  * ```
  */
 export type HoverCardEscapeEvent = Event & Readonly<{ key?: string }>;
@@ -178,7 +178,7 @@ export type HoverCardEscapeEvent = Event & Readonly<{ key?: string }>;
  * ```ts
  * import { hoverCardRootAttributes } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardRootAttributes>[0];
+ * declare const input: Parameters<typeof hoverCardRootAttributes>[0];
  * const result = hoverCardRootAttributes(input);
  * ```
  */
@@ -197,7 +197,7 @@ export function hoverCardRootAttributes(state: HoverCardState): HoverCardPrimiti
  * ```ts
  * import { hoverCardTriggerAttributes } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardTriggerAttributes>[0];
+ * declare const input: Parameters<typeof hoverCardTriggerAttributes>[0];
  * const result = hoverCardTriggerAttributes(input);
  * ```
  */
@@ -225,7 +225,7 @@ export function hoverCardTriggerAttributes(
  * ```ts
  * import { hoverCardContentAttributes } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardContentAttributes>[0];
+ * declare const input: Parameters<typeof hoverCardContentAttributes>[0];
  * const result = hoverCardContentAttributes(input);
  * ```
  */
@@ -252,10 +252,10 @@ export function hoverCardContentAttributes(
  * ```ts
  * import { setHoverCardOpen } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof setHoverCardOpen>[0];
- * const state = {} as Parameters<typeof setHoverCardOpen>[1];
- * const options = {} as Parameters<typeof setHoverCardOpen>[2];
- * const detail = {} as Parameters<typeof setHoverCardOpen>[3];
+ * declare const input: Parameters<typeof setHoverCardOpen>[0];
+ * declare const state: Parameters<typeof setHoverCardOpen>[1];
+ * declare const options: Parameters<typeof setHoverCardOpen>[2];
+ * declare const detail: Parameters<typeof setHoverCardOpen>[3];
  * const result = setHoverCardOpen(input, state, options, detail);
  * ```
  *
@@ -277,9 +277,9 @@ export function setHoverCardOpen(
  * ```ts
  * import { hoverCardTriggerPointerEnter } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardTriggerPointerEnter>[0];
- * const state = {} as Parameters<typeof hoverCardTriggerPointerEnter>[1];
- * const options = {} as Parameters<typeof hoverCardTriggerPointerEnter>[2];
+ * declare const input: Parameters<typeof hoverCardTriggerPointerEnter>[0];
+ * declare const state: Parameters<typeof hoverCardTriggerPointerEnter>[1];
+ * declare const options: Parameters<typeof hoverCardTriggerPointerEnter>[2];
  * const result = hoverCardTriggerPointerEnter(input, state, options);
  * ```
  *
@@ -306,9 +306,9 @@ export function hoverCardTriggerPointerEnter(
  * ```ts
  * import { hoverCardTriggerPointerLeave } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardTriggerPointerLeave>[0];
- * const state = {} as Parameters<typeof hoverCardTriggerPointerLeave>[1];
- * const options = {} as Parameters<typeof hoverCardTriggerPointerLeave>[2];
+ * declare const input: Parameters<typeof hoverCardTriggerPointerLeave>[0];
+ * declare const state: Parameters<typeof hoverCardTriggerPointerLeave>[1];
+ * declare const options: Parameters<typeof hoverCardTriggerPointerLeave>[2];
  * const result = hoverCardTriggerPointerLeave(input, state, options);
  * ```
  *
@@ -335,9 +335,9 @@ export function hoverCardTriggerPointerLeave(
  * ```ts
  * import { hoverCardTriggerFocus } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardTriggerFocus>[0];
- * const state = {} as Parameters<typeof hoverCardTriggerFocus>[1];
- * const options = {} as Parameters<typeof hoverCardTriggerFocus>[2];
+ * declare const input: Parameters<typeof hoverCardTriggerFocus>[0];
+ * declare const state: Parameters<typeof hoverCardTriggerFocus>[1];
+ * declare const options: Parameters<typeof hoverCardTriggerFocus>[2];
  * const result = hoverCardTriggerFocus(input, state, options);
  * ```
  *
@@ -364,9 +364,9 @@ export function hoverCardTriggerFocus(
  * ```ts
  * import { hoverCardTriggerBlur } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardTriggerBlur>[0];
- * const state = {} as Parameters<typeof hoverCardTriggerBlur>[1];
- * const options = {} as Parameters<typeof hoverCardTriggerBlur>[2];
+ * declare const input: Parameters<typeof hoverCardTriggerBlur>[0];
+ * declare const state: Parameters<typeof hoverCardTriggerBlur>[1];
+ * declare const options: Parameters<typeof hoverCardTriggerBlur>[2];
  * const result = hoverCardTriggerBlur(input, state, options);
  * ```
  *
@@ -393,9 +393,9 @@ export function hoverCardTriggerBlur(
  * ```ts
  * import { hoverCardContentPointerEnter } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardContentPointerEnter>[0];
- * const state = {} as Parameters<typeof hoverCardContentPointerEnter>[1];
- * const options = {} as Parameters<typeof hoverCardContentPointerEnter>[2];
+ * declare const input: Parameters<typeof hoverCardContentPointerEnter>[0];
+ * declare const state: Parameters<typeof hoverCardContentPointerEnter>[1];
+ * declare const options: Parameters<typeof hoverCardContentPointerEnter>[2];
  * const result = hoverCardContentPointerEnter(input, state, options);
  * ```
  *
@@ -422,9 +422,9 @@ export function hoverCardContentPointerEnter(
  * ```ts
  * import { hoverCardContentPointerLeave } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardContentPointerLeave>[0];
- * const state = {} as Parameters<typeof hoverCardContentPointerLeave>[1];
- * const options = {} as Parameters<typeof hoverCardContentPointerLeave>[2];
+ * declare const input: Parameters<typeof hoverCardContentPointerLeave>[0];
+ * declare const state: Parameters<typeof hoverCardContentPointerLeave>[1];
+ * declare const options: Parameters<typeof hoverCardContentPointerLeave>[2];
  * const result = hoverCardContentPointerLeave(input, state, options);
  * ```
  *
@@ -451,9 +451,9 @@ export function hoverCardContentPointerLeave(
  * ```ts
  * import { hoverCardContentFocus } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardContentFocus>[0];
- * const state = {} as Parameters<typeof hoverCardContentFocus>[1];
- * const options = {} as Parameters<typeof hoverCardContentFocus>[2];
+ * declare const input: Parameters<typeof hoverCardContentFocus>[0];
+ * declare const state: Parameters<typeof hoverCardContentFocus>[1];
+ * declare const options: Parameters<typeof hoverCardContentFocus>[2];
  * const result = hoverCardContentFocus(input, state, options);
  * ```
  *
@@ -480,9 +480,9 @@ export function hoverCardContentFocus(
  * ```ts
  * import { hoverCardContentBlur } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardContentBlur>[0];
- * const state = {} as Parameters<typeof hoverCardContentBlur>[1];
- * const options = {} as Parameters<typeof hoverCardContentBlur>[2];
+ * declare const input: Parameters<typeof hoverCardContentBlur>[0];
+ * declare const state: Parameters<typeof hoverCardContentBlur>[1];
+ * declare const options: Parameters<typeof hoverCardContentBlur>[2];
  * const result = hoverCardContentBlur(input, state, options);
  * ```
  *
@@ -509,9 +509,9 @@ export function hoverCardContentBlur(
  * ```ts
  * import { hoverCardEscapeKeyDown } from '@kovojs/headless-ui/hover-card';
  *
- * const input = {} as Parameters<typeof hoverCardEscapeKeyDown>[0];
- * const state = {} as Parameters<typeof hoverCardEscapeKeyDown>[1];
- * const options = {} as Parameters<typeof hoverCardEscapeKeyDown>[2];
+ * declare const input: Parameters<typeof hoverCardEscapeKeyDown>[0];
+ * declare const state: Parameters<typeof hoverCardEscapeKeyDown>[1];
+ * declare const options: Parameters<typeof hoverCardEscapeKeyDown>[2];
  * const result = hoverCardEscapeKeyDown(input, state, options);
  * ```
  *

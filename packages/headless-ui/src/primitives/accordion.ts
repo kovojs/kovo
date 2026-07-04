@@ -22,7 +22,7 @@ import {
  * ```ts
  * import type { AccordionType } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionType = {} as AccordionType;
+ * declare const value: AccordionType;
  * ```
  */
 export type AccordionType = 'multiple' | 'single';
@@ -36,7 +36,7 @@ export type AccordionType = 'multiple' | 'single';
  * ```ts
  * import type { AccordionValue } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionValue = {} as AccordionValue;
+ * declare const value: AccordionValue;
  * ```
  */
 export type AccordionValue = readonly string[] | string | undefined;
@@ -50,7 +50,7 @@ export type AccordionValue = readonly string[] | string | undefined;
  * ```ts
  * import type { AccordionChangeReason } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionChangeReason = {} as AccordionChangeReason;
+ * declare const value: AccordionChangeReason;
  * ```
  */
 export type AccordionChangeReason = 'programmatic' | 'trigger-click';
@@ -64,7 +64,7 @@ export type AccordionChangeReason = 'programmatic' | 'trigger-click';
  * ```ts
  * import type { AccordionChangeDetail } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionChangeDetail = {} as AccordionChangeDetail;
+ * declare const value: AccordionChangeDetail;
  * ```
  */
 export type AccordionChangeDetail = PrimitiveChangeDetail<AccordionChangeReason, AccordionValue>;
@@ -78,7 +78,7 @@ export type AccordionChangeDetail = PrimitiveChangeDetail<AccordionChangeReason,
  * ```ts
  * import type { AccordionState } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionState = {} as AccordionState;
+ * declare const value: AccordionState;
  * ```
  */
 export interface AccordionState {
@@ -102,7 +102,7 @@ export interface AccordionState {
  * ```ts
  * import type { AccordionItem } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionItem = {} as AccordionItem;
+ * declare const value: AccordionItem;
  * ```
  */
 export interface AccordionItem {
@@ -119,7 +119,7 @@ export interface AccordionItem {
  * ```ts
  * import type { AccordionItemOptions } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionItemOptions = {} as AccordionItemOptions;
+ * declare const value: AccordionItemOptions;
  * ```
  */
 export interface AccordionItemOptions extends AccordionState {
@@ -136,7 +136,7 @@ export interface AccordionItemOptions extends AccordionState {
  * ```ts
  * import type { AccordionHeaderAttributeOptions } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionHeaderAttributeOptions = {} as AccordionHeaderAttributeOptions;
+ * declare const value: AccordionHeaderAttributeOptions;
  * ```
  */
 export interface AccordionHeaderAttributeOptions extends AccordionItemOptions {
@@ -152,7 +152,7 @@ export interface AccordionHeaderAttributeOptions extends AccordionItemOptions {
  * ```ts
  * import type { AccordionTriggerAttributeOptions } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionTriggerAttributeOptions = {} as AccordionTriggerAttributeOptions;
+ * declare const value: AccordionTriggerAttributeOptions;
  * ```
  */
 export interface AccordionTriggerAttributeOptions extends AccordionItemOptions {
@@ -169,7 +169,7 @@ export interface AccordionTriggerAttributeOptions extends AccordionItemOptions {
  * ```ts
  * import type { AccordionContentAttributeOptions } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionContentAttributeOptions = {} as AccordionContentAttributeOptions;
+ * declare const value: AccordionContentAttributeOptions;
  * ```
  */
 export interface AccordionContentAttributeOptions extends AccordionItemOptions {
@@ -186,7 +186,7 @@ export interface AccordionContentAttributeOptions extends AccordionItemOptions {
  * ```ts
  * import type { AccordionChangeOptions } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionChangeOptions = {} as AccordionChangeOptions;
+ * declare const value: AccordionChangeOptions;
  * ```
  */
 export interface AccordionChangeOptions {
@@ -202,7 +202,7 @@ export interface AccordionChangeOptions {
  * ```ts
  * import type { AccordionChangeResult } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionChangeResult = {} as AccordionChangeResult;
+ * declare const value: AccordionChangeResult;
  * ```
  */
 export interface AccordionChangeResult {
@@ -220,7 +220,7 @@ export interface AccordionChangeResult {
  * ```ts
  * import type { AccordionMoveResult } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionMoveResult = {} as AccordionMoveResult;
+ * declare const value: AccordionMoveResult;
  * ```
  */
 export interface AccordionMoveResult {
@@ -237,7 +237,7 @@ export interface AccordionMoveResult {
  * ```ts
  * import type { AccordionPrimitiveAttributes } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionPrimitiveAttributes = {} as AccordionPrimitiveAttributes;
+ * declare const value: AccordionPrimitiveAttributes;
  * ```
  */
 export type AccordionPrimitiveAttributes = PrimitiveDataAttributes &
@@ -252,7 +252,7 @@ export type AccordionPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { AccordionTriggerEvent } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionTriggerEvent = {} as AccordionTriggerEvent;
+ * declare const value: AccordionTriggerEvent;
  * ```
  */
 export type AccordionTriggerEvent = Event;
@@ -266,7 +266,7 @@ export type AccordionTriggerEvent = Event;
  * ```ts
  * import type { AccordionKeyboardEvent } from '@kovojs/headless-ui/accordion';
  *
- * const value: AccordionKeyboardEvent = {} as AccordionKeyboardEvent;
+ * declare const value: AccordionKeyboardEvent;
  * ```
  */
 export type AccordionKeyboardEvent = Event & { readonly key: string };
@@ -280,7 +280,7 @@ export type AccordionKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import { accordionItemOpen } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionItemOpen>[0];
+ * declare const input: Parameters<typeof accordionItemOpen>[0];
  * const result = accordionItemOpen(input);
  * ```
  */
@@ -301,7 +301,7 @@ export function accordionItemOpen(options: AccordionItemOptions): boolean {
  * ```ts
  * import { accordionRootAttributes } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionRootAttributes>[0];
+ * declare const input: Parameters<typeof accordionRootAttributes>[0];
  * const result = accordionRootAttributes(input);
  * ```
  */
@@ -323,7 +323,7 @@ export function accordionRootAttributes(state: AccordionState): AccordionPrimiti
  * ```ts
  * import { accordionItemAttributes } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionItemAttributes>[0];
+ * declare const input: Parameters<typeof accordionItemAttributes>[0];
  * const result = accordionItemAttributes(input);
  * ```
  */
@@ -347,7 +347,7 @@ export function accordionItemAttributes(
  * ```ts
  * import { accordionHeaderAttributes } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionHeaderAttributes>[0];
+ * declare const input: Parameters<typeof accordionHeaderAttributes>[0];
  * const result = accordionHeaderAttributes(input);
  * ```
  */
@@ -372,7 +372,7 @@ export function accordionHeaderAttributes(
  * ```ts
  * import { accordionTriggerAttributes } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionTriggerAttributes>[0];
+ * declare const input: Parameters<typeof accordionTriggerAttributes>[0];
  * const result = accordionTriggerAttributes(input);
  * ```
  */
@@ -401,7 +401,7 @@ export function accordionTriggerAttributes(
  * ```ts
  * import { accordionContentAttributes } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionContentAttributes>[0];
+ * declare const input: Parameters<typeof accordionContentAttributes>[0];
  * const result = accordionContentAttributes(input);
  * ```
  */
@@ -428,10 +428,10 @@ export function accordionContentAttributes(
  * ```ts
  * import { setAccordionValue } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof setAccordionValue>[0];
- * const state = {} as Parameters<typeof setAccordionValue>[1];
- * const options = {} as Parameters<typeof setAccordionValue>[2];
- * const detail = {} as Parameters<typeof setAccordionValue>[3];
+ * declare const input: Parameters<typeof setAccordionValue>[0];
+ * declare const state: Parameters<typeof setAccordionValue>[1];
+ * declare const options: Parameters<typeof setAccordionValue>[2];
+ * declare const detail: Parameters<typeof setAccordionValue>[3];
  * const result = setAccordionValue(input, state, options, detail);
  * ```
  *
@@ -470,10 +470,10 @@ export function setAccordionValue(
  * ```ts
  * import { toggleAccordionItem } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof toggleAccordionItem>[0];
- * const state = {} as Parameters<typeof toggleAccordionItem>[1];
- * const options = {} as Parameters<typeof toggleAccordionItem>[2];
- * const detail = {} as Parameters<typeof toggleAccordionItem>[3];
+ * declare const input: Parameters<typeof toggleAccordionItem>[0];
+ * declare const state: Parameters<typeof toggleAccordionItem>[1];
+ * declare const options: Parameters<typeof toggleAccordionItem>[2];
+ * declare const detail: Parameters<typeof toggleAccordionItem>[3];
  * const result = toggleAccordionItem(input, state, options, detail);
  * ```
  *
@@ -501,7 +501,7 @@ export function toggleAccordionItem(
  * ```ts
  * import { accordionRovingIndex } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionRovingIndex>[0];
+ * declare const input: Parameters<typeof accordionRovingIndex>[0];
  * const result = accordionRovingIndex(input);
  * ```
  *
@@ -536,8 +536,8 @@ export function accordionRovingIndex(state: AccordionState): number {
  * ```ts
  * import { accordionMoveFocus } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionMoveFocus>[0];
- * const state = {} as Parameters<typeof accordionMoveFocus>[1];
+ * declare const input: Parameters<typeof accordionMoveFocus>[0];
+ * declare const state: Parameters<typeof accordionMoveFocus>[1];
  * const result = accordionMoveFocus(input, state);
  * ```
  *
@@ -572,9 +572,9 @@ export function accordionMoveFocus(
  * ```ts
  * import { accordionTriggerClick } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionTriggerClick>[0];
- * const state = {} as Parameters<typeof accordionTriggerClick>[1];
- * const options = {} as Parameters<typeof accordionTriggerClick>[2];
+ * declare const input: Parameters<typeof accordionTriggerClick>[0];
+ * declare const state: Parameters<typeof accordionTriggerClick>[1];
+ * declare const options: Parameters<typeof accordionTriggerClick>[2];
  * const result = accordionTriggerClick(input, state, options);
  * ```
  *
@@ -615,8 +615,8 @@ export function accordionTriggerClick(
  * ```ts
  * import { accordionKeyDown } from '@kovojs/headless-ui/accordion';
  *
- * const input = {} as Parameters<typeof accordionKeyDown>[0];
- * const state = {} as Parameters<typeof accordionKeyDown>[1];
+ * declare const input: Parameters<typeof accordionKeyDown>[0];
+ * declare const state: Parameters<typeof accordionKeyDown>[1];
  * const result = accordionKeyDown(input, state);
  * ```
  *
