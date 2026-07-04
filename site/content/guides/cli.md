@@ -113,7 +113,6 @@ kovo explain --endpoints [graph.json]                        # the machine-ingre
 kovo explain --revealed [graph.json]                         # confidential fields intentionally revealed
 kovo explain --access [--fail-on-findings] [graph.json]      # explicit access decisions
 kovo explain --sources-sinks                                 # source/sink inventory
-kovo explain --capabilities [graph.json]                     # held dangerous capabilities and capability URLs
 kovo explain --cookies [graph.json]                          # cookie downgrade and posture audit
 ```
 
@@ -127,10 +126,11 @@ kovo explain --cookies [graph.json]                          # cookie downgrade 
 - **`--revealed`** lists confidentiality reveals, including `trustedReveal(...)` rows that need human
   review.
 - **`--access`** lists explicit public/authenticated/machine access decisions.
-- **`--capabilities`** lists held dangerous capabilities: agent tools, audit-grade reveals,
-  cross-owner admin reads, declared public database relations, and signed download/capability URL
-  mints.
 - **`--cookies`** lists cookie posture and downgrade findings.
+
+Capability-style review currently runs through the concrete shipped surfaces: `--revealed`,
+`--trust`, `--endpoints`, and `--sources-sinks`. Do not use `--capabilities` as a blocking
+capability-URL proof in technical preview.
 
 ### `kovo add` — vendor a UI component
 
