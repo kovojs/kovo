@@ -10,6 +10,8 @@ import { createServer } from 'vite-plus';
 import {
   galleryHeadlessGeneratedModuleSpecifier,
   galleryHeadlessPrimitiveModuleSpecifier,
+  galleryPrimitiveActionsGeneratedImportManifest,
+  galleryPrimitiveActionsGeneratedModuleSpecifier,
   galleryPrimitiveActionsImportManifest,
   galleryRuntimeModuleSpecifier,
   rebaseGalleryClientModuleManifest,
@@ -161,6 +163,7 @@ async function ensureGalleryInteractiveServerArtifacts(): Promise<() => void> {
 
 interface SupportRegistration {
   headlessUiModuleHrefs: ReadonlyMap<string, string>;
+  primitiveActionsGeneratedHref: string;
   primitiveActionsHref: string;
   runtimeHref: string;
 }
@@ -213,9 +216,22 @@ function registerGalleryInteractiveSupportClientModules(
     moduleHrefs.set(module.pathName, href);
   }
 
-  const primitiveActionsHref = registerPrimitiveActionsClientModule(clientModules, moduleHrefs);
+  const primitiveActionsGeneratedHref = registerPrimitiveActionsGeneratedClientModule(
+    clientModules,
+    moduleHrefs,
+  );
+  const primitiveActionsHref = registerPrimitiveActionsClientModule(
+    clientModules,
+    moduleHrefs,
+    primitiveActionsGeneratedHref,
+  );
 
-  return { headlessUiModuleHrefs: moduleHrefs, primitiveActionsHref, runtimeHref };
+  return {
+    headlessUiModuleHrefs: moduleHrefs,
+    primitiveActionsGeneratedHref,
+    primitiveActionsHref,
+    runtimeHref,
+  };
 }
 
 function headlessUiClientModuleSource(sourcePath: string): { pathName: string; source: string } {
@@ -235,6 +251,7 @@ function headlessUiClientModuleSource(sourcePath: string): { pathName: string; s
 function registerPrimitiveActionsClientModule(
   clientModules: GalleryDeps['clientModules'],
   headlessUiModuleHrefs: ReadonlyMap<string, string>,
+  primitiveActionsGeneratedHref: string,
 ): string {
   const pathName = '/c/examples/gallery/src/primitive-actions.js';
   const rawSource = readFileSync(
@@ -254,6 +271,42 @@ function registerPrimitiveActionsClientModule(
     (moduleSpecifier) =>
       resolveGalleryClientModuleSpecifier(moduleSpecifier, {
         headlessUiModuleHrefs,
+        primitiveActionsGeneratedHref,
+        primitiveActionsHref: '',
+        runtimeHref: '',
+      }),
+  );
+
+  return clientModules.put({
+    path: pathName,
+    source,
+    version: contentHash(source).slice(0, 8),
+  });
+}
+
+function registerPrimitiveActionsGeneratedClientModule(
+  clientModules: GalleryDeps['clientModules'],
+  headlessUiModuleHrefs: ReadonlyMap<string, string>,
+): string {
+  const pathName = '/c/examples/gallery/src/primitive-actions.generated.js';
+  const rawSource = readFileSync(
+    path.join(repoRoot, 'examples/gallery/src/primitive-actions.generated.ts'),
+    'utf8',
+  );
+  const source = resolveGalleryClientModuleSpecifiers(
+    ts.transpileModule(rawSource, {
+      compilerOptions: {
+        importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+        module: ts.ModuleKind.ES2022,
+        target: ts.ScriptTarget.ES2022,
+      },
+      fileName: 'primitive-actions.generated.ts',
+    }).outputText,
+    galleryPrimitiveActionsGeneratedImportManifest(),
+    (moduleSpecifier) =>
+      resolveGalleryClientModuleSpecifier(moduleSpecifier, {
+        headlessUiModuleHrefs,
+        primitiveActionsGeneratedHref: '',
         primitiveActionsHref: '',
         runtimeHref: '',
       }),
@@ -385,6 +438,9 @@ function resolveGalleryClientModuleSpecifier(
   if (moduleSpecifier === galleryRuntimeModuleSpecifier) return support.runtimeHref;
   if (moduleSpecifier === '../primitive-actions.js') return support.primitiveActionsHref;
   if (moduleSpecifier === '../../primitive-actions.js') return support.primitiveActionsHref;
+  if (moduleSpecifier === galleryPrimitiveActionsGeneratedModuleSpecifier) {
+    return support.primitiveActionsGeneratedHref;
+  }
   if (moduleSpecifier === galleryHeadlessGeneratedModuleSpecifier) {
     return headlessUiClientModuleHref(support.headlessUiModuleHrefs, 'generated');
   }
