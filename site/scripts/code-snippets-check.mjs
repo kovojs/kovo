@@ -770,10 +770,15 @@ export type KovoTestTouchGraph = any;
 export type PGliteOptions = any;
 export type PgliteDatabase<TSchema = any> = any;
 export type Results = any;
+export type BetterAuthSessionPayload<Session = any, User = any> = {
+  session: Session;
+  user: User;
+};
 
 export const KovoDevtool: any;
 export const PGlite: any;
 export const assertMutationError: any;
+export const authed: <Request = any>() => any;
 export const betterAuth: any;
 export const betterAuthSession: any;
 export const betterAuthSignInEmailMutation: any;
@@ -800,6 +805,8 @@ export const serial: any;
 export const sql: any;
 export const sqliteTable: any;
 export const text: any;
+export const mount: any;
+export const role: <Request = any>(...args: any[]) => any;
 declare const defaultExport: any;
 export default defaultExport;
 `;

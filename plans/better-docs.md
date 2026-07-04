@@ -90,7 +90,7 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     annotations in `kovo({ ... })` table tags (the guide currently conflates them). Also mention
     `tag()` (row-scoped invalidation, same file) with a pointer, not a full treatment.
 
-- [ ] **Rewrite `auth-better-auth.md` (lowest score, 4/10).** Three independent breakages plus a
+- [x] **Rewrite `auth-better-auth.md` (lowest score, 4/10).** Three independent breakages plus a
       missing arc; treat as a page rewrite, not spot fixes.
   - Broken guard example: the "Guard pages and mutations" snippet is
     `route('/', { page(_context, request) { if (!request.session) return redirect('/login', {}); ... } })`
@@ -128,6 +128,10 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     `Clear-Site-Data`); configuring the `betterAuth()` instance itself (`baseURL`, shared secret,
     `advanced.disableCSRFCheck` and why Kovo's CSRF makes that safe); rolling-session refresh
     header forwarding. Fix the spec pointer (session typing is not §6.6 — locate the right §).
+  - Evidence: `site/content/guides/auth-better-auth.md` rewrites the guard, DB wiring,
+    `appSession` typing, Run it, failure, mount, role, sign-out, config, and rolling-session
+    sections; `pnpm run check:docs-snippets`; `pnpm --filter @kovojs/site run build`;
+    `pnpm --filter @kovojs/site run check:links`.
 
 - [ ] **Fix broken/unrunnable commands (each: quote → replacement, then run the replacement
       end-to-end before publishing):**

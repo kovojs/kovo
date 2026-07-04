@@ -31,8 +31,13 @@ starter uses, with one addition: `appSignUp`.
 
 The smallest Kovo-facing piece is the session provider:
 
-```text
+```ts
 import { betterAuthSession } from '@kovojs/better-auth';
+
+declare const appSession: {
+  provider(value: unknown): unknown;
+};
+declare const auth: unknown;
 
 export const appSessionProvider = appSession.provider(
   betterAuthSession(auth, ({ session: authSession, user }) => ({
@@ -128,6 +133,7 @@ const auth = betterAuth({
   advanced: { disableCSRFCheck: true },
   database: drizzleAdapter(appRuntimeAuthDb, { provider: 'pg', schema: authSchema }),
 });
+export { auth };
 
 function mapBetterAuthSession(
   value: BetterAuthSessionPayload<BetterAuthAppSession, BetterAuthAppUser>,
@@ -260,13 +266,14 @@ library's pre-session writes out of your app-facing read surface.
 Kovo mutations are the right place for browser credential forms. Better Auth's own redirect protocol
 handler belongs on a mounted endpoint instead:
 
-```text
+```ts
 import { mount } from '@kovojs/better-auth';
+import { createApp } from '@kovojs/server';
+
+declare const auth: unknown;
 
 const app = createApp({
-  endpoints: [
-    mount('/api/auth', auth, { method: 'GET' }),
-  ],
+  endpoints: [mount('/api/auth', auth, { method: 'GET' })],
 });
 ```
 
@@ -279,9 +286,11 @@ because the forgery protection there is Better Auth's provider `state`, not Kovo
 Start private pages with `appAuthed`. Layer role checks on top when the page is not for every signed-in
 user:
 
-```text
+```tsx
 import { role } from '@kovojs/better-auth';
 import { route } from '@kovojs/server';
+
+declare function AdminPage(props: { email: string }): string;
 
 export const adminRoute = route('/admin', {
   guard: role<AppRequest>('admin'),
