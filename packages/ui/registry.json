@@ -18,9 +18,7 @@
       },
       "name": "accordion",
       "title": "Accordion",
-      "files": [
-        "src/accordion.tsx"
-      ],
+      "files": ["src/accordion.tsx"],
       "exports": [
         "Accordion",
         "AccordionItem",
@@ -38,19 +36,10 @@
           "AccordionType",
           "AccordionValue"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "family": {
@@ -61,25 +50,14 @@
       },
       "name": "alert",
       "title": "Alert",
-      "files": [
-        "src/alert.tsx"
-      ],
-      "exports": [
-        "Alert"
-      ],
+      "files": ["src/alert.tsx"],
+      "exports": ["Alert"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "family": {
@@ -90,9 +68,7 @@
       },
       "name": "alert-dialog",
       "title": "AlertDialog",
-      "files": [
-        "src/alert-dialog.tsx"
-      ],
+      "files": ["src/alert-dialog.tsx"],
       "exports": [
         "AlertDialog",
         "AlertDialogTrigger",
@@ -113,21 +89,11 @@
           "alertDialogRootAttributes",
           "alertDialogTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "X"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/icons": ["X"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -138,9 +104,7 @@
       },
       "name": "autocomplete",
       "title": "Autocomplete",
-      "files": [
-        "src/autocomplete.tsx"
-      ],
+      "files": ["src/autocomplete.tsx"],
       "exports": [
         "Autocomplete",
         "AutocompleteInput",
@@ -158,18 +122,10 @@
           "autocompleteValueAttributes",
           "autocompleteValueText"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -180,14 +136,8 @@
       },
       "name": "avatar",
       "title": "Avatar",
-      "files": [
-        "src/avatar.tsx"
-      ],
-      "exports": [
-        "Avatar",
-        "AvatarImage",
-        "AvatarFallback"
-      ],
+      "files": ["src/avatar.tsx"],
+      "exports": ["Avatar", "AvatarImage", "AvatarFallback"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "avatarFallbackAttributes",
@@ -195,18 +145,10 @@
           "AvatarImageStatus",
           "avatarRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -217,25 +159,14 @@
       },
       "name": "badge",
       "title": "Badge",
-      "files": [
-        "src/badge.tsx"
-      ],
-      "exports": [
-        "Badge"
-      ],
+      "files": ["src/badge.tsx"],
+      "exports": ["Badge"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "family": {
@@ -246,32 +177,14 @@
       },
       "name": "breadcrumb",
       "title": "Breadcrumb",
-      "files": [
-        "src/breadcrumb.tsx"
-      ],
-      "exports": [
-        "Breadcrumb",
-        "BreadcrumbItem",
-        "BreadcrumbLink",
-        "BreadcrumbSeparator"
-      ],
+      "files": ["src/breadcrumb.tsx"],
+      "exports": ["Breadcrumb", "BreadcrumbItem", "BreadcrumbLink", "BreadcrumbSeparator"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "separatorRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["separatorRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "safe-url",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "safe-url", "theme"]
     },
     {
       "family": {
@@ -282,26 +195,14 @@
       },
       "name": "button",
       "title": "Button",
-      "files": [
-        "src/button.tsx"
-      ],
-      "exports": [
-        "Button"
-      ],
+      "files": ["src/button.tsx"],
+      "exports": ["Button"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -312,25 +213,14 @@
       },
       "name": "card",
       "title": "Card",
-      "files": [
-        "src/card.tsx"
-      ],
-      "exports": [
-        "Card"
-      ],
+      "files": ["src/card.tsx"],
+      "exports": ["Card"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "family": {
@@ -341,29 +231,14 @@
       },
       "name": "checkbox",
       "title": "Checkbox",
-      "files": [
-        "src/checkbox.tsx"
-      ],
-      "exports": [
-        "Checkbox"
-      ],
+      "files": ["src/checkbox.tsx"],
+      "exports": ["Checkbox"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "CheckboxCheckedState",
-          "checkboxRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["CheckboxCheckedState", "checkboxRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -374,9 +249,7 @@
       },
       "name": "checkbox-group",
       "title": "CheckboxGroup",
-      "files": [
-        "src/checkbox-group.tsx"
-      ],
+      "files": ["src/checkbox-group.tsx"],
       "exports": [
         "CheckboxGroup",
         "CheckboxGroupItem",
@@ -391,19 +264,10 @@
           "checkboxGroupLabelAttributes",
           "checkboxGroupRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "family": {
@@ -414,32 +278,18 @@
       },
       "name": "collapsible",
       "title": "Collapsible",
-      "files": [
-        "src/collapsible.tsx"
-      ],
-      "exports": [
-        "Collapsible",
-        "CollapsibleTrigger",
-        "CollapsibleContent"
-      ],
+      "files": ["src/collapsible.tsx"],
+      "exports": ["Collapsible", "CollapsibleTrigger", "CollapsibleContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "collapsibleContentAttributes",
           "collapsibleRootAttributes",
           "collapsibleTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -450,9 +300,7 @@
       },
       "name": "combobox",
       "title": "Combobox",
-      "files": [
-        "src/combobox.tsx"
-      ],
+      "files": ["src/combobox.tsx"],
       "exports": [
         "Combobox",
         "ComboboxInput",
@@ -470,18 +318,10 @@
           "comboboxValueAttributes",
           "comboboxValueText"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -492,9 +332,7 @@
       },
       "name": "command",
       "title": "Command",
-      "files": [
-        "src/command.tsx"
-      ],
+      "files": ["src/command.tsx"],
       "exports": [
         "Command",
         "CommandTrigger",
@@ -519,21 +357,11 @@
           "commandTriggerAttributes",
           "commandValueText"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "Search"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/icons": ["Search"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -544,9 +372,7 @@
       },
       "name": "context-menu",
       "title": "ContextMenu",
-      "files": [
-        "src/context-menu.tsx"
-      ],
+      "files": ["src/context-menu.tsx"],
       "exports": [
         "ContextMenu",
         "ContextMenuTrigger",
@@ -566,18 +392,10 @@
           "contextMenuSeparatorAttributes",
           "contextMenuTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -588,9 +406,7 @@
       },
       "name": "dialog",
       "title": "Dialog",
-      "files": [
-        "src/dialog.tsx"
-      ],
+      "files": ["src/dialog.tsx"],
       "exports": [
         "Dialog",
         "DialogTrigger",
@@ -608,18 +424,10 @@
           "dialogRootAttributes",
           "dialogTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -630,32 +438,18 @@
       },
       "name": "disclosure",
       "title": "Disclosure",
-      "files": [
-        "src/disclosure.tsx"
-      ],
-      "exports": [
-        "Disclosure",
-        "DisclosureTrigger",
-        "DisclosureContent"
-      ],
+      "files": ["src/disclosure.tsx"],
+      "exports": ["Disclosure", "DisclosureTrigger", "DisclosureContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "disclosureContentAttributes",
           "disclosureRootAttributes",
           "disclosureTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -666,9 +460,7 @@
       },
       "name": "drawer",
       "title": "Drawer",
-      "files": [
-        "src/drawer.tsx"
-      ],
+      "files": ["src/drawer.tsx"],
       "exports": [
         "Drawer",
         "DrawerRoot",
@@ -687,18 +479,10 @@
           "dialogRootAttributes",
           "dialogTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -709,9 +493,7 @@
       },
       "name": "dropdown-menu",
       "title": "DropdownMenu",
-      "files": [
-        "src/dropdown-menu.tsx"
-      ],
+      "files": ["src/dropdown-menu.tsx"],
       "exports": [
         "DropdownMenu",
         "DropdownMenuTrigger",
@@ -730,18 +512,10 @@
           "dropdownMenuSeparatorAttributes",
           "dropdownMenuTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -752,9 +526,7 @@
       },
       "name": "field",
       "title": "Field",
-      "files": [
-        "src/field.tsx"
-      ],
+      "files": ["src/field.tsx"],
       "exports": [
         "Field",
         "FieldLabel",
@@ -777,18 +549,10 @@
           "fieldsetLegendAttributes",
           "fieldsetRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -799,33 +563,18 @@
       },
       "name": "hover-card",
       "title": "HoverCard",
-      "files": [
-        "src/hover-card.tsx"
-      ],
-      "exports": [
-        "HoverCard",
-        "HoverCardTrigger",
-        "HoverCardContent"
-      ],
+      "files": ["src/hover-card.tsx"],
+      "exports": ["HoverCard", "HoverCardTrigger", "HoverCardContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "hoverCardContentAttributes",
           "hoverCardRootAttributes",
           "hoverCardTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "safe-url",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "safe-url", "theme"]
     },
     {
       "family": {
@@ -836,25 +585,14 @@
       },
       "name": "kbd",
       "title": "Kbd",
-      "files": [
-        "src/kbd.tsx"
-      ],
-      "exports": [
-        "Kbd"
-      ],
+      "files": ["src/kbd.tsx"],
+      "exports": ["Kbd"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "family": {
@@ -865,16 +603,8 @@
       },
       "name": "menubar",
       "title": "Menubar",
-      "files": [
-        "src/menubar.tsx"
-      ],
-      "exports": [
-        "Menubar",
-        "MenubarItem",
-        "MenubarSubmenu",
-        "MenubarGroup",
-        "MenubarSeparator"
-      ],
+      "files": ["src/menubar.tsx"],
+      "exports": ["Menubar", "MenubarItem", "MenubarSubmenu", "MenubarGroup", "MenubarSeparator"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "menubarGroupAttributes",
@@ -884,19 +614,10 @@
           "menubarSeparatorAttributes",
           "menubarSubmenuAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "family": {
@@ -907,28 +628,14 @@
       },
       "name": "meter",
       "title": "Meter",
-      "files": [
-        "src/meter.tsx"
-      ],
-      "exports": [
-        "Meter"
-      ],
+      "files": ["src/meter.tsx"],
+      "exports": ["Meter"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "meterRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["meterRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -939,9 +646,7 @@
       },
       "name": "navigation-menu",
       "title": "NavigationMenu",
-      "files": [
-        "src/navigation-menu.tsx"
-      ],
+      "files": ["src/navigation-menu.tsx"],
       "exports": [
         "NavigationMenu",
         "NavigationMenuList",
@@ -964,22 +669,11 @@
           "navigationMenuTriggerAttributes",
           "navigationMenuViewportAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "ChevronDown"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/icons": ["ChevronDown"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "family": {
@@ -990,9 +684,7 @@
       },
       "name": "number-field",
       "title": "NumberField",
-      "files": [
-        "src/number-field.tsx"
-      ],
+      "files": ["src/number-field.tsx"],
       "exports": [
         "NumberField",
         "NumberFieldControl",
@@ -1008,18 +700,10 @@
           "numberFieldRootAttributes",
           "NumberFieldValue"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -1030,15 +714,8 @@
       },
       "name": "otp-field",
       "title": "OtpField",
-      "files": [
-        "src/otp-field.tsx"
-      ],
-      "exports": [
-        "OtpField",
-        "OtpFieldGroup",
-        "OtpFieldHiddenInput",
-        "OtpFieldInput"
-      ],
+      "files": ["src/otp-field.tsx"],
+      "exports": ["OtpField", "OtpFieldGroup", "OtpFieldHiddenInput", "OtpFieldInput"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "otpFieldHiddenInputAttributes",
@@ -1046,18 +723,10 @@
           "OtpFieldInputMode",
           "otpFieldRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -1068,32 +737,18 @@
       },
       "name": "popover",
       "title": "Popover",
-      "files": [
-        "src/popover.tsx"
-      ],
-      "exports": [
-        "Popover",
-        "PopoverTrigger",
-        "PopoverContent"
-      ],
+      "files": ["src/popover.tsx"],
+      "exports": ["Popover", "PopoverTrigger", "PopoverContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "popoverContentAttributes",
           "popoverRootAttributes",
           "popoverTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -1104,52 +759,20 @@
       },
       "name": "progress",
       "title": "Progress",
-      "files": [
-        "src/progress.tsx"
-      ],
-      "exports": [
-        "Progress"
-      ],
+      "files": ["src/progress.tsx"],
+      "exports": ["Progress"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "progressRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["progressRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
-        "ids": [
-          "controlId",
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy"
-        ],
-        "parts": [
-          "item",
-          "label",
-          "radio",
-          "radioControl",
-          "root"
-        ],
-        "slots": [
-          "item",
-          "label",
-          "radio",
-          "radioControl",
-          "root"
-        ],
+        "ids": ["controlId", "descriptionId", "errorId", "id", "labelledBy"],
+        "parts": ["item", "label", "radio", "radioControl", "root"],
+        "slots": ["item", "label", "radio", "radioControl", "root"],
         "state": [
           "descriptionId",
           "dir",
@@ -1167,15 +790,8 @@
       },
       "name": "radio-group",
       "title": "RadioGroup",
-      "files": [
-        "src/radio-group.tsx"
-      ],
-      "exports": [
-        "RadioGroup",
-        "RadioGroupItem",
-        "RadioGroupRadio",
-        "RadioGroupLabel"
-      ],
+      "files": ["src/radio-group.tsx"],
+      "exports": ["RadioGroup", "RadioGroupItem", "RadioGroupRadio", "RadioGroupLabel"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "RadioGroupItem",
@@ -1184,19 +800,10 @@
           "radioGroupRadioAttributes",
           "radioGroupRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "family": {
@@ -1207,9 +814,7 @@
       },
       "name": "scroll-area",
       "title": "ScrollArea",
-      "files": [
-        "src/scroll-area.tsx"
-      ],
+      "files": ["src/scroll-area.tsx"],
       "exports": [
         "ScrollArea",
         "ScrollAreaViewport",
@@ -1228,45 +833,16 @@
           "scrollAreaThumbAttributes",
           "scrollAreaViewportAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "family": {
-        "ids": [
-          "descriptionId",
-          "errorId",
-          "id",
-          "labelledBy",
-          "listboxId"
-        ],
-        "parts": [
-          "content",
-          "hiddenInput",
-          "item",
-          "root",
-          "trigger",
-          "value"
-        ],
-        "slots": [
-          "content",
-          "hiddenInput",
-          "item",
-          "root",
-          "trigger",
-          "value"
-        ],
+        "ids": ["descriptionId", "errorId", "id", "labelledBy", "listboxId"],
+        "parts": ["content", "hiddenInput", "item", "root", "trigger", "value"],
+        "slots": ["content", "hiddenInput", "item", "root", "trigger", "value"],
         "state": [
           "disabled",
           "form",
@@ -1283,9 +859,7 @@
       },
       "name": "select",
       "title": "Select",
-      "files": [
-        "src/select.tsx"
-      ],
+      "files": ["src/select.tsx"],
       "exports": [
         "Select",
         "SelectTrigger",
@@ -1305,18 +879,10 @@
           "selectValueAttributes",
           "selectValueText"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -1327,28 +893,14 @@
       },
       "name": "separator",
       "title": "Separator",
-      "files": [
-        "src/separator.tsx"
-      ],
-      "exports": [
-        "Separator"
-      ],
+      "files": ["src/separator.tsx"],
+      "exports": ["Separator"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "SeparatorOrientation",
-          "separatorRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component"
-        ]
+        "@kovojs/headless-ui": ["SeparatorOrientation", "separatorRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -1359,9 +911,7 @@
       },
       "name": "sheet",
       "title": "Sheet",
-      "files": [
-        "src/sheet.tsx"
-      ],
+      "files": ["src/sheet.tsx"],
       "exports": [
         "Sheet",
         "SheetRoot",
@@ -1379,22 +929,11 @@
           "dialogRootAttributes",
           "dialogTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild",
-          "ComponentRenderResult"
-        ],
-        "@kovojs/icons": [
-          "X"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild", "ComponentRenderResult"],
+        "@kovojs/icons": ["X"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -1405,24 +944,14 @@
       },
       "name": "skeleton",
       "title": "Skeleton",
-      "files": [
-        "src/skeleton.tsx"
-      ],
-      "exports": [
-        "Skeleton"
-      ],
+      "files": ["src/skeleton.tsx"],
+      "exports": ["Skeleton"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "family": {
@@ -1433,16 +962,8 @@
       },
       "name": "slider",
       "title": "Slider",
-      "files": [
-        "src/slider.tsx"
-      ],
-      "exports": [
-        "Slider",
-        "SliderInput",
-        "SliderTrack",
-        "SliderRange",
-        "SliderThumb"
-      ],
+      "files": ["src/slider.tsx"],
+      "exports": ["Slider", "SliderInput", "SliderTrack", "SliderRange", "SliderThumb"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "sliderInputAttributes",
@@ -1452,18 +973,10 @@
           "sliderThumbAttributes",
           "sliderTrackAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -1474,84 +987,33 @@
       },
       "name": "switch",
       "title": "Switch",
-      "files": [
-        "src/switch.tsx"
-      ],
-      "exports": [
-        "Switch"
-      ],
+      "files": ["src/switch.tsx"],
+      "exports": ["Switch"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "switchRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["switchRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
         "ids": [],
-        "parts": [
-          "body",
-          "caption",
-          "cell",
-          "head",
-          "headerCell",
-          "row",
-          "table",
-          "wrapper"
-        ],
-        "slots": [
-          "body",
-          "caption",
-          "cell",
-          "head",
-          "headerCell",
-          "row",
-          "table",
-          "wrapper"
-        ],
+        "parts": ["body", "caption", "cell", "head", "headerCell", "row", "table", "wrapper"],
+        "slots": ["body", "caption", "cell", "head", "headerCell", "row", "table", "wrapper"],
         "state": []
       },
       "name": "table",
       "title": "Table",
-      "files": [
-        "src/table.tsx"
-      ],
-      "exports": [
-        "Table",
-        "TableHead",
-        "TableBody",
-        "TableRow",
-        "TableHeaderCell",
-        "TableCell"
-      ],
+      "files": ["src/table.tsx"],
+      "exports": ["Table", "TableHead", "TableBody", "TableRow", "TableHeaderCell", "TableCell"],
       "dependencies": {
         "@kovojs/headless-ui": [],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/server": [
-          "renderRouteHtml",
-          "trustedHtml"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/server": ["renderRouteHtml", "trustedHtml"]
       },
-      "uiComponents": [
-        "theme"
-      ]
+      "uiComponents": ["theme"]
     },
     {
       "family": {
@@ -1562,15 +1024,8 @@
       },
       "name": "tabs",
       "title": "Tabs",
-      "files": [
-        "src/tabs.tsx"
-      ],
-      "exports": [
-        "Tabs",
-        "TabsList",
-        "TabsTrigger",
-        "TabsPanel"
-      ],
+      "files": ["src/tabs.tsx"],
+      "exports": ["Tabs", "TabsList", "TabsTrigger", "TabsPanel"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "TabsActivationMode",
@@ -1580,19 +1035,10 @@
           "tabsRootAttributes",
           "tabsTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "family": {
@@ -1603,9 +1049,7 @@
       },
       "name": "toast",
       "title": "ToastViewport",
-      "files": [
-        "src/toast.tsx"
-      ],
+      "files": ["src/toast.tsx"],
       "exports": [
         "ToastViewport",
         "Toast",
@@ -1626,21 +1070,11 @@
           "ToastVariant",
           "toastViewportAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ],
-        "@kovojs/icons": [
-          "X"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"],
+        "@kovojs/icons": ["X"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -1651,28 +1085,14 @@
       },
       "name": "toggle",
       "title": "Toggle",
-      "files": [
-        "src/toggle.tsx"
-      ],
-      "exports": [
-        "Toggle"
-      ],
+      "files": ["src/toggle.tsx"],
+      "exports": ["Toggle"],
       "dependencies": {
-        "@kovojs/headless-ui": [
-          "toggleRootAttributes"
-        ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/headless-ui": ["toggleRootAttributes"],
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     },
     {
       "family": {
@@ -1683,14 +1103,8 @@
       },
       "name": "toggle-group",
       "title": "ToggleGroup",
-      "files": [
-        "src/toggle-group.tsx"
-      ],
-      "exports": [
-        "ToggleGroup",
-        "ToggleGroupItem",
-        "ToggleGroupButton"
-      ],
+      "files": ["src/toggle-group.tsx"],
+      "exports": ["ToggleGroup", "ToggleGroupItem", "ToggleGroupButton"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "toggleGroupButtonAttributes",
@@ -1700,19 +1114,10 @@
           "ToggleGroupType",
           "ToggleGroupValue"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "family": {
@@ -1723,14 +1128,8 @@
       },
       "name": "toolbar",
       "title": "Toolbar",
-      "files": [
-        "src/toolbar.tsx"
-      ],
-      "exports": [
-        "Toolbar",
-        "ToolbarItem",
-        "ToolbarButton"
-      ],
+      "files": ["src/toolbar.tsx"],
+      "exports": ["Toolbar", "ToolbarItem", "ToolbarButton"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "toolbarButtonAttributes",
@@ -1739,19 +1138,10 @@
           "ToolbarOrientation",
           "toolbarRootAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "navigation-types",
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["navigation-types", "pass-through", "theme"]
     },
     {
       "family": {
@@ -1762,32 +1152,18 @@
       },
       "name": "tooltip",
       "title": "Tooltip",
-      "files": [
-        "src/tooltip.tsx"
-      ],
-      "exports": [
-        "Tooltip",
-        "TooltipTrigger",
-        "TooltipContent"
-      ],
+      "files": ["src/tooltip.tsx"],
+      "exports": ["Tooltip", "TooltipTrigger", "TooltipContent"],
       "dependencies": {
         "@kovojs/headless-ui": [
           "tooltipContentAttributes",
           "tooltipRootAttributes",
           "tooltipTriggerAttributes"
         ],
-        "@kovojs/style": [
-          "*"
-        ],
-        "@kovojs/core": [
-          "component",
-          "ComponentChild"
-        ]
+        "@kovojs/style": ["*"],
+        "@kovojs/core": ["component", "ComponentChild"]
       },
-      "uiComponents": [
-        "pass-through",
-        "theme"
-      ]
+      "uiComponents": ["pass-through", "theme"]
     }
   ]
 }

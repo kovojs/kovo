@@ -458,12 +458,9 @@ export const enhancedMutationReauthResponse = wireEmitter('server.wire.mutation-
   // with a 401 Kovo-Reauth directive instead of rendering validation UI.
   return {
     body: frameworkWireBody(''),
-    headers: mergeResponseHeaders(
-      mutationWireResponseHeaders({} as MutationWireRequest<Request>),
-      {
-        'Kovo-Reauth': loginLocation(options.currentUrl ?? '/'),
-      },
-    ),
+    headers: mergeResponseHeaders(mutationWireResponseHeaders({} as MutationWireRequest<Request>), {
+      'Kovo-Reauth': loginLocation(options.currentUrl ?? '/'),
+    }),
     status: 401,
   };
 });

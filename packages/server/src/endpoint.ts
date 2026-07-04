@@ -157,13 +157,9 @@ export type EndpointDefinition<
   Mount extends EndpointMount = 'exact',
   Db = unknown,
 > =
-  | (EndpointDefinitionBase<Method> &
-      { reason: string } &
-      EndpointMountDefinition<Mount> &
+  | (EndpointDefinitionBase<Method> & { reason: string } & EndpointMountDefinition<Mount> &
       (EndpointCsrfDefault | EndpointCsrfExempt))
-  | (EndpointDbDefinitionBase<Method, Db> &
-      { reason: string } &
-      EndpointMountDefinition<Mount> &
+  | (EndpointDbDefinitionBase<Method, Db> & { reason: string } & EndpointMountDefinition<Mount> &
       (EndpointCsrfDefault | EndpointCsrfExempt));
 
 /** An endpoint with its path attached, as returned by `endpoint()`. */
