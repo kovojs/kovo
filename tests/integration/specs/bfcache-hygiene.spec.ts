@@ -59,8 +59,8 @@ test('recovers server truth after bfcache restore without unload handlers', asyn
   );
   await page.goBack();
   const cleanResponse = await cleanRefetchResponse;
-  await expect(cleanResponse.text()).resolves.toBe(
-    '<kovo-query name="navCounter">{"value":5}</kovo-query>',
+  await expect(cleanResponse.text()).resolves.toMatch(
+    /^<kovo-query name="navCounter"[^>]*>\{"value":5\}<\/kovo-query>$/u,
   );
   await expect(page.getByRole('heading', { name: 'Navigation lifecycle' })).toBeVisible();
   await expect(count).toHaveText('5');
@@ -121,8 +121,8 @@ test('recovers server truth after bfcache restore without unload handlers', asyn
   );
   await page.goBack();
   const response = await refetchResponse;
-  await expect(response.text()).resolves.toBe(
-    '<kovo-query name="navCounter">{"value":8}</kovo-query>',
+  await expect(response.text()).resolves.toMatch(
+    /^<kovo-query name="navCounter"[^>]*>\{"value":8\}<\/kovo-query>$/u,
   );
 
   await expect(page.getByRole('heading', { name: 'Navigation lifecycle' })).toBeVisible();

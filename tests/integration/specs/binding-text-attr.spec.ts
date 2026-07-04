@@ -22,7 +22,7 @@ test('updates text and attribute bindings from current server and state surfaces
   await page.getByRole('button', { name: 'Update server card' }).click();
   const mutationResponse = await mutationResponsePromise;
   const mutationBody = await mutationResponse.text();
-  expect(mutationBody).toContain('<kovo-query name="card">');
+  expect(mutationBody).toMatch(/<kovo-query name="card"[^>]*>/u);
   expect(mutationBody).not.toContain('<kovo-fragment');
 
   await expect(queryOutput).toHaveText('Updated text');

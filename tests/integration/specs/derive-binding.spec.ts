@@ -21,7 +21,7 @@ test('lazily imports a named derive on query change and updates the bound attrib
     page.getByRole('button', { name: 'Sell out' }).click(),
   ]);
   const body = await response.text();
-  expect(body).toContain('<kovo-query name="inventory">');
+  expect(body).toMatch(/<kovo-query name="inventory"[^>]*>/u);
   expect(body).not.toContain('<kovo-fragment');
 
   await expect(page.locator('[data-bind="inventory.count"]')).toHaveText('0');

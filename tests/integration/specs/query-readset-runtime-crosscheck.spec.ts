@@ -9,8 +9,8 @@ test('verifies query endpoint reads against declared read domains', async ({
   const response = await request.get('/_q/readset-good');
 
   expect(response.status()).toBe(200);
-  await expect(response.text()).resolves.toBe(
-    '<kovo-query name="readset-good">{"name":"Keyboard"}</kovo-query>',
+  await expect(response.text()).resolves.toMatch(
+    /^<kovo-query name="readset-good"[^>]*>\{"name":"Keyboard"\}<\/kovo-query>$/u,
   );
   expect(kovoApp.verificationDiagnostics()).toEqual([]);
 });

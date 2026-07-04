@@ -1,4 +1,4 @@
-import { createQueryStore, installKovoLoader } from '@kovojs/browser/client';
+import { createQueryStore, installKovoLoader } from '@kovojs/browser/generated';
 
 declare global {
   interface Window {

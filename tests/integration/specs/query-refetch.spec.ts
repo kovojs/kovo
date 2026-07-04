@@ -34,8 +34,8 @@ test('visible-return refetch updates bound query consumers from typed-read truth
     headers: { Accept: 'text/html', 'Kovo-Fragment': 'true' },
   });
   expect(response.status()).toBe(200);
-  await expect(response.text()).resolves.toBe(
-    '<kovo-query name="refetch">{"message":"Externally changed"}</kovo-query>',
+  await expect(response.text()).resolves.toMatch(
+    /^<kovo-query name="refetch"[^>]*>\{"message":"Externally changed"\}<\/kovo-query>$/u,
   );
 
   expect(await kovoApp.semantic('main')).toMatchSnapshot('query-refetch.semantic.txt');

@@ -4,7 +4,7 @@ import {
   type MorphRoot,
   type TargetCollectorRoot,
   installKovoLoader,
-} from '@kovojs/browser/client';
+} from '@kovojs/browser/generated';
 import { DomMorphRoot, keyedDomMorph } from '@kovojs/test/internal/integration/fixture-browser-abi';
 import {
   applyCompiledQueryUpdatePlan,
