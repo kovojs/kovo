@@ -569,8 +569,14 @@ conservative half-step left as the end state.
     - Evidence: `packages/ui/src/*.tsx`, `packages/ui/scripts/build-registry.mjs`,
       `packages/ui/registry.json`, and `packages/ui/src/index.markup.test.tsx`; verified by the same
       focused command above.
-  - [ ] `@kovojs/browser/client` DI seams → generated/internal via the `KovoLoaderOptions` split.
-  - [ ] Emit generated optimistic modules' imports from `@kovojs/browser/generated`.
+  - [x] `@kovojs/browser/client` DI seams → generated/internal via the `KovoLoaderOptions` split.
+    - Evidence: `packages/browser/src/client.ts`, `packages/browser/src/generated.ts`, and
+      `packages/browser/src/loader.ts`; verified by `pnpm run check:api-surface` and
+      `pnpm exec vitest --run packages/browser/src/index-exports.test.ts packages/browser/src/generated-exports.test.ts packages/drizzle/src/derive-codegen.test.ts --config ./vite.config.ts`.
+  - [x] Emit generated optimistic modules' imports from `@kovojs/browser/generated`.
+    - Evidence: `packages/drizzle/src/derive-codegen.ts` and
+      `packages/drizzle/src/derive-codegen.test.ts`; verified by the same browser/drizzle focused
+      command above.
 - [ ] **Barrel hygiene on the `@kovojs/server` root**: move plumbing families (drain-facts,
       capability primitives, CSP renderers, vite-dev, adapter hooks) behind internal subpaths.
 - [ ] **Kill duplicate vocabulary in one pass** (tag/domain done in Phase 2; GuardFailure,
