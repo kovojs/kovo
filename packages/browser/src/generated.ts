@@ -43,11 +43,7 @@ export type {
   QueryRefetchOptions,
   QueryRefetchResponse,
 } from './query-refetch.js';
-export type {
-  QueryChunk,
-  QueryElementChunkLike,
-  QueryScriptChunkLike,
-} from './wire-parser.js';
+export type { QueryChunk, QueryElementChunkLike, QueryScriptChunkLike } from './wire-parser.js';
 export type { WireAttribute } from './wire-tokenizer.js';
 export type {
   AttributeElementLike,

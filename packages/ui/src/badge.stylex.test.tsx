@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as style from '@kovojs/style';
-import { Badge, badgeStyles } from './badge.js';
+import { Badge } from './badge.js';
 describe('@kovojs/ui Badge StyleX styles', () => {
   it('renders default and variant StyleX classes', () => {
     const neutral = String(Badge.definition.render({ children: 'Draft' }));
@@ -17,27 +17,11 @@ describe('@kovojs/ui Badge StyleX styles', () => {
     expect(success).toContain('badge.tsx#root; badge.tsx#success');
     expect(warning).toContain('badge.tsx#root; badge.tsx#warning');
     expect(
-      (
-        [
-          style.attrs(badgeStyles.base.root, badgeStyles.variants.neutral).class ?? '',
-          style.attrs(badgeStyles.variants.success).class ?? '',
-          style.attrs(badgeStyles.variants.warning).class ?? '',
-          style.attrs(badgeStyles.variants.destructive).class ?? '',
-          style.attrs(badgeStyles.variants.outline).class ?? '',
-        ] as const
-      ).join(' '),
-    ).toContain('kv-badge-align-');
-    expect(
-      (
-        [
-          style.attrs(badgeStyles.base.root, badgeStyles.variants.neutral).class ?? '',
-          style.attrs(badgeStyles.variants.success).class ?? '',
-          style.attrs(badgeStyles.variants.warning).class ?? '',
-          style.attrs(badgeStyles.variants.destructive).class ?? '',
-          style.attrs(badgeStyles.variants.outline).class ?? '',
-        ] as const
-      ).join(' '),
-    ).toContain('kv-badge-variant-bg-');
+      String(Badge.definition.render({ children: 'Draft', variant: 'destructive' })),
+    ).toContain('badge.tsx#root; badge.tsx#destructive');
+    expect(String(Badge.definition.render({ children: 'Draft', variant: 'outline' }))).toContain(
+      'badge.tsx#root; badge.tsx#outline',
+    );
   });
   it('accepts author-last StyleX overrides', () => {
     const overrides = style.create({
@@ -57,11 +41,5 @@ describe('@kovojs/ui Badge StyleX styles', () => {
     expect(rendered).toContain('kv-badge-stylex-test-fg-');
     expect(rendered).toContain('badge.stylex.test.tsx#root');
     expect(rendered).not.toContain('kv-badge-variant-bg-');
-  });
-  it('exports StyleX style groups instead of variant helpers', () => {
-    expect(badgeStyles.base.root.$$css).toBe(true);
-    expect(badgeStyles.variants.neutral.$$css).toBe(true);
-    expect(badgeStyles.variants.success.$$css).toBe(true);
-    expect(badgeStyles.variants.warning.$$css).toBe(true);
   });
 });

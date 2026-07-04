@@ -70,10 +70,6 @@ const variants = style.create({
     color: uiTheme.color.warning.foreground,
   },
 });
-const badgeStyles = {
-  base,
-  variants,
-} as const;
 
 /**
  * Renders the styled badge primitive.

@@ -6,9 +6,7 @@ import { defineTheme } from '@kovojs/style';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
-import { buttonStyles } from './button.js';
-import { dialogStyles } from './dialog.js';
-import { fieldStyles } from './field.js';
+import { uiTheme } from './theme.js';
 
 const srcDir = fileURLToPath(new URL('./', import.meta.url));
 
@@ -22,9 +20,12 @@ describe('@kovojs/ui theme token contract', () => {
     expect(violet.css).toContain('--kovo-theme-sys-color-primary:');
     expect(teal.css).toContain('--kovo-theme-sys-color-primary:');
 
-    expect(styleValues(buttonStyles)).toContain('var(--kovo-theme-sys-color-primary)');
-    expect(styleValues(fieldStyles)).toContain('var(--kovo-theme-sys-color-outline-variant)');
-    expect(styleValues(dialogStyles)).toContain('var(--kovo-theme-sys-color-surface)');
+    expect(uiTheme.color.accent).toContain('var(--kovo-theme-sys-color-primary)');
+    expect(uiTheme.color.border).toContain('var(--kovo-theme-sys-color-outline-variant)');
+    expect(uiTheme.color.background).toContain('var(--kovo-theme-sys-color-surface)');
+    expect(componentSource('button.tsx')).toContain('uiTheme.color.accent');
+    expect(componentSource('field.tsx')).toContain('uiTheme.color.border');
+    expect(componentSource('dialog.tsx')).toContain('uiTheme.color.background');
   });
 
   it('keeps UI component source free of raw hex color literals', () => {
@@ -90,10 +91,6 @@ describe('@kovojs/ui theme token contract', () => {
   });
 });
 
-function styleValues(value: unknown): string {
-  return JSON.stringify(value);
-}
-
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const file = path.join(dir, entry.name);
@@ -106,6 +103,10 @@ function componentSourceFiles(): string[] {
   return sourceFiles(srcDir).filter(
     (file) => !file.endsWith('.test.tsx') && !file.includes('__snapshots__/'),
   );
+}
+
+function componentSource(file: string): string {
+  return readFileSync(path.join(srcDir, file), 'utf8');
 }
 
 function visit(node: ts.Node, callback: (node: ts.Node) => void): void {

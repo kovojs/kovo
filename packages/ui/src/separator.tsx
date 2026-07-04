@@ -37,10 +37,6 @@ const orientations = style.create({
     width: 1,
   },
 });
-const separatorStyles = {
-  base,
-  orientations,
-} as const;
 
 /**
  * Renders the styled separator primitive.

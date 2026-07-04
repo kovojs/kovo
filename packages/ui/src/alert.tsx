@@ -74,10 +74,6 @@ const variants = style.create({
     borderLeftColor: uiTheme.color.warning.border,
   },
 });
-const alertStyles = {
-  base,
-  variants,
-} as const;
 
 /**
  * Renders the styled alert primitive.

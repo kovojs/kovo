@@ -140,11 +140,6 @@ const variants = style.create({
     },
   },
 });
-const buttonStyles = {
-  base,
-  sizes,
-  variants,
-} as const;
 
 /**
  * Renders the styled button primitive.

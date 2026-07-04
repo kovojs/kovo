@@ -6,7 +6,10 @@ import {
   type EnhancedMutationFetch,
   type QueryStore,
 } from '@kovojs/browser/client';
-import { applyCompiledQueryUpdatePlan } from '@kovojs/browser/generated';
+import {
+  applyCompiledQueryUpdatePlan,
+  type KovoGeneratedEnhancedMutationOptions,
+} from '@kovojs/browser/generated';
 import { keyedDomMorph } from '@kovojs/browser/internal/morph';
 import {
   OptimisticRebaser,
@@ -55,7 +58,7 @@ export function installOptimisticFixtureClient(
 ): OptimisticFixtureClient {
   const store = createQueryStore();
   const rebaser = new OptimisticRebaser(store);
-  const root = createBrowserKovoRoot();
+  const root = optimisticFixtureRuntimeRoot();
 
   if (options.installLoader !== false) {
     installKovoLoader({
@@ -102,4 +105,12 @@ export function installOptimisticFixtureClient(
       });
     },
   };
+}
+
+function optimisticFixtureRuntimeRoot(): KovoGeneratedEnhancedMutationOptions['root'] {
+  // Framework-owned optimistic fixtures bypass the public loader and call the
+  // generated/raw submit ABI directly. createBrowserKovoRoot still constructs
+  // the required morph and target-collector methods; the public return type is
+  // intentionally opaque for app-authored client entries.
+  return createBrowserKovoRoot() as KovoGeneratedEnhancedMutationOptions['root'];
 }

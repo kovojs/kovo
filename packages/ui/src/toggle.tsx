@@ -85,10 +85,6 @@ const variants = style.create({
     },
   },
 });
-const toggleStyles = {
-  base,
-  variants,
-} as const;
 
 /**
  * Renders the styled toggle primitive.

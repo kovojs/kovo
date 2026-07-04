@@ -520,7 +520,8 @@ describe('kovo add', () => {
       expect(accordion).toContain('styles?: AccordionStyleOverrides');
       expect(alert).toContain('export const Alert = component({');
       expect(alert).toContain("import * as style from '@kovojs/style';");
-      expect(alert).toContain('const alertStyles =');
+      expect(alert).toContain('const base = style.create');
+      expect(alert).toContain('const variants = style.create');
       expect(alert).toContain('style?: style.StyleInput');
       expect(autocomplete).toContain('export const Autocomplete = component({');
       expect(autocomplete).toContain("import * as style from '@kovojs/style';");
@@ -532,7 +533,8 @@ describe('kovo add', () => {
       expect(avatar).toContain('styles?: AvatarStyleOverrides');
       expect(badge).toContain('export const Badge = component({');
       expect(badge).toContain("import * as style from '@kovojs/style';");
-      expect(badge).toContain('const badgeStyles =');
+      expect(badge).toContain('const base = style.create');
+      expect(badge).toContain('const variants = style.create');
       expect(badge).toContain('style?: style.StyleInput');
       expect(breadcrumb).toContain('export const Breadcrumb = component({');
       expect(breadcrumb).toContain("import * as style from '@kovojs/style';");
@@ -541,7 +543,9 @@ describe('kovo add', () => {
       expect(button).toContain("from '@kovojs/core';");
       expect(button).toContain("import * as style from '@kovojs/style';");
       expect(button).toContain('export const Button = component({');
-      expect(button).toContain('const buttonStyles = {');
+      expect(button).toContain('const base = style.create');
+      expect(button).toContain('const sizes = style.create');
+      expect(button).toContain('const variants = style.create');
       expect(button).toContain('style.attrs(');
       expect(card).toContain('export const Card = component({');
       expect(card).toContain("import * as style from '@kovojs/style';");
@@ -605,7 +609,8 @@ describe('kovo add', () => {
       expect(scrollArea).toContain('styles?: ScrollAreaStyleOverrides');
       expect(separator).toContain('export const Separator = component({');
       expect(separator).toContain("import * as style from '@kovojs/style';");
-      expect(separator).toContain('const separatorStyles =');
+      expect(separator).toContain('const base = style.create');
+      expect(separator).toContain('const orientations = style.create');
       expect(separator).toContain('style?: style.StyleInput');
       expect(sheet).toContain('export const Sheet = component({');
       expect(sheet).toContain("import * as style from '@kovojs/style';");
@@ -635,7 +640,8 @@ describe('kovo add', () => {
       expect(tabs).toContain('styles?: TabsStyleOverrides');
       expect(toggle).toContain('export const Toggle = component({');
       expect(toggle).toContain("import * as style from '@kovojs/style';");
-      expect(toggle).toContain('const toggleStyles =');
+      expect(toggle).toContain('const base = style.create');
+      expect(toggle).toContain('const variants = style.create');
       expect(toggle).toContain('style?: style.StyleInput');
       expect(toggleGroup).toContain('export const ToggleGroup = component({');
       expect(toggleGroup).toContain("import * as style from '@kovojs/style';");
