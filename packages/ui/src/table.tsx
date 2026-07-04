@@ -63,7 +63,7 @@ export interface TableCellProps {
 }
 
 type MaybePromise<Value> = Promise<Value> | Value;
-type TableRenderedHtml = ReturnType<typeof trustedHtml>;
+type TableRenderedHtml = object;
 
 const tableRenderedHtmlValues = new WeakSet<object>();
 
