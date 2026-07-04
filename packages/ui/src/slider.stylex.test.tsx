@@ -2,14 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  Slider,
-  SliderInput,
-  SliderRange,
-  SliderThumb,
-  SliderTrack,
-  sliderStyles,
-} from './slider.js';
+import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from './slider.js';
 
 describe('@kovojs/ui Slider StyleX styles', () => {
   it('matches semantic slider markup with StyleX output', () => {
@@ -25,7 +18,6 @@ describe('@kovojs/ui Slider StyleX styles', () => {
     };
 
     expect({
-      classes: [style.attrs(sliderStyles.root).class ?? ''] as const,
       input: SliderInput.definition.render({
         ...state,
         descriptionId: 'volume-description',
@@ -35,12 +27,10 @@ describe('@kovojs/ui Slider StyleX styles', () => {
         label: 'Volume',
         valueText: '35 percent',
       }),
-      inputClasses: [style.attrs(sliderStyles.input).class ?? ''] as const,
       range: SliderRange.definition.render({
         ...state,
         id: 'volume-range',
       }),
-      rangeClasses: [style.attrs(sliderStyles.range).class ?? ''] as const,
       root: Slider.definition.render({
         ...state,
         children: 'volume slider',
@@ -53,13 +43,11 @@ describe('@kovojs/ui Slider StyleX styles', () => {
         label: 'Volume',
         valueText: '35 percent',
       }),
-      thumbClasses: [style.attrs(sliderStyles.thumb).class ?? ''] as const,
       track: SliderTrack.definition.render({
         ...state,
         children: SliderRange.definition.render(state),
         id: 'volume-track',
       }),
-      trackClasses: [style.attrs(sliderStyles.track).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -95,19 +83,6 @@ describe('@kovojs/ui Slider StyleX styles', () => {
         styles: { track: overrides.track },
         value: 50,
       }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      keys: Object.keys(sliderStyles),
-      markers: {
-        input: sliderStyles.input.$$css,
-        range: sliderStyles.range.$$css,
-        root: sliderStyles.root.$$css,
-        thumb: sliderStyles.thumb.$$css,
-        track: sliderStyles.track.$$css,
-      },
     }).toMatchSnapshot();
   });
 });

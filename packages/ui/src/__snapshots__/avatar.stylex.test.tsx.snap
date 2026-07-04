@@ -1,32 +1,10 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`@kovojs/ui Avatar StyleX styles > exports StyleX style groups 1`] = `
-{
-  "fallbackMarker": true,
-  "imageMarker": true,
-  "keys": [
-    "fallback",
-    "image",
-    "root",
-  ],
-  "rootMarker": true,
-}
-`;
-
 exports[`@kovojs/ui Avatar StyleX styles > matches author-last slot override output 1`] = `"<span class="kv-avatar-bg-ttl9f5 kv-avatar-bd-k90ydj kv-avatar-fg-5omt8h kv-avatar-d-1j551m kv-avatar-flex-1pwdgv kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-overflow-v522gr kv-avatar-position-1nl7h6 kv-avatar-stylex-test-h-1pmd4r kv-avatar-stylex-test-w-1cpny4" data-style-src="avatar.tsx#root; avatar.stylex.test.tsx#root" aria-label="Custom avatar" data-state="loading" role="img"><img alt="Custom avatar" class="kv-avatar-aspect-fpn43h kv-avatar-h-d5pf7t kv-avatar-position-1nl7h6 kv-avatar-w-ektg2g kv-avatar-z-1xxkwe kv-avatar-d-904jdd kv-avatar-stylex-test-object-fgykc3" data-style-src="avatar.tsx#image; avatar.stylex.test.tsx#image" data-state="loading" decoding="async" src="/avatars/custom.png"><span class="kv-avatar-align-it7624 kv-avatar-bd-k90ydj kv-avatar-bottom-k1oami kv-avatar-fg-5omt8h kv-avatar-d-10px5g kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-inset-wumpjy kv-avatar-justify-1daays kv-avatar-left-ifdzh8 kv-avatar-position-1dd1ho kv-avatar-right-10n8yr kv-avatar-top-15k26b kv-avatar-d-1bsk46 kv-avatar-stylex-test-bg-kswopb" data-style-src="avatar.tsx#fallback; avatar.stylex.test.tsx#fallback" data-state="error">CA</span></span>"`;
 
 exports[`@kovojs/ui Avatar StyleX styles > matches avatar image states with StyleX output 1`] = `
 {
-  "classes": [
-    "kv-avatar-bg-ttl9f5 kv-avatar-bd-k90ydj kv-avatar-fg-5omt8h kv-avatar-d-1j551m kv-avatar-flex-1pwdgv kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-h-j3ihts kv-avatar-overflow-v522gr kv-avatar-position-1nl7h6 kv-avatar-w-161s0d",
-  ],
   "error": "<span class="kv-avatar-bg-ttl9f5 kv-avatar-bd-k90ydj kv-avatar-fg-5omt8h kv-avatar-d-1j551m kv-avatar-flex-1pwdgv kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-h-j3ihts kv-avatar-overflow-v522gr kv-avatar-position-1nl7h6 kv-avatar-w-161s0d" data-style-src="avatar.tsx#root" aria-label="Fallback avatar" data-state="error" role="img"><img alt="" class="kv-avatar-aspect-fpn43h kv-avatar-h-d5pf7t kv-avatar-object-1h18mr kv-avatar-position-1nl7h6 kv-avatar-w-ektg2g kv-avatar-z-1xxkwe kv-avatar-d-904jdd" data-style-src="avatar.tsx#image" data-state="error" decoding="async" hidden src="/avatars/missing.png"><span class="kv-avatar-align-it7624 kv-avatar-bg-ttl9f5 kv-avatar-bd-k90ydj kv-avatar-bottom-k1oami kv-avatar-fg-5omt8h kv-avatar-d-10px5g kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-inset-wumpjy kv-avatar-justify-1daays kv-avatar-left-ifdzh8 kv-avatar-position-1dd1ho kv-avatar-right-10n8yr kv-avatar-top-15k26b kv-avatar-d-1bsk46" data-style-src="avatar.tsx#fallback" data-state="error">?</span></span>",
-  "fallbackClasses": [
-    "kv-avatar-align-it7624 kv-avatar-bg-ttl9f5 kv-avatar-bd-k90ydj kv-avatar-bottom-k1oami kv-avatar-fg-5omt8h kv-avatar-d-10px5g kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-inset-wumpjy kv-avatar-justify-1daays kv-avatar-left-ifdzh8 kv-avatar-position-1dd1ho kv-avatar-right-10n8yr kv-avatar-top-15k26b kv-avatar-d-1bsk46",
-  ],
-  "imageClasses": [
-    "kv-avatar-aspect-fpn43h kv-avatar-h-d5pf7t kv-avatar-object-1h18mr kv-avatar-position-1nl7h6 kv-avatar-w-ektg2g kv-avatar-z-1xxkwe kv-avatar-d-904jdd",
-  ],
   "loaded": "<span class="kv-avatar-bg-ttl9f5 kv-avatar-bd-k90ydj kv-avatar-fg-5omt8h kv-avatar-d-1j551m kv-avatar-flex-1pwdgv kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-h-j3ihts kv-avatar-overflow-v522gr kv-avatar-position-1nl7h6 kv-avatar-w-161s0d" data-style-src="avatar.tsx#root" aria-label="Grace Hopper avatar" data-state="loaded" role="img"><img alt="Grace Hopper" class="kv-avatar-aspect-fpn43h kv-avatar-h-d5pf7t kv-avatar-object-1h18mr kv-avatar-position-1nl7h6 kv-avatar-w-ektg2g kv-avatar-z-1xxkwe kv-avatar-d-904jdd" data-style-src="avatar.tsx#image" data-state="loaded" decoding="async" src="/avatars/grace.png"><span class="kv-avatar-align-it7624 kv-avatar-bg-ttl9f5 kv-avatar-bd-k90ydj kv-avatar-bottom-k1oami kv-avatar-fg-5omt8h kv-avatar-d-10px5g kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-inset-wumpjy kv-avatar-justify-1daays kv-avatar-left-ifdzh8 kv-avatar-position-1dd1ho kv-avatar-right-10n8yr kv-avatar-top-15k26b kv-avatar-d-1bsk46" data-style-src="avatar.tsx#fallback" data-state="loaded" hidden>GH</span></span>",
   "loading": "<span class="kv-avatar-bg-ttl9f5 kv-avatar-bd-k90ydj kv-avatar-fg-5omt8h kv-avatar-d-1j551m kv-avatar-flex-1pwdgv kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-h-j3ihts kv-avatar-overflow-v522gr kv-avatar-position-1nl7h6 kv-avatar-w-161s0d" data-style-src="avatar.tsx#root" aria-label="Ada Lovelace avatar" data-state="loading" role="img"><img alt="Ada Lovelace" class="kv-avatar-aspect-fpn43h kv-avatar-h-d5pf7t kv-avatar-object-1h18mr kv-avatar-position-1nl7h6 kv-avatar-w-ektg2g kv-avatar-z-1xxkwe kv-avatar-d-904jdd" data-style-src="avatar.tsx#image" data-state="loading" decoding="async" loading="lazy" src="/avatars/ada.png"><span class="kv-avatar-align-it7624 kv-avatar-bg-ttl9f5 kv-avatar-bd-k90ydj kv-avatar-bottom-k1oami kv-avatar-fg-5omt8h kv-avatar-d-10px5g kv-avatar-font-1h3ouf kv-avatar-font-7zattc kv-avatar-inset-wumpjy kv-avatar-justify-1daays kv-avatar-left-ifdzh8 kv-avatar-position-1dd1ho kv-avatar-right-10n8yr kv-avatar-top-15k26b kv-avatar-d-1bsk46" data-style-src="avatar.tsx#fallback" data-delay="250" data-state="loading">AL</span></span>",
 }

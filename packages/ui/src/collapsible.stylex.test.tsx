@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-  collapsibleStyles,
-} from './collapsible.js';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from './collapsible.js';
 
 describe('@kovojs/ui Collapsible StyleX styles', () => {
   it('matches native details states with StyleX output', () => {
@@ -15,7 +10,6 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
     const closed = { contentId: 'archived-notes', open: false as const };
 
     expect({
-      classes: [style.attrs(collapsibleStyles.root).class ?? ''] as const,
       closed: Collapsible.definition.render({
         children:
           CollapsibleTrigger.definition.render({ ...closed, children: 'Archived notes' }) +
@@ -26,7 +20,6 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
         id: 'collapsible-closed',
         open: false,
       }),
-      contentClasses: [style.attrs(collapsibleStyles.content).class ?? ''] as const,
       disabled: Collapsible.definition.render({
         children:
           CollapsibleTrigger.definition.render({
@@ -53,7 +46,6 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
         id: 'collapsible-open',
         open: true,
       }),
-      triggerClasses: [style.attrs(collapsibleStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -89,14 +81,5 @@ describe('@kovojs/ui Collapsible StyleX styles', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      contentMarker: collapsibleStyles.content.$$css,
-      keys: Object.keys(collapsibleStyles),
-      rootMarker: collapsibleStyles.root.$$css,
-      triggerMarker: collapsibleStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });

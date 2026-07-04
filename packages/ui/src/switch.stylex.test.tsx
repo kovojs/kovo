@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Switch, switchStyles } from './switch.js';
+import { Switch } from './switch.js';
 
 describe('@kovojs/ui Switch StyleX styles', () => {
   it('matches native switch states with StyleX output', () => {
@@ -14,9 +14,7 @@ describe('@kovojs/ui Switch StyleX styles', () => {
         name: 'notifications',
         value: 'enabled',
       }),
-      classes: [style.attrs(switchStyles.root).class ?? ''] as const,
       disabled: Switch.definition.render({ children: 'Disabled', disabled: true }),
-      inputClasses: [style.attrs(switchStyles.input).class ?? ''] as const,
       unchecked: Switch.definition.render({ children: 'Marketing' }),
     }).toMatchSnapshot();
   });
@@ -43,13 +41,5 @@ describe('@kovojs/ui Switch StyleX styles', () => {
         },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      keys: Object.keys(switchStyles),
-      inputMarker: switchStyles.input.$$css,
-      rootMarker: switchStyles.root.$$css,
-    }).toMatchSnapshot();
   });
 });

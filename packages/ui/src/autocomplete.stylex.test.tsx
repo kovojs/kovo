@@ -8,7 +8,6 @@ import {
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
-  autocompleteStyles,
 } from './autocomplete.js';
 
 const items = [
@@ -29,7 +28,6 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
     };
 
     expect({
-      classes: [style.attrs(autocompleteStyles.root).class ?? ''] as const,
       input: AutocompleteInput.definition.render({
         ...state,
         autocomplete: 'off',
@@ -39,19 +37,16 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
         labelledBy: 'team-label',
         name: 'team',
       }),
-      inputClasses: [style.attrs(autocompleteStyles.input).class ?? ''] as const,
       list: AutocompleteList.definition.render({
         ...state,
         children: 'options',
         id: 'team-list',
         labelledBy: 'team-input',
       }),
-      listClasses: [style.attrs(autocompleteStyles.list).class ?? ''] as const,
       option: AutocompleteOption.definition.render({
         ...state,
         itemValue: 'design',
       }),
-      optionClasses: [style.attrs(autocompleteStyles.option).class ?? ''] as const,
       root: Autocomplete.definition.render({
         ...state,
         children: 'autocomplete body',
@@ -63,7 +58,6 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
         ...state,
         id: 'team-value',
       }),
-      valueClasses: [style.attrs(autocompleteStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -107,17 +101,6 @@ describe('@kovojs/ui Autocomplete StyleX slots', () => {
         styles: { value: overrides.value },
         value: 'design',
       }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX slot objects instead of variant helpers', () => {
-    expect({
-      inputMarker: autocompleteStyles.input.$$css,
-      keys: Object.keys(autocompleteStyles),
-      listMarker: autocompleteStyles.list.$$css,
-      optionMarker: autocompleteStyles.option.$$css,
-      rootMarker: autocompleteStyles.root.$$css,
-      valueMarker: autocompleteStyles.value.$$css,
     }).toMatchSnapshot();
   });
 });

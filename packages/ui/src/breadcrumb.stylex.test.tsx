@@ -2,25 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  Breadcrumb,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbSeparator,
-  breadcrumbStyles,
-} from './breadcrumb.js';
+import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from './breadcrumb.js';
 
 describe('@kovojs/ui Breadcrumb StyleX styles', () => {
   it('matches breadcrumb parts with StyleX output', () => {
     expect({
-      classes: [
-        style.attrs(breadcrumbStyles.root).class ?? '',
-        style.attrs(breadcrumbStyles.list).class ?? '',
-        style.attrs(breadcrumbStyles.item).class ?? '',
-        style.attrs(breadcrumbStyles.link).class ?? '',
-        style.attrs(breadcrumbStyles.current).class ?? '',
-        style.attrs(breadcrumbStyles.separator).class ?? '',
-      ] as const,
       current: BreadcrumbLink.definition.render({ children: 'Billing', current: true }),
       item: BreadcrumbItem.definition.render({ children: 'Settings' }),
       link: BreadcrumbLink.definition.render({ children: 'Account', href: '/account' }),
@@ -90,17 +76,5 @@ describe('@kovojs/ui Breadcrumb StyleX styles', () => {
         },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      currentMarker: breadcrumbStyles.current.$$css,
-      itemMarker: breadcrumbStyles.item.$$css,
-      keys: Object.keys(breadcrumbStyles),
-      linkMarker: breadcrumbStyles.link.$$css,
-      listMarker: breadcrumbStyles.list.$$css,
-      rootMarker: breadcrumbStyles.root.$$css,
-      separatorMarker: breadcrumbStyles.separator.$$css,
-    }).toMatchSnapshot();
   });
 });

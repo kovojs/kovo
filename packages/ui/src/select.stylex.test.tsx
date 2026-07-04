@@ -7,7 +7,6 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  selectStyles,
 } from './select.js';
 const items = [
   { label: 'Design', value: 'design' },
@@ -24,7 +23,6 @@ describe('@kovojs/ui Select StyleX slots', () => {
       value: 'design',
     };
     const rendered = {
-      classes: [style.attrs(selectStyles.root).class ?? ''] as const,
       content: String(
         SelectContent.definition.render({
           ...state,
@@ -33,7 +31,6 @@ describe('@kovojs/ui Select StyleX slots', () => {
           labelledBy: 'team-trigger',
         }),
       ),
-      contentClasses: [style.attrs(selectStyles.content).class ?? ''] as const,
       hiddenInput: String(
         SelectHiddenInput.definition.render({
           ...state,
@@ -42,14 +39,12 @@ describe('@kovojs/ui Select StyleX slots', () => {
           name: 'team',
         }),
       ),
-      hiddenInputClasses: [style.attrs(selectStyles.hiddenInput).class ?? ''] as const,
       item: String(
         SelectItem.definition.render({
           ...state,
           itemValue: 'design',
         }),
       ),
-      itemClasses: [style.attrs(selectStyles.item).class ?? ''] as const,
       root: String(
         Select.definition.render({
           ...state,
@@ -69,16 +64,14 @@ describe('@kovojs/ui Select StyleX slots', () => {
           labelledBy: 'team-label',
         }),
       ),
-      triggerClasses: [style.attrs(selectStyles.trigger).class ?? ''] as const,
       value: String(
         SelectValue.definition.render({
           ...state,
           id: 'team-value',
         }),
       ),
-      valueClasses: [style.attrs(selectStyles.value).class ?? ''] as const,
     };
-    expect(rendered.classes[0]).toContain('kv-select');
+    expect(rendered.root).toContain('class="kv-select');
     expect(rendered.content).toContain('aria-labelledby="team-trigger"');
     expect(rendered.content).toContain('role="listbox"');
     expect(rendered.hiddenInput).toContain('form="team-form" id="team-hidden"');
@@ -89,9 +82,7 @@ describe('@kovojs/ui Select StyleX slots', () => {
     expect(rendered.trigger).toContain('aria-activedescendant="team-listbox-option-0"');
     expect(rendered.trigger).toContain('aria-controls="team-listbox"');
     expect(rendered.trigger).toContain('id="team-trigger" role="combobox" type="button"');
-    expect(rendered.triggerClasses[0]).toContain('kv-select');
     expect(rendered.value).toContain('id="team-value">Design</span>');
-    expect(rendered.valueClasses[0]).toContain('kv-select');
   });
   it('accepts author-last StyleX slot overrides', () => {
     const overrides = style.create({
@@ -173,24 +164,5 @@ describe('@kovojs/ui Select StyleX slots', () => {
     expect(rendered.value).toContain(
       'data-style-src="select.tsx#value; select.stylex.test.tsx#value"',
     );
-  });
-  it('exports StyleX slot objects instead of variant helpers', () => {
-    expect({
-      contentMarker: selectStyles.content.$$css,
-      hiddenInputMarker: selectStyles.hiddenInput.$$css,
-      itemMarker: selectStyles.item.$$css,
-      keys: Object.keys(selectStyles),
-      rootMarker: selectStyles.root.$$css,
-      triggerMarker: selectStyles.trigger.$$css,
-      valueMarker: selectStyles.value.$$css,
-    }).toEqual({
-      contentMarker: true,
-      hiddenInputMarker: true,
-      itemMarker: true,
-      keys: ['content', 'hiddenInput', 'item', 'root', 'trigger', 'value'],
-      rootMarker: true,
-      triggerMarker: true,
-      valueMarker: true,
-    });
   });
 });

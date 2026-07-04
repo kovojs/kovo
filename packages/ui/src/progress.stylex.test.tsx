@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Progress, progressStyles } from './progress.js';
+import { Progress } from './progress.js';
 
 describe('@kovojs/ui Progress StyleX styles', () => {
   it('matches native progress states with StyleX output', () => {
     expect({
-      classes: [style.attrs(progressStyles.root).class ?? ''] as const,
       complete: Progress.definition.render({ children: '100%', max: 100, value: 100 }),
       indeterminate: Progress.definition.render({ children: 'Loading', max: 100, value: null }),
       loading: Progress.definition.render({
@@ -35,12 +34,5 @@ describe('@kovojs/ui Progress StyleX styles', () => {
         value: 75,
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports a StyleX style group', () => {
-    expect({
-      keys: Object.keys(progressStyles),
-      marker: progressStyles.root.$$css,
-    }).toMatchSnapshot();
   });
 });

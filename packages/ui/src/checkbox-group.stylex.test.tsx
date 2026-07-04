@@ -7,7 +7,6 @@ import {
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
-  checkboxGroupStyles,
 } from './checkbox-group.js';
 
 const items = [
@@ -29,13 +28,11 @@ describe('@kovojs/ui CheckboxGroup StyleX styles', () => {
     };
 
     expect({
-      classes: [style.attrs(checkboxGroupStyles.root).class ?? ''] as const,
       control: CheckboxGroupControl.definition.render({
         ...state,
         controlId: 'notifications-updates',
         itemValue: 'updates',
       }),
-      controlClasses: [style.attrs(checkboxGroupStyles.control).class ?? ''] as const,
       disabledControl: CheckboxGroupControl.definition.render({
         ...state,
         controlId: 'notifications-security',
@@ -46,14 +43,12 @@ describe('@kovojs/ui CheckboxGroup StyleX styles', () => {
         children: 'updates input',
         itemValue: 'updates',
       }),
-      itemClasses: [style.attrs(checkboxGroupStyles.item).class ?? ''] as const,
       label: CheckboxGroupLabel.definition.render({
         ...state,
         children: 'Product updates',
         controlId: 'notifications-updates',
         itemValue: 'updates',
       }),
-      labelClasses: [style.attrs(checkboxGroupStyles.label).class ?? ''] as const,
       root: CheckboxGroup.definition.render({
         ...state,
         children: 'checkbox options',
@@ -107,18 +102,6 @@ describe('@kovojs/ui CheckboxGroup StyleX styles', () => {
         children: 'Custom options',
         styles: { root: overrides.root },
       }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      keys: Object.keys(checkboxGroupStyles),
-      markers: {
-        control: checkboxGroupStyles.control.$$css,
-        item: checkboxGroupStyles.item.$$css,
-        label: checkboxGroupStyles.label.$$css,
-        root: checkboxGroupStyles.root.$$css,
-      },
     }).toMatchSnapshot();
   });
 });

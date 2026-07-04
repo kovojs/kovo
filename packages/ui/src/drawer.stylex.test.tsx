@@ -2,23 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Drawer, drawerSideStyles, drawerStyles } from './drawer.js';
+import { Drawer } from './drawer.js';
 
 describe('@kovojs/ui Drawer StyleX slots', () => {
   it('matches drawer markup with StyleX slot output', () => {
     expect({
-      bodyClasses: [style.attrs(drawerStyles.body).class ?? ''] as const,
-      classes: [style.attrs(drawerStyles.root).class ?? ''] as const,
-      closeClasses: [style.attrs(drawerStyles.close).class ?? ''] as const,
-      contentClasses: [
-        style.attrs(drawerStyles.content, drawerSideStyles.bottom).class ?? '',
-        style.attrs(drawerSideStyles.left).class ?? '',
-        style.attrs(drawerSideStyles.right).class ?? '',
-        style.attrs(drawerSideStyles.top).class ?? '',
-      ] as const,
-      descriptionClasses: [style.attrs(drawerStyles.description).class ?? ''] as const,
-      handleClasses: [style.attrs(drawerStyles.handle).class ?? ''] as const,
-      headerClasses: [style.attrs(drawerStyles.header).class ?? ''] as const,
       open: Drawer.definition.render({
         children: 'Drawer body',
         contentId: 'standalone-drawer',
@@ -27,8 +15,6 @@ describe('@kovojs/ui Drawer StyleX slots', () => {
         title: 'Standalone drawer',
         trigger: 'Open drawer',
       }),
-      titleClasses: [style.attrs(drawerStyles.title).class ?? ''] as const,
-      triggerClasses: [style.attrs(drawerStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -85,16 +71,5 @@ describe('@kovojs/ui Drawer StyleX slots', () => {
         trigger: 'Customize',
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      contentMarker: drawerStyles.content.$$css,
-      handleMarker: drawerStyles.handle.$$css,
-      keys: Object.keys(drawerStyles),
-      rootMarker: drawerStyles.root.$$css,
-      sideKeys: Object.keys(drawerSideStyles),
-      triggerMarker: drawerStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });

@@ -175,8 +175,8 @@ export function addStorageQueryWriteProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { createMemoryStorage, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { createMemoryStorage, publicAccess, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     'storage query write proof import',
   );
   queries = replaceRequired(
@@ -1586,9 +1586,9 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
   const queriesPath = join(root, 'src/queries.ts');
   const queries = readFileSync(queriesPath, 'utf8')
     .replace(
-      "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
       [
-        "import { domain, query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+        "import { domain, query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
         "import { eq } from 'drizzle-orm';",
       ].join('\n'),
     )
@@ -1597,14 +1597,21 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
       "import { account, contacts } from './schema.js';",
     )
     .replace(
-      'export interface ContactListResult {\n  items: ContactRow[];\n}',
+      'export interface ContactListResult {\n  readonly [key: string]: JsonValue;\n  items: ContactRow[];\n}',
       [
         'export interface ContactListResult {',
+        '  readonly [key: string]: JsonValue;',
         '  items: ContactRow[];',
         '}',
         '',
         'export interface AuthSecretLeakResult {',
-        '  items: { accessToken: string | null; id: string; password: string | null }[];',
+        '  readonly [key: string]: JsonValue;',
+        '  items: {',
+        '    readonly [key: string]: JsonValue;',
+        '    accessToken: string | null;',
+        '    id: string;',
+        '    password: string | null;',
+        '  }[];',
         '}',
       ].join('\n'),
     )
@@ -1821,9 +1828,9 @@ export function addSecretViewEgressProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     [
-      "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
       "import { pgView } from 'drizzle-orm/pg-core';",
     ].join('\n'),
     'secret view proof imports',
@@ -2062,11 +2069,11 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     [
       "import { trustedReveal, type Secret } from '@kovojs/core';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { query, s, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     ].join('\n'),
     'runtime secret proof query imports',
   );
@@ -2508,12 +2515,12 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     [
       "import { trustedReveal, type Secret } from '@kovojs/core';",
       "import { count, eq, sql as drizzleSql } from 'drizzle-orm';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { endpoint, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { endpoint, publicAccess, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     ].join('\n'),
     'sqlite runtime secret provenance query imports',
   );
@@ -2534,13 +2541,23 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
     [
       'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
       '',
+      'type SqliteSecretRow = Record<string, JsonValue> & {',
+      '  company?: string;',
+      '  exposed?: string;',
+      '  id: string;',
+      '  label?: string;',
+      '  leaked?: string;',
+      '  total?: number;',
+      '};',
+      '',
       'interface SqliteSecretRows {',
-      '  items: { company?: string; exposed?: string; id: string; label?: string; leaked?: string; total?: number }[];',
+      '  readonly [key: string]: JsonValue;',
+      '  items: SqliteSecretRow[];',
       '}',
       '',
-      'interface RawSqliteSecretRows {',
+      'type RawSqliteSecretRows = Partial<Record<string, JsonValue>> & {',
       '  rows?: SqliteSecretRows["items"];',
-      '}',
+      '};',
       '',
       'const sqliteSecretRowSchema = s.object({',
       '  company: s.string().optional(),',
@@ -3364,7 +3381,7 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { eq } from 'drizzle-orm';",
       "import { alias } from 'drizzle-orm/sqlite-core';",
-      "import { domain, endpoint, mutation, publicAccess, query, s, type QueryLoadContext } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, query, s, type JsonValue, type QueryLoadContext } from '@kovojs/server';",
       '',
       "import { appAuthed, type AppRequest } from './auth.js';",
       "import type { AppDb } from './db.js';",
@@ -3380,6 +3397,7 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
       '});',
       '',
       'interface AuthzRow {',
+      '  readonly [key: string]: JsonValue;',
       '  id: string;',
       '  label: string;',
       '}',
@@ -3688,7 +3706,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { eq } from 'drizzle-orm';",
       "import { alias, pgTable, text } from 'drizzle-orm/pg-core';",
-      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, type QueryLoadContext, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, type JsonValue, type QueryLoadContext, type TaskSchedulingRequest } from '@kovojs/server';",
       '',
       "import { appAuthed, type AppRequest } from './auth.js';",
       "import type { AppDb } from './db.js';",
@@ -3708,7 +3726,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "  label: text('label').notNull(),",
       '});',
       '',
-      'interface AuthzRow { id: string; label: string }',
+      'interface AuthzRow { readonly [key: string]: JsonValue; id: string; label: string }',
       'type AuthzDb = AppDb | NonNullable<QueryLoadContext<AppRequest, AppDb>["db"]>;',
       '',
       'function requireDb(context?: QueryLoadContext<AppRequest, AppDb>): AuthzDb {',

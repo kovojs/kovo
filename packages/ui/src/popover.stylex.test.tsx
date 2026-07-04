@@ -2,19 +2,17 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Popover, PopoverContent, PopoverTrigger, popoverStyles } from './popover.js';
+import { Popover, PopoverContent, PopoverTrigger } from './popover.js';
 
 describe('@kovojs/ui Popover StyleX slots', () => {
   it('matches popover markup with StyleX slot output', () => {
     expect({
-      classes: [style.attrs(popoverStyles.root).class ?? ''] as const,
       closed: Popover.definition.render({
         children:
           PopoverTrigger.definition.render({ children: 'Filters', contentId: 'filters' }) +
           PopoverContent.definition.render({ children: 'Menu', contentId: 'filters' }),
         id: 'filters-popover',
       }),
-      contentClasses: [style.attrs(popoverStyles.content).class ?? ''] as const,
       open: Popover.definition.render({
         children:
           PopoverTrigger.definition.render({
@@ -26,7 +24,6 @@ describe('@kovojs/ui Popover StyleX slots', () => {
         id: 'filters-popover',
         open: true,
       }),
-      triggerClasses: [style.attrs(popoverStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -65,14 +62,5 @@ describe('@kovojs/ui Popover StyleX slots', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      contentMarker: popoverStyles.content.$$css,
-      keys: Object.keys(popoverStyles),
-      rootMarker: popoverStyles.root.$$css,
-      triggerMarker: popoverStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });

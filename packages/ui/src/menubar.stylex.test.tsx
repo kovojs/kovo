@@ -2,14 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  Menubar,
-  MenubarGroup,
-  MenubarItem,
-  MenubarSeparator,
-  MenubarSubmenu,
-  menubarStyles,
-} from './menubar.js';
+import { Menubar, MenubarGroup, MenubarItem, MenubarSeparator, MenubarSubmenu } from './menubar.js';
 
 const items = [
   { label: 'File', value: 'file' },
@@ -20,9 +13,6 @@ const items = [
 describe('@kovojs/ui Menubar StyleX slots', () => {
   it('matches menubar markup with StyleX slot output', () => {
     expect({
-      classes: [style.attrs(menubarStyles.root).class ?? ''] as const,
-      groupClasses: [style.attrs(menubarStyles.group).class ?? ''] as const,
-      itemClasses: [style.attrs(menubarStyles.item).class ?? ''] as const,
       menubar: Menubar.definition.render({
         activeValue: 'file',
         children:
@@ -67,8 +57,6 @@ describe('@kovojs/ui Menubar StyleX slots', () => {
         openValue: 'file',
         orientation: 'horizontal',
       }),
-      separatorClasses: [style.attrs(menubarStyles.separator).class ?? ''] as const,
-      submenuClasses: [style.attrs(menubarStyles.submenu).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -106,14 +94,5 @@ describe('@kovojs/ui Menubar StyleX slots', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      itemMarker: menubarStyles.item.$$css,
-      keys: Object.keys(menubarStyles),
-      rootMarker: menubarStyles.root.$$css,
-      submenuMarker: menubarStyles.submenu.$$css,
-    }).toMatchSnapshot();
   });
 });

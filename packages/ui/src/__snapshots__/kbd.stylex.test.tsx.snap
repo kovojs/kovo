@@ -1,21 +1,9 @@
 // Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
 
-exports[`@kovojs/ui Kbd StyleX styles > exports a StyleX style group 1`] = `
-{
-  "keys": [
-    "root",
-  ],
-  "marker": true,
-}
-`;
-
 exports[`@kovojs/ui Kbd StyleX styles > matches author-last override output 1`] = `"<kbd class="kv-kbd-align-pcwyi kv-kbd-bd-1gezg0 kv-kbd-bd-1cw6l8 kv-kbd-bd-17dppo kv-kbd-bd-5grtwb kv-kbd-box-xlni9o kv-kbd-d-1j551m kv-kbd-font-mbvnnm kv-kbd-font-6d48ri kv-kbd-font-pksaee kv-kbd-h-12eqfq kv-kbd-justify-1j5cpq kv-kbd-line-154t8i kv-kbd-min-bkq3y kv-kbd-pad-1e0rsx kv-kbd-stylex-test-bg-1c68yj kv-kbd-stylex-test-fg-sutien kv-kbd-stylex-test-text-n168zp" data-style-src="kbd.tsx#root; kbd.stylex.test.tsx#root">K</kbd>"`;
 
 exports[`@kovojs/ui Kbd StyleX styles > matches default rendered output 1`] = `
 {
-  "classes": [
-    "kv-kbd-align-pcwyi kv-kbd-bg-n2unu1 kv-kbd-bd-1gezg0 kv-kbd-bd-1cw6l8 kv-kbd-bd-17dppo kv-kbd-bd-5grtwb kv-kbd-box-xlni9o kv-kbd-fg-1k3ppc kv-kbd-d-1j551m kv-kbd-font-mbvnnm kv-kbd-font-6d48ri kv-kbd-font-pksaee kv-kbd-h-12eqfq kv-kbd-justify-1j5cpq kv-kbd-line-154t8i kv-kbd-min-bkq3y kv-kbd-pad-1e0rsx",
-  ],
   "rendered": "<kbd class="kv-kbd-align-pcwyi kv-kbd-bg-n2unu1 kv-kbd-bd-1gezg0 kv-kbd-bd-1cw6l8 kv-kbd-bd-17dppo kv-kbd-bd-5grtwb kv-kbd-box-xlni9o kv-kbd-fg-1k3ppc kv-kbd-d-1j551m kv-kbd-font-mbvnnm kv-kbd-font-6d48ri kv-kbd-font-pksaee kv-kbd-h-12eqfq kv-kbd-justify-1j5cpq kv-kbd-line-154t8i kv-kbd-min-bkq3y kv-kbd-pad-1e0rsx" data-style-src="kbd.tsx#root">Ctrl</kbd>",
 }
 `;

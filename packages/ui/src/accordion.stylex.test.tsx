@@ -8,7 +8,6 @@ import {
   AccordionHeader,
   AccordionItem,
   AccordionTrigger,
-  accordionStyles,
 } from './accordion.js';
 
 describe('@kovojs/ui Accordion StyleX styles', () => {
@@ -23,10 +22,6 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
     };
 
     expect({
-      classes: [style.attrs(accordionStyles.root).class ?? ''] as const,
-      contentClasses: [style.attrs(accordionStyles.content).class ?? ''] as const,
-      headerClasses: [style.attrs(accordionStyles.header).class ?? ''] as const,
-      itemClasses: [style.attrs(accordionStyles.item).class ?? ''] as const,
       open: Accordion.definition.render({
         children:
           AccordionItem.definition.render({
@@ -72,7 +67,6 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
         id: 'account-accordion',
         value: 'shipping',
       }),
-      triggerClasses: [style.attrs(accordionStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -124,16 +118,5 @@ describe('@kovojs/ui Accordion StyleX styles', () => {
         value: 'one',
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      contentMarker: accordionStyles.content.$$css,
-      headerMarker: accordionStyles.header.$$css,
-      itemMarker: accordionStyles.item.$$css,
-      keys: Object.keys(accordionStyles),
-      rootMarker: accordionStyles.root.$$css,
-      triggerMarker: accordionStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });

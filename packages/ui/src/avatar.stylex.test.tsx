@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Avatar, AvatarFallback, AvatarImage, avatarStyles } from './avatar.js';
+import { Avatar, AvatarFallback, AvatarImage } from './avatar.js';
 
 describe('@kovojs/ui Avatar StyleX styles', () => {
   it('matches avatar image states with StyleX output', () => {
@@ -11,7 +11,6 @@ describe('@kovojs/ui Avatar StyleX styles', () => {
     const error = { src: '/avatars/missing.png', status: 'error' as const };
 
     expect({
-      classes: [style.attrs(avatarStyles.root).class ?? ''] as const,
       error: Avatar.definition.render({
         ...error,
         children:
@@ -19,8 +18,6 @@ describe('@kovojs/ui Avatar StyleX styles', () => {
           AvatarFallback.definition.render({ ...error, children: '?' }),
         label: 'Fallback avatar',
       }),
-      fallbackClasses: [style.attrs(avatarStyles.fallback).class ?? ''] as const,
-      imageClasses: [style.attrs(avatarStyles.image).class ?? ''] as const,
       loaded: Avatar.definition.render({
         ...loaded,
         children:
@@ -76,14 +73,5 @@ describe('@kovojs/ui Avatar StyleX styles', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      fallbackMarker: avatarStyles.fallback.$$css,
-      imageMarker: avatarStyles.image.$$css,
-      keys: Object.keys(avatarStyles),
-      rootMarker: avatarStyles.root.$$css,
-    }).toMatchSnapshot();
   });
 });

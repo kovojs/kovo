@@ -12,7 +12,6 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
   AlertDialogTrigger,
-  alertDialogStyles,
 } from './alert-dialog.js';
 
 describe('@kovojs/ui AlertDialog StyleX slots', () => {
@@ -20,13 +19,6 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
     const dialogState = { contentId: 'delete-account', open: true as const };
 
     expect({
-      actionClasses: [style.attrs(alertDialogStyles.action).class ?? ''] as const,
-      cancelClasses: [style.attrs(alertDialogStyles.cancel).class ?? ''] as const,
-      classes: [style.attrs(alertDialogStyles.root).class ?? ''] as const,
-      contentClasses: [style.attrs(alertDialogStyles.content).class ?? ''] as const,
-      descriptionClasses: [style.attrs(alertDialogStyles.description).class ?? ''] as const,
-      footerClasses: [style.attrs(alertDialogStyles.footer).class ?? ''] as const,
-      headerClasses: [style.attrs(alertDialogStyles.header).class ?? ''] as const,
       open: AlertDialog.definition.render({
         children:
           AlertDialogTrigger.definition.render({ ...dialogState, children: 'Delete account' }) +
@@ -63,8 +55,6 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
         id: 'alert-dialog-root',
         open: true,
       }),
-      titleClasses: [style.attrs(alertDialogStyles.title).class ?? ''] as const,
-      triggerClasses: [style.attrs(alertDialogStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -118,20 +108,5 @@ describe('@kovojs/ui AlertDialog StyleX slots', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      actionMarker: alertDialogStyles.action.$$css,
-      cancelMarker: alertDialogStyles.cancel.$$css,
-      contentMarker: alertDialogStyles.content.$$css,
-      descriptionMarker: alertDialogStyles.description.$$css,
-      footerMarker: alertDialogStyles.footer.$$css,
-      headerMarker: alertDialogStyles.header.$$css,
-      keys: Object.keys(alertDialogStyles),
-      rootMarker: alertDialogStyles.root.$$css,
-      titleMarker: alertDialogStyles.title.$$css,
-      triggerMarker: alertDialogStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });

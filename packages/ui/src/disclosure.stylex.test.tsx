@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  Disclosure,
-  DisclosureContent,
-  DisclosureTrigger,
-  disclosureStyles,
-} from './disclosure.js';
+import { Disclosure, DisclosureContent, DisclosureTrigger } from './disclosure.js';
 
 describe('@kovojs/ui Disclosure StyleX styles', () => {
   it('matches disclosure states with StyleX output', () => {
@@ -15,7 +10,6 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
     const closed = { contentId: 'archived-details', open: false as const };
 
     expect({
-      classes: [style.attrs(disclosureStyles.root).class ?? ''] as const,
       closed: Disclosure.definition.render({
         children:
           DisclosureTrigger.definition.render({ ...closed, children: 'Archived review' }) +
@@ -26,7 +20,6 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
         id: 'disclosure-closed',
         open: false,
       }),
-      contentClasses: [style.attrs(disclosureStyles.content).class ?? ''] as const,
       disabled: Disclosure.definition.render({
         children:
           DisclosureTrigger.definition.render({
@@ -55,7 +48,6 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
         id: 'disclosure-open',
         open: true,
       }),
-      triggerClasses: [style.attrs(disclosureStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -92,14 +84,5 @@ describe('@kovojs/ui Disclosure StyleX styles', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      contentMarker: disclosureStyles.content.$$css,
-      keys: Object.keys(disclosureStyles),
-      rootMarker: disclosureStyles.root.$$css,
-      triggerMarker: disclosureStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });
