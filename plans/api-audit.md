@@ -584,9 +584,15 @@ conservative half-step left as the end state.
     verified by `pnpm run check:api-surface`, `pnpm run check:publish`,
     `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/api-ref.test.mjs scripts/public-packages.test.mjs scripts/api-surface-gate.test.mjs --config ./vite.config.ts`,
     and `pnpm exec vitest --run packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.scaffold.typecheck.test.ts packages/create-kovo/src/index.build.scaffold.sqlite.test.ts --config ./vite.config.ts`.
-- [ ] **Kill duplicate vocabulary in one pass** (tag/domain done in Phase 2; GuardFailure,
-      MutationResponseHeaders, CsrfValidationOptions alias, purpose/reason, core-vs-server
-      `query`/`route`, FieldError ×2, Stylesheet/stylesheet, dual-homed browser exports).
+- [x] **Kill duplicate vocabulary in one pass** (tag/domain done in Phase 2; GuardFailure,
+      MutationResponseHeaders, CsrfOptions-only CSRF config, purpose/reason, core-vs-server
+      `queryRef`/`routeRef`, FieldErrorMessage vs core FieldError, StylesheetLink/stylesheet,
+      duplicate browser/test exports).
+  - Evidence: `packages/core/src/index.ts`, `packages/server/src/{csrf,index,query,route}.ts`,
+    `packages/ui/src/field.tsx`, `packages/test/src/{harness,pglite,sqlite}.ts`, and
+    `scripts/exported-symbol-duplicates.baseline.json`; verified by `pnpm run check:api-surface`,
+    `pnpm run check:exports`, `pnpm run check:vp`, and
+    `pnpm exec vitest run packages/core/src/index.test.ts packages/browser/src/query-visible-return-refetch.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/mutation.test.ts packages/server/src/document.test.ts packages/server/src/api/app.test.ts packages/test/src/harness.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts packages/ui/src/field.stylex.test.tsx packages/ui/src/index.form-controls.test.tsx --config ./vite.config.ts`.
 - [ ] Fix `examples/gallery/src/primitive-actions.ts` importing `./generated`/`./internal`
       headless-ui subpaths from example app source.
 
@@ -675,12 +681,13 @@ hatch survives this phase.
       deriving it generically.
   - [x] Verify generated icons type-check under the new component signature and capture current-cost
         example typecheck timings.
-    - Evidence: `packages/icons/src/index.tsx` / generated icon sources and example tsconfigs;
-      verified by `pnpm exec vitest --run packages/icons/src/icons.test.ts --config ./vite.config.ts`,
-      `pnpm exec tsc --ignoreConfig --noEmit --jsx react-jsx --module NodeNext --moduleResolution NodeNext --target ES2024 --strict --skipLibCheck --types node,vitest packages/icons/src/index.tsx packages/icons/src/*.tsx`,
-      and current example `tsc` timings from the component-sweep branch.
+    - Evidence: `scripts/measure-api-audit-icon-tsc.mjs` typechecks `packages/icons/src/index.tsx`
+      plus all generated icon sources and records current monorepo/scaffold timings; verified by
+      `node scripts/measure-api-audit-icon-tsc.mjs` (icon typecheck exit 0; broader `tsc` exits
+      recorded as current baseline data).
   - [ ] Capture before/after monorepo plus scaffolded-app `tsc` timings before closing the full icon
         benchmark item.
+    - Gap: current-only timing harness exists; no true pre-change baseline was recovered.
 - [x] **Compiler/runtime alignment**: confirm compiler lowering and `assertKnownComponentDefinitionKeys`
       agree with the chosen props channel; type-level enforcement remains defense-in-depth per the
       honesty boundary (SPEC §6.6) — the compiler's validation stays authoritative.
@@ -720,8 +727,15 @@ labelledBy>` (broken composition the old signature hid), components.md Button
 - [ ] **Regenerate stale generated docs** (route() JSDoc example, drizzle 30/38, create-kovo
       `--experimental-sqlite`, cli no-args list, `ExplainKind` prose) and replace the mechanical
       `{} as SelectState` placeholder examples in headless-ui/ui JSDoc with real ones.
-- [ ] **Close the a11y claim gap**: add missing axe end-state assertions (switch-checked,
+  - [x] Replace the mechanical Select placeholder examples in headless-ui/ui JSDoc with concrete
+        examples and guard them in the API-ref test.
+    - Evidence: `packages/headless-ui/src/primitives/select.ts`, `packages/ui/src/select.tsx`, and
+      `site/scripts/api-ref.test.mjs`; verified by `pnpm exec vitest --run site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
+- [x] **Close the a11y claim gap**: add missing axe end-state assertions (switch-checked,
       hover-card-open, checkbox-checked) or soften the guide/rules claim; fix the cited proof file.
+  - Evidence: `examples/gallery/src/interactive-gallery.interactions-a.browser.test.ts` and
+    `examples/gallery/src/interactive-gallery.interactions-b.browser.test.ts`; verified by
+    `pnpm --filter @kovojs/example-gallery run test:browser`.
 
 ### Side investigations (parallel, unowned by a phase)
 
