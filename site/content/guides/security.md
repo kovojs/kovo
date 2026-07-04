@@ -254,7 +254,7 @@ can't trace to `req.session` — data that should be scoped to its owner but pro
 ```txt
 kovo-explain/v1
 UNSCOPED
-UNSCOPED query:orderHistory order via user_id  key predicate not traceable to session
+UNSCOPED QUERY cartById domain=cart scope=args site=cart.queries.ts:21
 SUMMARY total=1
 ```
 
@@ -271,8 +271,11 @@ scheme (`session+guard`, `verifier:<scheme>`, `custom:<name>`, or `none:<justifi
 ```txt
 kovo-explain/v1
 ENDPOINTS
-webhook:stripe POST /hooks/stripe prefix verifier:stripe-signature exempt:webhook order
-SUMMARY total=1
+ENDPOINT app-shell/order-paid surface=webhook method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=- rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
+ENDPOINT echo surface=endpoint method=POST path=/api/echo-json mount=exact auth=public:public echo endpoint is CSRF checked csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
+ENDPOINT health surface=endpoint method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
+ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
+SUMMARY total=4
 ```
 
 This answers "what can reach this app, and what can it touch?" — the report is snapshot-locked with

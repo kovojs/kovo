@@ -4,6 +4,8 @@ import { cp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
+import { checkDocsExplainOutputs } from './explain-output-check.mjs';
+
 /**
  * Authored-doc snippet gate (plan DS-C2): every `ts`/`tsx` fence under
  * `site/content` is extracted into a scratch TypeScript project and checked as
@@ -85,10 +87,12 @@ export async function checkAuthoredDocStyle({ dir = contentDir } = {}) {
 
 export async function checkAuthoredCodeSnippets({
   dir = contentDir,
+  checkExplainOutputs = dir === contentDir,
   outDir = scratchDir,
   keepOnSuccess = false,
 } = {}) {
   await checkAuthoredDocStyle({ dir });
+  if (checkExplainOutputs) checkDocsExplainOutputs({ dir });
 
   const snippets = await collectCodeSnippets(dir);
   if (snippets.length === 0) {

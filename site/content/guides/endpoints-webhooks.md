@@ -150,15 +150,17 @@ webhook, every mutation, and every route returning `respond.file()` or `respond.
 ```txt
 kovo-explain/v1
 ENDPOINTS
-endpoint:oauth/callback GET /auth/callback exact none:oauth-provider-state exempt:oauth-provider-state -
-webhook:stripe POST /hooks/stripe exact verifier:hmac exempt:webhook order
-route:invoice-download GET /invoices/:id exact session+guard checked invoice
-SUMMARY total=3
+ENDPOINT app-shell/order-paid surface=webhook method=POST path=/webhooks/order-paid mount=exact auth=verifier:stripe-signature csrf=exempt:signed stripe webhook cache=no-store body=raw bodySize=- rateLimit=webhook:stripe headers=Stripe-Signature files=- dynamic=- writes=order
+ENDPOINT echo surface=endpoint method=POST path=/api/echo-json mount=exact auth=public:public echo endpoint is CSRF checked csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
+ENDPOINT health surface=endpoint method=GET path=/healthz mount=exact auth=none:public uptime probe csrf=checked cache=no-store body=json bodySize=- rateLimit=- headers=- files=- dynamic=- writes=-
+ENDPOINT inventory/download surface=route-file method=GET path=/downloads/inventory.bin mount=exact auth=custom:api-key csrf=checked cache=private,no-store body=bytes bodySize=stream rateLimit=download:user headers=Content-Disposition,Content-Type files=inventory.bin dynamic=- writes=-
+SUMMARY total=4
 ```
 
-Each row shows method, path, mount mode, auth scheme, CSRF posture, and the write-to-domain chain
-where one exists. A `csrf: false` mutation appears here too, and the CSRF/session gate guarantees that it does
-not read ambient session authority.
+Each row is key/value text: surface, method, path, mount mode, auth scheme, CSRF posture, cache/body
+posture, response headers, file fields, dynamic-route posture, and the write-to-domain chain where
+one exists. A `csrf: false` mutation appears here too, and the CSRF/session gate guarantees that it
+does not read ambient session authority.
 
 ## Next
 

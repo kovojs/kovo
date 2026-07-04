@@ -176,9 +176,10 @@ node dist/server/server.mjs`. Rewrite the Dockerfile comment, pre-deploy gates b
     `static-export.md`, `queries.md`, `installation.md`, and `quickstart.md`; `examples/devtool`
     has a `dev` script; `pnpm --filter @kovojs/site run build`;
     `pnpm --filter @kovojs/site run check:links`; `pnpm --filter @kovojs/example-devtool run check`.
-- [ ] **Replace fabricated/stale CLI sample output with real captured output.** Rule for all
-      three: run the real command against the commerce example's committed graph and paste bytes;
-      never hand-compose output blocks.
+- [x] **Replace fabricated/stale CLI sample output with real captured output.** Rule for all
+      three: run the real CLI against fixture graphs and paste bytes; never hand-compose output
+      blocks. The repo has no committed commerce graph, so the old commerce-graph claim was
+      removed instead of preserved as fiction.
   - `endpoints-webhooks.md:150-157` — the `kovo explain --endpoints` block shows invented
     positional rows (`endpoint:oauth/callback GET /auth/callback exact none:... exempt:... -`).
     Real format is key=value rows (`ENDPOINT <name> surface=endpoint ...` per
@@ -192,11 +193,12 @@ UNHANDLED=0` omits the `derived=` and `PUNTED=` fields the CLI always emits
     (`graph-explain-format.ts:1019-1027`), so the guide's flagship copy-paste CI grep fails
     against real output. Recapture the sample and fix the CI recipe to match (assert on
     `UNHANDLED=0` with a pattern tolerant of field order/additions, and say why).
-  - Durable fix: generate these output blocks at site build time from the committed commerce
-    graph (a small `site/scripts/` step that runs `kovo explain` and injects the blocks, or a
-    test that diffs the docs blocks against fresh output) so they cannot drift again. The
-    kovo-explain review also found the "generated from the commerce app's committed graph" claim
-    is currently hand-maintained fiction — this makes it true.
+  - Durable fix: `site/scripts/explain-output-check.mjs` runs the real `kovo explain` CLI against
+    fixture graphs and `pnpm run check:docs-snippets` fails if the documented output blocks drift.
+  - Evidence: `site/content/guides/endpoints-webhooks.md`, `site/content/guides/security.md`,
+    and `site/content/guides/kovo-explain.md` contain the checked output blocks;
+    `node site/scripts/explain-output-check.mjs`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
 - [x] **Fix spec-contradicting claims** (each: what the page says → what is normatively true →
       the replacement passage):
   - `compiler-internals.md:72-76` + frontmatter description ("how to eject a component"): says
