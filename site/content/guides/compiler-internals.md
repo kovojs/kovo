@@ -98,9 +98,10 @@ functions that render full pages without diverging from them.
 - The generated `registries.d.ts` is where declare-once typing comes from: handler modules, fragment
   targets, query update plans, and route/mutation registries all land as interface augmentations,
   which is why renames propagate as type errors instead of stale strings.
-- `kovo explain component <Name> graph.json` shows the compiler's view of any component — queries
+- `kovo explain component <Name> dist/.kovo/graph.json` shows the compiler's view of any component — queries
   consumed, fragments targeted, handlers exported — without reading the emitted files at all. See
-  [Reading kovo check & kovo explain](/guides/kovo-explain/).
+  [Reading kovo check & kovo explain](/guides/kovo-explain/) and
+  [Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
 
 <details>
 <summary>Spec & diagnostics</summary>

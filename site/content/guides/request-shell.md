@@ -79,6 +79,19 @@ The generated route IR, live-target registry, and client-module registry are bui
 by the compiler integration. Do not point app config into `src/generated/*`; the authored app entry
 is ordinary TSX/TS.
 
+## Run it
+
+Start the app and hit one route from each dispatch tier:
+
+```sh
+curl -i http://localhost:3000/_q/cart
+curl -i http://localhost:3000/c/__v/dev/cart-badge.client.js
+curl -i http://localhost:3000/cart
+```
+
+The point is to see the shell's fixed dispatch order in real responses: typed reads under `/_q/`,
+immutable client modules under `/c/__v/`, then the route table for document requests.
+
 ## Dispatch order
 
 Dispatch is fixed and printable:

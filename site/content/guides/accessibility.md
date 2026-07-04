@@ -110,6 +110,18 @@ The framework proves `Select` emits a correct listbox contract; only you can kno
 _delivery speed_, sits under a _Shipping_ heading, and that the heading order around it is `h2 →
 h3` rather than `h2 → h4`.
 
+## Run it
+
+The framework proof moment is a real browser axe run, not a static claim:
+
+```sh
+pnpm --filter @kovojs/example-gallery run test:browser
+```
+
+That suite drives primitives into their open, expanded, checked, selected, and error end-states,
+then runs axe against the live DOM. For app code, use the same shape on the routes and flows you
+author.
+
 ## Know the documented exclusions
 
 A few states cannot be represented as an axe-stable DOM, and the suite documents each exclusion

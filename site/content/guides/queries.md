@@ -56,6 +56,20 @@ The rendered page carries the query value and the dependency stamp:
 
 The stamp is what lets a mutation response target the right fragments without a client cache.
 
+## Run it
+
+Load the page, then use View Source instead of the Elements panel. You should see both the stamped
+HTML and the serialized query payload the server sent for first paint:
+
+```html
+<span kovo-deps="cartSummary">Cart: <span data-bind="cart.count">2</span></span>
+<script type="application/json" kovo-query="cartSummary">
+  { "count": 2 }
+</script>
+```
+
+That pairing is the proof moment: the visible text and the hydration frame came from the same query.
+
 ## Let writes refresh it
 
 On the Drizzle path, invalidation comes from the SQL that actually runs:
@@ -115,6 +129,24 @@ kovo check
 That is the command that reports the data-plane graph verdict for opaque reads, exempt-table reads,
 and opaque writes. Keep `vp check` in CI for type/lint wiring, but use `kovo check` when you want
 the graph result itself.
+
+## Handle failure
+
+There are two common failure classes on this surface:
+
+- A loader that can fail at runtime should render a deliberate error state in the component that owns
+  it, not an empty value that looks like success.
+- A loader whose dataflow facts are missing fails under `kovo check` before deploy.
+
+Those diagnostics are the ones you fix first:
+
+```txt
+ERROR KV410 productQuery Opaque projection requires an output schema.
+ERROR KV411 auditLogQuery Query reads from exempt table "audit_log".
+```
+
+Add `output` when the query shape is not inferable, and add `reads` only when the SQL path is
+opaque enough that the analyzer cannot see the read set directly.
 
 ## Next
 

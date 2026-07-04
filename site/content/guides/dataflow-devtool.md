@@ -25,7 +25,8 @@ pnpm --filter @kovojs/example-stackoverflow test -- src/interactive-app.test.ts
 ```
 
 For a visual devtool host, pass the graph object or a build-produced graph file into
-`buildBundle()`.
+`buildBundle()`. The CLI writes that file at `dist/.kovo/graph.json`; the discovery rules are in
+[Build the graph artifact first](/guides/cli/#build-the-graph-artifact-first).
 
 ## Mount it under a repo dev server
 
@@ -60,7 +61,7 @@ import { createDevtoolApp } from '@kovojs/devtool/app';
 const bundle = buildBundle({
   app: 'my-app',
   label: 'My App',
-  graph: JSON.parse(readFileSync('./graph.json', 'utf8')),
+  graph: JSON.parse(readFileSync('./dist/.kovo/graph.json', 'utf8')),
   srcRoot: './src',
 });
 
@@ -76,7 +77,7 @@ cards, lanes, source previews, and edges from that input.
 Run the MCP server over the same graph:
 
 ```sh
-kovo-devtool mcp --graph ./graph.json --src ./src --label "My App"
+kovo-devtool mcp --graph ./dist/.kovo/graph.json --src ./src --label "My App"
 ```
 
 `kovo_explain({ query, app?, limit? })` resolves exact node names when possible, then falls back to

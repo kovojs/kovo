@@ -80,6 +80,18 @@ export const theme = defineTheme({
 
 `base`/`sys` theme derivation is an internal maintenance form, not an app-facing API.
 
+## Run it
+
+Build the app, then inspect the emitted stylesheet rather than trusting the TSX:
+
+```sh
+kovo build ./src/app.ts
+find dist -name '*.css' -print
+```
+
+Open the emitted CSS file and confirm the component's `kv-*` atoms and theme variables are present.
+That is the contract the page, fragment, and deferred-stream paths all share.
+
 ## Compose component states
 
 Style objects can be selected with normal TypeScript conditionals:

@@ -64,6 +64,14 @@ kovo: add, audit, build, check, db, compile, explain, export, mcp, update-docs
 Every command emits stable, versioned, diffable output (`kovo-check/v1`, `kovo-explain/v1`,
 `kovo-db/v1`, …) — the same artifact a reviewer reads and an agent consumes.
 
+## Build the graph artifact first
+
+Every `kovo check` and graph-backed `kovo explain` command reads an extracted graph artifact.
+`kovo build` writes it to `dist/.kovo/graph.json`. With no path argument, the CLI looks for
+`graph.json`, then `.kovo/graph.json`, then `dist/.kovo/graph.json`, walking up from the current
+directory. That means a bare `kovo check` in a fresh clone can pass vacuously because there is no
+graph yet. Build first, or pass the path explicitly.
+
 ### `kovo check` — the graph/coverage check
 
 Runs the framework's consistency and exhaustiveness verifier over the app graph: touch-graph
@@ -79,6 +87,9 @@ kovo check coverage graph.json  # against a pre-emitted graph artifact
 kovo check endpoint-posture .kovo/endpoint-posture.json
 kovo check sources-sinks
 ```
+
+If you want the command to be explicit in CI logs, point it at `dist/.kovo/graph.json` directly
+instead of relying on discovery.
 
 ### `kovo explain` — print the decision tree
 

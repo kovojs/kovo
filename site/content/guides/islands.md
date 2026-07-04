@@ -160,6 +160,15 @@ the ladder: extract a derive, lower to a CSS/attribute toggle, make the componen
 fragment target, or mark `isomorphic: true` (lint-gated escape hatch for logic beyond paths/derives/
 keyed lists).
 
+## Run it
+
+Render the page, then inspect both source and the live DOM:
+
+1. Use View Source to confirm the server sent `on:*` handler refs and a `kovo-state` stamp.
+2. Click the toggle and watch the same element flip in the Elements panel without a full re-render.
+
+That is the whole L1 contract: stamped HTML first, then a small handler module on first touch.
+
 ## Handle time-dependent UI
 
 Relative time, countdowns, and expiring badges need a cadence. Do not call `Date.now()` or

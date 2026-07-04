@@ -156,6 +156,18 @@ const f = form.get('/products');
 // ✗ compile error: a field name not in the route's search schema
 ```
 
+## Run it
+
+Scaffold one route, then hit both canonical and non-canonical URLs:
+
+```sh
+curl -i http://localhost:3000/products
+curl -i http://localhost:3000/products/
+```
+
+The first response is the page itself. The second shows the trailing-slash normalization the route
+table owns: a `308` redirect to the canonical path before the page code runs.
+
 ## Typed links and `href()`
 
 `<Link>` and `href()` are compile-time sugar. They carry the path's literal type and lower to a plain
