@@ -232,6 +232,10 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     await expectSecretColumnsDenied(defaultRuntimeUrl, 'kovo_reader', 'kovo_admin');
     await expectCrossOwnerRead(defaultRuntimeUrl);
     await expectSchemaEvolutionWithData(defaultAdminUrl, defaultRuntimeUrl);
+    await expectUnexpectedCatalogPrivilegesRefuse(
+      defaultRuntimeUrl,
+      cluster.url(defaultDb, 'postgres'),
+    );
 
     await expectPermissionDenied(
       cluster.url(adoptedDb, adoptedAdmin),
@@ -412,6 +416,38 @@ async function expectSecretColumnsDenied(
       code: '42501',
     });
   });
+}
+
+async function expectUnexpectedCatalogPrivilegesRefuse(
+  runtimeUrl: string,
+  superuserUrl: string,
+): Promise<void> {
+  const fdw = `${probeRun}_fdw`;
+  const server = `${probeRun}_server`;
+  const largeObjectOid = 700_000 + process.pid;
+  await withPool(superuserUrl, async (pool) => {
+    await pool.query(`CREATE FOREIGN DATA WRAPPER ${quoteIdent(fdw)}`);
+    await pool.query(`CREATE SERVER ${quoteIdent(server)} FOREIGN DATA WRAPPER ${quoteIdent(fdw)}`);
+    await pool.query(`GRANT USAGE ON FOREIGN DATA WRAPPER ${quoteIdent(fdw)} TO kovo_writer`);
+    await pool.query(`GRANT USAGE ON FOREIGN SERVER ${quoteIdent(server)} TO kovo_reader`);
+    await pool.query('GRANT USAGE ON LANGUAGE plpgsql TO kovo_reader');
+    await pool.query('SELECT lo_create($1::oid)', [largeObjectOid]);
+    await pool.query(`GRANT SELECT ON LARGE OBJECT ${largeObjectOid} TO kovo_writer`);
+  });
+
+  const report = await checkPostgresAppDbPosture({
+    databaseUrl: runtimeUrl,
+    schema: evolvedSchema,
+  });
+  expect(report.ok).toBe(false);
+  const unexpectedDetails = report.issues
+    .filter((issue) => issue.code === 'KV433_UNEXPECTED_PRIVILEGE')
+    .map((issue) => issue.detail)
+    .join('\n');
+  expect(unexpectedDetails).toContain('foreign_data_wrapper');
+  expect(unexpectedDetails).toContain('foreign_server');
+  expect(unexpectedDetails).toContain('language');
+  expect(unexpectedDetails).toContain('large_object');
 }
 
 async function expectCrossOwnerRead(databaseUrl: string): Promise<void> {
