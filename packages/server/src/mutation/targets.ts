@@ -94,6 +94,7 @@ export async function renderQueryChunks(
   request: unknown,
   changes: readonly ChangeRecord[],
   maxListItems?: number,
+  settles?: readonly string[],
 ): Promise<string[]> {
   const chunks: string[] = [];
 
@@ -118,7 +119,9 @@ export async function renderQueryChunks(
     }
     recordQueryRuntimeWarnings(request, result.warnings);
 
-    chunks.push(renderQueryRerunChunk(queryDefinition, input, result.value, affectedKeysByDomain));
+    chunks.push(
+      renderQueryRerunChunk(queryDefinition, input, result.value, affectedKeysByDomain, settles),
+    );
   }
 
   return chunks;
@@ -140,6 +143,7 @@ function renderQueryRerunChunk<const Key extends string, Value, Input, Request>(
   input: Input,
   value: Value,
   affectedKeysByDomain: ReadonlyMap<string, ReadonlySet<string>>,
+  settles?: readonly string[],
 ): string {
   const key = readQueryInstanceKey(queryDefinition, input);
   const version = readQueryVersion(queryDefinition, input, value);
@@ -153,6 +157,7 @@ function renderQueryRerunChunk<const Key extends string, Value, Input, Request>(
         delta: true,
         key,
         name: queryDefinition.key,
+        settles,
         value: delta,
         version,
       });
@@ -162,6 +167,7 @@ function renderQueryRerunChunk<const Key extends string, Value, Input, Request>(
   return renderQueryWireHtml({
     key,
     name: queryDefinition.key,
+    settles,
     value,
     version,
   });

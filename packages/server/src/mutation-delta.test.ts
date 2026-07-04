@@ -64,6 +64,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
     const response = await renderMutationResponse(updateItem, {
       buildToken: 'delta-build-token',
       fragment: true,
+      idem: 'idem_update_p0',
       onError: (err) => {
         errors.push(err);
       },
@@ -79,6 +80,7 @@ describe('prod wire deltas: query delta selection (SPEC §9.1.1)', () => {
 
     // The delta chunk must carry the boolean `delta` attribute.
     expect(response.body).toContain(' delta>');
+    expect(response.body).toContain(' settles="idem_update_p0"');
     // It should NOT contain the full large value (would have all 20 products).
     expect(response.body).not.toContain('"productId":"p10"');
     // It should contain the updated item for p0 in a delta envelope (lists or set).

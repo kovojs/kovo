@@ -26,6 +26,12 @@ export interface QueryWireRenderOptions {
   delta?: boolean | undefined;
   key?: string | undefined;
   name: string;
+  /**
+   * Idempotency tokens whose committed effects this query truth already reflects
+   * (SPEC §9.1.1). The browser drops matching pending optimistic transforms
+   * before rebasing the rest.
+   */
+  settles?: readonly string[] | undefined;
   value: unknown;
   version?: number | string | undefined;
 }
@@ -70,10 +76,14 @@ export function renderQueryWireHtml(options: QueryWireRenderOptions): string {
   const keyAttribute = options.key === undefined ? '' : ` key="${escapeAttribute(options.key)}"`;
   const versionAttribute =
     options.version === undefined ? '' : ` version="${escapeAttribute(String(options.version))}"`;
+  const settlesAttribute =
+    options.settles === undefined || options.settles.length === 0
+      ? ''
+      : ` settles="${escapeAttribute(options.settles.join(' '))}"`;
   // Boolean attribute: presence alone signals delta mode; no value is emitted (SPEC §9.1.1).
   const deltaAttribute = options.delta === true ? ' delta' : '';
 
-  return `<kovo-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}${deltaAttribute}>${escapeHtml(stringifyKovoWireValue(options.value))}</kovo-query>`;
+  return `<kovo-query name="${escapeAttribute(options.name)}"${keyAttribute}${versionAttribute}${settlesAttribute}${deltaAttribute}>${escapeHtml(stringifyKovoWireValue(options.value))}</kovo-query>`;
 }
 
 /**

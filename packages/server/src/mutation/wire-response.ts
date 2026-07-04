@@ -226,6 +226,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
       wireRequest.request,
       result.changes,
       wireRequest.maxListItems,
+      wireRequest.idem === undefined ? undefined : [wireRequest.idem],
     );
     const fragmentChunks = [
       ...(await renderLiveTargetChunks(

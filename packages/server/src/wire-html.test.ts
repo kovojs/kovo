@@ -41,6 +41,18 @@ describe('renderQueryWireHtml', () => {
     const html = renderQueryWireHtml({ name: 'cart', value: { count: 2 } });
     expect(html).not.toContain(' delta');
   });
+
+  it('emits escaped settlement tokens for optimistic rebase truth (SPEC §9.1.1)', () => {
+    expect(
+      renderQueryWireHtml({
+        name: 'cart',
+        settles: ['idem-1', 'idem&2'],
+        value: { count: 2 },
+      }),
+    ).toBe(
+      '<kovo-query name="cart" settles="idem-1 idem&amp;2">{"count":2}</kovo-query>',
+    );
+  });
 });
 
 describe('server wire html emitters', () => {
