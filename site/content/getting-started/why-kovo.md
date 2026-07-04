@@ -18,7 +18,7 @@ it, the database itself refuses.
 Here's the whole idea in one line. You mark who owns a row:
 
 ```ts
-orders = pgTable(
+const orders = pgTable(
   'orders',
   {
     /* … */
@@ -30,7 +30,7 @@ orders = pgTable(
 Now every read of `orders` is scoped to the signed-in user — enforced by Postgres, at the
 connection, not by a `WHERE` clause you remembered to add. Delete the filter, write the query wrong,
 reach the table through a different handle: the database still returns only that user's rows. Forget
-to scope an owned table at all, and the build fails at the query with `KV414` before it ships.
+to scope an owned table at all, and the build fails at the query before it ships.
 
 This page shows that pattern applied to the three mistakes that leak data: reading another user's
 rows (IDOR), SQL injection, and XSS. Real code, both sides — what you write, and what Kovo won't let
@@ -67,7 +67,7 @@ orders = pgTable(
   kovo({ owner: (t) => t.userId }),
 );
 
-orderHistory = query({
+const orderHistory = query({
   guard: guards.authed(),
   load: (_input, { db }) => db.select().from(orders), // returns only the caller's orders
 });
@@ -81,10 +81,10 @@ nothing about who can see what.)
 Now the version that leaks in most stacks — an owned table read with no way to scope it:
 
 ```ts
-db.select().from(orders); // ✗ build: KV414 — read of an owned table is not owner-scoped
+db.select().from(orders); // ✗ build error — read of an owned table is not owner-scoped
 ```
 
-At build, that's `KV414`. At runtime, if you route around the check somehow, the database returns
+At build, that's a scoping diagnostic. At runtime, if you route around the check somehow, the database returns
 zero rows — not everyone's. Reading across users on purpose (an admin report) is a named capability,
 `crossOwnerRead`, which requires an admin role and is logged. The wide read exists. It just can't
 happen by accident.
@@ -106,9 +106,9 @@ db.select()
   .where(sql`id = ${input.id}`); // ${input.id} is a bound parameter, not text
 ```
 
-A hand-built string doesn't carry that brand, so it can't reach a managed handle (`KV422`). Truly
-unsafe SQL — building the statement text yourself — means calling `trustedSql(...)` on purpose, the
-audited escape that appears in `kovo explain`.
+A hand-built string doesn't carry that brand, so it can't reach a managed handle. Truly unsafe SQL —
+building the statement text yourself — means calling `trustedSql(...)` on purpose, the audited escape
+that appears in `kovo explain`.
 
 ## XSS: a string that's really markup
 
@@ -119,11 +119,15 @@ Output is escaped. A name with a `<script>` in it renders as characters, not as 
 ```
 
 There's no string-accepting raw-HTML prop to slip markup through. To emit real HTML you build a
-`trustedHtml` value deliberately, which carries provenance the compiler can audit (`KV426`):
+`trustedHtml` value deliberately, which carries provenance the compiler can audit:
 
 ```tsx
+import { trustedHtml } from '@kovojs/server';
+
+declare const comment: { body: string };
+
 <div>{comment.body}</div>; // escaped — safe by default
-<div>{trustedHtml(comment.body)}</div>; // you opted in, on the record
+<div>{trustedHtml(comment.body, 'moderated comment markup')}</div>; // you opted in, on the record
 ```
 
 The dangerous form is longer to write than the safe one, and it leaves a trace. That's the point.
@@ -136,9 +140,9 @@ Mark a column `secret` and its value can't be serialized to the client — even 
 session = pgTable('session', { token: text('token') /* … */ }, kovo({ secret: ['token'] }));
 ```
 
-A session token, a password hash, an OAuth secret: tag it once, and `KV435` keeps it off every wire
-frame. Select it into a loader by accident and the value is dropped at the boundary, not shipped and
-hoped-unused.
+A session token, a password hash, an OAuth secret: tag it once, and the secret-egress check keeps it
+off every wire frame. Select it into a loader by accident and the value is dropped at the boundary,
+not shipped and hoped-unused.
 
 ## Where the guarantee actually comes from
 
@@ -153,11 +157,11 @@ the database, by the role, regardless of how the query is written. That's what m
 can't reach it. At startup Kovo audits the database's actual grant graph and refuses to serve if it
 finds anything the role can reach that isn't provably scoped.
 
-The static checks are the early-warning layer, not the boundary. `KV414` tells you at build that a
-read isn't scoped; it doesn't have to be complete, because the engine is what actually says no. Kovo
-tests exactly this: a paranoid build mode turns off every static security check and runs the app, so
-the runtime enforcement has to hold on its own. If switching off the compiler's help lets a leak
-through, that's a bug we fix — not a guarantee we quietly rest on the compiler for.
+The static checks are the early-warning layer, not the boundary. The scoping diagnostic tells you at
+build that a read isn't scoped; it doesn't have to be complete, because the engine is what actually
+says no. Kovo tests exactly this: a paranoid build mode turns off every static security check and
+runs the app, so the runtime enforcement has to hold on its own. If switching off the compiler's help
+lets a leak through, that's a bug we fix — not a guarantee we quietly rest on the compiler for.
 
 ## What you're still on the hook for
 
