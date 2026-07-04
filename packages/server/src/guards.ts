@@ -63,18 +63,6 @@ export interface RateLimitedDenial {
   retryAfter?: number;
 }
 
-/**
- * Back-compat alias for {@link GuardDenial}: the type a guard returns to reject a
- * request (SPEC §6.5).
- *
- * @deprecated Use {@link GuardDenial}. Retained as a documented alias so external
- * code that imported the previous denial type keeps compiling; the intent-based
- * `kind` discriminant (SPEC §6.5) replaces the old `code`/`status` fields, which
- * advertised an internal sentinel status (422) the browser never received on the
- * documented auth paths.
- */
-export type GuardFailure = GuardDenial;
-
 /** What a guard returns: `true` to allow, or a {@link GuardDenial} to reject (SPEC §6.5). */
 export type GuardResult = boolean | GuardDenial;
 

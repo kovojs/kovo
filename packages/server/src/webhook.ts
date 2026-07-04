@@ -21,7 +21,6 @@ import {
   mergeResponseHeaders,
   retryAfterHeaders,
   serverResponseToWebResponse,
-  type MutationResponseHeaders,
   type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
@@ -77,7 +76,7 @@ export interface WebhookChangeOptions<Input = unknown> {
 /** A stored wire response replayed for a duplicate webhook delivery (SPEC §10.3). */
 export interface WebhookWireResponse extends ServerResponseBase<
   string,
-  MutationResponseHeaders,
+  ResponseHeaders,
   WebhookResponseStatus
 > {}
 

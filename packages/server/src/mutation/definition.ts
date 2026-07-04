@@ -69,7 +69,7 @@ export interface MutationSuccess<Value, Input = unknown> {
   rerunQueryInstances?: QueryRerun[];
   rerunQueries: string[];
   ok: true;
-  responseHeaders?: import('../response.js').MutationResponseHeaders;
+  responseHeaders?: import('../response.js').ResponseHeaders;
   value: Value;
 }
 

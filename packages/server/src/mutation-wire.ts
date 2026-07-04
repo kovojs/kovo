@@ -14,7 +14,7 @@ import {
   readHeader,
   type FrameworkWireBody,
   type HeaderSource,
-  type MutationResponseHeaders,
+  type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
 
@@ -144,7 +144,7 @@ export interface LiveTargetRenderContext<Request = unknown> {
  */
 export interface BufferedMutationWireResponse extends ServerResponseBase<
   FrameworkWireBody,
-  MutationResponseHeaders,
+  ResponseHeaders,
   200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
 
@@ -207,7 +207,7 @@ export interface MutationWireRequestOptions<
  */
 export interface MutationWireResponse extends ServerResponseBase<
   FrameworkWireBody | ReadableStream<Uint8Array>,
-  MutationResponseHeaders,
+  ResponseHeaders,
   200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
 
@@ -256,7 +256,7 @@ export interface NoJsMutationRequest<
  */
 export interface NoJsMutationResponse extends ServerResponseBase<
   FrameworkWireBody,
-  MutationResponseHeaders,
+  ResponseHeaders,
   303 | 403 | 409 | 422 | 429 | 500
 > {}
 

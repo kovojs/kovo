@@ -311,7 +311,7 @@ describe('api-ref generator', () => {
       '@kovojs/headless-ui': 103,
       '@kovojs/icons': 1,
       '@kovojs/browser': 90,
-      '@kovojs/server': 160,
+      '@kovojs/server': 150,
       '@kovojs/style': 34,
       '@kovojs/better-auth': 13,
       '@kovojs/cli': 11,

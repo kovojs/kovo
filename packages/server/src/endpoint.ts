@@ -136,11 +136,6 @@ export interface EndpointDbDefinitionBase<Method extends EndpointMethod, Db = un
   response: EndpointResponsePosture;
 }
 
-/** Endpoint-level audit reason; `purpose` is accepted as an app-facing synonym. */
-export type EndpointReason =
-  | { purpose: string; reason?: never }
-  | { purpose?: never; reason: string };
-
 /** Prefix endpoint mounts must justify the wider routed surface (SPEC §9.1). */
 export type EndpointMountDefinition<Mount extends EndpointMount> = Mount extends 'prefix'
   ? { mount: Mount; mountJustification: string }
@@ -163,11 +158,11 @@ export type EndpointDefinition<
   Db = unknown,
 > =
   | (EndpointDefinitionBase<Method> &
-      EndpointReason &
+      { reason: string } &
       EndpointMountDefinition<Mount> &
       (EndpointCsrfDefault | EndpointCsrfExempt))
   | (EndpointDbDefinitionBase<Method, Db> &
-      EndpointReason &
+      { reason: string } &
       EndpointMountDefinition<Mount> &
       (EndpointCsrfDefault | EndpointCsrfExempt));
 
@@ -187,7 +182,7 @@ export interface EndpointDeclaration<
  * `Response`, mounted at an exact path or a path `prefix`. Endpoints are the
  * escape hatch for machine traffic (webhooks, APIs) that bypasses the page/query
  * pipeline, so every declaration carries audit metadata: explicit `method`,
- * endpoint-level `reason`/`purpose`, raw response posture, and a prefix mount
+ * endpoint-level `reason`, raw response posture, and a prefix mount
  * justification when `mount: 'prefix'` is used. CSRF is default-on — opt out
  * with `csrf: false` plus a justification (SPEC §6.6 and §9.1).
  *
@@ -216,11 +211,9 @@ export function endpoint<
   definition: EndpointDefinition<Method, Mount, Db>,
 ): EndpointDeclaration<Path, Method, Mount, Db> {
   const mount = (definition.mount ?? 'exact') as Mount;
-  const reason = definition.reason ?? definition.purpose;
-  if (reason === undefined) {
-    throw new TypeError('endpoint() requires either reason or purpose');
+  if (definition.reason.trim() === '') {
+    throw new TypeError('endpoint() requires a non-empty reason');
   }
-
   return {
     ...(definition.access === undefined ? {} : { access: definition.access }),
     ...(definition.auth === undefined ? {} : { auth: definition.auth }),
@@ -235,7 +228,7 @@ export function endpoint<
       ? {}
       : { mountJustification: definition.mountJustification }),
     path,
-    reason,
+    reason: definition.reason,
     response: definition.response,
   };
 }

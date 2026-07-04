@@ -185,7 +185,7 @@ describe('server endpoints', () => {
       csrfJustification: 'custom machine verifier',
       handler: () => new Response('ok'),
       method: 'POST',
-      purpose: 'custom machine verifier endpoint',
+      reason: 'custom machine verifier endpoint',
       response: rawTextResponse,
     });
 

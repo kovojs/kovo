@@ -1,4 +1,3 @@
-import type { DeferredStreamChunk } from './deferred-stream.js';
 import type { StorageReadCapability } from '@kovojs/core';
 import { wireEmitter } from '@kovojs/core/internal/security-markers';
 import {
@@ -16,12 +15,6 @@ export type ResponseHeaderValue = string | string[];
 
 /** A header bag mapping header names to values. */
 export type ResponseHeaders = Record<string, ResponseHeaderValue>;
-
-/** A single mutation-response header value (alias of `ResponseHeaderValue`). */
-export type MutationResponseHeaderValue = ResponseHeaderValue;
-
-/** A mutation-response header bag (alias of `ResponseHeaders`). */
-export type MutationResponseHeaders = ResponseHeaders;
 
 const SERVER_REDIRECT_LOCATION_SINK = 'server:redirect-location';
 
@@ -159,8 +152,6 @@ export interface RoutePageResponse extends ServerResponseBase<
   ResponseHeaders,
   RouteResponseStatus
 > {
-  /** @internal Deferred route-region chunks streamed after the initial document shell. */
-  deferredChunks?: readonly (DeferredStreamChunk | Promise<DeferredStreamChunk>)[];
   /** @internal The request after the route lifecycle resolved session/db (SPEC §6.5). */
   lifecycleRequest?: unknown;
 }

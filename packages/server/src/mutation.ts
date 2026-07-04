@@ -25,7 +25,7 @@ import {
 } from './guards.js';
 import { registeredGeneratedLiveTargetRenderers } from './live-target-registry.js';
 import type { JsonSerializable } from './json-boundary.js';
-import { appendResponseHeader, type MutationResponseHeaders } from './response.js';
+import { appendResponseHeader, type ResponseHeaders } from './response.js';
 import {
   mutationWireRequestFromHeaders,
   type BufferedMutationWireResponse,
@@ -436,7 +436,7 @@ async function runMutationWithTrackedInput<
   options: RunMutationOptions<Request>,
 ): Promise<MutationResult<Value, InferSchema<InputSchema>>> {
   const manualInvalidations: ChangeRecord[] = [];
-  const responseHeaders: MutationResponseHeaders = {};
+  const responseHeaders: ResponseHeaders = {};
   // B3 (SPEC §9.1.1:846): only the typed (name, value, options) builder is exposed;
   // the raw single-string overload has been removed to prevent arbitrary attribute injection.
   function setCookie(name: string, value: string, options?: CookieOptions): void {

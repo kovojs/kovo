@@ -1,5 +1,4 @@
 export { createApp, createRequestHandler } from './app.js';
-export { createElement } from './jsx-runtime.js';
 // SPEC §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot env/secret
 // validation at the createApp chokepoint. `CreateAppBootError` is the typed boot
 // refusal a deploy/test catches; `committedSecretWaiver` is the audited escape for
@@ -422,7 +421,6 @@ export {
   cspSha256,
   Defer,
   i18n,
-  meta,
   metaFromQuery,
   ComponentXmlError,
   parseComponentXml,
@@ -501,10 +499,6 @@ export type {
   ClientIpRequestLike,
   CookieClass,
   CookieOptions,
-  DeferredFragmentChunk,
-  DeferredPriority,
-  DeferredQueryChunk,
-  DeferredStreamChunk,
   DiagnosticCode,
   Endpoint,
   EndpointAuthDeclaration,
@@ -519,7 +513,6 @@ export type {
   EndpointMountDefinition,
   EndpointMethod,
   EndpointMount,
-  EndpointReason,
   EndpointRequest,
   EndpointCachePosture,
   EndpointResponseBody,
@@ -531,7 +524,6 @@ export type {
   Guard,
   GuardArgsRequest,
   GuardDenial,
-  GuardFailure,
   GuardParamsRequest,
   GuardResult,
   JsonValue,
@@ -543,8 +535,6 @@ export type {
   LayoutRenderResult,
   LayoutRenderSlots,
   LinkDescriptor,
-  MutationResponseHeaders,
-  MutationResponseHeaderValue,
   NotFound,
   RateLimitedDenial,
   RateLimitOptions,

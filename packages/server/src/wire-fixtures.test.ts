@@ -10,7 +10,7 @@ import {
   renderNoJsMutationResponse,
 } from './mutation.js';
 import { query, renderQueryEndpointResponse } from './query.js';
-import type { MutationResponseHeaderValue } from './response.js';
+import type { ResponseHeaderValue } from './response.js';
 import { s } from './schema.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
 import {
@@ -360,7 +360,7 @@ type WireFixtureHandlers = {
     rawInput: FormData,
   ): Promise<{
     body: string;
-    headers: Record<string, MutationResponseHeaderValue>;
+    headers: Record<string, ResponseHeaderValue>;
     status: number;
   }>;
   noJsAddToCart(
@@ -368,7 +368,7 @@ type WireFixtureHandlers = {
     rawInput: FormData,
   ): Promise<{
     body: string;
-    headers: Record<string, MutationResponseHeaderValue>;
+    headers: Record<string, ResponseHeaderValue>;
     status: number;
   }>;
   product(
@@ -471,7 +471,7 @@ function writeLiveFixtureResponse(
   response: ServerResponse,
   wireResponse: {
     body: string;
-    headers: Record<string, MutationResponseHeaderValue>;
+    headers: Record<string, ResponseHeaderValue>;
     status: number;
   },
   reason: string,
@@ -580,7 +580,7 @@ function readFixtureRequests(
 }
 
 function normalizeWireResponse(
-  response: { body: string; headers: Record<string, MutationResponseHeaderValue>; status: number },
+  response: { body: string; headers: Record<string, ResponseHeaderValue>; status: number },
   reason: string,
 ): { body: string; headers: Record<string, string>; statusLine: string } {
   return {
@@ -598,7 +598,7 @@ function normalizeWireResponse(
 function expectBufferedWireResponse<
   Response extends {
     body: ReadableStream<Uint8Array> | string;
-    headers: Record<string, MutationResponseHeaderValue>;
+    headers: Record<string, ResponseHeaderValue>;
     status: number;
   },
 >(response: Response): Response & { body: string } {
