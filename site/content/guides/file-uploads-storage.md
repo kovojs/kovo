@@ -20,10 +20,7 @@ declare const avatarStorage: any;
 export const uploadAvatar = mutation({
   access: publicAccess('signed-in users can upload an avatar'),
   input: s.object({
-    avatar: s.file().maxBytes(2_000_000).accept(['image/png']).store({
-      keyPrefix: 'avatars',
-      storage: avatarStorage,
-    }),
+    avatar: s.file().maxBytes(2_000_000).accept(['image/png']).store({ storage: avatarStorage }),
   }),
   async handler({ avatar }) {
     return { key: avatar.key };

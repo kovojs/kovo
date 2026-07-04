@@ -360,7 +360,7 @@ Each entry is a full outline an implementer can write from. All follow the guide
 "Sections" lists the verb-headed H2s in order. Verify every named export against the package
 index before writing (evidence lines given).
 
-- [ ] **File uploads & blob storage** — `tutorial/04-mutations.md:87` already promises "the
+- [x] **File uploads & blob storage** — `tutorial/04-mutations.md:87` already promises "the
       mutations guide covers guards, file uploads, and response headers"; none exists anywhere.
       Exports: `createFileSystemStorage`/`createMemoryStorage`/`createS3CompatibleStorage`
       (`packages/core/src/index.ts`, re-exported from server), `s.file()`, storage download
@@ -376,7 +376,9 @@ index before writing (evidence lines given).
     is wrong for user content) → **Limit it** (size/type validation on the schema; interaction
     with request-shell body limits) → **Handle failure** (validation failure → field error;
     storage errors) → Next: mutations, security (capability URLs).
-- [ ] **Background tasks & scheduling** — SPEC §9.6 fully shipped, zero site coverage, flagged
+  - Evidence: `site/content/guides/file-uploads-storage.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Background tasks & scheduling** — SPEC §9.6 fully shipped, zero site coverage, flagged
       by 4 of 6 sweeps. Exports: `task` (`packages/server/src/index.ts:270`; `task.ts`,
       `task-runner.ts`), `request.schedule()`/`request.cancel()`, `TaskScheduleOptions` with
       debounce/throttle keys, `TaskCronCatchUp`, `createDurableTaskStatus`,
@@ -393,7 +395,9 @@ index before writing (evidence lines given).
     deploy presets; `createDurableTaskSqlExecutor`/`createDurableTaskStatus` for status) →
     **Inspect it** (`kovo explain task <key>`, `--tasks` — real output) → **Handle failure**
     (retries, cancellation via `request.cancel()`) → Next: deployment, endpoints-webhooks.
-- [ ] **Configuration & environment reference** — no page enumerates any of the 25+ `KOVO_*`
+  - Evidence: `site/content/guides/background-tasks.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Configuration & environment reference** — no page enumerates any of the 25+ `KOVO_*`
       vars or the boot-validation contract. Source of truth: `packages/server/src/env.ts`
       (`validateAppEnv`, `resolveBootMode`, `committedSecretWaiver`,
       `FRAMEWORK_SECRET_MIN_ENTROPY_BITS`); grep `KOVO_` across packages for the full inventory.
@@ -406,7 +410,9 @@ index before writing (evidence lines given).
     effect — database URLs/roles/driver, CSRF secret, data dir, CSP report endpoint, deploy
     knobs, `KOVO_EXPERIMENTAL_SQLITE`, `KOVO_DEVTOOL_BASE`, …). Strongly consider generating the
     table from source the way `/api/` is generated, so it can't drift.
-- [ ] **Database lifecycle: create, migrate, seed** — all four data-backed examples hand-roll
+  - Evidence: `site/content/guides/configuration-environment.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Database lifecycle: create, migrate, seed** — all four data-backed examples hand-roll
       the same bootstrap; today's only coverage is a cli.md subsection. Sources:
       `packages/cli/src/commands/db.ts` (`check|generate|migrate|provision`,
       `KOVO_ADMIN_DATABASE_URL`, `generatedMigrationSequence`, `--reader-role`/`--writer-role`
@@ -421,7 +427,9 @@ migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role se
     handling, reader/writer role adoption and why two roles exist — link
     postgres-authz-policy) → **Check the posture** (`kovo db check`, real output) → **Handle
     failure** (provision failures, KV433 family) → Next: postgres-authz-policy, deployment.
-- [ ] **Error handling** — one page unifying the story currently fragmented across four guides
+  - Evidence: `site/content/guides/database-lifecycle.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Error handling** — one page unifying the story currently fragmented across four guides
       (layouts "Render segment failures", request-shell "Documents and error shells", mutations
       typed failures, routing `notFound()`), plus the pieces documented nowhere:
       `<ErrorBoundary fallback={...}>` from `@kovojs/core` (used at
@@ -438,7 +446,9 @@ migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role se
     (`ErrorShellRenderer`, a minimal custom 404; the default's no-internals guarantee) →
     **Observe errors in production** (`createApp({ onError })`; link observability when it
     exists) → Next. Existing guides then link here instead of re-explaining.
-- [ ] **Caching** — the first question a Next.js-trained evaluator asks; Kovo has a distinctive
+  - Evidence: `site/content/guides/error-handling.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
+- [x] **Caching** — the first question a Next.js-trained evaluator asks; Kovo has a distinctive
       normative answer and no page. Sources: SPEC §9 caching contract
       (`spec/09-wire-protocol.md:~87,~145`), typed `cacheControl` allowlist (KV415),
       `spec/07-navigation.md:34` (bfcache posture), `QueryReadConfig.read.cacheControl`
@@ -451,6 +461,8 @@ migrate`) → **Move to Postgres** (connection URLs, `kovo db provision` role se
     headers before/after) → **Navigation & bfcache** (what back/forward restores) → **Deploys**
     (old `/c/__v/` versions retained so long-lived documents keep working; the retention knob) →
     **Handle failure** (KV415 diagnostic) → collapsed details: SPEC §§.
+  - Evidence: `site/content/guides/caching.md`; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/site run build`; `pnpm --filter @kovojs/site run check:links`.
 - [ ] **Pagination** (recipe or a queries.md major section) — commerce ships the complete
       first-class pattern, no guide teaches it: cursor query (`after`/`limit`/`nextCursor`,
       `examples/commerce/src/queries.ts` productGridQuery), keyed items (`kovo-key={item.id}`),
