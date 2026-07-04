@@ -107,9 +107,10 @@ replace necessary-condition proxies with the engine's FINEST-granularity effecti
 
 ### DEC-F — Prove the audit by fuzzing the grant-shape space (closes O4; HIGHEST priority)
 
-- [ ] **F1 — Build a generative grant-shape FUZZER that materializes the cross-product of leak shapes and asserts the closure audit's verdict matches the actual engine leak on each point.** Space: object-class {table, view, matview, foreign-table, sequence, definer-function} × grant-target {reader, writer, admin, PUBLIC, a role the reader is a member of} × granularity {table, column} × schema {app, non-app} × RLS-state {force-rls+policy, no-rls, rls-no-force}. For each point: create the object + grant on raw PGlite, run the REAL `checkPostgresAppDbPosture`, and `SET ROLE` to read/write — assert (audit refuses) ⟺ (a leak is actually possible). Wire into `test:authz-paranoid` (gate 16.9).
+- [x] **F1 — Build a generative grant-shape FUZZER that materializes the cross-product of leak shapes and asserts the closure audit's verdict matches the actual engine leak on each point.** Space: object-class {table, view, matview, foreign-table, sequence, definer-function} × grant-target {reader, writer, admin, PUBLIC, a role the reader is a member of} × granularity {table, column} × schema {app, non-app} × RLS-state {force-rls+policy, no-rls, rls-no-force}. For each point: create the object + grant on raw PGlite, run the REAL `checkPostgresAppDbPosture`, and `SET ROLE` to read/write — assert (audit refuses) ⟺ (a leak is actually possible). Wire into `test:authz-paranoid` (gate 16.9).
   - Rationale: retain-and-prove (C7) REDUCES the completeness question to "is the reachability computation sound?" (A5's bounded catalogs); the fuzzer TESTS that reduction across the space. It is not a formal proof, but combined with fail-closed-on-unknown it gives "known space TESTED + unknown space fails closed" — the practical ceiling, and the mechanism that makes round-14's next-proxy a caught test rather than a served leak. This is the acceptance-level answer to the 13-round pattern and should GATE v1.
   - Acceptance: the fuzzer enumerates the space, every leaking point is refused by the audit, every safe point passes (no over-block); it runs in CI under `test:authz-paranoid`; a deliberately re-introduced round-13 bug (e.g. column-grant blindness) makes the fuzzer RED.
+  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-grant-shape-fuzzer.test.ts --config ./vite.config.ts` passed; `pnpm run test:authz-paranoid` passed with the fuzzer wired alongside the paranoid production-artifact runtime test.
 
 ## 5. Resolved design decisions (was "open issues"; decided 2026-07-04)
 
@@ -132,7 +133,8 @@ All six flagged issues are now decided; each folds into a DEC above. Recorded he
   - Evidence: focused vitest command passed; `postgres-runtime.test.ts` covers both unbranded act-as rejection and branded act-as owner reads.
 - [x] **DEC-C least-priv runtime sets `kovo.principal` (P1) and serves; serial-PK INSERT works (P2).**
   - Evidence: focused external Postgres probe passed and exercises least-priv owner isolation through `kovo.principal`; focused Postgres runtime suite passed and covers protected-table serial INSERT/pass.
-- [ ] **DEC-F fuzzer refuses every generated leaking shape and over-blocks none; re-introducing a round-13 bug turns it RED.**
+- [x] **DEC-F fuzzer refuses every generated leaking shape and over-blocks none; re-introducing a round-13 bug turns it RED.**
+  - Evidence: standalone fuzzer test and `test:authz-paranoid` both passed after integrating `postgres-grant-shape-fuzzer.test.ts`.
 
 ## 7. Resolved design forks (recorded for provenance)
 
