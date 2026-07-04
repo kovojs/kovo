@@ -57,27 +57,28 @@ Highest-leverage items, in order:
 
 ## Coverage Ledger
 
-| Package | Public subpaths | Exports reviewed | Primary evidence | Notes |
-| --- | --- | ---: | --- | --- |
-| `@kovojs/core` | `.` | ~120 (component 14, route/link 10, query/form/storage ~50, verifier/secret ~48, registries 5) | source + `site/gen/api/core.md` + 481 example imports | full root covered across 4 slices |
-| `@kovojs/server` | `.` | ~430 of 509 (routing/render ~155, security/session/schema ~195, data-layer ~75) | full source reads of route/guards/csrf/schema/endpoint/webhook/query/mutation/domain files; 9 samples tsc-checked | remaining ~80 are task/postgres-runtime internals reviewed by family |
-| `@kovojs/server` | `./build`, `./testing`, `./vite` | 17 + 6 + 3 | build.ts (KV417/445/446), testing.ts, vite.ts | all reviewed |
-| `@kovojs/browser` | `.`, `./client` | 24 + 78 | src read in full; consumer grep; compiler bootstrap emit checked | `./client` reviewed by family |
-| `@kovojs/drizzle` | `.` | 38/38 | drizzle-surface.ts, cas.ts, runtime-metadata.ts; gen-doc diff | 8 exports missing from API ref |
-| `@kovojs/better-auth` | `.` | 32/32 | all src files read | |
-| `@kovojs/cli` | `.` + `kovo` bin | 18 exports + 10 commands, all flags | api.ts, commands-manifest.ts vs impls, locked format tests | |
-| `@kovojs/test` | 7 subpaths | 63 | all subpath sources read (html-fragment by family) | |
-| `@kovojs/headless-ui` | 34 subpaths + `./types` | 699 (mechanical classify; 4 families deep-read) | public barrels vs `generated.ts` vs `@kovojs/ui` consumers | |
-| `@kovojs/ui` | root + 44 subpaths | 460 (pattern audit; 8 files deep-read) | registry.json, copy-in.test.ts, `site/gen/api/ui.md` | |
-| `@kovojs/style` | `.` | 35/35 | index/engine/theme read; every styling.md claim checked | |
-| `@kovojs/icons` | root + 1,740 glyph subpaths | root 2/2 + 1 glyph sampled | icon-base.ts, gen doc | generator-uniform family |
-| `create-kovo`, `@kovojs/compiler`, `@kovojs/devtool` | bins / empty / private | boundary-verified | package.json + manifest | boundaries correct (see devtool guide finding) |
+| Package                                              | Public subpaths                  |                                                                              Exports reviewed | Primary evidence                                                                                                  | Notes                                                                |
+| ---------------------------------------------------- | -------------------------------- | --------------------------------------------------------------------------------------------: | ----------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| `@kovojs/core`                                       | `.`                              | ~120 (component 14, route/link 10, query/form/storage ~50, verifier/secret ~48, registries 5) | source + `site/gen/api/core.md` + 481 example imports                                                             | full root covered across 4 slices                                    |
+| `@kovojs/server`                                     | `.`                              |               ~430 of 509 (routing/render ~155, security/session/schema ~195, data-layer ~75) | full source reads of route/guards/csrf/schema/endpoint/webhook/query/mutation/domain files; 9 samples tsc-checked | remaining ~80 are task/postgres-runtime internals reviewed by family |
+| `@kovojs/server`                                     | `./build`, `./testing`, `./vite` |                                                                                    17 + 6 + 3 | build.ts (KV417/445/446), testing.ts, vite.ts                                                                     | all reviewed                                                         |
+| `@kovojs/browser`                                    | `.`, `./client`                  |                                                                                       24 + 78 | src read in full; consumer grep; compiler bootstrap emit checked                                                  | `./client` reviewed by family                                        |
+| `@kovojs/drizzle`                                    | `.`                              |                                                                                         38/38 | drizzle-surface.ts, cas.ts, runtime-metadata.ts; gen-doc diff                                                     | 8 exports missing from API ref                                       |
+| `@kovojs/better-auth`                                | `.`                              |                                                                                         32/32 | all src files read                                                                                                |                                                                      |
+| `@kovojs/cli`                                        | `.` + `kovo` bin                 |                                                           18 exports + 10 commands, all flags | api.ts, commands-manifest.ts vs impls, locked format tests                                                        |                                                                      |
+| `@kovojs/test`                                       | 7 subpaths                       |                                                                                            63 | all subpath sources read (html-fragment by family)                                                                |                                                                      |
+| `@kovojs/headless-ui`                                | 34 subpaths + `./types`          |                                               699 (mechanical classify; 4 families deep-read) | public barrels vs `generated.ts` vs `@kovojs/ui` consumers                                                        |                                                                      |
+| `@kovojs/ui`                                         | root + 44 subpaths               |                                                        460 (pattern audit; 8 files deep-read) | registry.json, copy-in.test.ts, `site/gen/api/ui.md`                                                              |                                                                      |
+| `@kovojs/style`                                      | `.`                              |                                                                                         35/35 | index/engine/theme read; every styling.md claim checked                                                           |                                                                      |
+| `@kovojs/icons`                                      | root + 1,740 glyph subpaths      |                                                                    root 2/2 + 1 glyph sampled | icon-base.ts, gen doc                                                                                             | generator-uniform family                                             |
+| `create-kovo`, `@kovojs/compiler`, `@kovojs/devtool` | bins / empty / private           |                                                                             boundary-verified | package.json + manifest                                                                                           | boundaries correct (see devtool guide finding)                       |
 
 Guides: all 26 read end-to-end by their owning slice.
 
 ## Definitely Remove
 
 ### `@kovojs/headless-ui/<primitive>#<transition-machinery types>` (family, ~266 exports)
+
 **Current exposure:** public on all 34 primitive subpaths (`*ChangeOptions`, `*KeyDownOptions`,
 `*ChangeResult`, `*TriggerEvent`, `*ChangeDetail`, `*ChangeReason`, …).
 **Evidence:** these types exist solely to type transition functions exported ONLY from
@@ -95,6 +96,7 @@ headless-ui public surface.
 in violation of the boundary and should be fixed regardless).
 
 ### `@kovojs/ui/<component>#<component>Styles` (family, 44 exports)
+
 **Current exposure:** public const on every versioned subpath (`buttonStyles`
 `packages/ui/src/button.tsx:151`, `selectStyles` `select.tsx:149`, …), documented in
 `site/gen/api/ui.md`.
@@ -105,33 +107,38 @@ props are the sanctioned channel (components.md:39-40).
 **Migration:** none (zero usage).
 
 ### `@kovojs/server#write` + `#WriteDefinition`
+
 **Current exposure:** public root (`api/data.ts:22,65`; identity fn at
 `mutation/definition.ts:143-152`).
 **Evidence:** zero consumers of its output — neither `packages/drizzle/src/static.ts` nor the
 compiler parses authored `write({touches})`; touch graphs derive from Drizzle SQL, and declared
 touches ride `MutationRegistry.touches`. 0 named imports/examples. SPEC §10.3
-(`spec/10-data-plane.md:143-163`) prescribes a *different* two-arg shape that also doesn't ship.
+(`spec/10-data-plane.md:143-163`) prescribes a _different_ two-arg shape that also doesn't ship.
 Yet `queries.md`/`data-layer.md` teach it as the load-bearing center of the data layer.
 **Recommendation:** remove from the public root until the SPEC §10.3 domain-write mechanism exists;
 rewrite guides to the enforced reality (analyzed Drizzle writes + registry-declared touches).
 **Migration:** zero external usage; guide rewrite only.
 
 ### `@kovojs/server#tag` + `#Tag`
+
 **Evidence:** `tag()` byte-identical to `domain()`; `Tag` a bare alias of `Domain`
 (`domain.ts:33-53`); 0 imports; only doc mention `data-layer.md:45-49`.
 **Recommendation:** remove; `domain('billing:invoice')` says the same thing. Migration: rename in docs.
 
 ### `@kovojs/server#GuardFailure`
+
 **Evidence:** self-described back-compat alias of `GuardDenial` (`guards.ts:67-76`), 0 imports —
 CLAUDE.md technical-preview bias forbids compat aliases.
 **Recommendation:** remove. Migration: mechanical rename.
 
 ### `@kovojs/server#EndpointReason` `purpose` synonym
+
 **Evidence:** two spellings of one required field (`endpoint.ts:139-143,219-222`); no `purpose:`
 usage in docs/examples/templates.
 **Recommendation:** keep `reason`, drop the synonym branch.
 
 ### `@kovojs/better-auth#role` (replace body, or drop)
+
 **Evidence:** weaker parallel reimplementation of `guards.role`
 (`packages/better-auth/src/guards.ts:53-65`): no proven-principal check, never calls
 `markPassedRoleGuard`, so `db.crossOwnerRead(..., { role: 'admin' })`'s runtime gate
@@ -141,26 +148,31 @@ facts (invisible to `--unguarded`). Fails closed but contradicts `security.md`'s
 (2 imports, 1 example). This is also a **bug fix**, not just surface hygiene.
 
 ### `@kovojs/server#createElement` (root re-export)
+
 **Evidence:** barrel leak (`packages/server/src/index.ts:2`); 0 imports; the JSX-transform homes
 `./jsx-runtime`/`./jsx-dev-runtime` already exist.
 **Recommendation:** drop from root; keep on `./jsx-runtime` only.
 
 ### `@kovojs/server#{MutationResponseHeaderValue, MutationResponseHeaders}`
+
 **Evidence:** pure aliases of `ResponseHeaderValue`/`ResponseHeaders` (`response.ts:20-24`), 0 imports.
 **Recommendation:** remove; mechanical rename.
 
 ### `@kovojs/server#{DeferredQueryChunk, DeferredFragmentChunk, DeferredStreamChunk, DeferredPriority}`
+
 **Evidence:** framework-owned deferred wire chunk shapes (`deferred-stream.ts:11-50`), 0 imports;
 the only app authoring surface is `<Defer>` (SPEC §8/§9.1). Referenced by
 `RoutePageResponse.deferredChunks` (`response.ts:163`), itself internal-flavored.
 **Recommendation:** move to `./internal/wire` (with `RoutePageResponse` or accept the reference).
 
 ### `@kovojs/server#meta`
+
 **Evidence:** identity function (`meta.ts:18-20`), 0 imports; `route()` `meta:` takes the plain
 object; a third way to say the same thing.
 **Recommendation:** delete; pass the object.
 
 ### `@kovojs/cli#runKovoCommand`
+
 **Evidence:** JSDoc claims generated maintenance scripts use it; zero call sites repo-wide — the
 repo's own consumers bypass it (`site/scripts/export-static.mjs:320` deep-src import;
 `examples/gallery/.../kovo-explain-contracts.test.ts:9` uses `main` from `./internal`).
@@ -172,6 +184,7 @@ the false JSDoc.
 Grouped by theme; each needs a decision, not necessarily removal.
 
 ### Duplicate vocabulary (pick one name)
+
 - `@kovojs/core#query/Query/QueryConfig` vs `@kovojs/server#query` — same exported name, different
   meaning; near-zero app usage of the core handle; the collision already confused the framework's
   own docs (queries.md put `refetchOnFocus` on the wrong one). Rename (e.g. `queryRef`) or absorb
@@ -202,6 +215,7 @@ Grouped by theme; each needs a decision, not necessarily removal.
   (`endpoint.ts:70-84`); could inline.
 
 ### Plumbing/ABI on app-facing surfaces (reclassify)
+
 - `@kovojs/browser/client` DI-seam families (~25-37 of 78 exports): `QueryApplyInterposition`/
   `QueryChunk`/`WireAttribute`, `ClockUpdate*`, `CompiledQuery*` ×6, `VisibleObserver*`,
   `InlineQueryEvent*`, `QueryRefetch*`, `StructuralMorph*`, and the 12-type `dom-like` family —
@@ -246,6 +260,7 @@ Grouped by theme; each needs a decision, not necessarily removal.
   `KovoApp.requestLimits` (`app-types.ts:191-211`); `@internal` or narrow the face.
 
 ### Design fixes (keep the API, change the shape)
+
 - `@kovojs/core#Component` call signature `(props?: Record<string, unknown>): any`
   (`core/src/index.ts:168-172`): every `component()` descriptor — all 44 `@kovojs/ui` components
   and every app component — is **unchecked at JSX call sites**; contradicts the typed-props story
@@ -267,6 +282,7 @@ Grouped by theme; each needs a decision, not necessarily removal.
   (`graph-output.ts:617-620` vs `site/gen/api/cli.md:349`). Document with SPEC rationale or hide.
 
 ### Weak-evidence surface (needs a consumer, a guide, or an `@experimental` marker)
+
 - `@kovojs/server` render-tree family (`renderRegistry`/`renderTree`/`parseComponentXml` + types):
   SPEC §4.10-grounded and well documented, but zero example usage — the one rich-text example uses
   `safeRichHtml` instead. Add a real example or mark `@experimental`.
@@ -310,7 +326,7 @@ Grouped by theme; each needs a decision, not necessarily removal.
   types (produce readable type errors by design), CAS pair (`compareAndSet` +
   `StaleVersionError`), `@kovojs/drizzle#kovo` annotations (every guide-named option verified
   real), `sql`/`staticSql`/`trustedSql`, `readonlyDb`/`Reader`/`Writer`/`declarePublicRead`,
-  `form`/`Form` + GetForm* family, registries, replay stores.
+  `form`/`Form` + GetForm\* family, registries, replay stores.
 - **Security**: `guards` family (intent-based denials, fail-loud rate limits, `guards.owns` —
   exactly the discriminated-union posture CLAUDE.md asks for), schema family (`s`, KV428/KV434
   hardening), CSRF mint/validate family, `endpoint`/`webhook` families (the
@@ -336,6 +352,7 @@ Grouped by theme; each needs a decision, not necessarily removal.
 Legend: ✅ clean · ⚠️ minor issues · ❌ material defects (broken samples or false claims).
 
 ### Data layer
+
 - ❌ **queries.md** — `query({ refetchOnFocus: false })` on the server definition cannot compile
   (field lives on the core client handle; the definition boundary rejects unknown fields by design,
   `server/src/query.ts:104-163` vs `core/src/index.ts:610`). Loaders shown as
@@ -362,6 +379,7 @@ Legend: ✅ clean · ⚠️ minor issues · ❌ material defects (broken samples
 - ✅ **postgres-authz-policy.md** — verified accurate throughout; best guide in the data slice.
 
 ### Routing & rendering
+
 - ❌ **routing.md** — `route({ queries: {...} })` does not exist (`RouteDefinition`,
   `route.ts:219-254`; tsc-confirmed TS2353). Everything else checked (staticPaths, search schema,
   redirect/notFound, respond.file/stream, prefetch justification, dispatch order, 6 KV codes)
@@ -391,6 +409,7 @@ Legend: ✅ clean · ⚠️ minor issues · ❌ material defects (broken samples
   only commands shown are repo-internal site scripts. Conceptual constraints verified consistent.
 
 ### Components, styling, accessibility
+
 - ❌ **components.md** — headless-ui "URL helpers" don't exist; the styled-Button sample doesn't
   typecheck (`variant` includes `'secondary'` but `buttonStyles` lacks the key); the "spread the
   builder's output" prose contradicts both its own example and shipped source (both hand-map
@@ -408,6 +427,7 @@ Legend: ✅ clean · ⚠️ minor issues · ❌ material defects (broken samples
   MUST list is currently not fully met by the cited suite.
 
 ### Security, auth, wire
+
 - ❌ **security.md** — `guard: authed` uncalled (denies everything); query `load` signature wrong
   (and contradicts line 305 of the same guide); the `csrfField` example omits `mutation:` and mints
   a token dispatch rejects with 422 (the exact "audit trap" the source JSDoc warns about,
@@ -434,6 +454,7 @@ Legend: ✅ clean · ⚠️ minor issues · ❌ material defects (broken samples
   (implementation gap or wrong doc).
 
 ### Tooling & testing
+
 - ⚠️ **cli.md** — explain kind list omits `task` and the `document` form; review-mode list omits
   `--trust`/`--tasks` (kovo-explain.md disagrees with cli.md and both undercount source); the
   "starter wires these npm scripts" framing describes the monorepo, not the starter; `--preset`
@@ -460,6 +481,7 @@ Legend: ✅ clean · ⚠️ minor issues · ❌ material defects (broken samples
   promote the package or reclassify the guide as internal tooling docs.
 
 ### Generated reference (`site/gen/api/*.md`) staleness
+
 - `route()`'s canonical JSDoc example returns a string from `page` — fails its own declared type
   (`RoutePageResult` excludes string; tsc-confirmed). The most-used server API's example doesn't
   compile.
@@ -496,7 +518,7 @@ conservative half-step left as the end state.
 
 - [ ] **Remove `write`/`WriteDefinition` and `tag`/`Tag` from the `@kovojs/server` root** (inert;
       zero consumers) and record the SPEC §10.3 divergence as an explicit open design decision —
-      if the domain-write mechanism lands later, `write()` returns *with* its enforcement in the
+      if the domain-write mechanism lands later, `write()` returns _with_ its enforcement in the
       same change.
 - [ ] **Rewrite queries.md / mutations.md / data-layer.md to the enforced model**: analyzed Drizzle
       writes + registry-declared touches (what commerce does), `context.db`/`Reader` loader
@@ -505,7 +527,7 @@ conservative half-step left as the end state.
 ### Phase 3 — surface removals and ABI reclassification
 
 - [ ] Land the remaining **Definitely Remove** items (createElement, MutationResponseHeaders,
-      Deferred*Chunk family, meta(), GuardFailure, EndpointReason `purpose`, runKovoCommand).
+      Deferred\*Chunk family, meta(), GuardFailure, EndpointReason `purpose`, runKovoCommand).
 - [ ] **Reclassify compiled-ABI types**: headless-ui transition machinery → `./generated` (one
       generator change in `packages/ui/scripts/primitive-component-manifest.mjs`); drop the 44
       `@kovojs/ui` `*Styles` exports from versioned modules (keep module-local for copy-in);
@@ -540,24 +562,25 @@ hatch survives this phase.
       has no partial type-argument inference — it would force a curried call shape), and merging
       the type channel into the `props:` metadata field (constructor maps can only carry the
       JSON-serializable subset; `ButtonProps`'s union literals, style objects, and `children` are
-      composition-time values that never cross the wire). Sub-contracts:
-      - [ ] Call signature = bag type minus `keyof Definition['queries']`, with exact-key
-            (excess-property) checking; expose it as a named `ComponentProps<Definition>` alias so
-            errors read legibly instead of as raw `Omit<...>` failures. A prop name colliding with
-            a query key is a compile error + new KV diagnostic (ambiguous in the merged bag).
-      - [ ] Unannotated render ⇒ props = `{}`: call sites accept nothing (default-deny, Prime
-            Principle posture); annotating the bag is the fix. Supply the bag's query-result keys
-            contextually from the `Query<Key, Result>` handles so authors stop hand-annotating
-            result types the framework already knows (retires a small declare-once violation).
-      - [ ] Constrain `.args(mapper)` — `QueryArgsBinding`/`Query.args` at
-            `core/src/index.ts:296-345` — so the mapper's `Props` must be assignable from the
-            component's derived call-site props: mappers narrow, never invent.
-      - [ ] Type the `props:` metadata field as a constructor map whose derived type
-            (`{ dealId: String }` → `{ dealId: string }`) must be assignable to the matching keys
-            of the call-site props — it remains the serializable-subset declaration for
-            live-target renderers, but can no longer contradict the annotation.
-      The contract must also type the compiler-injected `style`/`styles` override channel and
-      `kovo-key`.
+      composition-time values that never cross the wire). The sub-contracts below are part of this
+      decision and remain open until implemented and verified.
+- [ ] **Component call signature contract**: call signature = bag type minus
+      `keyof Definition['queries']`, with exact-key (excess-property) checking; expose it as a
+      named `ComponentProps<Definition>` alias so errors read legibly instead of as raw `Omit<...>`
+      failures. A prop name colliding with a query key is a compile error + new KV diagnostic
+      (ambiguous in the merged bag). The contract must also type the compiler-injected
+      `style`/`styles` override channel and `kovo-key`.
+- [ ] **Default-deny unannotated render contract**: unannotated render ⇒ props = `{}` so call
+      sites accept nothing; annotating the bag is the fix. Supply the bag's query-result keys
+      contextually from the `Query<Key, Result>` handles so authors stop hand-annotating result
+      types the framework already knows.
+- [ ] **Query args mapper contract**: constrain `.args(mapper)` — `QueryArgsBinding`/`Query.args`
+      at `core/src/index.ts:296-345` — so the mapper's `Props` must be assignable from the
+      component's derived call-site props: mappers narrow, never invent.
+- [ ] **Serializable `props:` metadata consistency contract**: type the `props:` metadata field as
+      a constructor map whose derived type (`{ dealId: String }` → `{ dealId: string }`) must be
+      assignable to the matching keys of the call-site props. It remains the serializable-subset
+      declaration for live-target renderers, but can no longer contradict the annotation.
 - [ ] **Implement `Component<Definition>` call-signature inference in core** — replace
       `(props?: Record<string, unknown>): any` (`core/src/index.ts:168-172`). Exact-key checking
       (excess-property errors) is required, not just known-key widening.
@@ -584,7 +607,7 @@ hatch survives this phase.
       agree with the chosen props channel; type-level enforcement remains defense-in-depth per the
       honesty boundary (SPEC §6.6) — the compiler's validation stays authoritative.
 - [ ] **Fix the guide samples this invalidates or vindicates**: accessibility.md `<Select
-      labelledBy>` (broken composition the old signature hid), components.md Button
+labelledBy>` (broken composition the old signature hid), components.md Button
       `'secondary'` variant sample, plus any sample the sweep breaks.
 
 ### Phase 5 — docs truth and drift-proofing (after Phase 4, so the gate has teeth)
