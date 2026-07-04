@@ -8,6 +8,7 @@ export {
   dropdownMenuGroupAttributes,
   dropdownMenuSeparatorAttributes,
   dropdownMenuItemHighlighted,
+  dropdownMenuFocusElement,
 } from '../primitives/dropdown-menu.js';
 export type {
   DropdownMenuItem,
@@ -22,5 +23,6 @@ export type {
   DropdownMenuTypeaheadOptions,
   DropdownMenuTypeaheadResult,
   DropdownMenuPrimitiveAttributes,
+  DropdownMenuFocusEvent,
   DropdownMenuFocusOptions,
 } from '../primitives/dropdown-menu.js';

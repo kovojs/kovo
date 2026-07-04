@@ -8,6 +8,7 @@ export {
   contextMenuGroupAttributes,
   contextMenuSeparatorAttributes,
   contextMenuItemHighlighted,
+  contextMenuFocusElement,
 } from '../primitives/context-menu.js';
 export type {
   ContextMenuPoint,
@@ -23,5 +24,6 @@ export type {
   ContextMenuTypeaheadOptions,
   ContextMenuTypeaheadResult,
   ContextMenuPrimitiveAttributes,
+  ContextMenuFocusEvent,
   ContextMenuFocusOptions,
 } from '../primitives/context-menu.js';
