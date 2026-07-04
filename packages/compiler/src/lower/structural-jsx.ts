@@ -862,7 +862,7 @@ function meterExpression(parts: MeterExpressionParts, target: MeterExpressionTar
                   ? 'return String(value);'
                   : 'return `${(((value - min) / (max - min)) * 100).toFixed(4).replace(/\\.?0+$/, "")}%`;';
 
-  return `(() => { const minNumber = Number(${parts.min}); const min = Number.isFinite(minNumber) ? minNumber : 0; const maxNumber = Number(${parts.max}); const normalizedMax = Number.isFinite(maxNumber) ? maxNumber : 1; const max = normalizedMax > min ? normalizedMax : min + 1; const normalize = (input, fallback) => { const number = Number(input); return Number.isFinite(number) ? Math.min(Math.max(number, min), max) : fallback; }; const low = normalize(${parts.low}, min); const high = Math.max(normalize(${parts.high}, max), low); const optimum = normalize(${parts.optimum}, (min + max) / 2); const value = normalize(${parts.value}, min); ${result} })()`;
+  return `(() => { const minNumber = Number(${parts.min}); const min = Number.isFinite(minNumber) ? minNumber : 0; const maxNumber = Number(${parts.max}); const normalizedMax = Number.isFinite(maxNumber) ? maxNumber : 1; const max = normalizedMax > min ? normalizedMax : min + 1; const normalize = (input: unknown, fallback: number) => { const number = Number(input); return Number.isFinite(number) ? Math.min(Math.max(number, min), max) : fallback; }; const low = normalize(${parts.low}, min); const high = Math.max(normalize(${parts.high}, max), low); const optimum = normalize(${parts.optimum}, (min + max) / 2); const value = normalize(${parts.value}, min); ${result} })()`;
 }
 
 // SPEC.md §4.8 data-bind-prop: emit a property-only `data-bind-prop:indeterminate`

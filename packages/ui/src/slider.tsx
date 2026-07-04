@@ -89,6 +89,7 @@ export interface SliderInputProps extends SliderStateProps {
 export interface SliderPartProps extends SliderStateProps {
   children?: ComponentChild;
   id?: string;
+  style?: unknown;
   styles?: SliderStyleOverrides;
 }
 
