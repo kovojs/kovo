@@ -45,7 +45,7 @@ the host example you are testing. The exact package script is repo-local; it is 
 `create-kovo`.
 
 ```sh
-KOVO_DEVTOOL_BASE=/__kovo pnpm --filter @kovojs/example-devtool dev
+KOVO_DEVTOOL_BASE=/__kovo pnpm --filter @kovojs/example-devtool run dev
 ```
 
 ## Build a bundle directly in repo tooling

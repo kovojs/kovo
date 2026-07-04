@@ -61,27 +61,23 @@ The stamp is what lets a mutation response target the right fragments without a 
 On the Drizzle path, invalidation comes from the SQL that actually runs:
 
 ```ts
+const commitAddToCartRows = async (_db: unknown, _input: unknown) => {};
+
 export const addToCart = mutation({
   access: publicAccess('demo cart mutation'),
   csrf: cartCsrf,
   input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
+  registry: { touches: [cart, product] },
   async handler(input, request) {
-    await request.db.insert(cartItems).values({
-      productId: input.productId,
-      quantity: input.quantity,
-    });
-    await request.db
-      .update(products)
-      .set({ stock: sql`${products.stock} - ${input.quantity}` })
-      .where(eq(products.id, input.productId));
+    await commitAddToCartRows(request.db, input);
     return { ok: true };
   },
 });
 ```
 
-The analyzer sees writes to `cartItems` and `products`. It maps those tables through the schema's
-`kovo({ domain })` annotations, intersects them with visible query read sets, and reruns the stale
-queries after the transaction commits.
+The write still goes through a named helper. `kovo check` reads those helper writes, maps the tables
+through the schema's `kovo({ domain })` annotations, intersects them with visible query read sets,
+and reruns the stale queries after the transaction commits.
 
 ## Declare opaque writes
 
@@ -108,14 +104,15 @@ opaque.
 
 ## Check the graph
 
-Run the data-plane check before you ship:
+Run the graph check before you ship:
 
 ```sh
-vp check
+kovo check
 ```
 
-The check fails if a loader reads an exempt table, if an opaque projection omits `reads`, or if a
-mutation write cannot be matched to static Drizzle analysis or declared registry facts.
+That is the command that reports the data-plane graph verdict for opaque reads, exempt-table reads,
+and opaque writes. Keep `vp check` in CI for type/lint wiring, but use `kovo check` when you want
+the graph result itself.
 
 ## Next
 
@@ -127,7 +124,7 @@ mutation write cannot be matched to static Drizzle analysis or declared registry
 
 Queries: SPEC §10.2 and §9.4. Access decisions: SPEC §10.2 default-deny access decisions and KV436.
 Opaque reads: KV410. Exempt table reads: KV411. Opaque writes: SPEC §10.3 and KV406. Direct
-write-capable DB access in app-authored request code is tracked by KV330 where the static data-plane
-gate owns that boundary.
+mutation-handler writes are tracked by KV330: "Direct db access in a mutation handler; route through
+domain."
 
 </details>

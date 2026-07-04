@@ -193,7 +193,7 @@ FROM node:22-slim
 WORKDIR /app
 COPY package.json pnpm-lock.yaml ./
 RUN corepack enable && pnpm install --prod --frozen-lockfile
-COPY dist ./dist           # output of `vp build`, including /c/* client modules
+COPY dist ./dist           # output of `pnpm run build:prod`, including /c/* client modules
 ENV PORT=3000
 EXPOSE 3000
 CMD ["node", "dist/server/server.mjs"]
@@ -273,23 +273,19 @@ limit counters answer "what happened in production?" after deploy.
 
 ## Pre-deploy gates
 
-The verification surface is browser-free by design, so the full behavioral gate runs in ordinary CI
-ahead of any deploy:
+The verification surface is browser-free by design. In the generated starter, the scaffold already
+ships the right scripts for CI and for the emitted server:
 
 ```sh
-vp check                  # vp toolchain: typecheck + lint — wiring proofs (handlers, forms, links, bindings)
-vp test                   # vp toolchain: vitest suites, including wire-level and pglite-backed tests
-vp build                  # vp toolchain: production build
-vp run kovo-check         # runs the framework's `kovo check`: KV310 optimistic coverage, KV311 update coverage, audits
-# run your app-owned graph-query assertion script here, if you wrote one
+pnpm run check       # starter aggregate: vp check + sound-subset + build:prod + endpoint posture
+pnpm run build:prod  # kovo build ./src/app.tsx
+pnpm run start       # NODE_ENV=production node dist/server/server.mjs
 ```
 
-`vp check` and `vp build` are the toolchain's own commands (typecheck/lint and bundle); they are
-distinct from the framework's `kovo check`, which runs the graph/coverage gates and is invoked here
-through the `kovo-check` npm script via `vp run`. Add graph assertions only after your app owns a
-matching script. If a deploy passes these, the things that usually need a staging click-through —
-does this button do anything, does that mutation refresh the badge — are already proven. See
-[reading kovo check & kovo explain](/guides/kovo-explain/).
+`pnpm run check` is the starter's proof script, not just a typecheck alias. It runs `vp check`,
+the starter sound-subset gate, `pnpm run build:prod`, and the endpoint-posture audit. `pnpm run start`
+is the emitted Node server entrypoint. Add app-owned graph assertions only after your app owns a
+matching script. See [reading kovo check & kovo explain](/guides/kovo-explain/).
 
 ## Checklist
 
@@ -298,8 +294,7 @@ does this button do anything, does that mutation refresh the badge — are alrea
 - [ ] HTML responses are not cached as immutable (documents change per deploy; modules don't).
 - [ ] 103 Early Hints / preload wired from route page hints if your edge supports it.
 - [ ] Speculation Rules prefetch only on routes that opted in — it is per-route, default off.
-- [ ] CI runs `vp check`, `vp test`, `vp build`, and `vp run kovo-check` (the framework's
-      `kovo check`) before deploy.
+- [ ] CI runs `pnpm run check` and `pnpm run build:prod` before deploy.
 - [ ] App-owned graph assertions run before deploy, if the app has a script for them.
 
 ## Next

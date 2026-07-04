@@ -4,6 +4,7 @@
   "type": "module",
   "scripts": {
     "check": "vp check",
+    "dev": "vp dev",
     "test": "vp test"
   },
   "dependencies": {

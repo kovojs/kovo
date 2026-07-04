@@ -75,17 +75,15 @@ routes. The skipped paths are still review evidence; do not hide them in a gener
 
 ## Checks to run
 
-The site export path exercises the same route data as the Kovo app:
+For an app project, run the exporter itself in CI:
 
 ```sh
-pnpm --filter @kovojs/site run build
-pnpm --filter @kovojs/site run check:links
-pnpm --filter @kovojs/site run smoke:navigation
+kovo export ./src/app.tsx --origin https://example.com
 ```
 
-For app projects, pair static export with the graph checks from [Testing with @kovojs/test](/guides/testing/)
-and [Reading kovo check & kovo explain](/guides/kovo-explain/). If a route cannot be replayed
-faithfully, keep it on the server path.
+That command is the exportability gate. It exits non-zero when a route cannot be replayed faithfully
+or when earlier app diagnostics already block the build. Add your own link checker only after the
+export succeeds. Any third-party HTML link checker is fine; Kovo does not ship one for app projects.
 
 ## Next
 
