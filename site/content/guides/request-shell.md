@@ -142,6 +142,7 @@ objects inside route/query/mutation logic.
 
 ## Next
 
+- [Error handling](/guides/error-handling/) — decide which failures stay local and which change the whole shell.
 - [Deployment](/guides/deployment/) — serving the shell and retaining prior artifacts.
 - [Endpoints & webhooks](/guides/endpoints-webhooks/) — raw machine ingress in the dispatch table.
 - [Security & authorization](/guides/security/) — guards and audits over the shell surfaces.

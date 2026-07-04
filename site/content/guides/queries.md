@@ -119,6 +119,7 @@ mutation write cannot be matched to static Drizzle analysis or declared registry
 
 ## Next
 
+- [Caching](/guides/caching/) — make a public typed read cacheable and verify the headers.
 - [Data layer](/guides/data-layer/) — annotate tables and understand Drizzle extraction.
 - [Mutations & forms](/guides/mutations/) — post forms and return fresh fragments.
 

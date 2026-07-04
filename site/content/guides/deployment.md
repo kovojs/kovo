@@ -304,6 +304,8 @@ does this button do anything, does that mutation refresh the badge — are alrea
 
 ## Next
 
+- [Background tasks](/guides/background-tasks/) — deploy a preset that can actually drain durable jobs.
+- [Configuration & environment](/guides/configuration-environment/) — map the app-facing env vars to the deploy shape.
 - [Reading kovo check & kovo explain](/guides/kovo-explain/) — the gates in that checklist.
 - [Live queries](/guides/live-queries/) — shipped liveness paths and the roadmap SSE caveat.
 - [Static export](/guides/static-export/) — deciding whether a route can ship without a server.

@@ -140,6 +140,7 @@ and write invalidation is covered by analyzed Drizzle writes or explicit registr
 
 ## Next
 
+- [File uploads & storage](/guides/file-uploads-storage/) — accept multipart files and serve them back safely.
 - [Queries & invalidation](/guides/queries/) — see how visible queries refresh after a mutation.
 - [Optimistic updates](/guides/optimistic/) — predict a query while the mutation is in flight.
 
