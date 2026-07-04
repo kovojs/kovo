@@ -547,9 +547,7 @@ export function tempId(): string {
   return `kovo-tmp-${derivedTempIdCounter}`;
 }
 
-/**
- * @internal Client clock for `now()` placeholders in derived optimistic transforms (SPEC.md §10.5).
- */
+/** Client clock for `now()` placeholders in generated derived optimistic transforms (SPEC.md §10.5). */
 export function now(): number {
   return Date.now();
 }

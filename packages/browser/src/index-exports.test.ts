@@ -12,7 +12,7 @@ import * as inlineLoader from './internal/inline-loader.js';
 import * as output from './internal/output.js';
 import { derive } from './derive.js';
 import { handler } from './handlers.js';
-import { tempId } from './optimism.js';
+import { now, tempId } from './optimism.js';
 import { safeRichHtml, trustedHtml, trustedUrl } from './security-output.js';
 
 describe('runtime public export boundaries', () => {
@@ -20,6 +20,7 @@ describe('runtime public export boundaries', () => {
     // SPEC.md §4.3, §4.8, and §10.4 define the author-written client helpers.
     expect(root.derive).toBe(derive);
     expect(root.handler).toBe(handler);
+    expect(root.now).toBe(now);
     expect(root.tempId).toBe(tempId);
     expect(root.safeRichHtml).toBe(safeRichHtml);
     expect(root.trustedHtml).toBe(trustedHtml);
@@ -28,6 +29,7 @@ describe('runtime public export boundaries', () => {
     expect(Object.keys(root).sort()).toEqual([
       'derive',
       'handler',
+      'now',
       'safeRichHtml',
       'tempId',
       'trustedHtml',
