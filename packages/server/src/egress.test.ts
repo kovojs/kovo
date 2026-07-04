@@ -129,6 +129,41 @@ describe('evaluateEgress policy decision', () => {
     ).toBeInstanceOf(EgressBlockedError);
   });
 
+  it('allows only the configured database host:port without broadening private-network egress', () => {
+    const policy = resolveEgressPolicy({ allowInternal: [] }, () => {}, {
+      databaseUrls: ['postgres://app@127.0.0.1:54329/app'],
+    });
+
+    expect(policy.allowInternal.size).toBe(0);
+    expect(policy.allowDatabaseEndpoints.has('127.0.0.1:54329')).toBe(true);
+    expect(
+      evaluateEgress({ host: '127.0.0.1', port: 54329, resolvedIp: '127.0.0.1', policy }),
+    ).toBeNull();
+    expect(
+      evaluateEgress({ host: '127.0.0.1', port: 54330, resolvedIp: '127.0.0.1', policy }),
+    ).toBeInstanceOf(EgressBlockedError);
+    expect(
+      evaluateEgress({ host: '10.0.5.2', port: 54329, resolvedIp: '10.0.5.2', policy }),
+    ).toBeInstanceOf(EgressBlockedError);
+  });
+
+  it('keeps metadata blocked even when KOVO_DATABASE_URL names a metadata host', () => {
+    const policy = resolveEgressPolicy({ allowInternal: [] }, () => {}, {
+      databaseUrls: ['postgres://app@169.254.169.254:5432/app'],
+    });
+
+    const blocked = evaluateEgress({
+      host: '169.254.169.254',
+      port: 5432,
+      resolvedIp: '169.254.169.254',
+      policy,
+    });
+
+    expect(policy.allowDatabaseEndpoints.has('169.254.169.254:5432')).toBe(true);
+    expect(blocked).toBeInstanceOf(EgressBlockedError);
+    expect(blocked?.classification).toBe('metadata');
+  });
+
   it('NEVER allows metadata via allowInternal; allows it only inside the credential frame', () => {
     const policy = emptyPolicy();
     const outside = evaluateEgress({

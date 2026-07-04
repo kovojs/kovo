@@ -155,6 +155,8 @@ function isMetadataAllowed(): boolean {
 export interface EgressPolicy {
   /** `host:port` (lowercased host) entries permitted to reach a private/loopback IP. */
   readonly allowInternal: ReadonlySet<string>;
+  /** Framework-derived DB `host:port` endpoints exempt from the private-network floor. */
+  readonly allowDatabaseEndpoints: ReadonlySet<string>;
   /** Exact normalized origins permitted for framework-owned HTTP egress surfaces. */
   readonly allowDestinations: ReadonlySet<string>;
   /** Broad-CIDR entries the operator passed (flagged + warned, honored as a fallback). */
@@ -204,6 +206,11 @@ type EgressHardeningMode = NonNullable<EgressOptions['hardening']>;
 interface ResolveEgressPolicyOptions {
   /** Internal boot posture for omitted `createApp({ egress })` in development. */
   allowPrivateNetwork?: boolean;
+  /**
+   * Runtime database URLs whose exact host:port should be reachable even when the
+   * production/private-network floor is otherwise empty. Defaults to `KOVO_DATABASE_URL`.
+   */
+  databaseUrls?: readonly (string | undefined)[];
 }
 
 const METADATA_ALLOWLIST_REJECT =
@@ -218,6 +225,7 @@ export function resolveEgressPolicy(
   policyOptions: ResolveEgressPolicyOptions = {},
 ): EgressPolicy {
   const allowInternal = new Set<string>();
+  const allowDatabaseEndpoints = new Set<string>();
   const allowDestinations = new Set<string>();
   const allowInternalCidrs: string[] = [];
   for (const raw of options?.allowDestinations ?? []) {
@@ -264,12 +272,44 @@ export function resolveEgressPolicy(
     }
     allowInternal.add(`${parsed.host.toLowerCase()}:${parsed.port}`);
   }
+  for (const endpoint of resolveDatabaseEgressEndpoints(policyOptions.databaseUrls)) {
+    allowDatabaseEndpoints.add(endpoint);
+  }
   return {
     allowInternal,
+    allowDatabaseEndpoints,
     allowDestinations,
     allowInternalCidrs,
     allowPrivateNetwork: policyOptions.allowPrivateNetwork === true,
   };
+}
+
+function resolveDatabaseEgressEndpoints(
+  databaseUrls: readonly (string | undefined)[] | undefined,
+): readonly string[] {
+  const urls = databaseUrls ?? [process.env.KOVO_DATABASE_URL];
+  const endpoints = new Set<string>();
+  for (const raw of urls) {
+    if (raw === undefined || raw.trim() === '') continue;
+    const endpoint = databaseEgressEndpointFromUrl(raw);
+    if (endpoint) endpoints.add(endpoint);
+  }
+  return [...endpoints];
+}
+
+function databaseEgressEndpointFromUrl(raw: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    return null;
+  }
+  if (url.protocol !== 'postgres:' && url.protocol !== 'postgresql:') return null;
+  const host = decodeURIComponent(url.hostname).replace(/^\[/, '').replace(/\]$/, '');
+  if (host === '') return null;
+  const port = url.port === '' ? 5432 : Number(url.port);
+  if (!Number.isInteger(port) || port < 1 || port > 65535) return null;
+  return `${host.toLowerCase()}:${port}`;
 }
 
 /** Boot-time config error for an invalid/forbidden egress allowlist entry. */
@@ -544,6 +584,9 @@ export function evaluateEgress(args: {
   const hostKey = `${host.toLowerCase()}:${port}`;
   const ipKey = `${resolvedIp.toLowerCase()}:${port}`;
   if (policy.allowInternal.has(hostKey) || policy.allowInternal.has(ipKey)) return null;
+  if (policy.allowDatabaseEndpoints.has(hostKey) || policy.allowDatabaseEndpoints.has(ipKey)) {
+    return null;
+  }
 
   // CIDR fallback (operator opted into a broad range, warned at boot).
   if (policy.allowInternalCidrs.some((cidr) => ipInCidr(resolvedIp, cidr))) return null;
