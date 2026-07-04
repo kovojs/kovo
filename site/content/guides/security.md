@@ -146,9 +146,11 @@ export const orders = pgTable(
 Then scope every read and write of that table to the session, not to client input:
 
 ```ts
+import { guards, query } from '@kovojs/server';
+
 // CORRECT: the user id comes from req.session, traceable by the predicate extractor
 export const orderHistoryQuery = query({
-  guard: authed(),
+  guard: guards.authed(),
   load: (_args, context: { db?: any; request: CommerceRequest }) => {
     const userId = context?.request.session.user.id;
     return context?.db?.select().from(orders).where(eq(orders.userId, userId)) ?? [];
