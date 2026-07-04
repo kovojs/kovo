@@ -79,15 +79,18 @@ replace necessary-condition proxies with the engine's FINEST-granularity effecti
 
 ### DEC-C — The least-privilege runtime is turn-key (fixes P1, P2, P3, P5)
 
-- [ ] **C1 — Provision grants `EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean)` to the runtime login role (only) after the followup-6 `REVOKE … FROM PUBLIC` (`postgres-runtime.ts:582`), so a least-priv managed Postgres runtime can set `kovo.principal`. App SQL (a different path) still cannot.** (P1 — currently the supported production config cannot run.)
+- [x] **C1 — Provision grants `EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean)` to the runtime login role (only) after the followup-6 `REVOKE … FROM PUBLIC` (`postgres-runtime.ts:582`), so a least-priv managed Postgres runtime can set `kovo.principal`. App SQL (a different path) still cannot.** (P1 — currently the supported production config cannot run.)
   - Acceptance: a least-priv external runtime role sets `kovo.principal` and serves owner data; `has_function_privilege(app_sql_role, 'set_config', 'EXECUTE')` remains false.
-- [ ] **C2 — Provision ordering + atomicity: ensure roles BEFORE applying migrations that may reference them, and wrap role/policy/grant + migration application in one transaction (no partial-provision state on failure).** (P3)
+  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-external-probe.test.ts --config ./vite.config.ts -t "proves split provisioning"` passed against a local least-priv external runtime; `postgres-runtime.test.ts` verifies `set_config` EXECUTE belongs to the runtime login role, not `PUBLIC` or `kovo_reader`.
+- [x] **C2 — Provision ordering + atomicity: ensure roles BEFORE applying migrations that may reference them, and wrap role/policy/grant + migration application in one transaction (no partial-provision state on failure).** (P3)
   - Acceptance: a migration referencing `kovo_reader` applies cleanly; a mid-provision failure rolls back.
+  - Evidence: `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts --config ./vite.config.ts` passed; it covers migration SQL referencing `kovo_reader` and rollback of migration-created tables plus `kovo_migrations` when a later schema assertion fails.
 - [x] **C3 — Exempt the app's own configured DB host from the egress floor UNIFORMLY (boot pool and per-request), so a loopback/managed Postgres works under `KOVO_PARANOID=1`.** (P5)
   - Acceptance: an app against `postgres://…@127.0.0.1` serves under `KOVO_PARANOID=1`; cloud-metadata/internal egress stays blocked.
   - Evidence: `packages/server/src/egress-bootstrap.test.ts` covers DB URL registration before and after floor install; focused vitest command passed. `KOVO_PARANOID=1 pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts --config ./vite.config.ts -t "runs provision -> check -> boot for the paranoid served artifact without manual runtime grants"` passed.
-- [ ] **C4 — Shrink the accidental-`PUBLIC` surface (O2 defense-in-depth; detection remains the guarantee). At provision, `ALTER DEFAULT PRIVILEGES IN SCHEMA <app> REVOKE ALL ON TABLES, SEQUENCES, FUNCTIONS FROM PUBLIC`, so future objects do not silently auto-grant to `PUBLIC`; run migrations as a non-superuser role.** Full prevention is impossible (any object owner can `GRANT … TO PUBLIC`; `PUBLIC` cannot be removed from a role), so DEC-A's retain-and-prove DETECTION is the boundary — this only removes the default/accidental path.
+- [x] **C4 — Shrink the accidental-`PUBLIC` surface (O2 defense-in-depth; detection remains the guarantee). At provision, `ALTER DEFAULT PRIVILEGES IN SCHEMA <app> REVOKE ALL ON TABLES, SEQUENCES, FUNCTIONS FROM PUBLIC`, so future objects do not silently auto-grant to `PUBLIC`; run migrations as a non-superuser role.** Full prevention is impossible (any object owner can `GRANT … TO PUBLIC`; `PUBLIC` cannot be removed from a role), so DEC-A's retain-and-prove DETECTION is the boundary — this only removes the default/accidental path.
   - Acceptance: a newly created table in the app schema is not auto-readable by `PUBLIC`/app roles without an explicit grant; an explicit `GRANT … TO PUBLIC` is still caught by DEC-A.
+  - Evidence: `postgres-runtime.test.ts` verifies provision removes app-schema table/sequence default grants before future objects are created; `postgres-runtime.ts` emits table, sequence, and function default-privilege revokes; the external probe runs migrations through non-superuser admin roles.
 
 ### DEC-D — Security opt-outs carry justification, never bare booleans (fixes P4)
 
@@ -125,7 +128,8 @@ All six flagged issues are now decided; each folds into a DEC above. Recorded he
   - Evidence: focused vitest command passed; `postgres-runtime.test.ts` covers cross-schema `SECURITY DEFINER`, protected serial INSERT/pass, and unrelated sequence refusal.
 - [x] **DEC-B unbranded posture rejected; branded `actAs` honored.**
   - Evidence: focused vitest command passed; `postgres-runtime.test.ts` covers both unbranded act-as rejection and branded act-as owner reads.
-- [ ] **DEC-C least-priv runtime sets `kovo.principal` (P1) and serves; serial-PK INSERT works (P2).**
+- [x] **DEC-C least-priv runtime sets `kovo.principal` (P1) and serves; serial-PK INSERT works (P2).**
+  - Evidence: focused external Postgres probe passed and exercises least-priv owner isolation through `kovo.principal`; focused Postgres runtime suite passed and covers protected-table serial INSERT/pass.
 - [ ] **DEC-F fuzzer refuses every generated leaking shape and over-blocks none; re-introducing a round-13 bug turns it RED.**
 
 ## 7. Resolved design forks (recorded for provenance)
