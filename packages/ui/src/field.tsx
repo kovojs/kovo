@@ -594,10 +594,10 @@ export const FieldDescription = component({
  * Renders the styled field error primitive.
  *
  * @example
- * import { FieldError } from "@kovojs/ui/field";
- * const component = FieldError;
+ * import { FieldErrorMessage } from "@kovojs/ui/field";
+ * const component = FieldErrorMessage;
  */
-export const FieldError = component({
+export const FieldErrorMessage = component({
   render(props: FieldMessageProps) {
     const attrs = fieldErrorAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

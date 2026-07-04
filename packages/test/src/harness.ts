@@ -1,11 +1,5 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import type {
-  CsrfValidationOptions,
-  MutationDefinition,
-  MutationResult,
-  QueryDefinition,
-  Schema,
-} from '@kovojs/server';
+import type { CsrfOptions, MutationDefinition, MutationResult, QueryDefinition, Schema } from '@kovojs/server';
 import {
   executeHarnessMutation,
   executeHarnessQuery,
@@ -27,7 +21,6 @@ export type { DbVerificationDiagnostic } from './verifier-diagnostics.js';
 /** The context a Kovo test receives: the `db`, and helpers to `exec` mutations, run `query`s, load a `page`, and read verification diagnostics. */
 export interface KovoTestContext<Db = unknown> {
   db: Db;
-  dbHandle(): Db;
   exec: <
     InputSchema extends Schema<unknown>,
     Errors extends Record<string, Schema<unknown>>,
@@ -101,7 +94,7 @@ export interface KovoTestHarnessOptions<Db> {
 
 /** Options for a single `exec` of a mutation inside the harness. */
 export interface KovoTestExecOptions<Request> {
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfOptions<Request>;
   request?: Partial<Omit<Request, 'db'>>;
   touchGraphKey?: string;
 }
@@ -128,9 +121,6 @@ export function createKovoTestHarness<Db>(
 
   return {
     db,
-    dbHandle(): Db {
-      return db;
-    },
     async exec<
       InputSchema extends Schema<unknown>,
       Errors extends Record<string, Schema<unknown>>,

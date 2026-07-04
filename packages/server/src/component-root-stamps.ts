@@ -1,6 +1,6 @@
 import type { Component } from '@kovojs/core';
 
-import type { CsrfValidationOptions } from './csrf.js';
+import type { CsrfOptions } from './csrf.js';
 import { escapeAttribute } from './html.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
 import type { QueryDefinition } from './query.js';
@@ -33,7 +33,7 @@ export function assignDerivedComponentName<ComponentType extends StampComponent>
 export interface ComponentRootStampOptions<Request = unknown> {
   component: StampComponent;
   componentName?: string;
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfOptions<Request>;
   html: string;
   jsxKey?: unknown;
   props: Record<string, unknown>;

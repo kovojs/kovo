@@ -14,7 +14,7 @@ import type { QueryChunk } from './wire-parser.js';
 /**
  * @internal A declared query whose refetch-on-focus opt-out drives the runtime exclusion set
  * (SPEC §9.3/§9.4). Mirrors the `@kovojs/core` `Query` handle shape produced by
- * `query(key, { refetchOnFocus: false })`.
+ * `queryRef(key, { refetchOnFocus: false })`.
  */
 export interface RefetchOnFocusDeclaration {
   key: string;
@@ -24,7 +24,7 @@ export interface RefetchOnFocusDeclaration {
 /**
  * @internal Derive the refetch-on-focus opt-out NAME set from declared queries (SPEC §9.3/§9.4).
  *
- * A query whose declaration sets `refetchOnFocus: false` (the `@kovojs/core` `query()` config) is
+ * A query whose declaration sets `refetchOnFocus: false` (the `@kovojs/core` `queryRef()` config) is
  * excluded from the visible-return/focus typed-read refetch (§9.4). This maps that per-query
  * declaration into the `refetchOnFocusOptOut` set the loader runtime consumes, so the declared
  * value actually drives behavior instead of being dead metadata. Matching is by query NAME

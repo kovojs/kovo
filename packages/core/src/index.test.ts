@@ -11,9 +11,9 @@ import {
   FormError,
   href,
   Link,
-  query,
+  queryRef,
   redirect,
-  route,
+  routeRef,
   type Component as KovoComponent,
   type ComponentDefinitionInput,
   type FormFailure,
@@ -79,19 +79,19 @@ declare module './index.js' {
   }
 
   interface RouteRegistry {
-    '/cart': ReturnType<typeof route<'/cart'>>;
-    '/products': ReturnType<typeof route<'/products', {}, { max: number; sort: string }>>;
+    '/cart': ReturnType<typeof routeRef<'/cart'>>;
+    '/products': ReturnType<typeof routeRef<'/products', {}, { max: number; sort: string }>>;
     '/products/:id': ReturnType<
-      typeof route<'/products/:id', { id: string }, { max: number; sort: string }>
+      typeof routeRef<'/products/:id', { id: string }, { max: number; sort: string }>
     >;
     '/optional-search': ReturnType<
-      typeof route<'/optional-search', {}, { next: string | undefined }>
+      typeof routeRef<'/optional-search', {}, { next: string | undefined }>
     >;
     // H1 (bugs-part4 L6-1): param names use the same whole-segment grammar as the
     // matcher (server match.ts) and the `PathParamNames` type extractor, so hyphen
     // and dot characters belong to the param name.
-    '/users/:user-id': ReturnType<typeof route<'/users/:user-id'>>;
-    '/files/:name.json': ReturnType<typeof route<'/files/:name.json'>>;
+    '/users/:user-id': ReturnType<typeof routeRef<'/users/:user-id'>>;
+    '/files/:name.json': ReturnType<typeof routeRef<'/files/:name.json'>>;
   }
 }
 
@@ -138,7 +138,7 @@ describe('core authoring APIs', () => {
   });
 
   it('preserves component definitions for compiler analysis', () => {
-    const cart = query<'cart', { count: number }>('cart');
+    const cart = queryRef<'cart', { count: number }>('cart');
     const CartBadge = component({
       queries: { cart },
       state: () => ({ bouncing: false }) satisfies JsonValue,
@@ -166,7 +166,7 @@ describe('core authoring APIs', () => {
   });
 
   it('preserves disableServerRefresh and rejects removed fragmentTarget authoring', () => {
-    const cart = query<'cart', { count: number }>('cart');
+    const cart = queryRef<'cart', { count: number }>('cart');
     const LocalOnlyCartBadge = component({
       disableServerRefresh: true,
       queries: { cart },
@@ -177,7 +177,7 @@ describe('core authoring APIs', () => {
 
     const assertRemovedFragmentTargetOption = () => {
       component({
-        // @ts-expect-error fragmentTarget was removed; query-backed targets are inferred.
+        // @ts-expect-error fragmentTarget was removed; queryRef-backed targets are inferred.
         fragmentTarget: true,
         queries: { cart },
         render: () => null,
@@ -187,7 +187,7 @@ describe('core authoring APIs', () => {
   });
 
   it('derives component call-site props from the annotated render input', () => {
-    const product = query<'product', { name: string }>('product');
+    const product = queryRef<'product', { name: string }>('product');
     const ProductCard = component({
       props: { productId: String },
       queries: {
@@ -207,7 +207,7 @@ describe('core authoring APIs', () => {
     ProductCard({ productId: 'p1' });
     ProductCard({ productId: 'p1', selected: true, 'kovo-key': 'p1', style: {} });
 
-    // @ts-expect-error SPEC §4.1/§6.2: query result keys are server-owned, not call-site props.
+    // @ts-expect-error SPEC §4.1/§6.2: queryRef result keys are server-owned, not call-site props.
     ProductCard({ product: { name: 'Desk' }, productId: 'p1' });
     // @ts-expect-error SPEC §4.1/§6.2: required render-derived props must be supplied.
     ProductCard();
@@ -225,8 +225,8 @@ describe('core authoring APIs', () => {
     Unannotated({ label: 'hidden' });
   });
 
-  it('checks query args and props metadata against render-derived props', () => {
-    const product = query<'product', { name: string }>('product');
+  it('checks queryRef args and props metadata against render-derived props', () => {
+    const product = queryRef<'product', { name: string }>('product');
 
     component({
       props: { productId: String, count: Number },
@@ -246,7 +246,7 @@ describe('core authoring APIs', () => {
 
     component({
       queries: {
-        // @ts-expect-error SPEC §4.1/§6.2: query args cannot invent props absent from render input.
+        // @ts-expect-error SPEC §4.1/§6.2: queryRef args cannot invent props absent from render input.
         product: product.args((props: { invented: string }) => ({ id: props.invented })),
       },
       render: ({ productId }: { product: { name: string }; productId: string }) => ({
@@ -356,8 +356,8 @@ describe('core authoring APIs', () => {
     ).toThrow('trustedReveal requires a non-empty justification.');
   });
 
-  it('preserves query and form keys as typed authoring facts', () => {
-    const cart = query<'cart', { count: number }>('cart');
+  it('preserves queryRef and form keys as typed authoring facts', () => {
+    const cart = queryRef<'cart', { count: number }>('cart');
     const cartForProduct = cart.args((props: { productId: string }) => ({
       id: props.productId,
     }));
@@ -381,8 +381,8 @@ describe('core authoring APIs', () => {
     expect(form('cart/add').key).toBe('cart/add');
 
     const assertUnknownQuery = () => {
-      // @ts-expect-error query keys are checked against generated QueryRegistry facts.
-      query('missing-query');
+      // @ts-expect-error queryRef keys are checked against generated QueryRegistry facts.
+      queryRef('missing-query');
     };
     const assertUnknownMutation = () => {
       // @ts-expect-error form keys are checked against generated MutationRegistry facts.
@@ -392,11 +392,11 @@ describe('core authoring APIs', () => {
     expect(assertUnknownMutation).toBeTypeOf('function');
   });
 
-  it('declares per-query refetch-on-focus opt-out on the query handle (SPEC §9.3/§9.4)', () => {
-    // SPEC §9.3/§9.4: refetch-on-focus is a per-query loader behavior with a per-query opt-out.
-    // The opt-out is declarable at the query site; refetch-on-focus is on by default otherwise.
-    const ticker = query<'ticker', { price: number }>('ticker', { refetchOnFocus: false });
-    const cart = query<'cart', { count: number }>('cart');
+  it('declares per-queryRef refetch-on-focus opt-out on the queryRef handle (SPEC §9.3/§9.4)', () => {
+    // SPEC §9.3/§9.4: refetch-on-focus is a per-queryRef loader behavior with a per-queryRef opt-out.
+    // The opt-out is declarable at the queryRef site; refetch-on-focus is on by default otherwise.
+    const ticker = queryRef<'ticker', { price: number }>('ticker', { refetchOnFocus: false });
+    const cart = queryRef<'cart', { count: number }>('cart');
 
     expect(ticker.refetchOnFocus).toBe(false);
     expect(ticker.key).toBe('ticker');
@@ -405,7 +405,7 @@ describe('core authoring APIs', () => {
     const assertNoOptInField = () => {
       // @ts-expect-error SPEC §9.3/§9.4: refetch-on-focus is on by default, so `true` would be a
       // no-op field; only `refetchOnFocus: false` (the opt-out) is accepted.
-      query<'cart', { count: number }>('cart', { refetchOnFocus: true });
+      queryRef<'cart', { count: number }>('cart', { refetchOnFocus: true });
     };
     expect(assertNoOptInField).toBeTypeOf('function');
   });
@@ -678,8 +678,8 @@ describe('core authoring APIs', () => {
     expect(assertUnknownProp).toBeTypeOf('function');
   });
 
-  it('builds typed route hrefs, links, and redirects from generated registry facts', () => {
-    const productRoute = route<'/products/:id', { id: string }, { max: number; sort: string }>(
+  it('builds typed routeRef hrefs, links, and redirects from generated registry facts', () => {
+    const productRoute = routeRef<'/products/:id', { id: string }, { max: number; sort: string }>(
       '/products/:id',
       {
         prefetch: 'conservative',
@@ -721,17 +721,17 @@ describe('core authoring APIs', () => {
     );
 
     const assertMissingParam = () => {
-      // @ts-expect-error id is required by the route path.
+      // @ts-expect-error id is required by the routeRef path.
       href('/products/:id', { search: { max: 500 } });
     };
     const assertUnknownRoute = () => {
-      // @ts-expect-error route hrefs are checked against generated RouteRegistry facts.
+      // @ts-expect-error routeRef hrefs are checked against generated RouteRegistry facts.
       href('/missing', {});
     };
     const assertUnknownSearch = () => {
       href('/products/:id', {
         params: { id: 'p1' },
-        // @ts-expect-error sku is not part of the route search schema.
+        // @ts-expect-error sku is not part of the routeRef search schema.
         search: { sku: 'sku-1' },
       });
     };
@@ -741,7 +741,7 @@ describe('core authoring APIs', () => {
     expect(assertUnknownSearch).toBeTypeOf('function');
   });
 
-  it('types GET form fields against route search schemas', () => {
+  it('types GET form fields against routeRef search schemas', () => {
     const productFilter = form.get('/products');
     const productDetailFilter = form.get('/products/:id', { params: { id: 'p1' } });
 
@@ -759,11 +759,11 @@ describe('core authoring APIs', () => {
     expect(form.get('/optional-search').input('next')).toEqual({ name: 'next' });
 
     const assertUnknownSearchField = () => {
-      // @ts-expect-error sku is not part of the route search schema.
+      // @ts-expect-error sku is not part of the routeRef search schema.
       productFilter.input('sku');
     };
     const assertUnknownSearchFieldComponent = () => {
-      // @ts-expect-error sku is not part of the route search schema.
+      // @ts-expect-error sku is not part of the routeRef search schema.
       productFilter.input({ name: 'sku' });
     };
     const assertMissingRouteParam = () => {

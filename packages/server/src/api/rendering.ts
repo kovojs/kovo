@@ -22,7 +22,7 @@ export {
   Link,
   Meta,
   ModulePreload,
-  Stylesheet,
+  StylesheetLink,
 } from '../document-structured.js';
 export type {
   DocumentAuthoringContext,

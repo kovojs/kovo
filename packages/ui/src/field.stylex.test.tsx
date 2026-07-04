@@ -7,7 +7,7 @@ import {
   Field,
   FieldControl,
   FieldDescription,
-  FieldError,
+  FieldErrorMessage,
   FieldLabel,
   FieldSelect,
   FieldSelectOption,
@@ -48,7 +48,7 @@ describe('@kovojs/ui Field StyleX styles', () => {
         id: 'email-description',
       }),
       descriptionClasses: [style.attrs(fieldStyles.description).class ?? ''] as const,
-      error: FieldError.definition.render({ children: 'Email required.', id: 'email-error' }),
+      error: FieldErrorMessage.definition.render({ children: 'Email required.', id: 'email-error' }),
       errorClasses: [style.attrs(fieldStyles.error).class ?? ''] as const,
       fieldset: Fieldset.definition.render({
         children: FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }),
@@ -126,7 +126,7 @@ describe('@kovojs/ui Field StyleX styles', () => {
         children: 'Custom description',
         styles: { description: overrides.description },
       }),
-      error: FieldError.definition.render({
+      error: FieldErrorMessage.definition.render({
         children: 'Custom error',
         styles: { error: overrides.error },
       }),

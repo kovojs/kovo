@@ -1,7 +1,7 @@
 import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 
-import type { CsrfValidationOptions } from './csrf.js';
+import type { CsrfOptions } from './csrf.js';
 import type { DeferredStreamChunk } from './deferred-stream.js';
 import type { MutationFail } from './mutation.js';
 
@@ -16,7 +16,7 @@ export interface JsxMutationFailureContext {
 
 export interface JsxFrameworkContext {
   anonymousCsrfBindings?: Map<string, JsxAnonymousCsrfBinding>;
-  csrf?: CsrfValidationOptions<any>;
+  csrf?: CsrfOptions<any>;
   deferredRegions?: DeferredRegionCollector;
   maxListItems?: number;
   mutationFormHelpers: JsxMutationFormHelperRegistry;

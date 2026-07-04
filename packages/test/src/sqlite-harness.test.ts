@@ -32,7 +32,7 @@ describe('@kovojs/test SQLite harness integration', () => {
           normalizeTableName: (table) => table.replace(/^main\./, ''),
         },
         sqlWritePolicy: { dialect: 'sqlite' },
-      }) as unknown as Pick<SqliteTestDb, 'exec' | 'query' | 'sql'> & {
+      }) as unknown as Pick<SqliteTestDb, 'exec' | 'query'> & {
         rawRead<Row extends Record<string, unknown> = Record<string, unknown>>(
           statement: unknown,
           declaration: { reads: readonly string[] },
@@ -136,12 +136,12 @@ describe('@kovojs/test SQLite harness integration', () => {
           tables: ['cart_items'],
           touches: ['cart'],
         },
-      }) as unknown as Pick<SqliteTestDb, 'insert'>;
+      }) as unknown as Pick<SqliteTestDb, 'write'>;
 
-      writer.insert('main.cart_items').values({ product_id: 'p1', qty: 2 });
+      writer.write('main.cart_items', { product_id: 'p1', qty: 2 });
       expect(db.read<{ product_id: string }>('cart_items')).toMatchObject([{ product_id: 'p1' }]);
 
-      expect(() => writer.insert('main.audit_log').values({ product_id: 'p1' })).toThrow(
+      expect(() => writer.write('main.audit_log', { product_id: 'p1' })).toThrow(
         /KV406.*SQLite adapter declared-write fallback/s,
       );
       expect(db.read('audit_log')).toEqual([]);

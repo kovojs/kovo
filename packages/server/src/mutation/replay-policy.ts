@@ -1,6 +1,6 @@
 import { isUntrusted, revealUntrusted } from '@kovojs/core';
 
-import { KOVO_IDEM_FIELD_NAME, type CsrfValidationOptions } from '../csrf.js';
+import { KOVO_IDEM_FIELD_NAME, type CsrfOptions } from '../csrf.js';
 import {
   canonicalRequestFingerprint,
   MutationReplayConflictError,
@@ -81,7 +81,7 @@ export function optionalReplayPolicy<Response>(
 }
 
 export function enhancedMutationReplayPolicy<Request>(mode: {
-  csrf: CsrfValidationOptions<Request> | false | undefined;
+  csrf: CsrfOptions<Request> | false | undefined;
   mutationKey: string;
   request: MutationWireRequest<Request>;
 }): MutationLifecycleReplayPolicy<BufferedMutationWireResponse> {
@@ -118,7 +118,7 @@ export function enhancedMutationReplayPolicy<Request>(mode: {
 }
 
 export function noJsMutationReplayPolicy<Request, Value>(mode: {
-  csrf: CsrfValidationOptions<Request> | false | undefined;
+  csrf: CsrfOptions<Request> | false | undefined;
   mutationKey: string;
   request: NoJsMutationRequest<Request, Value>;
 }): MutationLifecycleReplayPolicy<NoJsMutationResponse> | undefined {
@@ -234,7 +234,7 @@ function readNoJsIdemField(rawInput: unknown): string | undefined {
 }
 
 function noJsReplayScopeFor<Request>(
-  csrf: CsrfValidationOptions<Request> | false | undefined,
+  csrf: CsrfOptions<Request> | false | undefined,
   mutationKey: string,
   request: Request,
 ): string {

@@ -1,5 +1,5 @@
 import type {
-  CsrfValidationOptions,
+  CsrfOptions,
   MutationDefinition,
   MutationResult,
   QueryDefinition,
@@ -44,7 +44,7 @@ export type HarnessPageFixture<Db = unknown> =
 
 /** @internal Per-`exec` mutation options surfaced publicly via `KovoTestExecOptions`. */
 export interface HarnessMutationOptions<Request> {
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfOptions<Request>;
   request?: Partial<Omit<Request, 'db'>>;
   touchGraphKey?: string;
 }

@@ -182,8 +182,8 @@ export function Link(props: {
   return documentNode('head', `<link${renderAttributes('link', filterLinkAttrs(props))}>`);
 }
 
-/** Stylesheet link primitive. */
-export function Stylesheet(props: { href: string; media?: string }): unknown {
+/** StylesheetLink link primitive. */
+export function StylesheetLink(props: { href: string; media?: string }): unknown {
   return Link({
     rel: 'stylesheet',
     href: props.href,

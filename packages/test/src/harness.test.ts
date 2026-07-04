@@ -98,8 +98,8 @@ describe('@kovojs/test harness context', () => {
   it('exposes a stable db handle for direct harness assertions', async () => {
     const harness = createKovoTestHarness({ db: { cart: [] as string[] } });
 
-    expect(harness.dbHandle()).toBe(harness.db);
-    harness.dbHandle().cart.push('direct');
+    expect(harness.db).toBe(harness.db);
+    harness.db.cart.push('direct');
 
     const addToCart = mutation('cart/add', {
       csrf: false,
@@ -132,9 +132,9 @@ describe('@kovojs/test harness context', () => {
       },
     });
 
-    harness.dbHandle().write('cart_items', 'p1');
+    harness.db.write('cart_items', 'p1');
 
-    expect(harness.dbHandle().read('cart_items')).toEqual(['p1']);
+    expect(harness.db.read('cart_items')).toEqual(['p1']);
   });
 
   it('returns no verification diagnostics when verification is not configured', () => {

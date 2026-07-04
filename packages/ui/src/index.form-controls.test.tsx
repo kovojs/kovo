@@ -12,7 +12,7 @@ import {
   Field,
   FieldControl,
   FieldDescription,
-  FieldError,
+  FieldErrorMessage,
   FieldLabel,
   FieldSelect,
   FieldSelectOption,
@@ -567,7 +567,7 @@ describe('@kovojs/ui styled package foundation', () => {
       }),
     );
     const error = String(
-      FieldError.definition.render({ children: 'Email required.', id: 'email-error' }),
+      FieldErrorMessage.definition.render({ children: 'Email required.', id: 'email-error' }),
     );
     const fieldset = String(
       Fieldset.definition.render({

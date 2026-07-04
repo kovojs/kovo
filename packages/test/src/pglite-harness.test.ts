@@ -35,7 +35,7 @@ describe('@kovojs/test PGlite harness integration', () => {
           executeMethod: 'query',
           normalizeTableName: (table) => table,
         },
-      }) as unknown as Pick<PgliteTestDb, 'exec' | 'query' | 'sql'> & {
+      }) as unknown as Pick<PgliteTestDb, 'exec' | 'query'> & {
         rawRead<Row extends Record<string, unknown> = Record<string, unknown>>(
           statement: unknown,
           declaration: { reads: readonly string[] },
@@ -222,14 +222,14 @@ describe('@kovojs/test PGlite harness integration', () => {
           tables: ['cart_items'],
           touches: ['cart'],
         },
-      }) as unknown as Pick<PgliteTestDb, 'insert'>;
+      }) as unknown as Pick<PgliteTestDb, 'write'>;
 
-      await writer.insert('public.cart_items').values({ product_id: 'p1', qty: 2 });
+      await writer.write('public.cart_items', { product_id: 'p1', qty: 2 });
       await expect(db.read<{ product_id: string }>('cart_items')).resolves.toMatchObject([
         { product_id: 'p1' },
       ]);
 
-      expect(() => writer.insert('public.audit_log').values({ product_id: 'p1' })).toThrow(
+      await expect(writer.write('public.audit_log', { product_id: 'p1' })).rejects.toThrow(
         /KV406.*PGlite adapter declared-write fallback/s,
       );
       await expect(db.read('audit_log')).resolves.toEqual([]);
@@ -570,7 +570,7 @@ describe('@kovojs/test PGlite harness integration', () => {
       const verifier = createDbVerifier({}, { domainByTable: { products: 'product' } });
       const wrapped = verifier.wrap(db);
 
-      await wrapped.sql(stampTrustedSql({ text: 'truncate products' }, 'static truncate test'));
+      await wrapped.query(stampTrustedSql({ text: 'truncate products' }, 'static truncate test'));
 
       expect(() => verifier.assertCovered()).toThrow(expectedDiagnostic('KV402', 'product'));
     } finally {
@@ -595,7 +595,7 @@ describe('@kovojs/test PGlite harness integration', () => {
 
       // pgsql-ast-parser rejects `DELETE … USING`, so the explicit parse drops to
       // [] (fail-open). The count delta on `products` is the only signal.
-      await wrapped.sql(
+      await wrapped.query(
         stampTrustedSql(
           { text: 'delete from products using archived where products.id = archived.id' },
           'static delete-using test',

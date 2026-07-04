@@ -10,7 +10,7 @@ import {
   renderRouteDocumentResponse,
 } from './document-core.js';
 import { forwardSetCookie } from './cookies.js';
-import { currentCsrfSecret, type CsrfSecret } from './csrf.js';
+import { currentSigningSecret, type SigningSecret } from './csrf.js';
 import {
   createSignUrl,
   storageDownloadEndpointInfo,
@@ -305,9 +305,9 @@ function createUnavailableSignUrl(message: string): ReturnType<typeof createSign
  * stay out of the BroadcastChannel envelope. Principal resolution happens through
  * `principalPostureFromRequest`; unresolved session carriers intentionally do not reach this helper.
  */
-function hmacSessionFingerprint(input: string, secret: CsrfSecret | undefined): string {
+function hmacSessionFingerprint(input: string, secret: SigningSecret | undefined): string {
   const hmacSecret =
-    secret === undefined ? fallbackBroadcastFingerprintSecret : currentCsrfSecret(secret);
+    secret === undefined ? fallbackBroadcastFingerprintSecret : currentSigningSecret(secret);
   return createHmac('sha256', hmacSecret).update(input).digest('base64url');
 }
 

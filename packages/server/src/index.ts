@@ -275,8 +275,6 @@ export type {
   ChangeRecord,
   CsrfAnonymousCookieOptions,
   CsrfOptions,
-  CsrfSecret,
-  CsrfValidationOptions,
   Domain,
   FileLike,
   FileSchema,
@@ -323,7 +321,6 @@ export type {
   QueryDefinitionParameterBoundary,
   QueryInstanceKey,
   QueryJsonBoundaryErrorUseJsonbTypeOrSRecord,
-  JsonSerializable,
   QueryLoadContext,
   QueryReadConfig,
   QueryResult,
@@ -386,7 +383,7 @@ export {
   InlineStyle,
   Meta,
   ModulePreload,
-  Stylesheet,
+  StylesheetLink,
 } from './api/rendering.js';
 export type {
   ComponentElementNode,

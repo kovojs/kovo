@@ -24,7 +24,7 @@ import {
   isDocumentConfig,
   isStructuredDocumentNode,
   Link,
-  Stylesheet,
+  StylesheetLink,
 } from './document-structured.js';
 import { jsx } from './jsx-runtime.js';
 
@@ -165,7 +165,7 @@ describe('server app shell document assembly', () => {
             InlineScript({ children: themeScript, id: 'theme', run: 'beforePaint' }),
             InlineStyle({ children: criticalCss, id: 'critical', source: 'test/document.test.ts' }),
             FontPreload({ href: '/fonts/inter.woff2' }),
-            Stylesheet({ href: '/assets/site.css' }),
+            StylesheetLink({ href: '/assets/site.css' }),
           ],
         }),
         BodyStart({ children: '<banner>escaped</banner>' }),
