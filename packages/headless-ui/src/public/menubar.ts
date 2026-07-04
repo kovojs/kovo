@@ -8,6 +8,7 @@ export {
   menubarSeparatorAttributes,
   menubarItemHighlighted,
   menubarItemOpen,
+  menubarFocusElement,
 } from '../primitives/menubar.js';
 export type {
   MenubarItem,
@@ -22,5 +23,6 @@ export type {
   MenubarTypeaheadOptions,
   MenubarTypeaheadResult,
   MenubarPrimitiveAttributes,
+  MenubarFocusEvent,
   MenubarFocusOptions,
 } from '../primitives/menubar.js';

@@ -11,6 +11,7 @@ export {
   navigationMenuIndicatorAttributes,
   navigationMenuItemHighlighted,
   navigationMenuItemOpen,
+  navigationMenuFocusElement,
 } from '../primitives/navigation-menu.js';
 export type {
   NavigationMenuItem,
@@ -28,5 +29,6 @@ export type {
   NavigationMenuTypeaheadOptions,
   NavigationMenuTypeaheadResult,
   NavigationMenuPrimitiveAttributes,
+  NavigationMenuFocusEvent,
   NavigationMenuFocusOptions,
 } from '../primitives/navigation-menu.js';

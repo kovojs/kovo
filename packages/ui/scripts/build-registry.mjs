@@ -912,6 +912,9 @@ function isTransitionMachineOnlyDeclaration(name) {
   if (/^Toast(?:Show|Dismiss)?Event/.test(name) || /^toast(?:Show|Dismiss)?Event/.test(name)) {
     return false;
   }
+  if (name.endsWith('FocusEvent')) {
+    return false;
+  }
   return new RegExp(
     [
       'Change(?:Reason|Detail|Options|Result)',
@@ -924,7 +927,6 @@ function isTransitionMachineOnlyDeclaration(name) {
       'SelectResult',
       'PointerDragOptions',
       'KeyDownOptions',
-      'FocusElement',
       'Event',
     ].join('|') + '$',
   ).test(name);
