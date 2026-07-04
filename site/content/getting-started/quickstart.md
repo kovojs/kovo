@@ -10,12 +10,25 @@ In a few minutes you'll have the current Kovo starter running: a signed-in conta
 Drizzle database, Better Auth session handling, a guarded mutation, typed queries, styled
 components, tests, CI, and production build wiring.
 
-> **Status: pre-v1.** Kovo isn't on npm yet. The commands below describe the intended flow and work
-> today inside the [Kovo repository](https://github.com/kovojs/kovo) as workspace packages. Until
-> packages publish, clone the repo and work in a workspace member - that's all the
-> [Tutorial](/tutorial/) does, and it runs against the real compiler.
+> **Status: pre-v1.** Kovo isn't on npm yet. Today you run it from a cloned checkout of the
+> [Kovo repository](https://github.com/kovojs/kovo), with the generated app linked back to the local
+> workspace packages.
 
 ## 1. Scaffold
+
+Today, use the repo-local scaffold flow:
+
+```sh
+git clone https://github.com/kovojs/kovo.git
+cd kovo
+pnpm install
+node --experimental-transform-types packages/create-kovo/src/index.ts examples/my-app --disable-git
+node scripts/link-local-kovo.mjs examples/my-app
+cd examples/my-app
+pnpm install --ignore-workspace
+```
+
+After packages publish, the short form becomes:
 
 ```sh
 pnpm create kovo my-app
@@ -27,7 +40,7 @@ Use SQLite when you want a local file-backed starter instead of the default PGli
 one:
 
 ```sh
-pnpm create kovo my-app -- --dialect sqlite
+pnpm create kovo my-app -- --dialect sqlite --experimental-sqlite
 ```
 
 The scaffold writes `src/app.tsx`, `src/auth.ts`, `src/db.ts`, `src/schema.ts`, `src/queries.ts`,
@@ -38,7 +51,7 @@ gitignored; replace the secret in your deployment environment before shipping.
 ## 2. Run it
 
 ```sh
-vp dev
+pnpm run dev
 ```
 
 Open `/login` and sign in with the seeded demo user. Use `demo@example.com` and the random
@@ -53,12 +66,13 @@ contact region.
 Run the starter's focused gates before editing:
 
 ```sh
-vp check
-vp test
+pnpm run check
+pnpm test
 ```
 
-`vp check` runs the Vite+ type/lint pipeline that surfaces Kovo static errors. `vp test` runs the
-starter test through the same app wiring. The production path is also present from day one:
+`pnpm run check` is the starter aggregate gate. It runs `vp check`, the starter sound-subset policy,
+`pnpm run build:prod`, and the endpoint-posture audit. `pnpm test` runs the starter test through the
+same app wiring. The production path is also present from day one:
 
 ```sh
 npm run build:prod
@@ -82,7 +96,7 @@ and `company` but a component tries to render a field that does not exist:
 then:
 
 ```sh
-vp check
+pnpm run check
 ```
 
 reports the binding error during development instead of letting the mismatch reach production.
@@ -113,8 +127,8 @@ route declaration rather than hiding them in component code.
 Run the narrow checks before and after the change:
 
 ```sh
-vp check
-vp test
+pnpm run check
+pnpm test
 ```
 
 When the feature crosses data domains or relies on optimistic behavior, add a graph assertion or a

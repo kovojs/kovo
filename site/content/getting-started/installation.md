@@ -27,11 +27,11 @@ cd my-app
 pnpm install
 ```
 
-The default starter uses PGlite with Drizzle's Postgres dialect. Use SQLite when that is the
-deployment target you want to prove from the first commit:
+The default starter uses PGlite with Drizzle's Postgres dialect. SQLite is still experimental and
+single-principal/local-dev only, so opt into it explicitly:
 
 ```sh
-pnpm create kovo my-app -- --dialect sqlite
+pnpm create kovo my-app -- --dialect sqlite --experimental-sqlite
 ```
 
 The CLI accepts:
@@ -40,10 +40,12 @@ The CLI accepts:
 create-kovo <target-directory> [--name <package-name>] [--dialect postgres|sqlite] [--disable-git]
 ```
 
-`--postgres` and `--sqlite` are accepted aliases. The target directory must be empty when it already
-exists; the command refuses to merge into a non-empty app. By default, `create-kovo` initializes a
-Git repository after writing the scaffold. Pass `--disable-git` to skip that. If the target is
-already inside a Git or Mercurial repository, the command does not create a nested Git repository.
+`--postgres` and `--sqlite` are accepted aliases. `--sqlite` still requires
+`--experimental-sqlite` unless `KOVO_EXPERIMENTAL_SQLITE=1` is set. The target directory must be
+empty when it already exists; the command refuses to merge into a non-empty app. By default,
+`create-kovo` initializes a Git repository after writing the scaffold. Pass `--disable-git` to skip
+that. If the target is already inside a Git or Mercurial repository, the command does not create a
+nested Git repository.
 
 > **Pre-v1:** not on npm yet. These commands describe the intended flow and work today inside the
 > [Kovo repository](https://github.com/kovojs/kovo) as workspace packages - clone the repo and work
