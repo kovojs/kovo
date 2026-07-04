@@ -543,23 +543,34 @@ conservative half-step left as the end state.
 
 ### Phase 3 — surface removals and ABI reclassification
 
-- [ ] Land the remaining **Definitely Remove** items.
-  - [ ] `createElement`
-  - [ ] `MutationResponseHeaders`
-  - [ ] `Deferred*Chunk` family
-  - [ ] `meta()`
-  - [ ] `GuardFailure`
-  - [ ] EndpointReason `purpose`
+- [x] Land the remaining **Definitely Remove** items.
+  - [x] `createElement`
+  - [x] `MutationResponseHeaders`
+  - [x] `Deferred*Chunk` family
+  - [x] `meta()`
+  - [x] `GuardFailure`
+  - [x] EndpointReason `purpose`
   - [x] `runKovoCommand` removed from the `@kovojs/cli` root; it remains available only on the
         internal command dispatcher subpath.
     - Evidence: `packages/cli/src/api.ts`, `site/scripts/api-ref.test.mjs`,
       `pnpm run check:api-surface`, and
       `pnpm exec vitest --run site/scripts/api-ref.test.mjs packages/cli/src/index.kovo-check.test.ts --config ./vite.config.ts`.
-- [ ] **Reclassify compiled-ABI types**: headless-ui transition machinery → `./generated` (one
-      generator change in `packages/ui/scripts/primitive-component-manifest.mjs`); drop the 44
-      `@kovojs/ui` `*Styles` exports from versioned modules (keep module-local for copy-in);
-      `@kovojs/browser/client` DI seams → generated/internal via the `KovoLoaderOptions` split;
-      emit generated optimistic modules' imports from `@kovojs/browser/generated`.
+  - Evidence: `packages/server/src/index.ts`, `packages/server/src/guards.ts`,
+    `packages/server/src/endpoint.ts`, `packages/server/src/response.ts`, and
+    `packages/server/src/api/routing.ts`; verified by `pnpm run check:api-surface` and
+    `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/endpoint.test.ts site/scripts/api-ref.test.mjs packages/server/src/wire-fixtures.test.ts --config ./vite.config.ts`.
+- [ ] **Reclassify compiled-ABI types**.
+  - [x] Headless-ui transition machinery moved out of app-facing public facades.
+    - Evidence: `packages/headless-ui/src/public/*.ts`, `packages/headless-ui/src/types-boundary.test.ts`,
+      and `site/scripts/api-ref.test.mjs`; verified by `pnpm run check:api-surface` and
+      `pnpm exec vitest --run packages/headless-ui/src/types-boundary.test.ts packages/ui/src/index.markup.test.tsx site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
+  - [x] Drop the 44 `@kovojs/ui` `*Styles` exports from versioned modules while keeping them
+        source-local for copy-in.
+    - Evidence: `packages/ui/src/*.tsx`, `packages/ui/scripts/build-registry.mjs`,
+      `packages/ui/registry.json`, and `packages/ui/src/index.markup.test.tsx`; verified by the same
+      focused command above.
+  - [ ] `@kovojs/browser/client` DI seams → generated/internal via the `KovoLoaderOptions` split.
+  - [ ] Emit generated optimistic modules' imports from `@kovojs/browser/generated`.
 - [ ] **Barrel hygiene on the `@kovojs/server` root**: move plumbing families (drain-facts,
       capability primitives, CSP renderers, vite-dev, adapter hooks) behind internal subpaths.
 - [ ] **Kill duplicate vocabulary in one pass** (tag/domain done in Phase 2; GuardFailure,
