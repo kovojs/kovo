@@ -113,11 +113,7 @@ export type {
 // `Writer<Db>` type mirrors, `readonlyDb(appDb)` for raw endpoint reads, and
 // `declarePublicRead(...)` for audited public raw reads. Framework adapter hooks and audit drains
 // stay on `@kovojs/server/internal/managed-db`.
-export {
-  declarePublicRead,
-  KovoReadonlyHandleError,
-  readonlyDb,
-} from '../managed-db.js';
+export { declarePublicRead, KovoReadonlyHandleError, readonlyDb } from '../managed-db.js';
 export {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
@@ -156,6 +152,16 @@ export type {
   KovoPostgresRuntimeDb,
   KovoPostgresRuntimeDriver,
 } from '../postgres-runtime.js';
+export { createSqliteAppRuntimeDb } from '../sqlite-runtime.js';
+export type {
+  KovoSqliteAppRuntimeDb,
+  KovoSqliteAppRuntimeMetadata,
+  KovoSqliteAppRuntimeOptions,
+  KovoSqliteColumnOriginClient,
+  KovoSqliteRuntimeColumnSource,
+} from '../sqlite-runtime.js';
+export { declareSecretReadCapability } from '../secret-read-boundary.js';
+export type { DeclaredSecretReadCapability } from '../secret-read-boundary.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {
   FileLike,

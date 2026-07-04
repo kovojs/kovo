@@ -32,6 +32,18 @@ export type {
   KovoPostgresRuntimeDb,
   KovoPostgresRuntimeDriver,
 } from './postgres-runtime.js';
+// SPEC §5.2/§10.3/§11.2: generated SQLite starter source must use public Kovo entrypoints, while
+// the adapter hooks and low-level secret/read/write wrappers remain internal.
+export { createSqliteAppRuntimeDb } from './sqlite-runtime.js';
+export type {
+  KovoSqliteAppRuntimeDb,
+  KovoSqliteAppRuntimeMetadata,
+  KovoSqliteAppRuntimeOptions,
+  KovoSqliteColumnOriginClient,
+  KovoSqliteRuntimeColumnSource,
+} from './sqlite-runtime.js';
+export { declareSecretReadCapability } from './secret-read-boundary.js';
+export type { DeclaredSecretReadCapability } from './secret-read-boundary.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
 export { trustedAssign, serverValue } from './write-governance.js';
@@ -79,7 +91,12 @@ export {
   createStorageDownloadEndpoint,
 } from './capability-route.js';
 export type { CapabilityMethod, CapabilityReplayStore } from './capability-url.js';
-export type { SignUrlContext, SignUrlOptions, SignedUrl, StorageDownloadEndpointOptions } from './capability-route.js';
+export type {
+  SignUrlContext,
+  SignUrlOptions,
+  SignedUrl,
+  StorageDownloadEndpointOptions,
+} from './capability-route.js';
 // SPEC §6.6 / §9.1: rooted filesystem serving is the framework-owned file/path sink for
 // route-served local bytes. App code passes request-derived relative paths to this capability,
 // never a pre-resolved raw fs path.
@@ -190,7 +207,12 @@ export type {
 // CSP allowlist config named by `createApp({ document: { csp } })` (recursive publicness,
 // rules/api-surface.md): an app declares third-party analytics/Stripe origins through these.
 // SPEC §6.6: a cross-browser runtime DiD floor, not a by-construction proof.
-export type { CspAllowlist, CspInlineMetadata, CspReportingConfig, DocumentCspConfig } from './csp.js';
+export type {
+  CspAllowlist,
+  CspInlineMetadata,
+  CspReportingConfig,
+  DocumentCspConfig,
+} from './csp.js';
 // Option/registry types named by `createApp({ clientModules })` and by app
 // consumers that hold a registry reference (recursive publicness,
 // rules/api-surface.md). They also remain on `@kovojs/server/internal/client-modules`.

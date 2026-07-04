@@ -8,12 +8,9 @@ import {
 
 import Database from 'better-sqlite3';
 import {
-  createSecretBoxingReadDb,
-  createDeclaredWriteDb,
+  createSqliteAppRuntimeDb,
   declareSecretReadCapability,
-  kovoDeclaredWriteDbHandle,
-  kovoReadonlyDbHandle,
-  readonlyDb,
+  type KovoSqliteAppRuntimeDb,
 } from '@kovojs/server';
 import { extractKovoRuntimeDbMetadata } from '@kovojs/drizzle';
 import { getTableConfig } from 'drizzle-orm/sqlite-core';
@@ -25,9 +22,7 @@ import type { AppDb, AppReadonlyDb } from '../db.js';
 // The framework-owned app database runtime for the opt-in SQLite scaffold.
 // Postgres remains the default starter dialect.
 
-interface CreatedAppRuntimeDb {
-  db: AppDb;
-  readonlyDb: AppReadonlyDb;
+interface CreatedAppRuntimeDb extends KovoSqliteAppRuntimeDb<AppDb> {
   ready: Promise<void>;
   sqliteFile: string;
 }
@@ -59,10 +54,6 @@ const RUNTIME_DB_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES);
 const SQLITE_RUNTIME_WARNING =
   'Kovo SQLite starter is experimental and single-principal only: SQLite has no engine role/RLS layer, so Kovo owner scoping is not enforced. Use the default PGlite/Postgres runtime for multi-tenant authorization.';
 let sqliteRuntimeWarningPrinted = false;
-interface DeclaredWritePolicy {
-  tables?: readonly string[];
-  touches?: readonly string[];
-}
 
 function createAppRuntimeDb(): CreatedAppRuntimeDb {
   warnExperimentalSqliteRuntime();
@@ -73,44 +64,19 @@ function createAppRuntimeDb(): CreatedAppRuntimeDb {
   client.exec(SCHEMA_DDL);
   client.exec(SEED_CONTACTS);
   const db = drizzle({ client });
-  const secretReadDb = createSecretBoxingReadDb(
-    readonlyDb(db, {
-      rawRead: {
-        dialectLabel: 'SQLite',
-        executeMethod: 'all',
-        normalizeTableName: normalizePolicyTable,
-        sqliteAuthorizer: {
-          constants: nodeSqliteConstants,
-          openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile),
-        },
-      },
-    }),
-    RUNTIME_DB_METADATA,
-    {
-      sqliteColumnOrigins: client,
+  const runtime = createSqliteAppRuntimeDb({
+    db,
+    metadata: RUNTIME_DB_METADATA,
+    normalizeTableName: normalizePolicyTable,
+    sqliteAuthorizer: {
+      constants: nodeSqliteConstants,
+      openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile),
     },
-  );
-  Object.defineProperty(db, kovoReadonlyDbHandle, {
-    configurable: true,
-    value: () => secretReadDb,
-  });
-  Object.defineProperty(db, kovoDeclaredWriteDbHandle, {
-    configurable: true,
-    value: (policy: DeclaredWritePolicy) =>
-      createDeclaredWriteDb(db, policy, {
-        dialectLabel: 'SQLite',
-        governedColumns: RUNTIME_DB_METADATA,
-        normalizeTableName: normalizePolicyTable,
-        sqliteAuthorizer: {
-          constants: nodeSqliteConstants,
-          openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile),
-        },
-        tableNames: sqliteTablePolicyNames,
-      }),
+    sqliteColumnOrigins: client,
+    tableNames: sqliteTablePolicyNames,
   });
   return {
-    db,
-    readonlyDb: secretReadDb,
+    ...runtime,
     ready: Promise.resolve(),
     sqliteFile,
   };

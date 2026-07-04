@@ -70,6 +70,7 @@ import * as responseApi from '../response.js';
 import * as routeApi from '../route.js';
 import * as redosApi from '../redos.js';
 import * as secretReadBoundaryApi from '../secret-read-boundary.js';
+import * as sqliteRuntimeApi from '../sqlite-runtime.js';
 import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
@@ -247,10 +248,8 @@ type RemovedRootEgressFloorInstall =
 type RemovedRootCredentialProvider =
   // @ts-expect-error SPEC §6.6: cloud metadata credential frames live on the internal egress subpath.
   import('@kovojs/server').CredentialProvider;
-// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
-type RemovedRootDeclaredSecretReadCapability =
-  // @ts-expect-error SPEC §10.3/§11.2: raw secret-read boundary declarations are adapter plumbing.
-  import('@kovojs/server').DeclaredSecretReadCapability;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootDeclaredSecretReadCapability = import('@kovojs/server').DeclaredSecretReadCapability;
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedRootPostgresRlsSilentDenyDiagnostic =
   // @ts-expect-error SPEC §10.3: Postgres runtime diagnostic facts are internal adapter plumbing.
@@ -685,7 +684,14 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('drainPostgresRlsSilentDenyDiagnostics');
     expect(publicValues).not.toHaveProperty('drainPublicReadAuditFacts');
     expect(publicValues).not.toHaveProperty('createSecretBoxingReadDb');
-    expect(publicValues).not.toHaveProperty('declareSecretReadCapability');
+    expect(publicApi.declareSecretReadCapability).toBe(
+      secretReadBoundaryApi.declareSecretReadCapability,
+    );
+    expect(packageRootApi.declareSecretReadCapability).toBe(
+      secretReadBoundaryApi.declareSecretReadCapability,
+    );
+    expect(publicApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
+    expect(packageRootApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
     for (const key of renderingSubpathOnlyValues) {
       expect(publicValues).not.toHaveProperty(key);
       expect(packageRootValues).not.toHaveProperty(key);
@@ -704,6 +710,10 @@ describe('server app-shell public API barrels', () => {
     expect(dataApi).not.toHaveProperty('createPostgresScopedClient');
     expect(dataApi).not.toHaveProperty('kovoDeclaredWriteDbHandle');
     expect(dataApi).not.toHaveProperty('kovoReadonlyDbHandle');
+    expect(dataApi.declareSecretReadCapability).toBe(
+      secretReadBoundaryApi.declareSecretReadCapability,
+    );
+    expect(dataApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
     expect(dataApi).not.toHaveProperty('drainCrossOwnerReadAuditFacts');
     expect(dataApi).not.toHaveProperty('drainPostgresRlsSilentDenyDiagnostics');
     expect(dataApi).not.toHaveProperty('drainPublicReadAuditFacts');
@@ -783,7 +793,9 @@ describe('server app-shell public API barrels', () => {
     expect(packageInternalManagedDbApi.kovoDeclaredWriteDbHandle).toBe(
       managedDbApi.kovoDeclaredWriteDbHandle,
     );
-    expect(packageInternalManagedDbApi.kovoReadonlyDbHandle).toBe(managedDbApi.kovoReadonlyDbHandle);
+    expect(packageInternalManagedDbApi.kovoReadonlyDbHandle).toBe(
+      managedDbApi.kovoReadonlyDbHandle,
+    );
     expect(packageInternalManagedDbApi.createSecretBoxingReadDb).toBe(
       secretReadBoundaryApi.createSecretBoxingReadDb,
     );
