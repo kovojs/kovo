@@ -86,6 +86,35 @@ const serialNotes = pgTable(
   }),
 );
 
+const fkParents = pgTable(
+  'kovo_runtime_fk_parents',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('ownerId').notNull(),
+  },
+  kovo({
+    domain: 'runtime-fk-parents',
+    key: 'id',
+    owner: 'ownerId',
+  }),
+);
+
+const fkChildren = pgTable(
+  'kovo_runtime_fk_children',
+  {
+    id: text('id').primaryKey(),
+    ownerId: text('ownerId').notNull(),
+    parentId: text('parent_id')
+      .notNull()
+      .references(() => fkParents.id),
+  },
+  kovo({
+    domain: 'runtime-fk-children',
+    key: 'id',
+    owner: 'ownerId',
+  }),
+);
+
 const schema = { labels, notes };
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedPostureCheckOnBootOption =
@@ -1061,6 +1090,113 @@ describe('createPostgresAppRuntimeDb', () => {
     );
   });
 
+  it('refuses SECURITY DEFINER code attached to app-role-reachable tables by side effect', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-attached-code-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        [
+          'CREATE FUNCTION kovo_runtime_attached_trigger() RETURNS trigger',
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN NEW; END $$',
+        ].join(' '),
+        [
+          'CREATE TRIGGER kovo_runtime_attached_trigger',
+          'BEFORE UPDATE ON kovo_runtime_notes',
+          'FOR EACH ROW EXECUTE FUNCTION kovo_runtime_attached_trigger()',
+        ].join(' '),
+        [
+          'CREATE FUNCTION kovo_runtime_attached_check(value text) RETURNS boolean',
+          'LANGUAGE SQL SECURITY DEFINER',
+          'AS $$ SELECT true $$',
+        ].join(' '),
+        [
+          'ALTER TABLE kovo_runtime_notes ADD CONSTRAINT kovo_runtime_attached_check',
+          'CHECK (kovo_runtime_attached_check(title))',
+        ].join(' '),
+        [
+          'CREATE FUNCTION kovo_runtime_attached_default() RETURNS text',
+          'LANGUAGE SQL SECURITY DEFINER',
+          "AS $$ SELECT 'attached'::text $$",
+        ].join(' '),
+        [
+          'ALTER TABLE kovo_runtime_notes ADD COLUMN attached_default text',
+          'DEFAULT kovo_runtime_attached_default()',
+        ].join(' '),
+        [
+          'CREATE FUNCTION kovo_runtime_attached_index(value text) RETURNS text',
+          'LANGUAGE SQL IMMUTABLE SECURITY DEFINER',
+          'AS $$ SELECT value $$',
+        ].join(' '),
+        [
+          'CREATE INDEX kovo_runtime_attached_index',
+          'ON kovo_runtime_notes (kovo_runtime_attached_index(title))',
+        ].join(' '),
+      ].join('; '),
+    );
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'KV433_ATTACHED_CODE',
+          detail: expect.stringContaining('DML trigger'),
+        }),
+        expect.objectContaining({
+          code: 'KV433_ATTACHED_CODE',
+          detail: expect.stringContaining('CHECK/domain constraint function'),
+        }),
+        expect.objectContaining({
+          code: 'KV433_ATTACHED_CODE',
+          detail: expect.stringContaining('default/generated expression function'),
+        }),
+        expect.objectContaining({
+          code: 'KV433_ATTACHED_CODE',
+          detail: expect.stringContaining('index/predicate expression function'),
+        }),
+      ]),
+    );
+  });
+
+  it('allows framework/internal FK triggers on app-role-reachable tables', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-fk-triggers-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      schema: { fkChildren, fkParents },
+      seedSql: [
+        "INSERT INTO kovo_runtime_fk_parents (id, \"ownerId\") VALUES ('p1', 'u1')",
+        [
+          'INSERT INTO kovo_runtime_fk_children (id, "ownerId", parent_id)',
+          "VALUES ('c1', 'u1', 'p1')",
+        ].join(' '),
+      ],
+    });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    const report = await checkPostgresAppDbPosture({
+      dataDir,
+      driver: 'pglite',
+      schema: { fkChildren, fkParents },
+    });
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
+  });
+
   it('allows protected-table serial sequences but refuses unrelated reachable sequences', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-sequences-'));
     roots.push(dataDir);
@@ -1437,6 +1573,53 @@ describe('createPostgresAppRuntimeDb', () => {
       'DISCARD ALL',
       'release',
     ]);
+  });
+
+  it('requires separate external Postgres URLs for framework admin and system roles', async () => {
+    const baseConfig = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+      crossOwnerReadTables: ['kovo_runtime_notes'],
+      databaseUrl: 'postgres://app-runtime@127.0.0.1/kovo',
+      driver: 'node-postgres',
+      postureCheck: {
+        justification: 'unit test constructs handles without connecting',
+        onBoot: false,
+      },
+      provisionOnBoot: false,
+      schema,
+    });
+    const appOnlyClient = __testPostgresRuntimeInternals.createRuntimeClient(baseConfig);
+    try {
+      expect(() => appOnlyClient.drizzleReadonlyDb('u1', 'kovo_reader')).not.toThrow();
+      expect(() => appOnlyClient.drizzleReadonlyDb('u1', 'kovo_reader', 'admin')).toThrow(
+        /adminDatabaseUrl\/KOVO_DB_ADMIN_URL/,
+      );
+      expect(() => appOnlyClient.drizzleRequestDb(undefined, 'system')).toThrow(
+        /systemDatabaseUrl\/KOVO_DB_SYSTEM_URL/,
+      );
+    } finally {
+      await appOnlyClient.close();
+    }
+
+    const privilegedConfig = __testPostgresRuntimeInternals.resolvePostgresRuntimeConfig({
+      adminDatabaseUrl: 'postgres://framework-admin@127.0.0.1/kovo',
+      crossOwnerReadTables: ['kovo_runtime_notes'],
+      databaseUrl: 'postgres://app-runtime@127.0.0.1/kovo',
+      driver: 'node-postgres',
+      postureCheck: {
+        justification: 'unit test constructs handles without connecting',
+        onBoot: false,
+      },
+      provisionOnBoot: false,
+      schema,
+      systemDatabaseUrl: 'postgres://framework-system@127.0.0.1/kovo',
+    });
+    const privilegedClient = __testPostgresRuntimeInternals.createRuntimeClient(privilegedConfig);
+    try {
+      expect(() => privilegedClient.drizzleReadonlyDb('u1', 'kovo_reader', 'admin')).not.toThrow();
+      expect(() => privilegedClient.drizzleRequestDb(undefined, 'system')).not.toThrow();
+    } finally {
+      await privilegedClient.close();
+    }
   });
 
   it('provisions custom authzPolicy predicates as FORCE RLS policies', async () => {

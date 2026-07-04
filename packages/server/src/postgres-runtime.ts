@@ -148,6 +148,14 @@ interface PostgresReachableSequenceRow {
   table_name: string;
 }
 
+interface PostgresAttachedCodeRow {
+  mechanism: string;
+  relation_name: string;
+  relation_schema: string;
+  routine_name: string;
+  routine_schema: string;
+}
+
 interface PostgresUnexpectedPrivilegeRow {
   object_kind: string;
   object_name: string;
@@ -180,6 +188,7 @@ interface RuntimeSqlClient extends RuntimeTransactionClient {
 
 interface ResolvedPostgresRuntimeConfig {
   adminRole: string;
+  adminDatabaseUrl?: string;
   createReaderRole: boolean;
   createAdminRole: boolean;
   createSystemRole: boolean;
@@ -196,6 +205,7 @@ interface ResolvedPostgresRuntimeConfig {
   readerRole: string;
   schema: Record<string, unknown>;
   seedSql: readonly string[];
+  systemDatabaseUrl?: string;
   systemRole: string;
   writerRole: string;
 }
@@ -257,6 +267,18 @@ export interface KovoPostgresAppRuntimeOptions {
   dataDir?: string;
   /** Override the external Postgres URL. Defaults to `KOVO_DATABASE_URL`. */
   databaseUrl?: string;
+  /**
+   * Framework-owned external Postgres URL used only for audited `crossOwnerRead(...)` calls. The
+   * login must be the configured `adminRole` or be able to `SET ROLE` to it; the ordinary app
+   * runtime login must not be a member of that role (SPEC §10.3).
+   */
+  adminDatabaseUrl?: string;
+  /**
+   * Framework-owned external Postgres URL used only for audited system work. The login must be the
+   * configured system role or be able to `SET ROLE` to it; the ordinary app runtime login must not
+   * be a member of that role (SPEC §10.3).
+   */
+  systemDatabaseUrl?: string;
   /** Force the driver. Defaults to external Postgres when a database URL is present, PGlite otherwise. */
   driver?: KovoPostgresRuntimeDriver;
   /**
@@ -979,7 +1001,116 @@ async function auditPostgresReachableClosure(
       detail: `${relation.schema}.${relation.table} is reachable by an app role with unsupported relkind ${relation.relkind}`,
     });
   }
+  issues.push(...(await auditPostgresAttachedCode(client, reachable)));
   return issues;
+}
+
+async function auditPostgresAttachedCode(
+  client: RuntimeSqlClient,
+  reachable: ReadonlyMap<string, PostgresReachableRelation>,
+): Promise<KovoPostgresPostureIssue[]> {
+  const reachableBaseTables = new Set(
+    [...reachable.values()]
+      .filter((relation) => relation.relkind === 'r' || relation.relkind === 'p')
+      .map((relation) => postgresRelationKey(relation.schema, relation.table)),
+  );
+  if (reachableBaseTables.size === 0) return [];
+
+  const attachedRows = await safeQuery<PostgresAttachedCodeRow>(
+    client,
+    [
+      "SELECT 'DML trigger' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
+      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
+      'FROM pg_trigger trigger',
+      'JOIN pg_class rel ON rel.oid = trigger.tgrelid',
+      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
+      'JOIN pg_proc proc ON proc.oid = trigger.tgfoid',
+      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
+      'WHERE trigger.tgisinternal = false',
+      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      "AND proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      'UNION ALL',
+      "SELECT 'rewrite rule' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
+      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
+      'FROM pg_rewrite rewrite',
+      'JOIN pg_class rel ON rel.oid = rewrite.ev_class',
+      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
+      "JOIN pg_depend dep ON dep.classid = 'pg_rewrite'::regclass AND dep.objid = rewrite.oid",
+      "  AND dep.refclassid = 'pg_proc'::regclass",
+      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
+      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
+      "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      'UNION ALL',
+      "SELECT 'CHECK/domain constraint function' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
+      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
+      'FROM pg_constraint constraint_row',
+      'JOIN pg_class rel ON rel.oid = constraint_row.conrelid',
+      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
+      "JOIN pg_depend dep ON dep.classid = 'pg_constraint'::regclass AND dep.objid = constraint_row.oid",
+      "  AND dep.refclassid = 'pg_proc'::regclass",
+      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
+      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
+      "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      'UNION ALL',
+      "SELECT 'CHECK/domain constraint function' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
+      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
+      'FROM pg_attribute attr',
+      'JOIN pg_class rel ON rel.oid = attr.attrelid',
+      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
+      'JOIN pg_constraint constraint_row ON constraint_row.contypid = attr.atttypid',
+      "JOIN pg_depend dep ON dep.classid = 'pg_constraint'::regclass AND dep.objid = constraint_row.oid",
+      "  AND dep.refclassid = 'pg_proc'::regclass",
+      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
+      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
+      'WHERE attr.attnum > 0 AND attr.attisdropped = false',
+      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      "AND proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      'UNION ALL',
+      "SELECT 'default/generated expression function' AS mechanism, rel_ns.nspname AS relation_schema, rel.relname AS relation_name,",
+      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
+      'FROM pg_attrdef attrdef',
+      'JOIN pg_class rel ON rel.oid = attrdef.adrelid',
+      'JOIN pg_namespace rel_ns ON rel_ns.oid = rel.relnamespace',
+      "JOIN pg_depend dep ON dep.classid = 'pg_attrdef'::regclass AND dep.objid = attrdef.oid",
+      "  AND dep.refclassid = 'pg_proc'::regclass",
+      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
+      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
+      "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      "AND rel_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      'UNION ALL',
+      "SELECT 'index/predicate expression function' AS mechanism, table_ns.nspname AS relation_schema, table_rel.relname AS relation_name,",
+      'proc_ns.nspname AS routine_schema, proc.proname AS routine_name',
+      'FROM pg_index index_row',
+      'JOIN pg_class index_rel ON index_rel.oid = index_row.indexrelid',
+      'JOIN pg_class table_rel ON table_rel.oid = index_row.indrelid',
+      'JOIN pg_namespace table_ns ON table_ns.oid = table_rel.relnamespace',
+      "JOIN pg_depend dep ON dep.classid = 'pg_class'::regclass AND dep.objid = index_rel.oid",
+      "  AND dep.refclassid = 'pg_proc'::regclass",
+      'JOIN pg_proc proc ON proc.oid = dep.refobjid',
+      'JOIN pg_namespace proc_ns ON proc_ns.oid = proc.pronamespace',
+      "WHERE proc_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      "AND table_ns.nspname NOT IN ('pg_catalog', 'information_schema')",
+      'ORDER BY relation_schema, relation_name, mechanism, routine_schema, routine_name',
+    ].join(' '),
+  );
+  if (attachedRows === undefined) {
+    return [
+      {
+        code: 'KV433_REACHABILITY_AUDIT',
+        detail: 'could not enumerate side-effect attached code on app-role-reachable tables',
+      },
+    ];
+  }
+  return attachedRows.rows
+    .filter((row) =>
+      reachableBaseTables.has(postgresRelationKey(row.relation_schema, row.relation_name)),
+    )
+    .map((row) => ({
+      code: 'KV433_ATTACHED_CODE',
+      detail: `${row.relation_schema}.${row.relation_name} has ${row.mechanism} reaching app-authored routine ${row.routine_schema}.${row.routine_name}; attached code is app-role-reachable through table side effects (SPEC §10.3)`,
+    }));
 }
 
 async function auditPostgresReachableView(
@@ -1304,14 +1435,40 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
   }
 
   const unregisterDatabaseEgressUrl = registerEgressDatabaseUrl(config.databaseUrl);
+  const unregisterAdminDatabaseEgressUrl =
+    config.adminDatabaseUrl === undefined
+      ? undefined
+      : registerEgressDatabaseUrl(config.adminDatabaseUrl);
+  const unregisterSystemDatabaseEgressUrl =
+    config.systemDatabaseUrl === undefined
+      ? undefined
+      : registerEgressDatabaseUrl(config.systemDatabaseUrl);
   const pool = new Pool({ connectionString: config.databaseUrl } satisfies PoolConfig);
   const transactionalClient = new NodePostgresRuntimeClient(pool);
+  const adminTransactionalClient =
+    config.adminDatabaseUrl === undefined
+      ? undefined
+      : new NodePostgresRuntimeClient(
+          new Pool({ connectionString: config.adminDatabaseUrl } satisfies PoolConfig),
+        );
+  const systemTransactionalClient =
+    config.systemDatabaseUrl === undefined
+      ? undefined
+      : new NodePostgresRuntimeClient(
+          new Pool({ connectionString: config.systemDatabaseUrl } satisfies PoolConfig),
+        );
   return {
     close: async () => {
       try {
-        await transactionalClient.close();
+        await Promise.all([
+          transactionalClient.close(),
+          adminTransactionalClient?.close(),
+          systemTransactionalClient?.close(),
+        ]);
       } finally {
         unregisterDatabaseEgressUrl();
+        unregisterAdminDatabaseEgressUrl?.();
+        unregisterSystemDatabaseEgressUrl?.();
       }
     },
     drizzleInternalDb: (capability) => {
@@ -1321,7 +1478,11 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
     drizzleReadonlyDb: (principal, role, roleSetting) =>
       drizzleNodePg({
         client: createPostgresReadonlyClient(
-          transactionalClient,
+          nodePostgresScopedRuntimeClient(config, transactionalClient, {
+            adminClient: adminTransactionalClient,
+            roleSetting,
+            systemClient: systemTransactionalClient,
+          }),
           postgresReadonlyClientOptions(config, principal, role, roleSetting),
         ) as unknown as Pool,
         relations,
@@ -1329,7 +1490,11 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
     drizzleRequestDb: (principal, roleSetting) =>
       drizzleNodePg({
         client: createPostgresScopedClient(
-          transactionalClient,
+          nodePostgresScopedRuntimeClient(config, transactionalClient, {
+            adminClient: adminTransactionalClient,
+            roleSetting,
+            systemClient: systemTransactionalClient,
+          }),
           postgresScopedClientOptions(config, principal, roleSetting),
         ) as unknown as Pool,
         relations,
@@ -1337,6 +1502,34 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
     label: 'Postgres',
     sql: transactionalClient,
   };
+}
+
+function nodePostgresScopedRuntimeClient(
+  config: ResolvedPostgresRuntimeConfig,
+  appClient: NodePostgresRuntimeClient,
+  input: {
+    adminClient: NodePostgresRuntimeClient | undefined;
+    roleSetting: string | undefined;
+    systemClient: NodePostgresRuntimeClient | undefined;
+  },
+): NodePostgresRuntimeClient {
+  if (input.roleSetting === 'admin') {
+    if (input.adminClient === undefined) {
+      throw new Error(
+        `KV414: external Postgres crossOwnerRead requires a framework-owned adminDatabaseUrl/KOVO_DB_ADMIN_URL; the ordinary app runtime login must not assume ${config.adminRole} (SPEC §10.3).`,
+      );
+    }
+    return input.adminClient;
+  }
+  if (input.roleSetting === 'system') {
+    if (input.systemClient === undefined) {
+      throw new Error(
+        `KV414: external Postgres systemDb requires a framework-owned systemDatabaseUrl/KOVO_DB_SYSTEM_URL; the ordinary app runtime login must not assume ${config.systemRole} (SPEC §10.3).`,
+      );
+    }
+    return input.systemClient;
+  }
+  return appClient;
 }
 
 function createRequestScopedDb(
@@ -1459,8 +1652,14 @@ async function discardNodePostgresSession(client: PoolClient): Promise<Error | u
 }
 
 export const __testPostgresRuntimeInternals = {
+  createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRuntimeClient {
+    return createRuntimeClient(config);
+  },
   createNodePostgresRuntimeClient(pool: Pool): RuntimeSqlClient {
     return new NodePostgresRuntimeClient(pool);
+  },
+  resolvePostgresRuntimeConfig(options: PostgresRuntimeConfigInput): ResolvedPostgresRuntimeConfig {
+    return resolvePostgresRuntimeConfig(options);
   },
 };
 
@@ -1502,6 +1701,8 @@ function resolvePostgresRuntimeConfig(
 ): ResolvedPostgresRuntimeConfig {
   const driver = resolveDriver(options);
   const databaseUrl = options.databaseUrl ?? process.env.KOVO_DATABASE_URL;
+  const adminDatabaseUrl = options.adminDatabaseUrl ?? process.env.KOVO_DB_ADMIN_URL;
+  const systemDatabaseUrl = options.systemDatabaseUrl ?? process.env.KOVO_DB_SYSTEM_URL;
   const envAdminRole = nonEmptyEnv('KOVO_DB_ADMIN_ROLE');
   const envReaderRole = nonEmptyEnv('KOVO_DB_READER_ROLE');
   const envWriterRole = nonEmptyEnv('KOVO_DB_WRITER_ROLE');
@@ -1513,6 +1714,7 @@ function resolvePostgresRuntimeConfig(
   );
   const config: ResolvedPostgresRuntimeConfig = {
     adminRole: options.adminRole ?? envAdminRole ?? DEFAULT_ADMIN_ROLE,
+    ...(adminDatabaseUrl === undefined ? {} : { adminDatabaseUrl }),
     createAdminRole: options.adminRole !== undefined || envAdminRole === undefined,
     createReaderRole: options.readerRole !== undefined || envReaderRole === undefined,
     createSystemRole: true,
@@ -1528,6 +1730,7 @@ function resolvePostgresRuntimeConfig(
     readerRole: options.readerRole ?? envReaderRole ?? DEFAULT_READER_ROLE,
     schema: options.schema,
     seedSql: normalizeSeedSql(options.seedSql),
+    ...(systemDatabaseUrl === undefined ? {} : { systemDatabaseUrl }),
     systemRole: DEFAULT_SYSTEM_ROLE,
     writerRole: options.writerRole ?? envWriterRole ?? DEFAULT_WRITER_ROLE,
   };

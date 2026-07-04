@@ -62,6 +62,7 @@ type RlsState = 'force-rls-policy' | 'no-rls' | 'rls-no-force';
 type SchemaKind = 'app' | 'non-app';
 
 interface GrantShapeCase {
+  readonly expectedAuditRefusal?: boolean;
   readonly grantTarget: GrantTarget;
   readonly granularity: 'column' | 'object' | 'table';
   readonly name: string;
@@ -139,12 +140,14 @@ describe('Postgres grant-shape closure fuzzer', () => {
           schema: fuzzerSchema,
         });
         const refused = !report.ok;
-        if (leak !== testCase.shouldLeak || refused !== leak) {
+        const expectedRefusal = testCase.expectedAuditRefusal ?? leak;
+        if (leak !== testCase.shouldLeak || refused !== expectedRefusal) {
           mismatches.push(
             [
               testCase.name,
               `expectedLeak=${testCase.shouldLeak}`,
               `actualLeak=${leak}`,
+              `expectedAuditRefusal=${expectedRefusal}`,
               `auditRefused=${refused}`,
               `issues=${report.issues.map((issue) => issue.code).join(',')}`,
             ].join(' '),
@@ -210,6 +213,12 @@ function grantShapeCases(): readonly GrantShapeCase[] {
   for (const grantTarget of grantTargets) {
     for (const schemaKind of schemaKinds) cases.push(definerFunctionCase(grantTarget, schemaKind));
   }
+
+  cases.push(attachedTriggerCase());
+  cases.push(attachedRewriteRuleCase());
+  cases.push(attachedCheckConstraintCase());
+  cases.push(attachedDefaultExpressionCase());
+  cases.push(attachedIndexExpressionCase());
 
   for (const grantTarget of ['reader', 'public'] as const) {
     cases.push(foreignTableCase(grantTarget));
@@ -493,6 +502,197 @@ function foreignTableCase(grantTarget: GrantTarget): GrantShapeCase {
         ],
         probeRole: probeRole(grantTarget),
         sql: `SELECT has_table_privilege(current_user, '${object.schema}.${object.name}', 'SELECT') AS unsafe`,
+        unsafePrivilege: 'unsafe',
+      };
+    },
+  };
+}
+
+function attachedTriggerCase(): GrantShapeCase {
+  return {
+    expectedAuditRefusal: true,
+    grantTarget: 'writer',
+    granularity: 'object',
+    name: 'attached-code:dml-trigger:definer',
+    objectClass: 'definer-function',
+    probeKind: 'privilege',
+    rlsState: 'force-rls-policy',
+    schemaKind: 'app',
+    shouldLeak: false,
+    async materialize(ctx) {
+      const functionName = `kovo_fuzzer_attached_trigger_${ctx.index}`;
+      const triggerName = `kovo_fuzzer_attached_trigger_${ctx.index}`;
+      await execMany(ctx.client, [
+        [
+          `CREATE FUNCTION ${quoteIdent(functionName)}() RETURNS trigger`,
+          'LANGUAGE plpgsql SECURITY DEFINER',
+          'AS $$ BEGIN RETURN NEW; END $$',
+        ].join(' '),
+        [
+          `CREATE TRIGGER ${quoteIdent(triggerName)}`,
+          'BEFORE UPDATE ON kovo_fuzzer_notes',
+          `FOR EACH ROW EXECUTE FUNCTION ${quoteIdent(functionName)}()`,
+        ].join(' '),
+      ]);
+      return {
+        cleanupSql: [
+          `DROP TRIGGER IF EXISTS ${quoteIdent(triggerName)} ON kovo_fuzzer_notes`,
+          `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}() CASCADE`,
+        ],
+        probeRole: 'kovo_writer',
+        sql: 'SELECT false AS unsafe',
+        unsafePrivilege: 'unsafe',
+      };
+    },
+  };
+}
+
+function attachedCheckConstraintCase(): GrantShapeCase {
+  return {
+    expectedAuditRefusal: true,
+    grantTarget: 'writer',
+    granularity: 'object',
+    name: 'attached-code:check-constraint:definer',
+    objectClass: 'definer-function',
+    probeKind: 'privilege',
+    rlsState: 'force-rls-policy',
+    schemaKind: 'app',
+    shouldLeak: false,
+    async materialize(ctx) {
+      const functionName = `kovo_fuzzer_attached_check_${ctx.index}`;
+      const constraintName = `kovo_fuzzer_attached_check_${ctx.index}`;
+      await execMany(ctx.client, [
+        [
+          `CREATE FUNCTION ${quoteIdent(functionName)}(value text) RETURNS boolean`,
+          'LANGUAGE SQL SECURITY DEFINER',
+          'AS $$ SELECT true $$',
+        ].join(' '),
+        [
+          `ALTER TABLE kovo_fuzzer_notes ADD CONSTRAINT ${quoteIdent(constraintName)}`,
+          `CHECK (${quoteIdent(functionName)}(title))`,
+        ].join(' '),
+      ]);
+      return {
+        cleanupSql: [
+          `ALTER TABLE kovo_fuzzer_notes DROP CONSTRAINT IF EXISTS ${quoteIdent(constraintName)}`,
+          `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}(text) CASCADE`,
+        ],
+        probeRole: 'kovo_writer',
+        sql: 'SELECT false AS unsafe',
+        unsafePrivilege: 'unsafe',
+      };
+    },
+  };
+}
+
+function attachedRewriteRuleCase(): GrantShapeCase {
+  return {
+    expectedAuditRefusal: true,
+    grantTarget: 'writer',
+    granularity: 'object',
+    name: 'attached-code:rewrite-rule:definer',
+    objectClass: 'definer-function',
+    probeKind: 'privilege',
+    rlsState: 'force-rls-policy',
+    schemaKind: 'app',
+    shouldLeak: false,
+    async materialize(ctx) {
+      const functionName = `kovo_fuzzer_attached_rule_${ctx.index}`;
+      const ruleName = `kovo_fuzzer_attached_rule_${ctx.index}`;
+      await execMany(ctx.client, [
+        [
+          `CREATE FUNCTION ${quoteIdent(functionName)}() RETURNS text`,
+          'LANGUAGE SQL SECURITY DEFINER',
+          "AS $$ SELECT 'attached'::text $$",
+        ].join(' '),
+        [
+          `CREATE RULE ${quoteIdent(ruleName)} AS ON UPDATE TO kovo_fuzzer_notes`,
+          `DO ALSO SELECT ${quoteIdent(functionName)}()`,
+        ].join(' '),
+      ]);
+      return {
+        cleanupSql: [
+          `DROP RULE IF EXISTS ${quoteIdent(ruleName)} ON kovo_fuzzer_notes`,
+          `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}() CASCADE`,
+        ],
+        probeRole: 'kovo_writer',
+        sql: 'SELECT false AS unsafe',
+        unsafePrivilege: 'unsafe',
+      };
+    },
+  };
+}
+
+function attachedDefaultExpressionCase(): GrantShapeCase {
+  return {
+    expectedAuditRefusal: true,
+    grantTarget: 'writer',
+    granularity: 'object',
+    name: 'attached-code:default-expression:definer',
+    objectClass: 'definer-function',
+    probeKind: 'privilege',
+    rlsState: 'force-rls-policy',
+    schemaKind: 'app',
+    shouldLeak: false,
+    async materialize(ctx) {
+      const functionName = `kovo_fuzzer_attached_default_${ctx.index}`;
+      const columnName = `attached_default_${ctx.index}`;
+      await execMany(ctx.client, [
+        [
+          `CREATE FUNCTION ${quoteIdent(functionName)}() RETURNS text`,
+          'LANGUAGE SQL SECURITY DEFINER',
+          "AS $$ SELECT 'attached'::text $$",
+        ].join(' '),
+        [
+          'ALTER TABLE kovo_fuzzer_notes ADD COLUMN',
+          `${quoteIdent(columnName)} text DEFAULT ${quoteIdent(functionName)}()`,
+        ].join(' '),
+      ]);
+      return {
+        cleanupSql: [
+          `ALTER TABLE kovo_fuzzer_notes DROP COLUMN IF EXISTS ${quoteIdent(columnName)}`,
+          `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}() CASCADE`,
+        ],
+        probeRole: 'kovo_writer',
+        sql: 'SELECT false AS unsafe',
+        unsafePrivilege: 'unsafe',
+      };
+    },
+  };
+}
+
+function attachedIndexExpressionCase(): GrantShapeCase {
+  return {
+    expectedAuditRefusal: true,
+    grantTarget: 'writer',
+    granularity: 'object',
+    name: 'attached-code:index-expression:definer',
+    objectClass: 'definer-function',
+    probeKind: 'privilege',
+    rlsState: 'force-rls-policy',
+    schemaKind: 'app',
+    shouldLeak: false,
+    async materialize(ctx) {
+      const functionName = `kovo_fuzzer_attached_index_${ctx.index}`;
+      const indexName = `kovo_fuzzer_attached_index_${ctx.index}`;
+      await execMany(ctx.client, [
+        [
+          `CREATE FUNCTION ${quoteIdent(functionName)}(value text) RETURNS text`,
+          'LANGUAGE SQL IMMUTABLE SECURITY DEFINER',
+          'AS $$ SELECT value $$',
+        ].join(' '),
+        [
+          `CREATE INDEX ${quoteIdent(indexName)}`,
+          `ON kovo_fuzzer_notes (${quoteIdent(functionName)}(title))`,
+        ].join(' '),
+      ]);
+      return {
+        cleanupSql: [
+          `DROP INDEX IF EXISTS ${quoteIdent(indexName)}`,
+          `DROP FUNCTION IF EXISTS ${quoteIdent(functionName)}(text) CASCADE`,
+        ],
+        probeRole: 'kovo_writer',
+        sql: 'SELECT false AS unsafe',
         unsafePrivilege: 'unsafe',
       };
     },
