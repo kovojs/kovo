@@ -150,15 +150,7 @@ export interface NavigationMenuPartProps extends NavigationMenuStateProps {
   id?: string;
   styles?: NavigationMenuStyleOverrides;
 }
-
-/**
- * Style definitions used by the navigation menu components.
- *
- * @example
- * import { navigationMenuStyles } from "@kovojs/ui/navigation-menu";
- * const styles = navigationMenuStyles;
- */
-export const navigationMenuStyles = style.create({
+const navigationMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

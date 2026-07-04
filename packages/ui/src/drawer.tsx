@@ -138,15 +138,7 @@ export interface DrawerCloseProps extends DrawerStateProps {
   contentId: string;
   id?: string;
 }
-
-/**
- * Style definitions used by the drawer components.
- *
- * @example
- * import { drawerStyles } from "@kovojs/ui/drawer";
- * const styles = drawerStyles;
- */
-export const drawerStyles = style.create({
+const drawerStyles = style.create({
   body: {
     fontSize: 14,
   },
@@ -251,15 +243,7 @@ export const drawerStyles = style.create({
     },
   },
 });
-
-/**
- * Style definitions used by the drawer side components.
- *
- * @example
- * import { drawerSideStyles } from "@kovojs/ui/drawer";
- * const styles = drawerSideStyles;
- */
-export const drawerSideStyles = style.create({
+const drawerSideStyles = style.create({
   bottom: {
     borderTopLeftRadius: uiTheme.radius.lg,
     borderTopRightRadius: uiTheme.radius.lg,

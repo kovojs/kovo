@@ -60,15 +60,7 @@ export interface BreadcrumbLinkProps extends BreadcrumbPartProps {
   current?: boolean;
   href?: string;
 }
-
-/**
- * Style definitions used by the breadcrumb components.
- *
- * @example
- * import { breadcrumbStyles } from "@kovojs/ui/breadcrumb";
- * const styles = breadcrumbStyles;
- */
-export const breadcrumbStyles = style.create({
+const breadcrumbStyles = style.create({
   current: {
     color: uiTheme.color.foreground,
     fontWeight: 500,

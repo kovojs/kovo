@@ -121,15 +121,7 @@ export interface MenubarSeparatorProps {
   id?: string;
   styles?: MenubarStyleOverrides;
 }
-
-/**
- * Style definitions used by the menubar components.
- *
- * @example
- * import { menubarStyles } from "@kovojs/ui/menubar";
- * const styles = menubarStyles;
- */
-export const menubarStyles = style.create({
+const menubarStyles = style.create({
   group: {
     display: 'grid',
     gap: 4,

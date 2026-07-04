@@ -7,15 +7,7 @@ export {
   dialogCloseAttributes,
 } from '../primitives/dialog.js';
 export type {
-  DialogChangeReason,
-  DialogChangeDetail,
   DialogState,
   DialogAttributeOptions,
-  DialogChangeOptions,
-  DialogChangeResult,
   DialogPrimitiveAttributes,
-  DialogTriggerEvent,
-  DialogCloseEvent,
-  DialogCancelEvent,
-  DialogBeforeToggleEvent,
 } from '../primitives/dialog.js';

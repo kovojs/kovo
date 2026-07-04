@@ -70,15 +70,7 @@ const variants = style.create({
     color: uiTheme.color.warning.foreground,
   },
 });
-
-/**
- * Style definitions used by the badge components.
- *
- * @example
- * import { badgeStyles } from "@kovojs/ui/badge";
- * const styles = badgeStyles;
- */
-export const badgeStyles = {
+const badgeStyles = {
   base,
   variants,
 } as const;

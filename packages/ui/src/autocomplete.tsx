@@ -122,15 +122,7 @@ export interface AutocompleteValueProps extends AutocompleteStateProps {
   id?: string;
   styles?: AutocompleteStyleOverrides;
 }
-
-/**
- * Style definitions used by the autocomplete components.
- *
- * @example
- * import { autocompleteStyles } from "@kovojs/ui/autocomplete";
- * const styles = autocompleteStyles;
- */
-export const autocompleteStyles = style.create({
+const autocompleteStyles = style.create({
   input: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

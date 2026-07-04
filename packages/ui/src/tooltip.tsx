@@ -75,15 +75,7 @@ export interface TooltipContentProps extends TooltipStateProps {
   contentId?: string;
   styles?: TooltipStyleOverrides;
 }
-
-/**
- * Style definitions used by the tooltip components.
- *
- * @example
- * import { tooltipStyles } from "@kovojs/ui/tooltip";
- * const styles = tooltipStyles;
- */
-export const tooltipStyles = style.create({
+const tooltipStyles = style.create({
   // Rotated-square arrow at the bottom center of the content, pointing down to
   // the trigger. Same fill as the content so the two read as one shape.
   arrow: {

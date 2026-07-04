@@ -14,12 +14,6 @@ export type {
   CheckboxGroupItemAttributeOptions,
   CheckboxGroupControlAttributeOptions,
   CheckboxGroupLabelAttributeOptions,
-  CheckboxGroupChangeReason,
-  CheckboxGroupChangeDetail,
-  CheckboxGroupChangeOptions,
-  CheckboxGroupChangeResult,
   CheckboxGroupMoveResult,
   CheckboxGroupPrimitiveAttributes,
-  CheckboxGroupItemEvent,
-  CheckboxGroupKeyboardEvent,
 } from '../primitives/checkbox-group.js';

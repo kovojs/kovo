@@ -15,12 +15,6 @@ export type {
   RadioGroupItemAttributeOptions,
   RadioGroupRadioAttributeOptions,
   RadioGroupLabelAttributeOptions,
-  RadioGroupChangeReason,
-  RadioGroupChangeDetail,
-  RadioGroupChangeOptions,
-  RadioGroupChangeResult,
   RadioGroupMoveResult,
   RadioGroupPrimitiveAttributes,
-  RadioGroupItemEvent,
-  RadioGroupKeyboardEvent,
 } from '../primitives/radio-group.js';

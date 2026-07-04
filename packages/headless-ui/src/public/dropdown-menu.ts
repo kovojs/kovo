@@ -8,7 +8,6 @@ export {
   dropdownMenuGroupAttributes,
   dropdownMenuSeparatorAttributes,
   dropdownMenuItemHighlighted,
-  dropdownMenuFocusElement,
 } from '../primitives/dropdown-menu.js';
 export type {
   DropdownMenuItem,
@@ -19,20 +18,9 @@ export type {
   DropdownMenuItemAttributeOptions,
   DropdownMenuGroupAttributeOptions,
   DropdownMenuSeparatorAttributeOptions,
-  DropdownMenuOpenChangeReason,
-  DropdownMenuSelectReason,
-  DropdownMenuOpenChangeDetail,
-  DropdownMenuSelectDetail,
-  DropdownMenuChangeOptions,
-  DropdownMenuOpenChangeResult,
-  DropdownMenuSelectResult,
   DropdownMenuMoveResult,
   DropdownMenuTypeaheadOptions,
   DropdownMenuTypeaheadResult,
   DropdownMenuPrimitiveAttributes,
-  DropdownMenuTriggerEvent,
-  DropdownMenuItemEvent,
-  DropdownMenuKeyboardEvent,
-  DropdownMenuFocusEvent,
   DropdownMenuFocusOptions,
 } from '../primitives/dropdown-menu.js';

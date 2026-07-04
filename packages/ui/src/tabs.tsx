@@ -115,15 +115,7 @@ const panelFade = style.keyframes({
   '0%': { opacity: 0 },
   '100%': { opacity: 1 },
 });
-
-/**
- * Style definitions used by the tabs components.
- *
- * @example
- * import { tabsStyles } from "@kovojs/ui/tabs";
- * const styles = tabsStyles;
- */
-export const tabsStyles = style.create({
+const tabsStyles = style.create({
   list: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundSubtleHigh,

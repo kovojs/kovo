@@ -89,15 +89,7 @@ export interface NumberFieldButtonProps extends NumberFieldStateProps {
   label?: string;
   styles?: NumberFieldStyleOverrides;
 }
-
-/**
- * Style definitions used by the number field components.
- *
- * @example
- * import { numberFieldStyles } from "@kovojs/ui/number-field";
- * const styles = numberFieldStyles;
- */
-export const numberFieldStyles = style.create({
+const numberFieldStyles = style.create({
   button: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundRaised,

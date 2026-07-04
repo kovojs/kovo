@@ -39,15 +39,7 @@ export interface MeterProps {
   value?: number;
   valueText?: string;
 }
-
-/**
- * Style definitions used by the meter components.
- *
- * @example
- * import { meterStyles } from "@kovojs/ui/meter";
- * const styles = meterStyles;
- */
-export const meterStyles = style.create({
+const meterStyles = style.create({
   // Custom indicator filled by value ratio (set inline). Color tracks the
   // optimum/suboptimum/even-less-good state.
   indicator: {

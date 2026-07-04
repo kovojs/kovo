@@ -140,15 +140,7 @@ const variants = style.create({
     },
   },
 });
-
-/**
- * Style definitions used by the button components.
- *
- * @example
- * import { buttonStyles } from "@kovojs/ui/button";
- * const styles = buttonStyles;
- */
-export const buttonStyles = {
+const buttonStyles = {
   base,
   sizes,
   variants,

@@ -138,15 +138,7 @@ export interface SheetCloseProps extends SheetStateProps {
   contentId: string;
   id?: string;
 }
-
-/**
- * Style definitions used by the sheet components.
- *
- * @example
- * import { sheetStyles } from "@kovojs/ui/sheet";
- * const styles = sheetStyles;
- */
-export const sheetStyles = style.create({
+const sheetStyles = style.create({
   body: {
     fontSize: 14,
   },
@@ -259,15 +251,7 @@ export const sheetStyles = style.create({
     },
   },
 });
-
-/**
- * Style definitions used by the sheet side components.
- *
- * @example
- * import { sheetSideStyles } from "@kovojs/ui/sheet";
- * const styles = sheetSideStyles;
- */
-export const sheetSideStyles = style.create({
+const sheetSideStyles = style.create({
   bottom: {
     borderTopWidth: 1,
     bottom: 0,

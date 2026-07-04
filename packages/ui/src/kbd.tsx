@@ -15,15 +15,7 @@ export interface KbdProps {
   children?: ComponentChild;
   style?: style.StyleInput;
 }
-
-/**
- * Style definitions used by the kbd components.
- *
- * @example
- * import { kbdStyles } from "@kovojs/ui/kbd";
- * const styles = kbdStyles;
- */
-export const kbdStyles = style.create({
+const kbdStyles = style.create({
   root: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundRaised,

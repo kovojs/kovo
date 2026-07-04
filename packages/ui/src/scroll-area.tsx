@@ -116,15 +116,7 @@ export interface ScrollAreaCornerProps extends ScrollAreaStateProps {
   styles?: ScrollAreaStyleOverrides;
   visible?: boolean;
 }
-
-/**
- * Style definitions used by the scroll area components.
- *
- * @example
- * import { scrollAreaStyles } from "@kovojs/ui/scroll-area";
- * const styles = scrollAreaStyles;
- */
-export const scrollAreaStyles = style.create({
+const scrollAreaStyles = style.create({
   corner: {
     backgroundColor: uiTheme.color.backgroundSubtleHigh,
     bottom: 0,

@@ -106,15 +106,7 @@ export interface SliderThumbProps extends SliderPartProps {
   labelledBy?: string;
   valueText?: string;
 }
-
-/**
- * Style definitions used by the slider components.
- *
- * @example
- * import { sliderStyles } from "@kovojs/ui/slider";
- * const styles = sliderStyles;
- */
-export const sliderStyles = style.create({
+const sliderStyles = style.create({
   // Native range kept for keyboard/form/validation; visually hidden but
   // stretched over the track so it stays the pointer/focus target.
   input: {

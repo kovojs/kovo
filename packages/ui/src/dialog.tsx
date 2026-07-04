@@ -111,15 +111,7 @@ export interface DialogPartProps {
   id?: string;
   styles?: DialogStyleOverrides;
 }
-
-/**
- * Style definitions used by the dialog components.
- *
- * @example
- * import { dialogStyles } from "@kovojs/ui/dialog";
- * const styles = dialogStyles;
- */
-export const dialogStyles = style.create({
+const dialogStyles = style.create({
   close: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.background,

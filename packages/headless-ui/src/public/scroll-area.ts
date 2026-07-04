@@ -31,10 +31,7 @@ export type {
   ScrollAreaThumbGeometry,
   ScrollAreaThumbDragStart,
   ScrollAreaThumbDragOptions,
-  ScrollAreaViewportScrollEvent,
-  ScrollAreaPointerEvent,
   ScrollAreaScrollToTrigger,
   ScrollAreaScrollToViewport,
-  ScrollAreaScrollToEvent,
   ScrollAreaScrollToResult,
 } from '../primitives/scroll-area.js';

@@ -7,38 +7,23 @@ import {
   AlertDialogCancel,
   AlertDialogContent,
   AlertDialogTrigger,
-  alertDialogStyles,
 } from './alert-dialog.js';
-import { autocompleteStyles } from './autocomplete.js';
 import { Avatar, AvatarFallback, AvatarImage } from './avatar.js';
 import { Badge } from './badge.js';
 import { Breadcrumb, BreadcrumbItem, BreadcrumbLink, BreadcrumbSeparator } from './breadcrumb.js';
 import { Button } from './button.js';
 import { Card } from './card.js';
-import { checkboxGroupStyles } from './checkbox-group.js';
 import { CollapsibleContent, CollapsibleTrigger } from './collapsible.js';
-import { comboboxStyles } from './combobox.js';
-import { commandStyles } from './command.js';
-import { contextMenuStyles } from './context-menu.js';
-import { DialogClose, DialogContent, DialogTrigger, dialogStyles } from './dialog.js';
+import { DialogClose, DialogContent, DialogTrigger } from './dialog.js';
 import { DisclosureContent, DisclosureTrigger } from './disclosure.js';
-import { dropdownMenuStyles } from './dropdown-menu.js';
-import { fieldStyles } from './field.js';
 import { HoverCardContent, HoverCardTrigger } from './hover-card.js';
 import { Kbd } from './kbd.js';
-import { menubarStyles } from './menubar.js';
 import { Meter } from './meter.js';
-import { navigationMenuStyles } from './navigation-menu.js';
-import { numberFieldStyles } from './number-field.js';
-import { otpFieldStyles } from './otp-field.js';
 import { PopoverContent, PopoverTrigger } from './popover.js';
 import { Progress } from './progress.js';
-import { selectStyles } from './select.js';
 import { Separator } from './separator.js';
 import { Skeleton } from './skeleton.js';
-import { sliderStyles } from './slider.js';
 import { Table, TableBody, TableCell, TableHeaderCell } from './table.js';
-import { toastStyles } from './toast.js';
 import { TooltipContent, TooltipTrigger } from './tooltip.js';
 import { readSource } from './test-source.js';
 describe('@kovojs/ui styled package foundation', () => {
@@ -104,33 +89,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(String(Skeleton.definition.render({ style: skeletonOverride.root }))).toContain(
       'data-style-src="skeleton.tsx#root; index.markup.test.tsx#root"',
     );
-    expect({
-      alertDialogActionClasses: [style.attrs(alertDialogStyles.action).class ?? ''] as const,
-      alertDialogClasses: [style.attrs(alertDialogStyles.root).class ?? ''] as const,
-      alertDialogContentClasses: [style.attrs(alertDialogStyles.content).class ?? ''] as const,
-      autocompleteClasses: [style.attrs(autocompleteStyles.root).class ?? ''] as const,
-      autocompleteInputClasses: [style.attrs(autocompleteStyles.input).class ?? ''] as const,
-      checkboxGroupClasses: [style.attrs(checkboxGroupStyles.root).class ?? ''] as const,
-      commandClasses: [style.attrs(commandStyles.root).class ?? ''] as const,
-      contextMenuClasses: [style.attrs(contextMenuStyles.root).class ?? ''] as const,
-      dialogClasses: [style.attrs(dialogStyles.root).class ?? ''] as const,
-      dialogContentClasses: [style.attrs(dialogStyles.content).class ?? ''] as const,
-      dropdownMenuClasses: [style.attrs(dropdownMenuStyles.root).class ?? ''] as const,
-      fieldClasses: [style.attrs(fieldStyles.root).class ?? ''] as const,
-      menubarClasses: [style.attrs(menubarStyles.root).class ?? ''] as const,
-      navigationMenuClasses: [style.attrs(navigationMenuStyles.root).class ?? ''] as const,
-      numberFieldClasses: [style.attrs(numberFieldStyles.root).class ?? ''] as const,
-      otpFieldClasses: [style.attrs(otpFieldStyles.root).class ?? ''] as const,
-      selectClasses: [style.attrs(selectStyles.root).class ?? ''] as const,
-      selectTriggerClasses: [style.attrs(selectStyles.trigger).class ?? ''] as const,
-      sliderClasses: [style.attrs(sliderStyles.root).class ?? ''] as const,
-      sliderInputClasses: [style.attrs(sliderStyles.input).class ?? ''] as const,
-      toastClasses: [style.attrs(toastStyles.root).class ?? ''] as const,
-      toastViewportClasses: [style.attrs(toastStyles.viewport).class ?? ''] as const,
-      comboboxClasses: [style.attrs(comboboxStyles.root).class ?? ''] as const,
-      comboboxInputClasses: [style.attrs(comboboxStyles.input).class ?? ''] as const,
-      comboboxListboxClasses: [style.attrs(comboboxStyles.listbox).class ?? ''] as const,
-    }).toMatchSnapshot();
   });
   it('wraps H1 primitives as styled vendorable TSX parts', () => {
     const accordionState = {

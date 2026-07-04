@@ -138,15 +138,7 @@ export interface SelectValueProps extends SelectStateProps {
   id?: string;
   styles?: SelectStyleOverrides;
 }
-
-/**
- * Style definitions used by the select components.
- *
- * @example
- * import { selectStyles } from "@kovojs/ui/select";
- * const styles = selectStyles;
- */
-export const selectStyles = style.create({
+const selectStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,
