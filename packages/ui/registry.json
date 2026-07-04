@@ -535,7 +535,7 @@
         "FieldSelect",
         "FieldSelectOption",
         "FieldDescription",
-        "FieldError",
+        "FieldErrorMessage",
         "Fieldset",
         "FieldsetLegend"
       ],

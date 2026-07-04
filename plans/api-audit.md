@@ -593,8 +593,17 @@ conservative half-step left as the end state.
     `scripts/exported-symbol-duplicates.baseline.json`; verified by `pnpm run check:api-surface`,
     `pnpm run check:exports`, `pnpm run check:vp`, and
     `pnpm exec vitest run packages/core/src/index.test.ts packages/browser/src/query-visible-return-refetch.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/mutation.test.ts packages/server/src/document.test.ts packages/server/src/api/app.test.ts packages/test/src/harness.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts packages/ui/src/field.stylex.test.tsx packages/ui/src/index.form-controls.test.tsx --config ./vite.config.ts`.
-- [ ] Fix `examples/gallery/src/primitive-actions.ts` importing `./generated`/`./internal`
+- [x] Fix `examples/gallery/src/primitive-actions.ts` importing `./generated`/`./internal`
       headless-ui subpaths from example app source.
+  - Evidence: `examples/gallery/src/primitive-actions.ts` now re-exports the local generated
+    façade at `examples/gallery/src/primitive-actions.generated.ts`, and
+    `examples/gallery/src/client-module-manifest.ts`/`examples/gallery/src/app-shell.ts` register
+    that generated façade as an explicit support client module; verified by
+    `node packages/ui/scripts/build-registry.mjs`,
+    `if rg -n "@kovojs/headless-ui/(generated|internal/primitive)" examples/gallery/src/primitive-actions.ts examples/gallery/src/interactive -g '*.{ts,tsx}'; then exit 1; fi`,
+    `pnpm exec vitest run examples/gallery/src/interactive-gallery.artifacts.test.ts --config ./vite.config.ts`,
+    `pnpm --filter @kovojs/example-gallery run test:browser`, `pnpm run check:vp`, and
+    `pnpm run check:api-surface`.
 
 ### Phase 4 — typed Component call sites (the full fix)
 
