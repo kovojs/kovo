@@ -249,10 +249,8 @@ Grouped by theme; each needs a decision, not necessarily removal.
 - `@kovojs/core#Component` call signature `(props?: Record<string, unknown>): any`
   (`core/src/index.ts:168-172`): every `component()` descriptor — all 44 `@kovojs/ui` components
   and every app component — is **unchecked at JSX call sites**; contradicts the typed-props story
-  in components.md and CLAUDE.md's type-ergonomics rule. Derive the call signature from the render
-  fn's props. Fix jointly with `@kovojs/ui`'s family-wide `children?: string` (126 occurrences —
-  container parts that must nest JSX declare string children; only tolerable because call sites are
-  unchecked today).
+  in components.md and CLAUDE.md's type-ergonomics rule. **Decision 2026-07-03: full fix, not the
+  conservative staged version — see Phase 4 of the remediation plan below.**
 - `@kovojs/server#ComponentRegistry` uses a **public structural brand**
   (`render-tree.ts:63-66`) for what SPEC §4.10 calls the pre-approval security boundary — CLAUDE.md
   forbids exactly this shortcut; convert to the module-private symbol/WeakSet pattern already used
@@ -472,39 +470,127 @@ Legend: ✅ clean · ⚠️ minor issues · ❌ material defects (broken samples
 - headless-ui/ui JSDoc examples are mechanical placeholders (`{} as SelectState`) — 100%
   "documented" by count, near-zero informational value across ~1,100 exports.
 
-## Cross-Cutting Recommendations
+## Decided Remediation Plan (2026-07-03)
 
-- [ ] **Reconcile docs with the shipped data-layer model** (`write`/`db.<domain>.<write>` vs
-      analyzed Drizzle writes) — the single largest docs-vs-reality break; decide implement-vs-remove
-      against SPEC §10.3 before v1 docs freeze.
+Recommendations accepted by the product owner; sequenced by dependency and cost-of-delay. Phase 4
+(Component call-site typing) is explicitly the **full fix** — do the hard thing completely, no
+conservative half-step left as the end state.
+
+### Phase 1 — standalone bug fixes (independent, land first)
+
+- [ ] **Fix `@kovojs/better-auth#role`**: delegate the body to `guards.role` (keep the typed
+      role-name overload), so proven-principal checks, `markPassedRoleGuard`, and guard audit facts
+      come along. Add a regression test asserting `db.crossOwnerRead(..., { role })` succeeds
+      behind the better-auth guard (`packages/better-auth/src/guards.ts:53-65`,
+      `packages/server/src/guards.ts:550-560`, `postgres-runtime.ts:983`).
+- [ ] **Export `now` next to `tempId`** so derive-codegen's emitted
+      `import { now, tempId } from '@kovojs/browser'` resolves (`browser/src/index.ts:4`,
+      `optimism.ts:553`, `drizzle/src/derive-codegen.ts:52-58`). Add a test that renders a derived
+      transform exercising **every** placeholder and typechecks/executes the emitted module — the
+      drift-proof is the real fix.
 - [ ] **Resolve the `clocks` core↔compiler contradiction**: add `clocks` to
-      `COMPONENT_DEFINITION_KEYS` + a SPEC section, or delete the compiler path and the islands.md
-      section.
-- [ ] **Compile guide samples in CI.** ≥12 samples across 9 guides cannot compile or throw. The
-      capture pipeline already proves CLI transcripts can't drift; extend the same discipline to
-      guide TSX/TS snippets (tsc against dist types).
-- [ ] **Stop describing a starter that doesn't exist**: kovo-explain.md/deployment.md/testing.md
-      (graph-assertions, CI list, Dockerfile, `client.ts`), cli.md script wiring, auth guide `vp
-      check` — either add these to `create-kovo` templates or fix the guides.
-- [ ] **Barrel hygiene on `@kovojs/server` root** (509 exports): land the Definitely-remove items
-      and move plumbing families (drain-facts, capability primitives, CSP renderers, vite-dev,
-      deferred chunks, adapter hooks) behind internal subpaths.
-- [ ] **Reclassify compiled-ABI types**: headless-ui transition machinery → `./generated`;
-      `@kovojs/browser/client` DI seams → generated/internal; `tempId`/`now` →
-      `@kovojs/browser/generated` (and **export `now`** — currently a latent codegen break).
-- [ ] **Kill duplicate vocabulary in one pass** (tag/domain, GuardFailure, MutationResponseHeaders,
-      CsrfValidationOptions, purpose/reason, meta(), core-vs-server `query`/`route`, FieldError ×2,
-      Stylesheet/stylesheet, dual-homed browser exports) — technical preview is the moment.
-- [ ] **Fix `@kovojs/better-auth#role`** to mark role-guard passage (or delegate to `guards.role`)
-      — a functional security-adjacent bug, not just API hygiene.
-- [ ] **Type `Component` call sites.** The untyped `(props?: Record<string, unknown>)` signature
-      quietly voids the typed-props story for every UI and app component and is what lets broken
-      guide samples "work".
-- [ ] **Investigate the wire `settles` emission gap** (client parses it; no server emits it) and
-      the commerce `const db = request.db` KV330 alias question (analyzer evasion vs unflagged
-      violation) — both surfaced as side findings.
-- [ ] **Close the a11y claim gap**: add the missing axe end-state assertions (switch-checked,
+      `COMPONENT_DEFINITION_KEYS` + a SPEC section, or delete the compiler path
+      (`compiler/src/validate/temporal.ts`) and the islands.md section — one owner, not two truths.
+
+### Phase 2 — data-layer reconciliation
+
+- [ ] **Remove `write`/`WriteDefinition` and `tag`/`Tag` from the `@kovojs/server` root** (inert;
+      zero consumers) and record the SPEC §10.3 divergence as an explicit open design decision —
+      if the domain-write mechanism lands later, `write()` returns *with* its enforcement in the
+      same change.
+- [ ] **Rewrite queries.md / mutations.md / data-layer.md to the enforced model**: analyzed Drizzle
+      writes + registry-declared touches (what commerce does), `context.db`/`Reader` loader
+      handles, `access` posture on every request-reachable sample, correct KV330 severity.
+
+### Phase 3 — surface removals and ABI reclassification
+
+- [ ] Land the remaining **Definitely Remove** items (createElement, MutationResponseHeaders,
+      Deferred*Chunk family, meta(), GuardFailure, EndpointReason `purpose`, runKovoCommand).
+- [ ] **Reclassify compiled-ABI types**: headless-ui transition machinery → `./generated` (one
+      generator change in `packages/ui/scripts/primitive-component-manifest.mjs`); drop the 44
+      `@kovojs/ui` `*Styles` exports from versioned modules (keep module-local for copy-in);
+      `@kovojs/browser/client` DI seams → generated/internal via the `KovoLoaderOptions` split;
+      emit generated optimistic modules' imports from `@kovojs/browser/generated`.
+- [ ] **Barrel hygiene on the `@kovojs/server` root**: move plumbing families (drain-facts,
+      capability primitives, CSP renderers, vite-dev, adapter hooks) behind internal subpaths.
+- [ ] **Kill duplicate vocabulary in one pass** (tag/domain done in Phase 2; GuardFailure,
+      MutationResponseHeaders, CsrfValidationOptions alias, purpose/reason, core-vs-server
+      `query`/`route`, FieldError ×2, Stylesheet/stylesheet, dual-homed browser exports).
+- [ ] Fix `examples/gallery/src/primitive-actions.ts` importing `./generated`/`./internal`
+      headless-ui subpaths from example app source.
+
+### Phase 4 — typed Component call sites (the full fix)
+
+Goal: `<Button varient="x">` is a `tsc` error in every app, example, template, and doc sample —
+the JSX call site enforces the exact props contract the definition declares, including `children`
+composition. This is the SPEC §1.3 promise ("generated apps fail TypeScript static checking if
+wiring is wrong") applied to the most common wiring there is. No `Record<string, unknown>` escape
+hatch survives this phase.
+
+- [ ] **Design the props-derivation contract.** `Component<Definition>`'s call signature must be
+      derived from the definition, and the derivation has a real discrimination to settle: for
+      plain server components the first render parameter *is* the props object
+      (`packages/ui/src/button.tsx:164` — `render(props: ButtonProps)`), while for queries/state
+      components the render signature is `(queries, state, slots)`
+      (`core/src/index.ts:208-256` overloads). Decide and document (SPEC §4.1/§6.2) how a
+      definition declares its props type — options: infer from first render param when neither
+      `queries` nor `state` is declared; or add an explicit `props` type channel to the definition
+      and type the existing `props?: Record<string, unknown>` metadata field properly while at it.
+      The chosen shape must also type the compiler-injected `style`/`styles` override channel and
+      `kovo-key`.
+- [ ] **Implement `Component<Definition>` call-signature inference in core** — replace
+      `(props?: Record<string, unknown>): any` (`core/src/index.ts:168-172`). Exact-key checking
+      (excess-property errors) is required, not just known-key widening.
+- [ ] **Wire the JSX side**: `JSX.ElementType`/`KovoJsxComponent` in
+      `packages/server/src/jsx-runtime.ts:870-921` must resolve per-descriptor props (not
+      `JsxComponent<any>`), preserving intrinsic-element and plain-function-component behavior.
+      Extend `jsx-runtime-types.test.ts` with descriptor-component cases: wrong prop name, wrong
+      value type, missing required prop, excess property, `children` JSX nesting — all asserted as
+      type errors (the test currently proves enforcement only for plain function components).
+- [ ] **`children` sweep across `@kovojs/ui`**: fix the 126 `children?: string` declarations (and
+      `Card`'s `children?: unknown`) to the real composition type (`ComponentRenderResult`) on
+      every container part that nests JSX; string-only stays only where the contract is genuinely
+      text-only. Fix prop placement errors the new checking surfaces (e.g. `labelledBy` belongs on
+      `SelectTrigger`, not `Select`).
+- [ ] **Sweep all call sites the checking breaks**: `packages/ui` internal composition, `site/`,
+      `examples/*` (commerce, gallery, crm, stackoverflow, devtool, reference), `create-kovo`
+      templates, tutorial steps. Every break is a latent bug being surfaced — fix the call site,
+      don't loosen the type.
+- [ ] **Icons**: verify the 1,740 generated icon components type-check under the new signature and
+      **benchmark `tsc`** before/after across the monorepo and a scaffolded app; if inference cost
+      is material, precompute each icon's call signature in the generator output instead of
+      deriving it generically.
+- [ ] **Compiler/runtime alignment**: confirm compiler lowering and `assertKnownComponentDefinitionKeys`
+      agree with the chosen props channel; type-level enforcement remains defense-in-depth per the
+      honesty boundary (SPEC §6.6) — the compiler's validation stays authoritative.
+- [ ] **Fix the guide samples this invalidates or vindicates**: accessibility.md `<Select
+      labelledBy>` (broken composition the old signature hid), components.md Button
+      `'secondary'` variant sample, plus any sample the sweep breaks.
+
+### Phase 5 — docs truth and drift-proofing (after Phase 4, so the gate has teeth)
+
+- [ ] **Compile guide samples in CI**: extract TSX/TS snippets from `site/content/guides/**` and
+      typecheck against built dist types, same discipline as the `{{capture:*}}` CLI-transcript
+      pipeline. ≥12 currently-broken samples across 9 guides become impossible to reintroduce.
+- [ ] **Fix the remaining per-guide defects** catalogued above (request-shell option names,
+      routing `queries:`, layouts typing, static-export missing its own API, security.md CSRF
+      audience + fabricated explain output + `--capabilities` claim, endpoints-webhooks broken
+      flagship example, wire-protocol `settles`, streaming/islands issues, devtool guide
+      public/private status).
+- [ ] **Stop describing a starter that doesn't exist**: align `create-kovo` templates or the
+      guides for graph-assertions, CI script list, Dockerfile entrypoint, `client.ts` — one truth.
+- [ ] **Regenerate stale generated docs** (route() JSDoc example, drizzle 30/38, create-kovo
+      `--experimental-sqlite`, cli no-args list, `ExplainKind` prose) and replace the mechanical
+      `{} as SelectState` placeholder examples in headless-ui/ui JSDoc with real ones.
+- [ ] **Close the a11y claim gap**: add missing axe end-state assertions (switch-checked,
       hover-card-open, checkbox-checked) or soften the guide/rules claim; fix the cited proof file.
+
+### Side investigations (parallel, unowned by a phase)
+
+- [ ] **Wire `settles` emission gap**: client parses it (`browser/src/wire-parser.ts:150`); no
+      server emission found — implementation gap or dead doc.
+- [ ] **Commerce KV330 alias question**: `const db = request.db; db.insert(...)` — analyzer
+      evasion or unflagged reference-app violation; either outcome is a real issue.
 
 ## Gaps And Follow-Up
 
