@@ -5,12 +5,7 @@ import {
   AutocompleteOption,
   AutocompleteValue,
 } from './autocomplete.js';
-import {
-  ComboboxInput,
-  ComboboxListbox,
-  ComboboxOption,
-  ComboboxValue,
-} from './combobox.js';
+import { ComboboxInput, ComboboxListbox, ComboboxOption, ComboboxValue } from './combobox.js';
 import {
   ScrollArea,
   ScrollAreaCorner,
@@ -26,13 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from './select.js';
-import {
-  Slider,
-  SliderInput,
-  SliderRange,
-  SliderThumb,
-  SliderTrack,
-} from './slider.js';
+import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from './slider.js';
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from './tabs.js';
 describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless scroll-area primitive as styled native scrolling parts', () => {
