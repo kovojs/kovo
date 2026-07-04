@@ -125,6 +125,8 @@ export async function commitAddToCartRows(
 If the write hides its table set, declare the registry facts on the mutation:
 
 ```ts
+const mergeCartRows = async (_db: unknown, _cartId: string) => {};
+
 export const mergeCart = mutation({
   access: publicAccess('demo cart merge mutation'),
   csrf: cartCsrf,
@@ -134,13 +136,14 @@ export const mergeCart = mutation({
     touches: [cart],
   },
   async handler(input, request) {
-    await request.db.execute(sql`/* merge cart ${input.cartId} */`);
+    await mergeCartRows(request.db, input.cartId);
     return { ok: true };
   },
 });
 ```
 
-`tables` lists the physical tables the raw SQL may mutate. `touches` lists the domains to rerun.
+`tables` lists the physical tables the helper's raw SQL may mutate. `touches` lists the domains to
+rerun.
 
 ## Handle failure
 

@@ -16,9 +16,10 @@ queries and sends fresh fragments back.
 Start with the smallest useful POST:
 
 ```ts
-import { publicAccess, mutation, s } from '@kovojs/server';
+import { domain, publicAccess, mutation, s } from '@kovojs/server';
 
-const cart = { key: 'cart' }, addCartRow = async (_db: unknown, _input: unknown) => {};
+const cart = domain('cart');
+const addCartRow = async (_db: unknown, _input: unknown) => {};
 
 export const addToCart = mutation({
   access: publicAccess('demo cart is intentionally public'),
@@ -27,7 +28,6 @@ export const addToCart = mutation({
   registry: { touches: [cart] },
   async handler(input, request) {
     await addCartRow(request.db, input);
-    return { ok: true };
   },
 });
 ```
@@ -121,6 +121,8 @@ named helper or domain operation instead.
 Raw SQL and helper calls that hide the write need registry facts:
 
 ```ts
+const mergeCartRows = async (_db: unknown, _cartId: string) => {};
+
 export const mergeCart = mutation({
   access: publicAccess('demo cart merge mutation'),
   csrf: cartCsrf,
@@ -130,14 +132,15 @@ export const mergeCart = mutation({
     touches: [cart],
   },
   async handler(input, request) {
-    await request.db.execute(sql`/* opaque merge for ${input.cartId} */`);
+    await mergeCartRows(request.db, input.cartId);
     return { ok: true };
   },
 });
 ```
 
-`tables` is checked at the SQL execution boundary. If production SQL mutates a table outside the
-allowlist, the runtime fails closed and invalidates the declared `touches` domains conservatively.
+The helper may use raw SQL internally. `tables` is checked at the SQL execution boundary. If
+production SQL mutates a table outside the allowlist, the runtime fails closed and invalidates the
+declared `touches` domains conservatively.
 
 ## Handle failure
 

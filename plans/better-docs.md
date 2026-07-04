@@ -28,7 +28,7 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
 
 ## P0 — Wrong or build-breaking content (readers fail today)
 
-- [ ] ✅ **Fix the canonical mutation example in `mutations.md` and `data-layer.md` — both teach
+- [x] ✅ **Fix the canonical mutation example in `mutations.md` and `data-layer.md` — both teach
       the KV330 error case as the happy path.**
   - Current: both guides show `await request.db.insert(cartItems).values(...)` /
     `request.db.update(products)...` directly inside the mutation `handler`
@@ -70,8 +70,11 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
   - Same fix in data-layer.md, whose "Write with analyzable Drizzle calls" section must show the
     helper-extraction shape and name KV330 as the failure mode, with a `Handle failure` block
     showing the diagnostic.
+  - Evidence: `site/content/guides/mutations.md` and `site/content/guides/data-layer.md` route
+    writes through named helpers and show KV330 failure text; `pnpm run check:docs-snippets`;
+    `pnpm --filter @kovojs/example-commerce exec kovo check`.
 
-- [ ] ✅ **Fix `data-layer.md` `touches: [cart]` — `cart` is never created; introduce `domain()`.**
+- [x] ✅ **Fix `data-layer.md` `touches: [cart]` — `cart` is never created; introduce `domain()`.**
   - `registry.touches` takes `Domain` values (`packages/server/src/mutation.ts:682` maps
     `domain.key`), created with `domain()` from `@kovojs/server`. Verified signature
     (`packages/server/src/domain.ts:26-30`): `domain()` derives a stable name from the exported
@@ -89,6 +92,9 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     and one sentence distinguishing these source-level `Domain` values from the string
     annotations in `kovo({ ... })` table tags (the guide currently conflates them). Also mention
     `tag()` (row-scoped invalidation, same file) with a pointer, not a full treatment.
+
+  - Evidence: `site/content/guides/data-layer.md` declares `cart`/`product` with `domain()` and
+    distinguishes Domain values from Drizzle table tags; `pnpm run check:docs-snippets`.
 
 - [x] **Rewrite `auth-better-auth.md` (lowest score, 4/10).** Three independent breakages plus a
       missing arc; treat as a page rewrite, not spot fixes.
@@ -133,7 +139,7 @@ cli 7, kovo-explain 7, optimistic 7, postgres-authz-policy 7, render-tree 7, sec
     sections; `pnpm run check:docs-snippets`; `pnpm --filter @kovojs/site run build`;
     `pnpm --filter @kovojs/site run check:links`.
 
-- [ ] **Fix broken/unrunnable commands (each: quote → replacement, then run the replacement
+- [x] **Fix broken/unrunnable commands (each: quote → replacement, then run the replacement
       end-to-end before publishing):**
   - `dataflow-devtool.md:48` — `KOVO_DEVTOOL_BASE=/__kovo pnpm --filter @kovojs/example-devtool dev`:
     no `dev` script exists (`examples/devtool/package.json` has only `check`/`test`). Either add
@@ -166,6 +172,10 @@ node dist/server/server.mjs`. Rewrite the Dockerfile comment, pre-deploy gates b
     (clone → `pnpm install` → scaffold/copy a workspace member → `pnpm run dev`), verified by
     actually executing it in a clean checkout; keep the npm form as the post-v1 path, clearly
     ordered.
+  - Evidence: docs replacements landed in `dataflow-devtool.md`, `deployment.md`,
+    `static-export.md`, `queries.md`, `installation.md`, and `quickstart.md`; `examples/devtool`
+    has a `dev` script; `pnpm --filter @kovojs/site run build`;
+    `pnpm --filter @kovojs/site run check:links`; `pnpm --filter @kovojs/example-devtool run check`.
 - [ ] **Replace fabricated/stale CLI sample output with real captured output.** Rule for all
       three: run the real command against the commerce example's committed graph and paste bytes;
       never hand-compose output blocks.

@@ -84,6 +84,8 @@ and reruns the stale queries after the transaction commits.
 If the analyzer cannot see the tables, declare the mutation registry facts explicitly:
 
 ```ts
+const mergeCartRows = async (_db: unknown, _cartId: string) => {};
+
 export const mergeCart = mutation({
   access: publicAccess('demo cart merge mutation'),
   csrf: cartCsrf,
@@ -93,14 +95,14 @@ export const mergeCart = mutation({
     touches: [cart],
   },
   async handler(input, request) {
-    await request.db.execute(sql`/* merge CTE for ${input.cartId} */`);
+    await mergeCartRows(request.db, input.cartId);
     return { ok: true };
   },
 });
 ```
 
-`tables` is the raw-SQL table allowlist. `touches` is the domain set to invalidate if the write is
-opaque.
+`tables` is the helper's raw-SQL table allowlist. `touches` is the domain set to invalidate if the
+write is opaque.
 
 ## Check the graph
 
