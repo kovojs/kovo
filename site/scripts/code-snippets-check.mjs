@@ -816,7 +816,7 @@ export type RoutePageResult = any;
 export type SelectTriggerAttributeOptions = any;
 export type StaticExportOptions = any;
 export type StyleInput = any;
-export type CsrfValidationOptions<Request = any> = any;
+export type CsrfOptions<Request = any> = any;
 
 export class ComponentXmlError extends Error {}
 export const BodyEnd: any;

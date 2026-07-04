@@ -1,6 +1,14 @@
 #!/usr/bin/env node
 import { spawnSync } from 'node:child_process';
-import { cpSync, mkdirSync, readFileSync, readdirSync, rmSync, symlinkSync, writeFileSync } from 'node:fs';
+import {
+  cpSync,
+  mkdirSync,
+  readFileSync,
+  readdirSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -100,7 +108,11 @@ const iconTypecheck = run(
   repoRoot,
 );
 iconTypecheck.command = `pnpm exec tsc --ignoreConfig --noEmit ... packages/icons/src/index.tsx + ${iconFiles.length} icon sources`;
-const monorepoTsc = run('pnpm', ['exec', 'tsc', '-p', 'tsconfig.json', '--noEmit', '--pretty', 'false'], repoRoot);
+const monorepoTsc = run(
+  'pnpm',
+  ['exec', 'tsc', '-p', 'tsconfig.json', '--noEmit', '--pretty', 'false'],
+  repoRoot,
+);
 
 let starterInstall = null;
 let starterTsc = null;

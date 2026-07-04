@@ -258,9 +258,9 @@ describe('api-ref generator', () => {
   });
 
   it('renders concrete Select examples instead of cast placeholders', () => {
-    expect(headlessUiPage).toContain("const value: SelectState = {");
+    expect(headlessUiPage).toContain('const value: SelectState = {');
     expect(headlessUiPage).not.toContain('const value: SelectState = {} as SelectState;');
-    expect(uiPage).toContain("const state: SelectStateProps = {");
+    expect(uiPage).toContain('const state: SelectStateProps = {');
     expect(uiPage).not.toContain('const state: SelectStateProps = {};');
   });
 

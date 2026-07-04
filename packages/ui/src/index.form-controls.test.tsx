@@ -1,12 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import * as style from '@kovojs/style';
 import { Checkbox } from './checkbox.js';
 import {
   CheckboxGroup,
   CheckboxGroupControl,
   CheckboxGroupItem,
   CheckboxGroupLabel,
-  checkboxGroupStyles,
 } from './checkbox-group.js';
 import {
   Field,
@@ -19,7 +17,6 @@ import {
   FieldTextarea,
   Fieldset,
   FieldsetLegend,
-  fieldStyles,
 } from './field.js';
 import {
   NumberField,
@@ -27,15 +24,8 @@ import {
   NumberFieldDecrement,
   NumberFieldIncrement,
   NumberFieldInput,
-  numberFieldStyles,
 } from './number-field.js';
-import {
-  OtpField,
-  OtpFieldGroup,
-  OtpFieldHiddenInput,
-  OtpFieldInput,
-  otpFieldStyles,
-} from './otp-field.js';
+import { OtpField, OtpFieldGroup, OtpFieldHiddenInput, OtpFieldInput } from './otp-field.js';
 import { RadioGroup, RadioGroupItem, RadioGroupLabel, RadioGroupRadio } from './radio-group.js';
 import { Switch } from './switch.js';
 import { Toggle } from './toggle.js';
@@ -109,11 +99,10 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(disabledControl).toContain('id="notifications-security"');
     expect(disabledControl).toContain('tabIndex="-1" type="checkbox" value="security"');
     expect(label).toContain('for="notifications-updates"');
-    expect({
-      checkboxGroupControlClasses: [style.attrs(checkboxGroupStyles.control).class ?? ''] as const,
-      checkboxGroupItemClasses: [style.attrs(checkboxGroupStyles.item).class ?? ''] as const,
-      checkboxGroupLabelClasses: [style.attrs(checkboxGroupStyles.label).class ?? ''] as const,
-    }).toMatchSnapshot();
+    expect(root).toContain('data-style-src="checkbox-group.tsx#root"');
+    expect(item).toContain('data-style-src="checkbox-group.tsx#item"');
+    expect(control).toContain('data-style-src="checkbox-group.tsx#control"');
+    expect(label).toContain('data-style-src="checkbox-group.tsx#label"');
   });
   it('wraps the headless radio-group primitive as styled native radios', () => {
     const items = [
@@ -415,11 +404,11 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(increment).toContain('data-action="increment"');
     expect(disabledAtMax).toContain('data-disabled=""');
     expect(disabledAtMax).toContain('disabled type="button"');
-    expect({
-      numberFieldButtonClasses: [style.attrs(numberFieldStyles.button).class ?? ''] as const,
-      numberFieldControlClasses: [style.attrs(numberFieldStyles.control).class ?? ''] as const,
-      numberFieldInputClasses: [style.attrs(numberFieldStyles.input).class ?? ''] as const,
-    }).toMatchSnapshot();
+    expect(root).toContain('data-style-src="number-field.tsx#root"');
+    expect(control).toContain('data-style-src="number-field.tsx#control"');
+    expect(decrement).toContain('data-style-src="number-field.tsx#button"');
+    expect(input).toContain('data-style-src="number-field.tsx#input"');
+    expect(increment).toContain('data-style-src="number-field.tsx#button"');
   });
   it('wraps the headless otp-field primitive as styled aggregate and slot inputs', () => {
     const state = {
@@ -484,11 +473,10 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(firstSlot).toContain('maxLength="1"');
     expect(emptySlot).toContain('data-slot="5"');
     expect(completeDisabled).toContain('data-complete="" data-disabled=""');
-    expect({
-      otpFieldGroupClasses: [style.attrs(otpFieldStyles.group).class ?? ''] as const,
-      otpFieldHiddenInputClasses: [style.attrs(otpFieldStyles.hiddenInput).class ?? ''] as const,
-      otpFieldInputClasses: [style.attrs(otpFieldStyles.input).class ?? ''] as const,
-    }).toMatchSnapshot();
+    expect(root).toContain('data-style-src="otp-field.tsx#root"');
+    expect(hidden).toContain('data-style-src="otp-field.tsx#hiddenInput"');
+    expect(firstSlot).toContain('otp-field.tsx#input');
+    expect(emptySlot).toContain('otp-field.tsx#input');
   });
   it('wraps field and fieldset primitives as styled native form wiring', () => {
     const state = {
@@ -630,16 +618,15 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(fieldset).toContain('id="seat" name="seat"');
     expect(fieldset).toContain('id="plan-fieldset"');
     expect(fieldset).toContain('id="plan-legend"');
-    expect({
-      fieldControlClasses: [style.attrs(fieldStyles.control).class ?? ''] as const,
-      fieldDescriptionClasses: [style.attrs(fieldStyles.description).class ?? ''] as const,
-      fieldErrorClasses: [style.attrs(fieldStyles.error).class ?? ''] as const,
-      fieldLabelClasses: [style.attrs(fieldStyles.label).class ?? ''] as const,
-      fieldSelectClasses: [style.attrs(fieldStyles.select).class ?? ''] as const,
-      fieldSelectOptionClasses: [style.attrs(fieldStyles.selectOption).class ?? ''] as const,
-      fieldTextareaClasses: [style.attrs(fieldStyles.textarea).class ?? ''] as const,
-      fieldsetClasses: [style.attrs(fieldStyles.fieldset).class ?? ''] as const,
-      fieldsetLegendClasses: [style.attrs(fieldStyles.fieldsetLegend).class ?? ''] as const,
-    }).toMatchSnapshot();
+    expect(root).toContain('data-style-src="field.tsx#root"');
+    expect(label).toContain('data-style-src="field.tsx#label"');
+    expect(control).toContain('data-style-src="field.tsx#control"');
+    expect(textarea).toContain('data-style-src="field.tsx#textarea"');
+    expect(select).toContain('data-style-src="field.tsx#select"');
+    expect(selectOption).toContain('data-style-src="field.tsx#selectOption"');
+    expect(description).toContain('data-style-src="field.tsx#description"');
+    expect(error).toContain('data-style-src="field.tsx#error"');
+    expect(fieldset).toContain('data-style-src="field.tsx#fieldset"');
+    expect(fieldset).toContain('data-style-src="field.tsx#fieldsetLegend"');
   });
 });

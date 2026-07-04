@@ -20,7 +20,7 @@ export type UntrustedJsonBodyResult =
  * values are attacker-controlled provenance for diagnostics. Native `Request.headers`
  * remains the platform API; Kovo-owned accessors tag the value before validation reveals it.
  */
-export function readUntrustedRequestHeader(request: Request, name: string): unknown | undefined {
+export function readUntrustedRequestHeader(request: Request, name: string): unknown {
   const value = request.headers.get(name);
   return value === null ? undefined : untrusted(value);
 }
@@ -29,7 +29,7 @@ export function readUntrustedRequestHeader(request: Request, name: string): unkn
  * @internal Read a request cookie through Kovo's DX-only untrusted provenance tag.
  * The returned value must be revealed only by the validation choke that consumes it.
  */
-export function readUntrustedCookieValue(request: Request, name: string): unknown | undefined {
+export function readUntrustedCookieValue(request: Request, name: string): unknown {
   const header = request.headers.get('cookie');
   if (!header) return undefined;
 

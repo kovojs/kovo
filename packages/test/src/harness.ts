@@ -1,5 +1,11 @@
 import type * as CoreGraph from '@kovojs/core/internal/graph';
-import type { CsrfOptions, MutationDefinition, MutationResult, QueryDefinition, Schema } from '@kovojs/server';
+import type {
+  CsrfOptions,
+  MutationDefinition,
+  MutationResult,
+  QueryDefinition,
+  Schema,
+} from '@kovojs/server';
 import {
   executeHarnessMutation,
   executeHarnessQuery,

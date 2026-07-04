@@ -10,7 +10,8 @@ import {
   renderRouteDocumentResponse,
 } from './document-core.js';
 import { forwardSetCookie } from './cookies.js';
-import { currentSigningSecret, type SigningSecret } from './csrf.js';
+import { currentSigningSecret } from './csrf.js';
+import type { SigningSecret } from './keyring.js';
 import {
   createSignUrl,
   storageDownloadEndpointInfo,

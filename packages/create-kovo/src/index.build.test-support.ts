@@ -3303,10 +3303,10 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
   let auth = readFileSync(authPath, 'utf8');
   auth = replaceRequired(
     auth,
-    "import { publicAccess, s, session, type CsrfValidationOptions } from '@kovojs/server';",
+    "import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';",
     [
       "import { eq } from 'drizzle-orm';",
-      "import { publicAccess, s, session, type CsrfValidationOptions } from '@kovojs/server';",
+      "import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';",
     ].join('\n'),
     'phase 5.1 authorization auth eq import',
   );

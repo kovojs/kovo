@@ -122,7 +122,7 @@ import {
   Field,
   FieldControl,
   FieldDescription,
-  FieldError,
+  FieldErrorMessage,
   FieldLabel,
   FieldSelect,
   FieldSelectOption,
@@ -1216,7 +1216,7 @@ export function FieldDemo(): string {
                 children: 'Used for release notifications.',
                 id: 'gallery-field-description',
               })}
-              {FieldError.definition.render({
+              {FieldErrorMessage.definition.render({
                 children: 'Email is required.',
                 id: 'gallery-field-error',
               })}

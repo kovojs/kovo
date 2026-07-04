@@ -11,7 +11,7 @@ sessions, CSRF, guards, and the scope-audit graph — is easy to read in full.
   `betterAuthSignInEmailMutation` / `betterAuthSignOutMutation` sign-in and
   sign-out mutations.
 - **CSRF protection**: `csrfField` / `csrfToken` with a per-session
-  `CsrfValidationOptions`, threaded through the login and logout forms.
+  `CsrfOptions`, threaded through the login and logout forms.
 - **Route guards**: `authed<...>()` on `/account` and `role<...>('admin')` on
   `/admin`, so authorization is checked at the route boundary.
 - **Reference shell tests** exercise the same auth and scope behavior through

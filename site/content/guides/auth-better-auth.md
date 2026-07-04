@@ -50,7 +50,7 @@ place:
 
 ```ts
 import { betterAuthSession } from '@kovojs/better-auth';
-import { s, session, type CsrfValidationOptions } from '@kovojs/server';
+import { s, session, type CsrfOptions } from '@kovojs/server';
 
 export interface AppRequest {
   authCsrfId?: string | null;
@@ -78,7 +78,7 @@ export const appCsrf = {
   sessionId(request: AppRequest) {
     return request.session?.id ?? request.authCsrfId ?? undefined;
   },
-} satisfies CsrfValidationOptions<AppRequest>;
+} satisfies CsrfOptions<AppRequest>;
 
 export const appSessionProvider = appSession.provider(
   betterAuthSession(auth, ({ session: authSession, user }) => ({

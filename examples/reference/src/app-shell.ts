@@ -6,7 +6,7 @@ import {
   renderRouteHtml,
   route,
   toNodeHandler,
-  type CsrfValidationOptions,
+  type CsrfOptions,
   type RequestHandler,
   type ServerErrorHandler,
 } from '@kovojs/server';
@@ -49,7 +49,7 @@ export const referencePublicClientModuleHref = publicClientModules.put({
   version: 'reference-r7',
 });
 
-const shellReferenceAuthCsrf: CsrfValidationOptions<Request> = {
+const shellReferenceAuthCsrf: CsrfOptions<Request> = {
   field: referenceAuthCsrf.field,
   secret: referenceAuthCsrf.secret,
   sessionId(request) {

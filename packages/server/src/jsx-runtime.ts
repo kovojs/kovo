@@ -23,11 +23,7 @@ import {
 import { attrs as kovoStyleAttrs, type StyleInput } from '@kovojs/style';
 
 import { componentMutationFailureSlots } from './component-render.js';
-import {
-  renderMutationCsrfField,
-  renderMutationIdemField,
-  type CsrfOptions,
-} from './csrf.js';
+import { renderMutationCsrfField, renderMutationIdemField, type CsrfOptions } from './csrf.js';
 import {
   escapeAttribute,
   isRenderedHtml,

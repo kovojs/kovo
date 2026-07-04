@@ -5,11 +5,7 @@ import type { CookieOptions } from './cookies.js';
 import { serializeCookie } from './cookies.js';
 import { escapeAttribute } from './html.js';
 import { currentJsxFrameworkContext } from './jsx-context.js';
-import {
-  isSigningKeyRing,
-  signingKeyRingFromSecret,
-  type SigningSecret,
-} from './keyring.js';
+import { isSigningKeyRing, signingKeyRingFromSecret, type SigningSecret } from './keyring.js';
 import { isTrustedSecureRequest } from './request-scheme.js';
 import { formLikeToRecord } from './schema.js';
 import {
@@ -547,7 +543,8 @@ export function currentSigningSecret(secret: SigningSecret): string {
     throw new Error('currentSigningSecret cannot expose raw material from a SigningKeyRing');
   }
   const current = secret.keys.find((key) => key.state === 'active');
-  if (current === undefined) throw new Error('SigningSecret key ring options must include an active key');
+  if (current === undefined)
+    throw new Error('SigningSecret key ring options must include an active key');
   return typeof current.secret === 'string'
     ? current.secret
     : Buffer.from(current.secret).toString('base64url');
