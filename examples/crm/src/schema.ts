@@ -43,5 +43,10 @@ export const activities = pgTable(
     kind: text('kind').notNull(),
     note: text('note').notNull(),
   },
-  kovo({ domain: 'activity', key: (t) => t.id }),
+  // SPEC 10.1: activities inherit ownership from their parent deal.
+  kovo({
+    domain: 'activity',
+    key: (t) => t.id,
+    ownerVia: { fk: (t) => t.dealId, parent: deals, parentKey: (t) => t.id },
+  }),
 );

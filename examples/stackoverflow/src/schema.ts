@@ -5,6 +5,8 @@ import { answer, question, vote } from './model.js';
 
 // Drizzle tables for the Stack Overflow clone. The kovo({ domain, key })
 // annotations let the generated graph connect mutations to refreshed queries.
+// SPEC 10.2: the hosted Q&A demo intentionally serves public content; sessionId scopes
+// throwaway demo state, not an authorization boundary.
 
 // Presentational columns carry defaults so simple inserts can omit them.
 export const questions = pgTable(
@@ -21,7 +23,7 @@ export const questions = pgTable(
     tags: text('tags').notNull().default(''),
     createdAt: text('created_at').notNull().default(''),
   },
-  kovo({ domain: question, key: 'sessionId,id' }),
+  kovo({ domain: question, key: 'sessionId,id', public: true }),
 );
 
 export const answers = pgTable(
@@ -37,7 +39,7 @@ export const answers = pgTable(
     authorName: text('author_name').notNull().default('Anonymous'),
     createdAt: text('created_at').notNull().default(''),
   },
-  kovo({ domain: answer, key: 'sessionId,id' }),
+  kovo({ domain: answer, key: 'sessionId,id', public: true }),
 );
 
 export const votes = pgTable(
@@ -50,5 +52,5 @@ export const votes = pgTable(
     userId: text('user_id').notNull(),
     value: integer('value').notNull(),
   },
-  kovo({ domain: vote, key: 'sessionId,id' }),
+  kovo({ domain: vote, key: 'sessionId,id', public: true }),
 );

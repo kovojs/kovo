@@ -47,7 +47,7 @@ RUN cd examples/commerce \
   && cd ../crm \
   && NODE_OPTIONS=--max-old-space-size=4096 ../../node_modules/.bin/vp build \
   && cd ../stackoverflow \
-  && NODE_OPTIONS=--max-old-space-size=4096 ../../node_modules/.bin/vp build \
+  && NODE_OPTIONS=--max-old-space-size=5120 ../../node_modules/.bin/vp build \
   && NODE_OPTIONS=--max-old-space-size=4096 node scripts/materialize-demo-css.mjs
 
 RUN chown -R node:node /app
