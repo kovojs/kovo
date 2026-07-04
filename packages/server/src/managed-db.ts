@@ -1009,11 +1009,39 @@ function scopedPostgresTransaction(
       target,
       (tx: unknown) => {
         if (!isPostgresTransactionClient(tx)) return callback(tx);
-        return Promise.resolve(runPostgresTransactionControl(tx, options)).then(() => callback(tx));
+        return Promise.resolve(runPostgresTransactionControl(tx, options)).then(() =>
+          callback(scopedPostgresTransactionClient(tx, options)),
+        );
       },
       ...args,
     ) as Result;
   };
+}
+
+function scopedPostgresTransactionClient(
+  tx: PostgresTransactionClient,
+  options: PostgresScopedClientOptions,
+): PostgresTransactionClient {
+  return new Proxy(tx as Record<PropertyKey, unknown>, {
+    get(target, prop, receiver) {
+      if (prop === 'query') {
+        return (query: unknown, params?: unknown[], queryOptions?: unknown) => {
+          assertAppPostgresStatementAllowed(query);
+          const queryMethod = Reflect.get(target, 'query', receiver);
+          if (typeof queryMethod !== 'function') {
+            throw new KovoReadonlyHandleError(
+              'KV433: Postgres scoped transaction client requires a callable query method (SPEC §10.3/§11.2).',
+            );
+          }
+          return Reflect.apply(queryMethod, target, [query, params, queryOptions]);
+        };
+      }
+      if (prop === 'exec') return scopedPostgresExec.bind(undefined, options);
+      if (prop === 'transaction') return scopedPostgresTransaction(target, options, receiver);
+      const value = Reflect.get(target, prop, receiver);
+      return typeof value === 'function' ? value.bind(target) : value;
+    },
+  }) as PostgresTransactionClient;
 }
 
 function scopedPostgresQuery(
@@ -1023,6 +1051,7 @@ function scopedPostgresQuery(
   params?: unknown[],
   queryOptions?: unknown,
 ): Promise<unknown> {
+  assertAppPostgresStatementAllowed(query);
   return postgresTransaction(client, async (tx) => {
     await runPostgresTransactionControl(tx, options);
     const queryMethod = tx.query.bind(tx);
@@ -1070,6 +1099,113 @@ function postgresQueryText(query: unknown): string | undefined {
     : typeof query.text === 'string'
       ? query.text
       : undefined;
+}
+
+const APP_POSTGRES_ALLOWED_COMMANDS = new Set(['delete', 'insert', 'select', 'update', 'with']);
+
+function assertAppPostgresStatementAllowed(query: unknown): void {
+  const text = postgresQueryText(query);
+  if (text === undefined) {
+    throw new KovoReadonlyHandleError(
+      'KV414: Postgres scoped managed clients reject unknown SQL query carriers; app SQL must be a string or query config with text/sql (SPEC §10.2/§10.3).',
+    );
+  }
+  const shape = scanAppPostgresStatementShape(text);
+  if (!shape.ok) {
+    throw new KovoReadonlyHandleError(
+      `KV414: Postgres scoped managed clients reject unsafe app SQL: ${shape.reason} (SPEC §10.2/§10.3).`,
+    );
+  }
+}
+
+type AppPostgresStatementShape = { command: string; ok: true } | { ok: false; reason: string };
+
+function scanAppPostgresStatementShape(sql: string): AppPostgresStatementShape {
+  let cleaned = '';
+  let statementCount = 0;
+  let statementHasToken = false;
+  let trailingOnly = false;
+  for (let index = 0; index < sql.length; index += 1) {
+    const char = sql.charAt(index);
+    const next = sql.charAt(index + 1);
+    if (char === '-' && next === '-') {
+      cleaned += ' ';
+      index += 2;
+      while (index < sql.length && sql.charAt(index) !== '\n' && sql.charAt(index) !== '\r')
+        index += 1;
+      if (index < sql.length) cleaned += '\n';
+      continue;
+    }
+    if (char === '/' && next === '*') {
+      cleaned += ' ';
+      index += 2;
+      let closed = false;
+      for (; index < sql.length; index += 1) {
+        if (sql.charAt(index) === '*' && sql.charAt(index + 1) === '/') {
+          closed = true;
+          index += 1;
+          break;
+        }
+      }
+      if (!closed) return { ok: false, reason: 'unterminated block comment' };
+      cleaned += ' ';
+      continue;
+    }
+    if (char === "'" || char === '"') {
+      const quote = char;
+      cleaned += ' ';
+      for (index += 1; index < sql.length; index += 1) {
+        if (sql.charAt(index) === quote) {
+          if (sql.charAt(index + 1) === quote) {
+            index += 1;
+            continue;
+          }
+          break;
+        }
+      }
+      if (index >= sql.length) return { ok: false, reason: 'unterminated quoted literal' };
+      cleaned += ' ';
+      continue;
+    }
+    if (char === '$') {
+      const tagMatch = /^\$[A-Za-z_][A-Za-z0-9_]*\$|^\$\$/u.exec(sql.slice(index));
+      if (tagMatch !== null) {
+        const tag = tagMatch[0];
+        cleaned += ' ';
+        const end = sql.indexOf(tag, index + tag.length);
+        if (end === -1) return { ok: false, reason: 'unterminated dollar-quoted literal' };
+        index = end + tag.length - 1;
+        cleaned += ' ';
+        continue;
+      }
+    }
+    if (char === ';') {
+      if (statementHasToken) {
+        statementCount += 1;
+        statementHasToken = false;
+        trailingOnly = true;
+      } else if (!trailingOnly) {
+        return { ok: false, reason: 'empty SQL statement' };
+      }
+      cleaned += ' ';
+      continue;
+    }
+    if (/\S/u.test(char)) {
+      if (trailingOnly) return { ok: false, reason: 'multiple SQL statements' };
+      statementHasToken = true;
+    }
+    cleaned += char;
+  }
+  if (statementHasToken) statementCount += 1;
+  if (statementCount !== 1) return { ok: false, reason: 'expected exactly one SQL statement' };
+  const command = /^\s*([A-Za-z]+)/u.exec(cleaned)?.[1]?.toLowerCase();
+  if (command === undefined || !APP_POSTGRES_ALLOWED_COMMANDS.has(command)) {
+    return { ok: false, reason: 'statement command is not in the app SQL allowlist' };
+  }
+  if (/\b(?:pg_catalog\.)?set_config\s*\(/iu.test(cleaned)) {
+    return { ok: false, reason: 'app SQL cannot change framework transaction settings' };
+  }
+  return { command, ok: true };
 }
 
 function scopedPostgresExec(options: PostgresScopedClientOptions, query: string): Promise<unknown> {

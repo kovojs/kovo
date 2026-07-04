@@ -114,14 +114,14 @@ describe('Postgres/PGlite owner RLS runtime floor', () => {
     await installOwnerScopedSchema(client);
     const u1 = scopedClient(client, 'u1');
 
-    await expect(
+    expect(() =>
       u1.query("select pg_catalog.set_config('kovo.principal', $1, true)", ['u2']),
-    ).rejects.toThrow(/permission denied|set_config/i);
+    ).toThrow(/KV414/);
     await expect(orderIds(u1)).resolves.toEqual(['o1']);
 
-    await expect(
-      u1.query('select id from orders; reset role; select id from orders'),
-    ).rejects.toThrow();
+    expect(() => u1.query('select id from orders; reset role; select id from orders')).toThrow(
+      /KV414/,
+    );
     await expect(orderIds(u1)).resolves.toEqual(['o1']);
   });
 

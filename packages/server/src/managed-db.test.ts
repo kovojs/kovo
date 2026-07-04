@@ -2089,6 +2089,129 @@ describe('managedDb (KV422 SQL-safe unified with KV433 read-only)', () => {
     expect(() => scoped.exec('select 1')).toThrow(/parameterized db\.query/);
   });
 
+  it('rejects unsafe app SQL before scoped Postgres query execution', async () => {
+    const log: string[] = [];
+    const client = {
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        log.push('transaction');
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: unknown, params?: unknown[]) {
+        log.push(`query:${String(statement)}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve({ rows: [] });
+      },
+    };
+    const scoped = createPostgresScopedClient(client, {
+      principal: 'user-1',
+      readOnly: true,
+      role: 'kovo_reader',
+    });
+
+    for (const statement of [
+      "SET kovo.principal='victim'",
+      "SET kovo.role='admin'",
+      'RESET ROLE',
+      'SET ROLE kovo_admin',
+      'DISCARD ALL',
+      'CREATE TABLE stolen (id text)',
+      "RESET ROLE; SELECT set_config('kovo.principal', 'victim', true)",
+      '/* hidden utility */ SET ROLE kovo_admin',
+      'SELECT 1; /* comment */ SELECT 2',
+      "SELECT pg_catalog.set_config('kovo.principal', $1, true)",
+      'VACUUM',
+    ]) {
+      expect(() => scoped.query(statement, ['victim'])).toThrow(/KV414/);
+    }
+
+    expect(log).toEqual([]);
+  });
+
+  it('allows only the single-statement app Postgres command allowlist', async () => {
+    const log: string[] = [];
+    const client = {
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        log.push('transaction');
+        return callback(this);
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: unknown, params?: unknown[]) {
+        const sql = typeof statement === 'string' ? statement : JSON.stringify(statement);
+        log.push(`query:${sql}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve({ rows: [] });
+      },
+    };
+    const scoped = createPostgresScopedClient(client, { role: false });
+
+    await expect(scoped.query('select id from contacts where id = $1', ['c1'])).resolves.toEqual({
+      rows: [],
+    });
+    await expect(
+      scoped.query({ text: 'insert into contacts (id) values ($1)', values: ['c2'] }),
+    ).resolves.toEqual({ rows: [] });
+    await expect(
+      scoped.query({ sql: 'update contacts set label = $1 where id = $2', values: ['x', 'c1'] }),
+    ).resolves.toEqual({ rows: [] });
+    await expect(scoped.query('delete from contacts where id = $1', ['c1'])).resolves.toEqual({
+      rows: [],
+    });
+    await expect(
+      scoped.query('with selected as (select $1::text as id) select id from selected', ['c1']),
+    ).resolves.toEqual({ rows: [] });
+
+    expect(() => scoped.query({ values: [] })).toThrow(/unknown SQL query carriers/);
+    expect(() => scoped.query({ text: 'explain select id from contacts', values: [] })).toThrow(
+      /allowlist/,
+    );
+    expect(() => scoped.query('select 1 /* unterminated')).toThrow(/unterminated block comment/);
+  });
+
+  it('guards nested Postgres transaction query paths with the same statement chokepoint', async () => {
+    const log: string[] = [];
+    const client = {
+      transaction<Result>(callback: (tx: typeof client) => Promise<Result>) {
+        log.push('transaction');
+        return Promise.resolve(callback(this));
+      },
+      exec(statement: string) {
+        log.push(`exec:${statement}`);
+        return Promise.resolve();
+      },
+      query(statement: unknown, params?: unknown[]) {
+        log.push(`query:${String(statement)}:${JSON.stringify(params ?? [])}`);
+        return Promise.resolve({ rows: [] });
+      },
+    };
+    const scoped = createPostgresScopedClient(client, {
+      principal: 'user-1',
+      readOnly: true,
+      role: 'kovo_reader',
+    }) as typeof client;
+
+    await expect(
+      scoped.transaction(async (tx) => tx.query('select id from contacts where id = $1', ['c1'])),
+    ).resolves.toEqual({ rows: [] });
+    await expect(scoped.transaction(async (tx) => tx.query('RESET ROLE'))).rejects.toThrow(/KV414/);
+
+    expect(log).toEqual([
+      'transaction',
+      'exec:SET TRANSACTION READ ONLY',
+      `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
+      'exec:SET LOCAL ROLE "kovo_reader"',
+      'query:select id from contacts where id = $1:["c1"]',
+      'transaction',
+      'exec:SET TRANSACTION READ ONLY',
+      `query:SELECT set_config('kovo.principal', $1, true):["user-1"]`,
+      'exec:SET LOCAL ROLE "kovo_reader"',
+    ]);
+  });
+
   it('binds pass-through Postgres client methods to the underlying client', () => {
     class PrivateFieldClient {
       #ready = true;
