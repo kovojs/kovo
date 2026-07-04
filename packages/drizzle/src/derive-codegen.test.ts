@@ -55,7 +55,7 @@ describe('serializeDerivedOptimistic', () => {
 
     expect(source).toContain('// DO NOT EDIT');
     expect(source).toContain("import type { addToCartForm } from '../../app.js';");
-    expect(source).toContain("import type { OptimisticFor } from '@kovojs/browser';");
+    expect(source).toContain("import type { OptimisticFor } from '@kovojs/browser/generated';");
     expect(source).toContain('export const cartAddDerivedOptimistic = {');
     expect(source).toContain("queue: 'cart',");
     expect(source).toContain('transforms: {');
@@ -75,7 +75,9 @@ describe('serializeDerivedOptimistic', () => {
       entries: [{ program: pushProgram, query: 'orderHistory' }],
       formImport: { name: 'addToCartForm', path: '../../app.js' },
     });
-    expect(source).toContain("import { tempId, type OptimisticFor } from '@kovojs/browser';");
+    expect(source).toContain(
+      "import { tempId, type OptimisticFor } from '@kovojs/browser/generated';",
+    );
     expect(source).toContain(
       'draft.items.push({ id: tempId(), productId: $input.productId, total: 0 });',
     );
@@ -94,11 +96,11 @@ describe('serializeDerivedOptimistic', () => {
       );
       writeFileSync(
         join(root, 'node_modules', '@kovojs', 'browser', 'package.json'),
-        JSON.stringify({ exports: './index.mjs', type: 'module' }, null, 2),
+        JSON.stringify({ exports: { './generated': './generated.mjs' }, type: 'module' }, null, 2),
         'utf8',
       );
       writeFileSync(
-        join(root, 'node_modules', '@kovojs', 'browser', 'index.mjs'),
+        join(root, 'node_modules', '@kovojs', 'browser', 'generated.mjs'),
         [
           'let id = 0;',
           'export function tempId() {',
@@ -157,7 +159,9 @@ describe('serializeDerivedOptimistic', () => {
               noEmit: true,
               noImplicitAny: false,
               paths: {
-                '@kovojs/browser': [join(process.cwd(), 'packages/browser/src/index.ts')],
+                '@kovojs/browser/generated': [
+                  join(process.cwd(), 'packages/browser/src/generated.ts'),
+                ],
                 '@kovojs/core': [join(process.cwd(), 'packages/core/src/index.ts')],
               },
               strict: true,
@@ -225,7 +229,7 @@ describe('serializeDerivedOptimistic', () => {
       });
 
       expect(source).toContain(
-        "import { now, tempId, type OptimisticFor } from '@kovojs/browser';",
+        "import { now, tempId, type OptimisticFor } from '@kovojs/browser/generated';",
       );
       expect(draft.items).toHaveLength(1);
       expect(draft.items[0]).toMatchObject({

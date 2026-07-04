@@ -13,7 +13,7 @@ import { definedProps } from './defined-props.js';
  * app entry hands it to the loader's `enhancedMutations.root` without naming the
  * low-level morph/target types.
  */
-export interface BrowserKovoRoot extends MorphRoot, TargetCollectorRoot {}
+export interface BrowserKovoRoot {}
 
 /**
  * Options for {@link createBrowserKovoRoot}.
@@ -23,7 +23,7 @@ export interface CreateBrowserKovoRootOptions {
    * The DOM root used for fragment-target lookup and target collection. Defaults
    * to the global `document`.
    */
-  documentRoot?: FragmentTargetRoot & TargetCollectorRoot;
+  documentRoot?: ParentNode;
 }
 
 /**
@@ -80,14 +80,15 @@ export const defaultEnhancedFetch: EnhancedMutationFetch = (url, options) => {
 export function createBrowserKovoRoot(options: CreateBrowserKovoRootOptions = {}): BrowserKovoRoot {
   const documentRoot =
     options.documentRoot ?? (document as FragmentTargetRoot & TargetCollectorRoot);
-  const morphRoot = new DomMorphRoot(documentRoot);
+  const runtimeRoot = documentRoot as FragmentTargetRoot & TargetCollectorRoot;
+  const morphRoot = new DomMorphRoot(runtimeRoot);
 
   return {
     findFragmentTarget(target) {
       return morphRoot.findFragmentTarget(target);
     },
     querySelectorAll(selector) {
-      return documentRoot.querySelectorAll(selector);
+      return runtimeRoot.querySelectorAll(selector);
     },
-  };
+  } as BrowserKovoRoot;
 }
