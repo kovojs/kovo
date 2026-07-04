@@ -40,10 +40,12 @@ interface StarterDevPlugin {
 function starterSharedAppShellDevPlugin(): StarterDevPlugin {
   return {
     async configureServer(server) {
-      const serverModule = await server.ssrLoadModule('@kovojs/server');
+      const serverModule = await server.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
       const sharedPluginFactory = serverModule.kovoAppShellViteDevPlugin;
       if (typeof sharedPluginFactory !== 'function') {
-        throw new Error('@kovojs/server must export kovoAppShellViteDevPlugin.');
+        throw new Error(
+          '@kovojs/server/internal/app-shell-vite must export kovoAppShellViteDevPlugin.',
+        );
       }
       const sharedPlugin = sharedPluginFactory({
         earlyHints: false,
