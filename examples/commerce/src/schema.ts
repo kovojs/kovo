@@ -13,7 +13,11 @@ export const products = pgTable(
     stock: integer('stock').notNull(),
     unitPrice: integer('unit_price').notNull(),
   },
-  kovo({ domain: product, key: (t) => t.id }),
+  kovo({
+    authzPolicy: 'shared commerce catalog and stock are written only by guarded commerce mutations',
+    domain: product,
+    key: (t) => t.id,
+  }),
 );
 
 export const cartItems = pgTable(
@@ -24,7 +28,11 @@ export const cartItems = pgTable(
     qty: integer('qty').notNull(),
     unitPrice: integer('unit_price').notNull(),
   },
-  kovo({ domain: cart, key: (t) => t.id }),
+  kovo({
+    authzPolicy: 'single shared demo cart rows are written only by guarded commerce mutations',
+    domain: cart,
+    key: (t) => t.id,
+  }),
 );
 
 export const orders = pgTable(
