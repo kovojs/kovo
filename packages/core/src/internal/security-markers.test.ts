@@ -115,6 +115,17 @@ describe('DEC-D security code registry', () => {
     }
   });
 
+  it('documents KV414 authorization as privilege/principal/runtime chokes, not set_config alone', () => {
+    const property = SECURITY_CODE_REGISTRY.KV414.property;
+
+    expect(property).toContain('unassumeable privilege roles');
+    expect(property).toContain('confined statement surface');
+    expect(property).toContain('per-request principal GUCs');
+    expect(property).toContain('scrubbed connections');
+    expect(property).toContain('side-effect-inclusive closure-audited reachable objects');
+    expect(property).not.toMatch(/set_config/u);
+  });
+
   it('keeps authorization/confidentiality guarantees off build-only classifications', () => {
     for (const code of AUTHORIZATION_CONFIDENTIALITY_RUNTIME_CODES) {
       expect(
