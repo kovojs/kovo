@@ -3,7 +3,11 @@ import { join } from 'node:path';
 
 import { createFrameworkOutputFileSystemBoundary } from '@kovojs/core/internal/filesystem';
 
-import { declareSystemPrincipal, isProvenPrincipal } from './auth-principal.js';
+import {
+  actAsNonRequestPrincipal,
+  declareSystemPrincipal,
+  isProvenPrincipal,
+} from './auth-principal.js';
 import { guards } from './guards.js';
 import { kovoReadonlyDbHandle, type KovoReadonlyDbCapable, type Reader } from './managed-db.js';
 import { createPostgresAppRuntimeDb, type KovoPostgresRuntimeDb } from './postgres-runtime.js';
@@ -150,9 +154,12 @@ export async function createPostgresTestRuntime(
     ): Promise<Result> {
       if (closed) throw new Error('Postgres test runtime is already closed.');
       assertPostgresTestPrincipal('withPrincipal', principalId);
-      return await callback(
-        runtime.db({ principalPosture: { kind: 'act-as', principal: principalId } }),
-      );
+      const posture = actAsNonRequestPrincipal(principalId, {
+        ingress: 'endpoint',
+        operation: 'write',
+        surface: 'createPostgresTestRuntime.withPrincipal',
+      });
+      return await callback(runtime.db({ principalPosture: posture }));
     },
     async asAdmin<Result>(
       principalId: string,
