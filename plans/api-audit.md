@@ -559,7 +559,7 @@ conservative half-step left as the end state.
     `packages/server/src/endpoint.ts`, `packages/server/src/response.ts`, and
     `packages/server/src/api/routing.ts`; verified by `pnpm run check:api-surface` and
     `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/endpoint.test.ts site/scripts/api-ref.test.mjs packages/server/src/wire-fixtures.test.ts --config ./vite.config.ts`.
-- [ ] **Reclassify compiled-ABI types**.
+- [x] **Reclassify compiled-ABI types**.
   - [x] Headless-ui transition machinery moved out of app-facing public facades.
     - Evidence: `packages/headless-ui/src/public/*.ts`, `packages/headless-ui/src/types-boundary.test.ts`,
       and `site/scripts/api-ref.test.mjs`; verified by `pnpm run check:api-surface` and
@@ -659,10 +659,23 @@ hatch survives this phase.
       `examples/*` (commerce, gallery, crm, stackoverflow, devtool, reference), `create-kovo`
       templates, tutorial steps. Every break is a latent bug being surfaced — fix the call site,
       don't loosen the type.
+  - [x] Fix the gallery interactive compile break surfaced by the headless public-facade narrowing.
+    - Evidence: `packages/headless-ui/src/public/{context-menu,dropdown-menu,menubar,navigation-menu}.ts`
+      and `examples/gallery/src/interactive/*.tsx`; verified by
+      `pnpm exec tsc -p examples/gallery/tsconfig.json --noEmit --pretty false` and
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.compile.test.ts packages/icons/src/icons.test.ts site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
 - [ ] **Icons**: verify the 1,740 generated icon components type-check under the new signature and
       **benchmark `tsc`** before/after across the monorepo and a scaffolded app; if inference cost
       is material, precompute each icon's call signature in the generator output instead of
       deriving it generically.
+  - [x] Verify generated icons type-check under the new component signature and capture current-cost
+        example typecheck timings.
+    - Evidence: `packages/icons/src/index.tsx` / generated icon sources and example tsconfigs;
+      verified by `pnpm exec vitest --run packages/icons/src/icons.test.ts --config ./vite.config.ts`,
+      `pnpm exec tsc --ignoreConfig --noEmit --jsx react-jsx --module NodeNext --moduleResolution NodeNext --target ES2024 --strict --skipLibCheck --types node,vitest packages/icons/src/index.tsx packages/icons/src/*.tsx`,
+      and current example `tsc` timings from the component-sweep branch.
+  - [ ] Capture before/after monorepo plus scaffolded-app `tsc` timings before closing the full icon
+        benchmark item.
 - [x] **Compiler/runtime alignment**: confirm compiler lowering and `assertKnownComponentDefinitionKeys`
       agree with the chosen props channel; type-level enforcement remains defense-in-depth per the
       honesty boundary (SPEC §6.6) — the compiler's validation stays authoritative.
