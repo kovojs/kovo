@@ -66,7 +66,9 @@ export const appSession = session(
 
 function requireAuthSecret(): string {
   const secret = process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET;
-  if (!secret) throw new Error('Set BETTER_AUTH_SECRET or KOVO_CSRF_SECRET.');
+  if (!secret || secret === 'replace-with-a-deployed-secret') {
+    throw new Error('Set BETTER_AUTH_SECRET or KOVO_CSRF_SECRET to a strong random value.');
+  }
   return secret;
 }
 
@@ -92,6 +94,15 @@ The starter uses:
 
 ```ts
 betterAuthSignInEmailMutation(auth, {
+  csrf: appCsrf,
+  defaultRedirectTo: '/',
+});
+```
+
+For account creation, use the companion mutation:
+
+```ts
+betterAuthSignUpEmailMutation(auth, {
   csrf: appCsrf,
   defaultRedirectTo: '/',
 });
@@ -142,8 +153,8 @@ instead of hiding them in component code.
 ## Verify the integration
 
 ```sh
-vp check
-vp test
+npm run check
+npm test
 npm run build:prod
 ```
 

@@ -283,9 +283,10 @@ vp run graph-assertions   # runs your app's graph-query behavior rules
 
 `vp check` and `vp build` are the toolchain's own commands (typecheck/lint and bundle); they are
 distinct from the framework's `kovo check`, which runs the graph/coverage gates and is invoked here
-through the `kovo-check` npm script via `vp run`. The starter's CI workflow runs exactly this list. If a deploy passes these, the things that usually
-need a staging click-through — does this button do anything, does that mutation refresh the badge —
-are already proven. See [reading kovo check & kovo explain](/guides/kovo-explain/).
+through the `kovo-check` npm script via `vp run`. Wire this list into your app's CI once the matching
+scripts exist. If a deploy passes these, the things that usually need a staging click-through — does
+this button do anything, does that mutation refresh the badge — are already proven. See
+[reading kovo check & kovo explain](/guides/kovo-explain/).
 
 ## Checklist
 

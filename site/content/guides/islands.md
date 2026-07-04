@@ -160,26 +160,12 @@ the ladder: extract a derive, lower to a CSS/attribute toggle, make the componen
 fragment target, or mark `isomorphic: true` (lint-gated escape hatch for logic beyond paths/derives/
 keyed lists).
 
-## Declare clocks for time-dependent UI
+## Handle time-dependent UI
 
 Relative time, countdowns, and expiring badges need a cadence. Do not call `Date.now()` or
-`new Date()` inside a derive. Declare a `clocks` input and read it through `now`:
-
-```tsx
-import { component } from '@kovojs/core';
-
-export const MessageTime = component({
-  queries: { message: messageQuery },
-  clocks: { ago: { every: '30s' } },
-  render: ({ message, now }) => (
-    <time dateTime={message.createdAt}>{formatRelative(now.ago, message.createdAt)}</time>
-  ),
-});
-```
-
-Kovo lowers `now.ago` to the shared browser tick bus and reruns only the derives that declared that
-clock input. The server-rendered text is still useful without JavaScript; the clock just keeps it
-fresh while the document stays open.
+`new Date()` inside a derive. Component-level clock declarations are not a shipped app-authoring
+option yet, so use query refresh for server truth and keep purely presentational ticking inside a
+small client handler.
 
 For time-dependent query data, put the cadence on the query binding so Kovo knows when to ask the
 server for fresh truth:
@@ -207,23 +193,24 @@ export const QueueBadge = component({
 });
 ```
 
-Use `renderOnce(...)` when freezing a clock value for the document lifetime is intentional, such as a
+Use an app-local helper when freezing a value for the document lifetime is intentional, such as a
 published date that should not tick while the page is open:
 
 ```tsx
 import { component } from '@kovojs/core';
 
+const renderOnce = <Value,>(value: Value) => value;
+
 export const PublishedAt = component({
   queries: { post: postQuery },
-  clocks: { published: { renderOnce: true } },
   render: ({ post, now }) => (
-    <time dateTime={post.publishedAt}>{renderOnce(formatDate(now.published))}</time>
+    <time dateTime={post.publishedAt}>{renderOnce(formatDate(post.publishedAt))}</time>
   ),
 });
 ```
 
-`renderOnce` is an escape hatch, not a freshness tool. If the value should change while the page is
-open, declare a clock or query refresh cadence instead.
+That `renderOnce` helper is app code, not a framework export. If the value should change while the
+page is open, use a query refresh cadence or a client handler instead.
 
 ## Execution triggers: `on:click`, `on:visible`
 

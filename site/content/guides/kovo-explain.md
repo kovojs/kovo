@@ -156,7 +156,7 @@ source rather than left silent.
 ## Turn product rules into CI assertions
 
 When a product rule matters — "every component that shows cart data must refresh when the cart
-changes" — you assert it as a set operation over the printed graph. Here is the starter's shell
+changes" — you assert it as a set operation over the printed graph. Here is an app-owned shell
 recipe:
 
 ```sh
@@ -170,7 +170,8 @@ grep '^invalidated-by: .*cart/add' .kovo/cart.query.txt
 kovo explain mutation cart/add --optimistic graph.json | grep '^OPTIMISTIC-SUMMARY .*UNHANDLED=0'
 ```
 
-The starter generates the script version into `scripts/graph-assertions.mjs`:
+If the rule should live in CI, put the script version in your app, for example
+`scripts/graph-assertions.mjs`:
 
 ```ts
 import assert from 'node:assert/strict';
@@ -184,10 +185,9 @@ assert.match(cartAdd, /^updates: cart->component:CartBadge,page:\/cart/m);
 assert.match(cartAdd, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
 ```
 
-These run in the starter's CI as `vp run graph-assertions`, next to `vp run kovo-check`. A graph
-assertion differs in kind from a rendering test: it states intent ("cart consumers are exactly
-these") and holds as the app grows — a new component that reads cart data either joins the consumer
-set correctly or turns CI red.
+Run that script next to `kovo check` in your app's CI. A graph assertion differs in kind from a
+rendering test: it states intent ("cart consumers are exactly these") and holds as the app grows — a
+new component that reads cart data either joins the consumer set correctly or turns CI red.
 
 ## The security review modes
 

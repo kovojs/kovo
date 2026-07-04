@@ -6,9 +6,12 @@ order: 6.2
 
 # Dataflow devtool
 
-`@kovojs/devtool` turns a Kovo graph into two surfaces: a visual dataflow app and an MCP tool named
-`kovo_explain`. Both render the same graph cards, so the page a developer reads and the artifact an
-agent consumes stay aligned.
+Kovo's repo-internal devtool turns a Kovo graph into two surfaces: a visual dataflow app and an MCP
+tool named `kovo_explain`. Both render the same graph cards, so the page a developer reads and the
+artifact an agent consumes stay aligned.
+
+The `@kovojs/devtool` package is private in the current technical preview. Treat the imports below
+as repository tooling examples, not public app dependencies.
 
 ## Build or capture a graph first
 
@@ -24,10 +27,10 @@ pnpm --filter @kovojs/example-stackoverflow test -- src/interactive-app.test.ts
 For a visual devtool host, pass the graph object or a build-produced graph file into
 `buildBundle()`.
 
-## Mount it under your app
+## Mount it under a repo dev server
 
-Use the Vite plugin when the devtool should live under an existing dev server path such as
-`/__kovo`:
+Inside this repository, the Vite plugin can mount the devtool under an existing dev server path such
+as `/__kovo`:
 
 ```ts
 import { devtoolMountPlugin } from '@kovojs/devtool/vite';
@@ -37,15 +40,17 @@ export default {
 };
 ```
 
-Set `KOVO_DEVTOOL_BASE=/__kovo` so emitted links match the mount path, then run:
+Set `KOVO_DEVTOOL_BASE=/__kovo` so emitted links match the mount path, then run the dev server for
+the host example you are testing. The exact package script is repo-local; it is not part of
+`create-kovo`.
 
 ```sh
-pnpm --filter @kovojs/example-devtool dev:mounted
+KOVO_DEVTOOL_BASE=/__kovo pnpm --filter @kovojs/example-devtool dev
 ```
 
-## Build a bundle directly when you own the host
+## Build a bundle directly in repo tooling
 
-For a host app, provide the graph JSON and source root:
+For repo tooling that owns the host, provide the graph JSON and source root:
 
 ```ts
 import { readFileSync } from 'node:fs';
