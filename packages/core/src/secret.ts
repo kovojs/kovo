@@ -115,6 +115,8 @@ const maybeMarkAsUncloneable = (() => {
   return loader?.('node:worker_threads')?.markAsUncloneable;
 })();
 
+const structuredCloneSecretGuard = Symbol.for('kovo.secret.structuredCloneGuard');
+
 type PoisonKind = 'secret' | 'redacted' | 'untrusted';
 
 /**
@@ -229,6 +231,58 @@ export function isSecret(value: unknown): value is SecretValue<unknown> {
   return (
     isPoisonBox(value) && (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'secret'
   );
+}
+
+installStructuredCloneSecretGuard();
+
+function installStructuredCloneSecretGuard(): void {
+  const globalClone = globalThis as typeof globalThis & {
+    [structuredCloneSecretGuard]?: true;
+    structuredClone?: (value: unknown, options?: unknown) => unknown;
+  };
+  if (globalClone[structuredCloneSecretGuard] === true) return;
+  const nativeStructuredClone = globalClone.structuredClone;
+  if (typeof nativeStructuredClone !== 'function') return;
+  globalClone.structuredClone = (value: unknown, options?: unknown): unknown => {
+    assertNoSecretStructuredCloneValue(value);
+    return nativeStructuredClone(value, options);
+  };
+  Object.defineProperty(globalClone, structuredCloneSecretGuard, {
+    configurable: false,
+    enumerable: false,
+    value: true,
+  });
+}
+
+function assertNoSecretStructuredCloneValue(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet(),
+): void {
+  if (isSecret(value)) throw nonCoercibleError('secret', 'structuredClone');
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return;
+  if (seen.has(value)) return;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoSecretStructuredCloneValue(item, seen);
+    return;
+  }
+  if (value instanceof Map) {
+    for (const [key, item] of value) {
+      assertNoSecretStructuredCloneValue(key, seen);
+      assertNoSecretStructuredCloneValue(item, seen);
+    }
+    return;
+  }
+  if (value instanceof Set) {
+    for (const item of value) assertNoSecretStructuredCloneValue(item, seen);
+    return;
+  }
+  for (const key of Object.keys(value as Record<string, unknown>)) {
+    assertNoSecretStructuredCloneValue((value as Record<string, unknown>)[key], seen);
+  }
+  if (value instanceof Error && 'cause' in value) {
+    assertNoSecretStructuredCloneValue((value as { cause?: unknown }).cause, seen);
+  }
 }
 
 /**

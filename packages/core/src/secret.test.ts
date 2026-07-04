@@ -62,9 +62,11 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     const s = secret('hunter2');
     expect(Object.keys(s)).toEqual([]);
     expect(JSON.stringify(Object.assign({}, s))).toBe('{}');
-    expect(() => structuredClone(s)).toThrow();
-    expect(() => structuredClone({ password: s })).toThrow();
-    expect(() => structuredClone([s])).toThrow();
+    expect(() => structuredClone(s)).toThrow(/KV435/);
+    expect(() => structuredClone({ password: s })).toThrow(/KV435/);
+    expect(() => structuredClone([s])).toThrow(/KV435/);
+    expect(() => structuredClone(new Map([['password', s]]))).toThrow(/KV435/);
+    expect(() => structuredClone(new Set([s]))).toThrow(/KV435/);
   });
 
   it('reveals the value only on explicit reveal()/revealSecret()', () => {
