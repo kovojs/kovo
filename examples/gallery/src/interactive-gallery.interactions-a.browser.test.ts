@@ -606,6 +606,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(input.indeterminate).toBe(false);
     });
 
+    // SPEC §12.1: the standalone checkbox checked end-state (aria-checked=true,
+    // native checked=true) must stay axe-clean before the keyboard toggle clears it.
+    await expectNoAxeViolations(root);
+
     input.focus();
     await userEvent.keyboard('{Space}');
 
@@ -1224,6 +1228,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(input.checked).toBe(true);
       expect(new FormData(form).get('gallery-notifications')).toBe('enabled');
     });
+
+    // SPEC §12.1: the switch checked end-state (role=switch, native checked=true)
+    // must stay axe-clean before keyboard toggles move it again.
+    await expectNoAxeViolations(root);
 
     input.focus();
     await userEvent.keyboard('{Space}');
