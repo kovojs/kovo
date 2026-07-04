@@ -187,6 +187,7 @@ that reports direct handler writes, opaque writes, and the invalidation coverage
 
 ## Next
 
+- [File uploads & storage](/guides/file-uploads-storage/) — accept multipart files and serve them back safely.
 - [Queries & invalidation](/guides/queries/) — see how visible queries refresh after a mutation.
 - [Optimistic updates](/guides/optimistic/) — predict a query while the mutation is in flight.
 
