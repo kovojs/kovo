@@ -16,10 +16,10 @@ export type {
   MintedCsrfField,
   MintedCsrfToken,
 } from '../csrf.js';
-export { domain, tag } from '../domain.js';
-export type { Domain, Tag } from '../domain.js';
+export { domain } from '../domain.js';
+export type { Domain } from '../domain.js';
 export type { JsonSerializable } from '../json-boundary.js';
-export { errorBoundary, queue, stream, write } from '../mutation.js';
+export { errorBoundary, queue, stream } from '../mutation.js';
 import { mutation as mutationImplementation } from '../mutation.js';
 import { query as queryImplementation } from '../query.js';
 import { task as taskImplementation } from '../task.js';
@@ -62,7 +62,6 @@ export type {
   MutationSuccess,
   // KV429 (SPEC §10.3/§11.1): typed 409 stale-version conflict outcome.
   StaleVersionConflict,
-  WriteDefinition,
 } from '../mutation.js';
 /** Attribute object returned by `mutationFormAttributes(...)`. */
 export type { MutationFormAttributes } from '../mutation.js';

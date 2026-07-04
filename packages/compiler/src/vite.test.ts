@@ -165,10 +165,9 @@ export function renderSource() {
     });
     const transformed = await plugin.transform(
       `
-import { domain, mutation, query, tag, task, webhook } from '@kovojs/server';
+import { domain, mutation, query, task, webhook } from '@kovojs/server';
 
 export const contact = domain();
-export const contactRow = tag();
 export const addToCart = mutation({ handler() {}, input: {} });
 export const cartQuery = query({ load: () => ({ count: 1 }), reads: [] });
 export const auditQuery = query({ load: () => ({ ok: true }), reads: [] });
@@ -190,9 +189,6 @@ export const orderPaid = webhook('/webhooks/order-paid', {
     );
     expect(transformed?.code).toContain(
       'export const contact = __kovoAssignDerivedDomainKey(domain(), "app-shell/contact")',
-    );
-    expect(transformed?.code).toContain(
-      'export const contactRow = __kovoAssignDerivedDomainKey(tag(), "app-shell/contact-row")',
     );
     expect(transformed?.code).toContain(
       'export const addToCart = __kovoAssignDerivedMutationKey(mutation({ handler() {}, input: {} }), "app-shell/add-to-cart")',

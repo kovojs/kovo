@@ -139,6 +139,13 @@ tracking across storage.
 
 ### 10.3 Mutations & writes
 
+> **Open design decision:** The domain-write declaration shape in this section is the target
+> contract, not the current app-facing root API. `@kovojs/server` does not ship `write()` or `tag()`
+> from its root public surface until the same change also ships the static enforcement and generated
+> routing that make those declarations authoritative. Until then, authored apps use mutation
+> handlers with analyzed Drizzle writes plus explicit `registry.tables`/`registry.touches` on opaque
+> write sites.
+
 ```ts
 // cart.domain.ts — ALL writes flow through here (error KV330 bans db access in handlers)
 export const cart = domain({
