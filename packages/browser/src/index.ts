@@ -1,7 +1,7 @@
 export type { ElementParamValue, HandlerContext } from './handler-context.js';
 export { handler } from './handlers.js';
 export type { ClientHandler, ImportHandlerModule } from './handlers.js';
-export { tempId } from './optimism.js';
+export { now, tempId } from './optimism.js';
 export type {
   MutationChangeRecord,
   OptimisticChange,
