@@ -166,6 +166,46 @@ type RootMemoryVersionedClientModuleRegistryOptions =
 type RootVersionedClientModuleRegistry = import('@kovojs/server').VersionedClientModuleRegistry;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootVersionedClientModuleInput = import('@kovojs/server').VersionedClientModuleInput;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootCreateElement =
+  // @ts-expect-error SPEC §5.2/§9.5: classic JSX ABI stays on @kovojs/server/jsx-runtime, not the root.
+  typeof import('@kovojs/server').createElement;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootMeta =
+  // @ts-expect-error SPEC §6.4: route metadata is a route definition shape; the root keeps metaFromQuery only.
+  typeof import('@kovojs/server').meta;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootGuardFailure =
+  // @ts-expect-error SPEC §6.5: GuardDenial is the app-facing guard rejection type.
+  import('@kovojs/server').GuardFailure;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootEndpointReason =
+  // @ts-expect-error SPEC §9.1: endpoint definitions require a `reason` field, not an exported reason alias.
+  import('@kovojs/server').EndpointReason;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootMutationResponseHeaderValue =
+  // @ts-expect-error SPEC §9.1: mutation response header aliases are internal; use ResponseHeaderValue.
+  import('@kovojs/server').MutationResponseHeaderValue;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootMutationResponseHeaders =
+  // @ts-expect-error SPEC §9.1: mutation response header aliases are internal; use ResponseHeaders.
+  import('@kovojs/server').MutationResponseHeaders;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootDeferredQueryChunk =
+  // @ts-expect-error SPEC §8/§9: deferred stream chunks are framework wire internals.
+  import('@kovojs/server').DeferredQueryChunk;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootDeferredFragmentChunk =
+  // @ts-expect-error SPEC §8/§9: deferred stream chunks are framework wire internals.
+  import('@kovojs/server').DeferredFragmentChunk;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootDeferredStreamChunk =
+  // @ts-expect-error SPEC §8/§9: deferred stream chunks are framework wire internals.
+  import('@kovojs/server').DeferredStreamChunk;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootDeferredPriority =
+  // @ts-expect-error SPEC §8/§9: deferred stream chunk priority is framework wire internal.
+  import('@kovojs/server').DeferredPriority;
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedCreateApp =
@@ -387,7 +427,7 @@ describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on subpaths while root preserves SPEC §9.5 built-harness entries', () => {
     const publicValues = publicApi as Record<string, unknown>;
     const packageRootValues = packageRootApi as Record<string, unknown>;
-    const renderingSubpathOnlyValues = new Set<string>();
+    const renderingSubpathOnlyValues = new Set<string>(['meta']);
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
       // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
@@ -461,7 +501,6 @@ describe('server app-shell public API barrels', () => {
       // SPEC.md §6.6 / plans/most-secure-web-framework.md OPP-04: app authors
       // satisfy confidential-at-rest write gates with this authenticated-encryption sink.
       encryptAtRest: confidentialAtRestApi.encryptAtRest,
-      createElement: publicApi.createElement,
       mintCsrfField: dataApi.mintCsrfField,
       mintCsrfToken: dataApi.mintCsrfToken,
       kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
@@ -492,6 +531,24 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.hmacSignature).toBe(coreHmacSignature);
     expect(publicApi.standardWebhooks).toBe(coreStandardWebhooks);
     expect(publicApi.customVerifier).toBe(coreCustomVerifier);
+    expect(publicValues).not.toHaveProperty('createElement');
+    expect(packageRootValues).not.toHaveProperty('createElement');
+    expect(publicValues).not.toHaveProperty('GuardFailure');
+    expect(packageRootValues).not.toHaveProperty('GuardFailure');
+    expect(publicValues).not.toHaveProperty('EndpointReason');
+    expect(packageRootValues).not.toHaveProperty('EndpointReason');
+    expect(publicValues).not.toHaveProperty('MutationResponseHeaderValue');
+    expect(packageRootValues).not.toHaveProperty('MutationResponseHeaderValue');
+    expect(publicValues).not.toHaveProperty('MutationResponseHeaders');
+    expect(packageRootValues).not.toHaveProperty('MutationResponseHeaders');
+    expect(publicValues).not.toHaveProperty('DeferredQueryChunk');
+    expect(packageRootValues).not.toHaveProperty('DeferredQueryChunk');
+    expect(publicValues).not.toHaveProperty('DeferredFragmentChunk');
+    expect(packageRootValues).not.toHaveProperty('DeferredFragmentChunk');
+    expect(publicValues).not.toHaveProperty('DeferredStreamChunk');
+    expect(packageRootValues).not.toHaveProperty('DeferredStreamChunk');
+    expect(publicValues).not.toHaveProperty('DeferredPriority');
+    expect(packageRootValues).not.toHaveProperty('DeferredPriority');
     // SPEC.md §9.5: `createApp({ clientModules })` consumers construct a registry,
     // so the constructor stays public at the root and shares the internal value.
     expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(

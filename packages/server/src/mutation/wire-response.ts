@@ -7,7 +7,6 @@ import {
   frameworkWireBody,
   mergeResponseHeaders,
   retryAfterHeaders,
-  type MutationResponseHeaders,
   type ResponseHeaders,
 } from '../response.js';
 import { renderFragmentWireHtml } from '../wire-html.js';
@@ -93,7 +92,7 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
         body: frameworkWireBody(await renderFailureFragment(lifecycle.failure, wireRequest)),
         // A1: a rate-limit (or other retry-able) guard failure carries Retry-After; preserve it on the
         // pre-replay guard-failure response (the old runMutation path added it via retryAfterHeaders).
-        headers: mergeMutationResponseHeaders(
+        headers: mergeResponseHeaders(
           mutationWireResponseHeaders(wireRequest),
           retryAfterHeaders(lifecycle.guardFailure),
         ),
@@ -124,7 +123,7 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
       if (result.error.code === 'VALIDATION' || result.status === 429 || result.status === 409) {
         return {
           body: frameworkWireBody(await renderFailureFragment(result, wireRequest)),
-          headers: mergeMutationResponseHeaders(
+          headers: mergeResponseHeaders(
             mutationWireResponseHeaders(wireRequest),
             retryAfterHeaders(result),
           ),
@@ -134,7 +133,7 @@ export const renderMutationWireLifecycleResponse = wireEmitter(
 
       return commitReservedMutationReplay(lifecycle.reservation, async () => ({
         body: frameworkWireBody(await renderFailureFragment(result, wireRequest)),
-        headers: mergeMutationResponseHeaders(
+        headers: mergeResponseHeaders(
           mutationWireResponseHeaders(wireRequest),
           retryAfterHeaders(result),
         ),
@@ -246,7 +245,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
 
     // SPEC §5.2.1 rule 2(c): enhanced mutation/full fragment responses are build-scoped
     // payloads, so a successful response must carry the render-plan token.
-    const buildHeaders: MutationResponseHeaders = {
+    const buildHeaders: ResponseHeaders = {
       'Kovo-Build': requiredMutationBuildToken(wireRequest),
     };
     const queryWarningHeader = queryRuntimeWarningHeaderValue(
@@ -257,7 +256,7 @@ const renderSuccessfulMutationWireResponse = wireEmitter(
 
     return {
       body: frameworkWireBody([...queryChunks, ...fragmentChunks].join('\n')),
-      headers: mergeMutationResponseHeaders(
+      headers: mergeResponseHeaders(
         mutationWireResponseHeaders(wireRequest),
         {
           'Kovo-Changes': mutationWireChangeHeader(result.changes),
@@ -303,7 +302,7 @@ async function renderReplayUnavailableFragment<Request>(
 ): Promise<MutationWireResponse> {
   return {
     body: frameworkWireBody(await renderFailureFragment(replayUnavailableFailure(), wireRequest)),
-    headers: mergeMutationResponseHeaders(mutationWireResponseHeaders(wireRequest), {
+    headers: mergeResponseHeaders(mutationWireResponseHeaders(wireRequest), {
       'Retry-After': '1',
     }),
     status: 429,
@@ -332,11 +331,11 @@ function requiredMutationBuildToken<Request>(wireRequest: MutationWireRequest<Re
 function mutationRenderErrorResponse<Request>(
   changes: readonly ChangeRecord[],
   wireRequest: MutationWireRequest<Request>,
-  responseHeaders?: MutationResponseHeaders,
+  responseHeaders?: ResponseHeaders,
 ): BufferedMutationWireResponse {
   return {
     body: frameworkWireBody(renderMutationRenderErrorFragment(wireRequest)),
-    headers: mergeMutationResponseHeaders(
+    headers: mergeResponseHeaders(
       mutationWireResponseHeaders(wireRequest),
       {
         'Kovo-Changes': mutationWireChangeHeader(changes),
@@ -459,7 +458,7 @@ export const enhancedMutationReauthResponse = wireEmitter('server.wire.mutation-
   // with a 401 Kovo-Reauth directive instead of rendering validation UI.
   return {
     body: frameworkWireBody(''),
-    headers: mergeMutationResponseHeaders(
+    headers: mergeResponseHeaders(
       mutationWireResponseHeaders({} as MutationWireRequest<Request>),
       {
         'Kovo-Reauth': loginLocation(options.currentUrl ?? '/'),
@@ -486,9 +485,9 @@ function loginLocation(next: string): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-function mergeMutationResponseHeaders(
-  ...sources: readonly (MutationResponseHeaders | undefined)[]
-): MutationResponseHeaders {
+function mergeResponseHeaders(
+  ...sources: readonly (ResponseHeaders | undefined)[]
+): ResponseHeaders {
   return mergeResponseHeaders(...sources);
 }
 
