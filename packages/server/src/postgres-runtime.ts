@@ -27,6 +27,12 @@ import {
 } from './managed-db.js';
 import { requestPassedRoleGuard } from './guards.js';
 import { createSecretBoxingReadDb } from './secret-read-boundary.js';
+import { ensureRecurringTaskSchema } from './task-cron.js';
+import {
+  createDurableTaskSqlExecutor,
+  ensureDurableTaskSchema,
+  grantDurableTaskWriterRole,
+} from './task-queue.js';
 
 const DEFAULT_DATA_DIR = '.kovo/pglite';
 const DEFAULT_ADMIN_ROLE = 'kovo_admin';
@@ -34,6 +40,7 @@ const DEFAULT_READER_ROLE = 'kovo_reader';
 const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
+const FRAMEWORK_INTERNAL_REACHABLE_TABLES = new Set(['_kovo_jobs', '_kovo_task_cron_occurrences']);
 const RUNTIME_LEAST_PRIVILEGE_ERROR = 'runtime must be a least-privilege login role';
 const internalPostgresRuntimeDbCapability: unique symbol = Symbol(
   'kovo.postgres-runtime.internal-db',
@@ -504,6 +511,7 @@ async function provisionRuntimeDb(
     'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
   );
   await applyPostgresDefaultDenyPrivileges(client, input.schemaTables, input.config);
+  await provisionPostgresFrameworkTaskStore(client, input.config);
   await applyPostgresRlsPolicies(client, input.schemaTables, input.metadata, input.config);
   await applyPostgresViewSecurityInvoker(client, input.schemaTables);
   await applyPostgresReaderColumnPrivileges(
@@ -754,6 +762,7 @@ async function auditPostgresReachableClosure(
       continue;
     }
     if (catalog.relkind === 'r' || catalog.relkind === 'p') {
+      if (FRAMEWORK_INTERNAL_REACHABLE_TABLES.has(relation.table)) continue;
       if (allowlistedTables.has(relation.table)) continue;
       if (!protectedTableNames.has(relation.table)) {
         issues.push({
@@ -812,6 +821,16 @@ async function auditPostgresReachableClosure(
     });
   }
   return issues;
+}
+
+async function provisionPostgresFrameworkTaskStore(
+  client: RuntimeSqlClient,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<void> {
+  const executor = createDurableTaskSqlExecutor(client);
+  await ensureDurableTaskSchema(executor);
+  await ensureRecurringTaskSchema(executor);
+  await grantDurableTaskWriterRole(executor, config.writerRole);
 }
 
 async function auditPostgresReachableRoutines(

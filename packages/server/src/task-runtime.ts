@@ -10,6 +10,7 @@ import {
 } from './task-cron.js';
 import { createDurableTaskRunner, type DurableTaskRunner } from './task-runner.js';
 import {
+  assertDurableTaskStoreReady,
   PostgresDurableTaskQueue,
   createDurableTaskSqlExecutor,
   ensureDurableTaskSchema,
@@ -79,10 +80,8 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
   private async start(request: Request): Promise<void> {
     const db = await this.resolveRootDb();
     const executor = createDurableTaskSqlExecutor(db);
+    await ensureTaskStoreReady(executor);
     const store = new PostgresDurableTaskQueue(executor);
-    await ensureDurableTaskSchema(executor);
-    await grantDurableTaskWriterRole(executor);
-    await ensureRecurringTaskSchema(executor);
     this.cronMaterializer = createRecurringTaskMaterializer({
       occurrenceStore: new PostgresRecurringTaskOccurrenceStore(executor),
       store,
@@ -211,6 +210,16 @@ class DefaultAppTaskRuntime implements AppTaskRuntime {
       );
     }
     return new PostgresDurableTaskQueue(createDurableTaskSqlExecutor(request.db));
+  }
+}
+
+async function ensureTaskStoreReady(executor: ReturnType<typeof createDurableTaskSqlExecutor>) {
+  try {
+    await ensureDurableTaskSchema(executor);
+    await ensureRecurringTaskSchema(executor);
+    await grantDurableTaskWriterRole(executor);
+  } catch (error) {
+    await assertDurableTaskStoreReady(executor, error);
   }
 }
 
