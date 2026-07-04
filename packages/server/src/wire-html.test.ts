@@ -49,9 +49,7 @@ describe('renderQueryWireHtml', () => {
         settles: ['idem-1', 'idem&2'],
         value: { count: 2 },
       }),
-    ).toBe(
-      '<kovo-query name="cart" settles="idem-1 idem&amp;2">{"count":2}</kovo-query>',
-    );
+    ).toBe('<kovo-query name="cart" settles="idem-1 idem&amp;2">{"count":2}</kovo-query>');
   });
 });
 

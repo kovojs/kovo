@@ -405,9 +405,7 @@ describe('wire parser HTML entity handling', () => {
 
   it('parses settlement tokens from query chunks (SPEC §9.1.1)', () => {
     expect(
-      readQueryChunks(
-        '<kovo-query name="cart" settles="idem-1 idem-2">{"count":2}</kovo-query>',
-      ),
+      readQueryChunks('<kovo-query name="cart" settles="idem-1 idem-2">{"count":2}</kovo-query>'),
     ).toEqual([{ name: 'cart', settles: ['idem-1', 'idem-2'], value: { count: 2 } }]);
   });
 
