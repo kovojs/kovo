@@ -125,6 +125,7 @@ A static component imports `@kovojs/style` and `component()`:
 /** @jsxImportSource @kovojs/server */
 import { component } from '@kovojs/core';
 import * as style from '@kovojs/style';
+import type { ButtonVariant } from '@kovojs/ui/button';
 
 export const buttonStyles = style.create({
   root: {
@@ -138,8 +139,22 @@ export const buttonStyles = style.create({
     backgroundColor: style.tokens.sys.color.primary,
     color: style.tokens.sys.color.onPrimary,
   },
+  secondary: {
+    backgroundColor: style.tokens.sys.color.surface,
+    color: style.tokens.sys.color.onSurface,
+  },
   ghost: {
     backgroundColor: 'transparent',
+    color: style.tokens.sys.color.onSurface,
+  },
+  destructive: {
+    backgroundColor: style.tokens.sys.color.error,
+    color: style.tokens.sys.color.onError,
+  },
+  outline: {
+    borderColor: style.tokens.sys.color.outline,
+    borderStyle: 'solid',
+    borderWidth: 1,
     color: style.tokens.sys.color.onSurface,
   },
 });
@@ -147,7 +162,7 @@ export const buttonStyles = style.create({
 export interface ButtonProps {
   children?: string;
   style?: style.StyleInput;
-  variant?: 'primary' | 'secondary' | 'ghost';
+  variant?: ButtonVariant;
 }
 
 export const Button = component({

@@ -11,11 +11,16 @@ import {
 
 import * as packageRootApi from '@kovojs/server';
 import * as packageViteApi from '@kovojs/server/vite';
+import * as packageInternalAuditFactsApi from '@kovojs/server/internal/audit-facts';
+import * as packageInternalCapabilitiesApi from '@kovojs/server/internal/capabilities';
 import * as packageInternalClientModulesApi from '@kovojs/server/internal/client-modules';
+import * as packageInternalCspApi from '@kovojs/server/internal/csp';
 import * as packageInternalCsrfApi from '@kovojs/server/internal/csrf';
+import * as packageInternalEgressApi from '@kovojs/server/internal/egress';
 import * as packageInternalEscapeApi from '@kovojs/server/internal/escape';
 import * as packageInternalExecutionApi from '@kovojs/server/internal/execution';
 import * as packageInternalHtmlApi from '@kovojs/server/internal/html';
+import * as packageInternalManagedDbApi from '@kovojs/server/internal/managed-db';
 import * as packageInternalRouteApi from '@kovojs/server/internal/route';
 import * as packageInternalStaticExportApi from '@kovojs/server/internal/static-export';
 import * as packageInternalWireApi from '@kovojs/server/internal/wire';
@@ -33,16 +38,23 @@ import * as egressCredentialsApi from '../egress-credentials.js';
 import * as envApi from '../env.js';
 import * as fileApi from '../file.js';
 import * as keyringApi from '../keyring.js';
+import * as managedDbApi from '../managed-db.js';
 import * as passwordApi from '../password.js';
+import * as postgresRuntimeApi from '../postgres-runtime.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
 import * as publicApi from '../index.js';
 import * as internalClientModulesApi from '../internal/client-modules.js';
+import * as internalAuditFactsApi from '../internal/audit-facts.js';
+import * as internalCapabilitiesApi from '../internal/capabilities.js';
+import * as internalCspApi from '../internal/csp.js';
 import * as internalCsrfApi from '../internal/csrf.js';
+import * as internalEgressApi from '../internal/egress.js';
 import * as internalEscapeApi from '../internal/escape.js';
 import * as internalExecutionApi from '../internal/execution.js';
 import * as internalHtmlApi from '../internal/html.js';
+import * as internalManagedDbApi from '../internal/managed-db.js';
 import * as internalRouteApi from '../internal/route.js';
 import * as mutationApi from '../mutation.js';
 import * as nodeSourceApi from '../node.js';
@@ -57,13 +69,16 @@ import * as renderingApi from './rendering.js';
 import * as routingApi from './routing.js';
 import * as responseApi from '../response.js';
 import * as routeApi from '../route.js';
+import * as redosApi from '../redos.js';
 import * as secretReadBoundaryApi from '../secret-read-boundary.js';
+import * as sqliteRuntimeApi from '../sqlite-runtime.js';
 import * as staticExportDiagnosticsApi from '../static-export-diagnostics.js';
 import * as staticExportOrchestratorApi from '../static-export.js';
 import * as staticExportOutputApi from '../static-export-output.js';
 import * as staticExportResultApi from '../static-export-result.js';
 import * as taskObservabilityApi from '../task-observability.js';
 import * as taskQueueApi from '../task-queue.js';
+import * as uploadSniffApi from '../upload-sniff.js';
 import * as viteApi from '../vite.js';
 import * as viteDevApi from '../vite-dev.js';
 import * as internalWireApi from '../internal/wire.js';
@@ -166,6 +181,102 @@ type RootMemoryVersionedClientModuleRegistryOptions =
 type RootVersionedClientModuleRegistry = import('@kovojs/server').VersionedClientModuleRegistry;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
 type RootVersionedClientModuleInput = import('@kovojs/server').VersionedClientModuleInput;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootCreateElement =
+  // @ts-expect-error SPEC §5.2/§9.5: classic JSX ABI stays on @kovojs/server/jsx-runtime, not the root.
+  typeof import('@kovojs/server').createElement;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootMeta =
+  // @ts-expect-error SPEC §6.4: route metadata is a route definition shape; the root keeps metaFromQuery only.
+  typeof import('@kovojs/server').meta;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootGuardFailure =
+  // @ts-expect-error SPEC §6.5: GuardDenial is the app-facing guard rejection type.
+  import('@kovojs/server').GuardFailure;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootEndpointReason =
+  // @ts-expect-error SPEC §9.1: endpoint definitions require a `reason` field, not an exported reason alias.
+  import('@kovojs/server').EndpointReason;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootMutationResponseHeaderValue =
+  // @ts-expect-error SPEC §9.1: mutation response header aliases are internal; use ResponseHeaderValue.
+  import('@kovojs/server').MutationResponseHeaderValue;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootMutationResponseHeaders =
+  // @ts-expect-error SPEC §9.1: mutation response header aliases are internal; use ResponseHeaders.
+  import('@kovojs/server').MutationResponseHeaders;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootDeferredQueryChunk =
+  // @ts-expect-error SPEC §8/§9: deferred stream chunks are framework wire internals.
+  import('@kovojs/server').DeferredQueryChunk;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootDeferredFragmentChunk =
+  // @ts-expect-error SPEC §8/§9: deferred stream chunks are framework wire internals.
+  import('@kovojs/server').DeferredFragmentChunk;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootDeferredStreamChunk =
+  // @ts-expect-error SPEC §8/§9: deferred stream chunks are framework wire internals.
+  import('@kovojs/server').DeferredStreamChunk;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootDeferredPriority =
+  // @ts-expect-error SPEC §8/§9: deferred stream chunk priority is framework wire internal.
+  import('@kovojs/server').DeferredPriority;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootCapabilityClaims =
+  // @ts-expect-error SPEC §6.6: raw capability signing claims live on an internal subpath.
+  import('@kovojs/server').CapabilityClaims;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootTrustedAssignFact =
+  // @ts-expect-error SPEC §6.6: audit-fact accumulator payloads are CLI/internal plumbing.
+  import('@kovojs/server').TrustedAssignFact;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootUnverifiedMimeFact =
+  // @ts-expect-error SPEC §6.6: upload audit facts are internal audit plumbing.
+  import('@kovojs/server').UnverifiedMimeFact;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootUnsafeRegexFact =
+  // @ts-expect-error SPEC §6.6: ReDoS audit facts are internal audit plumbing.
+  import('@kovojs/server').UnsafeRegexFact;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootContentSecurityPolicyOptions =
+  // @ts-expect-error SPEC §6.6/§9.5: CSP render helpers are internal render plumbing.
+  import('@kovojs/server').ContentSecurityPolicyOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootEgressFloorInstall =
+  // @ts-expect-error SPEC §6.6: egress floor bootstrap handles are internal runtime plumbing.
+  import('@kovojs/server').EgressFloorInstall;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootCredentialProvider =
+  // @ts-expect-error SPEC §6.6: cloud metadata credential frames live on the internal egress subpath.
+  import('@kovojs/server').CredentialProvider;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootDeclaredSecretReadCapability = import('@kovojs/server').DeclaredSecretReadCapability;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootPostgresRlsSilentDenyDiagnostic =
+  // @ts-expect-error SPEC §10.3: Postgres runtime diagnostic facts are internal adapter plumbing.
+  import('@kovojs/server').PostgresRlsSilentDenyDiagnostic;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootPostgresPostureCheckOptOutFact =
+  // @ts-expect-error SPEC §10.3: Postgres runtime opt-out facts are internal audit plumbing.
+  import('@kovojs/server').PostgresPostureCheckOptOutFact;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalCapabilityClaims = import('@kovojs/server/internal/capabilities').CapabilityClaims;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootCapabilityMethod = import('@kovojs/server').CapabilityMethod;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootCapabilityReplayStore = import('@kovojs/server').CapabilityReplayStore;
+// eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
+type RootCspInlineMetadata = import('@kovojs/server').CspInlineMetadata;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalTrustedAssignFact = import('@kovojs/server/internal/audit-facts').TrustedAssignFact;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalContentSecurityPolicyOptions =
+  import('@kovojs/server/internal/csp').ContentSecurityPolicyOptions;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalEgressFloorInstall = import('@kovojs/server/internal/egress').EgressFloorInstall;
+// eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
+type InternalDeclaredSecretReadCapability =
+  import('@kovojs/server/internal/managed-db').DeclaredSecretReadCapability;
 
 // eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
 type RemovedFocusedCreateApp =
@@ -387,7 +498,7 @@ describe('server app-shell public API barrels', () => {
   it('keeps app-shell helpers on subpaths while root preserves SPEC §9.5 built-harness entries', () => {
     const publicValues = publicApi as Record<string, unknown>;
     const packageRootValues = packageRootApi as Record<string, unknown>;
-    const renderingSubpathOnlyValues = new Set<string>();
+    const renderingSubpathOnlyValues = new Set<string>(['meta']);
     const rootValues = aggregateValueKeys(dataApi, renderingApi, routingApi, {
       createApp: appApi.createApp,
       // SPEC.md §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot
@@ -396,35 +507,17 @@ describe('server app-shell public API barrels', () => {
       committedSecretWaiver: envApi.committedSecretWaiver,
       CreateAppBootError: envApi.CreateAppBootError,
       isCreateAppBootError: envApi.isCreateAppBootError,
-      // SPEC.md §6.6 / plans/secure-framework.md Phase 5: the outbound-egress private-network
-      // deny floor (runtime defense-in-depth). The typed blocked/config errors, the
-      // worker-bootstrap install + self-probe helpers, the cloud credential factories, and the
-      // `kovo` capability namespace are public at the root barrel.
+      // SPEC.md §6.6 / plans/secure-framework.md Phase 5: app-facing egress config errors
+      // remain public; bootstrap/credential plumbing moved to @kovojs/server/internal/egress.
       EgressBlockedError: egressApi.EgressBlockedError,
       EgressConfigError: egressApi.EgressConfigError,
-      installEgressFloor: egressBootstrapApi.installEgressFloor,
-      selfProbe: egressBootstrapApi.selfProbe,
-      awsCredential: egressCredentialsApi.awsCredential,
-      gcpCredential: egressCredentialsApi.gcpCredential,
-      azureCredential: egressCredentialsApi.azureCredential,
       createSigningKeyRing: keyringApi.createSigningKeyRing,
-      // SPEC.md §6.6 / §9.1 / plans/secure-framework.md Phase 5: capability-URL signing/verify
-      // primitive (by-construction at the verify sink). Public at the root barrel; the download
-      // route that hosts the sink is open work.
-      DEFAULT_CAPABILITY_TTL_MS: capabilityUrlApi.DEFAULT_CAPABILITY_TTL_MS,
-      createMemoryCapabilityReplayStore: capabilityUrlApi.createMemoryCapabilityReplayStore,
-      signCapability: capabilityUrlApi.signCapability,
-      verifyCapability: capabilityUrlApi.verifyCapability,
       // SPEC.md §6.6 / §9.1 / plans/secure-framework.md Phase 5 follow-up: the framework-owned
-      // storage download route that hosts the capability verify sink + the `ctx.signUrl` mint
-      // (also reachable on the route page context) + the audit-fact drain. Public at the root barrel.
-      CAPABILITY_TOKEN_PARAM: capabilityRouteApi.CAPABILITY_TOKEN_PARAM,
+      // storage download route that hosts the capability verify sink. Low-level signing,
+      // URL-construction, token constants, and audit drains are internal plumbing.
       DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH:
         capabilityRouteApi.DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
-      createSignUrl: capabilityRouteApi.createSignUrl,
       createStorageDownloadEndpoint: capabilityRouteApi.createStorageDownloadEndpoint,
-      deriveDownloadKey: capabilityRouteApi.deriveDownloadKey,
-      drainCapabilityMintFacts: capabilityRouteApi.drainCapabilityMintFacts,
       createFileSystemStorage: coreCreateFileSystemStorage,
       createMemoryStorage: coreCreateMemoryStorage,
       createS3CompatibleStorage: coreCreateS3CompatibleStorage,
@@ -444,33 +537,24 @@ describe('server app-shell public API barrels', () => {
       isArgon2idPasswordDigest: passwordApi.isArgon2idPasswordDigest,
       verifyCredential: passwordApi.verifyCredential,
       verifyPassword: passwordApi.verifyPassword,
-      // SPEC.md §9.5: dev integration/plugin stay public at the root barrel for the
-      // create-kovo starter template's vite.config.ts.
-      createKovoAppShellViteDevIntegration: viteDevApi.createKovoAppShellViteDevIntegration,
       createMemoryVersionedClientModuleRegistry:
         internalClientModulesApi.createMemoryVersionedClientModuleRegistry,
       createRequestHandler: appApi.createRequestHandler,
       exportStaticApp: staticExportOrchestratorApi.exportStaticApp,
       isKovoApp: appGuardsApi.isKovoApp,
       // SPEC.md §10.3/§11.1 / plans/secure-framework.md Phase 3: the mass-assignment
-      // (KV438) author-assertion escapes — serverValue(non-input) + the audited
-      // trustedAssign + its drain — are public at the root barrel.
+      // (KV438) author-assertion escapes — serverValue(non-input) + trustedAssign
+      // are public; the drain is CLI/audit plumbing.
       trustedAssign: writeGovernanceApi.trustedAssign,
-      drainTrustedAssignFacts: writeGovernanceApi.drainTrustedAssignFacts,
       serverValue: writeGovernanceApi.serverValue,
       // SPEC.md §6.6 / plans/most-secure-web-framework.md OPP-04: app authors
       // satisfy confidential-at-rest write gates with this authenticated-encryption sink.
       encryptAtRest: confidentialAtRestApi.encryptAtRest,
-      createElement: publicApi.createElement,
       mintCsrfField: dataApi.mintCsrfField,
       mintCsrfToken: dataApi.mintCsrfToken,
-      kovoAppShellViteDevPlugin: viteDevApi.kovoAppShellViteDevPlugin,
       StaticExportError: staticExportDiagnosticsApi.StaticExportError,
       createDurableTaskSqlExecutor: taskQueueApi.createDurableTaskSqlExecutor,
       createDurableTaskStatus: taskObservabilityApi.createDurableTaskStatus,
-      createSecretBoxingReadDb: secretReadBoundaryApi.createSecretBoxingReadDb,
-      declareSecretReadCapability: secretReadBoundaryApi.declareSecretReadCapability,
-      kovoReadonlyDbHandle: dataApi.kovoReadonlyDbHandle,
       toNodeHandler: nodeSourceApi.toNodeHandler,
     }).filter((key) => !renderingSubpathOnlyValues.has(key));
 
@@ -492,6 +576,24 @@ describe('server app-shell public API barrels', () => {
     expect(publicApi.hmacSignature).toBe(coreHmacSignature);
     expect(publicApi.standardWebhooks).toBe(coreStandardWebhooks);
     expect(publicApi.customVerifier).toBe(coreCustomVerifier);
+    expect(publicValues).not.toHaveProperty('createElement');
+    expect(packageRootValues).not.toHaveProperty('createElement');
+    expect(publicValues).not.toHaveProperty('GuardFailure');
+    expect(packageRootValues).not.toHaveProperty('GuardFailure');
+    expect(publicValues).not.toHaveProperty('EndpointReason');
+    expect(packageRootValues).not.toHaveProperty('EndpointReason');
+    expect(publicValues).not.toHaveProperty('MutationResponseHeaderValue');
+    expect(packageRootValues).not.toHaveProperty('MutationResponseHeaderValue');
+    expect(publicValues).not.toHaveProperty('MutationResponseHeaders');
+    expect(packageRootValues).not.toHaveProperty('MutationResponseHeaders');
+    expect(publicValues).not.toHaveProperty('DeferredQueryChunk');
+    expect(packageRootValues).not.toHaveProperty('DeferredQueryChunk');
+    expect(publicValues).not.toHaveProperty('DeferredFragmentChunk');
+    expect(packageRootValues).not.toHaveProperty('DeferredFragmentChunk');
+    expect(publicValues).not.toHaveProperty('DeferredStreamChunk');
+    expect(packageRootValues).not.toHaveProperty('DeferredStreamChunk');
+    expect(publicValues).not.toHaveProperty('DeferredPriority');
+    expect(packageRootValues).not.toHaveProperty('DeferredPriority');
     // SPEC.md §9.5: `createApp({ clientModules })` consumers construct a registry,
     // so the constructor stays public at the root and shares the internal value.
     expect(publicApi.createMemoryVersionedClientModuleRegistry).toBe(
@@ -499,37 +601,15 @@ describe('server app-shell public API barrels', () => {
     );
     expect(publicApi.createDurableTaskSqlExecutor).toBe(taskQueueApi.createDurableTaskSqlExecutor);
     expect(publicApi.createDurableTaskStatus).toBe(taskObservabilityApi.createDurableTaskStatus);
-    // SPEC.md §9.5: dev integration/plugin are public at the root barrel (create-kovo
-    // starter template vite.config.ts) and share the vite-dev source values.
-    expect(publicApi.createKovoAppShellViteDevIntegration).toBe(
-      viteDevApi.createKovoAppShellViteDevIntegration,
-    );
-    expect(publicApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(publicApi.encryptAtRest).toBe(confidentialAtRestApi.encryptAtRest);
-    expect(packageRootApi.createKovoAppShellViteDevIntegration).toBe(
-      viteDevApi.createKovoAppShellViteDevIntegration,
-    );
-    expect(packageRootApi.kovoAppShellViteDevPlugin).toBe(viteDevApi.kovoAppShellViteDevPlugin);
     expect(publicApi.StaticExportError).toBe(staticExportDiagnosticsApi.StaticExportError);
     expect(publicApi.toNodeHandler).toBe(nodeSourceApi.toNodeHandler);
     expect(publicApi.createMemoryWebhookReplayStore).toBe(
       routingApi.createMemoryWebhookReplayStore,
     );
     expect(publicApi.webhook).toBe(routingApi.webhook);
-    expect(publicApi.createDeclaredWriteDb).toBe(dataApi.createDeclaredWriteDb);
-    expect(publicApi.createPostgresReadonlyClient).toBe(dataApi.createPostgresReadonlyClient);
-    expect(publicApi.createPostgresScopedClient).toBe(dataApi.createPostgresScopedClient);
     expect(publicApi.declarePublicRelation).toBe(dataApi.declarePublicRelation);
     expect(publicApi.declarePublicRead).toBe(dataApi.declarePublicRead);
-    expect(publicApi.drainPostgresRlsSilentDenyDiagnostics).toBe(
-      dataApi.drainPostgresRlsSilentDenyDiagnostics,
-    );
-    expect(publicApi.drainPublicReadAuditFacts).toBe(dataApi.drainPublicReadAuditFacts);
-    expect(publicApi.createSecretBoxingReadDb).toBe(secretReadBoundaryApi.createSecretBoxingReadDb);
-    expect(publicApi.declareSecretReadCapability).toBe(
-      secretReadBoundaryApi.declareSecretReadCapability,
-    );
-    expect(publicApi.kovoReadonlyDbHandle).toBe(dataApi.kovoReadonlyDbHandle);
     expect(publicApi.readonlyDb).toBe(dataApi.readonlyDb);
     expect(publicApi.customVerifier).toBe(coreCustomVerifier);
     expect(publicApi.hmacSignature).toBe(coreHmacSignature);
@@ -546,11 +626,8 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('renderNoJsMutationResponse');
     expect(publicValues).not.toHaveProperty('renderQueryEndpointResponse');
     expect(publicValues).not.toHaveProperty('renderQueryRegistryEndpointResponse');
-    // CSP-3 (bugs-part3): `renderContentSecurityPolicy` + `cspSha256` are now public at
-    // the root barrel so apps can emit the framework's own hash-based CSP. (Inverts the
-    // prior not-public assertions.)
-    expect(publicApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
-    expect(publicApi.cspSha256).toBe(cspApi.cspSha256);
+    expect(publicValues).not.toHaveProperty('renderContentSecurityPolicy');
+    expect(publicValues).not.toHaveProperty('cspSha256');
     expect(publicApi.Defer).toBe(renderingApi.Defer);
     expect(publicApi.trustedHtml).toBe(trustedHtml);
     expect(publicApi.trustedUrl).toBe(trustedUrl);
@@ -566,8 +643,8 @@ describe('server app-shell public API barrels', () => {
     expect(renderingApi.Link).toBe(documentStructuredApi.Link);
     expect(publicValues).not.toHaveProperty('DocumentLink');
     expect(publicValues).not.toHaveProperty('defer');
-    expect(packageRootApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
-    expect(packageRootApi.cspSha256).toBe(cspApi.cspSha256);
+    expect(packageRootValues).not.toHaveProperty('renderContentSecurityPolicy');
+    expect(packageRootValues).not.toHaveProperty('cspSha256');
     expect(packageRootApi.Defer).toBe(renderingApi.Defer);
     expect(packageRootApi.trustedHtml).toBe(trustedHtml);
     expect(packageRootApi.trustedUrl).toBe(trustedUrl);
@@ -584,6 +661,43 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('renderRoutePageResponse');
     expect(publicValues).not.toHaveProperty('readHeader');
     expect(publicValues).not.toHaveProperty('renderComponent');
+    expect(publicValues).not.toHaveProperty('installEgressFloor');
+    expect(publicValues).not.toHaveProperty('selfProbe');
+    expect(publicValues).not.toHaveProperty('awsCredential');
+    expect(publicValues).not.toHaveProperty('gcpCredential');
+    expect(publicValues).not.toHaveProperty('azureCredential');
+    expect(publicValues).not.toHaveProperty('DEFAULT_CAPABILITY_TTL_MS');
+    expect(publicValues).not.toHaveProperty('createMemoryCapabilityReplayStore');
+    expect(publicValues).not.toHaveProperty('signCapability');
+    expect(publicValues).not.toHaveProperty('verifyCapability');
+    expect(publicValues).not.toHaveProperty('CAPABILITY_TOKEN_PARAM');
+    expect(publicValues).not.toHaveProperty('createSignUrl');
+    expect(publicValues).not.toHaveProperty('deriveDownloadKey');
+    expect(publicValues).not.toHaveProperty('drainCapabilityMintFacts');
+    expect(publicValues).not.toHaveProperty('drainTrustedAssignFacts');
+    expect(publicValues).not.toHaveProperty('drainUnsafeRegexFacts');
+    expect(publicValues).not.toHaveProperty('drainUnverifiedMimeFacts');
+    expect(publicValues).not.toHaveProperty('createKovoAppShellViteDevIntegration');
+    expect(publicValues).not.toHaveProperty('kovoAppShellViteDevPlugin');
+    expect(publicValues).not.toHaveProperty('createDeclaredWriteDb');
+    expect(publicValues).not.toHaveProperty('createAuthorizationCensusDb');
+    expect(publicValues).not.toHaveProperty('createPostgresReadonlyClient');
+    expect(publicValues).not.toHaveProperty('createPostgresScopedClient');
+    expect(publicValues).not.toHaveProperty('kovoDeclaredWriteDbHandle');
+    expect(publicValues).not.toHaveProperty('kovoReadonlyDbHandle');
+    expect(publicValues).not.toHaveProperty('drainCrossOwnerReadAuditFacts');
+    expect(publicValues).not.toHaveProperty('drainPostgresRlsSilentDenyDiagnostics');
+    expect(publicValues).not.toHaveProperty('drainPostgresPostureCheckOptOutFacts');
+    expect(publicValues).not.toHaveProperty('drainPublicReadAuditFacts');
+    expect(publicValues).not.toHaveProperty('createSecretBoxingReadDb');
+    expect(publicApi.declareSecretReadCapability).toBe(
+      secretReadBoundaryApi.declareSecretReadCapability,
+    );
+    expect(packageRootApi.declareSecretReadCapability).toBe(
+      secretReadBoundaryApi.declareSecretReadCapability,
+    );
+    expect(publicApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
+    expect(packageRootApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
     for (const key of renderingSubpathOnlyValues) {
       expect(publicValues).not.toHaveProperty(key);
       expect(packageRootValues).not.toHaveProperty(key);
@@ -596,9 +710,24 @@ describe('server app-shell public API barrels', () => {
     expect(dataApi).not.toHaveProperty('renderQueryScript');
     expect(dataApi).not.toHaveProperty('runMutation');
     expect(dataApi).not.toHaveProperty('runQuery');
-    // CSP-3 (bugs-part3): the rendering barrel now re-exports the CSP helpers publicly.
-    expect(renderingApi.renderContentSecurityPolicy).toBe(cspApi.renderContentSecurityPolicy);
-    expect(renderingApi.cspSha256).toBe(cspApi.cspSha256);
+    expect(dataApi).not.toHaveProperty('createDeclaredWriteDb');
+    expect(dataApi).not.toHaveProperty('createAuthorizationCensusDb');
+    expect(dataApi).not.toHaveProperty('createPostgresReadonlyClient');
+    expect(dataApi).not.toHaveProperty('createPostgresScopedClient');
+    expect(dataApi).not.toHaveProperty('kovoDeclaredWriteDbHandle');
+    expect(dataApi).not.toHaveProperty('kovoReadonlyDbHandle');
+    expect(dataApi.declareSecretReadCapability).toBe(
+      secretReadBoundaryApi.declareSecretReadCapability,
+    );
+    expect(dataApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
+    expect(dataApi).not.toHaveProperty('drainCrossOwnerReadAuditFacts');
+    expect(dataApi).not.toHaveProperty('drainPostgresRlsSilentDenyDiagnostics');
+    expect(dataApi).not.toHaveProperty('drainPostgresPostureCheckOptOutFacts');
+    expect(dataApi).not.toHaveProperty('drainPublicReadAuditFacts');
+    expect(dataApi).not.toHaveProperty('drainUnsafeRegexFacts');
+    expect(dataApi).not.toHaveProperty('drainUnverifiedMimeFacts');
+    expect(renderingApi).not.toHaveProperty('renderContentSecurityPolicy');
+    expect(renderingApi).not.toHaveProperty('cspSha256');
     expect(renderingApi.Defer).toBe(internalHtmlApi.Defer);
     expect(renderingApi.trustedHtml).toBe(trustedHtml);
     expect(renderingApi.trustedUrl).toBe(trustedUrl);
@@ -624,6 +753,66 @@ describe('server app-shell public API barrels', () => {
       documentCoreApi.renderRouteDocumentResponse,
     );
     expect(packageInternalHtmlApi).not.toHaveProperty('renderContentSecurityPolicy');
+    expect(packageInternalCspApi.renderContentSecurityPolicy).toBe(
+      cspApi.renderContentSecurityPolicy,
+    );
+    expect(packageInternalCspApi.cspSha256).toBe(cspApi.cspSha256);
+    expect(packageInternalCspApi).toEqual(internalCspApi);
+    expect(packageInternalCapabilitiesApi.signCapability).toBe(capabilityUrlApi.signCapability);
+    expect(packageInternalCapabilitiesApi.verifyCapability).toBe(capabilityUrlApi.verifyCapability);
+    expect(packageInternalCapabilitiesApi.createSignUrl).toBe(capabilityRouteApi.createSignUrl);
+    expect(packageInternalCapabilitiesApi.deriveDownloadKey).toBe(
+      capabilityRouteApi.deriveDownloadKey,
+    );
+    expect(packageInternalCapabilitiesApi.drainCapabilityMintFacts).toBe(
+      capabilityRouteApi.drainCapabilityMintFacts,
+    );
+    expect(packageInternalCapabilitiesApi).toEqual(internalCapabilitiesApi);
+    expect(packageInternalAuditFactsApi.drainTrustedAssignFacts).toBe(
+      writeGovernanceApi.drainTrustedAssignFacts,
+    );
+    expect(packageInternalAuditFactsApi.drainUnsafeRegexFacts).toBe(redosApi.drainUnsafeRegexFacts);
+    expect(packageInternalAuditFactsApi.drainUnverifiedMimeFacts).toBe(
+      uploadSniffApi.drainUnverifiedMimeFacts,
+    );
+    expect(packageInternalAuditFactsApi.drainCapabilityMintFacts).toBe(
+      capabilityRouteApi.drainCapabilityMintFacts,
+    );
+    expect(packageInternalAuditFactsApi.drainPostgresPostureCheckOptOutFacts).toBe(
+      postgresRuntimeApi.drainPostgresPostureCheckOptOutFacts,
+    );
+    expect(packageInternalAuditFactsApi).toEqual(internalAuditFactsApi);
+    expect(packageInternalEgressApi.installEgressFloor).toBe(egressBootstrapApi.installEgressFloor);
+    expect(packageInternalEgressApi.selfProbe).toBe(egressBootstrapApi.selfProbe);
+    expect(packageInternalEgressApi.awsCredential).toBe(egressCredentialsApi.awsCredential);
+    expect(packageInternalEgressApi.gcpCredential).toBe(egressCredentialsApi.gcpCredential);
+    expect(packageInternalEgressApi.azureCredential).toBe(egressCredentialsApi.azureCredential);
+    expect(packageInternalEgressApi).toEqual(internalEgressApi);
+    expect(packageInternalManagedDbApi.createDeclaredWriteDb).toBe(
+      managedDbApi.createDeclaredWriteDb,
+    );
+    expect(packageInternalManagedDbApi.createAuthorizationCensusDb).toBe(
+      managedDbApi.createAuthorizationCensusDb,
+    );
+    expect(packageInternalManagedDbApi.createPostgresReadonlyClient).toBe(
+      managedDbApi.createPostgresReadonlyClient,
+    );
+    expect(packageInternalManagedDbApi.createPostgresScopedClient).toBe(
+      managedDbApi.createPostgresScopedClient,
+    );
+    expect(packageInternalManagedDbApi.kovoDeclaredWriteDbHandle).toBe(
+      managedDbApi.kovoDeclaredWriteDbHandle,
+    );
+    expect(packageInternalManagedDbApi.kovoReadonlyDbHandle).toBe(
+      managedDbApi.kovoReadonlyDbHandle,
+    );
+    expect(packageInternalManagedDbApi.createSecretBoxingReadDb).toBe(
+      secretReadBoundaryApi.createSecretBoxingReadDb,
+    );
+    expect(packageInternalManagedDbApi.declareSecretReadCapability).toBe(
+      secretReadBoundaryApi.declareSecretReadCapability,
+    );
+    expect(packageInternalManagedDbApi).toEqual(internalManagedDbApi);
     expect(packageInternalHtmlApi.renderComponent).toBe(componentRenderApi.renderComponent);
     expect(packageInternalHtmlApi.renderDeferredDocument).toBe(
       documentCoreApi.renderDeferredDocument,
@@ -817,10 +1006,15 @@ describe('server app-shell public API barrels', () => {
       './app-shell/static-export',
     );
     expect(serverPackage.exports as Record<string, string>).toMatchObject({
+      './internal/audit-facts': './src/internal/audit-facts.ts',
+      './internal/capabilities': './src/internal/capabilities.ts',
       './internal/client-modules': './src/internal/client-modules.ts',
+      './internal/csp': './src/internal/csp.ts',
       './internal/csrf': './src/internal/csrf.ts',
+      './internal/egress': './src/internal/egress.ts',
       './internal/escape': './src/internal/escape.ts',
       './internal/execution': './src/internal/execution.ts',
+      './internal/managed-db': './src/internal/managed-db.ts',
     });
   });
 

@@ -58,12 +58,15 @@ describe('runtime Secret non-coercible wrapper (SPEC §10.2/§11.2)', () => {
     expect(() => s.valueOf()).toThrow(/KV435/);
   });
 
-  it('keeps the value out of property enumeration and structuredClone', () => {
+  it('keeps the value out of property enumeration and refuses structuredClone', () => {
     const s = secret('hunter2');
     expect(Object.keys(s)).toEqual([]);
     expect(JSON.stringify(Object.assign({}, s))).toBe('{}');
-    // A private #value field cannot survive a structured clone to a worker.
-    expect(JSON.stringify(structuredClone({ ...s }))).not.toContain('hunter2');
+    expect(() => structuredClone(s)).toThrow(/KV435/);
+    expect(() => structuredClone({ password: s })).toThrow(/KV435/);
+    expect(() => structuredClone([s])).toThrow(/KV435/);
+    expect(() => structuredClone(new Map([['password', s]]))).toThrow(/KV435/);
+    expect(() => structuredClone(new Set([s]))).toThrow(/KV435/);
   });
 
   it('reveals the value only on explicit reveal()/revealSecret()', () => {

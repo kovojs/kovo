@@ -12,7 +12,6 @@ import {
   CommandListbox,
   CommandTrigger,
   CommandValue,
-  commandStyles,
 } from './command.js';
 
 const commandItems = [
@@ -23,13 +22,6 @@ const commandItems = [
 describe('@kovojs/ui Command StyleX slots', () => {
   it('matches command states with StyleX output', () => {
     expect({
-      classes: [style.attrs(commandStyles.root).class ?? ''] as const,
-      closeClasses: [style.attrs(commandStyles.close).class ?? ''] as const,
-      dialogClasses: [style.attrs(commandStyles.dialog).class ?? ''] as const,
-      emptyClasses: [style.attrs(commandStyles.empty).class ?? ''] as const,
-      inputClasses: [style.attrs(commandStyles.input).class ?? ''] as const,
-      itemClasses: [style.attrs(commandStyles.item).class ?? ''] as const,
-      listboxClasses: [style.attrs(commandStyles.listbox).class ?? ''] as const,
       rendered: Command.definition.render({
         children:
           CommandTrigger.definition.render({
@@ -94,8 +86,6 @@ describe('@kovojs/ui Command StyleX slots', () => {
         open: true,
         value: 'open-file',
       }),
-      triggerClasses: [style.attrs(commandStyles.trigger).class ?? ''] as const,
-      valueClasses: [style.attrs(commandStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -187,22 +177,5 @@ describe('@kovojs/ui Command StyleX slots', () => {
         }),
       ),
     ).toContain('id="command-listbox-item-0"');
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      keys: Object.keys(commandStyles),
-      markers: {
-        close: commandStyles.close.$$css,
-        dialog: commandStyles.dialog.$$css,
-        empty: commandStyles.empty.$$css,
-        input: commandStyles.input.$$css,
-        item: commandStyles.item.$$css,
-        listbox: commandStyles.listbox.$$css,
-        root: commandStyles.root.$$css,
-        trigger: commandStyles.trigger.$$css,
-        value: commandStyles.value.$$css,
-      },
-    }).toMatchSnapshot();
   });
 });

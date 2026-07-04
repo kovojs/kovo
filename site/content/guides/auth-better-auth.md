@@ -38,7 +38,7 @@ The smallest Kovo-facing piece is the session adapter:
 import { betterAuthSession } from '@kovojs/better-auth';
 
 export const appSessionProvider = commerceSession.provider(
-  betterAuthSession(auth, ({ session, user }) => ({
+  betterAuthSession(auth, ({ session, user }: { session: any; user: any }) => ({
     id: session.id,
     user: { id: user.id, email: user.email, name: user.name },
   })),
@@ -50,7 +50,7 @@ place:
 
 ```ts
 import { betterAuthSession } from '@kovojs/better-auth';
-import { s, session, type CsrfValidationOptions } from '@kovojs/server';
+import { s, session, type CsrfOptions } from '@kovojs/server';
 
 export interface AppRequest {
   authCsrfId?: string | null;
@@ -66,7 +66,9 @@ export const appSession = session(
 
 function requireAuthSecret(): string {
   const secret = process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET;
-  if (!secret) throw new Error('Set BETTER_AUTH_SECRET or KOVO_CSRF_SECRET.');
+  if (!secret || secret === 'replace-with-a-deployed-secret') {
+    throw new Error('Set BETTER_AUTH_SECRET or KOVO_CSRF_SECRET to a strong random value.');
+  }
   return secret;
 }
 
@@ -76,10 +78,10 @@ export const appCsrf = {
   sessionId(request: AppRequest) {
     return request.session?.id ?? request.authCsrfId ?? undefined;
   },
-} satisfies CsrfValidationOptions<AppRequest>;
+} satisfies CsrfOptions<AppRequest>;
 
 export const appSessionProvider = appSession.provider(
-  betterAuthSession(auth, ({ session: authSession, user }) => ({
+  betterAuthSession(auth, ({ session: authSession, user }: { session: any; user: any }) => ({
     id: authSession.id,
     user: { id: user.id, email: user.email, name: user.name },
   })),
@@ -92,6 +94,15 @@ The starter uses:
 
 ```ts
 betterAuthSignInEmailMutation(auth, {
+  csrf: appCsrf,
+  defaultRedirectTo: '/',
+});
+```
+
+For account creation, use the companion mutation:
+
+```ts
+betterAuthSignUpEmailMutation(auth, {
   csrf: appCsrf,
   defaultRedirectTo: '/',
 });
@@ -142,8 +153,8 @@ instead of hiding them in component code.
 ## Verify the integration
 
 ```sh
-vp check
-vp test
+npm run check
+npm test
 npm run build:prod
 ```
 

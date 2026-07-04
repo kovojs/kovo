@@ -130,7 +130,7 @@ describe('@kovojs/test harness verifier integration', () => {
       ok: true,
       value: 'p1',
     });
-    expect(harness.dbHandle().read('cart_items')).toEqual([]);
+    expect(harness.db.read('cart_items')).toEqual([]);
   });
 
   it('fails verification when observed writes land outside touch graph coverage', async () => {

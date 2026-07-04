@@ -34,6 +34,10 @@ jobs:
         run: vp exec pnpm run check:paranoid-runtime
       - name: API surface
         run: vp exec pnpm run check:api-surface
+      - name: Authored docs snippets
+        run: vp exec pnpm run check:docs-snippets
+      - name: Authored docs snippets against dist types
+        run: vp exec pnpm run check:docs-snippets:dist
       - name: SQL safety
         run: |
           vp exec vitest --run \

@@ -94,7 +94,6 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
           name: 'Phase 5 Postgres Paranoid Dogfood Proof',
         });
         linkStarterBuildDependencies(root);
-        allowExternalPostgresEgress(root);
         addPostgresParanoidPhase5DogfoodProof(root);
         addPostgresParanoidFollowup8Shapes(root);
         disableRuntimeSeedSql(root);
@@ -145,7 +144,6 @@ describe('create-kovo starter (build integration: paranoid runtime chokes)', () 
             BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
-            KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL: `127.0.0.1:${cluster.port}`,
             KOVO_PARANOID: '1',
             NODE_ENV: 'production',
             PORT: String(port),
@@ -273,7 +271,6 @@ describeIfPostgres(
       try {
         writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid External Proof' });
         linkStarterBuildDependencies(root);
-        allowExternalPostgresEgress(root);
         writeProductionEquivalentSchemaModule(root);
         writeStarterPostgresMigration(root);
         buildParanoidProductionArtifact(root);
@@ -314,7 +311,6 @@ describeIfPostgres(
             BETTER_AUTH_URL: `http://127.0.0.1:${port}`,
             HOST: '127.0.0.1',
             KOVO_DATABASE_URL: runtimeUrl,
-            KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL: `127.0.0.1:${cluster.port}`,
             KOVO_PARANOID: '1',
             NODE_ENV: 'production',
             PORT: String(port),
@@ -343,7 +339,6 @@ describeIfPostgres(
 
       writeKovoProject(root, { dialect: 'postgres', name: 'Authz Paranoid Refusal Proof' });
       linkStarterBuildDependencies(root);
-      allowExternalPostgresEgress(root);
       writeProductionEquivalentSchemaModule(root);
       writeStarterPostgresMigration(root);
       buildParanoidProductionArtifact(root);
@@ -782,22 +777,6 @@ function execKovoFailure(root: string, args: readonly string[]): string {
     return `${stdout}\n${stderr}`.trim();
   }
   throw new Error(`Expected kovo command to fail: ${args.join(' ')}`);
-}
-
-function allowExternalPostgresEgress(root: string): void {
-  const appPath = join(root, 'src/app.tsx');
-  const source = readFileSync(appPath, 'utf8').replace(
-    '  db: appRuntimeDbProvider,\n',
-    [
-      '  db: appRuntimeDbProvider,',
-      '  egress: {',
-      '    allowInternal: process.env.KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL',
-      '      ? [process.env.KOVO_EXTERNAL_POSTGRES_ALLOW_INTERNAL]',
-      '      : [],',
-      '  },',
-    ].join('\n') + '\n',
-  );
-  writeFileSync(appPath, source, 'utf8');
 }
 
 function disableRuntimeSeedSql(root: string): void {

@@ -2,12 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  ToggleGroup,
-  ToggleGroupButton,
-  ToggleGroupItem,
-  toggleGroupStyles,
-} from './toggle-group.js';
+import { ToggleGroup, ToggleGroupButton, ToggleGroupItem } from './toggle-group.js';
 
 const items = [
   { value: 'bold' },
@@ -31,8 +26,6 @@ describe('@kovojs/ui ToggleGroup StyleX slots', () => {
         id: 'bold-button',
         itemValue: 'bold',
       }),
-      buttonClasses: [style.attrs(toggleGroupStyles.button).class ?? ''] as const,
-      classes: [style.attrs(toggleGroupStyles.root).class ?? ''] as const,
       disabledButton: ToggleGroupButton.definition.render({
         ...state,
         children: 'Strike',
@@ -44,7 +37,6 @@ describe('@kovojs/ui ToggleGroup StyleX slots', () => {
         id: 'bold-item',
         itemValue: 'bold',
       }),
-      itemClasses: [style.attrs(toggleGroupStyles.item).class ?? ''] as const,
       root: ToggleGroup.definition.render({
         ...state,
         children: 'format controls',
@@ -95,15 +87,6 @@ describe('@kovojs/ui ToggleGroup StyleX slots', () => {
         children: 'format controls',
         styles: { root: overrides.root },
       }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX slot objects instead of variant helpers', () => {
-    expect({
-      buttonMarker: toggleGroupStyles.button.$$css,
-      itemMarker: toggleGroupStyles.item.$$css,
-      keys: Object.keys(toggleGroupStyles),
-      rootMarker: toggleGroupStyles.root.$$css,
     }).toMatchSnapshot();
   });
 });

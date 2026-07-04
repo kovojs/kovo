@@ -9,10 +9,11 @@ import { drizzle as drizzlePglite, type PgliteDatabase } from 'drizzle-orm/pglit
 import { Pool, type PoolClient, type PoolConfig, type QueryConfig, type QueryResultRow } from 'pg';
 
 import {
-  assertNonRequestPrincipalPosture,
   declareSystemPrincipal,
+  principalFromNonRequestPrincipalPosture,
   type NonRequestPrincipalPosture,
 } from './auth-principal.js';
+import { registerEgressDatabaseUrl } from './egress-bootstrap.js';
 import {
   createAuthorizationCensusDb,
   createDeclaredWriteDb,
@@ -51,10 +52,16 @@ const POSTGRES_REACHABLE_RELATIONS_SQL = [
   'SELECT n.nspname AS schema_name, c.relname AS table_name, c.relkind,',
   'c.relrowsecurity, c.relforcerowsecurity, c.reloptions,',
   'r.rolname AS role_name,',
-  "has_table_privilege(r.oid, c.oid, 'SELECT') AS can_select,",
-  "has_table_privilege(r.oid, c.oid, 'INSERT') AS can_insert,",
-  "has_table_privilege(r.oid, c.oid, 'UPDATE') AS can_update,",
-  "has_table_privilege(r.oid, c.oid, 'DELETE') AS can_delete",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN has_table_privilege(r.oid, c.oid, 'SELECT') ELSE false END AS can_select,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN has_table_privilege(r.oid, c.oid, 'INSERT') ELSE false END AS can_insert,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN has_table_privilege(r.oid, c.oid, 'UPDATE') ELSE false END AS can_update,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN has_table_privilege(r.oid, c.oid, 'DELETE') ELSE false END AS can_delete,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND has_column_privilege(r.oid, c.oid, a.attname, 'SELECT')) ELSE false END AS can_select_column,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND has_column_privilege(r.oid, c.oid, a.attname, 'INSERT')) ELSE false END AS can_insert_column,",
+  "CASE WHEN c.relkind IN ('r', 'p', 'v', 'm', 'f') THEN EXISTS (SELECT 1 FROM pg_attribute a WHERE a.attrelid = c.oid AND a.attnum > 0 AND NOT a.attisdropped AND has_column_privilege(r.oid, c.oid, a.attname, 'UPDATE')) ELSE false END AS can_update_column,",
+  "CASE WHEN c.relkind = 'S' THEN has_sequence_privilege(r.oid, c.oid, 'USAGE') ELSE false END AS can_use_sequence,",
+  "CASE WHEN c.relkind = 'S' THEN has_sequence_privilege(r.oid, c.oid, 'SELECT') ELSE false END AS can_select_sequence,",
+  "CASE WHEN c.relkind = 'S' THEN has_sequence_privilege(r.oid, c.oid, 'UPDATE') ELSE false END AS can_update_sequence",
   'FROM pg_class c',
   'JOIN pg_namespace n ON n.oid = c.relnamespace',
   'JOIN existing_roles r ON true',
@@ -110,8 +117,14 @@ interface PostgresViewDependency {
 interface PostgresReachableRelationRow extends PostgresCatalogRelation {
   can_delete: boolean;
   can_insert: boolean;
+  can_insert_column: boolean;
   can_select: boolean;
+  can_select_column: boolean;
+  can_select_sequence: boolean;
   can_update: boolean;
+  can_update_column: boolean;
+  can_update_sequence: boolean;
+  can_use_sequence: boolean;
   role_name: string;
 }
 
@@ -126,6 +139,19 @@ interface PostgresReachableRoutineRow {
   role_name: string;
   routine_name: string;
   routine_schema: string;
+}
+
+interface PostgresReachableSequenceRow {
+  sequence_name: string;
+  sequence_schema: string;
+  table_name: string;
+}
+
+interface PostgresUnexpectedPrivilegeRow {
+  object_kind: string;
+  object_name: string;
+  privilege_type: string;
+  role_name: string;
 }
 
 interface KovoDomainAnnotation {
@@ -161,6 +187,7 @@ interface ResolvedPostgresRuntimeConfig {
   databaseUrl?: string;
   driver: KovoPostgresResolvedRuntimeDriver;
   postureCheckOnBoot: boolean;
+  postureCheckOptOut?: PostgresPostureCheckOptOut;
   principalFromRequest: (request: unknown) => string | undefined;
   provisionOnBoot: boolean;
   publicRelations: ReadonlyMap<string, KovoPostgresPublicRelationDeclaration>;
@@ -169,6 +196,25 @@ interface ResolvedPostgresRuntimeConfig {
   seedSql: readonly string[];
   writerRole: string;
 }
+
+interface PostgresRuntimeConfigInput extends KovoPostgresAppRuntimeOptions {
+  /** Internal framework override for CLI/check/provision paths. Public apps use `postureCheck`. */
+  postureCheckOnBoot?: boolean;
+}
+
+interface PostgresPostureCheckOptOut {
+  justification: string;
+  site?: string;
+}
+
+/** Internal audit fact for `kovo explain --capabilities` posture-check opt-outs. */
+export interface PostgresPostureCheckOptOutFact {
+  readonly driver: KovoPostgresResolvedRuntimeDriver;
+  readonly justification: string;
+  readonly site?: string;
+}
+
+const postgresPostureCheckOptOutFacts: PostgresPostureCheckOptOutFact[] = [];
 
 interface CreatedRuntimeClient {
   close(): Promise<void>;
@@ -218,8 +264,14 @@ export interface KovoPostgresAppRuntimeOptions {
   /**
    * Check schema/RLS/grant posture during app boot. Defaults to true for external Postgres and
    * false for PGlite because the default PGlite path provisions in-process first.
+   *
+   * Disabling the boot check is an audited capability escape: use
+   * `postureCheck: { onBoot: false, justification: '...' }`, which is recorded for
+   * `kovo explain --capabilities`. Bare booleans are intentionally not accepted.
    */
-  postureCheckOnBoot?: boolean;
+  postureCheck?:
+    | { readonly onBoot?: true }
+    | { readonly justification: string; readonly onBoot: false; readonly site?: string };
   principalFromRequest?: (request: unknown) => string | undefined;
   readerRole?: string;
   /**
@@ -546,6 +598,11 @@ export async function checkPostgresAppDbPosture(
   }
 }
 
+/** Drain audited Postgres boot-posture-check opt-outs for explain/capability ledgers. */
+export function drainPostgresPostureCheckOptOutFacts(): readonly PostgresPostureCheckOptOutFact[] {
+  return postgresPostureCheckOptOutFacts.splice(0, postgresPostureCheckOptOutFacts.length);
+}
+
 async function initializeRuntimeDb(
   client: RuntimeSqlClient,
   input: {
@@ -576,6 +633,11 @@ async function initializeRuntimeDb(
         ].join('\n'),
       );
     }
+  } else if (input.config.postureCheckOptOut !== undefined) {
+    postgresPostureCheckOptOutFacts.push({
+      driver: input.config.driver,
+      ...input.config.postureCheckOptOut,
+    });
   }
 }
 
@@ -591,13 +653,17 @@ async function provisionRuntimeDb(
     schemaTables: readonly PgTable[];
   },
 ): Promise<{ applied: readonly string[]; skipped: readonly string[] }> {
-  const migrationReport = await applyPostgresMigrations(client, input.migrations);
-  if (!input.applySchemaDdl) await assertPostgresSchemaTablesExist(client, input.schemaTables);
+  let migrationReport: { applied: readonly string[]; skipped: readonly string[] } = {
+    applied: [],
+    skipped: [],
+  };
   await client.transaction(async (tx) => {
     if (input.config.createAdminRole) await ensurePostgresRole(tx, input.config.adminRole);
     if (input.config.createReaderRole) await ensurePostgresRole(tx, input.config.readerRole);
     if (input.config.createWriterRole) await ensurePostgresRole(tx, input.config.writerRole);
     if (input.applySchemaDdl) await tx.exec(input.schemaDdl);
+    migrationReport = await applyPostgresMigrations(tx, input.migrations);
+    if (!input.applySchemaDdl) await assertPostgresSchemaTablesExist(tx, input.schemaTables);
     await tx.exec(
       'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
     );
@@ -607,6 +673,12 @@ async function provisionRuntimeDb(
     await applyPostgresViewSecurityInvoker(tx, input.schemaTables);
     await applyPostgresReaderColumnPrivileges(tx, input.schemaTables, input.metadata, input.config);
     await applyPostgresWriterTablePrivileges(tx, input.schemaTables, input.metadata, input.config);
+    await applyPostgresWriterSequencePrivileges(
+      tx,
+      input.schemaTables,
+      input.metadata,
+      input.config,
+    );
     await ensurePostgresSchemaStateTable(tx);
     await grantPostgresRuntimeLoginRole(tx, input.config, input.runtimeLoginRole);
     for (const statement of input.config.seedSql) await tx.exec(statement);
@@ -749,31 +821,30 @@ async function checkRuntimeDbPosture(
     const tableName = getTableConfig(table).name;
     const secretColumns = input.metadata.secretColumnNamesByTable.get(tableName) ?? new Set();
     for (const column of secretColumns) {
-      const grant = await safeQuery(
+      const grant = await safeQuery<{ can_select: boolean }>(
         client,
-        [
-          'SELECT 1 FROM information_schema.column_privileges',
-          'WHERE table_name = $1 AND column_name = $2 AND grantee = $3 AND privilege_type = $4',
-        ].join(' '),
-        [tableName, column, input.config.readerRole, 'SELECT'],
+        ["SELECT has_column_privilege($1, $2, $3, 'SELECT') AS can_select"].join(' '),
+        [input.config.readerRole, tableName, column],
       );
-      if ((grant?.rows.length ?? 0) > 0) {
+      if (grant === undefined) {
+        issues.push({
+          code: 'KV433_REACHABILITY_AUDIT',
+          detail: `could not verify effective secret-column privilege for ${tableName}.${column}`,
+        });
+        continue;
+      }
+      if (grant.rows[0]?.can_select === true) {
         issues.push({
           code: 'KV435_SECRET_COLUMN_GRANT',
-          detail: `${input.config.readerRole} must not have SELECT on ${tableName}.${column}`,
+          detail: `${input.config.readerRole} must not have effective SELECT on ${tableName}.${column}`,
         });
       }
     }
   }
 
   issues.push(...(await auditPostgresReachableClosure(client, input)));
-  issues.push(
-    ...(await auditPostgresReachableRoutines(
-      client,
-      input.config,
-      postgresSchemaNames(input.schemaTables),
-    )),
-  );
+  issues.push(...(await auditPostgresReachableRoutines(client, input.config)));
+  issues.push(...(await auditPostgresUnexpectedPrivileges(client, input.config)));
 
   return {
     driver: input.config.driver,
@@ -797,6 +868,14 @@ async function auditPostgresReachableClosure(
     ...input.config.crossOwnerReadTables,
   ]);
   const allowlistedTables = postgresReachabilityAllowlist(input.schemaTables, input.metadata);
+  const allowlistedSequences = await postgresProtectedSerialSequences(client, protectedTableNames);
+  if (allowlistedSequences === undefined) {
+    issues.push({
+      code: 'KV433_REACHABILITY_AUDIT',
+      detail: 'could not enumerate protected-table serial/identity sequence dependencies',
+    });
+    return issues;
+  }
   const publicRelations = input.config.publicRelations;
   const reachableRows = await safeQuery<PostgresReachableRelationRow>(
     client,
@@ -807,7 +886,7 @@ async function auditPostgresReachableClosure(
     issues.push({
       code: 'KV433_REACHABILITY_AUDIT',
       detail:
-        'could not enumerate app-role relation reachability from pg_class/has_table_privilege',
+        'could not enumerate app-role relation reachability from pg_class/effective privilege checks',
     });
     return issues;
   }
@@ -889,6 +968,14 @@ async function auditPostgresReachableClosure(
       });
       continue;
     }
+    if (relation.relkind === 'S') {
+      if (allowlistedSequences.has(postgresRelationKey(relation.schema, relation.table))) continue;
+      issues.push({
+        code: 'KV433_REACHABLE_OBJECT',
+        detail: `${relation.schema}.${relation.table} is a sequence reachable by ${relation.roles.join(', ')} but does not back a protected table serial/identity column`,
+      });
+      continue;
+    }
     if (relation.relkind === 'f') {
       issues.push({
         code: 'KV433_REACHABLE_OBJECT',
@@ -922,6 +1009,12 @@ function reachableRelationsFromRows(
       row.can_insert ? 'INSERT' : undefined,
       row.can_update ? 'UPDATE' : undefined,
       row.can_delete ? 'DELETE' : undefined,
+      row.can_select_column ? 'SELECT_COLUMN' : undefined,
+      row.can_insert_column ? 'INSERT_COLUMN' : undefined,
+      row.can_update_column ? 'UPDATE_COLUMN' : undefined,
+      row.can_use_sequence ? 'USAGE_SEQUENCE' : undefined,
+      row.can_select_sequence ? 'SELECT_SEQUENCE' : undefined,
+      row.can_update_sequence ? 'UPDATE_SEQUENCE' : undefined,
     ].filter((privilege): privilege is string => privilege !== undefined);
     if (privileges.length === 0) continue;
     const key = `${row.schema_name}.${row.table_name}`;
@@ -969,10 +1062,7 @@ async function provisionPostgresFrameworkTaskStore(
 async function auditPostgresReachableRoutines(
   client: RuntimeSqlClient,
   config: ResolvedPostgresRuntimeConfig,
-  schemas: readonly string[],
 ): Promise<KovoPostgresPostureIssue[]> {
-  if (schemas.length === 0) return [];
-  const schemaPlaceholders = schemas.map((_, index) => `$${index + 4}`).join(', ');
   const routineRows = await safeQuery<PostgresReachableRoutineRow>(
     client,
     [
@@ -987,12 +1077,12 @@ async function auditPostgresReachableRoutines(
       'FROM pg_proc p',
       'JOIN pg_namespace n ON n.oid = p.pronamespace',
       'JOIN existing_roles r ON true',
-      `WHERE n.nspname IN (${schemaPlaceholders})`,
+      "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
       'AND p.prosecdef = true',
       "AND has_function_privilege(r.oid, p.oid, 'EXECUTE')",
       'ORDER BY n.nspname, p.proname, r.rolname',
     ].join(' '),
-    [config.readerRole, config.writerRole, config.adminRole, ...schemas],
+    [config.readerRole, config.writerRole, config.adminRole],
   );
   if (routineRows === undefined) {
     return [
@@ -1007,6 +1097,142 @@ async function auditPostgresReachableRoutines(
     code: 'KV433_REACHABLE_ROUTINE',
     detail: `${row.routine_schema}.${row.routine_name} is a SECURITY DEFINER routine executable by ${row.role_name}; routine reachability has no vetted Kovo allowlist`,
   }));
+}
+
+async function auditPostgresUnexpectedPrivileges(
+  client: RuntimeSqlClient,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<KovoPostgresPostureIssue[]> {
+  const queries = [
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      ')',
+      "SELECT 'foreign_data_wrapper' AS object_kind, f.fdwname AS object_name,",
+      'acl.privilege_type, r.rolname AS role_name',
+      'FROM pg_foreign_data_wrapper f',
+      'CROSS JOIN LATERAL aclexplode(f.fdwacl) acl',
+      'JOIN existing_roles r ON true',
+      "WHERE acl.privilege_type = 'USAGE'",
+      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+    ].join(' '),
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      ')',
+      "SELECT 'foreign_server' AS object_kind, s.srvname AS object_name,",
+      'acl.privilege_type, r.rolname AS role_name',
+      'FROM pg_foreign_server s',
+      'CROSS JOIN LATERAL aclexplode(s.srvacl) acl',
+      'JOIN existing_roles r ON true',
+      "WHERE acl.privilege_type = 'USAGE'",
+      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+    ].join(' '),
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      ')',
+      "SELECT 'language' AS object_kind, l.lanname AS object_name,",
+      'acl.privilege_type, r.rolname AS role_name',
+      'FROM pg_language l',
+      'CROSS JOIN LATERAL aclexplode(l.lanacl) acl',
+      'JOIN existing_roles r ON true',
+      "WHERE l.lanname NOT IN ('internal')",
+      "AND acl.privilege_type = 'USAGE'",
+      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+    ].join(' '),
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      ')',
+      "SELECT 'large_object' AS object_kind, m.oid::text AS object_name,",
+      'acl.privilege_type, r.rolname AS role_name',
+      'FROM pg_largeobject_metadata m',
+      'CROSS JOIN LATERAL aclexplode(m.lomacl) acl',
+      'JOIN existing_roles r ON true',
+      "WHERE acl.privilege_type IN ('SELECT', 'UPDATE')",
+      "AND (acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE'))",
+    ].join(' '),
+    [
+      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+      'existing_roles AS (',
+      '  SELECT DISTINCT r.oid, r.rolname',
+      '  FROM pg_roles r',
+      '  JOIN app_roles a ON a.role_name = r.rolname',
+      '), expanded_default_acl AS (',
+      '  SELECT n.nspname, d.defaclobjtype, acl.grantee, acl.privilege_type',
+      '  FROM pg_default_acl d',
+      '  LEFT JOIN pg_namespace n ON n.oid = d.defaclnamespace',
+      '  CROSS JOIN LATERAL aclexplode(d.defaclacl) acl',
+      ')',
+      "SELECT 'default_acl' AS object_kind,",
+      "COALESCE(nspname, '*') || ':' || defaclobjtype::text AS object_name,",
+      'privilege_type, r.rolname AS role_name',
+      'FROM expanded_default_acl acl',
+      "JOIN existing_roles r ON acl.grantee = 0 OR acl.grantee = r.oid OR pg_has_role(r.oid, acl.grantee, 'USAGE')",
+    ].join(' '),
+  ];
+  const issues: KovoPostgresPostureIssue[] = [];
+  for (const query of queries) {
+    const rows = await safeQuery<PostgresUnexpectedPrivilegeRow>(client, query, [
+      config.readerRole,
+      config.writerRole,
+      config.adminRole,
+    ]);
+    if (rows === undefined) {
+      issues.push({
+        code: 'KV433_REACHABILITY_AUDIT',
+        detail: 'could not enumerate unexpected app-role ACL-bearing catalog privileges',
+      });
+      continue;
+    }
+    for (const row of rows.rows) {
+      issues.push({
+        code: 'KV433_UNEXPECTED_PRIVILEGE',
+        detail: `${row.role_name} has ${row.privilege_type} on ${row.object_kind} ${row.object_name}; app roles may only reach audited relations, columns, routines, and protected-table sequences`,
+      });
+    }
+  }
+  return issues;
+}
+
+async function postgresProtectedSerialSequences(
+  client: RuntimeTransactionClient,
+  protectedTableNames: ReadonlySet<string>,
+): Promise<ReadonlySet<string> | undefined> {
+  const rows = await safeQuery<PostgresReachableSequenceRow>(
+    client,
+    [
+      'SELECT DISTINCT seq_ns.nspname AS sequence_schema, seq.relname AS sequence_name',
+      ', tbl.relname AS table_name',
+      'FROM pg_class seq',
+      'JOIN pg_namespace seq_ns ON seq_ns.oid = seq.relnamespace',
+      'JOIN pg_depend dep ON dep.classid = $1::regclass AND dep.objid = seq.oid',
+      'JOIN pg_class tbl ON tbl.oid = dep.refobjid',
+      "WHERE seq.relkind = 'S'",
+      "AND dep.deptype IN ('a', 'i')",
+    ].join(' '),
+    ['pg_class'],
+  );
+  return rows === undefined
+    ? undefined
+    : new Set(
+        rows.rows
+          .filter((row) => protectedTableNames.has(row.table_name))
+          .map((row) => postgresRelationKey(row.sequence_schema, row.sequence_name)),
+      );
 }
 
 function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRuntimeClient {
@@ -1043,10 +1269,17 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
     };
   }
 
+  const unregisterDatabaseEgressUrl = registerEgressDatabaseUrl(config.databaseUrl);
   const pool = new Pool({ connectionString: config.databaseUrl } satisfies PoolConfig);
   const transactionalClient = new NodePostgresRuntimeClient(pool);
   return {
-    close: () => transactionalClient.close(),
+    close: async () => {
+      try {
+        await transactionalClient.close();
+      } finally {
+        unregisterDatabaseEgressUrl();
+      }
+    },
     drizzleInternalDb: (capability) => {
       assertInternalPostgresRuntimeDbCapability(capability);
       return drizzleNodePg({ client: pool, relations });
@@ -1211,7 +1444,7 @@ class NodePostgresTransactionClient implements RuntimeSqlClient {
 }
 
 function resolvePostgresRuntimeConfig(
-  options: KovoPostgresAppRuntimeOptions,
+  options: PostgresRuntimeConfigInput,
 ): ResolvedPostgresRuntimeConfig {
   const driver = resolveDriver(options);
   const databaseUrl = options.databaseUrl ?? process.env.KOVO_DATABASE_URL;
@@ -1220,6 +1453,10 @@ function resolvePostgresRuntimeConfig(
   const envWriterRole = nonEmptyEnv('KOVO_DB_WRITER_ROLE');
   const crossOwnerReadTables = normalizeStringSet(options.crossOwnerReadTables);
   const publicRelations = normalizePublicRelationDeclarations(options.publicRelations);
+  const postureCheck = resolvePostgresPostureCheck(
+    options,
+    driver === 'node-postgres' && options.provisionOnBoot !== true,
+  );
   const config: ResolvedPostgresRuntimeConfig = {
     adminRole: options.adminRole ?? envAdminRole ?? DEFAULT_ADMIN_ROLE,
     createAdminRole:
@@ -1230,9 +1467,8 @@ function resolvePostgresRuntimeConfig(
     crossOwnerReadTables,
     dataDir: options.dataDir ?? process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR,
     driver,
-    postureCheckOnBoot:
-      options.postureCheckOnBoot ??
-      (driver === 'node-postgres' && options.provisionOnBoot !== true),
+    postureCheckOnBoot: postureCheck.onBoot,
+    ...(postureCheck.optOut === undefined ? {} : { postureCheckOptOut: postureCheck.optOut }),
     principalFromRequest: options.principalFromRequest ?? principalFromRequest,
     provisionOnBoot: options.provisionOnBoot ?? driver === 'pglite',
     publicRelations,
@@ -1243,6 +1479,47 @@ function resolvePostgresRuntimeConfig(
   };
   if (databaseUrl !== undefined) return { ...config, databaseUrl };
   return config;
+}
+
+function resolvePostgresPostureCheck(
+  options: PostgresRuntimeConfigInput,
+  defaultOnBoot: boolean,
+): { onBoot: boolean; optOut?: PostgresPostureCheckOptOut } {
+  if (options.postureCheckOnBoot !== undefined) {
+    return { onBoot: options.postureCheckOnBoot };
+  }
+
+  const postureCheck = options.postureCheck;
+  if (postureCheck === undefined) return { onBoot: defaultOnBoot };
+  if (!isRecord(postureCheck)) {
+    throw new Error(
+      'KV433: postureCheck must be { onBoot: true } or { onBoot: false, justification } (SPEC §10.3).',
+    );
+  }
+
+  if (postureCheck.onBoot === undefined || postureCheck.onBoot === true) {
+    return { onBoot: true };
+  }
+  if (postureCheck.onBoot !== false) {
+    throw new Error(
+      'KV433: postureCheck.onBoot must be true or false; disabling requires a justification (SPEC §10.3).',
+    );
+  }
+
+  const justification = postureCheck.justification;
+  if (typeof justification !== 'string' || justification.trim() === '') {
+    throw new Error(
+      'KV433: postureCheck: { onBoot: false } requires a non-empty justification for kovo explain --capabilities (SPEC §10.3).',
+    );
+  }
+  const site = postureCheck.site;
+  return {
+    onBoot: false,
+    optOut: {
+      justification: justification.trim(),
+      ...(typeof site === 'string' && site.trim() !== '' ? { site: site.trim() } : {}),
+    },
+  };
 }
 
 function nonEmptyEnv(name: string): string | undefined {
@@ -1613,7 +1890,7 @@ async function ensurePostgresRole(client: RuntimeTransactionClient, role: string
 }
 
 async function assertPostgresSchemaTablesExist(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   tables: readonly PgTable[],
 ): Promise<void> {
   const missing = await missingPostgresSchemaTables(client, tables);
@@ -1670,6 +1947,11 @@ async function grantPostgresRuntimeLoginRole(
   }
   await client.exec(
     `GRANT SELECT ON TABLE ${quoteIdent(SCHEMA_STATE_TABLE)} TO ${quoteIdent(runtimeLoginRole)}`,
+  );
+  await client.exec(
+    `GRANT EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) TO ${quoteIdent(
+      runtimeLoginRole,
+    )}`,
   );
 }
 
@@ -1741,7 +2023,7 @@ function currentNodeEnv(): string | undefined {
 }
 
 async function applyPostgresMigrations(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   migrations: readonly KovoPostgresMigration[],
 ): Promise<{ applied: readonly string[]; skipped: readonly string[] }> {
   const normalized = normalizePostgresMigrations(migrations);
@@ -1774,13 +2056,11 @@ async function applyPostgresMigrations(
       continue;
     }
 
-    await client.transaction(async (tx) => {
-      await tx.exec(migration.sql);
-      await tx.query(`INSERT INTO ${quoteIdent(MIGRATIONS_TABLE)} (id, checksum) VALUES ($1, $2)`, [
-        migration.id,
-        migration.checksum,
-      ]);
-    });
+    await client.exec(migration.sql);
+    await client.query(
+      `INSERT INTO ${quoteIdent(MIGRATIONS_TABLE)} (id, checksum) VALUES ($1, $2)`,
+      [migration.id, migration.checksum],
+    );
     applied.push(migration.id);
   }
 
@@ -1824,6 +2104,19 @@ async function applyPostgresDefaultDenyPrivileges(
   const schemas = new Set<string>();
   for (const table of tables) schemas.add(tableSchemaName(getTableConfig(table)));
   for (const schema of schemas) {
+    await client.exec(
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA ${quoteIdent(schema)} REVOKE ALL ON TABLES FROM PUBLIC`,
+    );
+    await client.exec(
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA ${quoteIdent(
+        schema,
+      )} REVOKE ALL ON SEQUENCES FROM PUBLIC`,
+    );
+    await client.exec(
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA ${quoteIdent(
+        schema,
+      )} REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`,
+    );
     await client.exec(
       `REVOKE ALL ON ALL TABLES IN SCHEMA ${quoteIdent(schema)} FROM ${quoteIdent(
         config.readerRole,
@@ -1931,6 +2224,25 @@ async function applyPostgresWriterTablePrivileges(
         )} TO ${quoteIdent(config.writerRole)}`,
       );
     }
+  }
+}
+
+async function applyPostgresWriterSequencePrivileges(
+  client: RuntimeTransactionClient,
+  tables: readonly PgTable[],
+  metadata: KovoRuntimeDbMetadata,
+  config: ResolvedPostgresRuntimeConfig,
+): Promise<void> {
+  const protectedTables = resolveProtectedPostgresTables(tables, metadata);
+  const writableTables = postgresWriterWritableTableNames(tables, metadata, protectedTables);
+  const sequences = await postgresProtectedSerialSequences(client, writableTables);
+  if (sequences === undefined) return;
+  for (const sequence of sequences) {
+    const [schema, name] = sequence.split('.', 2);
+    if (schema === undefined || name === undefined) continue;
+    await client.exec(
+      `GRANT USAGE ON SEQUENCE ${quoteQualified(schema, name)} TO ${quoteIdent(config.writerRole)}`,
+    );
   }
 }
 
@@ -2444,9 +2756,13 @@ function postgresRequestScope(
   config: ResolvedPostgresRuntimeConfig,
 ): PostgresRequestScope {
   const posture = nonRequestPrincipalPostureObject(request);
-  if (posture !== undefined && posture.kind === 'system') {
-    assertNonRequestPrincipalPosture(posture);
-    return { roleSetting: 'system' };
+  if (posture !== undefined) {
+    const nonRequestPrincipal = principalFromNonRequestPrincipalPosture(posture);
+    if (posture.kind === 'system') return { roleSetting: 'system' };
+    if (nonRequestPrincipal === undefined) {
+      throw new Error('Framework-minted actAs(id) posture did not provide a principal.');
+    }
+    return { principal: nonRequestPrincipal };
   }
   const principal = config.principalFromRequest(request);
   return principal === undefined ? {} : { principal };
@@ -2455,16 +2771,7 @@ function postgresRequestScope(
 function nonRequestPrincipalPostureFromRequest(request: unknown): string | undefined {
   const posture = nonRequestPrincipalPostureObject(request);
   if (posture === undefined) return undefined;
-  if (posture.kind === 'system') {
-    assertNonRequestPrincipalPosture(posture);
-    return undefined;
-  }
-  const principal = (posture as { principal?: unknown }).principal;
-  return posture.kind === 'act-as' &&
-    typeof principal === 'string' &&
-    principal.trim() === principal
-    ? principal
-    : undefined;
+  return principalFromNonRequestPrincipalPosture(posture);
 }
 
 function nonRequestPrincipalPostureObject(

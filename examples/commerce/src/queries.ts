@@ -5,16 +5,16 @@ import type { CommerceDb } from './db.js';
 import { cart, order } from './model.js';
 import { cartItems, orders, products } from './schema.js';
 
-export interface CartQueryResult {
+export type CartQueryResult = {
   count: number;
-}
+};
 
 export interface ProductGridInput {
   after?: string;
   limit?: number;
 }
 
-export interface ProductGridResult {
+export type ProductGridResult = {
   items: {
     id: string;
     name: string;
@@ -24,11 +24,11 @@ export interface ProductGridResult {
     unitPrice: number;
   }[];
   nextCursor: string | null;
-}
+};
 
-export interface OrderHistoryResult {
+export type OrderHistoryResult = {
   items: { id: string; productId: string; qty: number; total: number; userId: string }[];
-}
+};
 
 export interface CommerceQueryRequest {
   // SECURITY (SECURITY_FINDINGS.md M9): order-history reads are per-user, so the

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as style from '@kovojs/style';
-import { Button, buttonStyles } from './button.js';
+import { Button } from './button.js';
 describe('@kovojs/ui Button StyleX prototype', () => {
   it('renders StyleX-authored classes and metadata', () => {
     const html = String(
@@ -44,33 +44,20 @@ describe('@kovojs/ui Button StyleX prototype', () => {
     expect(html).not.toContain('kv-button-variant-bg-');
     expect(html).toContain('button.stylex.test.tsx#root');
   });
-  it('exports StyleX style objects instead of variant-helper output', () => {
-    expect(buttonStyles.base.root.$$css).toBe(true);
-    expect(
-      (
-        [
-          style.attrs(buttonStyles.base.root, buttonStyles.sizes.md, buttonStyles.variants.primary)
-            .class ?? '',
-          style.attrs(buttonStyles.sizes.sm).class ?? '',
-          style.attrs(buttonStyles.variants.secondary).class ?? '',
-          style.attrs(buttonStyles.variants.ghost).class ?? '',
-          style.attrs(buttonStyles.variants.destructive).class ?? '',
-          style.attrs(buttonStyles.variants.outline).class ?? '',
-        ] as const
-      ).join(' '),
-    ).toContain('kv-button-size-h-');
-    expect(
-      (
-        [
-          style.attrs(buttonStyles.base.root, buttonStyles.sizes.md, buttonStyles.variants.primary)
-            .class ?? '',
-          style.attrs(buttonStyles.sizes.sm).class ?? '',
-          style.attrs(buttonStyles.variants.secondary).class ?? '',
-          style.attrs(buttonStyles.variants.ghost).class ?? '',
-          style.attrs(buttonStyles.variants.destructive).class ?? '',
-          style.attrs(buttonStyles.variants.outline).class ?? '',
-        ] as const
-      ).join(' '),
-    ).toContain('kv-button-variant-bg-');
+  it('renders size and variant StyleX classes without exposing style objects', () => {
+    const html = [
+      Button.definition.render({ children: 'Primary' }),
+      Button.definition.render({ children: 'Small', size: 'sm' }),
+      Button.definition.render({ children: 'Secondary', variant: 'secondary' }),
+      Button.definition.render({ children: 'Ghost', variant: 'ghost' }),
+      Button.definition.render({ children: 'Destructive', variant: 'destructive' }),
+      Button.definition.render({ children: 'Outline', variant: 'outline' }),
+    ].join(' ');
+
+    expect(html).toContain('kv-button-size-h-');
+    expect(html).toContain('kv-button-variant-bg-');
+    expect(html).toContain('data-style-src="button.tsx#root; button.tsx#md; button.tsx#primary"');
+    expect(html).toContain('data-style-src="button.tsx#root; button.tsx#sm; button.tsx#primary"');
+    expect(html).toContain('button.tsx#secondary');
   });
 });

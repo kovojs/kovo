@@ -159,6 +159,10 @@ export function create<const Styles extends Record<string, StyleObject>>(
 ): StyleNamespaces<Styles>;
 export function create<const Styles extends Record<string, StyleObject>>(
   styles: Styles,
+  identity: { readonly namespace?: string; readonly source?: string },
+): StyleNamespaces<Styles>;
+export function create<const Styles extends Record<string, StyleObject>>(
+  styles: Styles,
   identity: { readonly namespace?: string; readonly source?: string } = {},
 ): StyleNamespaces<Styles> {
   assertObjectInput(styles, 'style.create', 'styles');

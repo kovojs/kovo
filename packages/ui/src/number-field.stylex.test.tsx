@@ -8,7 +8,6 @@ import {
   NumberFieldDecrement,
   NumberFieldIncrement,
   NumberFieldInput,
-  numberFieldStyles,
 } from './number-field.js';
 
 describe('@kovojs/ui NumberField StyleX styles', () => {
@@ -24,14 +23,11 @@ describe('@kovojs/ui NumberField StyleX styles', () => {
     };
 
     expect({
-      buttonClasses: [style.attrs(numberFieldStyles.button).class ?? ''] as const,
-      classes: [style.attrs(numberFieldStyles.root).class ?? ''] as const,
       control: NumberFieldControl.definition.render({
         ...state,
         children: 'stepper',
         id: 'quantity-control',
       }),
-      controlClasses: [style.attrs(numberFieldStyles.control).class ?? ''] as const,
       decrement: NumberFieldDecrement.definition.render({
         ...state,
         id: 'quantity-decrement',
@@ -56,7 +52,6 @@ describe('@kovojs/ui NumberField StyleX styles', () => {
         id: 'quantity-input',
         labelledBy: 'quantity-label',
       }),
-      inputClasses: [style.attrs(numberFieldStyles.input).class ?? ''] as const,
       root: NumberField.definition.render({
         ...state,
         children: 'quantity controls',
@@ -102,18 +97,6 @@ describe('@kovojs/ui NumberField StyleX styles', () => {
         children: 'Custom number field',
         styles: { root: overrides.root },
       }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      keys: Object.keys(numberFieldStyles),
-      markers: {
-        button: numberFieldStyles.button.$$css,
-        control: numberFieldStyles.control.$$css,
-        input: numberFieldStyles.input.$$css,
-        root: numberFieldStyles.root.$$css,
-      },
     }).toMatchSnapshot();
   });
 });

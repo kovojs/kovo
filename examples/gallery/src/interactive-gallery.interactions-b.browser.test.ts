@@ -1643,6 +1643,10 @@ describe('compiled interactive gallery demos in the browser', () => {
       expect(output.textContent).toBe('open');
     });
 
+    // SPEC §12.1: the hover-card open end-state (revealed content, hidden=false,
+    // state=open) must stay axe-clean before pointer and keyboard dismissal paths run.
+    await expectNoAxeViolations(root);
+
     trigger.dispatchEvent(new Event('pointerleave', { bubbles: true }));
     content.dispatchEvent(new Event('pointerenter', { bubbles: true }));
 

@@ -84,7 +84,9 @@ export function substituteRoutePatternParams(
   return `/${pattern.segments
     .map((segment) => {
       if (segment.kind === 'static') return segment.value;
-      return encodeURIComponent(String(params[segment.name ?? segment.value.slice(1)] ?? ''));
+      return encodeURIComponent(
+        routeSearchValueToString(params[segment.name ?? segment.value.slice(1)]),
+      );
     })
     .join('/')}`;
 }
@@ -366,5 +368,11 @@ function removeDotSegments(pathname: string): string {
 }
 
 function routeSearchValueToString(value: unknown): string {
-  return typeof value === 'object' ? JSON.stringify(value) : String(value);
+  if (value === undefined || value === null) return '';
+  if (typeof value === 'string') return value;
+  if (typeof value === 'number' || typeof value === 'boolean' || typeof value === 'bigint') {
+    return String(value);
+  }
+  if (typeof value === 'symbol') return value.description ?? '';
+  return JSON.stringify(value) ?? '';
 }

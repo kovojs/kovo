@@ -3,15 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { jsx } from '@kovojs/server/jsx-runtime';
 import * as style from '@kovojs/style';
 
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeaderCell,
-  TableRow,
-  tableStyles,
-} from './table.js';
+import { Table, TableBody, TableCell, TableHead, TableHeaderCell, TableRow } from './table.js';
 
 async function render(value: unknown): Promise<string> {
   return String(await value);
@@ -66,21 +58,6 @@ describe('@kovojs/ui Table StyleX slots', () => {
     })}`;
 
     expect({
-      bodyClasses: [style.attrs(tableStyles.body).class ?? ''] as const,
-      captionClasses: [style.attrs(tableStyles.caption).class ?? ''] as const,
-      cellClasses: [style.attrs(tableStyles.cell).class ?? ''] as const,
-      classes: [
-        style.attrs(tableStyles.wrapper).class ?? '',
-        style.attrs(tableStyles.table).class ?? '',
-        style.attrs(tableStyles.head).class ?? '',
-        style.attrs(tableStyles.body).class ?? '',
-        style.attrs(tableStyles.row).class ?? '',
-        style.attrs(tableStyles.headerCell).class ?? '',
-        style.attrs(tableStyles.cell).class ?? '',
-        style.attrs(tableStyles.caption).class ?? '',
-      ] as const,
-      headClasses: [style.attrs(tableStyles.head).class ?? ''] as const,
-      headerCellClasses: [style.attrs(tableStyles.headerCell).class ?? ''] as const,
       rendered: await render(
         Table.definition.render({
           caption: 'Invoices for the current billing period',
@@ -92,9 +69,6 @@ describe('@kovojs/ui Table StyleX slots', () => {
           children: legacyBody,
         }),
       ),
-      rootClasses: [style.attrs(tableStyles.table).class ?? ''] as const,
-      rowClasses: [style.attrs(tableStyles.row).class ?? ''] as const,
-      wrapperClasses: [style.attrs(tableStyles.wrapper).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -196,21 +170,5 @@ describe('@kovojs/ui Table StyleX slots', () => {
     expect(html).toContain('<td');
     expect(html).toContain('Paid &amp; posted');
     expect(html).not.toContain('[object Promise]');
-  });
-
-  it('exports StyleX slot objects instead of class fragments', () => {
-    expect({
-      keys: Object.keys(tableStyles),
-      markers: {
-        body: tableStyles.body.$$css,
-        caption: tableStyles.caption.$$css,
-        cell: tableStyles.cell.$$css,
-        head: tableStyles.head.$$css,
-        headerCell: tableStyles.headerCell.$$css,
-        row: tableStyles.row.$$css,
-        table: tableStyles.table.$$css,
-        wrapper: tableStyles.wrapper.$$css,
-      },
-    }).toMatchSnapshot();
   });
 });

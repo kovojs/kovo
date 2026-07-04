@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   toggleGroupButtonAttributes,
   toggleGroupItemAttributes,
@@ -55,7 +55,7 @@ export interface ToggleGroupStateProps {
  * const props: ToggleGroupProps = { children: 'Content' };
  */
 export interface ToggleGroupProps extends ToggleGroupStateProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   id?: string;
   labelledBy?: string;
@@ -70,7 +70,7 @@ export interface ToggleGroupProps extends ToggleGroupStateProps {
  * const props: ToggleGroupItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface ToggleGroupItemProps extends ToggleGroupStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
@@ -85,21 +85,13 @@ export interface ToggleGroupItemProps extends ToggleGroupStateProps {
  * const props: ToggleGroupButtonProps = { itemValue: 'item', children: 'Content' };
  */
 export interface ToggleGroupButtonProps extends ToggleGroupStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
   styles?: ToggleGroupStyleOverrides;
 }
-
-/**
- * Style definitions used by the toggle group components.
- *
- * @example
- * import { toggleGroupStyles } from "@kovojs/ui/toggle-group";
- * const styles = toggleGroupStyles;
- */
-export const toggleGroupStyles = style.create({
+const toggleGroupStyles = style.create({
   button: {
     // Button reset: kill the native UA <button> bevel so items read as a flat
     // segmented control (mirrors select.tsx's clean option rows).

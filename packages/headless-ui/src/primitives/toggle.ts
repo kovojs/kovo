@@ -16,7 +16,7 @@ import {
  * ```ts
  * import type { ToggleChangeReason } from '@kovojs/headless-ui/toggle';
  *
- * const value: ToggleChangeReason = {} as ToggleChangeReason;
+ * declare const value: ToggleChangeReason;
  * ```
  */
 export type ToggleChangeReason = 'programmatic' | 'trigger-click';
@@ -30,7 +30,7 @@ export type ToggleChangeReason = 'programmatic' | 'trigger-click';
  * ```ts
  * import type { ToggleChangeDetail } from '@kovojs/headless-ui/toggle';
  *
- * const value: ToggleChangeDetail = {} as ToggleChangeDetail;
+ * declare const value: ToggleChangeDetail;
  * ```
  */
 export type ToggleChangeDetail = PrimitiveChangeDetail<ToggleChangeReason, boolean>;
@@ -44,7 +44,7 @@ export type ToggleChangeDetail = PrimitiveChangeDetail<ToggleChangeReason, boole
  * ```ts
  * import type { ToggleState } from '@kovojs/headless-ui/toggle';
  *
- * const value: ToggleState = {} as ToggleState;
+ * declare const value: ToggleState;
  * ```
  */
 export interface ToggleState {
@@ -61,7 +61,7 @@ export interface ToggleState {
  * ```ts
  * import type { ToggleChangeOptions } from '@kovojs/headless-ui/toggle';
  *
- * const value: ToggleChangeOptions = {} as ToggleChangeOptions;
+ * declare const value: ToggleChangeOptions;
  * ```
  */
 export interface ToggleChangeOptions {
@@ -77,7 +77,7 @@ export interface ToggleChangeOptions {
  * ```ts
  * import type { ToggleChangeResult } from '@kovojs/headless-ui/toggle';
  *
- * const value: ToggleChangeResult = {} as ToggleChangeResult;
+ * declare const value: ToggleChangeResult;
  * ```
  */
 export interface ToggleChangeResult {
@@ -95,7 +95,7 @@ export interface ToggleChangeResult {
  * ```ts
  * import type { TogglePrimitiveAttributes } from '@kovojs/headless-ui/toggle';
  *
- * const value: TogglePrimitiveAttributes = {} as TogglePrimitiveAttributes;
+ * declare const value: TogglePrimitiveAttributes;
  * ```
  */
 export type TogglePrimitiveAttributes = PrimitiveDataAttributes &
@@ -110,7 +110,7 @@ export type TogglePrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { ToggleTriggerEvent } from '@kovojs/headless-ui/toggle';
  *
- * const value: ToggleTriggerEvent = {} as ToggleTriggerEvent;
+ * declare const value: ToggleTriggerEvent;
  * ```
  */
 export type ToggleTriggerEvent = Event;
@@ -126,7 +126,7 @@ export type ToggleTriggerEvent = Event;
  * ```ts
  * import { toggleRootAttributes } from '@kovojs/headless-ui/toggle';
  *
- * const input = {} as Parameters<typeof toggleRootAttributes>[0];
+ * declare const input: Parameters<typeof toggleRootAttributes>[0];
  * const result = toggleRootAttributes(input);
  * ```
  */
@@ -148,10 +148,10 @@ export function toggleRootAttributes(state: ToggleState): TogglePrimitiveAttribu
  * ```ts
  * import { setTogglePressed } from '@kovojs/headless-ui/toggle';
  *
- * const input = {} as Parameters<typeof setTogglePressed>[0];
- * const state = {} as Parameters<typeof setTogglePressed>[1];
- * const options = {} as Parameters<typeof setTogglePressed>[2];
- * const detail = {} as Parameters<typeof setTogglePressed>[3];
+ * declare const input: Parameters<typeof setTogglePressed>[0];
+ * declare const state: Parameters<typeof setTogglePressed>[1];
+ * declare const options: Parameters<typeof setTogglePressed>[2];
+ * declare const detail: Parameters<typeof setTogglePressed>[3];
  * const result = setTogglePressed(input, state, options, detail);
  * ```
  *
@@ -184,9 +184,9 @@ export function setTogglePressed(
  * ```ts
  * import { togglePressed } from '@kovojs/headless-ui/toggle';
  *
- * const input = {} as Parameters<typeof togglePressed>[0];
- * const state = {} as Parameters<typeof togglePressed>[1];
- * const options = {} as Parameters<typeof togglePressed>[2];
+ * declare const input: Parameters<typeof togglePressed>[0];
+ * declare const state: Parameters<typeof togglePressed>[1];
+ * declare const options: Parameters<typeof togglePressed>[2];
  * const result = togglePressed(input, state, options);
  * ```
  *
@@ -207,9 +207,9 @@ export function togglePressed(
  * ```ts
  * import { toggleTriggerClick } from '@kovojs/headless-ui/toggle';
  *
- * const input = {} as Parameters<typeof toggleTriggerClick>[0];
- * const state = {} as Parameters<typeof toggleTriggerClick>[1];
- * const options = {} as Parameters<typeof toggleTriggerClick>[2];
+ * declare const input: Parameters<typeof toggleTriggerClick>[0];
+ * declare const state: Parameters<typeof toggleTriggerClick>[1];
+ * declare const options: Parameters<typeof toggleTriggerClick>[2];
  * const result = toggleTriggerClick(input, state, options);
  * ```
  *

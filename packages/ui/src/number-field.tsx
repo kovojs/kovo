@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   numberFieldDecrementAttributes,
   numberFieldIncrementAttributes,
@@ -53,7 +53,7 @@ export interface NumberFieldStateProps {
  * const props: NumberFieldProps = { children: 'Content' };
  */
 export interface NumberFieldProps extends NumberFieldStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: NumberFieldStyleOverrides;
 }
@@ -83,21 +83,13 @@ export interface NumberFieldInputProps extends NumberFieldStateProps {
  * const props: NumberFieldButtonProps = { children: 'Content' };
  */
 export interface NumberFieldButtonProps extends NumberFieldStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   inputId?: string;
   label?: string;
   styles?: NumberFieldStyleOverrides;
 }
-
-/**
- * Style definitions used by the number field components.
- *
- * @example
- * import { numberFieldStyles } from "@kovojs/ui/number-field";
- * const styles = numberFieldStyles;
- */
-export const numberFieldStyles = style.create({
+const numberFieldStyles = style.create({
   button: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundRaised,

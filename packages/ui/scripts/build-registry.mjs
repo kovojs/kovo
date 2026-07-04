@@ -38,6 +38,7 @@ const paths = {
   galleryComponentCatalog: path.join(galleryRoot, 'src', 'component-catalog.ts'),
   galleryComponentManifest: path.join(galleryRoot, 'src', 'gallery-component-manifest.ts'),
   galleryPrimitiveActions: path.join(galleryRoot, 'src', 'primitive-actions.ts'),
+  galleryPrimitiveActionsGenerated: path.join(galleryRoot, 'src', 'primitive-actions.generated.ts'),
   headlessGenerated: path.join(headlessRoot, 'src', 'generated.ts'),
   headlessPackageJson: path.join(headlessRoot, 'package.json'),
   headlessPublicDir: path.join(headlessRoot, 'src', 'public'),
@@ -96,6 +97,12 @@ const generatedTargets = [
     label: 'examples/gallery/src/primitive-actions.ts',
     path: paths.galleryPrimitiveActions,
     source: generateGalleryPrimitiveActionsTs(),
+  },
+  {
+    compare: 'text',
+    label: 'examples/gallery/src/primitive-actions.generated.ts',
+    path: paths.galleryPrimitiveActionsGenerated,
+    source: generateGalleryGeneratedPrimitiveActionsTs(),
   },
   {
     compare: 'text',
@@ -622,11 +629,20 @@ function generateGalleryPrimitiveActionsTs() {
   return [
     generatedSourceComment,
     '// Gallery-local L1 interaction adapter for compiled demos.',
-    "export * from '@kovojs/headless-ui/generated';",
-    "export * from '@kovojs/headless-ui/internal/primitive';",
+    "export * from './primitive-actions.generated.js';",
     ...primitiveComponentManifest.headlessPrimitives.map(
       (primitive) => `export * from '@kovojs/headless-ui/${primitive.subpath}';`,
     ),
+    '',
+  ].join('\n');
+}
+
+function generateGalleryGeneratedPrimitiveActionsTs() {
+  return [
+    generatedSourceComment,
+    '// Gallery-generated ABI adapter for compiled primitive demos. App-authored source imports ../primitive-actions.js instead.',
+    "export * from '@kovojs/headless-ui/generated';",
+    "export * from '@kovojs/headless-ui/internal/primitive';",
     '',
   ].join('\n');
 }
@@ -872,7 +888,10 @@ function publicPrimitiveExportsFromSource(fileName, subpath, source) {
 
   const publicNames = new Set(
     [...declarations.values()]
-      .filter((declaration) => declaration.isPublic)
+      .filter(
+        (declaration) =>
+          declaration.isPublic && !isTransitionMachineOnlyDeclaration(declaration.name),
+      )
       .map((declaration) => declaration.name),
   );
   let changed = true;
@@ -880,6 +899,7 @@ function publicPrimitiveExportsFromSource(fileName, subpath, source) {
     changed = false;
     for (const declaration of declarations.values()) {
       if (publicNames.has(declaration.name) || declaration.isImplementationOnly) continue;
+      if (isTransitionMachineOnlyDeclaration(declaration.name)) continue;
       if (!isTypeDeclarationKind(declaration.kind)) continue;
       if (!publicSignatureReferences(publicNames, declaration.name, declarations)) continue;
       publicNames.add(declaration.name);
@@ -899,6 +919,33 @@ function publicPrimitiveExportsFromSource(fileName, subpath, source) {
   }
 
   return { types, values };
+}
+
+function isTransitionMachineOnlyDeclaration(name) {
+  if (name === 'ToastChangeReason') {
+    return false;
+  }
+  if (/^Toast(?:Show|Dismiss)?Event/.test(name) || /^toast(?:Show|Dismiss)?Event/.test(name)) {
+    return false;
+  }
+  if (name.endsWith('FocusEvent')) {
+    return false;
+  }
+  return new RegExp(
+    [
+      'Change(?:Reason|Detail|Options|Result)',
+      'OpenChange(?:Reason|Detail|Result)',
+      'ValueChange(?:Reason|Detail|Result)',
+      'InputChange(?:Reason|Detail|Result)',
+      'Select(?:Reason|Detail|Result)',
+      'KeyboardResult',
+      'OptionSelectResult',
+      'SelectResult',
+      'PointerDragOptions',
+      'KeyDownOptions',
+      'Event',
+    ].join('|') + '$',
+  ).test(name);
 }
 
 function primitiveExportDeclarations(fileName, subpath, source) {

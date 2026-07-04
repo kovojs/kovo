@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   tooltipContentAttributes,
   tooltipRootAttributes,
@@ -44,7 +44,7 @@ export interface TooltipStateProps {
  * const props: TooltipProps = { children: 'Content' };
  */
 export interface TooltipProps extends TooltipStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: TooltipStyleOverrides;
 }
@@ -57,7 +57,7 @@ export interface TooltipProps extends TooltipStateProps {
  * const props: TooltipTriggerProps = { children: 'Content' };
  */
 export interface TooltipTriggerProps extends TooltipStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   styles?: TooltipStyleOverrides;
@@ -71,19 +71,11 @@ export interface TooltipTriggerProps extends TooltipStateProps {
  * const props: TooltipContentProps = { children: 'Content' };
  */
 export interface TooltipContentProps extends TooltipStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   styles?: TooltipStyleOverrides;
 }
-
-/**
- * Style definitions used by the tooltip components.
- *
- * @example
- * import { tooltipStyles } from "@kovojs/ui/tooltip";
- * const styles = tooltipStyles;
- */
-export const tooltipStyles = style.create({
+const tooltipStyles = style.create({
   // Rotated-square arrow at the bottom center of the content, pointing down to
   // the trigger. Same fill as the content so the two read as one shape.
   arrow: {

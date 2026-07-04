@@ -16,6 +16,8 @@ import ts from 'typescript';
 
 import {
   galleryPrimitiveActionsImportManifest,
+  galleryPrimitiveActionsGeneratedImportManifest,
+  galleryPrimitiveActionsGeneratedModuleSpecifier,
   galleryHeadlessGeneratedModuleSpecifier,
   galleryHeadlessPrimitiveModuleSpecifier,
   galleryRuntimeModuleSpecifier,
@@ -48,9 +50,12 @@ const galleryHeadlessUiClientModuleHrefMap = registerHeadlessUiClientModules();
 export const galleryHeadlessUiClientModuleHrefs = Object.freeze([
   ...galleryHeadlessUiClientModuleHrefMap.values(),
 ]);
+const galleryPrimitiveActionsGeneratedClientModuleHref =
+  registerPrimitiveActionsGeneratedClientModule();
 const galleryPrimitiveActionsClientModuleHref = registerPrimitiveActionsClientModule();
 export const galleryInteractiveSupportClientModuleHrefs = Object.freeze([
   galleryRuntimeModuleHref,
+  galleryPrimitiveActionsGeneratedClientModuleHref,
   galleryPrimitiveActionsClientModuleHref,
   ...galleryHeadlessUiClientModuleHrefs,
 ]);
@@ -274,11 +279,40 @@ function registerPrimitiveActionsClientModule(): string {
   });
 }
 
+function registerPrimitiveActionsGeneratedClientModule(): string {
+  const modulePath = '/c/examples/gallery/src/primitive-actions.generated.js';
+  const rawSource = readFileSync(
+    new URL('./primitive-actions.generated.ts', import.meta.url),
+    'utf8',
+  );
+  const source = resolveGalleryClientModuleSpecifiers(
+    ts.transpileModule(rawSource, {
+      compilerOptions: {
+        importsNotUsedAsValues: ts.ImportsNotUsedAsValues.Remove,
+        module: ts.ModuleKind.ES2022,
+        target: ts.ScriptTarget.ES2022,
+      },
+      fileName: 'primitive-actions.generated.ts',
+    }).outputText,
+    galleryPrimitiveActionsGeneratedImportManifest(),
+    resolveGalleryClientModuleSpecifier,
+  );
+
+  return galleryInteractiveClientModules.put({
+    path: modulePath,
+    source,
+    version: createHash('sha256').update(source).digest('hex').slice(0, 8),
+  });
+}
+
 function resolveGalleryClientModuleSpecifier(moduleSpecifier: string): string {
   if (moduleSpecifier === galleryRuntimeModuleSpecifier) return galleryRuntimeModuleHref;
   if (moduleSpecifier === '../primitive-actions.js') return galleryPrimitiveActionsClientModuleHref;
   if (moduleSpecifier === '../../primitive-actions.js')
     return galleryPrimitiveActionsClientModuleHref;
+  if (moduleSpecifier === galleryPrimitiveActionsGeneratedModuleSpecifier) {
+    return galleryPrimitiveActionsGeneratedClientModuleHref;
+  }
   if (moduleSpecifier === galleryHeadlessGeneratedModuleSpecifier) {
     return headlessUiClientModuleHref('generated');
   }

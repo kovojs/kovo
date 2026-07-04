@@ -6,7 +6,7 @@ import {
   betterAuthSignInEmailMutation,
   betterAuthSignOutMutation,
 } from '@kovojs/better-auth';
-import { publicAccess, s, session, type CsrfValidationOptions } from '@kovojs/server';
+import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';
 
 import { appRuntimeDbProvider } from './_kovo/app-runtime-db.js';
 import type { AppDb } from './db.js';
@@ -61,7 +61,7 @@ export const appCsrf = {
     // for login forms (SPEC.md §6.6).
     return request.session?.id ?? request.authCsrfId ?? undefined;
   },
-} satisfies CsrfValidationOptions<AppRequest>;
+} satisfies CsrfOptions<AppRequest>;
 
 export const appSession = session(
   s.object({

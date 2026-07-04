@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   collapsibleContentAttributes,
   collapsibleRootAttributes,
@@ -44,7 +44,7 @@ export interface CollapsibleStyleOverrides {
  * const props: CollapsibleProps = { children: 'Content' };
  */
 export interface CollapsibleProps extends CollapsibleStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: CollapsibleStyleOverrides;
 }
@@ -57,7 +57,7 @@ export interface CollapsibleProps extends CollapsibleStateProps {
  * const props: CollapsibleTriggerProps = { children: 'Content' };
  */
 export interface CollapsibleTriggerProps extends CollapsibleStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   styles?: CollapsibleStyleOverrides;
@@ -71,19 +71,11 @@ export interface CollapsibleTriggerProps extends CollapsibleStateProps {
  * const props: CollapsibleContentProps = { children: 'Content' };
  */
 export interface CollapsibleContentProps extends CollapsibleStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   styles?: CollapsibleStyleOverrides;
 }
-
-/**
- * Style definitions used by the collapsible components.
- *
- * @example
- * import { collapsibleStyles } from "@kovojs/ui/collapsible";
- * const styles = collapsibleStyles;
- */
-export const collapsibleStyles = style.create({
+const collapsibleStyles = style.create({
   // Grid wrapper animates open/close via grid-template-rows 0fr<->1fr. The author
   // `display:grid` overrides both the UA `details:not([open]) > *{display:none}`
   // rule and the closed state, so the panel smoothly expands/collapses instead of

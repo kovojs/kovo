@@ -172,7 +172,10 @@ const app = createApp({
   queries,
   // Runs once before route/query/mutation guards; return null for anonymous.
   sessionProvider,
-  csrf: { secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET! },
+  csrf: {
+    secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET!,
+    sessionId: (request: AppRequest) => request.session?.id,
+  },
 });
 
 const handler = toNodeHandler(createRequestHandler(app), { earlyHints: true });
@@ -193,7 +196,7 @@ RUN corepack enable && pnpm install --prod --frozen-lockfile
 COPY dist ./dist           # output of `vp build`, including /c/* client modules
 ENV PORT=3000
 EXPOSE 3000
-CMD ["node", "dist/server.js"]
+CMD ["node", "dist/server/server.mjs"]
 ```
 
 The container needs database and auth secrets from the environment. None of these is
@@ -278,14 +281,15 @@ vp check                  # vp toolchain: typecheck + lint — wiring proofs (ha
 vp test                   # vp toolchain: vitest suites, including wire-level and pglite-backed tests
 vp build                  # vp toolchain: production build
 vp run kovo-check         # runs the framework's `kovo check`: KV310 optimistic coverage, KV311 update coverage, audits
-vp run graph-assertions   # runs your app's graph-query behavior rules
+# run your app-owned graph-query assertion script here, if you wrote one
 ```
 
 `vp check` and `vp build` are the toolchain's own commands (typecheck/lint and bundle); they are
 distinct from the framework's `kovo check`, which runs the graph/coverage gates and is invoked here
-through the `kovo-check` npm script via `vp run`. The starter's CI workflow runs exactly this list. If a deploy passes these, the things that usually
-need a staging click-through — does this button do anything, does that mutation refresh the badge —
-are already proven. See [reading kovo check & kovo explain](/guides/kovo-explain/).
+through the `kovo-check` npm script via `vp run`. Add graph assertions only after your app owns a
+matching script. If a deploy passes these, the things that usually need a staging click-through —
+does this button do anything, does that mutation refresh the badge — are already proven. See
+[reading kovo check & kovo explain](/guides/kovo-explain/).
 
 ## Checklist
 
@@ -294,8 +298,9 @@ are already proven. See [reading kovo check & kovo explain](/guides/kovo-explain
 - [ ] HTML responses are not cached as immutable (documents change per deploy; modules don't).
 - [ ] 103 Early Hints / preload wired from route page hints if your edge supports it.
 - [ ] Speculation Rules prefetch only on routes that opted in — it is per-route, default off.
-- [ ] CI runs `vp check`, `vp test`, `vp build`, `vp run kovo-check` (the framework's `kovo check`),
-      and graph assertions before deploy.
+- [ ] CI runs `vp check`, `vp test`, `vp build`, and `vp run kovo-check` (the framework's
+      `kovo check`) before deploy.
+- [ ] App-owned graph assertions run before deploy, if the app has a script for them.
 
 ## Next
 

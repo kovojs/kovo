@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
@@ -28,7 +28,7 @@ export interface MeterStyleOverrides {
  * const props: MeterProps = { children: 'Content' };
  */
 export interface MeterProps {
-  children?: string;
+  children?: ComponentChild;
   high?: number;
   low?: number;
   max?: number;
@@ -39,15 +39,7 @@ export interface MeterProps {
   value?: number;
   valueText?: string;
 }
-
-/**
- * Style definitions used by the meter components.
- *
- * @example
- * import { meterStyles } from "@kovojs/ui/meter";
- * const styles = meterStyles;
- */
-export const meterStyles = style.create({
+const meterStyles = style.create({
   // Custom indicator filled by value ratio (set inline). Color tracks the
   // optimum/suboptimum/even-less-good state.
   indicator: {

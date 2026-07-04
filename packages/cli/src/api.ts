@@ -3,11 +3,11 @@
  *
  * The `kovo` CLI is primarily a bin (`kovo check`, `kovo explain`, `kovo audit`,
  * `kovo export`, `kovo add`, `kovo mcp`). This module exposes the small
- * documented library surface for verifiers plus `runKovoCommand`, the
- * command-equivalent facade used by generated app maintenance scripts that need
- * to run the same export/build path in process.
+ * documented library surface for verifiers. Generated app maintenance scripts
+ * that need the command-equivalent facade use the internal subpath instead of
+ * widening the app-facing root API.
  */
-export { kovoCheck, kovoExplain, runKovoCommand } from './index.js';
+export { kovoCheck, kovoExplain } from './index.js';
 
 export type {
   ExplainKind,

@@ -17,7 +17,7 @@ import {
  * ```ts
  * import type { DisclosureChangeReason } from '@kovojs/headless-ui/disclosure';
  *
- * const value: DisclosureChangeReason = {} as DisclosureChangeReason;
+ * declare const value: DisclosureChangeReason;
  * ```
  */
 export type DisclosureChangeReason = 'programmatic' | 'trigger-click';
@@ -31,7 +31,7 @@ export type DisclosureChangeReason = 'programmatic' | 'trigger-click';
  * ```ts
  * import type { DisclosureChangeDetail } from '@kovojs/headless-ui/disclosure';
  *
- * const value: DisclosureChangeDetail = {} as DisclosureChangeDetail;
+ * declare const value: DisclosureChangeDetail;
  * ```
  */
 export type DisclosureChangeDetail = PrimitiveChangeDetail<DisclosureChangeReason, boolean>;
@@ -45,7 +45,7 @@ export type DisclosureChangeDetail = PrimitiveChangeDetail<DisclosureChangeReaso
  * ```ts
  * import type { DisclosureState } from '@kovojs/headless-ui/disclosure';
  *
- * const value: DisclosureState = {} as DisclosureState;
+ * declare const value: DisclosureState;
  * ```
  */
 export interface DisclosureState {
@@ -62,7 +62,7 @@ export interface DisclosureState {
  * ```ts
  * import type { DisclosureAttributeOptions } from '@kovojs/headless-ui/disclosure';
  *
- * const value: DisclosureAttributeOptions = {} as DisclosureAttributeOptions;
+ * declare const value: DisclosureAttributeOptions;
  * ```
  */
 export interface DisclosureAttributeOptions extends DisclosureState {
@@ -78,7 +78,7 @@ export interface DisclosureAttributeOptions extends DisclosureState {
  * ```ts
  * import type { DisclosureChangeOptions } from '@kovojs/headless-ui/disclosure';
  *
- * const value: DisclosureChangeOptions = {} as DisclosureChangeOptions;
+ * declare const value: DisclosureChangeOptions;
  * ```
  */
 export interface DisclosureChangeOptions {
@@ -94,7 +94,7 @@ export interface DisclosureChangeOptions {
  * ```ts
  * import type { DisclosureChangeResult } from '@kovojs/headless-ui/disclosure';
  *
- * const value: DisclosureChangeResult = {} as DisclosureChangeResult;
+ * declare const value: DisclosureChangeResult;
  * ```
  */
 export interface DisclosureChangeResult {
@@ -112,7 +112,7 @@ export interface DisclosureChangeResult {
  * ```ts
  * import type { DisclosurePrimitiveAttributes } from '@kovojs/headless-ui/disclosure';
  *
- * const value: DisclosurePrimitiveAttributes = {} as DisclosurePrimitiveAttributes;
+ * declare const value: DisclosurePrimitiveAttributes;
  * ```
  */
 export type DisclosurePrimitiveAttributes = PrimitiveDataAttributes &
@@ -127,7 +127,7 @@ export type DisclosurePrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { DisclosureTriggerEvent } from '@kovojs/headless-ui/disclosure';
  *
- * const value: DisclosureTriggerEvent = {} as DisclosureTriggerEvent;
+ * declare const value: DisclosureTriggerEvent;
  * ```
  */
 export type DisclosureTriggerEvent = Event;
@@ -141,7 +141,7 @@ export type DisclosureTriggerEvent = Event;
  * ```ts
  * import { disclosureRootAttributes } from '@kovojs/headless-ui/disclosure';
  *
- * const input = {} as Parameters<typeof disclosureRootAttributes>[0];
+ * declare const input: Parameters<typeof disclosureRootAttributes>[0];
  * const result = disclosureRootAttributes(input);
  * ```
  */
@@ -160,7 +160,7 @@ export function disclosureRootAttributes(state: DisclosureState): DisclosurePrim
  * ```ts
  * import { disclosureTriggerAttributes } from '@kovojs/headless-ui/disclosure';
  *
- * const input = {} as Parameters<typeof disclosureTriggerAttributes>[0];
+ * declare const input: Parameters<typeof disclosureTriggerAttributes>[0];
  * const result = disclosureTriggerAttributes(input);
  * ```
  */
@@ -185,7 +185,7 @@ export function disclosureTriggerAttributes(
  * ```ts
  * import { disclosureContentAttributes } from '@kovojs/headless-ui/disclosure';
  *
- * const input = {} as Parameters<typeof disclosureContentAttributes>[0];
+ * declare const input: Parameters<typeof disclosureContentAttributes>[0];
  * const result = disclosureContentAttributes(input);
  * ```
  */
@@ -208,10 +208,10 @@ export function disclosureContentAttributes(
  * ```ts
  * import { setDisclosureOpen } from '@kovojs/headless-ui/disclosure';
  *
- * const input = {} as Parameters<typeof setDisclosureOpen>[0];
- * const state = {} as Parameters<typeof setDisclosureOpen>[1];
- * const options = {} as Parameters<typeof setDisclosureOpen>[2];
- * const detail = {} as Parameters<typeof setDisclosureOpen>[3];
+ * declare const input: Parameters<typeof setDisclosureOpen>[0];
+ * declare const state: Parameters<typeof setDisclosureOpen>[1];
+ * declare const options: Parameters<typeof setDisclosureOpen>[2];
+ * declare const detail: Parameters<typeof setDisclosureOpen>[3];
  * const result = setDisclosureOpen(input, state, options, detail);
  * ```
  *
@@ -235,9 +235,9 @@ export function setDisclosureOpen(
  * ```ts
  * import { toggleDisclosure } from '@kovojs/headless-ui/disclosure';
  *
- * const input = {} as Parameters<typeof toggleDisclosure>[0];
- * const state = {} as Parameters<typeof toggleDisclosure>[1];
- * const options = {} as Parameters<typeof toggleDisclosure>[2];
+ * declare const input: Parameters<typeof toggleDisclosure>[0];
+ * declare const state: Parameters<typeof toggleDisclosure>[1];
+ * declare const options: Parameters<typeof toggleDisclosure>[2];
  * const result = toggleDisclosure(input, state, options);
  * ```
  *
@@ -258,9 +258,9 @@ export function toggleDisclosure(
  * ```ts
  * import { disclosureTriggerClick } from '@kovojs/headless-ui/disclosure';
  *
- * const input = {} as Parameters<typeof disclosureTriggerClick>[0];
- * const state = {} as Parameters<typeof disclosureTriggerClick>[1];
- * const options = {} as Parameters<typeof disclosureTriggerClick>[2];
+ * declare const input: Parameters<typeof disclosureTriggerClick>[0];
+ * declare const state: Parameters<typeof disclosureTriggerClick>[1];
+ * declare const options: Parameters<typeof disclosureTriggerClick>[2];
  * const result = disclosureTriggerClick(input, state, options);
  * ```
  *

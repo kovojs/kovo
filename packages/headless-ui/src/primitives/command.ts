@@ -19,7 +19,7 @@ import {
  * ```ts
  * import type { CommandItem } from '@kovojs/headless-ui/command';
  *
- * const value: CommandItem = {} as CommandItem;
+ * declare const value: CommandItem;
  * ```
  */
 export interface CommandItem {
@@ -40,7 +40,7 @@ export interface CommandItem {
  * ```ts
  * import type { CommandState } from '@kovojs/headless-ui/command';
  *
- * const value: CommandState = {} as CommandState;
+ * declare const value: CommandState;
  * ```
  */
 export interface CommandState {
@@ -66,7 +66,7 @@ export interface CommandState {
  * ```ts
  * import type { CommandRootAttributeOptions } from '@kovojs/headless-ui/command';
  *
- * const value: CommandRootAttributeOptions = {} as CommandRootAttributeOptions;
+ * declare const value: CommandRootAttributeOptions;
  * ```
  */
 export interface CommandRootAttributeOptions extends CommandState {
@@ -82,7 +82,7 @@ export interface CommandRootAttributeOptions extends CommandState {
  * ```ts
  * import type { CommandTriggerAttributeOptions } from '@kovojs/headless-ui/command';
  *
- * const value: CommandTriggerAttributeOptions = {} as CommandTriggerAttributeOptions;
+ * declare const value: CommandTriggerAttributeOptions;
  * ```
  */
 export interface CommandTriggerAttributeOptions extends CommandState {
@@ -100,7 +100,7 @@ export interface CommandTriggerAttributeOptions extends CommandState {
  * ```ts
  * import type { CommandDialogAttributeOptions } from '@kovojs/headless-ui/command';
  *
- * const value: CommandDialogAttributeOptions = {} as CommandDialogAttributeOptions;
+ * declare const value: CommandDialogAttributeOptions;
  * ```
  */
 export interface CommandDialogAttributeOptions extends CommandState {
@@ -118,7 +118,7 @@ export interface CommandDialogAttributeOptions extends CommandState {
  * ```ts
  * import type { CommandCloseAttributeOptions } from '@kovojs/headless-ui/command';
  *
- * const value: CommandCloseAttributeOptions = {} as CommandCloseAttributeOptions;
+ * declare const value: CommandCloseAttributeOptions;
  * ```
  */
 export interface CommandCloseAttributeOptions extends CommandState {
@@ -134,7 +134,7 @@ export interface CommandCloseAttributeOptions extends CommandState {
  * ```ts
  * import type { CommandInputAttributeOptions } from '@kovojs/headless-ui/command';
  *
- * const value: CommandInputAttributeOptions = {} as CommandInputAttributeOptions;
+ * declare const value: CommandInputAttributeOptions;
  * ```
  */
 export interface CommandInputAttributeOptions extends CommandState {
@@ -154,7 +154,7 @@ export interface CommandInputAttributeOptions extends CommandState {
  * ```ts
  * import type { CommandListboxAttributeOptions } from '@kovojs/headless-ui/command';
  *
- * const value: CommandListboxAttributeOptions = {} as CommandListboxAttributeOptions;
+ * declare const value: CommandListboxAttributeOptions;
  * ```
  */
 export interface CommandListboxAttributeOptions extends CommandState {
@@ -171,7 +171,7 @@ export interface CommandListboxAttributeOptions extends CommandState {
  * ```ts
  * import type { CommandItemAttributeOptions } from '@kovojs/headless-ui/command';
  *
- * const value: CommandItemAttributeOptions = {} as CommandItemAttributeOptions;
+ * declare const value: CommandItemAttributeOptions;
  * ```
  */
 export interface CommandItemAttributeOptions extends CommandState {
@@ -190,7 +190,7 @@ export interface CommandItemAttributeOptions extends CommandState {
  * ```ts
  * import type { CommandEmptyAttributeOptions } from '@kovojs/headless-ui/command';
  *
- * const value: CommandEmptyAttributeOptions = {} as CommandEmptyAttributeOptions;
+ * declare const value: CommandEmptyAttributeOptions;
  * ```
  */
 export interface CommandEmptyAttributeOptions extends CommandState {
@@ -206,7 +206,7 @@ export interface CommandEmptyAttributeOptions extends CommandState {
  * ```ts
  * import type { CommandOpenChangeReason } from '@kovojs/headless-ui/command';
  *
- * const value: CommandOpenChangeReason = {} as CommandOpenChangeReason;
+ * declare const value: CommandOpenChangeReason;
  * ```
  */
 export type CommandOpenChangeReason =
@@ -227,7 +227,7 @@ export type CommandOpenChangeReason =
  * ```ts
  * import type { CommandInputChangeReason } from '@kovojs/headless-ui/command';
  *
- * const value: CommandInputChangeReason = {} as CommandInputChangeReason;
+ * declare const value: CommandInputChangeReason;
  * ```
  */
 export type CommandInputChangeReason = 'input' | 'programmatic';
@@ -241,7 +241,7 @@ export type CommandInputChangeReason = 'input' | 'programmatic';
  * ```ts
  * import type { CommandValueChangeReason } from '@kovojs/headless-ui/command';
  *
- * const value: CommandValueChangeReason = {} as CommandValueChangeReason;
+ * declare const value: CommandValueChangeReason;
  * ```
  */
 export type CommandValueChangeReason = 'enter-key' | 'item-click' | 'programmatic';
@@ -255,7 +255,7 @@ export type CommandValueChangeReason = 'enter-key' | 'item-click' | 'programmati
  * ```ts
  * import type { CommandOpenChangeDetail } from '@kovojs/headless-ui/command';
  *
- * const value: CommandOpenChangeDetail = {} as CommandOpenChangeDetail;
+ * declare const value: CommandOpenChangeDetail;
  * ```
  */
 export type CommandOpenChangeDetail = PrimitiveChangeDetail<CommandOpenChangeReason, boolean>;
@@ -269,7 +269,7 @@ export type CommandOpenChangeDetail = PrimitiveChangeDetail<CommandOpenChangeRea
  * ```ts
  * import type { CommandInputChangeDetail } from '@kovojs/headless-ui/command';
  *
- * const value: CommandInputChangeDetail = {} as CommandInputChangeDetail;
+ * declare const value: CommandInputChangeDetail;
  * ```
  */
 export type CommandInputChangeDetail = PrimitiveChangeDetail<CommandInputChangeReason, string>;
@@ -283,7 +283,7 @@ export type CommandInputChangeDetail = PrimitiveChangeDetail<CommandInputChangeR
  * ```ts
  * import type { CommandValueChangeDetail } from '@kovojs/headless-ui/command';
  *
- * const value: CommandValueChangeDetail = {} as CommandValueChangeDetail;
+ * declare const value: CommandValueChangeDetail;
  * ```
  */
 export type CommandValueChangeDetail = PrimitiveChangeDetail<
@@ -300,7 +300,7 @@ export type CommandValueChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { CommandChangeOptions } from '@kovojs/headless-ui/command';
  *
- * const value: CommandChangeOptions = {} as CommandChangeOptions;
+ * declare const value: CommandChangeOptions;
  * ```
  */
 export interface CommandChangeOptions {
@@ -318,7 +318,7 @@ export interface CommandChangeOptions {
  * ```ts
  * import type { CommandOpenChangeResult } from '@kovojs/headless-ui/command';
  *
- * const value: CommandOpenChangeResult = {} as CommandOpenChangeResult;
+ * declare const value: CommandOpenChangeResult;
  * ```
  */
 export interface CommandOpenChangeResult {
@@ -336,7 +336,7 @@ export interface CommandOpenChangeResult {
  * ```ts
  * import type { CommandInputChangeResult } from '@kovojs/headless-ui/command';
  *
- * const value: CommandInputChangeResult = {} as CommandInputChangeResult;
+ * declare const value: CommandInputChangeResult;
  * ```
  */
 export interface CommandInputChangeResult {
@@ -354,7 +354,7 @@ export interface CommandInputChangeResult {
  * ```ts
  * import type { CommandValueChangeResult } from '@kovojs/headless-ui/command';
  *
- * const value: CommandValueChangeResult = {} as CommandValueChangeResult;
+ * declare const value: CommandValueChangeResult;
  * ```
  */
 export interface CommandValueChangeResult {
@@ -372,7 +372,7 @@ export interface CommandValueChangeResult {
  * ```ts
  * import type { CommandSelectResult } from '@kovojs/headless-ui/command';
  *
- * const value: CommandSelectResult = {} as CommandSelectResult;
+ * declare const value: CommandSelectResult;
  * ```
  */
 export interface CommandSelectResult {
@@ -390,7 +390,7 @@ export interface CommandSelectResult {
  * ```ts
  * import type { CommandMoveResult } from '@kovojs/headless-ui/command';
  *
- * const value: CommandMoveResult = {} as CommandMoveResult;
+ * declare const value: CommandMoveResult;
  * ```
  */
 export interface CommandMoveResult {
@@ -407,7 +407,7 @@ export interface CommandMoveResult {
  * ```ts
  * import type { CommandKeyboardResult } from '@kovojs/headless-ui/command';
  *
- * const value: CommandKeyboardResult = {} as CommandKeyboardResult;
+ * declare const value: CommandKeyboardResult;
  * ```
  */
 export type CommandKeyboardResult =
@@ -424,7 +424,7 @@ export type CommandKeyboardResult =
  * ```ts
  * import type { CommandPrimitiveAttributes } from '@kovojs/headless-ui/command';
  *
- * const value: CommandPrimitiveAttributes = {} as CommandPrimitiveAttributes;
+ * declare const value: CommandPrimitiveAttributes;
  * ```
  */
 export type CommandPrimitiveAttributes = PrimitiveDataAttributes &
@@ -439,7 +439,7 @@ export type CommandPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { CommandTriggerEvent } from '@kovojs/headless-ui/command';
  *
- * const value: CommandTriggerEvent = {} as CommandTriggerEvent;
+ * declare const value: CommandTriggerEvent;
  * ```
  */
 export type CommandTriggerEvent = Event;
@@ -453,7 +453,7 @@ export type CommandTriggerEvent = Event;
  * ```ts
  * import type { CommandCloseEvent } from '@kovojs/headless-ui/command';
  *
- * const value: CommandCloseEvent = {} as CommandCloseEvent;
+ * declare const value: CommandCloseEvent;
  * ```
  */
 export type CommandCloseEvent = Event;
@@ -467,7 +467,7 @@ export type CommandCloseEvent = Event;
  * ```ts
  * import type { CommandCancelEvent } from '@kovojs/headless-ui/command';
  *
- * const value: CommandCancelEvent = {} as CommandCancelEvent;
+ * declare const value: CommandCancelEvent;
  * ```
  */
 export type CommandCancelEvent = Event;
@@ -481,7 +481,7 @@ export type CommandCancelEvent = Event;
  * ```ts
  * import type { CommandItemEvent } from '@kovojs/headless-ui/command';
  *
- * const value: CommandItemEvent = {} as CommandItemEvent;
+ * declare const value: CommandItemEvent;
  * ```
  */
 export type CommandItemEvent = Event;
@@ -495,7 +495,7 @@ export type CommandItemEvent = Event;
  * ```ts
  * import type { CommandInputEvent } from '@kovojs/headless-ui/command';
  *
- * const value: CommandInputEvent = {} as CommandInputEvent;
+ * declare const value: CommandInputEvent;
  * ```
  */
 export type CommandInputEvent = Event & {
@@ -512,7 +512,7 @@ export type CommandInputEvent = Event & {
  * ```ts
  * import type { CommandKeyboardEvent } from '@kovojs/headless-ui/command';
  *
- * const value: CommandKeyboardEvent = {} as CommandKeyboardEvent;
+ * declare const value: CommandKeyboardEvent;
  * ```
  */
 export type CommandKeyboardEvent = Event & { readonly key: string };
@@ -526,7 +526,7 @@ export type CommandKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import type { CommandBeforeToggleEvent } from '@kovojs/headless-ui/command';
  *
- * const value: CommandBeforeToggleEvent = {} as CommandBeforeToggleEvent;
+ * declare const value: CommandBeforeToggleEvent;
  * ```
  */
 export type CommandBeforeToggleEvent = Event &
@@ -543,7 +543,7 @@ export type CommandBeforeToggleEvent = Event &
  * ```ts
  * import { commandRootAttributes } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandRootAttributes>[0];
+ * declare const input: Parameters<typeof commandRootAttributes>[0];
  * const result = commandRootAttributes(input);
  * ```
  */
@@ -567,7 +567,7 @@ export function commandRootAttributes(
  * ```ts
  * import { commandTriggerAttributes } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandTriggerAttributes>[0];
+ * declare const input: Parameters<typeof commandTriggerAttributes>[0];
  * const result = commandTriggerAttributes(input);
  * ```
  */
@@ -605,7 +605,7 @@ export function commandTriggerAttributes(
  * ```ts
  * import { commandDialogAttributes } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandDialogAttributes>[0];
+ * declare const input: Parameters<typeof commandDialogAttributes>[0];
  * const result = commandDialogAttributes(input);
  * ```
  */
@@ -631,7 +631,7 @@ export function commandDialogAttributes(
  * ```ts
  * import { commandCloseAttributes } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandCloseAttributes>[0];
+ * declare const input: Parameters<typeof commandCloseAttributes>[0];
  * const result = commandCloseAttributes(input);
  * ```
  */
@@ -664,7 +664,7 @@ export function commandCloseAttributes(
  * ```ts
  * import { commandInputAttributes } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandInputAttributes>[0];
+ * declare const input: Parameters<typeof commandInputAttributes>[0];
  * const result = commandInputAttributes(input);
  * ```
  */
@@ -708,7 +708,7 @@ export function commandInputAttributes(
  * ```ts
  * import { commandListboxAttributes } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandListboxAttributes>[0];
+ * declare const input: Parameters<typeof commandListboxAttributes>[0];
  * const result = commandListboxAttributes(input);
  * ```
  */
@@ -735,7 +735,7 @@ export function commandListboxAttributes(
  * ```ts
  * import { commandItemAttributes } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandItemAttributes>[0];
+ * declare const input: Parameters<typeof commandItemAttributes>[0];
  * const result = commandItemAttributes(input);
  * ```
  */
@@ -774,7 +774,7 @@ export function commandItemAttributes(
  * ```ts
  * import { commandEmptyAttributes } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandEmptyAttributes>[0];
+ * declare const input: Parameters<typeof commandEmptyAttributes>[0];
  * const result = commandEmptyAttributes(input);
  * ```
  */
@@ -797,7 +797,7 @@ export function commandEmptyAttributes(
  * ```ts
  * import { commandItemHighlighted } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandItemHighlighted>[0];
+ * declare const input: Parameters<typeof commandItemHighlighted>[0];
  * const result = commandItemHighlighted(input);
  * ```
  */
@@ -814,7 +814,7 @@ export function commandItemHighlighted(options: CommandItemAttributeOptions): bo
  * ```ts
  * import { commandItemSelected } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandItemSelected>[0];
+ * declare const input: Parameters<typeof commandItemSelected>[0];
  * const result = commandItemSelected(input);
  * ```
  */
@@ -831,7 +831,7 @@ export function commandItemSelected(options: CommandItemAttributeOptions): boole
  * ```ts
  * import { commandValueText } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandValueText>[0];
+ * declare const input: Parameters<typeof commandValueText>[0];
  * const result = commandValueText(input);
  * ```
  */
@@ -850,7 +850,7 @@ export function commandValueText(state: CommandState): string {
  * ```ts
  * import { commandFilteredItems } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandFilteredItems>[0];
+ * declare const input: Parameters<typeof commandFilteredItems>[0];
  * const result = commandFilteredItems(input);
  * ```
  */
@@ -871,10 +871,10 @@ export function commandFilteredItems(state: CommandState): readonly CommandItem[
  * ```ts
  * import { setCommandOpen } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof setCommandOpen>[0];
- * const state = {} as Parameters<typeof setCommandOpen>[1];
- * const options = {} as Parameters<typeof setCommandOpen>[2];
- * const detail = {} as Parameters<typeof setCommandOpen>[3];
+ * declare const input: Parameters<typeof setCommandOpen>[0];
+ * declare const state: Parameters<typeof setCommandOpen>[1];
+ * declare const options: Parameters<typeof setCommandOpen>[2];
+ * declare const detail: Parameters<typeof setCommandOpen>[3];
  * const result = setCommandOpen(input, state, options, detail);
  * ```
  *
@@ -907,10 +907,10 @@ export function setCommandOpen(
  * ```ts
  * import { setCommandInputValue } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof setCommandInputValue>[0];
- * const state = {} as Parameters<typeof setCommandInputValue>[1];
- * const options = {} as Parameters<typeof setCommandInputValue>[2];
- * const detail = {} as Parameters<typeof setCommandInputValue>[3];
+ * declare const input: Parameters<typeof setCommandInputValue>[0];
+ * declare const state: Parameters<typeof setCommandInputValue>[1];
+ * declare const options: Parameters<typeof setCommandInputValue>[2];
+ * declare const detail: Parameters<typeof setCommandInputValue>[3];
  * const result = setCommandInputValue(input, state, options, detail);
  * ```
  *
@@ -944,10 +944,10 @@ export function setCommandInputValue(
  * ```ts
  * import { setCommandValue } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof setCommandValue>[0];
- * const state = {} as Parameters<typeof setCommandValue>[1];
- * const options = {} as Parameters<typeof setCommandValue>[2];
- * const detail = {} as Parameters<typeof setCommandValue>[3];
+ * declare const input: Parameters<typeof setCommandValue>[0];
+ * declare const state: Parameters<typeof setCommandValue>[1];
+ * declare const options: Parameters<typeof setCommandValue>[2];
+ * declare const detail: Parameters<typeof setCommandValue>[3];
  * const result = setCommandValue(input, state, options, detail);
  * ```
  *
@@ -980,9 +980,9 @@ export function setCommandValue(
  * ```ts
  * import { toggleCommand } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof toggleCommand>[0];
- * const state = {} as Parameters<typeof toggleCommand>[1];
- * const options = {} as Parameters<typeof toggleCommand>[2];
+ * declare const input: Parameters<typeof toggleCommand>[0];
+ * declare const state: Parameters<typeof toggleCommand>[1];
+ * declare const options: Parameters<typeof toggleCommand>[2];
  * const result = toggleCommand(input, state, options);
  * ```
  *
@@ -1005,10 +1005,10 @@ export function toggleCommand(
  * ```ts
  * import { selectCommandItem } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof selectCommandItem>[0];
- * const state = {} as Parameters<typeof selectCommandItem>[1];
- * const options = {} as Parameters<typeof selectCommandItem>[2];
- * const detail = {} as Parameters<typeof selectCommandItem>[3];
+ * declare const input: Parameters<typeof selectCommandItem>[0];
+ * declare const state: Parameters<typeof selectCommandItem>[1];
+ * declare const options: Parameters<typeof selectCommandItem>[2];
+ * declare const detail: Parameters<typeof selectCommandItem>[3];
  * const result = selectCommandItem(input, state, options, detail);
  * ```
  *
@@ -1058,9 +1058,9 @@ export function selectCommandItem(
  * ```ts
  * import { commandMove } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandMove>[0];
- * const state = {} as Parameters<typeof commandMove>[1];
- * const options = {} as Parameters<typeof commandMove>[2];
+ * declare const input: Parameters<typeof commandMove>[0];
+ * declare const state: Parameters<typeof commandMove>[1];
+ * declare const options: Parameters<typeof commandMove>[2];
  * const result = commandMove(input, state, options);
  * ```
  *
@@ -1097,9 +1097,9 @@ export function commandMove(
  * ```ts
  * import { commandTriggerClick } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandTriggerClick>[0];
- * const state = {} as Parameters<typeof commandTriggerClick>[1];
- * const options = {} as Parameters<typeof commandTriggerClick>[2];
+ * declare const input: Parameters<typeof commandTriggerClick>[0];
+ * declare const state: Parameters<typeof commandTriggerClick>[1];
+ * declare const options: Parameters<typeof commandTriggerClick>[2];
  * const result = commandTriggerClick(input, state, options);
  * ```
  *
@@ -1131,9 +1131,9 @@ export function commandTriggerClick(
  * ```ts
  * import { commandCloseClick } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandCloseClick>[0];
- * const state = {} as Parameters<typeof commandCloseClick>[1];
- * const options = {} as Parameters<typeof commandCloseClick>[2];
+ * declare const input: Parameters<typeof commandCloseClick>[0];
+ * declare const state: Parameters<typeof commandCloseClick>[1];
+ * declare const options: Parameters<typeof commandCloseClick>[2];
  * const result = commandCloseClick(input, state, options);
  * ```
  *
@@ -1165,9 +1165,9 @@ export function commandCloseClick(
  * ```ts
  * import { commandCancel } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandCancel>[0];
- * const state = {} as Parameters<typeof commandCancel>[1];
- * const options = {} as Parameters<typeof commandCancel>[2];
+ * declare const input: Parameters<typeof commandCancel>[0];
+ * declare const state: Parameters<typeof commandCancel>[1];
+ * declare const options: Parameters<typeof commandCancel>[2];
  * const result = commandCancel(input, state, options);
  * ```
  *
@@ -1199,9 +1199,9 @@ export function commandCancel(
  * ```ts
  * import { commandBeforeToggle } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandBeforeToggle>[0];
- * const state = {} as Parameters<typeof commandBeforeToggle>[1];
- * const options = {} as Parameters<typeof commandBeforeToggle>[2];
+ * declare const input: Parameters<typeof commandBeforeToggle>[0];
+ * declare const state: Parameters<typeof commandBeforeToggle>[1];
+ * declare const options: Parameters<typeof commandBeforeToggle>[2];
  * const result = commandBeforeToggle(input, state, options);
  * ```
  *
@@ -1234,9 +1234,9 @@ export function commandBeforeToggle(
  * ```ts
  * import { commandInput } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandInput>[0];
- * const state = {} as Parameters<typeof commandInput>[1];
- * const options = {} as Parameters<typeof commandInput>[2];
+ * declare const input: Parameters<typeof commandInput>[0];
+ * declare const state: Parameters<typeof commandInput>[1];
+ * declare const options: Parameters<typeof commandInput>[2];
  * const result = commandInput(input, state, options);
  * ```
  *
@@ -1273,9 +1273,9 @@ export function commandInput(
  * ```ts
  * import { commandItemClick } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandItemClick>[0];
- * const state = {} as Parameters<typeof commandItemClick>[1];
- * const options = {} as Parameters<typeof commandItemClick>[2];
+ * declare const input: Parameters<typeof commandItemClick>[0];
+ * declare const state: Parameters<typeof commandItemClick>[1];
+ * declare const options: Parameters<typeof commandItemClick>[2];
  * const result = commandItemClick(input, state, options);
  * ```
  *
@@ -1307,9 +1307,9 @@ export function commandItemClick(
  * ```ts
  * import { commandKeyDown } from '@kovojs/headless-ui/command';
  *
- * const input = {} as Parameters<typeof commandKeyDown>[0];
- * const state = {} as Parameters<typeof commandKeyDown>[1];
- * const options = {} as Parameters<typeof commandKeyDown>[2];
+ * declare const input: Parameters<typeof commandKeyDown>[0];
+ * declare const state: Parameters<typeof commandKeyDown>[1];
+ * declare const options: Parameters<typeof commandKeyDown>[2];
  * const result = commandKeyDown(input, state, options);
  * ```
  *

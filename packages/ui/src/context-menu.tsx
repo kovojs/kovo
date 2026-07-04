@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   contextMenuContentAttributes,
   contextMenuGroupAttributes,
@@ -55,7 +55,7 @@ export interface ContextMenuStateProps {
  * const props: ContextMenuProps = { children: 'Content' };
  */
 export interface ContextMenuProps extends ContextMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: ContextMenuStyleOverrides;
 }
@@ -68,7 +68,7 @@ export interface ContextMenuProps extends ContextMenuStateProps {
  * const props: ContextMenuTriggerProps = { children: 'Content' };
  */
 export interface ContextMenuTriggerProps extends ContextMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   labelledBy?: string;
@@ -83,7 +83,7 @@ export interface ContextMenuTriggerProps extends ContextMenuStateProps {
  * const props: ContextMenuContentProps = { children: 'Content' };
  */
 export interface ContextMenuContentProps extends ContextMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: ContextMenuStyleOverrides;
@@ -97,7 +97,7 @@ export interface ContextMenuContentProps extends ContextMenuStateProps {
  * const props: ContextMenuItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface ContextMenuItemProps extends ContextMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;
@@ -113,7 +113,7 @@ export interface ContextMenuItemProps extends ContextMenuStateProps {
  * const props: ContextMenuGroupProps = { children: 'Content' };
  */
 export interface ContextMenuGroupProps extends ContextMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: ContextMenuStyleOverrides;
@@ -130,15 +130,7 @@ export interface ContextMenuSeparatorProps {
   id?: string;
   styles?: ContextMenuStyleOverrides;
 }
-
-/**
- * Style definitions used by the context menu components.
- *
- * @example
- * import { contextMenuStyles } from "@kovojs/ui/context-menu";
- * const styles = contextMenuStyles;
- */
-export const contextMenuStyles = style.create({
+const contextMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

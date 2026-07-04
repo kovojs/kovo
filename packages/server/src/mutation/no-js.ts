@@ -7,7 +7,6 @@ import {
   mergeResponseHeaders,
   redirectLocationHeader,
   retryAfterHeaders,
-  type MutationResponseHeaders,
   type ResponseHeaders,
 } from '../response.js';
 import { isNoJsReplayResponse, type MutationLifecycleOutcome } from './replay-policy.js';
@@ -95,7 +94,7 @@ export async function renderNoJsMutationLifecycleResponse<
 
   const successResponse = blessRedirectResponse({
     body: frameworkWireBody(''),
-    headers: mergeMutationResponseHeaders(
+    headers: mergeResponseHeaders(
       {
         'Cache-Control': 'no-store',
         Location: redirectLocationHeader(
@@ -138,7 +137,7 @@ async function renderNoJsMutationFailureResponse<Request, Value>(
   return {
     body: frameworkWireBody(body),
     headers: stampNoJsMutationFailureHeaders(
-      mergeMutationResponseHeaders(
+      mergeResponseHeaders(
         { 'Content-Type': 'text/html; charset=utf-8' },
         retryAfterHeaders(failure),
       ),
@@ -234,10 +233,4 @@ function loginLocation(next: string): string {
   const url = new URL('/login', 'https://kovo.local');
   url.searchParams.set('next', next.startsWith('/') && !next.startsWith('//') ? next : '/');
   return `${url.pathname}${url.search}${url.hash}`;
-}
-
-function mergeMutationResponseHeaders(
-  ...sources: readonly (MutationResponseHeaders | undefined)[]
-): MutationResponseHeaders {
-  return mergeResponseHeaders(...sources);
 }

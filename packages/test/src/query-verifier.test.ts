@@ -223,7 +223,7 @@ describe('@kovojs/test query verifier', () => {
     const cartQuery = query('cart', {
       load(_input, context?: { db: FakeDb; request: { db: FakeDb } }) {
         expect(context?.db).toBe(context?.request.db);
-        expect(context?.db).toBe(harness.dbHandle());
+        expect(context?.db).toBe(harness.db);
         return context?.db.read('cart_items');
       },
       reads: [cart],

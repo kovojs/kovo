@@ -500,46 +500,110 @@ conservative half-step left as the end state.
 
 ### Phase 1 — standalone bug fixes (independent, land first)
 
-- [ ] **Fix `@kovojs/better-auth#role`**: delegate the body to `guards.role` (keep the typed
+- [x] **Fix `@kovojs/better-auth#role`**: delegate the body to `guards.role` (keep the typed
       role-name overload), so proven-principal checks, `markPassedRoleGuard`, and guard audit facts
       come along. Add a regression test asserting `db.crossOwnerRead(..., { role })` succeeds
       behind the better-auth guard (`packages/better-auth/src/guards.ts:53-65`,
       `packages/server/src/guards.ts:550-560`, `postgres-runtime.ts:983`).
-- [ ] **Export `now` next to `tempId`** so derive-codegen's emitted
+  - Evidence: `packages/server/src/better-auth-role-guard.test.ts` plus
+    `pnpm exec vitest --run packages/browser/src/index-exports.test.ts packages/drizzle/src/derive-codegen.test.ts packages/server/src/better-auth-role-guard.test.ts packages/server/src/wire-html.test.ts packages/server/src/mutation-delta.test.ts packages/browser/src/wire-parser.test.ts --config ./vite.config.ts`
+    (78 tests) after merging `agent/api-audit-phase1-20260703-2259`.
+- [x] **Export `now` next to `tempId`** so derive-codegen's emitted
       `import { now, tempId } from '@kovojs/browser'` resolves (`browser/src/index.ts:4`,
       `optimism.ts:553`, `drizzle/src/derive-codegen.ts:52-58`). Add a test that renders a derived
       transform exercising **every** placeholder and typechecks/executes the emitted module — the
       drift-proof is the real fix.
-- [ ] **Resolve the `clocks` core↔compiler contradiction**: add `clocks` to
+  - Evidence: `packages/drizzle/src/derive-codegen.test.ts` typechecks/executes the emitted
+    `now`+`tempId` module; covered by the 78-test focused command above.
+- [x] **Resolve the `clocks` core↔compiler contradiction**: add `clocks` to
       `COMPONENT_DEFINITION_KEYS` + a SPEC section, or delete the compiler path
       (`compiler/src/validate/temporal.ts`) and the islands.md section — one owner, not two truths.
+  - Evidence: `packages/core/src/index.ts`, `packages/core/src/index.test.ts`, and
+    `spec/04-component-model.md`; verified by the integrated 302-test focused command covering
+    `packages/core/src/index.test.ts`, `packages/compiler/src/stamps.test.ts`, and
+    `packages/compiler/src/query-coverage.test.ts`.
 
 ### Phase 2 — data-layer reconciliation
 
-- [ ] **Remove `write`/`WriteDefinition` and `tag`/`Tag` from the `@kovojs/server` root** (inert;
+- [x] **Remove `write`/`WriteDefinition` and `tag`/`Tag` from the `@kovojs/server` root** (inert;
       zero consumers) and record the SPEC §10.3 divergence as an explicit open design decision —
       if the domain-write mechanism lands later, `write()` returns _with_ its enforcement in the
       same change.
-- [ ] **Rewrite queries.md / mutations.md / data-layer.md to the enforced model**: analyzed Drizzle
+  - Evidence: `packages/server/src/index.ts`, `packages/server/src/api/data.ts`,
+    `packages/server/src/domain.ts`, `packages/server/src/mutation/definition.ts`, and
+    `spec/10-data-plane.md`; verified by `pnpm run check:api-surface` and the integrated
+    `packages/compiler/src/vite.test.ts` / `packages/drizzle/src/index.recognizer-alias-bugz3.test.ts`
+    focused run.
+- [x] **Rewrite queries.md / mutations.md / data-layer.md to the enforced model**: analyzed Drizzle
       writes + registry-declared touches (what commerce does), `context.db`/`Reader` loader
       handles, `access` posture on every request-reachable sample, correct KV330 severity.
+  - Evidence: `site/content/guides/queries.md`, `site/content/guides/mutations.md`, and
+    `site/content/guides/data-layer.md`; verified by `node site/scripts/code-snippets-check.mjs` and
+    `pnpm exec vitest --run site/scripts/code-snippets-check.test.mjs site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
 
 ### Phase 3 — surface removals and ABI reclassification
 
-- [ ] Land the remaining **Definitely Remove** items (createElement, MutationResponseHeaders,
-      Deferred\*Chunk family, meta(), GuardFailure, EndpointReason `purpose`, runKovoCommand).
-- [ ] **Reclassify compiled-ABI types**: headless-ui transition machinery → `./generated` (one
-      generator change in `packages/ui/scripts/primitive-component-manifest.mjs`); drop the 44
-      `@kovojs/ui` `*Styles` exports from versioned modules (keep module-local for copy-in);
-      `@kovojs/browser/client` DI seams → generated/internal via the `KovoLoaderOptions` split;
-      emit generated optimistic modules' imports from `@kovojs/browser/generated`.
-- [ ] **Barrel hygiene on the `@kovojs/server` root**: move plumbing families (drain-facts,
+- [x] Land the remaining **Definitely Remove** items.
+  - [x] `createElement`
+  - [x] `MutationResponseHeaders`
+  - [x] `Deferred*Chunk` family
+  - [x] `meta()`
+  - [x] `GuardFailure`
+  - [x] EndpointReason `purpose`
+  - [x] `runKovoCommand` removed from the `@kovojs/cli` root; it remains available only on the
+        internal command dispatcher subpath.
+    - Evidence: `packages/cli/src/api.ts`, `site/scripts/api-ref.test.mjs`,
+      `pnpm run check:api-surface`, and
+      `pnpm exec vitest --run site/scripts/api-ref.test.mjs packages/cli/src/index.kovo-check.test.ts --config ./vite.config.ts`.
+  - Evidence: `packages/server/src/index.ts`, `packages/server/src/guards.ts`,
+    `packages/server/src/endpoint.ts`, `packages/server/src/response.ts`, and
+    `packages/server/src/api/routing.ts`; verified by `pnpm run check:api-surface` and
+    `pnpm exec vitest --run packages/server/src/api/app.test.ts packages/server/src/endpoint.test.ts site/scripts/api-ref.test.mjs packages/server/src/wire-fixtures.test.ts --config ./vite.config.ts`.
+- [x] **Reclassify compiled-ABI types**.
+  - [x] Headless-ui transition machinery moved out of app-facing public facades.
+    - Evidence: `packages/headless-ui/src/public/*.ts`, `packages/headless-ui/src/types-boundary.test.ts`,
+      and `site/scripts/api-ref.test.mjs`; verified by `pnpm run check:api-surface` and
+      `pnpm exec vitest --run packages/headless-ui/src/types-boundary.test.ts packages/ui/src/index.markup.test.tsx site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
+  - [x] Drop the 44 `@kovojs/ui` `*Styles` exports from versioned modules while keeping them
+        source-local for copy-in.
+    - Evidence: `packages/ui/src/*.tsx`, `packages/ui/scripts/build-registry.mjs`,
+      `packages/ui/registry.json`, and `packages/ui/src/index.markup.test.tsx`; verified by the same
+      focused command above.
+  - [x] `@kovojs/browser/client` DI seams → generated/internal via the `KovoLoaderOptions` split.
+    - Evidence: `packages/browser/src/client.ts`, `packages/browser/src/generated.ts`, and
+      `packages/browser/src/loader.ts`; verified by `pnpm run check:api-surface` and
+      `pnpm exec vitest --run packages/browser/src/index-exports.test.ts packages/browser/src/generated-exports.test.ts packages/drizzle/src/derive-codegen.test.ts --config ./vite.config.ts`.
+  - [x] Emit generated optimistic modules' imports from `@kovojs/browser/generated`.
+    - Evidence: `packages/drizzle/src/derive-codegen.ts` and
+      `packages/drizzle/src/derive-codegen.test.ts`; verified by the same browser/drizzle focused
+      command above.
+- [x] **Barrel hygiene on the `@kovojs/server` root**: move plumbing families (drain-facts,
       capability primitives, CSP renderers, vite-dev, adapter hooks) behind internal subpaths.
-- [ ] **Kill duplicate vocabulary in one pass** (tag/domain done in Phase 2; GuardFailure,
-      MutationResponseHeaders, CsrfValidationOptions alias, purpose/reason, core-vs-server
-      `query`/`route`, FieldError ×2, Stylesheet/stylesheet, dual-homed browser exports).
-- [ ] Fix `examples/gallery/src/primitive-actions.ts` importing `./generated`/`./internal`
+  - Evidence: `packages/server/src/index.ts`, `packages/server/src/internal/{audit-facts,capabilities,csp,egress,managed-db}.ts`,
+    `packages/server/src/sqlite-runtime.ts`, and `packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts`;
+    verified by `pnpm run check:api-surface`, `pnpm run check:publish`,
+    `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/api-ref.test.mjs scripts/public-packages.test.mjs scripts/api-surface-gate.test.mjs --config ./vite.config.ts`,
+    and `pnpm exec vitest --run packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.scaffold.typecheck.test.ts packages/create-kovo/src/index.build.scaffold.sqlite.test.ts --config ./vite.config.ts`.
+- [x] **Kill duplicate vocabulary in one pass** (tag/domain done in Phase 2; GuardFailure,
+      MutationResponseHeaders, CsrfOptions-only CSRF config, purpose/reason, core-vs-server
+      `queryRef`/`routeRef`, FieldErrorMessage vs core FieldError, StylesheetLink/stylesheet,
+      duplicate browser/test exports).
+  - Evidence: `packages/core/src/index.ts`, `packages/server/src/{csrf,index,query,route}.ts`,
+    `packages/ui/src/field.tsx`, `packages/test/src/{harness,pglite,sqlite}.ts`, and
+    `scripts/exported-symbol-duplicates.baseline.json`; verified by `pnpm run check:api-surface`,
+    `pnpm run check:exports`, `pnpm run check:vp`, and
+    `pnpm exec vitest run packages/core/src/index.test.ts packages/browser/src/query-visible-return-refetch.test.ts packages/server/src/query-endpoint.test.ts packages/server/src/mutation.test.ts packages/server/src/document.test.ts packages/server/src/api/app.test.ts packages/test/src/harness.test.ts packages/test/src/pglite-harness.test.ts packages/test/src/sqlite-harness.test.ts packages/ui/src/field.stylex.test.tsx packages/ui/src/index.form-controls.test.tsx --config ./vite.config.ts`.
+- [x] Fix `examples/gallery/src/primitive-actions.ts` importing `./generated`/`./internal`
       headless-ui subpaths from example app source.
+  - Evidence: `examples/gallery/src/primitive-actions.ts` now re-exports the local generated
+    façade at `examples/gallery/src/primitive-actions.generated.ts`, and
+    `examples/gallery/src/client-module-manifest.ts`/`examples/gallery/src/app-shell.ts` register
+    that generated façade as an explicit support client module; verified by
+    `node packages/ui/scripts/build-registry.mjs`,
+    `if rg -n "@kovojs/headless-ui/(generated|internal/primitive)" examples/gallery/src/primitive-actions.ts examples/gallery/src/interactive -g '*.{ts,tsx}'; then exit 1; fi`,
+    `pnpm exec vitest run examples/gallery/src/interactive-gallery.artifacts.test.ts --config ./vite.config.ts`,
+    `pnpm --filter @kovojs/example-gallery run test:browser`, `pnpm run check:vp`, and
+    `pnpm run check:api-surface`.
 
 ### Phase 4 — typed Component call sites (the full fix)
 
@@ -549,7 +613,7 @@ composition. This is the SPEC §1.3 promise ("generated apps fail TypeScript sta
 wiring is wrong") applied to the most common wiring there is. No `Record<string, unknown>` escape
 hatch survives this phase.
 
-- [ ] **Codify the decided props-derivation contract (decided 2026-07-03: infer-from-render with
+- [x] **Codify the decided props-derivation contract (decided 2026-07-03: infer-from-render with
       framework-checked channel consistency)** in SPEC §4.1/§6.2. The runtime contract is already
       uniform and stays unchanged: render's first parameter is **one merged bag** — query results
       ∪ call-site props (`examples/crm/src/components/deal-detail.tsx:133` has both, with
@@ -563,77 +627,161 @@ hatch survives this phase.
       the type channel into the `props:` metadata field (constructor maps can only carry the
       JSON-serializable subset; `ButtonProps`'s union literals, style objects, and `children` are
       composition-time values that never cross the wire). The sub-contracts below are part of this
-      decision and remain open until implemented and verified.
-- [ ] **Component call signature contract**: call signature = bag type minus
+      decision and stay tracked until each is implemented and verified.
+  - Evidence: `spec/04-component-model.md`, `spec/06-type-system.md`, and
+    `packages/core/src/index.test.ts`; verified by the integrated 302-test focused command.
+- [x] **Component call signature contract**: call signature = bag type minus
       `keyof Definition['queries']`, with exact-key (excess-property) checking; expose it as a
       named `ComponentProps<Definition>` alias so errors read legibly instead of as raw `Omit<...>`
       failures. A prop name colliding with a query key is a compile error + new KV diagnostic
       (ambiguous in the merged bag). The contract must also type the compiler-injected
       `style`/`styles` override channel and `kovo-key`.
-- [ ] **Default-deny unannotated render contract**: unannotated render ⇒ props = `{}` so call
+  - Evidence: `ComponentProps`, `ExactProps`, and `ComponentCallArgs` in
+    `packages/core/src/index.ts`; verified by `packages/core/src/index.test.ts`.
+- [x] **Default-deny unannotated render contract**: unannotated render ⇒ props = `{}` so call
       sites accept nothing; annotating the bag is the fix. Supply the bag's query-result keys
       contextually from the `Query<Key, Result>` handles so authors stop hand-annotating result
       types the framework already knows.
-- [ ] **Query args mapper contract**: constrain `.args(mapper)` — `QueryArgsBinding`/`Query.args`
+  - Evidence: `packages/core/src/index.ts` unannotated-render typing and negative cases in
+    `packages/core/src/index.test.ts`.
+- [x] **Query args mapper contract**: constrain `.args(mapper)` — `QueryArgsBinding`/`Query.args`
       at `core/src/index.ts:296-345` — so the mapper's `Props` must be assignable from the
       component's derived call-site props: mappers narrow, never invent.
-- [ ] **Serializable `props:` metadata consistency contract**: type the `props:` metadata field as
+  - Evidence: `ComponentQueryBindingProps` / mapper constraints in `packages/core/src/index.ts`;
+    verified by `packages/core/src/index.test.ts`.
+- [x] **Serializable `props:` metadata consistency contract**: type the `props:` metadata field as
       a constructor map whose derived type (`{ dealId: String }` → `{ dealId: string }`) must be
       assignable to the matching keys of the call-site props. It remains the serializable-subset
       declaration for live-target renderers, but can no longer contradict the annotation.
-- [ ] **Implement `Component<Definition>` call-signature inference in core** — replace
+  - Evidence: `CheckedComponentPropsMetadata` in `packages/core/src/index.ts`; verified by
+    `packages/core/src/index.test.ts`.
+- [x] **Implement `Component<Definition>` call-signature inference in core** — replace
       `(props?: Record<string, unknown>): any` (`core/src/index.ts:168-172`). Exact-key checking
       (excess-property errors) is required, not just known-key widening.
-- [ ] **Wire the JSX side**: `JSX.ElementType`/`KovoJsxComponent` in
+  - Evidence: `Component<Definition>` call signature in `packages/core/src/index.ts`; verified by
+    `packages/core/src/index.test.ts` and `packages/core/src/component-state-types.test.ts`.
+- [x] **Wire the JSX side**: `JSX.ElementType`/`KovoJsxComponent` in
       `packages/server/src/jsx-runtime.ts:870-921` must resolve per-descriptor props (not
       `JsxComponent<any>`), preserving intrinsic-element and plain-function-component behavior.
       Extend `jsx-runtime-types.test.ts` with descriptor-component cases: wrong prop name, wrong
       value type, missing required prop, excess property, `children` JSX nesting — all asserted as
       type errors (the test currently proves enforcement only for plain function components).
-- [ ] **`children` sweep across `@kovojs/ui`**: fix the 126 `children?: string` declarations (and
+  - Evidence: `KovoJsxComponentProps` / `LibraryManagedAttributes` in
+    `packages/server/src/jsx-runtime.ts`; verified by `packages/server/src/jsx-runtime-types.test.ts`.
+- [x] **`children` sweep across `@kovojs/ui`**: fix the 126 `children?: string` declarations (and
       `Card`'s `children?: unknown`) to the real composition type (`ComponentRenderResult`) on
       every container part that nests JSX; string-only stays only where the contract is genuinely
       text-only. Fix prop placement errors the new checking surfaces (e.g. `labelledBy` belongs on
       `SelectTrigger`, not `Select`).
-- [ ] **Sweep all call sites the checking breaks**: `packages/ui` internal composition, `site/`,
+  - Evidence: `packages/ui/src/**/*.tsx` use `ComponentChild`; `rg -n "children\\?: (string|unknown)" packages/ui/src -S`
+    returned no matches; verified by `packages/ui/src/index.markup.test.tsx`.
+- [x] **Sweep all call sites the checking breaks**: `packages/ui` internal composition, `site/`,
       `examples/*` (commerce, gallery, crm, stackoverflow, devtool, reference), `create-kovo`
       templates, tutorial steps. Every break is a latent bug being surfaced — fix the call site,
       don't loosen the type.
-- [ ] **Icons**: verify the 1,740 generated icon components type-check under the new signature and
+  - [x] Fix the gallery interactive compile break surfaced by the headless public-facade narrowing.
+    - Evidence: `packages/headless-ui/src/public/{context-menu,dropdown-menu,menubar,navigation-menu}.ts`
+      and `examples/gallery/src/interactive/*.tsx`; verified by
+      `pnpm exec tsc -p examples/gallery/tsconfig.json --noEmit --pretty false` and
+      `pnpm exec vitest --run examples/gallery/src/interactive-gallery.compile.test.ts packages/icons/src/icons.test.ts site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
+  - Evidence: `site/scripts/code-snippets-check.mjs`,
+    `packages/create-kovo/templates/src/queries.ts`, and the example app `tsconfig.json` files;
+    verified by `pnpm run check:docs-snippets:dist`, `vp run typecheck-examples`, and
+    `pnpm exec vitest --run packages/create-kovo/src/index.build.scaffold.typecheck.test.ts --config ./vite.config.ts`.
+- [x] **Icons**: verify the 1,740 generated icon components type-check under the new signature and
       **benchmark `tsc`** before/after across the monorepo and a scaffolded app; if inference cost
       is material, precompute each icon's call signature in the generator output instead of
       deriving it generically.
-- [ ] **Compiler/runtime alignment**: confirm compiler lowering and `assertKnownComponentDefinitionKeys`
+  - [x] Verify generated icons type-check under the new component signature and capture current-cost
+        example typecheck timings.
+    - Evidence: `scripts/measure-api-audit-icon-tsc.mjs` typechecks `packages/icons/src/index.tsx`
+      plus all generated icon sources and records current monorepo/scaffold timings; verified by
+      `node scripts/measure-api-audit-icon-tsc.mjs` (icon typecheck exit 0; broader `tsc` exits
+      recorded as current baseline data).
+  - [x] Capture before/after monorepo plus scaffolded-app `tsc` timings before closing the full icon
+        benchmark item.
+    - Evidence: `node scripts/measure-api-audit-icon-tsc.mjs --baseline-root /Users/mini/kovo-main-verify-20260703-225123`
+      compared parent `5b8d3c1` with current: icon `tsc` exit 0 in both (2193ms baseline,
+      2458ms current); monorepo/starter timings and unrelated non-zero exits were recorded in the
+      JSON report.
+- [x] **Compiler/runtime alignment**: confirm compiler lowering and `assertKnownComponentDefinitionKeys`
       agree with the chosen props channel; type-level enforcement remains defense-in-depth per the
       honesty boundary (SPEC §6.6) — the compiler's validation stays authoritative.
-- [ ] **Fix the guide samples this invalidates or vindicates**: accessibility.md `<Select
+  - Evidence: `packages/server/src/component-root-stamps.ts`,
+    `packages/server/src/live-target-renderer.ts`, and `packages/core/src/index.ts`; verified by
+    `packages/compiler/src/stamps.test.ts`, `packages/compiler/src/query-coverage.test.ts`, and
+    `packages/core/src/index.test.ts`.
+- [x] **Fix the guide samples this invalidates or vindicates**: accessibility.md `<Select
 labelledBy>` (broken composition the old signature hid), components.md Button
       `'secondary'` variant sample, plus any sample the sweep breaks.
+  - Evidence: `site/content/guides/accessibility.md`, `site/content/guides/components.md`, and
+    `site/scripts/code-snippets-check.mjs`; verified by `pnpm run check:docs-snippets` and
+    `pnpm exec vitest --run site/scripts/code-snippets-check.test.mjs site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
 
 ### Phase 5 — docs truth and drift-proofing (after Phase 4, so the gate has teeth)
 
-- [ ] **Compile guide samples in CI**: extract TSX/TS snippets from `site/content/guides/**` and
+- [x] **Compile guide samples in CI**: extract TSX/TS snippets from `site/content/guides/**` and
       typecheck against built dist types, same discipline as the `{{capture:*}}` CLI-transcript
       pipeline. ≥12 currently-broken samples across 9 guides become impossible to reintroduce.
-- [ ] **Fix the remaining per-guide defects** catalogued above (request-shell option names,
+  - [x] Add the authored-guide snippet extraction/typecheck gate over all `site/content/**` TS/TSX
+        fences with doc-style checks and public-shape package stubs.
+    - Evidence: `site/scripts/code-snippets-check.mjs` and `site/content/guides/**`; verified by
+      `node site/scripts/code-snippets-check.mjs` (`snippets=125 OK`) and
+      `pnpm exec vitest --run site/scripts/code-snippets-check.test.mjs site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
+  - [x] Wire the public-shape guide snippet gate into CI.
+    - Evidence: `.github/workflows/ci.yml` runs `vp exec pnpm run check:docs-snippets`; verified by
+      `pnpm run check:docs-snippets`.
+  - [x] Make `check:docs-snippets:dist` blocking after the remaining guide/API mismatches are closed.
+    - Evidence: `.github/workflows/ci.yml` runs `vp exec pnpm run check:docs-snippets:dist`;
+      verified by `pnpm run check:docs-snippets:dist`.
+- [x] **Fix the remaining per-guide defects** catalogued above (request-shell option names,
       routing `queries:`, layouts typing, static-export missing its own API, security.md CSRF
       audience + fabricated explain output + `--capabilities` claim, endpoints-webhooks broken
       flagship example, wire-protocol `settles`, streaming/islands issues, devtool guide
       public/private status).
-- [ ] **Stop describing a starter that doesn't exist**: align `create-kovo` templates or the
+  - Evidence: `site/content/guides/{auth-better-auth,data-layer,deployment,endpoints-webhooks,islands,kovo-explain,layouts,mutations,queries,render-tree,request-shell,routing,security,static-export,streaming,testing,wire-protocol,dataflow-devtool}.md`;
+    verified by `pnpm run check:docs-snippets` and `pnpm run check:docs-snippets:dist`.
+- [x] **Stop describing a starter that doesn't exist**: align `create-kovo` templates or the
       guides for graph-assertions, CI script list, Dockerfile entrypoint, `client.ts` — one truth.
-- [ ] **Regenerate stale generated docs** (route() JSDoc example, drizzle 30/38, create-kovo
+  - [x] Remove the documented graph-assertions starter script and stale Docker entrypoint claims from
+        the affected guides.
+    - Evidence: `site/content/guides/deployment.md` and `site/content/guides/kovo-explain.md`;
+      verified by `pnpm run check:docs-snippets`.
+  - Evidence: `site/content/guides/{auth-better-auth,deployment,kovo-explain,streaming,testing}.md`
+    align starter scripts, production entrypoint, graph assertions, and client-loader ownership with
+    `packages/create-kovo/templates/package*.json`; verified by `pnpm run check:docs-snippets:dist`.
+- [x] **Regenerate stale generated docs** (route() JSDoc example, drizzle 30/38, create-kovo
       `--experimental-sqlite`, cli no-args list, `ExplainKind` prose) and replace the mechanical
       `{} as SelectState` placeholder examples in headless-ui/ui JSDoc with real ones.
-- [ ] **Close the a11y claim gap**: add missing axe end-state assertions (switch-checked,
+  - Evidence: `packages/server/src/route.ts`, `packages/cli/src/{graph-args,graph-output}.ts`,
+    `packages/create-kovo/src/index.ts`, `packages/headless-ui/src/primitives/*.ts`, and
+    generated metadata in `public-packages.json`/`api-surface-baseline.json`; verified by
+    `pnpm exec vitest --run site/scripts/api-ref.test.mjs scripts/api-surface-gate.test.mjs site/scripts/cli-ref.test.mjs site/scripts/create-kovo-ref.test.mjs --config ./vite.config.ts`
+    and `pnpm run check:api-surface`.
+  - [x] Replace the mechanical Select placeholder examples in headless-ui/ui JSDoc with concrete
+        examples and guard them in the API-ref test.
+    - Evidence: `packages/headless-ui/src/primitives/select.ts`, `packages/ui/src/select.tsx`, and
+      `site/scripts/api-ref.test.mjs`; verified by `pnpm exec vitest --run site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
+- [x] **Close the a11y claim gap**: add missing axe end-state assertions (switch-checked,
       hover-card-open, checkbox-checked) or soften the guide/rules claim; fix the cited proof file.
+  - Evidence: `examples/gallery/src/interactive-gallery.interactions-a.browser.test.ts` and
+    `examples/gallery/src/interactive-gallery.interactions-b.browser.test.ts`; verified by
+    `pnpm --filter @kovojs/example-gallery run test:browser`.
 
 ### Side investigations (parallel, unowned by a phase)
 
-- [ ] **Wire `settles` emission gap**: client parses it (`browser/src/wire-parser.ts:150`); no
+- [x] **Wire `settles` emission gap**: client parses it (`browser/src/wire-parser.ts:150`); no
       server emission found — implementation gap or dead doc.
-- [ ] **Commerce KV330 alias question**: `const db = request.db; db.insert(...)` — analyzer
+  - Evidence: `packages/server/src/wire-html.ts`, `packages/server/src/mutation/targets.ts`, and
+    `packages/server/src/mutation/wire-response.ts` emit the triggering `Kovo-Idem`; verified by
+    `pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-delta.test.ts packages/browser/src/wire-parser.test.ts --config ./vite.config.ts`.
+- [x] **Commerce KV330 alias question**: `const db = request.db; db.insert(...)` — analyzer
       evasion or unflagged reference-app violation; either outcome is a real issue.
+  - Evidence: `packages/compiler/src/direct-db.test.ts` proves the compiler catches the commerce
+    alias path as KV330; `examples/commerce/src/domain.ts` moves the writes out of the handler.
+    Verified by
+    `pnpm exec vitest --run packages/compiler/src/direct-db.test.ts examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/app.test.ts --config ./vite.config.ts`
+    and `pnpm --filter @kovojs/example-commerce run build:demo`.
 
 ## Gaps And Follow-Up
 

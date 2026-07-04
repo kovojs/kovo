@@ -1,8 +1,6 @@
 import { guards } from '@kovojs/server';
 import type { AuthenticatedRequest, Guard, SessionRequestLike } from '@kovojs/server';
 
-import { unauthenticatedGuardFailure, unauthorizedGuardFailure } from './internal.js';
-
 /**
  * Guard that requires an authenticated session, narrowing the request to an
  * `AuthenticatedRequest`. A thin re-export of the framework's `guards.authed` for use on
@@ -55,11 +53,5 @@ export function role<Request extends BetterAuthRoleRequest>(
 ): Guard<Request>;
 export function role(requiredRole: string): Guard<BetterAuthRoleRequest>;
 export function role(requiredRole: string): Guard<BetterAuthRoleRequest> {
-  return (request) => {
-    if (!request.session?.user) return unauthenticatedGuardFailure();
-
-    return request.session.user.roles?.includes(requiredRole) === true
-      ? true
-      : unauthorizedGuardFailure();
-  };
+  return guards.role(requiredRole) as Guard<BetterAuthRoleRequest>;
 }

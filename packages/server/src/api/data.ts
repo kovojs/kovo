@@ -11,15 +11,13 @@ export { csrfField, csrfToken, mintCsrfField, mintCsrfToken } from '../csrf.js';
 export type {
   CsrfAnonymousCookieOptions,
   CsrfOptions,
-  CsrfSecret,
-  CsrfValidationOptions,
   MintedCsrfField,
   MintedCsrfToken,
 } from '../csrf.js';
-export { domain, tag } from '../domain.js';
-export type { Domain, Tag } from '../domain.js';
-export type { JsonSerializable } from '../json-boundary.js';
-export { errorBoundary, queue, stream, write } from '../mutation.js';
+export type { SigningSecret } from '../keyring.js';
+export { domain } from '../domain.js';
+export type { Domain } from '../domain.js';
+export { errorBoundary, queue, stream } from '../mutation.js';
 import { mutation as mutationImplementation } from '../mutation.js';
 import { query as queryImplementation } from '../query.js';
 import { task as taskImplementation } from '../task.js';
@@ -62,7 +60,6 @@ export type {
   MutationSuccess,
   // KV429 (SPEC §10.3/§11.1): typed 409 stale-version conflict outcome.
   StaleVersionConflict,
-  WriteDefinition,
 } from '../mutation.js';
 /** Attribute object returned by `mutationFormAttributes(...)`. */
 export type { MutationFormAttributes } from '../mutation.js';
@@ -110,26 +107,11 @@ export type {
   TaskScheduleOptions,
   TaskSchedulingRequest,
 } from '../task.js';
-// SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): the framework-owned managed DB handle. `Reader<Db>`
-// is the branded read-only loader-handle type mirror; `Writer<Db>` is the branded managed write
-// type mirror; `readonlyDb(appDb)` is the blessed read-only endpoint helper; `kovoReadonlyDbHandle`
-// lets framework-owned adapters vend that reader to query-loader `context.db`; and
-// `kovoDeclaredWriteDbHandle` lets framework-owned adapters vend a declared-table-scoped writer;
-// `KovoReadonlyHandleError` is the fail-closed runtime throw a read-surface write verb raises.
-export {
-  createDeclaredWriteDb,
-  createAuthorizationCensusDb,
-  createPostgresReadonlyClient,
-  createPostgresScopedClient,
-  declarePublicRead,
-  drainCrossOwnerReadAuditFacts,
-  drainPostgresRlsSilentDenyDiagnostics,
-  drainPublicReadAuditFacts,
-  KovoReadonlyHandleError,
-  kovoDeclaredWriteDbHandle,
-  kovoReadonlyDbHandle,
-  readonlyDb,
-} from '../managed-db.js';
+// SPEC §6.6/§9.4/§10.3 (MARQUEE / KV433+KV422): public app code gets the branded `Reader<Db>` /
+// `Writer<Db>` type mirrors, `readonlyDb(appDb)` for raw endpoint reads, and
+// `declarePublicRead(...)` for audited public raw reads. Framework adapter hooks and audit drains
+// stay on `@kovojs/server/internal/managed-db`.
+export { declarePublicRead, KovoReadonlyHandleError, readonlyDb } from '../managed-db.js';
 export {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
@@ -139,28 +121,16 @@ export {
   provisionPostgresAppDb,
 } from '../postgres-runtime.js';
 export type {
-  CrossOwnerReadAuditFact,
   CrossOwnerReadDeclaration,
   CrossOwnerReadPolicyOptions,
-  DeclaredWriteDbOptions,
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,
   DeclaredWriteSqliteAuthorizerOptions,
-  AuthorizationCensusDbOptions,
-  AuthorizationCensusMetadata,
-  GovernedWriteMetadata,
-  PostgresRlsDiagnosticReadClient,
-  PostgresRlsSilentDenyDiagnostic,
-  PostgresRlsSilentDenyDiagnosticsOptions,
-  PostgresReadonlyClientOptions,
-  PostgresScopedClientOptions,
-  PublicReadAuditFact,
   PublicReadDeclaration,
   PublicReadRowsScope,
   RawReadDeclaration,
   RawReadPolicyOptions,
   Reader,
-  SqliteAuthorizationClassification,
   Writer,
 } from '../managed-db.js';
 export type {
@@ -180,6 +150,16 @@ export type {
   KovoPostgresRuntimeDb,
   KovoPostgresRuntimeDriver,
 } from '../postgres-runtime.js';
+export { createSqliteAppRuntimeDb } from '../sqlite-runtime.js';
+export type {
+  KovoSqliteAppRuntimeDb,
+  KovoSqliteAppRuntimeMetadata,
+  KovoSqliteAppRuntimeOptions,
+  KovoSqliteColumnOriginClient,
+  KovoSqliteRuntimeColumnSource,
+} from '../sqlite-runtime.js';
+export { declareSecretReadCapability } from '../secret-read-boundary.js';
+export type { DeclaredSecretReadCapability } from '../secret-read-boundary.js';
 export { s, SchemaValidationError } from '../schema.js';
 export type {
   FileLike,
@@ -197,14 +177,13 @@ export type {
 } from '../schema.js';
 // KV428 (SPEC §6.6/§9.1): the upload inline-XSS gate. `accept`/`accept.unverified()` is the
 // verified-MIME allowlist + audited client-MIME escape; `InlineUnverifiedUploadError` is the
-// fail-closed inline-refusal; `drainUnverifiedMimeFacts` feeds `kovo explain --capabilities`.
-export { accept, InlineUnverifiedUploadError, drainUnverifiedMimeFacts } from '../upload-sniff.js';
-export type { UnverifiedAcceptance, UnverifiedMimeFact } from '../upload-sniff.js';
+// fail-closed inline-refusal. Audit drains stay on `@kovojs/server/internal/audit-facts`.
+export { accept, InlineUnverifiedUploadError } from '../upload-sniff.js';
+export type { UnverifiedAcceptance } from '../upload-sniff.js';
 // KV434 (SPEC §6.6/§9.5): ReDoS-safe string validators. `unsafeRegex` is the audited escape for an
-// unanalyzable pattern; `RedosPatternError` is the static-reject error; `drainUnsafeRegexFacts`
-// feeds `kovo explain --capabilities`.
-export { RedosPatternError, drainUnsafeRegexFacts, unsafeRegex } from '../redos.js';
-export type { BlessedFormatName, UnsafeRegexBrand, UnsafeRegexFact } from '../redos.js';
+// unanalyzable pattern; `RedosPatternError` is the static-reject error.
+export { RedosPatternError, unsafeRegex } from '../redos.js';
+export type { BlessedFormatName, UnsafeRegexBrand } from '../redos.js';
 // SPEC §9.1 idempotent replay store: apps provision and hold a store for webhook
 // and mutation handlers (real consumer: conformance/webhook-spike). The default
 // in-memory implementation and its contract types stay public at the root.

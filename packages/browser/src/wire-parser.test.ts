@@ -403,6 +403,24 @@ describe('wire parser HTML entity handling', () => {
     ).toEqual([{ delta: true, key: 'p1', name: 'product', value: { set: { stock: 5 } } }]);
   });
 
+  it('parses settlement tokens from query chunks (SPEC §9.1.1)', () => {
+    expect(
+      readQueryChunks('<kovo-query name="cart" settles="idem-1 idem-2">{"count":2}</kovo-query>'),
+    ).toEqual([{ name: 'cart', settles: ['idem-1', 'idem-2'], value: { count: 2 } }]);
+  });
+
+  it('parses settlement tokens from query hydration scripts', () => {
+    expect(
+      readQueryScriptChunks([
+        {
+          getAttribute: (name) =>
+            name === 'kovo-query' ? 'cart' : name === 'settles' ? 'idem-1 idem-2' : null,
+          textContent: '{"count":2}',
+        },
+      ]),
+    ).toEqual([{ name: 'cart', settles: ['idem-1', 'idem-2'], value: { count: 2 } }]);
+  });
+
   it('reads a pre-split delta element chunk through readQueryElementChunk', () => {
     // SPEC §9.1.1: inline bootstrap splits wire markup before passing raw element
     // chunks to readQueryElementChunk; delta must survive that path.

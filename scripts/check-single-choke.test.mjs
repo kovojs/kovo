@@ -248,6 +248,26 @@ export async function provisionRuntimeRoles(client, appHandle) {
     expect(result.findings).toEqual([]);
   });
 
+  it('accepts SQLite runtime managed handle construction as an audited framework composition point', () => {
+    const result = runDefaultFixture({
+      'packages/server/src/sql-safe-handle.ts': `
+export function enforceManagedSql(statement, mode, writePolicy) {
+  return validate(statement, mode, writePolicy);
+}
+`,
+      'packages/server/src/sqlite-runtime.ts': `
+export function createSqliteAppRuntimeDb(db) {
+  return {
+    read: readonlyDb(db),
+    write: managedDb(db, 'write'),
+  };
+}
+`,
+    });
+
+    expect(result.findings).toEqual([]);
+  });
+
   it('requires exactly one named enforceManagedSql() choke declaration', () => {
     const result = runFixture({
       'packages/server/src/sql-safe-handle.ts': `

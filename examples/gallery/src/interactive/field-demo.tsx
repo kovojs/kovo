@@ -4,7 +4,7 @@ import {
   Field,
   FieldControl,
   FieldDescription,
-  FieldError as UiFieldError,
+  FieldErrorMessage as UiFieldError,
   FieldLabel,
   FieldSelect,
   FieldSelectOption,

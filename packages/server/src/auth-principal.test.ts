@@ -5,6 +5,7 @@ import {
   assertNonRequestPrincipalPosture,
   declareSystemPrincipal,
   nonRequestPrincipalPostureDiagnostic,
+  principalFromNonRequestPrincipalPosture,
 } from './auth-principal.js';
 
 describe('non-request principal posture (SPEC §10.3 DEC-G)', () => {
@@ -26,16 +27,19 @@ describe('non-request principal posture (SPEC §10.3 DEC-G)', () => {
     expect(nonRequestPrincipalPostureDiagnostic(system)).toBe(
       'task:nightly:test_job:read:system(nightly analytics sweep)',
     );
+    expect(principalFromNonRequestPrincipalPosture(actAs)).toBe('user_1');
+    expect(principalFromNonRequestPrincipalPosture(system)).toBeUndefined();
   });
 
   it('rejects structural brand shortcuts and unresolved actAs ids', () => {
-    expect(() =>
-      assertNonRequestPrincipalPosture({
-        audit,
-        kind: 'act-as',
-        principal: 'user_1',
-      }),
-    ).toThrow(/framework-minted actAs/);
+    const forged = {
+      audit,
+      kind: 'act-as',
+      principal: 'user_1',
+    };
+
+    expect(() => assertNonRequestPrincipalPosture(forged)).toThrow(/framework-minted actAs/);
+    expect(() => principalFromNonRequestPrincipalPosture(forged)).toThrow(/framework-minted actAs/);
     expect(() => actAsNonRequestPrincipal(' anonymous ', audit)).toThrow(/proven/);
     expect(() => declareSystemPrincipal('', audit)).toThrow(/non-empty audited reason/);
   });

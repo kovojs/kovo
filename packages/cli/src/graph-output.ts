@@ -610,7 +610,8 @@ export function kovoAudit(
  * Reports the consistency and exhaustiveness findings of SPEC.md §11.4: touch-graph
  * diagnostics, optimistic exhaustiveness (KV310), update coverage (KV311), fixpoint
  * and render-equivalence invariants, and the unguarded/unscoped audits. The
- * optional `family` selects the `optimistic` or `coverage` slice (default `all`).
+ * optional `family` selects the `optimistic`, `coverage`, `endpoint-posture`,
+ * or `sources-sinks` slice (default `all`).
  * Returns the stable `kovo-check/v1` text plus an exit code that is non-zero when
  * any error-severity finding is present (SPEC.md §1.1 proof claims).
  */

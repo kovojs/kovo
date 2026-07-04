@@ -11,7 +11,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
-  dialogStyles,
 } from './dialog.js';
 
 describe('@kovojs/ui Dialog StyleX slots', () => {
@@ -19,12 +18,6 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
     const dialogState = { contentId: 'account-dialog', open: true as const };
 
     expect({
-      classes: [style.attrs(dialogStyles.root).class ?? ''] as const,
-      closeClasses: [style.attrs(dialogStyles.close).class ?? ''] as const,
-      closeXClasses: [style.attrs(dialogStyles.closeX).class ?? ''] as const,
-      contentClasses: [style.attrs(dialogStyles.content).class ?? ''] as const,
-      descriptionClasses: [style.attrs(dialogStyles.description).class ?? ''] as const,
-      headerClasses: [style.attrs(dialogStyles.header).class ?? ''] as const,
       open: Dialog.definition.render({
         children:
           DialogTrigger.definition.render({ ...dialogState, children: 'Edit account' }) +
@@ -47,8 +40,6 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
         id: 'dialog-root',
         open: true,
       }),
-      titleClasses: [style.attrs(dialogStyles.title).class ?? ''] as const,
-      triggerClasses: [style.attrs(dialogStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -92,19 +83,5 @@ describe('@kovojs/ui Dialog StyleX slots', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      closeMarker: dialogStyles.close.$$css,
-      closeXMarker: dialogStyles.closeX.$$css,
-      contentMarker: dialogStyles.content.$$css,
-      descriptionMarker: dialogStyles.description.$$css,
-      headerMarker: dialogStyles.header.$$css,
-      keys: Object.keys(dialogStyles),
-      rootMarker: dialogStyles.root.$$css,
-      titleMarker: dialogStyles.title.$$css,
-      triggerMarker: dialogStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });

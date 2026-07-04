@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   scrollAreaCornerAttributes,
   scrollAreaRootAttributes,
@@ -53,7 +53,7 @@ export interface ScrollAreaStateProps {
  * const props: ScrollAreaProps = { children: 'Content' };
  */
 export interface ScrollAreaProps extends ScrollAreaStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: ScrollAreaStyleOverrides;
 }
@@ -66,11 +66,12 @@ export interface ScrollAreaProps extends ScrollAreaStateProps {
  * const props: ScrollAreaViewportProps = { children: 'Content' };
  */
 export interface ScrollAreaViewportProps extends ScrollAreaStateProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   id?: string;
   label?: string;
   labelledBy?: string;
+  scrollTop?: number;
   scrollX?: ScrollAreaScrollPosition;
   scrollY?: ScrollAreaScrollPosition;
   styles?: ScrollAreaStyleOverrides;
@@ -84,7 +85,7 @@ export interface ScrollAreaViewportProps extends ScrollAreaStateProps {
  * const props: ScrollAreaScrollbarProps = { children: 'Content' };
  */
 export interface ScrollAreaScrollbarProps extends ScrollAreaStateProps {
-  children?: string;
+  children?: ComponentChild;
   forceMount?: boolean;
   id?: string;
   orientation?: ScrollAreaOrientation;
@@ -115,15 +116,7 @@ export interface ScrollAreaCornerProps extends ScrollAreaStateProps {
   styles?: ScrollAreaStyleOverrides;
   visible?: boolean;
 }
-
-/**
- * Style definitions used by the scroll area components.
- *
- * @example
- * import { scrollAreaStyles } from "@kovojs/ui/scroll-area";
- * const styles = scrollAreaStyles;
- */
-export const scrollAreaStyles = style.create({
+const scrollAreaStyles = style.create({
   corner: {
     backgroundColor: uiTheme.color.backgroundSubtleHigh,
     bottom: 0,

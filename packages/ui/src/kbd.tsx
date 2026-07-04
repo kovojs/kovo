@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
@@ -12,18 +12,10 @@ import { uiTheme } from './theme.js';
  * const props: KbdProps = { children: 'Content' };
  */
 export interface KbdProps {
-  children?: string;
+  children?: ComponentChild;
   style?: style.StyleInput;
 }
-
-/**
- * Style definitions used by the kbd components.
- *
- * @example
- * import { kbdStyles } from "@kovojs/ui/kbd";
- * const styles = kbdStyles;
- */
-export const kbdStyles = style.create({
+const kbdStyles = style.create({
   root: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundRaised,

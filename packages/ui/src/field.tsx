@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   fieldControlAttributes,
   fieldDescriptionAttributes,
@@ -56,7 +56,7 @@ export interface FieldStateProps {
  * const props: FieldProps = { children: 'Content' };
  */
 export interface FieldProps extends FieldStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: FieldStyleOverrides;
 }
@@ -69,7 +69,7 @@ export interface FieldProps extends FieldStateProps {
  * const props: FieldLabelProps = { children: 'Content' };
  */
 export interface FieldLabelProps extends FieldStateProps {
-  children?: string;
+  children?: ComponentChild;
   controlId?: string;
   id?: string;
   styles?: FieldStyleOverrides;
@@ -108,7 +108,7 @@ export interface FieldControlProps extends FieldStateProps {
  */
 export interface FieldTextareaProps extends FieldStateProps {
   autoComplete?: string;
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   errorId?: string;
   form?: string;
@@ -130,7 +130,7 @@ export interface FieldTextareaProps extends FieldStateProps {
  * const props: FieldSelectProps = { children: 'Content' };
  */
 export interface FieldSelectProps extends FieldStateProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   errorId?: string;
   form?: string;
@@ -148,7 +148,7 @@ export interface FieldSelectProps extends FieldStateProps {
  * const props: FieldSelectOptionProps = { children: 'Content' };
  */
 export interface FieldSelectOptionProps {
-  children?: string;
+  children?: ComponentChild;
   disabled?: boolean;
   selected?: boolean;
   styles?: FieldStyleOverrides;
@@ -163,7 +163,7 @@ export interface FieldSelectOptionProps {
  * const props: FieldMessageProps = { children: 'Content' };
  */
 export interface FieldMessageProps extends FieldStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: FieldStyleOverrides;
   visible?: boolean;
@@ -177,7 +177,7 @@ export interface FieldMessageProps extends FieldStateProps {
  * const props: FieldsetProps = { children: 'Content' };
  */
 export interface FieldsetProps extends FieldStateProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   errorId?: string;
   form?: string;
@@ -194,7 +194,7 @@ export interface FieldsetProps extends FieldStateProps {
  * const props: FieldsetLegendProps = { children: 'Content' };
  */
 export interface FieldsetLegendProps extends FieldStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: FieldStyleOverrides;
 }
@@ -233,15 +233,7 @@ const nativeControlStyle = {
     boxShadow: '0 0 0 3px color-mix(in srgb, var(--kovo-theme-sys-color-error) 30%, transparent)',
   },
 } as const;
-
-/**
- * Style definitions used by the field components.
- *
- * @example
- * import { fieldStyles } from "@kovojs/ui/field";
- * const styles = fieldStyles;
- */
-export const fieldStyles = style.create({
+const fieldStyles = style.create({
   control: {
     ...nativeControlStyle,
     height: 36,
@@ -602,10 +594,10 @@ export const FieldDescription = component({
  * Renders the styled field error primitive.
  *
  * @example
- * import { FieldError } from "@kovojs/ui/field";
- * const component = FieldError;
+ * import { FieldErrorMessage } from "@kovojs/ui/field";
+ * const component = FieldErrorMessage;
  */
-export const FieldError = component({
+export const FieldErrorMessage = component({
   render(props: FieldMessageProps) {
     const attrs = fieldErrorAttributes({
       ...(props.disabled === undefined ? {} : { disabled: props.disabled }),

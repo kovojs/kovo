@@ -48,6 +48,10 @@ describe('generated-artifacts policy manifest', () => {
         categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
       },
       {
+        path: 'examples/gallery/src/primitive-actions.generated.ts',
+        categories: [C.frameworkGeneratedSource, C.mustMatchGenerator],
+      },
+      {
         path: 'packages/ui/registry.json',
         categories: [C.generatedPackageMetadata, C.mustMatchGenerator],
       },
@@ -107,7 +111,11 @@ describe('generated-artifacts policy manifest', () => {
       generatedArtifactPoliciesForGenerator(GENERATED_ARTIFACT_GENERATORS.uiRegistry).map(
         (entry) => entry.id,
       ),
-    ).toEqual(['headless-ui-generated-source', 'ui-generated-registry']);
+    ).toEqual([
+      'headless-ui-generated-source',
+      'gallery-primitive-actions-generated-source',
+      'ui-generated-registry',
+    ]);
     expect(
       generatedArtifactGeneratorCheckCommand(GENERATED_ARTIFACT_GENERATORS.uiRegistry),
     ).toEqual(['node', 'packages/ui/scripts/build-registry.mjs']);

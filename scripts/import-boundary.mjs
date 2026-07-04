@@ -28,15 +28,8 @@ const explicitlyAllowedInternalImports = new Set([
   // source used by create-kovo and `kovo update-docs`; app-authored site/content
   // remains covered by the zero-exception default.
   'site/src/aux.ts -> @kovojs/core/internal/agent-docs',
-  // Framework-owned gallery L1 adapter keeps demo components off direct primitive reducer imports
-  // while exercising the same internal reducer ABI the generated handler tier composes with.
-  'examples/gallery/src/primitive-actions.ts -> @kovojs/headless-ui/internal/primitive',
 ]);
-const explicitlyAllowedGeneratedImports = new Set([
-  // Framework-owned gallery L1 adapter; ordinary app-authored source remains blocked from
-  // generated ABI imports by the default zero-exception rule.
-  'examples/gallery/src/primitive-actions.ts -> @kovojs/headless-ui/generated',
-]);
+const explicitlyAllowedGeneratedImports = new Set([]);
 
 export async function collectImportBoundaryViolations({
   generatedExceptions = explicitlyAllowedGeneratedImports,

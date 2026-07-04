@@ -6,12 +6,7 @@ export {
   disclosureContentAttributes,
 } from '../primitives/disclosure.js';
 export type {
-  DisclosureChangeReason,
-  DisclosureChangeDetail,
   DisclosureState,
   DisclosureAttributeOptions,
-  DisclosureChangeOptions,
-  DisclosureChangeResult,
   DisclosurePrimitiveAttributes,
-  DisclosureTriggerEvent,
 } from '../primitives/disclosure.js';

@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { installKovoLoader } from './client.js';
-import { createQueryStore } from './query-store.js';
+import { createQueryStore, installKovoLoader } from './generated.js';
 import {
   FakeBroadcastChannel,
   FakeFormElement,

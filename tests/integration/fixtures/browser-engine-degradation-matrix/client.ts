@@ -4,7 +4,7 @@ import {
   type EnhancedMutationFetch,
   type MorphRoot,
   type TargetCollectorRoot,
-} from '@kovojs/browser/client';
+} from '@kovojs/browser/generated';
 import { DomMorphRoot, keyedDomMorph } from '@kovojs/test/internal/integration/fixture-browser-abi';
 
 declare global {

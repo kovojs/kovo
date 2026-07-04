@@ -10,6 +10,7 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 import { Pool, type PoolClient, type QueryConfig, type QueryResultRow } from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { actAsNonRequestPrincipal } from './auth-principal.js';
 import { guards } from './guards.js';
 import {
   createPostgresReadonlyClient,
@@ -84,6 +85,14 @@ const addSummaryMigration = {
 };
 
 const probeRun = `kovo_ext_${process.pid}_${Date.now()}`;
+
+function actAsProbePrincipal(principal: string) {
+  return actAsNonRequestPrincipal(principal, {
+    ingress: 'task',
+    operation: 'write',
+    surface: 'postgres-external-probe.test.ts',
+  });
+}
 
 describeIfPostgres('external Postgres runtime/provisioning probes', () => {
   const roots: string[] = [];
@@ -169,7 +178,10 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     });
     expect(defaultReport.ok).toBe(true);
     expect(defaultReport.issues).toEqual([]);
-    await expectRuntimeLoginRoleUsable(defaultRuntimeUrl, 'kovo_reader', 'kovo_writer');
+    await expectRuntimeIdentityClosure(defaultRuntimeUrl, {
+      allowedRoles: ['kovo_reader', 'kovo_writer'],
+      deniedRoles: ['kovo_admin', 'postgres'],
+    });
 
     await withPool(cluster.url(defaultDb, 'postgres'), async (superPool) => {
       await superPool.query(`GRANT kovo_admin TO ${quoteIdent(adminMemberRuntime)}`);
@@ -223,6 +235,10 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     await expectSecretColumnsDenied(defaultRuntimeUrl, 'kovo_reader', 'kovo_admin');
     await expectCrossOwnerRead(defaultRuntimeUrl);
     await expectSchemaEvolutionWithData(defaultAdminUrl, defaultRuntimeUrl);
+    await expectUnexpectedCatalogPrivilegesRefuse(
+      defaultRuntimeUrl,
+      cluster.url(defaultDb, 'postgres'),
+    );
 
     await expectPermissionDenied(
       cluster.url(adoptedDb, adoptedAdmin),
@@ -281,8 +297,8 @@ async function expectOwnerIsolation(
   });
   try {
     await runtime.ready;
-    const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
-    const u2Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u2' } });
+    const u1Db = runtime.db({ principalPosture: actAsProbePrincipal('u1') });
+    const u2Db = runtime.db({ principalPosture: actAsProbePrincipal('u2') });
 
     await u1Db
       .insert(probeNotes)
@@ -363,7 +379,7 @@ async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: strin
   });
   try {
     await runtime.ready;
-    const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+    const u1Db = runtime.db({ principalPosture: actAsProbePrincipal('u1') });
     await expect(
       u1Db
         .select({ id: probeNotesV2.id, summary: probeNotesV2.summary, title: probeNotesV2.title })
@@ -403,6 +419,38 @@ async function expectSecretColumnsDenied(
       code: '42501',
     });
   });
+}
+
+async function expectUnexpectedCatalogPrivilegesRefuse(
+  runtimeUrl: string,
+  superuserUrl: string,
+): Promise<void> {
+  const fdw = `${probeRun}_fdw`;
+  const server = `${probeRun}_server`;
+  const largeObjectOid = 700_000 + process.pid;
+  await withPool(superuserUrl, async (pool) => {
+    await pool.query(`CREATE FOREIGN DATA WRAPPER ${quoteIdent(fdw)}`);
+    await pool.query(`CREATE SERVER ${quoteIdent(server)} FOREIGN DATA WRAPPER ${quoteIdent(fdw)}`);
+    await pool.query(`GRANT USAGE ON FOREIGN DATA WRAPPER ${quoteIdent(fdw)} TO kovo_writer`);
+    await pool.query(`GRANT USAGE ON FOREIGN SERVER ${quoteIdent(server)} TO kovo_reader`);
+    await pool.query('GRANT USAGE ON LANGUAGE plpgsql TO kovo_reader');
+    await pool.query('SELECT lo_create($1::oid)', [largeObjectOid]);
+    await pool.query(`GRANT SELECT ON LARGE OBJECT ${largeObjectOid} TO kovo_writer`);
+  });
+
+  const report = await checkPostgresAppDbPosture({
+    databaseUrl: runtimeUrl,
+    schema: evolvedSchema,
+  });
+  expect(report.ok).toBe(false);
+  const unexpectedDetails = report.issues
+    .filter((issue) => issue.code === 'KV433_UNEXPECTED_PRIVILEGE')
+    .map((issue) => issue.detail)
+    .join('\n');
+  expect(unexpectedDetails).toContain('foreign_data_wrapper');
+  expect(unexpectedDetails).toContain('foreign_server');
+  expect(unexpectedDetails).toContain('language');
+  expect(unexpectedDetails).toContain('large_object');
 }
 
 async function expectCrossOwnerRead(databaseUrl: string): Promise<void> {
@@ -493,27 +541,49 @@ async function expectPermissionDenied(databaseUrl: string, statement: string): P
   });
 }
 
-async function expectRuntimeLoginRoleUsable(
+async function expectRuntimeIdentityClosure(
   databaseUrl: string,
-  readerRole: string,
-  writerRole: string,
+  options: { allowedRoles: readonly string[]; deniedRoles: readonly string[] },
 ): Promise<void> {
   await withPool(databaseUrl, async (pool) => {
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      const identity = await client.query<{
+        current_role: string;
+        current_user: string;
+        rolbypassrls: boolean;
+        rolsuper: boolean;
+      }>(
+        [
+          'SELECT current_user, current_role, r.rolsuper, r.rolbypassrls',
+          'FROM pg_roles r WHERE r.rolname = current_user',
+        ].join(' '),
+      );
+      expect(identity.rows[0]).toEqual({
+        current_role: databaseUser(databaseUrl),
+        current_user: databaseUser(databaseUrl),
+        rolbypassrls: false,
+        rolsuper: false,
+      });
       await expect(client.query('SELECT key FROM kovo_schema_state')).resolves.toMatchObject({
         rows: [],
       });
-      await client.query(`SET LOCAL ROLE ${quoteIdent(readerRole)}`);
-      await client.query('RESET ROLE');
-      await client.query(`SET LOCAL ROLE ${quoteIdent(writerRole)}`);
-      await client.query('RESET ROLE');
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
+
+      for (const role of options.allowedRoles) {
+        await client.query('RESET ROLE');
+        await client.query(`SET ROLE ${quoteIdent(role)}`);
+        const scoped = await client.query<{ current_role: string }>('SELECT current_role');
+        expect(scoped.rows[0]?.current_role).toBe(role);
+      }
+
+      for (const role of options.deniedRoles) {
+        await client.query('RESET ROLE');
+        await expect(client.query(`SET ROLE ${quoteIdent(role)}`)).rejects.toMatchObject({
+          code: '42501',
+        });
+      }
     } finally {
+      await client.query('RESET ROLE').catch(() => undefined);
       client.release();
     }
   });

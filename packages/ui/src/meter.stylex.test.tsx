@@ -2,12 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Meter, meterStyles } from './meter.js';
+import { Meter } from './meter.js';
 
 describe('@kovojs/ui Meter StyleX styles', () => {
   it('matches native meter states with StyleX output', () => {
     expect({
-      classes: [style.attrs(meterStyles.root).class ?? ''] as const,
       optimum: Meter.definition.render({
         children: '84%',
         high: 90,
@@ -45,12 +44,5 @@ describe('@kovojs/ui Meter StyleX styles', () => {
         value: 72,
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports a StyleX style group', () => {
-    expect({
-      keys: Object.keys(meterStyles),
-      marker: meterStyles.root.$$css,
-    }).toMatchSnapshot();
   });
 });

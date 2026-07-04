@@ -141,7 +141,7 @@ const sourceSinkInventory: readonly SourceSinkInventoryEntry[] = [
     guard: `typed-document-primitives+url-scheme-allowlist:${SAFE_URL_SCHEMES.join('|')}`,
     runtimeGuard: 'server-document-assembly-csp-enrollment',
     schema:
-      'Document|Head|BodyStart|BodyEnd|HtmlAttrs|BodyAttrs|Meta|Link|Stylesheet|FontPreload|ModulePreload|InlineScript|InlineStyle',
+      'Document|Head|BodyStart|BodyEnd|HtmlAttrs|BodyAttrs|Meta|Link|StylesheetLink|FontPreload|ModulePreload|InlineScript|InlineStyle',
     sink: 'document.shell.output',
     source:
       'app-document-TSX|inline-script-source|inline-style-source|font-preload-url|modulepreload-url|body-end-ui',

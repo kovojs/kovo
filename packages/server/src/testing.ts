@@ -112,7 +112,6 @@ export async function createPostgresTestRuntime(
   const runtimeOptions: KovoPostgresAppRuntimeOptions = {
     dataDir,
     driver: 'pglite',
-    postureCheckOnBoot: false,
     provisionOnBoot: true,
     schema: options.schema,
   };

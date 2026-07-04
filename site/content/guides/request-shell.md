@@ -50,18 +50,27 @@ export default createApp({
   endpoints,
   db: () => db,
   sessionProvider,
-  csrf: { secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET! },
+  csrf: {
+    secret: process.env.BETTER_AUTH_SECRET ?? process.env.KOVO_CSRF_SECRET!,
+    sessionId: (request: AppRequest) => request.session?.id,
+  },
   document: appDocument,
-  errors: {
+  errorShells: {
     notFound: NotFoundShell,
     forbidden: ForbiddenShell,
-    unexpected: ErrorShell,
+    serverError: ErrorShell,
   },
-  limits: {
+  requestLimits: {
     maxBodyBytes: 1_000_000,
-    mutationRate: { perIp: 60, global: 2_000 },
-    queryRate: { perIp: 300, global: 10_000 },
-    maxFragmentTargets: 50,
+    mutations: {
+      perIp: { max: 60, windowMs: 60_000 },
+      global: { max: 2_000, windowMs: 60_000 },
+    },
+    queries: {
+      perIp: { max: 300, windowMs: 60_000 },
+      global: { max: 10_000, windowMs: 60_000 },
+    },
+    maxQueryListItems: 500,
   },
 });
 ```
@@ -92,8 +101,7 @@ before replay lookup, schema parse/coercion, and guards:
 
 - Request/body size over the configured maximum returns **413** before the body is read or parsed.
 - Per-IP and global request budgets return **429** with `Retry-After`.
-- A bound on reconstructed fragment targets prevents one response from asking the server to rebuild
-  unbounded live targets.
+- A bound on query/list result size prevents one response from shipping an unbounded list payload.
 
 Fine-grained `guards.rateLimit()` still belongs in the guard chain for per-principal policy. It
 composes with shell limits; it does not replace them, especially for anonymous floods.

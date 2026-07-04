@@ -4,7 +4,7 @@ import type {
   StructuralMorphBrowserState,
   StructuralMorphKey,
   StructuralMorphNode,
-} from './client.js';
+} from './generated.js';
 import * as root from './index.js';
 import * as client from './client.js';
 import * as generated from './generated.js';
@@ -12,7 +12,7 @@ import * as inlineLoader from './internal/inline-loader.js';
 import * as output from './internal/output.js';
 import { derive } from './derive.js';
 import { handler } from './handlers.js';
-import { tempId } from './optimism.js';
+import { now, tempId } from './optimism.js';
 import { safeRichHtml, trustedHtml, trustedUrl } from './security-output.js';
 
 describe('runtime public export boundaries', () => {
@@ -20,7 +20,6 @@ describe('runtime public export boundaries', () => {
     // SPEC.md §4.3, §4.8, and §10.4 define the author-written client helpers.
     expect(root.derive).toBe(derive);
     expect(root.handler).toBe(handler);
-    expect(root.tempId).toBe(tempId);
     expect(root.safeRichHtml).toBe(safeRichHtml);
     expect(root.trustedHtml).toBe(trustedHtml);
     expect(root.trustedUrl).toBe(trustedUrl);
@@ -29,7 +28,6 @@ describe('runtime public export boundaries', () => {
       'derive',
       'handler',
       'safeRichHtml',
-      'tempId',
       'trustedHtml',
       'trustedUrl',
     ]);
@@ -39,7 +37,8 @@ describe('runtime public export boundaries', () => {
     // SPEC.md §§4.4, 9.1: an app entry installs the loader and query store and
     // builds the browser root; the loader engine internals are no longer here.
     expect(client.createQueryStore).toBe(generated.createQueryStore);
-    expect(client.installKovoLoader).toBe(generated.installKovoLoader);
+    expect(typeof client.installKovoLoader).toBe('function');
+    expect(client.installKovoLoader).not.toBe(generated.installKovoLoader);
     expect(typeof client.createBrowserKovoRoot).toBe('function');
     expect(typeof client.defaultEnhancedFetch).toBe('function');
 
@@ -54,10 +53,10 @@ describe('runtime public export boundaries', () => {
     expect(Object.hasOwn(root, 'createQueryStore')).toBe(false);
   });
 
-  it('keeps the structural-morph shape types public for hand-written conformance helpers', () => {
+  it('keeps the structural-morph shape types on the generated ABI', () => {
     // SPEC.md §9.1: the structural-morph shape types are consumed by
-    // examples/commerce/src/app-test-helpers.ts. They are type-only exports
-    // (no runtime value), so assert their assignability shape here.
+    // generated/runtime conformance helpers. They are type-only exports (no
+    // runtime value), so assert their assignability shape here.
     const key: StructuralMorphKey = 'k';
     const browserState: StructuralMorphBrowserState = { focused: true };
     const node: StructuralMorphNode = { type: 'div', key, browserState };
@@ -72,9 +71,13 @@ describe('runtime public export boundaries', () => {
     expect(typeof generated.applyDeferredStreamResponseToRuntime).toBe('function');
     expect(typeof generated.applyCompiledQueryUpdatePlan).toBe('function');
     expect(typeof generated.runQueryUpdatePlan).toBe('function');
+    expect(generated.now).toBe(now);
+    expect(generated.tempId).toBe(tempId);
     expect(Object.hasOwn(client, 'applyDeferredStreamResponseToRuntime')).toBe(false);
     expect(Object.hasOwn(client, 'applyCompiledQueryUpdatePlan')).toBe(false);
     expect(Object.hasOwn(client, 'runQueryUpdatePlan')).toBe(false);
+    expect(Object.hasOwn(root, 'now')).toBe(false);
+    expect(Object.hasOwn(root, 'tempId')).toBe(false);
     expect(Object.hasOwn(client, 'createEventBus')).toBe(false);
     expect(Object.hasOwn(client, 'submitEnhancedMutation')).toBe(false);
     expect(Object.hasOwn(client, 'installMutationBroadcast')).toBe(false);

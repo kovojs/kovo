@@ -1,8 +1,13 @@
+import { execFileSync } from 'node:child_process';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import type {
   AlgebraicQueryShape,
   PatchProgram,
   SymbolicEffect,
 } from '@kovojs/core/internal/derivation';
+import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
 
 import { deriveOptimistic } from './derive.js';
@@ -50,7 +55,7 @@ describe('serializeDerivedOptimistic', () => {
 
     expect(source).toContain('// DO NOT EDIT');
     expect(source).toContain("import type { addToCartForm } from '../../app.js';");
-    expect(source).toContain("import type { OptimisticFor } from '@kovojs/browser';");
+    expect(source).toContain("import type { OptimisticFor } from '@kovojs/browser/generated';");
     expect(source).toContain('export const cartAddDerivedOptimistic = {');
     expect(source).toContain("queue: 'cart',");
     expect(source).toContain('transforms: {');
@@ -70,11 +75,172 @@ describe('serializeDerivedOptimistic', () => {
       entries: [{ program: pushProgram, query: 'orderHistory' }],
       formImport: { name: 'addToCartForm', path: '../../app.js' },
     });
-    expect(source).toContain("import { tempId, type OptimisticFor } from '@kovojs/browser';");
+    expect(source).toContain(
+      "import { tempId, type OptimisticFor } from '@kovojs/browser/generated';",
+    );
     expect(source).toContain(
       'draft.items.push({ id: tempId(), productId: $input.productId, total: 0 });',
     );
     expect(source).not.toContain('now()');
+  });
+
+  it('typechecks and executes an emitted transform that exercises every placeholder import', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'kovo-derived-optimistic-emitted-'));
+    try {
+      mkdirSync(join(root, 'src'), { recursive: true });
+      mkdirSync(join(root, 'node_modules', '@kovojs', 'browser'), { recursive: true });
+      writeFileSync(
+        join(root, 'package.json'),
+        JSON.stringify({ type: 'module' }, null, 2),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'node_modules', '@kovojs', 'browser', 'package.json'),
+        JSON.stringify({ exports: { './generated': './generated.mjs' }, type: 'module' }, null, 2),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'node_modules', '@kovojs', 'browser', 'generated.mjs'),
+        [
+          'let id = 0;',
+          'export function tempId() {',
+          '  id += 1;',
+          '  return `kovo-tmp-${id}`;',
+          '}',
+          'export function now() {',
+          '  return Date.now();',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      const source = serializeDerivedOptimistic({
+        complete: true,
+        constName: 'addLineDerivedOptimistic',
+        entries: [
+          {
+            program: {
+              ops: [
+                {
+                  op: 'push-row',
+                  path: 'items',
+                  placeholderColumns: ['id', 'createdAt'],
+                  position: 'end',
+                  row: {
+                    createdAt: { kind: 'placeholder', placeholder: 'now' },
+                    id: { kind: 'placeholder', placeholder: 'tempId' },
+                    productId: { kind: 'param', path: 'productId' },
+                    total: {
+                      kind: 'arith',
+                      left: { kind: 'param', path: 'quantity' },
+                      op: '*',
+                      right: { kind: 'param', path: 'unitPrice' },
+                    },
+                  },
+                },
+              ],
+              query: 'orderHistory',
+            },
+            query: 'orderHistory',
+          },
+        ],
+        formImport: { name: 'addLineForm', path: './form.js' },
+      });
+
+      writeFileSync(
+        join(root, 'tsconfig.json'),
+        JSON.stringify(
+          {
+            compilerOptions: {
+              baseUrl: '.',
+              ignoreDeprecations: '6.0',
+              module: 'ESNext',
+              moduleResolution: 'Bundler',
+              noEmit: true,
+              noImplicitAny: false,
+              paths: {
+                '@kovojs/browser/generated': [
+                  join(process.cwd(), 'packages/browser/src/generated.ts'),
+                ],
+                '@kovojs/core': [join(process.cwd(), 'packages/core/src/index.ts')],
+              },
+              strict: true,
+              target: 'ES2022',
+              typeRoots: [join(process.cwd(), 'node_modules/@types')],
+              types: ['node'],
+            },
+            include: ['src/**/*.ts'],
+          },
+          null,
+          2,
+        ),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src', 'form.ts'),
+        [
+          "import type { Form } from '@kovojs/core';",
+          '',
+          "export declare const addLineForm: Form<'addLine', { productId: string; quantity: number; unitPrice: number }, unknown>;",
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(
+        join(root, 'src', 'registry.d.ts'),
+        [
+          "import type { JsonValue } from '@kovojs/core';",
+          '',
+          "declare module '@kovojs/core' {",
+          '  interface QueryRegistry {',
+          '    orderHistory: { items: JsonValue[] };',
+          '  }',
+          '  interface InvalidationSets {',
+          "    addLine: 'orderHistory';",
+          '  }',
+          '}',
+          '',
+        ].join('\n'),
+        'utf8',
+      );
+      writeFileSync(join(root, 'src', 'generated.ts'), source, 'utf8');
+
+      execFileSync('pnpm', ['exec', 'tsc', '-p', join(root, 'tsconfig.json')], {
+        cwd: process.cwd(),
+        stdio: 'inherit',
+      });
+
+      const executable = ts.transpileModule(source, {
+        compilerOptions: { module: ts.ModuleKind.ES2022, target: ts.ScriptTarget.ES2022 },
+      }).outputText;
+      writeFileSync(join(root, 'src', 'generated.mjs'), executable, 'utf8');
+      const module = (await import(join(root, 'src', 'generated.mjs'))) as {
+        addLineDerivedOptimistic: {
+          transforms: {
+            orderHistory: (draft: { items: unknown[] }, input: unknown) => void;
+          };
+        };
+      };
+      const draft = { items: [] };
+      module.addLineDerivedOptimistic.transforms.orderHistory(draft, {
+        productId: 'p1',
+        quantity: 2,
+        unitPrice: 7,
+      });
+
+      expect(source).toContain(
+        "import { now, tempId, type OptimisticFor } from '@kovojs/browser/generated';",
+      );
+      expect(draft.items).toHaveLength(1);
+      expect(draft.items[0]).toMatchObject({
+        productId: 'p1',
+        total: 14,
+      });
+      expect((draft.items[0] as { id: string }).id).toMatch(/^kovo-tmp-\d+$/);
+      expect(typeof (draft.items[0] as { createdAt: unknown }).createdAt).toBe('number');
+    } finally {
+      rmSync(root, { force: true, recursive: true });
+    }
   });
 
   it('override precedence: a hand-written entry is suppressed (no satisfies, named note)', () => {

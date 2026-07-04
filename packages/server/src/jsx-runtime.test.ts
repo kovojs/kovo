@@ -13,6 +13,7 @@ import { escapeText, renderHtmlValue } from './html.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
 import { createElement, Fragment, jsx, jsxDEV, jsxs, type JsxChild } from './jsx-runtime.js';
 import { mutationFormAttributes } from './mutation.js';
+import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 
 const html = (value: unknown): string => renderHtmlValue(value);
 const asyncHtml = async (value: unknown): Promise<string> => renderHtmlValue(await value);
@@ -290,6 +291,53 @@ describe('server jsx runtime', () => {
 
     expect(rendered).toContain('Inner title is required.');
     expect(rendered).not.toContain('Outer title is required.');
+    expect(rendered).not.toContain('kovo-form-helper');
+  });
+
+  it('matches deferred mutation form helpers against tagged submitted form keys', async () => {
+    const formData = new FormData();
+    formData.set('kovo-form-key', 'p2');
+    formData.set('productId', 'p2');
+
+    const rendered = await asyncHtml(
+      runWithJsxRequestContext(
+        {},
+        {
+          mutationFailure: {
+            failure: {
+              error: { code: 'OUT_OF_STOCK', payload: { availableQuantity: 2 } },
+              ok: false,
+              status: 422,
+            },
+            input: tagUntrustedRequestValue(formData),
+            mutationKey: 'cart/add',
+            target: 'product-grid',
+          },
+        },
+        () =>
+          jsxs('section', {
+            children: [
+              jsx('form', {
+                key: 'p1',
+                mutation: { key: 'cart/add' },
+                children: FormError({ code: 'OUT_OF_STOCK', message: 'p1 unavailable' }),
+              }),
+              jsx('form', {
+                key: 'p2',
+                mutation: { key: 'cart/add' },
+                children: FormError({
+                  code: 'OUT_OF_STOCK',
+                  message: (failure: { payload: { availableQuantity: number } }) =>
+                    `Only ${failure.payload.availableQuantity} available.`,
+                }),
+              }),
+            ],
+          }),
+      ),
+    );
+
+    expect(rendered).toContain('Only 2 available.');
+    expect(rendered).not.toContain('p1 unavailable');
     expect(rendered).not.toContain('kovo-form-helper');
   });
 

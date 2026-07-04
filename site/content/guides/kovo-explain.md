@@ -27,7 +27,6 @@ kovo explain page /cart graph.json
 kovo explain component CartBadge graph.json
 kovo explain --unguarded graph.json
 kovo explain --revealed graph.json
-kovo explain --capabilities graph.json
 ```
 
 Prefer deriving or constructing the graph in tests instead of committing generated graph artifacts;
@@ -156,7 +155,7 @@ source rather than left silent.
 ## Turn product rules into CI assertions
 
 When a product rule matters — "every component that shows cart data must refresh when the cart
-changes" — you assert it as a set operation over the printed graph. Here is the starter's shell
+changes" — you assert it as a set operation over the printed graph. Here is an app-owned shell
 recipe:
 
 ```sh
@@ -170,7 +169,8 @@ grep '^invalidated-by: .*cart/add' .kovo/cart.query.txt
 kovo explain mutation cart/add --optimistic graph.json | grep '^OPTIMISTIC-SUMMARY .*UNHANDLED=0'
 ```
 
-The starter generates the script version into `scripts/graph-assertions.mjs`:
+If the rule should live in CI, put the script version in your app. This is app-owned code, not a
+file `create-kovo` generates:
 
 ```ts
 import assert from 'node:assert/strict';
@@ -184,10 +184,10 @@ assert.match(cartAdd, /^updates: cart->component:CartBadge,page:\/cart/m);
 assert.match(cartAdd, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
 ```
 
-These run in the starter's CI as `vp run graph-assertions`, next to `vp run kovo-check`. A graph
-assertion differs in kind from a rendering test: it states intent ("cart consumers are exactly
-these") and holds as the app grows — a new component that reads cart data either joins the consumer
-set correctly or turns CI red.
+Run that script next to `kovo check` only after you add it to your app. A graph assertion differs in
+kind from a rendering test: it states intent ("cart consumers are exactly these") and holds as the
+app grows — a new component that reads cart data either joins the consumer set correctly or turns CI
+red.
 
 ## The security review modes
 
@@ -200,7 +200,6 @@ kovo explain --endpoints graph.json   # machine ingress: endpoints, webhooks, fi
 kovo explain --revealed graph.json    # confidential fields intentionally revealed
 kovo explain --trust graph.json       # trusted HTML/SQL/URL escapes and their evidence
 kovo explain --access graph.json      # explicit public/authenticated/machine access decisions
-kovo explain --capabilities graph.json # held dangerous capabilities and capability URLs
 kovo explain --cookies graph.json     # cookie posture and downgrade findings
 kovo explain --sources-sinks          # source/sink inventory
 ```
@@ -229,10 +228,11 @@ can't land quietly.
   reviewable.
 - `--access` lists explicit public/authenticated/machine access decisions, including missing
   decisions that block under `kovo check`.
-- `--capabilities` lists held dangerous capabilities: agent tools, audit-grade reveals, and signed
-  download/capability URL mints.
 - `--cookies` lists cookie posture and downgrade findings.
 - `--sources-sinks` emits the source/sink inventory used by the security gates.
+
+Capability-style review currently happens through the concrete shipped surfaces: `--revealed`,
+`--trust`, `--endpoints`, and `--sources-sinks`.
 
 ## Debug from the Network panel
 
@@ -268,7 +268,8 @@ diffs: SPEC §11.1. Optimistic exhaustiveness is **KV310** (SPEC §10.6); update
 (SPEC §4.9). The "agent answers from `kovo explain` alone" acceptance criterion:
 `rules/v1-acceptance.md`. Security review modes and guard reachability: SPEC §10.3, §11.4;
 `owner:` annotations behind `--unscoped`: SPEC §10.1. Confidential reveal review: SPEC §6.6, KV435.
-Capability review: SPEC §6.6. The wire vocabulary behind Network-panel debugging: SPEC §9.1.
-Debugging downward into plainer artifacts: SPEC §1.
+Capability review through the shipped source/sink and ingress surfaces: SPEC §6.6. The wire
+vocabulary behind Network-panel debugging: SPEC §9.1. Debugging downward into plainer artifacts:
+SPEC §1.
 
 </details>

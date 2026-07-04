@@ -2,22 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Sheet, sheetSideStyles, sheetStyles } from './sheet.js';
+import { Sheet } from './sheet.js';
 
 describe('@kovojs/ui Sheet StyleX slots', () => {
   it('matches sheet markup with StyleX slot output', () => {
     expect({
-      bodyClasses: [style.attrs(sheetStyles.body).class ?? ''] as const,
-      classes: [style.attrs(sheetStyles.root).class ?? ''] as const,
-      closeClasses: [style.attrs(sheetStyles.close).class ?? ''] as const,
-      contentClasses: [
-        style.attrs(sheetStyles.content, sheetSideStyles.right).class ?? '',
-        style.attrs(sheetSideStyles.bottom).class ?? '',
-        style.attrs(sheetSideStyles.left).class ?? '',
-        style.attrs(sheetSideStyles.top).class ?? '',
-      ] as const,
-      descriptionClasses: [style.attrs(sheetStyles.description).class ?? ''] as const,
-      headerClasses: [style.attrs(sheetStyles.header).class ?? ''] as const,
       sheet: Sheet.definition.render({
         children: 'Sheet body',
         contentId: 'account-sheet',
@@ -26,8 +15,6 @@ describe('@kovojs/ui Sheet StyleX slots', () => {
         title: 'Account',
         trigger: 'Open sheet',
       }),
-      titleClasses: [style.attrs(sheetStyles.title).class ?? ''] as const,
-      triggerClasses: [style.attrs(sheetStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -80,15 +67,5 @@ describe('@kovojs/ui Sheet StyleX slots', () => {
         trigger: 'Customize',
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      contentMarker: sheetStyles.content.$$css,
-      keys: Object.keys(sheetStyles),
-      rootMarker: sheetStyles.root.$$css,
-      sideKeys: Object.keys(sheetSideStyles),
-      triggerMarker: sheetStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });

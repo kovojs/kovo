@@ -1,3 +1,5 @@
+import type { JsonValue } from '@kovojs/core';
+
 import { domain } from './domain.js';
 import {
   mutation as defineMutation,
@@ -14,7 +16,7 @@ export const testMutation = ((key: string, definition: Parameters<typeof defineM
 export const cartFixtureValue = {
   count: 1,
   items: [{ productId: 'p1', qty: 1, unitPrice: 1499 }],
-} as const;
+} satisfies JsonValue;
 
 export const cartBadgeFragmentHtml =
   '<cart-badge kovo-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge>';

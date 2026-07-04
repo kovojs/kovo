@@ -9,7 +9,7 @@ import { type PrimitiveDataAttributes } from '../lib/index.js';
  * ```ts
  * import type { AvatarImageStatus } from '@kovojs/headless-ui/avatar';
  *
- * const value: AvatarImageStatus = {} as AvatarImageStatus;
+ * declare const value: AvatarImageStatus;
  * ```
  */
 export type AvatarImageStatus = 'error' | 'loaded' | 'loading';
@@ -23,7 +23,7 @@ export type AvatarImageStatus = 'error' | 'loaded' | 'loading';
  * ```ts
  * import type { AvatarState } from '@kovojs/headless-ui/avatar';
  *
- * const value: AvatarState = {} as AvatarState;
+ * declare const value: AvatarState;
  * ```
  */
 export interface AvatarState {
@@ -40,7 +40,7 @@ export interface AvatarState {
  * ```ts
  * import type { AvatarComputedState } from '@kovojs/headless-ui/avatar';
  *
- * const value: AvatarComputedState = {} as AvatarComputedState;
+ * declare const value: AvatarComputedState;
  * ```
  */
 export interface AvatarComputedState {
@@ -59,7 +59,7 @@ export interface AvatarComputedState {
  * ```ts
  * import type { AvatarRootAttributeOptions } from '@kovojs/headless-ui/avatar';
  *
- * const value: AvatarRootAttributeOptions = {} as AvatarRootAttributeOptions;
+ * declare const value: AvatarRootAttributeOptions;
  * ```
  */
 export interface AvatarRootAttributeOptions extends AvatarState {
@@ -75,7 +75,7 @@ export interface AvatarRootAttributeOptions extends AvatarState {
  * ```ts
  * import type { AvatarImageAttributeOptions } from '@kovojs/headless-ui/avatar';
  *
- * const value: AvatarImageAttributeOptions = {} as AvatarImageAttributeOptions;
+ * declare const value: AvatarImageAttributeOptions;
  * ```
  */
 export interface AvatarImageAttributeOptions extends AvatarState {
@@ -96,7 +96,7 @@ export interface AvatarImageAttributeOptions extends AvatarState {
  * ```ts
  * import type { AvatarFallbackAttributeOptions } from '@kovojs/headless-ui/avatar';
  *
- * const value: AvatarFallbackAttributeOptions = {} as AvatarFallbackAttributeOptions;
+ * declare const value: AvatarFallbackAttributeOptions;
  * ```
  */
 export interface AvatarFallbackAttributeOptions extends AvatarState {
@@ -112,7 +112,7 @@ export interface AvatarFallbackAttributeOptions extends AvatarState {
  * ```ts
  * import type { AvatarPrimitiveAttributes } from '@kovojs/headless-ui/avatar';
  *
- * const value: AvatarPrimitiveAttributes = {} as AvatarPrimitiveAttributes;
+ * declare const value: AvatarPrimitiveAttributes;
  * ```
  */
 export type AvatarPrimitiveAttributes = PrimitiveDataAttributes &
@@ -127,7 +127,7 @@ export type AvatarPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import { avatarImageState } from '@kovojs/headless-ui/avatar';
  *
- * const input = {} as Parameters<typeof avatarImageState>[0];
+ * declare const input: Parameters<typeof avatarImageState>[0];
  * const result = avatarImageState(input);
  * ```
  */
@@ -154,7 +154,7 @@ export function avatarImageState(options: AvatarState = {}): AvatarComputedState
  * ```ts
  * import { avatarRootAttributes } from '@kovojs/headless-ui/avatar';
  *
- * const input = {} as Parameters<typeof avatarRootAttributes>[0];
+ * declare const input: Parameters<typeof avatarRootAttributes>[0];
  * const result = avatarRootAttributes(input);
  * ```
  */
@@ -180,7 +180,7 @@ export function avatarRootAttributes(
  * ```ts
  * import { avatarImageAttributes } from '@kovojs/headless-ui/avatar';
  *
- * const input = {} as Parameters<typeof avatarImageAttributes>[0];
+ * declare const input: Parameters<typeof avatarImageAttributes>[0];
  * const result = avatarImageAttributes(input);
  * ```
  */
@@ -213,7 +213,7 @@ export function avatarImageAttributes(
  * ```ts
  * import { avatarFallbackAttributes } from '@kovojs/headless-ui/avatar';
  *
- * const input = {} as Parameters<typeof avatarFallbackAttributes>[0];
+ * declare const input: Parameters<typeof avatarFallbackAttributes>[0];
  * const result = avatarFallbackAttributes(input);
  * ```
  */
@@ -238,7 +238,7 @@ export function avatarFallbackAttributes(
  * ```ts
  * import type { AvatarImageStatusResult } from '@kovojs/headless-ui/avatar';
  *
- * const value: AvatarImageStatusResult = {} as AvatarImageStatusResult;
+ * declare const value: AvatarImageStatusResult;
  * ```
  */
 export interface AvatarImageStatusResult {
@@ -255,7 +255,7 @@ export interface AvatarImageStatusResult {
  * ```ts
  * import type { AvatarImageEvent } from '@kovojs/headless-ui/avatar';
  *
- * const value: AvatarImageEvent = {} as AvatarImageEvent;
+ * declare const value: AvatarImageEvent;
  * ```
  */
 export type AvatarImageEvent = Event;
@@ -267,8 +267,8 @@ export type AvatarImageEvent = Event;
  * ```ts
  * import { avatarImageLoad } from '@kovojs/headless-ui/avatar';
  *
- * const input = {} as Parameters<typeof avatarImageLoad>[0];
- * const state = {} as Parameters<typeof avatarImageLoad>[1];
+ * declare const input: Parameters<typeof avatarImageLoad>[0];
+ * declare const state: Parameters<typeof avatarImageLoad>[1];
  * const result = avatarImageLoad(input, state);
  * ```
  *
@@ -297,8 +297,8 @@ export function avatarImageLoad(
  * ```ts
  * import { avatarImageError } from '@kovojs/headless-ui/avatar';
  *
- * const input = {} as Parameters<typeof avatarImageError>[0];
- * const state = {} as Parameters<typeof avatarImageError>[1];
+ * declare const input: Parameters<typeof avatarImageError>[0];
+ * declare const state: Parameters<typeof avatarImageError>[1];
  * const result = avatarImageError(input, state);
  * ```
  *

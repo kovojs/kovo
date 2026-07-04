@@ -1,5 +1,6 @@
 import type {
   InvalidationSets,
+  JsonValue,
   OptimisticDerivationSets,
   QueryRegistry,
   Redirect,
@@ -7,13 +8,12 @@ import type {
 import type { ChangeRecord, InvalidateOptions, MutationTouchSite } from '../change-record.js';
 import type { AccessDecision } from '../access.js';
 import type { CookieOptions } from '../cookies.js';
-import type { CsrfValidationOptions } from '../csrf.js';
+import type { CsrfOptions } from '../csrf.js';
 import type { Domain } from '../domain.js';
 import type { Guard, RequestLifecycleOptions } from '../guards.js';
 import { escapeAttribute } from '../html.js';
 import type { ErrorBoundaryRenderer, FragmentRenderer } from '../mutation-wire.js';
 import { mutationInputFileFields, type InferSchema, type Schema } from '../schema.js';
-import type { JsonSerializable } from '../json-boundary.js';
 import type { TaskDefinition, TaskHandle } from '../task.js';
 import type { DurableTaskEnqueueInput } from '../task-queue.js';
 import type { MutationStreamContext, MutationStreamSource } from './streaming.js';
@@ -69,7 +69,7 @@ export interface MutationSuccess<Value, Input = unknown> {
   rerunQueryInstances?: QueryRerun[];
   rerunQueries: string[];
   ok: true;
-  responseHeaders?: import('../response.js').MutationResponseHeaders;
+  responseHeaders?: import('../response.js').ResponseHeaders;
   value: Value;
 }
 
@@ -84,8 +84,8 @@ export type MutationResult<Value, Input = unknown> = MutationFail | MutationSucc
 export interface MutationContext<Errors extends Record<string, Schema<unknown>>> {
   fail<const Code extends Extract<keyof Errors, string>>(
     code: Code,
-    payload: JsonSerializable<InferSchema<Errors[Code]>>,
-  ): MutationFail<Code, JsonSerializable<InferSchema<Errors[Code]>>>;
+    payload: InferSchema<Errors[Code]> & JsonValue,
+  ): MutationFail<Code, InferSchema<Errors[Code]> & JsonValue>;
   invalidate<const DomainKey extends string, Input = unknown>(
     domain: Domain<DomainKey>,
     options?: InvalidateOptions<Input>,
@@ -129,16 +129,8 @@ export interface WriteDefinition<
  *
  * @param definition - The write's `key`, `touches` domains, and `run` body.
  * @returns The same `WriteDefinition`, typed.
- * @example
- * import { domain, write } from '@kovojs/server';
- *
- * const cart = domain('cart');
- *
- * export const addItem = write({
- *   key: 'cart/add-item',
- *   touches: [cart],
- *   run: (productId: string, quantity: number) => ({ productId, quantity }),
- * });
+ * @internal Framework-internal placeholder for the SPEC §10.3 domain-write target. It is not
+ * re-exported from the app-facing `@kovojs/server` root until enforcement ships with the API.
  */
 export function write<
   const Key extends string,
@@ -293,7 +285,7 @@ export interface MutationDefinition<
   GuardedRequest extends Request = Request,
 > {
   access?: AccessDecision;
-  csrf?: CsrfValidationOptions<Request> | false;
+  csrf?: CsrfOptions<Request> | false;
   /** Static/common POST-redirect-GET target for successful no-JS submissions (SPEC §9.1). */
   defaultRedirectTo?: string;
   /** @internal Derived from `input` when the schema contains `s.file()` fields. */
@@ -345,7 +337,7 @@ export interface MutationDefinition<
  * can inject the CSRF token into an enhanced form (SPEC §6.3/§9.1).
  */
 export interface MutationFormDefinition<Key extends string = string, Request = unknown> {
-  csrf?: CsrfValidationOptions<Request> | false;
+  csrf?: CsrfOptions<Request> | false;
   enctype?: 'multipart/form-data';
   fileFields?: readonly string[];
   input?: Schema<unknown>;
@@ -374,7 +366,7 @@ export interface RunMutationOptions<
   SessionValue = unknown,
   DbValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue, DbValue> {
-  csrf?: CsrfValidationOptions<Request> | false;
+  csrf?: CsrfOptions<Request> | false;
   /**
    * When the caller has already evaluated the session-bound guard chain before the replay
    * lookup (A1, SPEC §10.3 "re-evaluate the guard chain before re-serving"), `runMutation` must

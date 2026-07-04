@@ -13,12 +13,6 @@ export type {
   ToggleGroupState,
   ToggleGroupRootAttributeOptions,
   ToggleGroupItemAttributeOptions,
-  ToggleGroupChangeReason,
-  ToggleGroupChangeDetail,
-  ToggleGroupChangeOptions,
-  ToggleGroupChangeResult,
   ToggleGroupMoveResult,
   ToggleGroupPrimitiveAttributes,
-  ToggleGroupItemEvent,
-  ToggleGroupKeyboardEvent,
 } from '../primitives/toggle-group.js';

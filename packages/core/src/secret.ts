@@ -102,6 +102,21 @@ const inspectCustom = Symbol.for('nodejs.util.inspect.custom');
 /** Default poison output for {@link redacted} when no mask is supplied. */
 const REDACTED_MASK = '[redacted]';
 
+type NodeBuiltinLoader = (
+  id: string,
+) => { markAsUncloneable?: (value: object) => void } | undefined;
+
+const maybeMarkAsUncloneable = (() => {
+  const loader = (
+    globalThis as typeof globalThis & {
+      process?: { getBuiltinModule?: NodeBuiltinLoader };
+    }
+  ).process?.getBuiltinModule;
+  return loader?.('node:worker_threads')?.markAsUncloneable;
+})();
+
+const structuredCloneSecretGuard = Symbol.for('kovo.secret.structuredCloneGuard');
+
 type PoisonKind = 'secret' | 'redacted' | 'untrusted';
 
 /**
@@ -111,7 +126,11 @@ type PoisonKind = 'secret' | 'redacted' | 'untrusted';
  * value carries the kind so the guards can distinguish a secret from a redacted box.
  */
 class KovoPoisonBox<T> {
-  /** True private field: invisible to enumeration, JSON, `util.inspect`, and structuredClone. */
+  /**
+   * True private field: invisible to enumeration, JSON, and `util.inspect`.
+   * On Node runtimes with `markAsUncloneable()`, the box also fails closed at
+   * `structuredClone()` instead of laundering to `{}` (SPEC §6.6).
+   */
   readonly #value: T;
   readonly #poison: string;
   readonly #kind: PoisonKind;
@@ -120,6 +139,7 @@ class KovoPoisonBox<T> {
     this.#value = value;
     this.#poison = poison;
     this.#kind = kind;
+    maybeMarkAsUncloneable?.(this);
     // Non-enumerable brand (value = kind) so the marker never appears in
     // spreads/Object.keys, while remaining detectable by the guards in-module.
     Object.defineProperty(this, secretBoxBrand, { value: kind, enumerable: false });
@@ -211,6 +231,58 @@ export function isSecret(value: unknown): value is SecretValue<unknown> {
   return (
     isPoisonBox(value) && (value as unknown as Record<symbol, unknown>)[secretBoxBrand] === 'secret'
   );
+}
+
+installStructuredCloneSecretGuard();
+
+function installStructuredCloneSecretGuard(): void {
+  const globalClone = globalThis as typeof globalThis & {
+    [structuredCloneSecretGuard]?: true;
+    structuredClone?: (value: unknown, options?: unknown) => unknown;
+  };
+  if (globalClone[structuredCloneSecretGuard] === true) return;
+  const nativeStructuredClone = globalClone.structuredClone;
+  if (typeof nativeStructuredClone !== 'function') return;
+  globalClone.structuredClone = (value: unknown, options?: unknown): unknown => {
+    assertNoSecretStructuredCloneValue(value);
+    return nativeStructuredClone(value, options);
+  };
+  Object.defineProperty(globalClone, structuredCloneSecretGuard, {
+    configurable: false,
+    enumerable: false,
+    value: true,
+  });
+}
+
+function assertNoSecretStructuredCloneValue(
+  value: unknown,
+  seen: WeakSet<object> = new WeakSet(),
+): void {
+  if (isSecret(value)) throw nonCoercibleError('secret', 'structuredClone');
+  if ((typeof value !== 'object' && typeof value !== 'function') || value === null) return;
+  if (seen.has(value)) return;
+  seen.add(value);
+  if (Array.isArray(value)) {
+    for (const item of value) assertNoSecretStructuredCloneValue(item, seen);
+    return;
+  }
+  if (value instanceof Map) {
+    for (const [key, item] of value) {
+      assertNoSecretStructuredCloneValue(key, seen);
+      assertNoSecretStructuredCloneValue(item, seen);
+    }
+    return;
+  }
+  if (value instanceof Set) {
+    for (const item of value) assertNoSecretStructuredCloneValue(item, seen);
+    return;
+  }
+  for (const key of Object.keys(value as Record<string, unknown>)) {
+    assertNoSecretStructuredCloneValue((value as Record<string, unknown>)[key], seen);
+  }
+  if (value instanceof Error && 'cause' in value) {
+    assertNoSecretStructuredCloneValue((value as { cause?: unknown }).cause, seen);
+  }
 }
 
 /**

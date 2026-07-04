@@ -8,7 +8,6 @@ import {
   ComboboxListbox,
   ComboboxOption,
   ComboboxValue,
-  comboboxStyles,
 } from './combobox.js';
 
 const items = [
@@ -28,7 +27,6 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
     };
 
     expect({
-      classes: [style.attrs(comboboxStyles.root).class ?? ''] as const,
       input: ComboboxInput.definition.render({
         ...state,
         descriptionId: 'team-help',
@@ -37,19 +35,16 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
         labelledBy: 'team-label',
         name: 'team',
       }),
-      inputClasses: [style.attrs(comboboxStyles.input).class ?? ''] as const,
       listbox: ComboboxListbox.definition.render({
         ...state,
         children: 'options',
         id: 'team-listbox',
         labelledBy: 'team-input',
       }),
-      listboxClasses: [style.attrs(comboboxStyles.listbox).class ?? ''] as const,
       option: ComboboxOption.definition.render({
         ...state,
         itemValue: 'design',
       }),
-      optionClasses: [style.attrs(comboboxStyles.option).class ?? ''] as const,
       root: Combobox.definition.render({
         ...state,
         children: 'combobox body',
@@ -61,7 +56,6 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
         ...state,
         id: 'team-value',
       }),
-      valueClasses: [style.attrs(comboboxStyles.value).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -105,17 +99,6 @@ describe('@kovojs/ui Combobox StyleX slots', () => {
         styles: { value: overrides.value },
         value: 'design',
       }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX slot objects instead of variant helpers', () => {
-    expect({
-      inputMarker: comboboxStyles.input.$$css,
-      keys: Object.keys(comboboxStyles),
-      listboxMarker: comboboxStyles.listbox.$$css,
-      optionMarker: comboboxStyles.option.$$css,
-      rootMarker: comboboxStyles.root.$$css,
-      valueMarker: comboboxStyles.value.$$css,
     }).toMatchSnapshot();
   });
 });

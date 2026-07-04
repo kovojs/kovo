@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   dropdownMenuContentAttributes,
   dropdownMenuGroupAttributes,
@@ -53,7 +53,7 @@ export interface DropdownMenuStateProps {
  * const props: DropdownMenuProps = { children: 'Content' };
  */
 export interface DropdownMenuProps extends DropdownMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: DropdownMenuStyleOverrides;
 }
@@ -66,7 +66,7 @@ export interface DropdownMenuProps extends DropdownMenuStateProps {
  * const props: DropdownMenuTriggerProps = { children: 'Content' };
  */
 export interface DropdownMenuTriggerProps extends DropdownMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   labelledBy?: string;
@@ -81,7 +81,7 @@ export interface DropdownMenuTriggerProps extends DropdownMenuStateProps {
  * const props: DropdownMenuContentProps = { children: 'Content' };
  */
 export interface DropdownMenuContentProps extends DropdownMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: DropdownMenuStyleOverrides;
@@ -95,7 +95,7 @@ export interface DropdownMenuContentProps extends DropdownMenuStateProps {
  * const props: DropdownMenuItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface DropdownMenuItemProps extends DropdownMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;
@@ -111,7 +111,7 @@ export interface DropdownMenuItemProps extends DropdownMenuStateProps {
  * const props: DropdownMenuGroupProps = { children: 'Content' };
  */
 export interface DropdownMenuGroupProps extends DropdownMenuStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: DropdownMenuStyleOverrides;
@@ -128,15 +128,7 @@ export interface DropdownMenuSeparatorProps {
   id?: string;
   styles?: DropdownMenuStyleOverrides;
 }
-
-/**
- * Style definitions used by the dropdown menu components.
- *
- * @example
- * import { dropdownMenuStyles } from "@kovojs/ui/dropdown-menu";
- * const styles = dropdownMenuStyles;
- */
-export const dropdownMenuStyles = style.create({
+const dropdownMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

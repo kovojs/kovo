@@ -262,6 +262,10 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "import type { AppDb, AppReadonlyDb } from '../db.js'",
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("} from '@kovojs/server';");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      '@kovojs/server/internal/managed-db',
+    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'export const appRuntimeDbOptions = {\n  schema,\n  seedSql: SEED_CONTACTS,\n} satisfies KovoPostgresAppRuntimeOptions;',
     );
@@ -808,22 +812,31 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       "import Database from 'better-sqlite3'",
     );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("} from '@kovojs/server';");
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      '@kovojs/server/internal/managed-db',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createSqliteAppRuntimeDb,');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('type KovoSqliteAppRuntimeDb,');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("from 'drizzle-orm/better-sqlite3'");
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: AppReadonlyDb');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'interface CreatedAppRuntimeDb extends KovoSqliteAppRuntimeDb<AppDb>',
+    );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'client.exec(SCHEMA_DDL);\n  client.exec(SEED_CONTACTS);\n  const db = drizzle({ client });',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'readonlyDb(db).exec(SCHEMA_DDL)',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb: secretReadDb');
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+      'const runtime = createSqliteAppRuntimeDb({',
+    );
+    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('metadata: RUNTIME_DB_METADATA');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'Object.defineProperty(db, kovoReadonlyDbHandle',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('createDeclaredWriteDb(db, policy');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("dialectLabel: 'SQLite'");
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
-      'governedColumns: RUNTIME_DB_METADATA',
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
+      'createDeclaredWriteDb(db, policy',
     );
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'openDatabase: () => new NodeSqliteDatabaseSync(sqliteFile)',
@@ -838,13 +851,10 @@ describe('create-kovo starter (metadata)', () => {
     expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
       'const RUNTIME_DB_METADATA = extractKovoRuntimeDbMetadata(SCHEMA_TABLES)',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('readonlyDb(db, {');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('rawRead: {');
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain("executeMethod: 'all'");
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain(
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain('readonlyDb(db, {');
+    expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'const secretReadDb = createSecretBoxingReadDb(',
     );
-    expect(files.get('src/_kovo/app-runtime-db.ts')).toContain('RUNTIME_DB_METADATA,');
     expect(files.get('src/_kovo/app-runtime-db.ts')).not.toContain(
       'create' + 'SqliteAuthorizationDb',
     );

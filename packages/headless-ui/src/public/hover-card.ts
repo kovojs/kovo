@@ -6,14 +6,7 @@ export {
   hoverCardContentAttributes,
 } from '../primitives/hover-card.js';
 export type {
-  HoverCardChangeReason,
-  HoverCardChangeDetail,
   HoverCardState,
   HoverCardAttributeOptions,
-  HoverCardChangeOptions,
-  HoverCardChangeResult,
   HoverCardPrimitiveAttributes,
-  HoverCardTriggerEvent,
-  HoverCardContentEvent,
-  HoverCardEscapeEvent,
 } from '../primitives/hover-card.js';

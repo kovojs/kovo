@@ -15,7 +15,7 @@ import {
  * ```ts
  * import type { OtpFieldInputMode } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldInputMode = {} as OtpFieldInputMode;
+ * declare const value: OtpFieldInputMode;
  * ```
  */
 export type OtpFieldInputMode =
@@ -37,7 +37,7 @@ export type OtpFieldInputMode =
  * ```ts
  * import type { OtpFieldState } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldState = {} as OtpFieldState;
+ * declare const value: OtpFieldState;
  * ```
  */
 export interface OtpFieldState {
@@ -61,7 +61,7 @@ export interface OtpFieldState {
  * ```ts
  * import type { OtpFieldRootAttributeOptions } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldRootAttributeOptions = {} as OtpFieldRootAttributeOptions;
+ * declare const value: OtpFieldRootAttributeOptions;
  * ```
  */
 export interface OtpFieldRootAttributeOptions extends OtpFieldState {
@@ -80,7 +80,7 @@ export interface OtpFieldRootAttributeOptions extends OtpFieldState {
  * ```ts
  * import type { OtpFieldHiddenInputAttributeOptions } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldHiddenInputAttributeOptions = {} as OtpFieldHiddenInputAttributeOptions;
+ * declare const value: OtpFieldHiddenInputAttributeOptions;
  * ```
  */
 export interface OtpFieldHiddenInputAttributeOptions extends OtpFieldState {
@@ -96,7 +96,7 @@ export interface OtpFieldHiddenInputAttributeOptions extends OtpFieldState {
  * ```ts
  * import type { OtpFieldInputAttributeOptions } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldInputAttributeOptions = {} as OtpFieldInputAttributeOptions;
+ * declare const value: OtpFieldInputAttributeOptions;
  * ```
  */
 export interface OtpFieldInputAttributeOptions extends OtpFieldState {
@@ -115,7 +115,7 @@ export interface OtpFieldInputAttributeOptions extends OtpFieldState {
  * ```ts
  * import type { OtpFieldChangeReason } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldChangeReason = {} as OtpFieldChangeReason;
+ * declare const value: OtpFieldChangeReason;
  * ```
  */
 export type OtpFieldChangeReason = 'delete' | 'input' | 'paste' | 'programmatic';
@@ -129,7 +129,7 @@ export type OtpFieldChangeReason = 'delete' | 'input' | 'paste' | 'programmatic'
  * ```ts
  * import type { OtpFieldChangeDetail } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldChangeDetail = {} as OtpFieldChangeDetail;
+ * declare const value: OtpFieldChangeDetail;
  * ```
  */
 export type OtpFieldChangeDetail = PrimitiveChangeDetail<OtpFieldChangeReason, string>;
@@ -143,7 +143,7 @@ export type OtpFieldChangeDetail = PrimitiveChangeDetail<OtpFieldChangeReason, s
  * ```ts
  * import type { OtpFieldChangeOptions } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldChangeOptions = {} as OtpFieldChangeOptions;
+ * declare const value: OtpFieldChangeOptions;
  * ```
  */
 export interface OtpFieldChangeOptions {
@@ -159,7 +159,7 @@ export interface OtpFieldChangeOptions {
  * ```ts
  * import type { OtpFieldChangeResult } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldChangeResult = {} as OtpFieldChangeResult;
+ * declare const value: OtpFieldChangeResult;
  * ```
  */
 export interface OtpFieldChangeResult {
@@ -179,7 +179,7 @@ export interface OtpFieldChangeResult {
  * ```ts
  * import type { OtpFieldMoveResult } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldMoveResult = {} as OtpFieldMoveResult;
+ * declare const value: OtpFieldMoveResult;
  * ```
  */
 export interface OtpFieldMoveResult {
@@ -195,7 +195,7 @@ export interface OtpFieldMoveResult {
  * ```ts
  * import type { OtpFieldPrimitiveAttributes } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldPrimitiveAttributes = {} as OtpFieldPrimitiveAttributes;
+ * declare const value: OtpFieldPrimitiveAttributes;
  * ```
  */
 export type OtpFieldPrimitiveAttributes = PrimitiveDataAttributes &
@@ -215,7 +215,7 @@ export type OtpFieldRestorableTarget = { value?: string } | null;
  * ```ts
  * import type { OtpFieldInputEvent } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldInputEvent = {} as OtpFieldInputEvent;
+ * declare const value: OtpFieldInputEvent;
  * ```
  */
 export type OtpFieldInputEvent = Event & {
@@ -232,7 +232,7 @@ export type OtpFieldInputEvent = Event & {
  * ```ts
  * import type { OtpFieldKeyboardEvent } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldKeyboardEvent = {} as OtpFieldKeyboardEvent;
+ * declare const value: OtpFieldKeyboardEvent;
  * ```
  */
 export type OtpFieldKeyboardEvent = Event & {
@@ -249,7 +249,7 @@ export type OtpFieldKeyboardEvent = Event & {
  * ```ts
  * import type { OtpFieldPasteEvent } from '@kovojs/headless-ui/otp-field';
  *
- * const value: OtpFieldPasteEvent = {} as OtpFieldPasteEvent;
+ * declare const value: OtpFieldPasteEvent;
  * ```
  */
 export type OtpFieldPasteEvent = Event & {
@@ -267,7 +267,7 @@ export type OtpFieldPasteEvent = Event & {
  * ```ts
  * import { otpFieldComplete } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldComplete>[0];
+ * declare const input: Parameters<typeof otpFieldComplete>[0];
  * const result = otpFieldComplete(input);
  * ```
  */
@@ -284,8 +284,8 @@ export function otpFieldComplete(state: OtpFieldState): boolean {
  * ```ts
  * import { otpFieldSlotValue } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldSlotValue>[0];
- * const state = {} as Parameters<typeof otpFieldSlotValue>[1];
+ * declare const input: Parameters<typeof otpFieldSlotValue>[0];
+ * declare const state: Parameters<typeof otpFieldSlotValue>[1];
  * const result = otpFieldSlotValue(input, state);
  * ```
  */
@@ -306,7 +306,7 @@ export function otpFieldSlotValue(state: OtpFieldState, slotIndex: number): stri
  * ```ts
  * import { otpFieldRootAttributes } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldRootAttributes>[0];
+ * declare const input: Parameters<typeof otpFieldRootAttributes>[0];
  * const result = otpFieldRootAttributes(input);
  * ```
  */
@@ -337,7 +337,7 @@ export function otpFieldRootAttributes(
  * ```ts
  * import { otpFieldHiddenInputAttributes } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldHiddenInputAttributes>[0];
+ * declare const input: Parameters<typeof otpFieldHiddenInputAttributes>[0];
  * const result = otpFieldHiddenInputAttributes(input);
  * ```
  */
@@ -377,7 +377,7 @@ export function otpFieldHiddenInputAttributes(
  * ```ts
  * import { otpFieldInputAttributes } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldInputAttributes>[0];
+ * declare const input: Parameters<typeof otpFieldInputAttributes>[0];
  * const result = otpFieldInputAttributes(input);
  * ```
  */
@@ -417,10 +417,10 @@ export function otpFieldInputAttributes(
  * ```ts
  * import { setOtpFieldValue } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof setOtpFieldValue>[0];
- * const state = {} as Parameters<typeof setOtpFieldValue>[1];
- * const options = {} as Parameters<typeof setOtpFieldValue>[2];
- * const detail = {} as Parameters<typeof setOtpFieldValue>[3];
+ * declare const input: Parameters<typeof setOtpFieldValue>[0];
+ * declare const state: Parameters<typeof setOtpFieldValue>[1];
+ * declare const options: Parameters<typeof setOtpFieldValue>[2];
+ * declare const detail: Parameters<typeof setOtpFieldValue>[3];
  * const result = setOtpFieldValue(input, state, options, detail);
  * ```
  *
@@ -456,11 +456,11 @@ export function setOtpFieldValue(
  * ```ts
  * import { setOtpFieldSlotValue } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof setOtpFieldSlotValue>[0];
- * const state = {} as Parameters<typeof setOtpFieldSlotValue>[1];
- * const options = {} as Parameters<typeof setOtpFieldSlotValue>[2];
- * const detail = {} as Parameters<typeof setOtpFieldSlotValue>[3];
- * const extra = {} as Parameters<typeof setOtpFieldSlotValue>[4];
+ * declare const input: Parameters<typeof setOtpFieldSlotValue>[0];
+ * declare const state: Parameters<typeof setOtpFieldSlotValue>[1];
+ * declare const options: Parameters<typeof setOtpFieldSlotValue>[2];
+ * declare const detail: Parameters<typeof setOtpFieldSlotValue>[3];
+ * declare const extra: Parameters<typeof setOtpFieldSlotValue>[4];
  * const result = setOtpFieldSlotValue(input, state, options, detail, extra);
  * ```
  *
@@ -489,9 +489,9 @@ export function setOtpFieldSlotValue(
  * ```ts
  * import { otpFieldMoveFocus } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldMoveFocus>[0];
- * const state = {} as Parameters<typeof otpFieldMoveFocus>[1];
- * const options = {} as Parameters<typeof otpFieldMoveFocus>[2];
+ * declare const input: Parameters<typeof otpFieldMoveFocus>[0];
+ * declare const state: Parameters<typeof otpFieldMoveFocus>[1];
+ * declare const options: Parameters<typeof otpFieldMoveFocus>[2];
  * const result = otpFieldMoveFocus(input, state, options);
  * ```
  *
@@ -522,8 +522,8 @@ export function otpFieldMoveFocus(
  * ```ts
  * import { otpFieldValueFromString } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldValueFromString>[0];
- * const state = {} as Parameters<typeof otpFieldValueFromString>[1];
+ * declare const input: Parameters<typeof otpFieldValueFromString>[0];
+ * declare const state: Parameters<typeof otpFieldValueFromString>[1];
  * const result = otpFieldValueFromString(input, state);
  * ```
  */
@@ -538,9 +538,9 @@ export function otpFieldValueFromString(value: string, length?: number): string 
  * ```ts
  * import { otpFieldInput } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldInput>[0];
- * const state = {} as Parameters<typeof otpFieldInput>[1];
- * const options = {} as Parameters<typeof otpFieldInput>[2];
+ * declare const input: Parameters<typeof otpFieldInput>[0];
+ * declare const state: Parameters<typeof otpFieldInput>[1];
+ * declare const options: Parameters<typeof otpFieldInput>[2];
  * const result = otpFieldInput(input, state, options);
  * ```
  *
@@ -576,9 +576,9 @@ export function otpFieldInput(
  * ```ts
  * import { otpFieldKeyDown } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldKeyDown>[0];
- * const state = {} as Parameters<typeof otpFieldKeyDown>[1];
- * const options = {} as Parameters<typeof otpFieldKeyDown>[2];
+ * declare const input: Parameters<typeof otpFieldKeyDown>[0];
+ * declare const state: Parameters<typeof otpFieldKeyDown>[1];
+ * declare const options: Parameters<typeof otpFieldKeyDown>[2];
  * const result = otpFieldKeyDown(input, state, options);
  * ```
  *
@@ -632,9 +632,9 @@ export function otpFieldKeyDown(
  * ```ts
  * import { otpFieldPaste } from '@kovojs/headless-ui/otp-field';
  *
- * const input = {} as Parameters<typeof otpFieldPaste>[0];
- * const state = {} as Parameters<typeof otpFieldPaste>[1];
- * const options = {} as Parameters<typeof otpFieldPaste>[2];
+ * declare const input: Parameters<typeof otpFieldPaste>[0];
+ * declare const state: Parameters<typeof otpFieldPaste>[1];
+ * declare const options: Parameters<typeof otpFieldPaste>[2];
  * const result = otpFieldPaste(input, state, options);
  * ```
  *

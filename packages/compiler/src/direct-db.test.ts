@@ -1,4 +1,5 @@
 import { diagnosticDefinitions } from '@kovojs/core/internal/diagnostics';
+import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { compileComponentModule } from './index.js';
@@ -261,6 +262,20 @@ export const addToCart = mutation({
     });
 
     expect(result.diagnostics).toEqual([]);
+  });
+
+  it('keeps the commerce reference mutation free of handler db write sinks', () => {
+    const source = readFileSync(
+      new URL('../../../examples/commerce/src/domain.ts', import.meta.url),
+      'utf8',
+    );
+    const result = compileComponentModule({
+      fileName: 'examples/commerce/src/domain.ts',
+      source,
+    });
+
+    expect(result.diagnostics.filter((diagnostic) => diagnostic.code === 'KV330')).toEqual([]);
+    expect(result.handlerWriteSinkFacts.filter((fact) => fact.surface === 'mutation')).toEqual([]);
   });
 
   it('ignores mutation handler text inside strings and comments', () => {

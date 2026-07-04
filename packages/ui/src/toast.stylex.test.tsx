@@ -9,16 +9,11 @@ import {
   ToastDescription,
   ToastTitle,
   ToastViewport,
-  toastStyles,
 } from './toast.js';
 
 describe('@kovojs/ui Toast StyleX slots', () => {
   it('matches toast states with StyleX output', () => {
     expect({
-      actionClasses: [style.attrs(toastStyles.action).class ?? ''] as const,
-      classes: [style.attrs(toastStyles.root).class ?? ''] as const,
-      closeClasses: [style.attrs(toastStyles.close).class ?? ''] as const,
-      descriptionClasses: [style.attrs(toastStyles.description).class ?? ''] as const,
       rendered: ToastViewport.definition.render({
         children: Toast.definition.render({
           children:
@@ -53,8 +48,6 @@ describe('@kovojs/ui Toast StyleX slots', () => {
         label: 'Notifications',
         placement: 'bottom-end',
       }),
-      titleClasses: [style.attrs(toastStyles.title).class ?? ''] as const,
-      viewportClasses: [style.attrs(toastStyles.viewport).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -108,19 +101,5 @@ describe('@kovojs/ui Toast StyleX slots', () => {
         styles: { viewport: overrides.viewport },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      keys: Object.keys(toastStyles),
-      markers: {
-        action: toastStyles.action.$$css,
-        close: toastStyles.close.$$css,
-        description: toastStyles.description.$$css,
-        root: toastStyles.root.$$css,
-        title: toastStyles.title.$$css,
-        viewport: toastStyles.viewport.$$css,
-      },
-    }).toMatchSnapshot();
   });
 });

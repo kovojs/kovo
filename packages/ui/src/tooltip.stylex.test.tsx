@@ -2,13 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Tooltip, TooltipContent, TooltipTrigger, tooltipStyles } from './tooltip.js';
+import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip.js';
 
 describe('@kovojs/ui Tooltip StyleX slots', () => {
   it('matches tooltip markup with StyleX slot output', () => {
     expect({
-      classes: [style.attrs(tooltipStyles.root).class ?? ''] as const,
-      contentClasses: [style.attrs(tooltipStyles.content).class ?? ''] as const,
       disabled: Tooltip.definition.render({
         children:
           TooltipTrigger.definition.render({
@@ -32,7 +30,6 @@ describe('@kovojs/ui Tooltip StyleX slots', () => {
           }),
         open: true,
       }),
-      triggerClasses: [style.attrs(tooltipStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -71,14 +68,5 @@ describe('@kovojs/ui Tooltip StyleX slots', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      contentMarker: tooltipStyles.content.$$css,
-      keys: Object.keys(tooltipStyles),
-      rootMarker: tooltipStyles.root.$$css,
-      triggerMarker: tooltipStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });

@@ -1,6 +1,7 @@
 import {
   isUntrusted,
   revealUntrusted,
+  type ComponentChild,
   type JsonValue,
   type Redirect,
   type RouteSearchValue,
@@ -25,7 +26,7 @@ import {
 import type { PageHintOptions, RouteMetaSource } from './hints.js';
 import type { SignUrlContext } from './capability-route.js';
 import { runWithJsxRequestContext } from './jsx-context.js';
-import type { CsrfValidationOptions } from './csrf.js';
+import type { CsrfOptions } from './csrf.js';
 import type { AccessDecision } from './access.js';
 import { createDeferredRegionChunkCollector } from './deferred-region.js';
 import { stampGuardFailureDocumentSecurityFloor } from './document-core.js';
@@ -116,7 +117,7 @@ export interface LayoutRenderSlots<
   Regions extends LayoutRegionResults = LayoutRegionResults,
 > {
   /** The child layout or route page output this layout wraps. */
-  children: unknown;
+  children: ComponentChild;
   /** Named route-level sibling regions rendered before layout composition (SPEC §4.5/§8). */
   regions: Regions;
   /** The request after configured app lifecycle providers have run. */
@@ -350,7 +351,7 @@ export interface RouteFactory<Request = unknown> {
  * @param definition - The `page` handler plus optional `params`/`search` schemas, guards, and meta.
  * @returns A `RouteDeclaration` carrying `path`.
  * @example
- * import { notFound, route, s } from '@kovojs/server';
+ * import { notFound, route, s, trustedHtml } from '@kovojs/server';
  *
  * const catalog = new Map<string, { name: string }>();
  *
@@ -359,7 +360,7 @@ export interface RouteFactory<Request = unknown> {
  *   page({ params }) {
  *     const product = catalog.get(params.id);
  *     if (!product) return notFound();
- *     return `<h1>${product.name}</h1>`;
+ *     return trustedHtml(`<h1>${product.name}</h1>`);
  *   },
  * });
  */
@@ -524,7 +525,7 @@ export function notFound(): NotFound {
 }
 
 export interface RouteJsxContextOptions<Request> {
-  csrf?: CsrfValidationOptions<Request>;
+  csrf?: CsrfOptions<Request>;
   deferredRegions?: DeferredRegionCollector;
   maxListItems?: number;
   mutationFailure?: {
@@ -749,7 +750,7 @@ async function renderLayoutChain<Request>(
     try {
       const queries = await loadLayoutQueries(layoutDeclaration, request, maxListItems);
       value = await layoutDeclaration.render(queries, undefined, {
-        children: value,
+        children: value as ComponentChild,
         regions,
         request,
       });

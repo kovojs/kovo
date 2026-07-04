@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   dialogCloseAttributes,
   dialogContentAttributes,
@@ -50,7 +50,7 @@ export interface DialogStateProps {
  * const props: DialogProps = { children: 'Content' };
  */
 export interface DialogProps extends DialogStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: DialogStyleOverrides;
 }
@@ -63,7 +63,7 @@ export interface DialogProps extends DialogStateProps {
  * const props: DialogTriggerProps = { children: 'Content' };
  */
 export interface DialogTriggerProps extends DialogStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   styles?: DialogStyleOverrides;
@@ -77,7 +77,7 @@ export interface DialogTriggerProps extends DialogStateProps {
  * const props: DialogContentProps = { children: 'Content' };
  */
 export interface DialogContentProps extends DialogStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   descriptionId?: string;
   dismissible?: boolean;
@@ -93,7 +93,7 @@ export interface DialogContentProps extends DialogStateProps {
  * const props: DialogCloseProps = { children: 'Content' };
  */
 export interface DialogCloseProps extends DialogStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   styles?: DialogStyleOverrides;
@@ -107,19 +107,11 @@ export interface DialogCloseProps extends DialogStateProps {
  * const props: DialogPartProps = { children: 'Content' };
  */
 export interface DialogPartProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: DialogStyleOverrides;
 }
-
-/**
- * Style definitions used by the dialog components.
- *
- * @example
- * import { dialogStyles } from "@kovojs/ui/dialog";
- * const styles = dialogStyles;
- */
-export const dialogStyles = style.create({
+const dialogStyles = style.create({
   close: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.background,

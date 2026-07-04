@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
@@ -21,7 +21,7 @@ export type BadgeVariant = 'neutral' | 'success' | 'warning' | 'destructive' | '
  * const props: BadgeProps = { children: 'Content' };
  */
 export interface BadgeProps {
-  children?: string;
+  children?: ComponentChild;
   style?: style.StyleInput;
   variant?: BadgeVariant;
 }
@@ -70,18 +70,6 @@ const variants = style.create({
     color: uiTheme.color.warning.foreground,
   },
 });
-
-/**
- * Style definitions used by the badge components.
- *
- * @example
- * import { badgeStyles } from "@kovojs/ui/badge";
- * const styles = badgeStyles;
- */
-export const badgeStyles = {
-  base,
-  variants,
-} as const;
 
 /**
  * Renders the styled badge primitive.

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   selectContentAttributes,
   selectHiddenInputAttributes,
@@ -37,7 +37,11 @@ export interface SelectStyleOverrides {
  *
  * @example
  * import type { SelectStateProps } from "@kovojs/ui/select";
- * const state: SelectStateProps = {};
+ * const state: SelectStateProps = {
+ *   items: [{ label: 'Standard', value: 'standard' }],
+ *   name: 'shippingSpeed',
+ *   value: 'standard',
+ * };
  */
 export interface SelectStateProps {
   disabled?: boolean;
@@ -58,10 +62,14 @@ export interface SelectStateProps {
  *
  * @example
  * import type { SelectProps } from "@kovojs/ui/select";
- * const props: SelectProps = { children: 'Content' };
+ * const props: SelectProps = {
+ *   children: 'Shipping speed',
+ *   items: [{ label: 'Standard', value: 'standard' }],
+ *   value: 'standard',
+ * };
  */
 export interface SelectProps extends SelectStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: SelectStyleOverrides;
 }
@@ -71,11 +79,16 @@ export interface SelectProps extends SelectStateProps {
  *
  * @example
  * import type { SelectTriggerProps } from "@kovojs/ui/select";
- * const props: SelectTriggerProps = { children: 'Content' };
+ * const props: SelectTriggerProps = {
+ *   children: 'Standard',
+ *   id: 'shipping-speed-trigger',
+ *   labelledBy: 'shipping-speed-label',
+ *   value: 'standard',
+ * };
  */
 export interface SelectTriggerProps extends SelectStateProps {
-  'aria-activedescendant'?: string;
-  children?: string;
+  'aria-activedescendant'?: string | undefined;
+  children?: ComponentChild;
   descriptionId?: string;
   errorId?: string;
   id?: string;
@@ -88,7 +101,11 @@ export interface SelectTriggerProps extends SelectStateProps {
  *
  * @example
  * import type { SelectHiddenInputProps } from "@kovojs/ui/select";
- * const props: SelectHiddenInputProps = {};
+ * const props: SelectHiddenInputProps = {
+ *   id: 'shipping-speed-input',
+ *   name: 'shippingSpeed',
+ *   value: 'standard',
+ * };
  */
 export interface SelectHiddenInputProps extends SelectStateProps {
   id?: string;
@@ -100,10 +117,15 @@ export interface SelectHiddenInputProps extends SelectStateProps {
  *
  * @example
  * import type { SelectContentProps } from "@kovojs/ui/select";
- * const props: SelectContentProps = { children: 'Content' };
+ * const props: SelectContentProps = {
+ *   children: 'Shipping options',
+ *   id: 'shipping-speed-listbox',
+ *   labelledBy: 'shipping-speed-label',
+ *   open: true,
+ * };
  */
 export interface SelectContentProps extends SelectStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   label?: string;
   labelledBy?: string;
@@ -115,10 +137,15 @@ export interface SelectContentProps extends SelectStateProps {
  *
  * @example
  * import type { SelectItemProps } from "@kovojs/ui/select";
- * const props: SelectItemProps = { itemValue: 'item', children: 'Content' };
+ * const props: SelectItemProps = {
+ *   children: 'Standard',
+ *   itemLabel: 'Standard',
+ *   itemValue: 'standard',
+ *   value: 'standard',
+ * };
  */
 export interface SelectItemProps extends SelectStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;
@@ -131,22 +158,18 @@ export interface SelectItemProps extends SelectStateProps {
  *
  * @example
  * import type { SelectValueProps } from "@kovojs/ui/select";
- * const props: SelectValueProps = { children: 'Content' };
+ * const props: SelectValueProps = {
+ *   children: 'Standard',
+ *   placeholder: 'Choose a speed',
+ *   value: 'standard',
+ * };
  */
 export interface SelectValueProps extends SelectStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: SelectStyleOverrides;
 }
-
-/**
- * Style definitions used by the select components.
- *
- * @example
- * import { selectStyles } from "@kovojs/ui/select";
- * const styles = selectStyles;
- */
-export const selectStyles = style.create({
+const selectStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

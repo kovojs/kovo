@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   sliderInputAttributes,
   sliderRangeAttributes,
@@ -56,7 +56,7 @@ export interface SliderStateProps {
  * const props: SliderProps = { children: 'Content' };
  */
 export interface SliderProps extends SliderStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: SliderStyleOverrides;
 }
@@ -87,8 +87,9 @@ export interface SliderInputProps extends SliderStateProps {
  * const props: SliderPartProps = { children: 'Content' };
  */
 export interface SliderPartProps extends SliderStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
+  style?: unknown;
   styles?: SliderStyleOverrides;
 }
 
@@ -106,15 +107,7 @@ export interface SliderThumbProps extends SliderPartProps {
   labelledBy?: string;
   valueText?: string;
 }
-
-/**
- * Style definitions used by the slider components.
- *
- * @example
- * import { sliderStyles } from "@kovojs/ui/slider";
- * const styles = sliderStyles;
- */
-export const sliderStyles = style.create({
+const sliderStyles = style.create({
   // Native range kept for keyboard/form/validation; visually hidden but
   // stretched over the track so it stays the pointer/focus target.
   input: {

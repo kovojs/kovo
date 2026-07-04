@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import { renderRouteHtml, trustedHtml } from '@kovojs/server';
 import * as style from '@kovojs/style';
 
@@ -32,7 +32,7 @@ export interface TableStyleOverrides {
  */
 export interface TableProps {
   caption?: string;
-  children?: unknown;
+  children?: ComponentChild;
   styles?: TableStyleOverrides;
 }
 
@@ -44,7 +44,7 @@ export interface TableProps {
  * const props: TableSectionProps = { children: 'Content' };
  */
 export interface TableSectionProps {
-  children?: unknown;
+  children?: ComponentChild;
   styles?: TableStyleOverrides;
 }
 
@@ -56,14 +56,14 @@ export interface TableSectionProps {
  * const props: TableCellProps = { children: 'Content' };
  */
 export interface TableCellProps {
-  children?: unknown;
+  children?: ComponentChild;
   colSpan?: number;
   scope?: 'col' | 'row';
   styles?: TableStyleOverrides;
 }
 
 type MaybePromise<Value> = Promise<Value> | Value;
-type TableRenderedHtml = ReturnType<typeof trustedHtml>;
+type TableRenderedHtml = object;
 
 const tableRenderedHtmlValues = new WeakSet<object>();
 
@@ -118,15 +118,7 @@ function isTableRenderedHtml(value: unknown): value is TableRenderedHtml {
 function escapeAttribute(value: string): string {
   return escapeHtml(value).replaceAll('"', '&quot;');
 }
-
-/**
- * Style definitions used by the table components.
- *
- * @example
- * import { tableStyles } from "@kovojs/ui/table";
- * const styles = tableStyles;
- */
-export const tableStyles = style.create({
+const tableStyles = style.create({
   body: {
     '[&_tr:last-child]': {
       borderBottomWidth: 0,

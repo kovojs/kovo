@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import { Toolbar, ToolbarButton, ToolbarItem, toolbarStyles } from './toolbar.js';
+import { Toolbar, ToolbarButton, ToolbarItem } from './toolbar.js';
 
 const items = [{ value: 'bold' }, { value: 'italic' }, { disabled: true, value: 'link' }] as const;
 
@@ -22,8 +22,6 @@ describe('@kovojs/ui Toolbar StyleX slots', () => {
         itemValue: 'bold',
         pressed: true,
       }),
-      buttonClasses: [style.attrs(toolbarStyles.button).class ?? ''] as const,
-      classes: [style.attrs(toolbarStyles.root).class ?? ''] as const,
       disabledButton: ToolbarButton.definition.render({
         ...state,
         children: 'Link',
@@ -36,7 +34,6 @@ describe('@kovojs/ui Toolbar StyleX slots', () => {
         id: 'bold-item',
         itemValue: 'bold',
       }),
-      itemClasses: [style.attrs(toolbarStyles.item).class ?? ''] as const,
       root: Toolbar.definition.render({
         ...state,
         children: 'format controls',
@@ -85,15 +82,6 @@ describe('@kovojs/ui Toolbar StyleX slots', () => {
         children: 'format controls',
         styles: { root: overrides.root },
       }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX slot objects instead of variant helpers', () => {
-    expect({
-      buttonMarker: toolbarStyles.button.$$css,
-      itemMarker: toolbarStyles.item.$$css,
-      keys: Object.keys(toolbarStyles),
-      rootMarker: toolbarStyles.root.$$css,
     }).toMatchSnapshot();
   });
 });

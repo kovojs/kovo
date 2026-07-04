@@ -8,7 +8,6 @@ export {
   contextMenuGroupAttributes,
   contextMenuSeparatorAttributes,
   contextMenuItemHighlighted,
-  contextMenuPointFromEvent,
   contextMenuFocusElement,
 } from '../primitives/context-menu.js';
 export type {
@@ -21,20 +20,10 @@ export type {
   ContextMenuItemAttributeOptions,
   ContextMenuGroupAttributeOptions,
   ContextMenuSeparatorAttributeOptions,
-  ContextMenuOpenChangeReason,
-  ContextMenuSelectReason,
-  ContextMenuOpenChangeDetail,
-  ContextMenuSelectDetail,
-  ContextMenuChangeOptions,
-  ContextMenuOpenChangeResult,
-  ContextMenuSelectResult,
   ContextMenuMoveResult,
   ContextMenuTypeaheadOptions,
   ContextMenuTypeaheadResult,
   ContextMenuPrimitiveAttributes,
-  ContextMenuTriggerEvent,
-  ContextMenuItemEvent,
-  ContextMenuKeyboardEvent,
   ContextMenuFocusEvent,
   ContextMenuFocusOptions,
 } from '../primitives/context-menu.js';

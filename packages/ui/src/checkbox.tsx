@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import { checkboxRootAttributes, type CheckboxCheckedState } from '@kovojs/headless-ui/checkbox';
 import * as style from '@kovojs/style';
 
@@ -30,7 +30,7 @@ export interface CheckboxStyleOverrides {
 export interface CheckboxProps {
   describedBy?: string;
   checked?: CheckboxCheckedState;
-  children?: string;
+  children?: ComponentChild;
   disabled?: boolean;
   form?: string;
   id?: string;
@@ -40,15 +40,7 @@ export interface CheckboxProps {
   styles?: CheckboxStyleOverrides;
   value?: string;
 }
-
-/**
- * Style definitions used by the checkbox components.
- *
- * @example
- * import { checkboxStyles } from "@kovojs/ui/checkbox";
- * const styles = checkboxStyles;
- */
-export const checkboxStyles = style.create({
+const checkboxStyles = style.create({
   // Custom square. Carries data-state to paint the fill + check/dash glyph.
   box: {
     alignItems: 'center',

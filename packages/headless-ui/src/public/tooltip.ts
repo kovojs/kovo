@@ -6,13 +6,7 @@ export {
   tooltipContentAttributes,
 } from '../primitives/tooltip.js';
 export type {
-  TooltipChangeReason,
-  TooltipChangeDetail,
   TooltipState,
   TooltipAttributeOptions,
-  TooltipChangeOptions,
-  TooltipChangeResult,
   TooltipPrimitiveAttributes,
-  TooltipTriggerEvent,
-  TooltipEscapeEvent,
 } from '../primitives/tooltip.js';

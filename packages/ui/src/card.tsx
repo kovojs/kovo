@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { uiTheme } from './theme.js';
@@ -12,18 +12,10 @@ import { uiTheme } from './theme.js';
  * const props: CardProps = { children: 'Content' };
  */
 export interface CardProps {
-  children?: unknown;
+  children?: ComponentChild;
   style?: style.StyleInput;
 }
-
-/**
- * Style definitions used by the card components.
- *
- * @example
- * import { cardStyles } from "@kovojs/ui/card";
- * const styles = cardStyles;
- */
-export const cardStyles = style.create({
+const cardStyles = style.create({
   root: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

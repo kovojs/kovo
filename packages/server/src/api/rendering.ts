@@ -1,14 +1,8 @@
-// CSP-3 (bugs-part3): apps opt into the framework's own CSP by passing `document.csp`
-// (the inline-script/style hashes surfaced by `renderRouteDocumentResponse` /
-// `renderDeferredDocument`) to `renderContentSecurityPolicy` and setting the result as
-// their `Content-Security-Policy` header. `cspSha256` lets apps hash any additional
-// inline script/style they author so it can be admitted by the same policy.
 export { trustedHtml, trustedUrl } from '@kovojs/browser';
-export { cspSha256, renderContentSecurityPolicy } from '../csp.js';
-export type { ContentSecurityPolicyOptions, CspInlineMetadata } from '../csp.js';
 export { renderRouteHtml } from '../html.js';
 export { Defer } from '../deferred-region.js';
 export type { DeferProps, RegionPriority, ServerRenderable } from '../deferred-region.js';
+export type { CspInlineMetadata } from '../csp.js';
 export type {
   AwaitableGeneratedFragmentRenderable,
   GeneratedFragmentRenderable,
@@ -28,7 +22,7 @@ export {
   Link,
   Meta,
   ModulePreload,
-  Stylesheet,
+  StylesheetLink,
 } from '../document-structured.js';
 export type {
   DocumentAuthoringContext,

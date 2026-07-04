@@ -44,7 +44,7 @@ export const toastDismissEventName = 'toast:dismiss' as const;
  * ```ts
  * import type { ToastPlacement } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastPlacement = {} as ToastPlacement;
+ * declare const value: ToastPlacement;
  * ```
  */
 export type ToastPlacement =
@@ -64,7 +64,7 @@ export type ToastPlacement =
  * ```ts
  * import type { ToastPoliteness } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastPoliteness = {} as ToastPoliteness;
+ * declare const value: ToastPoliteness;
  * ```
  */
 export type ToastPoliteness = 'assertive' | 'polite';
@@ -78,7 +78,7 @@ export type ToastPoliteness = 'assertive' | 'polite';
  * ```ts
  * import type { ToastVariant } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastVariant = {} as ToastVariant;
+ * declare const value: ToastVariant;
  * ```
  */
 export type ToastVariant = 'default' | 'error' | 'info' | 'success' | 'warning';
@@ -92,7 +92,7 @@ export type ToastVariant = 'default' | 'error' | 'info' | 'success' | 'warning';
  * ```ts
  * import type { ToastChangeReason } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastChangeReason = {} as ToastChangeReason;
+ * declare const value: ToastChangeReason;
  * ```
  */
 export type ToastChangeReason =
@@ -111,7 +111,7 @@ export type ToastChangeReason =
  * ```ts
  * import type { ToastShowPayload } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastShowPayload = {} as ToastShowPayload;
+ * declare const value: ToastShowPayload;
  * ```
  */
 export interface ToastShowPayload {
@@ -134,7 +134,7 @@ export interface ToastShowPayload {
  * ```ts
  * import type { ToastDismissPayload } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastDismissPayload = {} as ToastDismissPayload;
+ * declare const value: ToastDismissPayload;
  * ```
  */
 export interface ToastDismissPayload {
@@ -151,7 +151,7 @@ export interface ToastDismissPayload {
  * ```ts
  * import type { ToastEventDefinition } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastEventDefinition = {} as ToastEventDefinition;
+ * declare const value: ToastEventDefinition;
  * ```
  */
 export interface ToastEventDefinition<Name extends string, Payload> {
@@ -169,7 +169,7 @@ export interface ToastEventDefinition<Name extends string, Payload> {
  * ```ts
  * import type { ToastShowEventDefinition } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastShowEventDefinition = {} as ToastShowEventDefinition;
+ * declare const value: ToastShowEventDefinition;
  * ```
  */
 export type ToastShowEventDefinition = ToastEventDefinition<
@@ -186,7 +186,7 @@ export type ToastShowEventDefinition = ToastEventDefinition<
  * ```ts
  * import type { ToastDismissEventDefinition } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastDismissEventDefinition = {} as ToastDismissEventDefinition;
+ * declare const value: ToastDismissEventDefinition;
  * ```
  */
 export type ToastDismissEventDefinition = ToastEventDefinition<
@@ -249,7 +249,7 @@ export const toastEvents = Object.freeze([toastShowEvent, toastDismissEvent] as 
  * ```ts
  * import type { ToastState } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastState = {} as ToastState;
+ * declare const value: ToastState;
  * ```
  */
 export interface ToastState {
@@ -267,7 +267,7 @@ export interface ToastState {
  * ```ts
  * import type { ToastViewportAttributeOptions } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastViewportAttributeOptions = {} as ToastViewportAttributeOptions;
+ * declare const value: ToastViewportAttributeOptions;
  * ```
  */
 export interface ToastViewportAttributeOptions {
@@ -286,7 +286,7 @@ export interface ToastViewportAttributeOptions {
  * ```ts
  * import type { ToastRootAttributeOptions } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastRootAttributeOptions = {} as ToastRootAttributeOptions;
+ * declare const value: ToastRootAttributeOptions;
  * ```
  */
 export interface ToastRootAttributeOptions extends ToastState {
@@ -305,7 +305,7 @@ export interface ToastRootAttributeOptions extends ToastState {
  * ```ts
  * import type { ToastPartAttributeOptions } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastPartAttributeOptions = {} as ToastPartAttributeOptions;
+ * declare const value: ToastPartAttributeOptions;
  * ```
  */
 export interface ToastPartAttributeOptions {
@@ -321,7 +321,7 @@ export interface ToastPartAttributeOptions {
  * ```ts
  * import type { ToastActionAttributeOptions } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastActionAttributeOptions = {} as ToastActionAttributeOptions;
+ * declare const value: ToastActionAttributeOptions;
  * ```
  */
 export interface ToastActionAttributeOptions extends ToastState {
@@ -339,7 +339,7 @@ export interface ToastActionAttributeOptions extends ToastState {
  * ```ts
  * import type { ToastChangeValue } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastChangeValue = {} as ToastChangeValue;
+ * declare const value: ToastChangeValue;
  * ```
  */
 export type ToastChangeValue = Readonly<{
@@ -356,7 +356,7 @@ export type ToastChangeValue = Readonly<{
  * ```ts
  * import type { ToastChangeDetail } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastChangeDetail = {} as ToastChangeDetail;
+ * declare const value: ToastChangeDetail;
  * ```
  */
 export type ToastChangeDetail = PrimitiveChangeDetail<ToastChangeReason, ToastChangeValue>;
@@ -370,7 +370,7 @@ export type ToastChangeDetail = PrimitiveChangeDetail<ToastChangeReason, ToastCh
  * ```ts
  * import type { ToastChangeOptions } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastChangeOptions = {} as ToastChangeOptions;
+ * declare const value: ToastChangeOptions;
  * ```
  */
 export interface ToastChangeOptions {
@@ -387,7 +387,7 @@ export interface ToastChangeOptions {
  * ```ts
  * import type { ToastChangeResult } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastChangeResult = {} as ToastChangeResult;
+ * declare const value: ToastChangeResult;
  * ```
  */
 export interface ToastChangeResult {
@@ -406,7 +406,7 @@ export interface ToastChangeResult {
  * ```ts
  * import type { ToastPrimitiveAttributes } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastPrimitiveAttributes = {} as ToastPrimitiveAttributes;
+ * declare const value: ToastPrimitiveAttributes;
  * ```
  */
 export type ToastPrimitiveAttributes = PrimitiveDataAttributes &
@@ -421,7 +421,7 @@ export type ToastPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { ToastButtonEvent } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastButtonEvent = {} as ToastButtonEvent;
+ * declare const value: ToastButtonEvent;
  * ```
  */
 export type ToastButtonEvent = Event;
@@ -435,7 +435,7 @@ export type ToastButtonEvent = Event;
  * ```ts
  * import type { ToastAnimationEvent } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastAnimationEvent = {} as ToastAnimationEvent;
+ * declare const value: ToastAnimationEvent;
  * ```
  */
 export type ToastAnimationEvent = Event & { readonly animationName?: string };
@@ -449,7 +449,7 @@ export type ToastAnimationEvent = Event & { readonly animationName?: string };
  * ```ts
  * import type { ToastKeyboardEvent } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastKeyboardEvent = {} as ToastKeyboardEvent;
+ * declare const value: ToastKeyboardEvent;
  * ```
  */
 export type ToastKeyboardEvent = Event & { readonly key: string };
@@ -463,7 +463,7 @@ export type ToastKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import type { ToastViewportKeyboardEvent } from '@kovojs/headless-ui/toast';
  *
- * const value: ToastViewportKeyboardEvent = {} as ToastViewportKeyboardEvent;
+ * declare const value: ToastViewportKeyboardEvent;
  * ```
  */
 export type ToastViewportKeyboardEvent = Event & { readonly key: string };
@@ -477,7 +477,7 @@ export type ToastViewportKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import { toastShowPayload } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastShowPayload>[0];
+ * declare const input: Parameters<typeof toastShowPayload>[0];
  * const result = toastShowPayload(input);
  * ```
  */
@@ -505,7 +505,7 @@ export function toastShowPayload(input: ToastShowPayload): ToastShowPayload {
  * ```ts
  * import { toastDismissPayload } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastDismissPayload>[0];
+ * declare const input: Parameters<typeof toastDismissPayload>[0];
  * const result = toastDismissPayload(input);
  * ```
  */
@@ -527,7 +527,7 @@ export function toastDismissPayload(input: ToastDismissPayload): ToastDismissPay
  * ```ts
  * import { toastViewportAttributes } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastViewportAttributes>[0];
+ * declare const input: Parameters<typeof toastViewportAttributes>[0];
  * const result = toastViewportAttributes(input);
  * ```
  */
@@ -556,7 +556,7 @@ export function toastViewportAttributes(
  * ```ts
  * import { toastRootAttributes } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastRootAttributes>[0];
+ * declare const input: Parameters<typeof toastRootAttributes>[0];
  * const result = toastRootAttributes(input);
  * ```
  */
@@ -585,7 +585,7 @@ export function toastRootAttributes(options: ToastRootAttributeOptions): ToastPr
  * ```ts
  * import { toastTitleAttributes } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastTitleAttributes>[0];
+ * declare const input: Parameters<typeof toastTitleAttributes>[0];
  * const result = toastTitleAttributes(input);
  * ```
  */
@@ -604,7 +604,7 @@ export function toastTitleAttributes(
  * ```ts
  * import { toastDescriptionAttributes } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastDescriptionAttributes>[0];
+ * declare const input: Parameters<typeof toastDescriptionAttributes>[0];
  * const result = toastDescriptionAttributes(input);
  * ```
  */
@@ -625,7 +625,7 @@ export function toastDescriptionAttributes(
  * ```ts
  * import { toastActionAttributes } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastActionAttributes>[0];
+ * declare const input: Parameters<typeof toastActionAttributes>[0];
  * const result = toastActionAttributes(input);
  * ```
  */
@@ -653,7 +653,7 @@ export function toastActionAttributes(
  * ```ts
  * import { toastCloseAttributes } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastCloseAttributes>[0];
+ * declare const input: Parameters<typeof toastCloseAttributes>[0];
  * const result = toastCloseAttributes(input);
  * ```
  */
@@ -675,10 +675,10 @@ export function toastCloseAttributes(options: ToastState): ToastPrimitiveAttribu
  * ```ts
  * import { setToastOpen } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof setToastOpen>[0];
- * const state = {} as Parameters<typeof setToastOpen>[1];
- * const options = {} as Parameters<typeof setToastOpen>[2];
- * const detail = {} as Parameters<typeof setToastOpen>[3];
+ * declare const input: Parameters<typeof setToastOpen>[0];
+ * declare const state: Parameters<typeof setToastOpen>[1];
+ * declare const options: Parameters<typeof setToastOpen>[2];
+ * declare const detail: Parameters<typeof setToastOpen>[3];
  * const result = setToastOpen(input, state, options, detail);
  * ```
  *
@@ -714,9 +714,9 @@ export function setToastOpen(
  * ```ts
  * import { dismissToast } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof dismissToast>[0];
- * const state = {} as Parameters<typeof dismissToast>[1];
- * const options = {} as Parameters<typeof dismissToast>[2];
+ * declare const input: Parameters<typeof dismissToast>[0];
+ * declare const state: Parameters<typeof dismissToast>[1];
+ * declare const options: Parameters<typeof dismissToast>[2];
  * const result = dismissToast(input, state, options);
  * ```
  *
@@ -737,9 +737,9 @@ export function dismissToast(
  * ```ts
  * import { toastCloseClick } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastCloseClick>[0];
- * const state = {} as Parameters<typeof toastCloseClick>[1];
- * const options = {} as Parameters<typeof toastCloseClick>[2];
+ * declare const input: Parameters<typeof toastCloseClick>[0];
+ * declare const state: Parameters<typeof toastCloseClick>[1];
+ * declare const options: Parameters<typeof toastCloseClick>[2];
  * const result = toastCloseClick(input, state, options);
  * ```
  *
@@ -771,9 +771,9 @@ export function toastCloseClick(
  * ```ts
  * import { toastActionClick } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastActionClick>[0];
- * const state = {} as Parameters<typeof toastActionClick>[1];
- * const options = {} as Parameters<typeof toastActionClick>[2];
+ * declare const input: Parameters<typeof toastActionClick>[0];
+ * declare const state: Parameters<typeof toastActionClick>[1];
+ * declare const options: Parameters<typeof toastActionClick>[2];
  * const result = toastActionClick(input, state, options);
  * ```
  *
@@ -815,9 +815,9 @@ export function toastActionClick(
  * ```ts
  * import { toastEscapeKeyDown } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastEscapeKeyDown>[0];
- * const state = {} as Parameters<typeof toastEscapeKeyDown>[1];
- * const options = {} as Parameters<typeof toastEscapeKeyDown>[2];
+ * declare const input: Parameters<typeof toastEscapeKeyDown>[0];
+ * declare const state: Parameters<typeof toastEscapeKeyDown>[1];
+ * declare const options: Parameters<typeof toastEscapeKeyDown>[2];
  * const result = toastEscapeKeyDown(input, state, options);
  * ```
  *
@@ -850,10 +850,10 @@ export function toastEscapeKeyDown(
  * ```ts
  * import { toastAnimationEnd } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastAnimationEnd>[0];
- * const state = {} as Parameters<typeof toastAnimationEnd>[1];
- * const options = {} as Parameters<typeof toastAnimationEnd>[2];
- * const detail = {} as Parameters<typeof toastAnimationEnd>[3];
+ * declare const input: Parameters<typeof toastAnimationEnd>[0];
+ * declare const state: Parameters<typeof toastAnimationEnd>[1];
+ * declare const options: Parameters<typeof toastAnimationEnd>[2];
+ * declare const detail: Parameters<typeof toastAnimationEnd>[3];
  * const result = toastAnimationEnd(input, state, options, detail);
  * ```
  *
@@ -887,7 +887,7 @@ export function toastAnimationEnd(
  * ```ts
  * import { toastViewportKeyDown } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof toastViewportKeyDown>[0];
+ * declare const input: Parameters<typeof toastViewportKeyDown>[0];
  * const result = toastViewportKeyDown(input);
  * ```
  *
@@ -949,7 +949,7 @@ function toastVariant(variant: ToastVariant | undefined): ToastVariant {
  * ```ts
  * import { normalizeToastDuration } from '@kovojs/headless-ui/toast';
  *
- * const input = {} as Parameters<typeof normalizeToastDuration>[0];
+ * declare const input: Parameters<typeof normalizeToastDuration>[0];
  * const result = normalizeToastDuration(input);
  * ```
  */

@@ -183,6 +183,9 @@ function isAllowedManagedHandleFactoryFile(filePath) {
     filePath === 'packages/server/src/endpoint.ts' ||
     filePath === 'packages/server/src/guards.ts' ||
     filePath === 'packages/server/src/postgres-runtime.ts' ||
+    // SPEC §10.3/§11.2: the public SQLite starter wrapper composes the same managed DB read/write
+    // boundaries as Postgres while keeping low-level adapter hooks internal.
+    filePath === 'packages/server/src/sqlite-runtime.ts' ||
     filePath === 'packages/server/src/webhook.ts'
   );
 }

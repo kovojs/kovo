@@ -38,7 +38,6 @@ export type {
   EndpointMountDefinition,
   EndpointMethod,
   EndpointMount,
-  EndpointReason,
   EndpointRequest,
   EndpointCachePosture,
   EndpointResponseBody,
@@ -56,7 +55,6 @@ export type {
   Guard,
   GuardArgsRequest,
   GuardDenial,
-  GuardFailure,
   GuardParamsRequest,
   GuardResult,
   RateLimitedDenial,
@@ -71,14 +69,6 @@ export type {
   UnauthenticatedHandler,
 } from '../guards.js';
 export type {
-  DeferredFragmentChunk,
-  DeferredPriority,
-  DeferredQueryChunk,
-  DeferredStreamChunk,
-} from '../deferred-stream.js';
-export type {
-  MutationResponseHeaderValue,
-  MutationResponseHeaders,
   NotFound,
   ResponseHeaderValue,
   ResponseHeaders,

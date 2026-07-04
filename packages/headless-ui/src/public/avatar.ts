@@ -15,5 +15,4 @@ export type {
   AvatarFallbackAttributeOptions,
   AvatarPrimitiveAttributes,
   AvatarImageStatusResult,
-  AvatarImageEvent,
 } from '../primitives/avatar.js';

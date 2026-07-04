@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import type { ComponentChild } from '@kovojs/core';
 import { Badge, type BadgeVariant } from '@kovojs/ui/badge';
 import * as style from '@kovojs/style';
 
@@ -121,7 +122,13 @@ export function stageBadge(stage: string): string {
   );
 }
 
-export function CrmShell({ active, children }: { active: CrmSection; children?: unknown }): string {
+export function CrmShell({
+  active,
+  children,
+}: {
+  active: CrmSection;
+  children?: ComponentChild;
+}): string {
   return (
     <div style={chromeStyles.appRoot}>
       <header style={chromeStyles.header}>

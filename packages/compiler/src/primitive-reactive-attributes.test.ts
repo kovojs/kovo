@@ -40,10 +40,10 @@ export const SwitchDemo = component({
     expect(server).toContain('data-bind:data-state=');
     expect(server).toContain('data-bind:checked=');
     expect(server).toContain(
-      'export const SwitchDemo$Switch_aria_checked_derive = derive(["state"], (state: any) => ((state.checked) ? "true" : "false"));',
+      'export const SwitchDemo$Switch_aria_checked_derive = derive(["state"], (state) => ((state.checked) ? "true" : "false"));',
     );
     expect(server).toContain(
-      'export const SwitchDemo$Switch_data_state_derive = derive(["state"], (state: any) => ((state.checked) ? "checked" : "unchecked"));',
+      'export const SwitchDemo$Switch_data_state_derive = derive(["state"], (state) => ((state.checked) ? "checked" : "unchecked"));',
     );
     // The control prop's own boolean-presence derive is still emitted by the
     // inline-attribute-derive pass; this pass must not duplicate it.
@@ -67,10 +67,10 @@ export const ToggleDemo = component({
     );
 
     expect(server).toContain(
-      'export const ToggleDemo$Toggle_aria_pressed_derive = derive(["state"], (state: any) => ((state.pressed) ? "true" : "false"));',
+      'export const ToggleDemo$Toggle_aria_pressed_derive = derive(["state"], (state) => ((state.pressed) ? "true" : "false"));',
     );
     expect(server).toContain(
-      'export const ToggleDemo$Toggle_data_state_derive = derive(["state"], (state: any) => ((state.pressed) ? "pressed" : "off"));',
+      'export const ToggleDemo$Toggle_data_state_derive = derive(["state"], (state) => ((state.pressed) ? "pressed" : "off"));',
     );
     expect(server).toContain('data-bind:aria-pressed=');
     expect(server).toContain('data-bind:data-state=');
@@ -96,16 +96,16 @@ export const DisclosureDemo = component({
 
     // Root: data-state only.
     expect(server).toContain(
-      'export const DisclosureDemo$Disclosure_data_state_derive = derive(["state"], (state: any) => ((state.open) ? "open" : "closed"));',
+      'export const DisclosureDemo$Disclosure_data_state_derive = derive(["state"], (state) => ((state.open) ? "open" : "closed"));',
     );
     // Trigger: aria-expanded + data-state.
     expect(server).toContain(
-      'export const DisclosureDemo$DisclosureTrigger_aria_expanded_derive = derive(["state"], (state: any) => ((state.open) ? "true" : "false"));',
+      'export const DisclosureDemo$DisclosureTrigger_aria_expanded_derive = derive(["state"], (state) => ((state.open) ? "true" : "false"));',
     );
     expect(server).toContain('data-bind:aria-expanded=');
     // Content: data-state + hidden (presence inverted relative to `open`).
     expect(server).toContain(
-      'export const DisclosureDemo$DisclosureContent_hidden_derive = derive(["state"], (state: any) => ((state.open) ? null : ""));',
+      'export const DisclosureDemo$DisclosureContent_hidden_derive = derive(["state"], (state) => ((state.open) ? null : ""));',
     );
     expect(server).toContain('data-bind:hidden=');
   });
@@ -129,10 +129,10 @@ export const CollapsibleDemo = component({
     );
 
     expect(server).toContain(
-      'export const CollapsibleDemo$CollapsibleTrigger_aria_expanded_derive = derive(["state"], (state: any) => ((state.open) ? "true" : "false"));',
+      'export const CollapsibleDemo$CollapsibleTrigger_aria_expanded_derive = derive(["state"], (state) => ((state.open) ? "true" : "false"));',
     );
     expect(server).toContain(
-      'export const CollapsibleDemo$CollapsibleContent_data_state_derive = derive(["state"], (state: any) => ((state.open) ? "open" : "closed"));',
+      'export const CollapsibleDemo$CollapsibleContent_data_state_derive = derive(["state"], (state) => ((state.open) ? "open" : "closed"));',
     );
   });
 
@@ -161,10 +161,10 @@ export const AccordionDemo = component({
     expect(server).toContain('data-bind:open=');
     expect(server).toContain('(state.value) === "shipping"');
     expect(server).toContain(
-      'export const AccordionDemo$AccordionTrigger_aria_expanded_derive = derive(["state"], (state: any) => (((state.value) === "shipping") ? "true" : "false"));',
+      'export const AccordionDemo$AccordionTrigger_aria_expanded_derive = derive(["state"], (state) => (((state.value) === "shipping") ? "true" : "false"));',
     );
     expect(server).toContain(
-      'export const AccordionDemo$AccordionContent_hidden_derive = derive(["state"], (state: any) => (((state.value) === "shipping") ? null : ""));',
+      'export const AccordionDemo$AccordionContent_hidden_derive = derive(["state"], (state) => (((state.value) === "shipping") ? null : ""));',
     );
   });
 
@@ -188,7 +188,7 @@ export const AccordionMultipleDemo = component({
 
     expect(server).toContain('Array.isArray((state.value)) && (state.value).includes("shipping")');
     expect(server).toContain(
-      'export const AccordionMultipleDemo$AccordionTrigger_aria_expanded_derive = derive(["state"], (state: any) => ((Array.isArray((state.value)) && (state.value).includes("shipping")) ? "true" : "false"));',
+      'export const AccordionMultipleDemo$AccordionTrigger_aria_expanded_derive = derive(["state"], (state) => ((Array.isArray((state.value)) && (state.value).includes("shipping")) ? "true" : "false"));',
     );
   });
 
@@ -210,10 +210,10 @@ export const CheckboxDemo = component({
     expect(server).toContain('data-bind:aria-checked=');
     expect(server).toContain('data-bind:data-state=');
     expect(server).toContain(
-      'export const CheckboxDemo$Checkbox_aria_checked_derive = derive(["state"], (state: any) => ((state.checked) === "indeterminate" ? "mixed" : (((state.checked) === true) ? "true" : "false")));',
+      'export const CheckboxDemo$Checkbox_aria_checked_derive = derive(["state"], (state) => ((state.checked) === "indeterminate" ? "mixed" : (((state.checked) === true) ? "true" : "false")));',
     );
     expect(server).toContain(
-      'export const CheckboxDemo$Checkbox_data_state_derive = derive(["state"], (state: any) => ((state.checked) === "indeterminate" ? "indeterminate" : (((state.checked) === true) ? "checked" : "unchecked")));',
+      'export const CheckboxDemo$Checkbox_data_state_derive = derive(["state"], (state) => ((state.checked) === "indeterminate" ? "indeterminate" : (((state.checked) === true) ? "checked" : "unchecked")));',
     );
   });
 
@@ -272,6 +272,9 @@ export const MeterDemo = component({
     expect(server).toContain('"even-less-good"');
     expect(server).toContain('"suboptimum"');
     expect(server).toContain('"optimum"');
+    expect(server).toContain('const normalize = (input, fallback) =>');
+    expect(server).not.toContain('input: unknown');
+    expect(server).not.toContain('fallback: number');
   });
 
   it('binds radio item/radio attributes by comparing value with itemValue', () => {
@@ -296,7 +299,7 @@ export const RadioGroupDemo = component({
     expect(server).toContain('data-bind:checked=');
     expect(server).toContain('data-bind:data-state=');
     expect(server).toContain(
-      'export const RadioGroupDemo$RadioGroupRadio_aria_checked_derive = derive(["state"], (state: any) => (((state.value) === "pro") ? "true" : "false"));',
+      'export const RadioGroupDemo$RadioGroupRadio_aria_checked_derive = derive(["state"], (state) => (((state.value) === "pro") ? "true" : "false"));',
     );
   });
 
@@ -411,7 +414,7 @@ export const SwitchQueryDemo = component({
     expect(server).toContain('data-bind:aria-checked=');
     expect(server).toContain('data-bind:data-state=');
     // derive input must be ["account"], param must be "account"
-    expect(server).toContain('derive(["account"], (account: any) =>');
+    expect(server).toContain('derive(["account"], (account) =>');
     // The stamp must be account.* not state.*
     expect(server).toMatch(/data-bind:aria-checked="account\./);
   });
@@ -439,12 +442,12 @@ export const TabsDemo = component({
     // TabsTrigger must bind aria-selected and data-state
     expect(server).toContain('data-bind:aria-selected=');
     expect(server).toContain(
-      'export const TabsDemo$TabsTrigger_aria_selected_derive = derive(["state"], (state: any) => (((state.active) === "billing") ? "true" : "false"));',
+      'export const TabsDemo$TabsTrigger_aria_selected_derive = derive(["state"], (state) => (((state.active) === "billing") ? "true" : "false"));',
     );
     // TabsPanel must bind data-state and hidden
     expect(server).toContain('data-bind:hidden=');
     expect(server).toContain(
-      'export const TabsDemo$TabsPanel_hidden_derive = derive(["state"], (state: any) => (((state.active) === "billing") ? null : ""));',
+      'export const TabsDemo$TabsPanel_hidden_derive = derive(["state"], (state) => (((state.active) === "billing") ? null : ""));',
     );
   });
 
@@ -470,11 +473,11 @@ export const ToggleGroupDemo = component({
     // ToggleGroupButton must bind aria-pressed and data-state
     expect(server).toContain('data-bind:aria-pressed=');
     expect(server).toContain(
-      'export const ToggleGroupDemo$ToggleGroupButton_aria_pressed_derive = derive(["state"], (state: any) => (((state.active) === "bold") ? "true" : "false"));',
+      'export const ToggleGroupDemo$ToggleGroupButton_aria_pressed_derive = derive(["state"], (state) => (((state.active) === "bold") ? "true" : "false"));',
     );
     // ToggleGroupItem must bind data-state
     expect(server).toContain(
-      'export const ToggleGroupDemo$ToggleGroupItem_data_state_derive = derive(["state"], (state: any) => (((state.active) === "bold") ? "pressed" : "off"));',
+      'export const ToggleGroupDemo$ToggleGroupItem_data_state_derive = derive(["state"], (state) => (((state.active) === "bold") ? "pressed" : "off"));',
     );
   });
 });

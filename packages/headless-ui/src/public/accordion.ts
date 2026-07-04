@@ -11,18 +11,12 @@ export {
 export type {
   AccordionType,
   AccordionValue,
-  AccordionChangeReason,
-  AccordionChangeDetail,
   AccordionState,
   AccordionItem,
   AccordionItemOptions,
   AccordionHeaderAttributeOptions,
   AccordionTriggerAttributeOptions,
   AccordionContentAttributeOptions,
-  AccordionChangeOptions,
-  AccordionChangeResult,
   AccordionMoveResult,
   AccordionPrimitiveAttributes,
-  AccordionTriggerEvent,
-  AccordionKeyboardEvent,
 } from '../primitives/accordion.js';

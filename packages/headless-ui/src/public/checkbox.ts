@@ -3,12 +3,7 @@
 export { checkboxRootAttributes, applyCheckboxIndeterminate } from '../primitives/checkbox.js';
 export type {
   CheckboxCheckedState,
-  CheckboxChangeReason,
-  CheckboxChangeDetail,
   CheckboxState,
-  CheckboxChangeOptions,
-  CheckboxChangeResult,
   CheckboxPrimitiveAttributes,
-  CheckboxTriggerEvent,
   CheckboxNativeInput,
 } from '../primitives/checkbox.js';

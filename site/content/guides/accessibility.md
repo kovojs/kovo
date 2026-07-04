@@ -63,22 +63,41 @@ to a real `<label>`, and nest headings without gaps:
 
 ```tsx
 /** @jsxImportSource @kovojs/server */
-import { Select } from '@kovojs/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@kovojs/ui/select';
 
 export function ShippingSection() {
+  const items = [
+    { value: 'standard', label: 'Standard (5-7 days)' },
+    { value: 'express', label: 'Express (1-2 days)' },
+  ];
+
   return (
     <section aria-labelledby="shipping-heading">
       <h2 id="shipping-heading">Shipping</h2>
 
       {/* h2 → h3, no skipped level */}
-      <h3 id="speed-label">Delivery speed</h3>
-      <Select
-        labelledBy="speed-label"
-        items={[
-          { value: 'standard', label: 'Standard (5–7 days)' },
-          { value: 'express', label: 'Express (1–2 days)' },
-        ]}
-      />
+      <h3 id="shipping-speed-heading">Delivery speed</h3>
+      <label id="shipping-speed-label" for="shipping-speed-trigger">
+        Shipping speed
+      </label>
+      <Select id="shipping-speed" items={items} listboxId="shipping-speed-listbox" value="standard">
+        <SelectTrigger id="shipping-speed-trigger" items={items} labelledBy="shipping-speed-label">
+          <SelectValue items={items} placeholder="Choose a speed" value="standard" />
+        </SelectTrigger>
+        <SelectContent
+          id="shipping-speed-listbox"
+          items={items}
+          labelledBy="shipping-speed-label"
+          value="standard"
+        >
+          <SelectItem itemValue="standard" value="standard">
+            Standard (5-7 days)
+          </SelectItem>
+          <SelectItem itemValue="express" value="standard">
+            Express (1-2 days)
+          </SelectItem>
+        </SelectContent>
+      </Select>
 
       <label for="zip">ZIP code</label>
       <input id="zip" name="zip" inputmode="numeric" autocomplete="postal-code" />

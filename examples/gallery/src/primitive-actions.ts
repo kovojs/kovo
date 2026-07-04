@@ -1,7 +1,6 @@
 // Generated from packages/ui/scripts/primitive-component-manifest.mjs. Run `node packages/ui/scripts/build-registry.mjs --write`.
 // Gallery-local L1 interaction adapter for compiled demos.
-export * from '@kovojs/headless-ui/generated';
-export * from '@kovojs/headless-ui/internal/primitive';
+export * from './primitive-actions.generated.js';
 export * from '@kovojs/headless-ui/accordion';
 export * from '@kovojs/headless-ui/alert-dialog';
 export * from '@kovojs/headless-ui/autocomplete';

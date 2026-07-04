@@ -35,7 +35,7 @@ test('validates typed-read search args before applying query guards', async ({ p
 
   const validAuthed = await page.request.get('/_q/secret?id=s1');
   expect(validAuthed.status()).toBe(200);
-  await expect(validAuthed.text()).resolves.toBe(
-    '<kovo-query name="secret" key="secret:s1">{"id":"s1","owner":"ada","value":"protected"}</kovo-query>',
+  await expect(validAuthed.text()).resolves.toMatch(
+    /^<kovo-query name="secret" key="secret:s1"[^>]*>\{"id":"s1","owner":"ada","value":"protected"\}<\/kovo-query>$/u,
   );
 });

@@ -58,7 +58,7 @@ test('neutralizes injected HTML/JS across server render, JSON island, wire, and 
   const wire = await (await mutationResponsePromise).text();
 
   // Wire <kovo-query> JSON escapes `<`/`>` (renderQueryWireHtml → escapeHtml).
-  expect(wire).toContain('<kovo-query name="payload">');
+  expect(wire).toMatch(/<kovo-query name="payload"[^>]*>/u);
   expect(wire).toContain('&lt;img src=x onerror=');
   expect(wire).not.toContain('<img src=x onerror=');
 

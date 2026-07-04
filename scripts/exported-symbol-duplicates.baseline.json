@@ -1,39 +1,6 @@
 {
   "generatedBy": "node scripts/exported-symbols.mjs --duplicates",
-  "reason": "Pre-existing public alias tracked during plans/api-export-cleanup.md one-symbol-one-home migration.",
-  "removalTarget": "Resolve by assigning each symbol one canonical public import path under plans/api-export-cleanup.md.",
-  "duplicates": [
-    {
-      "packageName": "@kovojs/browser",
-      "symbol": "ImportHandlerModule",
-      "homes": [
-        {
-          "importPath": "@kovojs/browser",
-          "kind": "type",
-          "subpath": "."
-        },
-        {
-          "importPath": "@kovojs/browser/client",
-          "kind": "type",
-          "subpath": "./client"
-        }
-      ]
-    },
-    {
-      "packageName": "@kovojs/browser",
-      "symbol": "MutationChangeRecord",
-      "homes": [
-        {
-          "importPath": "@kovojs/browser",
-          "kind": "type",
-          "subpath": "."
-        },
-        {
-          "importPath": "@kovojs/browser/client",
-          "kind": "type",
-          "subpath": "./client"
-        }
-      ]
-    }
-  ]
+  "reason": "No duplicate public symbol homes remain after the one-symbol-one-home cleanup.",
+  "removalTarget": "Keep this list empty; classify any new duplicate before adding it.",
+  "duplicates": []
 }

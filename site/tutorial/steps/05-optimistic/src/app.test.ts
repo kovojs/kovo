@@ -6,7 +6,7 @@ import {
   createLiveTargetAttestation,
   renderMutationEndpointResponse,
   type MutationWireHeaderSource,
-} from '@kovojs/server/internal/wire';
+} from '../../../../../packages/server/src/internal/wire.js';
 import { propertyTest } from '@kovojs/test/assertions';
 
 import {

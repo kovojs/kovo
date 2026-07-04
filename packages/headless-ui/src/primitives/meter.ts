@@ -9,7 +9,7 @@ import { type PrimitiveDataAttributes } from '../lib/index.js';
  * ```ts
  * import type { MeterDataState } from '@kovojs/headless-ui/meter';
  *
- * const value: MeterDataState = {} as MeterDataState;
+ * declare const value: MeterDataState;
  * ```
  */
 export type MeterDataState = 'even-less-good' | 'optimum' | 'suboptimum';
@@ -23,7 +23,7 @@ export type MeterDataState = 'even-less-good' | 'optimum' | 'suboptimum';
  * ```ts
  * import type { MeterAttributeOptions } from '@kovojs/headless-ui/meter';
  *
- * const value: MeterAttributeOptions = {} as MeterAttributeOptions;
+ * declare const value: MeterAttributeOptions;
  * ```
  */
 export interface MeterAttributeOptions {
@@ -45,7 +45,7 @@ export interface MeterAttributeOptions {
  * ```ts
  * import type { MeterComputedState } from '@kovojs/headless-ui/meter';
  *
- * const value: MeterComputedState = {} as MeterComputedState;
+ * declare const value: MeterComputedState;
  * ```
  */
 export interface MeterComputedState {
@@ -68,7 +68,7 @@ export interface MeterComputedState {
  * ```ts
  * import type { MeterPrimitiveAttributes } from '@kovojs/headless-ui/meter';
  *
- * const value: MeterPrimitiveAttributes = {} as MeterPrimitiveAttributes;
+ * declare const value: MeterPrimitiveAttributes;
  * ```
  */
 export type MeterPrimitiveAttributes = PrimitiveDataAttributes &
@@ -85,7 +85,7 @@ type MeterRegion = 'high' | 'low' | 'middle';
  * ```ts
  * import { meterValueState } from '@kovojs/headless-ui/meter';
  *
- * const input = {} as Parameters<typeof meterValueState>[0];
+ * declare const input: Parameters<typeof meterValueState>[0];
  * const result = meterValueState(input);
  * ```
  */
@@ -120,7 +120,7 @@ export function meterValueState(options: MeterAttributeOptions = {}): MeterCompu
  * ```ts
  * import { meterRootAttributes } from '@kovojs/headless-ui/meter';
  *
- * const input = {} as Parameters<typeof meterRootAttributes>[0];
+ * declare const input: Parameters<typeof meterRootAttributes>[0];
  * const result = meterRootAttributes(input);
  * ```
  */

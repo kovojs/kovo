@@ -1,6 +1,6 @@
 import { execFileSync } from 'node:child_process';
-import { readFileSync, rmSync, statSync } from 'node:fs';
-import { mkdir, readdir, rm, writeFile } from 'node:fs/promises';
+import { existsSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { cp, mkdir, readdir, rm, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 
@@ -18,6 +18,7 @@ const repoRoot = fileURLToPath(new URL('../../', import.meta.url));
 const contentDir = path.join(siteRoot, 'content');
 const scratchDir = path.join(siteRoot, 'gen/code-snippets');
 const stepsTsconfig = path.join(siteRoot, 'tutorial/tsconfig.steps.json');
+const useBuiltPackageDeclarations = process.env.KOVO_DOC_SNIPPETS_USE_DIST === '1';
 
 const TS_LANGS = new Set(['ts', 'tsx']);
 
@@ -343,14 +344,29 @@ async function writeSupportFiles(outDir) {
 }
 
 async function writeNodeModuleStubs(outDir) {
-  await writePackage(outDir, '@kovojs/better-auth', { '.': EXTERNAL_DTS });
-  await writePackage(outDir, '@kovojs/core', { '.': KOVO_DTS });
-  await writePackage(outDir, '@kovojs/server', { '.': KOVO_DTS });
-  await writePackage(outDir, '@kovojs/style', { '.': KOVO_DTS });
-  await writePackage(outDir, '@kovojs/browser', { './client': KOVO_DTS });
-  await writePackage(outDir, '@kovojs/headless-ui', { './dialog': KOVO_DTS, './select': KOVO_DTS });
-  await writePackage(outDir, '@kovojs/icons', { '.': KOVO_DTS, './search': KOVO_DTS });
-  await writePackage(outDir, '@kovojs/ui', { './button': KOVO_DTS, './select': KOVO_DTS });
+  await writePackageWithDistFallback(outDir, '@kovojs/better-auth', { '.': EXTERNAL_DTS });
+  await writePackageWithDistFallback(outDir, '@kovojs/core', { '.': KOVO_DTS });
+  await writePackageWithDistFallback(outDir, '@kovojs/server', {
+    '.': KOVO_DTS,
+    './build': KOVO_DTS,
+  });
+  await writePackageWithDistFallback(outDir, '@kovojs/style', { '.': KOVO_DTS });
+  await writePackageWithDistFallback(outDir, '@kovojs/browser', {
+    '.': KOVO_DTS,
+    './client': KOVO_DTS,
+  });
+  await writePackageWithDistFallback(outDir, '@kovojs/headless-ui', {
+    './dialog': KOVO_DTS,
+    './select': KOVO_DTS,
+  });
+  await writePackageWithDistFallback(outDir, '@kovojs/icons', {
+    '.': KOVO_DTS,
+    './search': KOVO_DTS,
+  });
+  await writePackageWithDistFallback(outDir, '@kovojs/ui', {
+    './button': KOVO_DTS,
+    './select': KOVO_DTS,
+  });
   await writePackage(outDir, '@kovojs/test', {
     './assertions': EXTERNAL_DTS,
     './harness': EXTERNAL_DTS,
@@ -371,6 +387,80 @@ async function writeNodeModuleStubs(outDir) {
     './pg-core': EXTERNAL_DTS,
     './pglite': EXTERNAL_DTS,
   });
+}
+
+async function writePackageWithDistFallback(outDir, packageName, fallbackEntries) {
+  if (
+    useBuiltPackageDeclarations &&
+    (await writeBuiltPackageDeclarations(outDir, packageName, Object.keys(fallbackEntries)))
+  ) {
+    return;
+  }
+  await writePackage(outDir, packageName, fallbackEntries);
+}
+
+export async function writeBuiltPackageDeclarations(outDir, packageName, subpaths) {
+  const workspacePackage = workspacePackagePath(packageName);
+  if (!workspacePackage) return false;
+
+  const packageJsonPath = path.join(workspacePackage, 'package.json');
+  if (!existsSync(packageJsonPath)) return false;
+
+  const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
+  const publishExports = packageJson.publishConfig?.exports;
+  if (!publishExports || typeof publishExports !== 'object') return false;
+
+  const resolvedEntries = {};
+  for (const subpath of subpaths) {
+    const types = resolvePublishedTypes(publishExports, subpath);
+    if (!types) return false;
+    const source = path.join(workspacePackage, types);
+    if (!existsSync(source)) return false;
+    resolvedEntries[subpath] = source;
+  }
+
+  const packageDir = path.join(outDir, 'node_modules', packageName);
+  await mkdir(packageDir, { recursive: true });
+  const sourceDistDir = path.join(workspacePackage, 'dist');
+  await cp(sourceDistDir, path.join(packageDir, 'dist'), { recursive: true });
+
+  const exports = {};
+  for (const [subpath, source] of Object.entries(resolvedEntries)) {
+    const copiedTypes = `./${toPackageRelative(path.relative(sourceDistDir, source), 'dist')}`;
+    exports[subpath] = { types: copiedTypes, default: copiedTypes };
+  }
+
+  await writeFile(
+    path.join(packageDir, 'package.json'),
+    `${JSON.stringify({ name: packageName, type: 'module', exports }, null, 2)}\n`,
+    'utf8',
+  );
+  return true;
+}
+
+function workspacePackagePath(packageName) {
+  if (!packageName.startsWith('@kovojs/')) return undefined;
+  return path.join(repoRoot, 'packages', packageName.slice('@kovojs/'.length));
+}
+
+function resolvePublishedTypes(exports, subpath) {
+  const exact = exports[subpath];
+  if (exact && typeof exact === 'object' && typeof exact.types === 'string') return exact.types;
+
+  for (const [pattern, target] of Object.entries(exports)) {
+    if (!pattern.includes('*') || !target || typeof target !== 'object') continue;
+    if (typeof target.types !== 'string') continue;
+    const [prefix, suffix] = pattern.split('*');
+    if (!subpath.startsWith(prefix) || !subpath.endsWith(suffix)) continue;
+    const match = subpath.slice(prefix.length, subpath.length - suffix.length);
+    return target.types.replace('*', match);
+  }
+
+  return undefined;
+}
+
+function toPackageRelative(relativeFile, prefix = '.') {
+  return path.posix.join(prefix, ...relativeFile.split(path.sep));
 }
 
 async function writePackage(outDir, packageName, entries) {
@@ -468,6 +558,7 @@ declare global {
   var appSignIn: any;
   var appSignOut: any;
   var applyAddToCartEffect: any;
+  var applyStripeOrderEvent: any;
   var assert: any;
   var auth: any;
   var authed: <Request = any>() => any;
@@ -477,12 +568,15 @@ declare global {
   var betterAuthSession: any;
   var betterAuthSignInEmailMutation: any;
   var betterAuthSignOutMutation: any;
+  var betterAuthSignUpEmailMutation: any;
   var broadcastCartUpdate: any;
   var cart: any;
   var cartDomain: any;
   var cartItems: any;
   var cartPage: any;
   var cartQuery: any;
+  var cartCsrf: any;
+  var cartSummary: any;
   var checkoutGuard: any;
   var commerceBetterAuth: any;
   var commerceCartRoute: any;
@@ -544,7 +638,9 @@ declare global {
   var invoicesBucket: any;
   var item: any;
   var kovo: any;
-  var layout: any;
+  var layout: <Request = any, Params = any, Page = any, Regions = any>(
+    ...args: any[]
+  ) => any;
   var loadCart: any;
   var loadContact: any;
   var loadDeal: any;
@@ -568,6 +664,7 @@ declare global {
   var pool: any;
   var postQuery: any;
   var priceParam: any;
+  var productCanBeViewed: any;
   var product: any;
   var productQuery: any;
   var productGrid: any;
@@ -575,6 +672,7 @@ declare global {
   var productId: any;
   var products: any;
   var pgTable: any;
+  var publicAccess: any;
   var query: any;
   var queries: any;
   var queryClient: any;
@@ -607,6 +705,7 @@ declare global {
   var sql: any;
   var sum: any;
   var stripe: any;
+  var stripeWebhookReplayStore: any;
   var table: any;
   var text: any;
   var themeScript: any;
@@ -677,6 +776,9 @@ export const PGlite: any;
 export const assertMutationError: any;
 export const betterAuth: any;
 export const betterAuthSession: any;
+export const betterAuthSignInEmailMutation: any;
+export const betterAuthSignOutMutation: any;
+export const betterAuthSignUpEmailMutation: any;
 export const betterSqlite3: any;
 export const buildBundle: any;
 export const createDevtoolApp: any;
@@ -703,6 +805,7 @@ export default defaultExport;
 `;
 
 const KOVO_DTS = String.raw`
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'outline';
 export type ComponentElementNode = any;
 export type ComponentNode = any;
 export type ComponentRegistry = any;
@@ -710,9 +813,11 @@ export type ComponentRegistryEntry = any;
 export type ComponentRegistryInput = any;
 export type ComponentTextNode = any;
 export type IconProps = any;
+export type RoutePageResult = any;
 export type SelectTriggerAttributeOptions = any;
+export type StaticExportOptions = any;
 export type StyleInput = any;
-export type CsrfValidationOptions<Request = any> = any;
+export type CsrfOptions<Request = any> = any;
 
 export class ComponentXmlError extends Error {}
 export const BodyEnd: any;
@@ -725,6 +830,11 @@ export const InlineScript: any;
 export const Link: any;
 export const Search: any;
 export const Select: any;
+export const SelectContent: any;
+export const SelectItem: any;
+export const SelectTrigger: any;
+export const SelectValue: any;
+export const cloudflare: any;
 export const trustedAssign: any;
 export const component: any;
 export const create: any;
@@ -736,8 +846,10 @@ export const csrfField: any;
 export const csrfToken: any;
 export const defineTheme: any;
 export const dialogContentAttributes: any;
+export const defineConfig: any;
 export const domain: any;
 export const endpoint: any;
+export const exportStaticApp: any;
 export const form: any;
 export const guards: {
   all: any;
@@ -748,15 +860,19 @@ export const guards: {
 };
 export const hmacSignature: any;
 export const installKovoLoader: any;
-export const layout: any;
+export const layout: <Request = any, Params = any, Page = any, Regions = any>(
+  ...args: any[]
+) => any;
 export const metaFromQuery: any;
 export const mintCsrfField: any;
 export const mintCsrfToken: any;
 export const mutation: <Value = any>(...args: any[]) => any;
+export const node: any;
 export const notFound: any;
 export const parseComponentXml: any;
 export const queue: any;
 export const query: any;
+export const publicAccess: any;
 export const tag: any;
 export const redirect: any;
 export const renderRegistry: any;
@@ -774,6 +890,8 @@ export const tokens: any;
 export const trustedHtml: any;
 export const trustedReveal: any;
 export const trustedUrl: any;
+export const verifiedAccess: any;
+export const vercel: any;
 export const webhook: any;
 export const write: any;
 `;
@@ -783,6 +901,7 @@ type AnyFn = (...args: any[]) => any;
 
 const anyFn = ((..._args: any[]) => ({})) as AnyFn;
 
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'outline';
 export type ComponentElementNode = any;
 export type ComponentNode = any;
 export type ComponentRegistry = any;
@@ -790,7 +909,9 @@ export type ComponentRegistryEntry = any;
 export type ComponentRegistryInput = any;
 export type ComponentTextNode = any;
 export type IconProps = any;
+export type RoutePageResult = any;
 export type SelectTriggerAttributeOptions = any;
+export type StaticExportOptions = any;
 export type StyleInput = any;
 
 export class ComponentXmlError extends Error {}
@@ -804,6 +925,11 @@ export const InlineScript = anyFn;
 export const Link = anyFn;
 export const Search = anyFn;
 export const Select = anyFn;
+export const SelectContent = anyFn;
+export const SelectItem = anyFn;
+export const SelectTrigger = anyFn;
+export const SelectValue = anyFn;
+export const cloudflare = anyFn;
 export const trustedAssign = anyFn;
 export const create = anyFn;
 export const component = anyFn;
@@ -815,20 +941,26 @@ export const csrfField = anyFn;
 export const csrfToken = anyFn;
 export const defineTheme = anyFn;
 export const dialogContentAttributes = anyFn;
+export const defineConfig = anyFn;
 export const domain = anyFn;
 export const endpoint = anyFn;
+export const exportStaticApp = anyFn;
 export const form = anyFn;
 export const hmacSignature = anyFn;
 export const installKovoLoader = anyFn;
-export const layout = anyFn;
+export const layout = anyFn as <Request = any, Params = any, Page = any, Regions = any>(
+  ...args: any[]
+) => any;
 export const metaFromQuery = anyFn;
 export const mintCsrfField = anyFn;
 export const mintCsrfToken = anyFn;
 export const mutation = anyFn;
+export const node = anyFn;
 export const notFound = anyFn;
 export const parseComponentXml = anyFn;
 export const queue = anyFn;
 export const query = anyFn;
+export const publicAccess = anyFn;
 export const redirect = anyFn;
 export const renderRegistry = anyFn;
 export const renderTree = anyFn;
@@ -843,6 +975,8 @@ export const toNodeHandler = anyFn;
 export const trustedHtml = anyFn;
 export const trustedReveal = anyFn;
 export const trustedUrl = anyFn;
+export const verifiedAccess = anyFn;
+export const vercel = anyFn;
 export const webhook = anyFn;
 export const write = anyFn;
 export const tokens = new Proxy({}, { get: () => 'var(--kovo-snippet-token)' }) as any;

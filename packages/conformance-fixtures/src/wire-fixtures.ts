@@ -87,7 +87,7 @@ export const generatedWireResponseBodies: Record<string, readonly string[]> = {
 `,
   ],
   'enhanced-mutation.http': [
-    `<kovo-query name="cart" key="cart:c1" version="7">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</kovo-query>
+    `<kovo-query name="cart" key="cart:c1" version="7" settles="idem_01HX">{"count":1,"items":[{"productId":"p1","qty":1,"unitPrice":1499}]}</kovo-query>
 <kovo-fragment target="cart-badge"><cart-badge kovo-deps="cart"><button commandfor="cart-drawer" command="show-modal"><span data-bind="cart.count">1</span></button></cart-badge></kovo-fragment>
 `,
   ],

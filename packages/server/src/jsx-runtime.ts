@@ -1,6 +1,7 @@
 import type {
   Component,
   ComponentDefinitionInput,
+  ComponentProps,
   ComponentRenderSlots,
   ErrorBoundaryProps,
   FieldErrorProps,
@@ -22,11 +23,7 @@ import {
 import { attrs as kovoStyleAttrs, type StyleInput } from '@kovojs/style';
 
 import { componentMutationFailureSlots } from './component-render.js';
-import {
-  renderMutationCsrfField,
-  renderMutationIdemField,
-  type CsrfValidationOptions,
-} from './csrf.js';
+import { renderMutationCsrfField, renderMutationIdemField, type CsrfOptions } from './csrf.js';
 import {
   escapeAttribute,
   isRenderedHtml,
@@ -45,6 +42,7 @@ import { recordQueryRuntimeWarnings, runQuery, type QueryDefinition } from './qu
 import { renderServerRenderable } from './renderable.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { isDocumentConfig, isStructuredDocumentNode } from './document-structured.js';
+import { revealUntrustedRequestValue } from './untrusted-request-body.js';
 
 // Server-side JSX runtime. Components author JSX sugar (SPEC.md section 4.1)
 // and render to light-DOM HTML strings (SPEC.md section 3 pipeline, section
@@ -108,6 +106,8 @@ type MaybePromise<Value> = Promise<Value> | Value;
 export type JsxComponent<Props extends object = Record<string, never>> = (props: Props) => any;
 
 type KovoJsxComponent = Component<ComponentDefinitionInput>;
+type KovoJsxComponentProps<Type> =
+  Type extends Component<infer Definition> ? ComponentProps<Definition> : never;
 
 type MutationFormHelperKind = 'field' | 'form';
 
@@ -414,7 +414,7 @@ function renderFormCsrfContent(props: JsxProps): string {
 
 function isMutationDefinitionLike(
   value: unknown,
-): value is { csrf?: CsrfValidationOptions<unknown> | false; key: string } {
+): value is { csrf?: CsrfOptions<unknown> | false; key: string } {
   return (
     typeof value === 'object' &&
     value !== null &&
@@ -546,11 +546,11 @@ function formKeyValue(props: JsxProps, jsxKey?: unknown): string | undefined {
 
 function submittedFormKey(input: unknown): string | undefined {
   if (input instanceof FormData) {
-    const value = input.get(kovoFormKeyFieldName);
+    const value = revealSubmittedFormValue(input.get(kovoFormKeyFieldName));
     return typeof value === 'string' ? value : undefined;
   }
   if (isRecord(input)) {
-    const value = input[kovoFormKeyFieldName];
+    const value = revealSubmittedFormValue(input[kovoFormKeyFieldName]);
     return typeof value === 'string' ? value : undefined;
   }
   return undefined;
@@ -559,12 +559,16 @@ function submittedFormKey(input: unknown): string | undefined {
 function submittedInputContainsValue(input: unknown, value: string): boolean {
   if (input instanceof FormData) {
     for (const submitted of input.values()) {
-      if (submitted === value) return true;
+      if (revealSubmittedFormValue(submitted) === value) return true;
     }
     return false;
   }
   if (!isRecord(input)) return false;
-  return Object.values(input).some((submitted) => submitted === value);
+  return Object.values(input).some((submitted) => revealSubmittedFormValue(submitted) === value);
+}
+
+function revealSubmittedFormValue(value: unknown): unknown {
+  return revealUntrustedRequestValue(value, 'validated mutation form failure input');
 }
 
 function renderJsxContent(props: JsxProps): JsxChild {
@@ -874,6 +878,10 @@ export declare namespace JSX {
   // intrinsic attributes through the call-site prop types below.
   type Element = any;
   type ElementType = JsxComponent<any> | KovoJsxComponent | keyof IntrinsicElements;
+  type LibraryManagedAttributes<ComponentType, Props> =
+    ComponentType extends Component<ComponentDefinitionInput>
+      ? KovoJsxComponentProps<ComponentType>
+      : Props;
   interface ElementChildrenAttribute {
     children: {};
   }

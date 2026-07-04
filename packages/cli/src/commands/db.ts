@@ -395,8 +395,7 @@ function applyRuntimeOptionOverrides(
   if (overrides.databaseUrl !== undefined) result.databaseUrl = overrides.databaseUrl;
   if (overrides.driver !== undefined) result.driver = overrides.driver;
   if (overrides.provisionOnBoot !== undefined) result.provisionOnBoot = overrides.provisionOnBoot;
-  if (overrides.postureCheckOnBoot !== undefined)
-    result.postureCheckOnBoot = overrides.postureCheckOnBoot;
+  if (overrides.postureCheck !== undefined) result.postureCheck = overrides.postureCheck;
   if (overrides.principalFromRequest !== undefined)
     result.principalFromRequest = overrides.principalFromRequest;
   if (overrides.readerRole !== undefined) result.readerRole = overrides.readerRole;

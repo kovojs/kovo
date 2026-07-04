@@ -130,14 +130,15 @@ knob; prod picks full or delta per response.
 Delta frames are scoped by the committed change record, not by a server-side memory of the client:
 
 ```html
-<kovo-query name="cart" delta settlement="cart-submit-01">
+<kovo-query name="cart" delta>
   {"items":{"upsert":[{"id":"p1","qty":3}],"removedKeys":["p2"]}}
 </kovo-query>
 ```
 
-The settlement set names the idempotency tokens whose committed effects are already reflected in
-the arriving server truth. The client drops matching optimistic transforms before re-applying any
-still-pending predictions, so confirmed writes are not counted twice.
+The client treats arriving server truth as authoritative for the committed mutation response. It
+drops the matching optimistic prediction before re-applying any still-pending predictions, so
+confirmed writes are not counted twice. Settlement bookkeeping is a client/runtime concern, not an
+app-authored wire attribute.
 
 Deep-merge semantics are fixed:
 
@@ -175,8 +176,8 @@ otherwise.
 
 Enhanced mutation request and response headers, target selection, `text/vnd.kovo.fragment+html`,
 `Kovo-Changes`, query/frame escaping, fragment morphing, streaming mutation text, and no-JS
-degradation: SPEC §9.1. Prod delta encoding, deep-merge semantics, removed-key lists, settlement
-sets, base-version validation, full-vs-delta selection, and `kovo explain` reconstruction:
+degradation: SPEC §9.1. Prod delta encoding, deep-merge semantics, removed-key lists, base-version
+validation, full-vs-delta selection, and `kovo explain` reconstruction:
 SPEC §9.1.1. BroadcastChannel, refetch, and live transport vocabulary: SPEC §9.3. Typed reads,
 guarded read cache posture, and canonical query instance keys: SPEC §9.4. Build-skew recovery:
 SPEC §14.

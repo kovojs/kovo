@@ -21,11 +21,10 @@ export interface PgliteStatementCarrier {
 /** SQL statement input accepted by `PgliteTestDb` helpers. */
 export type PgliteStatementInput = string | PgliteStatementCarrier;
 
-/** A PGlite-backed test database handle: `exec`/`query`/`sql` SQL helpers plus `read`/`write` and `close`. */
+/** A PGlite-backed test database handle: `exec`/`query` SQL helpers plus `read`/`write` and `close`. */
 export interface PgliteTestDb {
   close(): Promise<void>;
   exec(statement: PgliteStatementInput): Promise<Results[]>;
-  insert(table: string): { values(value: Record<string, unknown>): Promise<void> };
   pglite: PGlite;
   query<Row extends Record<string, unknown> = Record<string, unknown>>(
     statement: PgliteStatementInput,
@@ -33,10 +32,6 @@ export interface PgliteTestDb {
   ): Promise<Row[]>;
   read<Row extends Record<string, unknown> = Record<string, unknown>>(
     table: string,
-  ): Promise<Row[]>;
-  sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-    statement: PgliteStatementInput,
-    params?: readonly unknown[],
   ): Promise<Row[]>;
   write(table: string, value: Record<string, unknown>): Promise<void>;
 }
@@ -183,24 +178,6 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
     async exec(statement) {
       return pgliteExecStatement(pglite, statement);
     },
-    insert(table) {
-      return {
-        values(value) {
-          return insertPgliteRow(
-            (statement) => pgliteExecStatement(pglite, statement),
-            async <Row extends Record<string, unknown>>(
-              statement: PgliteStatementInput,
-              params: readonly unknown[] = [],
-            ) => {
-              const carrier = pgliteStatement(statement, params);
-              return (await pglite.query<Row>(carrier.text, [...carrier.values])).rows;
-            },
-            table,
-            value,
-          );
-        },
-      };
-    },
     pglite,
     async query<Row extends Record<string, unknown> = Record<string, unknown>>(
       statement: PgliteStatementInput,
@@ -212,14 +189,6 @@ export async function createPgliteTestDb(options: PGliteOptions = {}): Promise<P
     },
     async read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string) {
       const result = await pglite.query<Row>(`select * from ${quoteSqlIdentifier(table)}`);
-      return result.rows;
-    },
-    async sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-      statement: PgliteStatementInput,
-      params: readonly unknown[] = [],
-    ) {
-      const carrier = pgliteStatement(statement, params);
-      const result = await pglite.query<Row>(carrier.text, [...carrier.values]);
       return result.rows;
     },
     async write(table, value) {
@@ -283,16 +252,6 @@ function pgliteTestDbFromOperations(
     async exec(statement) {
       return execStatement(statement);
     },
-    insert(table) {
-      return {
-        values(value) {
-          if (declaredWritePolicy !== undefined) {
-            assertDeclaredWriteTableAllowed(table, declaredWritePolicy, 'postgres');
-          }
-          return insertPgliteRow(execStatement, queryRows, table, value);
-        },
-      };
-    },
     get pglite() {
       return pgliteHandle();
     },
@@ -304,12 +263,6 @@ function pgliteTestDbFromOperations(
     },
     async read<Row extends Record<string, unknown> = Record<string, unknown>>(table: string) {
       return queryRows<Row>(`select * from ${quoteSqlIdentifier(table)}`);
-    },
-    async sql<Row extends Record<string, unknown> = Record<string, unknown>>(
-      statement: PgliteStatementInput,
-      params: readonly unknown[] = [],
-    ) {
-      return queryRows<Row>(statement, params);
     },
     async write(table, value) {
       if (declaredWritePolicy !== undefined) {

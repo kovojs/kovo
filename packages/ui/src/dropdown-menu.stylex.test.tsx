@@ -9,7 +9,6 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-  dropdownMenuStyles,
 } from './dropdown-menu.js';
 
 const items = [
@@ -20,10 +19,6 @@ const items = [
 describe('@kovojs/ui DropdownMenu StyleX slots', () => {
   it('matches dropdown menu markup with StyleX slot output', () => {
     expect({
-      classes: [style.attrs(dropdownMenuStyles.root).class ?? ''] as const,
-      contentClasses: [style.attrs(dropdownMenuStyles.content).class ?? ''] as const,
-      groupClasses: [style.attrs(dropdownMenuStyles.group).class ?? ''] as const,
-      itemClasses: [style.attrs(dropdownMenuStyles.item).class ?? ''] as const,
       menu: DropdownMenu.definition.render({
         children:
           DropdownMenuTrigger.definition.render({
@@ -59,8 +54,6 @@ describe('@kovojs/ui DropdownMenu StyleX slots', () => {
         id: 'actions-root',
         open: true,
       }),
-      separatorClasses: [style.attrs(dropdownMenuStyles.separator).class ?? ''] as const,
-      triggerClasses: [style.attrs(dropdownMenuStyles.trigger).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -105,14 +98,5 @@ describe('@kovojs/ui DropdownMenu StyleX slots', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      contentMarker: dropdownMenuStyles.content.$$css,
-      keys: Object.keys(dropdownMenuStyles),
-      rootMarker: dropdownMenuStyles.root.$$css,
-      triggerMarker: dropdownMenuStyles.trigger.$$css,
-    }).toMatchSnapshot();
   });
 });

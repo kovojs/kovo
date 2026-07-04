@@ -113,7 +113,7 @@ describe('server mutation response replay', () => {
 
     expect(writes).toBe(1);
     expect(second).toEqual({
-      body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+      body: '<kovo-query name="cart" settles="idem_01">{"count":1}</kovo-query>',
       headers: {
         'Cache-Control': 'private, no-store',
         'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
@@ -172,7 +172,7 @@ describe('server mutation response replay', () => {
     expect(writes).toBe(1);
     expect(firstResponse).toEqual(secondResponse);
     expect(firstResponse).toMatchObject({
-      body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+      body: '<kovo-query name="cart" settles="idem_concurrent_handler">{"count":1}</kovo-query>',
       status: 200,
     });
   });
@@ -519,7 +519,7 @@ describe('server mutation response replay', () => {
     queryRelease.resolve();
     await expect(Promise.all([first, second])).resolves.toEqual([
       {
-        body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+        body: '<kovo-query name="cart" settles="idem_pending_query">{"count":1}</kovo-query>',
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',
@@ -531,7 +531,7 @@ describe('server mutation response replay', () => {
         status: 200,
       },
       {
-        body: '<kovo-query name="cart">{"count":1}</kovo-query>',
+        body: '<kovo-query name="cart" settles="idem_pending_query">{"count":1}</kovo-query>',
         headers: {
           'Cache-Control': 'private, no-store',
           'Content-Type': 'text/vnd.kovo.fragment+html; charset=utf-8',

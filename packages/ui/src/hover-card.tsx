@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   hoverCardContentAttributes,
   hoverCardRootAttributes,
@@ -45,7 +45,7 @@ export interface HoverCardStateProps {
  * const props: HoverCardProps = { children: 'Content' };
  */
 export interface HoverCardProps extends HoverCardStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: HoverCardStyleOverrides;
 }
@@ -58,7 +58,7 @@ export interface HoverCardProps extends HoverCardStateProps {
  * const props: HoverCardTriggerProps = { children: 'Content' };
  */
 export interface HoverCardTriggerProps extends HoverCardStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   href?: string;
   id?: string;
@@ -73,19 +73,11 @@ export interface HoverCardTriggerProps extends HoverCardStateProps {
  * const props: HoverCardContentProps = { children: 'Content' };
  */
 export interface HoverCardContentProps extends HoverCardStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   styles?: HoverCardStyleOverrides;
 }
-
-/**
- * Style definitions used by the hover card components.
- *
- * @example
- * import { hoverCardStyles } from "@kovojs/ui/hover-card";
- * const styles = hoverCardStyles;
- */
-export const hoverCardStyles = style.create({
+const hoverCardStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

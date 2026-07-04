@@ -32,7 +32,6 @@ import {
   type ValidationFailurePayload,
 } from './schema.js';
 import { renderQueryWireHtml } from './wire-html.js';
-import type { JsonSerializable } from './json-boundary.js';
 import type { Reader } from './managed-db.js';
 import { tagUntrustedRequestValue } from './untrusted-request-body.js';
 
@@ -155,7 +154,7 @@ export type QueryDefinitionBoundary<Definition, Shape> =
   Exclude<keyof Definition, keyof Shape> extends never
     ? 'load' extends keyof Definition
       ? Definition extends { load?: (...args: any[]) => infer Result }
-        ? Awaited<Result> extends JsonSerializable<Awaited<Result>>
+        ? Awaited<Result> extends JsonValue
           ? []
           : [__kovoQueryJsonBoundary: QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<Awaited<Result>>]
         : [__kovoQueryJsonBoundary: QueryJsonBoundaryErrorUseJsonbTypeOrSRecord<unknown>]

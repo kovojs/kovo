@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import * as style from '@kovojs/style';
-import { Tabs, TabsList, TabsPanel, TabsTrigger, tabsStyles } from './tabs.js';
+import { Tabs, TabsList, TabsPanel, TabsTrigger } from './tabs.js';
 const items = [
   { label: 'Overview', value: 'overview' },
   { label: 'Billing', value: 'billing' },
@@ -57,16 +57,6 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
     expect(inactivePanel).toContain('aria-labelledby="billing-trigger"');
     expect(inactivePanel).toContain('data-state="inactive" hidden');
     expect(inactivePanel).toContain('role="tabpanel"');
-    expect(([style.attrs(tabsStyles.root).class ?? ''] as const).join(' ')).toContain('kv-tabs-w-');
-    expect(([style.attrs(tabsStyles.list).class ?? ''] as const).join(' ')).toContain(
-      'kv-tabs-flex-',
-    );
-    expect(([style.attrs(tabsStyles.trigger).class ?? ''] as const).join(' ')).toContain(
-      'kv-tabs-bg-',
-    );
-    expect(([style.attrs(tabsStyles.panel).class ?? ''] as const).join(' ')).toContain(
-      'kv-tabs-pad-',
-    );
   });
   it('accepts per-slot StyleX override objects', () => {
     const overrides = style.create({
@@ -121,11 +111,5 @@ describe('@kovojs/ui Tabs StyleX slots', () => {
     expect(list).toContain('tabs.stylex.test.tsx#list');
     expect(trigger).toContain('tabs.stylex.test.tsx#trigger');
     expect(panel).toContain('tabs.stylex.test.tsx#panel');
-  });
-  it('exports StyleX slot objects instead of variant helpers', () => {
-    expect(tabsStyles.root.$$css).toBe(true);
-    expect(tabsStyles.list.$$css).toBe(true);
-    expect(tabsStyles.trigger.$$css).toBe(true);
-    expect(tabsStyles.panel.$$css).toBe(true);
   });
 });

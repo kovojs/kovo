@@ -430,6 +430,7 @@ function stylesheetThemeCss(theme: StylesheetTheme | undefined): string | undefi
 interface CriticalCssBlock {
   declarations: CriticalCssDeclaration[];
   selector: string;
+  wrappers: readonly string[];
 }
 
 interface CriticalCssDeclaration {
@@ -458,13 +459,29 @@ function pruneCriticalThemeCss(themeCss: string, criticalCss: string): string | 
       const declarations = block.declarations.filter(
         (declaration) => !declaration.property.startsWith('--') || needed.has(declaration.property),
       );
-      return declarations.length === 0
-        ? ''
-        : `${block.selector} {\n${declarations.map((declaration) => `  ${declaration.raw}`).join('\n')}\n}`;
+      return declarations.length === 0 ? '' : renderCriticalCssBlock(block, declarations);
     })
     .filter(Boolean);
 
   return rendered.join('\n\n');
+}
+
+function renderCriticalCssBlock(
+  block: CriticalCssBlock,
+  declarations: readonly CriticalCssDeclaration[],
+): string {
+  let css = `${block.selector} {\n${declarations.map((declaration) => `  ${declaration.raw}`).join('\n')}\n}`;
+  for (let index = block.wrappers.length - 1; index >= 0; index -= 1) {
+    css = `${block.wrappers[index]} {\n${indentCriticalCss(css)}\n}`;
+  }
+  return css;
+}
+
+function indentCriticalCss(css: string): string {
+  return css
+    .split('\n')
+    .map((line) => (line.length === 0 ? line : `  ${line}`))
+    .join('\n');
 }
 
 function transitiveCriticalCssVariables(
@@ -496,7 +513,10 @@ function stripCssComments(css: string): string {
   return css.replace(/\/\*[\s\S]*?\*\//g, '');
 }
 
-function parseCriticalCssBlocks(css: string): CriticalCssBlock[] | undefined {
+function parseCriticalCssBlocks(
+  css: string,
+  wrappers: readonly string[] = [],
+): CriticalCssBlock[] | undefined {
   const blocks: CriticalCssBlock[] = [];
   let offset = 0;
 
@@ -511,17 +531,29 @@ function parseCriticalCssBlocks(css: string): CriticalCssBlock[] | undefined {
     const close = findMatchingCriticalCssBlockClose(css, open);
     if (close === undefined) return undefined;
     const body = css.slice(open + 1, close);
-    if (body.includes('{') || body.includes('}')) return undefined;
+    if (body.includes('{') || body.includes('}')) {
+      if (!isSupportedCriticalCssWrapper(selector)) return undefined;
+      const nested = parseCriticalCssBlocks(body, [...wrappers, selector]);
+      if (!nested) return undefined;
+      blocks.push(...nested);
+      offset = close + 1;
+      continue;
+    }
     const declarations = parseCriticalCssDeclarations(body);
     if (!declarations) return undefined;
-    blocks.push({ declarations, selector });
+    blocks.push({ declarations, selector, wrappers });
     offset = close + 1;
   }
 
   return blocks;
 }
 
+function isSupportedCriticalCssWrapper(selector: string): boolean {
+  return /^@media\s+.+$/u.test(selector);
+}
+
 function findMatchingCriticalCssBlockClose(css: string, open: number): number | undefined {
+  let braceDepth = 1;
   let quote: '"' | "'" | undefined;
   let parenDepth = 0;
 
@@ -547,7 +579,15 @@ function findMatchingCriticalCssBlockClose(css: string, open: number): number | 
       parenDepth -= 1;
       continue;
     }
-    if (char === '}' && parenDepth === 0) return index;
+    if (parenDepth !== 0) continue;
+    if (char === '{') {
+      braceDepth += 1;
+      continue;
+    }
+    if (char === '}') {
+      braceDepth -= 1;
+      if (braceDepth === 0) return index;
+    }
   }
 
   return undefined;

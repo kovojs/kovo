@@ -61,7 +61,9 @@ const STAGED_STATIC_EXPORT_PUBLIC_ASSETS = [
 function findUndefinedCustomProperties(css) {
   const defined = new Set([...css.matchAll(/(?<![\w-])(--[\w-]+)\s*:/g)].map((match) => match[1]));
   const referenced = new Set([...css.matchAll(/var\(\s*(--[\w-]+)/g)].map((match) => match[1]));
-  return [...referenced].filter((property) => !defined.has(property)).sort();
+  return [...referenced]
+    .filter((property) => !defined.has(property))
+    .sort((left, right) => left.localeCompare(right));
 }
 
 function stylesheetClassSelectors(css) {
@@ -84,7 +86,7 @@ export function assertExportedAppStyleClassCoverage(artifacts, css, stylesheetPa
   for (const artifact of artifacts) {
     const missingForArtifact = [...htmlClassNames(artifact.body)]
       .filter((className) => className.startsWith('kv-style-') && !selectors.has(className))
-      .sort();
+      .sort((left, right) => left.localeCompare(right));
     if (missingForArtifact.length === 0) continue;
     missing.push(
       `${artifact.path}: ${missingForArtifact.slice(0, 12).join(', ')}${

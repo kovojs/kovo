@@ -16,7 +16,7 @@ import {
  * ```ts
  * import type { TooltipChangeReason } from '@kovojs/headless-ui/tooltip';
  *
- * const value: TooltipChangeReason = {} as TooltipChangeReason;
+ * declare const value: TooltipChangeReason;
  * ```
  */
 export type TooltipChangeReason =
@@ -36,7 +36,7 @@ export type TooltipChangeReason =
  * ```ts
  * import type { TooltipChangeDetail } from '@kovojs/headless-ui/tooltip';
  *
- * const value: TooltipChangeDetail = {} as TooltipChangeDetail;
+ * declare const value: TooltipChangeDetail;
  * ```
  */
 export type TooltipChangeDetail = PrimitiveChangeDetail<TooltipChangeReason, boolean>;
@@ -50,7 +50,7 @@ export type TooltipChangeDetail = PrimitiveChangeDetail<TooltipChangeReason, boo
  * ```ts
  * import type { TooltipState } from '@kovojs/headless-ui/tooltip';
  *
- * const value: TooltipState = {} as TooltipState;
+ * declare const value: TooltipState;
  * ```
  */
 export interface TooltipState {
@@ -67,7 +67,7 @@ export interface TooltipState {
  * ```ts
  * import type { TooltipAttributeOptions } from '@kovojs/headless-ui/tooltip';
  *
- * const value: TooltipAttributeOptions = {} as TooltipAttributeOptions;
+ * declare const value: TooltipAttributeOptions;
  * ```
  */
 export interface TooltipAttributeOptions extends TooltipState {
@@ -83,7 +83,7 @@ export interface TooltipAttributeOptions extends TooltipState {
  * ```ts
  * import type { TooltipChangeOptions } from '@kovojs/headless-ui/tooltip';
  *
- * const value: TooltipChangeOptions = {} as TooltipChangeOptions;
+ * declare const value: TooltipChangeOptions;
  * ```
  */
 export interface TooltipChangeOptions {
@@ -99,7 +99,7 @@ export interface TooltipChangeOptions {
  * ```ts
  * import type { TooltipChangeResult } from '@kovojs/headless-ui/tooltip';
  *
- * const value: TooltipChangeResult = {} as TooltipChangeResult;
+ * declare const value: TooltipChangeResult;
  * ```
  */
 export interface TooltipChangeResult {
@@ -117,7 +117,7 @@ export interface TooltipChangeResult {
  * ```ts
  * import type { TooltipPrimitiveAttributes } from '@kovojs/headless-ui/tooltip';
  *
- * const value: TooltipPrimitiveAttributes = {} as TooltipPrimitiveAttributes;
+ * declare const value: TooltipPrimitiveAttributes;
  * ```
  */
 export type TooltipPrimitiveAttributes = PrimitiveDataAttributes &
@@ -132,7 +132,7 @@ export type TooltipPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { TooltipTriggerEvent } from '@kovojs/headless-ui/tooltip';
  *
- * const value: TooltipTriggerEvent = {} as TooltipTriggerEvent;
+ * declare const value: TooltipTriggerEvent;
  * ```
  */
 export type TooltipTriggerEvent = Event;
@@ -146,7 +146,7 @@ export type TooltipTriggerEvent = Event;
  * ```ts
  * import type { TooltipEscapeEvent } from '@kovojs/headless-ui/tooltip';
  *
- * const value: TooltipEscapeEvent = {} as TooltipEscapeEvent;
+ * declare const value: TooltipEscapeEvent;
  * ```
  */
 export type TooltipEscapeEvent = Event & Readonly<{ key?: string }>;
@@ -160,7 +160,7 @@ export type TooltipEscapeEvent = Event & Readonly<{ key?: string }>;
  * ```ts
  * import { tooltipRootAttributes } from '@kovojs/headless-ui/tooltip';
  *
- * const input = {} as Parameters<typeof tooltipRootAttributes>[0];
+ * declare const input: Parameters<typeof tooltipRootAttributes>[0];
  * const result = tooltipRootAttributes(input);
  * ```
  */
@@ -181,7 +181,7 @@ export function tooltipRootAttributes(state: TooltipState): TooltipPrimitiveAttr
  * ```ts
  * import { tooltipTriggerAttributes } from '@kovojs/headless-ui/tooltip';
  *
- * const input = {} as Parameters<typeof tooltipTriggerAttributes>[0];
+ * declare const input: Parameters<typeof tooltipTriggerAttributes>[0];
  * const result = tooltipTriggerAttributes(input);
  * ```
  */
@@ -208,7 +208,7 @@ export function tooltipTriggerAttributes(
  * ```ts
  * import { tooltipContentAttributes } from '@kovojs/headless-ui/tooltip';
  *
- * const input = {} as Parameters<typeof tooltipContentAttributes>[0];
+ * declare const input: Parameters<typeof tooltipContentAttributes>[0];
  * const result = tooltipContentAttributes(input);
  * ```
  */
@@ -232,10 +232,10 @@ export function tooltipContentAttributes(
  * ```ts
  * import { setTooltipOpen } from '@kovojs/headless-ui/tooltip';
  *
- * const input = {} as Parameters<typeof setTooltipOpen>[0];
- * const state = {} as Parameters<typeof setTooltipOpen>[1];
- * const options = {} as Parameters<typeof setTooltipOpen>[2];
- * const detail = {} as Parameters<typeof setTooltipOpen>[3];
+ * declare const input: Parameters<typeof setTooltipOpen>[0];
+ * declare const state: Parameters<typeof setTooltipOpen>[1];
+ * declare const options: Parameters<typeof setTooltipOpen>[2];
+ * declare const detail: Parameters<typeof setTooltipOpen>[3];
  * const result = setTooltipOpen(input, state, options, detail);
  * ```
  *
@@ -257,9 +257,9 @@ export function setTooltipOpen(
  * ```ts
  * import { tooltipTriggerPointerEnter } from '@kovojs/headless-ui/tooltip';
  *
- * const input = {} as Parameters<typeof tooltipTriggerPointerEnter>[0];
- * const state = {} as Parameters<typeof tooltipTriggerPointerEnter>[1];
- * const options = {} as Parameters<typeof tooltipTriggerPointerEnter>[2];
+ * declare const input: Parameters<typeof tooltipTriggerPointerEnter>[0];
+ * declare const state: Parameters<typeof tooltipTriggerPointerEnter>[1];
+ * declare const options: Parameters<typeof tooltipTriggerPointerEnter>[2];
  * const result = tooltipTriggerPointerEnter(input, state, options);
  * ```
  *
@@ -286,9 +286,9 @@ export function tooltipTriggerPointerEnter(
  * ```ts
  * import { tooltipTriggerPointerLeave } from '@kovojs/headless-ui/tooltip';
  *
- * const input = {} as Parameters<typeof tooltipTriggerPointerLeave>[0];
- * const state = {} as Parameters<typeof tooltipTriggerPointerLeave>[1];
- * const options = {} as Parameters<typeof tooltipTriggerPointerLeave>[2];
+ * declare const input: Parameters<typeof tooltipTriggerPointerLeave>[0];
+ * declare const state: Parameters<typeof tooltipTriggerPointerLeave>[1];
+ * declare const options: Parameters<typeof tooltipTriggerPointerLeave>[2];
  * const result = tooltipTriggerPointerLeave(input, state, options);
  * ```
  *
@@ -315,9 +315,9 @@ export function tooltipTriggerPointerLeave(
  * ```ts
  * import { tooltipTriggerFocus } from '@kovojs/headless-ui/tooltip';
  *
- * const input = {} as Parameters<typeof tooltipTriggerFocus>[0];
- * const state = {} as Parameters<typeof tooltipTriggerFocus>[1];
- * const options = {} as Parameters<typeof tooltipTriggerFocus>[2];
+ * declare const input: Parameters<typeof tooltipTriggerFocus>[0];
+ * declare const state: Parameters<typeof tooltipTriggerFocus>[1];
+ * declare const options: Parameters<typeof tooltipTriggerFocus>[2];
  * const result = tooltipTriggerFocus(input, state, options);
  * ```
  *
@@ -344,9 +344,9 @@ export function tooltipTriggerFocus(
  * ```ts
  * import { tooltipTriggerBlur } from '@kovojs/headless-ui/tooltip';
  *
- * const input = {} as Parameters<typeof tooltipTriggerBlur>[0];
- * const state = {} as Parameters<typeof tooltipTriggerBlur>[1];
- * const options = {} as Parameters<typeof tooltipTriggerBlur>[2];
+ * declare const input: Parameters<typeof tooltipTriggerBlur>[0];
+ * declare const state: Parameters<typeof tooltipTriggerBlur>[1];
+ * declare const options: Parameters<typeof tooltipTriggerBlur>[2];
  * const result = tooltipTriggerBlur(input, state, options);
  * ```
  *
@@ -373,9 +373,9 @@ export function tooltipTriggerBlur(
  * ```ts
  * import { tooltipEscapeKeyDown } from '@kovojs/headless-ui/tooltip';
  *
- * const input = {} as Parameters<typeof tooltipEscapeKeyDown>[0];
- * const state = {} as Parameters<typeof tooltipEscapeKeyDown>[1];
- * const options = {} as Parameters<typeof tooltipEscapeKeyDown>[2];
+ * declare const input: Parameters<typeof tooltipEscapeKeyDown>[0];
+ * declare const state: Parameters<typeof tooltipEscapeKeyDown>[1];
+ * declare const options: Parameters<typeof tooltipEscapeKeyDown>[2];
  * const result = tooltipEscapeKeyDown(input, state, options);
  * ```
  *

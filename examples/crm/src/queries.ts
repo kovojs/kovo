@@ -22,57 +22,57 @@ const crmRead = guards.authed<CrmRequest>();
 // Keep the Drizzle selects inline so the graph emitter can read the same source
 // the app runs.
 
-export interface ContactRow {
+export type ContactRow = {
   id: string;
   name: string;
   email: string;
   ownerId: string;
   dealCount: number;
-}
+};
 
-export interface DealRow {
+export type DealRow = {
   id: string;
   contactId: string;
   stage: string;
   amount: number;
   ownerId: string;
-}
+};
 
-export interface ContactListResult {
+export type ContactListResult = {
   items: ContactRow[];
-}
+};
 
-export interface DealListResult {
+export type DealListResult = {
   items: DealRow[];
-}
+};
 
-export interface ContactDealCountResult {
+export type ContactDealCountResult = {
   count: number;
-}
+};
 
-export interface OpenDealsResult {
+export type OpenDealsResult = {
   items: DealRow[];
-}
+};
 
-export interface PipelineStageBucket {
+export type PipelineStageBucket = {
   stage: string;
   total: number;
-}
+};
 
-export interface PipelineByStageResult {
+export type PipelineByStageResult = {
   buckets: PipelineStageBucket[];
-}
+};
 
-export interface ActivityRow {
+export type ActivityRow = {
   id: number;
   dealId: string;
   kind: string;
   note: string;
-}
+};
 
-export interface ActivityListResult {
+export type ActivityListResult = {
   items: ActivityRow[];
-}
+};
 
 /** AGG(contacts) — the full contact book, ordered by id (a derivable rowset). */
 export const contactListQuery = query({

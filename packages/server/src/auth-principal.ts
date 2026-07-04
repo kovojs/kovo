@@ -156,6 +156,12 @@ export function assertNonRequestPrincipalPosture(
   );
 }
 
+/** @internal SPEC §10.3 DEC-G/C7: the brand check is the only door to DB principal elevation. */
+export function principalFromNonRequestPrincipalPosture(value: unknown): string | undefined {
+  assertNonRequestPrincipalPosture(value);
+  return value.kind === 'act-as' ? value.principal : undefined;
+}
+
 /** @internal */
 export function nonRequestPrincipalPostureDiagnostic(value: NonRequestPrincipalPosture): string {
   if (value.kind === 'act-as') {

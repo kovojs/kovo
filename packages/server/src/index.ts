@@ -1,20 +1,10 @@
 export { createApp, createRequestHandler } from './app.js';
-export { createElement } from './jsx-runtime.js';
 // SPEC §6.6 / §9.5 (plans/secure-framework.md Tier 1): refuse-to-boot env/secret
 // validation at the createApp chokepoint. `CreateAppBootError` is the typed boot
 // refusal a deploy/test catches; `committedSecretWaiver` is the audited escape for
 // the committed-secret heuristic.
 export { committedSecretWaiver, CreateAppBootError, isCreateAppBootError } from './env.js';
 export type { EnvValidationIssue } from './env.js';
-export { createSecretBoxingReadDb, declareSecretReadCapability } from './secret-read-boundary.js';
-export type {
-  DeclaredSecretReadCapability,
-  SecretReadBoundaryOptions,
-  SecretReadColumnSource,
-  SecretReadMetadata,
-  SecretReadSqliteColumnOrigin,
-  SecretReadSqliteColumnOriginClient,
-} from './secret-read-boundary.js';
 // SPEC §10.3: generated Postgres apps import this runtime to derive schema DDL/RLS/grants from
 // app-authored Drizzle schema exports while keeping privileged provisioning out of normal boot.
 export {
@@ -42,10 +32,22 @@ export type {
   KovoPostgresRuntimeDb,
   KovoPostgresRuntimeDriver,
 } from './postgres-runtime.js';
+// SPEC §5.2/§10.3/§11.2: generated SQLite starter source must use public Kovo entrypoints, while
+// the adapter hooks and low-level secret/read/write wrappers remain internal.
+export { createSqliteAppRuntimeDb } from './sqlite-runtime.js';
+export type {
+  KovoSqliteAppRuntimeDb,
+  KovoSqliteAppRuntimeMetadata,
+  KovoSqliteAppRuntimeOptions,
+  KovoSqliteColumnOriginClient,
+  KovoSqliteRuntimeColumnSource,
+} from './sqlite-runtime.js';
+export { declareSecretReadCapability } from './secret-read-boundary.js';
+export type { DeclaredSecretReadCapability } from './secret-read-boundary.js';
 export { isKovoApp } from './app-guards.js';
 export { publicAccess, verifiedAccess } from './access.js';
-export { trustedAssign, drainTrustedAssignFacts, serverValue } from './write-governance.js';
-export type { TrustedAssignFact, TrustedAssignOptions } from './write-governance.js';
+export { trustedAssign, serverValue } from './write-governance.js';
+export type { TrustedAssignOptions } from './write-governance.js';
 export { encryptAtRest } from './confidential-at-rest.js';
 export type { EncryptedAtRest, EncryptAtRestOptions } from './confidential-at-rest.js';
 // SPEC §6.6 / KV424 and plans/most-secure-web-framework.md SINK-02: shell command
@@ -62,16 +64,11 @@ export type {
 } from './command.js';
 // SPEC §6.6 / plans/secure-framework.md Phase 5: outbound-egress private-network deny floor
 // (runtime defense-in-depth, NOT a by-construction proof). `EgressBlockedError` is the typed
-// 502-class error a blocked outbound connection throws; `installEgressFloor`/`selfProbe` let a
-// worker/child bootstrap re-install + verify the floor (it does not cross worker boundaries).
-// The flat `awsCredential`/`gcpCredential`/`azureCredential` factories below are the ONLY entry
-// points to the metadata-allowed frame.
+// 502-class error a blocked outbound connection throws. The worker/bootstrap installers and
+// cloud-credential metadata frames are framework plumbing exposed on
+// `@kovojs/server/internal/egress`, not app-authored root API.
 export { EgressBlockedError, EgressConfigError } from './egress.js';
 export type { EgressOptions, PrivateAddressClass } from './egress.js';
-export { installEgressFloor, selfProbe } from './egress-bootstrap.js';
-export type { EgressFloorInstall } from './egress-bootstrap.js';
-export { awsCredential, azureCredential, gcpCredential } from './egress-credentials.js';
-export type { CredentialProvider } from './egress-credentials.js';
 export { createSigningKeyRing } from './keyring.js';
 export type {
   SigningInput,
@@ -85,43 +82,16 @@ export type {
   SigningVerifyInput,
   SigningVerifyResult,
 } from './keyring.js';
-// SPEC §6.6 / §9.1 / plans/secure-framework.md Phase 5: capability-URL primitive — sign a
-// short-lived, scope-bound token over a storage object; constant-time verify BEFORE any storage
-// read (by-construction at the verify sink). The framework download *route* that hosts the sink
-// remains open work; these are the signing/verify/one-time-replay core a route mounts.
-export {
-  DEFAULT_CAPABILITY_TTL_MS,
-  createMemoryCapabilityReplayStore,
-  signCapability,
-  verifyCapability,
-} from './capability-url.js';
-export type {
-  CapabilityClaims,
-  CapabilityMethod,
-  CapabilityRejectReason,
-  CapabilityReplayStore,
-  CapabilityVerifyResult,
-  SignCapabilityOptions,
-  SignedCapability,
-} from './capability-url.js';
 // SPEC §6.6 / §9.1 / plans/secure-framework.md Phase 5 follow-up: the framework-owned storage
-// download ROUTE that hosts the capability verify sink, plus `ctx.signUrl` (also reachable on the
-// route page context). `createStorageDownloadEndpoint` builds a prefix-mounted GET/HEAD endpoint
-// whose handler verifies a per-object token (constant-time, fail-closed) BEFORE any storage read,
-// so a stored object is un-dereferenceable without a token minted for that exact object. The minted
-// URL is a BEARER credential (leakage mitigated by short expiry / narrow scope / optional one-time,
-// NOT proven). `drainCapabilityMintFacts` feeds `kovo explain --capabilities` (SF-WIRE in
-// capability-route.ts).
+// download ROUTE that hosts the capability verify sink. `createStorageDownloadEndpoint` builds a
+// prefix-mounted GET/HEAD endpoint whose handler verifies a per-object token BEFORE any storage
+// read. Raw sign/verify/mint plumbing lives on `@kovojs/server/internal/capabilities`.
 export {
-  CAPABILITY_TOKEN_PARAM,
   DEFAULT_CAPABILITY_DOWNLOAD_BASE_PATH,
-  createSignUrl,
   createStorageDownloadEndpoint,
-  deriveDownloadKey,
-  drainCapabilityMintFacts,
 } from './capability-route.js';
+export type { CapabilityMethod, CapabilityReplayStore } from './capability-url.js';
 export type {
-  CapabilityMintFact,
   SignUrlContext,
   SignUrlOptions,
   SignedUrl,
@@ -211,13 +181,6 @@ export type {
   DurableTaskStatusSqlStatement,
   DurableTaskStatusSurface,
 } from './task-observability.js';
-// SPEC.md §9.5: app authors wire the app shell into their Vite dev server from
-// vite.config.ts (the create-kovo starter template does exactly this). These stay
-// public at the root barrel and also remain on `@kovojs/server/internal/app-shell-vite`.
-/**
- * @experimental
- */
-export { createKovoAppShellViteDevIntegration, kovoAppShellViteDevPlugin } from './vite-dev.js';
 export type {
   AppEgressOptions,
   AppEgressOptOut,
@@ -244,7 +207,12 @@ export type {
 // CSP allowlist config named by `createApp({ document: { csp } })` (recursive publicness,
 // rules/api-surface.md): an app declares third-party analytics/Stripe origins through these.
 // SPEC §6.6: a cross-browser runtime DiD floor, not a by-construction proof.
-export type { CspAllowlist, CspReportingConfig, DocumentCspConfig } from './csp.js';
+export type {
+  CspAllowlist,
+  CspInlineMetadata,
+  CspReportingConfig,
+  DocumentCspConfig,
+} from './csp.js';
 // Option/registry types named by `createApp({ clientModules })` and by app
 // consumers that hold a registry reference (recursive publicness,
 // rules/api-surface.md). They also remain on `@kovojs/server/internal/client-modules`.
@@ -275,24 +243,13 @@ export type {
 // ./api/rendering.js, and ./api/routing.js.
 export {
   accept,
-  createAuthorizationCensusDb,
-  createDeclaredWriteDb,
   createMemoryMutationReplayStore,
-  createPostgresReadonlyClient,
-  createPostgresScopedClient,
   csrfField,
   csrfToken,
   declarePublicRead,
   domain,
-  drainCrossOwnerReadAuditFacts,
-  drainPostgresRlsSilentDenyDiagnostics,
-  drainPublicReadAuditFacts,
-  drainUnsafeRegexFacts,
-  drainUnverifiedMimeFacts,
   errorBoundary,
   InlineUnverifiedUploadError,
-  kovoDeclaredWriteDbHandle,
-  kovoReadonlyDbHandle,
   KovoReadonlyHandleError,
   mutation,
   mintCsrfField,
@@ -310,18 +267,14 @@ export {
   // distinct from the IDEMPOTENCY_CONFLICT 409 produced by the replay path.
   StaleVersionError,
   stream,
-  tag,
   task,
   unsafeRegex,
-  write,
 } from './api/data.js';
 export type {
   BlessedFormatName,
   ChangeRecord,
   CsrfAnonymousCookieOptions,
   CsrfOptions,
-  CsrfSecret,
-  CsrfValidationOptions,
   Domain,
   FileLike,
   FileSchema,
@@ -353,23 +306,12 @@ export type {
   MutationSuccess,
   MutationTextCoalescingPolicy,
   NumberSchema,
-  AuthorizationCensusDbOptions,
-  AuthorizationCensusMetadata,
-  CrossOwnerReadAuditFact,
   CrossOwnerReadDeclaration,
   CrossOwnerReadPolicyOptions,
-  DeclaredWriteDbOptions,
   DeclaredWriteSqliteAuthorizerConstants,
   DeclaredWriteSqliteAuthorizerDatabase,
   DeclaredWriteSqliteAuthorizerOptions,
-  GovernedWriteMetadata,
-  PostgresRlsDiagnosticReadClient,
-  PostgresRlsSilentDenyDiagnostic,
-  PostgresRlsSilentDenyDiagnosticsOptions,
-  PostgresScopedClientOptions,
   PreserveDefinitionInference,
-  PostgresReadonlyClientOptions,
-  PublicReadAuditFact,
   PublicReadDeclaration,
   PublicReadRowsScope,
   QueryDeclarationBoundaryShape,
@@ -379,7 +321,6 @@ export type {
   QueryDefinitionParameterBoundary,
   QueryInstanceKey,
   QueryJsonBoundaryErrorUseJsonbTypeOrSRecord,
-  JsonSerializable,
   QueryLoadContext,
   QueryReadConfig,
   QueryResult,
@@ -390,14 +331,12 @@ export type {
   ReplayMutationWireBodyOptions,
   Schema,
   Secret,
-  SqliteAuthorizationClassification,
   // KV429 (SPEC §10.3/§11.1): the typed 409 stale-version conflict outcome.
   StaleVersionConflict,
   StoredFileSchema,
   StoredFileSchemaOptions,
   StoredFileUpload,
   StringSchema,
-  Tag,
   Writer,
   TaskCronCatchUp,
   TaskDefinition,
@@ -415,22 +354,16 @@ export type {
   TaskScheduleOptions,
   TaskSchedulingRequest,
   UnsafeRegexBrand,
-  UnsafeRegexFact,
   UnverifiedAcceptance,
-  UnverifiedMimeFact,
   ValidationFailurePayload,
   ValidationIssue,
-  WriteDefinition,
 } from './api/data.js';
 export {
-  cspSha256,
   Defer,
   i18n,
-  meta,
   metaFromQuery,
   ComponentXmlError,
   parseComponentXml,
-  renderContentSecurityPolicy,
   renderRegistry,
   renderRouteHtml,
   renderTree,
@@ -450,7 +383,7 @@ export {
   InlineStyle,
   Meta,
   ModulePreload,
-  Stylesheet,
+  StylesheetLink,
 } from './api/rendering.js';
 export type {
   ComponentElementNode,
@@ -459,8 +392,6 @@ export type {
   ComponentRegistryEntry,
   ComponentRegistryInput,
   ComponentTextNode,
-  ContentSecurityPolicyOptions,
-  CspInlineMetadata,
   DeferProps,
   DocumentAuthoringContext,
   DocumentConfig,
@@ -505,10 +436,6 @@ export type {
   ClientIpRequestLike,
   CookieClass,
   CookieOptions,
-  DeferredFragmentChunk,
-  DeferredPriority,
-  DeferredQueryChunk,
-  DeferredStreamChunk,
   DiagnosticCode,
   Endpoint,
   EndpointAuthDeclaration,
@@ -523,7 +450,6 @@ export type {
   EndpointMountDefinition,
   EndpointMethod,
   EndpointMount,
-  EndpointReason,
   EndpointRequest,
   EndpointCachePosture,
   EndpointResponseBody,
@@ -535,7 +461,6 @@ export type {
   Guard,
   GuardArgsRequest,
   GuardDenial,
-  GuardFailure,
   GuardParamsRequest,
   GuardResult,
   JsonValue,
@@ -547,8 +472,6 @@ export type {
   LayoutRenderResult,
   LayoutRenderSlots,
   LinkDescriptor,
-  MutationResponseHeaders,
-  MutationResponseHeaderValue,
   NotFound,
   RateLimitedDenial,
   RateLimitOptions,

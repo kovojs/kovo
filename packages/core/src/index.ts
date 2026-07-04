@@ -102,6 +102,9 @@ export type ComponentRenderResult =
 /** Escaped text/message content used by explicit text-oriented helpers. */
 export type ComponentTextResult = ComponentRenderResult | string;
 
+/** Render-time child/slot composition value, including escaped text nodes (SPEC §4.5). */
+export type ComponentChild = ComponentRenderResult | string;
+
 interface FrameworkRenderedHtml {
   readonly html: string;
   [Symbol.toPrimitive](): string;
@@ -130,7 +133,7 @@ type ComponentDefinitionMutations<Definition> = Definition extends { mutations: 
   : NoComponentMutations;
 
 interface ComponentRenderSlotValues {
-  children?: unknown;
+  children?: ComponentChild;
   [slot: string]: unknown;
 }
 
@@ -146,6 +149,8 @@ export type ComponentRenderSlots<
 
 /** Loosely-typed input accepted by `component()` before inference narrows it. */
 export interface ComponentDefinitionInput {
+  /** Declared clock inputs for time-dependent rendered positions and derives (SPEC §4.8/§4.9). */
+  clocks?: Record<string, unknown>;
   /** Force-off escape hatch for inferred server refresh targets (SPEC §4.1). */
   disableServerRefresh?: boolean;
   /** Removed: query-backed components infer refresh targets; use `disableServerRefresh` to opt out. */
@@ -164,9 +169,145 @@ export interface ComponentDefinitionInput {
   render: (...args: never[]) => ComponentRenderResult;
 }
 
+/** Function type used by component type helpers for callable render slots and definitions. */
+export type AnyFunction = (...args: any[]) => any;
+/** Type-level predicate used by component prop inference to default-deny `any` render input. */
+export type IsAny<T> = 0 extends 1 & T ? true : false;
+/** First render-parameter input bag before query result keys are removed (SPEC §4.1/§6.2). */
+export type ComponentRenderInput<Definition> = Definition extends {
+  render: (input: infer Input, ...args: any[]) => any;
+}
+  ? IsAny<Input> extends true
+    ? Record<never, never>
+    : unknown extends Input
+      ? Record<never, never>
+      : Input extends object
+        ? Input
+        : Record<never, never>
+  : Record<never, never>;
+
+/** Query result property names supplied by the runtime rather than component call sites. */
+export type ComponentQueryKeys<Definition> = Definition extends { queries: infer Queries }
+  ? Extract<keyof Queries, string>
+  : never;
+
+/** Framework-level attributes accepted by component call sites in addition to rendered props. */
+export interface ComponentCallSiteAttributes {
+  [attribute: `aria-${string}`]: unknown;
+  [attribute: `data-${string}`]: unknown;
+  [attribute: `on${string}`]: unknown;
+  checked?: unknown;
+  class?: string;
+  className?: string;
+  disabled?: unknown;
+  form?: unknown;
+  hidden?: unknown;
+  id?: unknown;
+  'kovo-key'?: number | string;
+  key?: number | string;
+  name?: unknown;
+  required?: unknown;
+  role?: unknown;
+  style?: unknown;
+  styles?: unknown;
+  tabIndex?: unknown;
+  value?: unknown;
+}
+
+/**
+ * Props accepted when calling or rendering a Kovo component descriptor. Per SPEC §4.1/§6.2,
+ * the render function's first parameter is the source of truth, and query result keys are
+ * supplied by the runtime rather than by call sites.
+ */
+export type ComponentProps<Definition> = Omit<
+  ComponentRenderInput<Definition>,
+  ComponentQueryKeys<Definition>
+> &
+  ComponentCallSiteAttributes;
+
+/** Props consumed by a component query `args` binding. */
+export type ComponentQueryBindingProps<Binding> =
+  Binding extends QueryArgsBinding<string, unknown, infer Props, unknown> ? Props : never;
+
+/** Query binding consistency check against render-derived call-site props. */
+export type CheckedComponentQueryBindings<Definition> = Definition extends {
+  queries: infer Queries;
+}
+  ? {
+      [Key in keyof Queries]: ComponentQueryBindingProps<Queries[Key]> extends never
+        ? Queries[Key]
+        : ComponentQueryBindingProps<Queries[Key]> extends ComponentProps<Definition>
+          ? Queries[Key]
+          : never;
+    }
+  : unknown;
+
+/** Constructor values accepted in component `props` metadata. */
+export type ComponentPropMetadataValue =
+  | ArrayConstructor
+  | BooleanConstructor
+  | NumberConstructor
+  | ObjectConstructor
+  | StringConstructor;
+
+/** Runtime value type represented by a component `props` metadata constructor. */
+export type ComponentPropMetadataType<Value> = Value extends StringConstructor
+  ? string
+  : Value extends NumberConstructor
+    ? number
+    : Value extends BooleanConstructor
+      ? boolean
+      : Value extends ArrayConstructor
+        ? readonly JsonValue[]
+        : Value extends ObjectConstructor
+          ? Record<string, JsonValue>
+          : never;
+
+/** Props metadata consistency check against render-derived call-site props. */
+export type CheckedComponentPropsMetadata<Definition> = Definition extends { props: infer Metadata }
+  ? {
+      [Key in keyof Metadata]: Key extends keyof ComponentProps<Definition>
+        ? Metadata[Key] extends ComponentPropMetadataValue
+          ? ComponentPropMetadataType<Metadata[Key]> extends ComponentProps<Definition>[Key]
+            ? Metadata[Key]
+            : never
+          : never
+        : never;
+    }
+  : unknown;
+
+/** Definition-level consistency checks for query args and serializable props metadata. */
+export type CheckedComponentDefinition<Definition extends ComponentDefinitionInput> = Definition &
+  (Definition extends { queries: unknown }
+    ? { queries: CheckedComponentQueryBindings<Definition> }
+    : unknown) &
+  (Definition extends { props: unknown }
+    ? { props: CheckedComponentPropsMetadata<Definition> }
+    : unknown);
+
+/** Required keys of an object type, preserving `exactOptionalPropertyTypes` semantics. */
+export type RequiredKeys<T extends object> = {
+  [Key in keyof T]-?: {} extends Pick<T, Key> ? never : Key;
+}[keyof T];
+
+/** Exact object helper used to reject excess component call-site properties. */
+export type ExactProps<Shape extends object, Input extends Shape> = Input &
+  Record<Exclude<keyof Input, keyof Shape>, never>;
+
+/** Tuple form for component calls: props are optional only when no render-derived prop is required. */
+export type ComponentCallArgs<
+  Definition extends ComponentDefinitionInput,
+  Props extends ComponentProps<Definition>,
+> =
+  RequiredKeys<ComponentProps<Definition>> extends never
+    ? [props?: ExactProps<ComponentProps<Definition>, Props>]
+    : [props: ExactProps<ComponentProps<Definition>, Props>];
+
 /** A component descriptor returned by `component()`; the compiler injects `name` after derivation. */
 export interface Component<Definition extends ComponentDefinitionInput> {
-  (props?: Record<string, unknown>): any;
+  <const Props extends ComponentProps<Definition>>(
+    ...args: ComponentCallArgs<Definition, Props>
+  ): any;
   definition: Definition;
   name?: string;
 }
@@ -213,7 +354,7 @@ export function component<
     render: (...args: any[]) => ComponentRenderResult;
   },
 >(
-  definition: Definition &
+  definition: CheckedComponentDefinition<Definition> &
     (State extends Serializable<State> ? { state: () => State } : { state: () => never }) & {
       render: (
         queries: any,
@@ -229,7 +370,7 @@ export function component<
     state?: undefined;
   },
 >(
-  definition: Definition & {
+  definition: CheckedComponentDefinition<Definition> & {
     render: (
       queries: any,
       state: any,
@@ -259,6 +400,7 @@ export function component(
 }
 
 const COMPONENT_DEFINITION_KEYS = new Set([
+  'clocks',
   'css',
   'disableServerRefresh',
   'errorBoundary',
@@ -292,7 +434,12 @@ export function ErrorBoundary(props: ErrorBoundaryProps): ComponentRenderResult 
 }
 
 /** A typed component query binding with args derived from serializable component props. */
-export interface QueryArgsBinding<Key extends string, Result, Props, Args> {
+export interface QueryArgsBinding<
+  Key extends string,
+  Result,
+  Props extends Record<string, JsonValue>,
+  Args,
+> {
   args: (props: Props) => Args;
   key: Key;
   refresh<PropsSpec extends QueryRefreshSpec<Result>>(
@@ -335,10 +482,10 @@ export interface Query<Key extends string, Result> {
   key: Key;
   /**
    * Declarative per-query opt-out from refetch-on-focus (SPEC §9.3/§9.4). Refetch-on-focus
-   * is on by default; set `refetchOnFocus: false` on the {@link query} handle to exclude this
+   * is on by default; set `refetchOnFocus: false` on the {@link queryRef} handle to exclude this
    * query from the visible-return/bfcache typed-read refetch (§9.4). Only `false` is accepted:
    * `true` would be the default and a no-op field, so it is not part of the type. Present only
-   * when the query was declared with `query(key, { refetchOnFocus: false })`.
+   * when the query was declared with `queryRef(key, { refetchOnFocus: false })`.
    */
   refetchOnFocus?: false;
   refresh<Spec extends QueryRefreshSpec<Result>>(
@@ -349,7 +496,7 @@ export interface Query<Key extends string, Result> {
 }
 
 /**
- * Declaration-site config for {@link query} (SPEC §9.3/§9.4).
+ * Declaration-site config for {@link queryRef} (SPEC §9.3/§9.4).
  *
  * `refetchOnFocus: false` opts the query out of refetch-on-focus — the per-query loader
  * behavior that re-runs queries over the typed read endpoint (`/_q/`, §9.4) when a stale tab
@@ -371,7 +518,7 @@ export interface QueryConfig {
  * @augmented The canonical entries are emitted by the compiler via
  * `declare module '@kovojs/core'` (compiler/src/emit/registry.ts); hand-augmentation is
  * the SPEC §5.2/KV235-discouraged exception. Mirrors the `@generated` registries in
- * `core/src/generated.ts`, but stays here because `form`/`query`/`href` typing resolves it.
+ * `core/src/generated.ts`, but stays here because `form`/`queryRef`/`href` typing resolves it.
  */
 export interface QueryRegistry {}
 
@@ -399,13 +546,15 @@ export interface InvalidationSets {}
  */
 export interface OptimisticDerivationSets {}
 
-type RegistryKey<Registry> = keyof Registry extends never
+/** Registry key helper that falls back to `string` until compiler-emitted registry facts exist. */
+export type RegistryKey<Registry> = keyof Registry extends never
   ? string
   : Extract<keyof Registry, string>;
 
 // Public signatures cannot reference internal subpath types. Keep this type-level
 // mirror local while runtime href/matching consumes `internal/route-pattern`.
-type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
+/** URL path parameter names parsed from `:param` route segments. */
+export type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}`
   ? Rest extends `${infer Param}/${infer Tail}`
     ? Param | PathParamNames<Tail>
     : Rest extends `${infer Param}?${string}`
@@ -415,7 +564,8 @@ type PathParamNames<Path extends string> = Path extends `${string}:${infer Rest}
         : Rest
   : never;
 
-type PathParams<Path extends string> =
+/** Route params object inferred from a path pattern. */
+export type PathParams<Path extends string> =
   PathParamNames<Path> extends never ? {} : Record<PathParamNames<Path>, string>;
 
 /** JSON URL search values accepted by typed routes; `undefined` means omit the key. */
@@ -433,7 +583,7 @@ export interface Route<
   search?: Search;
 }
 
-/** Options accepted by `route()`: param/search shapes and prefetch policy. */
+/** Options accepted by `routeRef()`: param/search shapes and prefetch policy. */
 export interface RouteOptions<
   Params extends Record<string, string> = Record<string, never>,
   Search extends Record<string, RouteSearchValue> = Record<string, JsonValue>,
@@ -473,14 +623,14 @@ type RouteGetFormArgs<Definition> = keyof RouteParams<Definition> extends never
  * @param options - Optional `params`/`search` shapes and `prefetch` policy.
  * @returns A `Route` descriptor keyed by `path`.
  * @example
- * import { route } from '@kovojs/core';
+ * import { routeRef } from '@kovojs/core';
  *
- * export const productRoute = route('/products/:id', {
+ * export const productRoute = routeRef('/products/:id', {
  *   params: { id: '' },
  *   prefetch: 'conservative',
  * });
  */
-export function route<
+export function routeRef<
   const Path extends string,
   Params extends Record<string, string> = PathParams<Path>,
   Search extends Record<string, RouteSearchValue> = Record<string, JsonValue>,
@@ -601,13 +751,13 @@ function buildHref(
  *   `{ refetchOnFocus: false }` to opt this query out of refetch-on-focus.
  * @returns A typed `Query` handle whose `result` reflects the registry entry.
  * @example
- * import { query } from '@kovojs/core';
+ * import { queryRef } from '@kovojs/core';
  *
- * export const cart = query('cart');
+ * export const cart = queryRef('cart');
  * // SPEC §9.3/§9.4: opt a query out of refetch-on-focus at the declaration site.
- * export const ticker = query('ticker', { refetchOnFocus: false });
+ * export const ticker = queryRef('ticker', { refetchOnFocus: false });
  */
-export function query<
+export function queryRef<
   const Key extends RegistryKey<QueryRegistry>,
   Result = Key extends keyof QueryRegistry ? QueryRegistry[Key] : unknown,
 >(key: Key, config?: QueryConfig): Query<Key, Result> {

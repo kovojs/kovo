@@ -2,13 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  RadioGroup,
-  RadioGroupItem,
-  RadioGroupLabel,
-  RadioGroupRadio,
-  radioGroupStyles,
-} from './radio-group.js';
+import { RadioGroup, RadioGroupItem, RadioGroupLabel, RadioGroupRadio } from './radio-group.js';
 
 describe('@kovojs/ui RadioGroup StyleX styles', () => {
   it('matches native radio-group states with StyleX output', () => {
@@ -27,26 +21,22 @@ describe('@kovojs/ui RadioGroup StyleX styles', () => {
     };
 
     expect({
-      classes: [style.attrs(radioGroupStyles.root).class ?? ''] as const,
       item: RadioGroupItem.definition.render({
         ...state,
         children: 'Express option',
         itemValue: 'express',
       }),
-      itemClasses: [style.attrs(radioGroupStyles.item).class ?? ''] as const,
       label: RadioGroupLabel.definition.render({
         ...state,
         children: 'Express',
         controlId: 'shipping-express',
         itemValue: 'express',
       }),
-      labelClasses: [style.attrs(radioGroupStyles.label).class ?? ''] as const,
       radio: RadioGroupRadio.definition.render({
         ...state,
         controlId: 'shipping-express',
         itemValue: 'express',
       }),
-      radioClasses: [style.attrs(radioGroupStyles.radio).class ?? ''] as const,
       root: RadioGroup.definition.render({
         ...state,
         children: 'radio options',
@@ -105,16 +95,6 @@ describe('@kovojs/ui RadioGroup StyleX styles', () => {
         children: 'radio options',
         styles: { root: overrides.root },
       }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      itemMarker: radioGroupStyles.item.$$css,
-      keys: Object.keys(radioGroupStyles),
-      labelMarker: radioGroupStyles.label.$$css,
-      radioMarker: radioGroupStyles.radio.$$css,
-      rootMarker: radioGroupStyles.root.$$css,
     }).toMatchSnapshot();
   });
 });

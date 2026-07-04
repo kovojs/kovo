@@ -55,12 +55,26 @@ facts. The component-level escape hatch is force-off only: `disableServerRefresh
 query-backed component out of server fragment refresh while preserving query bindings and local
 client updates. There is no force-on mode.
 
+**Call-site props are inferred from `render`.** The first `render` parameter is the single runtime
+input bag: the server calls `render({ ...callSiteProps, ...queryResults }, state, slots)`, so query
+result keys are server-owned and override any same-named call-site value. TypeScript therefore derives
+the public component call-site props from the annotated first `render` parameter with the component's
+declared `queries` keys removed. The second parameter is component-local state, and the third
+parameter carries render-time slots (`children`, named slots, form state, and request-only framework
+slots). A render function whose first parameter is unannotated or `any` exports no ordinary call-site
+props; authors must annotate the render input to make props public. `props` metadata and
+`query.args((props) => ...)` declarations are consistency checks against that derived call-site prop
+shape, not a second source of truth. Component JSX/call expressions still accept framework-owned
+attributes such as `key`, `kovo-key`, `style`, and `styles`.
+
 **Rules enforced by the type system:**
 
 - `state` must satisfy `JsonValue` (no `Date`, `Map`, functions, class instances) — serializability is a compile error, not a runtime surprise.
 - A query-backed component that is inferred as server-refreshable has render inputs ⊆ (declared queries ∪ stamped props); otherwise the compiler emits a diagnostic explaining why the target cannot be reconstructed, while §4.8 plan-covered positions may still update from query JSON.
 - Repeated or prop-keyed inferred targets need stable instance identity from authored `key` or serializable keyed component props; duplicate or ambiguous target identities are compile errors.
 - Query data is **shared and server-owned**; local state is **private and client-owned**. A lint (`KV301`) rejects server facts in local state.
+- Declared `clocks` are part of the component definition contract. They describe named `now.*`
+  inputs for time-dependent render positions and derives; undeclared clock reads remain KV312/KV315.
 
 ### 4.2 Rendered output (the IR's runtime form)
 

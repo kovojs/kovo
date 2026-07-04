@@ -6,8 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it } from 'vitest';
 
-import { dispatchDelegatedEvent, type EventElementLike } from '@kovojs/browser/internal/delegation';
-import { renderRoutePageResponse } from '@kovojs/server/internal/route';
+import { renderRoutePageResponse } from '../../../../../packages/server/src/internal/route.js';
 
 import { productRoute } from './app.js';
 
@@ -15,6 +14,13 @@ import { productRoute } from './app.js';
 // — platform behavior, handler wiring, and island state are all readable as
 // attributes — and the handler module is loadable and runnable without a
 // browser (SPEC.md section 4.3).
+
+interface EventElementLike {
+  attributes: { name: string; value: string }[];
+  closest(selector: string): EventElementLike | null;
+  getAttribute(name: string): string | null;
+  setAttribute(name: string, value: string): void;
+}
 
 class FakeElement implements EventElementLike {
   attributes: { name: string; value: string }[];
@@ -39,6 +45,29 @@ class FakeElement implements EventElementLike {
     }
     this.attributes.push({ name, value });
   }
+}
+
+async function dispatchTutorialEvent(
+  event: { target: EventElementLike; type: string },
+  importModule: (url: string) => Promise<Record<string, unknown>>,
+) {
+  const element = event.target.closest(`[on\\:${event.type}]`);
+  const handlerReference = element?.getAttribute(`on:${event.type}`);
+  if (!element || !handlerReference) return;
+
+  const [moduleUrl, exportName] = handlerReference.split('#');
+  if (!moduleUrl || !exportName) throw new Error(`invalid handler reference: ${handlerReference}`);
+  const module = await importModule(moduleUrl);
+  const handler = module[exportName];
+  if (typeof handler !== 'function') throw new Error(`missing handler export: ${exportName}`);
+
+  const currentState = element.getAttribute('kovo-state');
+  const state = currentState ? (JSON.parse(currentState) as Record<string, unknown>) : {};
+  await (handler as (event: unknown, context: { state: Record<string, unknown> }) => unknown)(
+    event,
+    { state },
+  );
+  element.setAttribute('kovo-state', JSON.stringify(state));
 }
 
 function bodyText(body: unknown): string {
@@ -136,8 +165,8 @@ describe('tutorial step 02 — islands', () => {
         };
       };
 
-      await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
-      await dispatchDelegatedEvent({ target: element, type: 'click' }, importModule);
+      await dispatchTutorialEvent({ target: element, type: 'click' }, importModule);
+      await dispatchTutorialEvent({ target: element, type: 'click' }, importModule);
 
       expect(importedUrls[0]).toContain('/c/__v/');
       expect(importedUrls[0]).toContain('/tutorial/steps/02-islands/');

@@ -2,7 +2,8 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 
 import type { Redirect } from '@kovojs/core';
 import { isProvenPrincipal } from './auth-principal.js';
-import { signingKeyRingFromCsrfSecret, type CsrfValidationOptions } from './csrf.js';
+import type { CsrfOptions } from './csrf.js';
+import { signingKeyRingFromSecret } from './keyring.js';
 import type { RequestLifecycleOptions } from './guards.js';
 import type { StylesheetAsset } from './hints.js';
 import type { MutationFail, MutationSuccess } from './mutation.js';
@@ -14,7 +15,7 @@ import {
   readHeader,
   type FrameworkWireBody,
   type HeaderSource,
-  type MutationResponseHeaders,
+  type ResponseHeaders,
   type ServerResponseBase,
 } from './response.js';
 
@@ -64,7 +65,7 @@ export interface MutationWireRequest<
    * to full rather than applying a delta against a stale base.
    */
   buildToken?: string;
-  csrf?: CsrfValidationOptions<Request> | false;
+  csrf?: CsrfOptions<Request> | false;
   currentUrl?: string;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
@@ -127,7 +128,7 @@ export interface LiveTargetRenderer<Request = unknown> {
 
 /** @internal Context passed to a generated live-target renderer (SPEC §9.1). */
 export interface LiveTargetRenderContext<Request = unknown> {
-  csrf?: CsrfValidationOptions<Request> | false;
+  csrf?: CsrfOptions<Request> | false;
   failure?: MutationFail;
   input: unknown;
   /** @internal Query/list result item ceiling enforced by generated live-target query reloads. */
@@ -144,7 +145,7 @@ export interface LiveTargetRenderContext<Request = unknown> {
  */
 export interface BufferedMutationWireResponse extends ServerResponseBase<
   FrameworkWireBody,
-  MutationResponseHeaders,
+  ResponseHeaders,
   200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
 
@@ -181,7 +182,7 @@ export interface MutationWireRequestOptions<
 > extends RequestLifecycleOptions<Request, SessionValue> {
   /** Build-global render-plan version token (SPEC §5.1, §9.1.1). */
   buildToken?: string;
-  csrf?: CsrfValidationOptions<Request> | false;
+  csrf?: CsrfOptions<Request> | false;
   currentUrl?: string;
   failureTarget?: string;
   failureStylesheets?: readonly (string | StylesheetAsset)[];
@@ -207,7 +208,7 @@ export interface MutationWireRequestOptions<
  */
 export interface MutationWireResponse extends ServerResponseBase<
   FrameworkWireBody | ReadableStream<Uint8Array>,
-  MutationResponseHeaders,
+  ResponseHeaders,
   200 | 401 | 403 | 409 | 422 | 429 | 500
 > {}
 
@@ -221,7 +222,7 @@ export interface NoJsMutationRequest<
   Value,
   SessionValue = unknown,
 > extends RequestLifecycleOptions<Request, SessionValue> {
-  csrf?: CsrfValidationOptions<Request> | false;
+  csrf?: CsrfOptions<Request> | false;
   currentUrl?: string;
   /**
    * Idempotency key for dedup of no-JS form submissions (A2, SPEC §10.3:1063).
@@ -256,7 +257,7 @@ export interface NoJsMutationRequest<
  */
 export interface NoJsMutationResponse extends ServerResponseBase<
   FrameworkWireBody,
-  MutationResponseHeaders,
+  ResponseHeaders,
   303 | 403 | 409 | 422 | 429 | 500
 > {}
 
@@ -526,7 +527,7 @@ function parseLiveTargetDescriptorEntry(entry: string): MutationLiveTargetDescri
 export function createLiveTargetAttestation<Request>(
   descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
   options: {
-    csrf?: CsrfValidationOptions<Request> | false;
+    csrf?: CsrfOptions<Request> | false;
     request: Request;
   },
 ): string {
@@ -534,7 +535,7 @@ export function createLiveTargetAttestation<Request>(
   if (options.csrf === undefined || options.csrf === false) {
     return createHmac('sha256', liveTargetAttestationSecret()).update(payload).digest('base64url');
   }
-  return signingKeyRingFromCsrfSecret(options.csrf.secret).sign({
+  return signingKeyRingFromSecret(options.csrf.secret).sign({
     audience: 'mutation-live-target',
     payload,
     purpose: 'live-target-attestation',
@@ -575,7 +576,7 @@ function liveTargetAttestationSecret(): string {
 function liveTargetAttestationPayload<Request>(
   descriptor: Omit<MutationLiveTargetDescriptor, 'attestation'>,
   options: {
-    csrf?: CsrfValidationOptions<Request> | false;
+    csrf?: CsrfOptions<Request> | false;
     request: Request;
   },
 ): string {

@@ -248,31 +248,51 @@ export const addToCart = mutation({
     const existingOrders = await db.select({ value: count() }).from(orders);
     const orderId = `order-${Number(existingOrders[0]?.value ?? 0) + 1}`;
 
-    await db.insert(cartItems).values({
-      productId: productId,
-      qty: quantity,
+    await commitAddToCartRows(db, {
+      orderId,
+      productId,
+      quantity,
       unitPrice: found.unitPrice,
+      userId: currentSession.user.id,
     });
-    await db.insert(orders).values({
-      // SPEC §11.1 / KV438: `id` and `userId` are governed (primary key + owner). Both
-      // are server-derived (a generated id and the session principal), so they are
-      // discharged with serverValue(...) — request input never reaches them.
-      id: serverValue(orderId, 'server-generated order id'),
-      productId: productId,
-      qty: quantity,
-      total: found.unitPrice * quantity,
-      userId: serverValue(currentSession.user.id, 'session principal'),
-    });
-    await db
-      .update(products)
-      .set({ stock: sql`${products.stock} - ${quantity}` })
-      .where(eq(products.id, productId));
     return { productId: productId, quantity: quantity };
   },
 });
 
 export const addToCartForm = form(addToCart);
 export type AddToCartInput = FormInput<typeof addToCartForm>;
+
+async function commitAddToCartRows(
+  db: CommerceDb,
+  input: {
+    orderId: string;
+    productId: string;
+    quantity: number;
+    unitPrice: number;
+    userId: string;
+  },
+) {
+  // SPEC §10.3 / KV330: commerce writes live in the domain layer instead of the mutation handler.
+  await db.insert(cartItems).values({
+    productId: input.productId,
+    qty: input.quantity,
+    unitPrice: input.unitPrice,
+  });
+  await db.insert(orders).values({
+    // SPEC §11.1 / KV438: `id` and `userId` are governed (primary key + owner). Both
+    // are server-derived (a generated id and the session principal), so they are
+    // discharged with serverValue(...) — request input never reaches them.
+    id: serverValue(input.orderId, 'server-generated order id'),
+    productId: input.productId,
+    qty: input.quantity,
+    total: input.unitPrice * input.quantity,
+    userId: serverValue(input.userId, 'session principal'),
+  });
+  await db
+    .update(products)
+    .set({ stock: sql`${products.stock} - ${input.quantity}` })
+    .where(eq(products.id, input.productId));
+}
 
 export const commerceMessageCatalog = {
   cartLabel: 'Cart',

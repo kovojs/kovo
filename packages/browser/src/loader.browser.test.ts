@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { installKovoLoader } from './client.js';
+import { installKovoLoader } from './generated.js';
 
 afterEach(() => {
   document.body.replaceChildren();

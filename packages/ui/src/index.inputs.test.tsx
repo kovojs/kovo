@@ -1,19 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import * as style from '@kovojs/style';
 import {
   AutocompleteInput,
   AutocompleteList,
   AutocompleteOption,
   AutocompleteValue,
-  autocompleteStyles,
 } from './autocomplete.js';
-import {
-  ComboboxInput,
-  ComboboxListbox,
-  ComboboxOption,
-  ComboboxValue,
-  comboboxStyles,
-} from './combobox.js';
+import { ComboboxInput, ComboboxListbox, ComboboxOption, ComboboxValue } from './combobox.js';
 import {
   ScrollArea,
   ScrollAreaCorner,
@@ -28,16 +20,8 @@ import {
   SelectItem,
   SelectTrigger,
   SelectValue,
-  selectStyles,
 } from './select.js';
-import {
-  Slider,
-  SliderInput,
-  SliderRange,
-  SliderThumb,
-  SliderTrack,
-  sliderStyles,
-} from './slider.js';
+import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from './slider.js';
 import { Tabs, TabsList, TabsPanel, TabsTrigger } from './tabs.js';
 describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless scroll-area primitive as styled native scrolling parts', () => {
@@ -172,11 +156,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(hiddenInput).toContain('name="plan" type="hidden" value="growth"');
     expect(hiddenInput).not.toContain('required');
     expect(value).toContain('id="plan-value">Growth</span>');
-    expect({
-      selectContentClasses: [style.attrs(selectStyles.content).class ?? ''] as const,
-      selectItemClasses: [style.attrs(selectStyles.item).class ?? ''] as const,
-      selectValueClasses: [style.attrs(selectStyles.value).class ?? ''] as const,
-    }).toMatchSnapshot();
   });
   it('wraps the headless combobox primitive as styled input and listbox markup', () => {
     const items = [
@@ -234,11 +213,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(listbox).toContain('id="assignee-listbox-option-1"');
     expect(listbox).toContain('aria-disabled="true"');
     expect(value).toContain('id="assignee-value">Ada Lovelace</span>');
-    expect({
-      comboboxListboxClasses: [style.attrs(comboboxStyles.listbox).class ?? ''] as const,
-      comboboxOptionClasses: [style.attrs(comboboxStyles.option).class ?? ''] as const,
-      comboboxValueClasses: [style.attrs(comboboxStyles.value).class ?? ''] as const,
-    }).toMatchSnapshot();
   });
   it('wraps the headless autocomplete primitive as styled input and listbox markup', () => {
     const items = [
@@ -297,11 +271,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(list).toContain('data-highlighted="" data-state="checked"');
     expect(list).toContain('aria-disabled="true"');
     expect(value).toContain('id="plan-search-value">Growth plan</span>');
-    expect({
-      autocompleteListClasses: [style.attrs(autocompleteStyles.list).class ?? ''] as const,
-      autocompleteOptionClasses: [style.attrs(autocompleteStyles.option).class ?? ''] as const,
-      autocompleteValueClasses: [style.attrs(autocompleteStyles.value).class ?? ''] as const,
-    }).toMatchSnapshot();
   });
   it('wraps the headless slider primitive as styled range input and decorative parts', () => {
     const state = {
@@ -342,11 +311,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(root).toContain('data-part="range"');
     expect(root).toContain('data-part="thumb"');
     expect(root).toContain('data-value-ratio="0.65"');
-    expect({
-      sliderRangeClasses: [style.attrs(sliderStyles.range).class ?? ''] as const,
-      sliderThumbClasses: [style.attrs(sliderStyles.thumb).class ?? ''] as const,
-      sliderTrackClasses: [style.attrs(sliderStyles.track).class ?? ''] as const,
-    }).toMatchSnapshot();
   });
   it('wraps the headless tabs primitive as styled tablist parts', () => {
     const items = [

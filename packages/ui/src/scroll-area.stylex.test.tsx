@@ -8,7 +8,6 @@ import {
   ScrollAreaScrollbar,
   ScrollAreaThumb,
   ScrollAreaViewport,
-  scrollAreaStyles,
 } from './scroll-area.js';
 
 describe('@kovojs/ui ScrollArea StyleX styles', () => {
@@ -19,9 +18,7 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
     };
 
     expect({
-      classes: [style.attrs(scrollAreaStyles.root).class ?? ''] as const,
       corner: ScrollAreaCorner.definition.render({ ...state, id: 'activity-corner' }),
-      cornerClasses: [style.attrs(scrollAreaStyles.corner).class ?? ''] as const,
       hiddenThumb: ScrollAreaThumb.definition.render({
         ...state,
         forceMount: true,
@@ -35,8 +32,6 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
         children: 'viewport and scrollbars',
         id: 'activity',
       }),
-      scrollbarClasses: [style.attrs(scrollAreaStyles.scrollbar).class ?? ''] as const,
-      thumbClasses: [style.attrs(scrollAreaStyles.thumb).class ?? ''] as const,
       verticalScrollbar: ScrollAreaScrollbar.definition.render({
         ...state,
         children: ScrollAreaThumb.definition.render({
@@ -59,7 +54,6 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
         scrollX: 'none',
         scrollY: 'middle',
       }),
-      viewportClasses: [style.attrs(scrollAreaStyles.viewport).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -103,16 +97,5 @@ describe('@kovojs/ui ScrollArea StyleX styles', () => {
         styles: { root: overrides.root },
       }),
     ).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      cornerMarker: scrollAreaStyles.corner.$$css,
-      keys: Object.keys(scrollAreaStyles),
-      rootMarker: scrollAreaStyles.root.$$css,
-      scrollbarMarker: scrollAreaStyles.scrollbar.$$css,
-      thumbMarker: scrollAreaStyles.thumb.$$css,
-      viewportMarker: scrollAreaStyles.viewport.$$css,
-    }).toMatchSnapshot();
   });
 });

@@ -175,8 +175,8 @@ export function addStorageQueryWriteProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { createMemoryStorage, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { createMemoryStorage, publicAccess, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     'storage query write proof import',
   );
   queries = replaceRequired(
@@ -475,7 +475,7 @@ export function addStarterMutationDbScopeProof(root: string): void {
     join(root, 'src/starter-mutation-db-scope-proof.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { domain, endpoint, mutation, publicAccess, s, serverValue, write } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, s, serverValue } from '@kovojs/server';",
       "import { eq } from 'drizzle-orm';",
       '',
       "import type { AppRequest } from './auth.js';",
@@ -485,6 +485,7 @@ export function addStarterMutationDbScopeProof(root: string): void {
       "const publicProof = publicAccess('public starter mutation DB scope proof');",
       "const starterDbScopeProof = domain('starter-db-scope-proof');",
       'const proofInput = s.object({ marker: s.string() });',
+      'function write<Definition>(definition: Definition): Definition { return definition; }',
       '',
       'const starterAuthUserTableWrite = write({',
       "  key: 'starter-db-scope/auth-user-table-write-run',",
@@ -798,7 +799,7 @@ export function addRuntimeMutationSafetyProofs(
     join(root, 'src/runtime-safety-proofs.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, s, serverValue, webhook, write, type MutationContext } from '@kovojs/server';",
+      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, s, serverValue, webhook, type MutationContext } from '@kovojs/server';",
       '',
       "import { readonlyAppDb } from './db.js';",
       [
@@ -813,6 +814,7 @@ export function addRuntimeMutationSafetyProofs(
       'const runtimeTableDriftError = s.object({ message: s.string() });',
       "const publicProof = publicAccess('public production mutation safety regression proof');",
       "const txProof = domain('tx_proof');",
+      'function write<Definition>(definition: Definition): Definition { return definition; }',
       ...(includeWebhookTransactionProof || includeWebhookTxEscapeAttempt
         ? [
             'const webhookReplayStore = createMemoryWebhookReplayStore();',
@@ -1584,9 +1586,9 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
   const queriesPath = join(root, 'src/queries.ts');
   const queries = readFileSync(queriesPath, 'utf8')
     .replace(
-      "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
       [
-        "import { domain, query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+        "import { domain, query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
         "import { eq } from 'drizzle-orm';",
       ].join('\n'),
     )
@@ -1595,14 +1597,21 @@ export function addAuthSecretLeakProof(root: string, options: { leakToWire?: boo
       "import { account, contacts } from './schema.js';",
     )
     .replace(
-      'export interface ContactListResult {\n  items: ContactRow[];\n}',
+      'export interface ContactListResult {\n  readonly [key: string]: JsonValue;\n  items: ContactRow[];\n}',
       [
         'export interface ContactListResult {',
+        '  readonly [key: string]: JsonValue;',
         '  items: ContactRow[];',
         '}',
         '',
         'export interface AuthSecretLeakResult {',
-        '  items: { accessToken: string | null; id: string; password: string | null }[];',
+        '  readonly [key: string]: JsonValue;',
+        '  items: {',
+        '    readonly [key: string]: JsonValue;',
+        '    accessToken: string | null;',
+        '    id: string;',
+        '    password: string | null;',
+        '  }[];',
         '}',
       ].join('\n'),
     )
@@ -1801,27 +1810,35 @@ export function addSecretViewEgressProof(root: string): void {
   const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
   const runtimeDb = replaceRequired(
     readFileSync(runtimeDbPath, 'utf8'),
-    '  await client.exec(SEED_CONTACTS);',
+    'export const appRuntimeDbOptions = {',
     [
-      '  await client.exec(SEED_CONTACTS);',
-      '  await client.exec(',
-      '    \'CREATE OR REPLACE VIEW "account_secret_view" WITH (security_invoker=true) AS SELECT id, "userId", password FROM "account";\',',
-      '  );',
-      '  await client.exec(',
-      '    \'GRANT SELECT ON "account_secret_view" TO "kovo_reader";\',',
-      '  );',
+      'const SECRET_VIEW_EGRESS_SEED = [',
+      '  \'CREATE OR REPLACE VIEW "account_secret_view" WITH (security_invoker=true) AS SELECT id, "userId", password FROM "account";\',',
+      '  \'GRANT SELECT ON "account_secret_view" TO "kovo_reader";\',',
+      '];',
+      '',
+      'export const appRuntimeDbOptions = {',
     ].join('\n'),
     'secret view proof runtime view DDL',
   );
-  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
+  writeFileSync(
+    runtimeDbPath,
+    replaceRequired(
+      runtimeDb,
+      '  seedSql: SEED_CONTACTS,',
+      '  seedSql: [SEED_CONTACTS, ...SECRET_VIEW_EGRESS_SEED],',
+      'secret view proof runtime seed registration',
+    ),
+    'utf8',
+  );
 
   const queriesPath = join(root, 'src/queries.ts');
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     [
-      "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
       "import { pgView } from 'drizzle-orm/pg-core';",
     ].join('\n'),
     'secret view proof imports',
@@ -1851,8 +1868,15 @@ export function addSecretViewEgressProof(root: string): void {
       '    .from(account),',
       ');',
       '',
+      'export interface SecretViewEgressRow {',
+      '  readonly [key: string]: JsonValue;',
+      '  id: string | null;',
+      '  token: string | null;',
+      '}',
+      '',
       'export interface SecretViewEgressResult {',
-      '  items: { id: string | null; token: string | null }[];',
+      '  readonly [key: string]: JsonValue;',
+      '  items: SecretViewEgressRow[];',
       '}',
       '',
       'export const secretViewEgressQuery = query({',
@@ -1967,92 +1991,29 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
   runtimeDb = replaceRequired(
     runtimeDb,
-    "import { account, contacts, session, user, verification } from '../schema.js';",
-    "import { account, contacts, readerRoleProof, runtimeSecretFunctionProof, runtimeSecretProof, runtimeSecretWholeProof, session, user, verification } from '../schema.js';",
-    'runtime secret proof runtime schema import',
-  );
-  runtimeDb = replaceRequired(
-    runtimeDb,
-    '  session,\n  account,\n  verification,',
-    '  session,\n  account,\n  verification,\n  runtimeSecretProof,\n  runtimeSecretFunctionProof,\n  runtimeSecretWholeProof,\n  readerRoleProof,',
-    'runtime secret proof runtime schema table list',
-  );
-  runtimeDb = replaceRequired(
-    runtimeDb,
+    'export const appRuntimeDbOptions = {',
     [
-      '  const readDb = drizzle({',
-      '    client: createPostgresReadonlyClient(client, { readerRole: READER_ROLE }),',
-      '  });',
-    ].join('\n'),
-    [
-      '  const readDb = drizzle({',
-      '    client: createPostgresReadonlyClient(client, { readerRole: READER_ROLE }),',
-      '  });',
-      '  const readDbExecute = (readDb as { execute(statement: unknown): unknown }).execute;',
-      '  const opaqueSecretReadDb = Object.create(readDb) as typeof readDb;',
-      '  (opaqueSecretReadDb as { execute(statement: unknown): unknown }).execute = (statement: unknown) => {',
-      '    if (',
-      "      typeof statement === 'object' &&",
-      '      statement !== null &&',
-      '      (statement as { __kovoOpaqueSecretReadProof?: unknown }).__kovoOpaqueSecretReadProof === true',
-      '    ) {',
-      "      return Promise.resolve([{ id: 's1', leaked: 'runtime-secret-value' }]);",
-      '    }',
-      '    return Reflect.apply(readDbExecute, readDb, [statement]);',
-      '  };',
-    ].join('\n'),
-    'runtime secret proof opaque read DB',
-  );
-  runtimeDb = replaceRequired(
-    runtimeDb,
-    [
-      '  const secretReadDb = createSecretBoxingReadDb(readonlyDb(readDb), SECRET_READ_METADATA, {',
-      '    privilegedDb: readonlyDb(privilegedReadDb),',
-      "    rawSecretTableRead: 'engine',",
-      '  });',
-    ].join('\n'),
-    [
-      '  const secretReadDb = createSecretBoxingReadDb(readonlyDb(opaqueSecretReadDb), SECRET_READ_METADATA, {',
-      '    privilegedDb: readonlyDb(privilegedReadDb),',
-      "    rawSecretTableRead: 'engine',",
-      '  });',
-    ].join('\n'),
-    'runtime secret proof opaque read boundary',
-  );
-  runtimeDb = replaceRequired(
-    runtimeDb,
-    '  await client.exec(SEED_CONTACTS);',
-    [
-      '  await client.exec(SEED_CONTACTS);',
-      '  await client.exec(',
-      "    'INSERT INTO \"runtime_secret_proof\" (id, label, classified) VALUES (\\'s1\\', \\'public label\\', \\'runtime-secret-value\\') ON CONFLICT (id) DO NOTHING;',",
-      '  );',
-      '  await client.exec(',
-      "    'INSERT INTO \"runtime_secret_function_proof\" (id, function_classified, label) VALUES (\\'sf1\\', \\'runtime-function-secret-value\\', \\'public function label\\') ON CONFLICT (id) DO NOTHING;',",
-      '  );',
-      '  await client.exec(',
-      "    'INSERT INTO \"runtime_secret_whole_proof\" (id, label) VALUES (\\'sw1\\', \\'runtime-whole-secret-value\\') ON CONFLICT (id) DO NOTHING;',",
-      '  );',
-      '  await client.exec(',
-      '    \'GRANT SELECT ON "runtime_secret_proof", "runtime_secret_function_proof", "runtime_secret_whole_proof" TO "kovo_reader";\',',
-      '  );',
-      '  await client.exec(',
-      '    \'DELETE FROM "runtime_reader_role_proof";\',',
-      '  );',
-      '  await client.exec(',
-      "    'INSERT INTO \"runtime_reader_role_proof\" (label) VALUES (\\'kovo_reader\\');',",
-      '  );',
-      '  await client.exec(',
-      '    \'GRANT SELECT ON "runtime_reader_role_proof" TO "kovo_reader";\',',
-      '  );',
-      '  await client.exec(',
-      '    \'CREATE OR REPLACE VIEW "runtime_secret_proof_view" WITH (security_invoker=true) AS SELECT id, classified AS leaked FROM "runtime_secret_proof";\',',
-      '  );',
-      '  await client.exec(',
-      '    \'GRANT SELECT ON "runtime_secret_proof_view" TO "kovo_reader";\',',
-      '  );',
+      'const RUNTIME_SECRET_BOUNDARY_SEED = [',
+      "  'INSERT INTO \"runtime_secret_proof\" (id, label, classified) VALUES (\\'s1\\', \\'public label\\', \\'runtime-secret-value\\') ON CONFLICT (id) DO NOTHING;',",
+      "  'INSERT INTO \"runtime_secret_function_proof\" (id, function_classified, label) VALUES (\\'sf1\\', \\'runtime-function-secret-value\\', \\'public function label\\') ON CONFLICT (id) DO NOTHING;',",
+      "  'INSERT INTO \"runtime_secret_whole_proof\" (id, label) VALUES (\\'sw1\\', \\'runtime-whole-secret-value\\') ON CONFLICT (id) DO NOTHING;',",
+      '  \'GRANT SELECT ON "runtime_secret_proof", "runtime_secret_function_proof", "runtime_secret_whole_proof" TO "kovo_reader";\',',
+      '  \'DELETE FROM "runtime_reader_role_proof";\',',
+      "  'INSERT INTO \"runtime_reader_role_proof\" (label) VALUES (\\'kovo_reader\\');',",
+      '  \'GRANT SELECT ON "runtime_reader_role_proof" TO "kovo_reader";\',',
+      '  \'CREATE OR REPLACE VIEW "runtime_secret_proof_view" WITH (security_invoker=true) AS SELECT id, classified AS leaked FROM "runtime_secret_proof";\',',
+      '  \'GRANT SELECT ON "runtime_secret_proof_view" TO "kovo_reader";\',',
+      '];',
+      '',
+      'export const appRuntimeDbOptions = {',
     ].join('\n'),
     'runtime secret proof seed',
+  );
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    '  seedSql: SEED_CONTACTS,',
+    '  seedSql: [SEED_CONTACTS, ...RUNTIME_SECRET_BOUNDARY_SEED],',
+    'runtime secret proof seed registration',
   );
   writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
 
@@ -2060,11 +2021,11 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     [
       "import { trustedReveal, type Secret } from '@kovojs/core';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { query, s, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     ].join('\n'),
     'runtime secret proof query imports',
   );
@@ -2083,12 +2044,30 @@ export function addRuntimeSecretBoundaryProof(root: string): void {
     [
       'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
       '',
+      'export interface RuntimeSecretBoundaryRow {',
+      '  readonly [key: string]: JsonValue;',
+      '  classified?: string;',
+      '  id: string;',
+      '  label?: string;',
+      '  leaked?: string;',
+      '}',
+      '',
       'export interface RuntimeSecretBoundaryResult {',
-      '  items: { id: string; classified?: string; leaked?: string; label?: string }[];',
+      '  readonly [key: string]: JsonValue;',
+      '  items: RuntimeSecretBoundaryRow[];',
+      '}',
+      '',
+      'export interface RuntimeSecretRevealRow {',
+      '  readonly [key: string]: JsonValue;',
+      '  computed: string;',
+      '  id: string;',
+      '  raw: string;',
+      '  reviewed: string;',
       '}',
       '',
       'export interface RuntimeSecretRevealResult {',
-      '  items: { computed: string; id: string; raw: string; reviewed: string }[];',
+      '  readonly [key: string]: JsonValue;',
+      '  items: RuntimeSecretRevealRow[];',
       '}',
       '',
       'interface RawRuntimeSecretRows {',
@@ -2506,12 +2485,12 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
   let queries = readFileSync(queriesPath, 'utf8');
   queries = replaceRequired(
     queries,
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     [
       "import { trustedReveal, type Secret } from '@kovojs/core';",
       "import { count, eq, sql as drizzleSql } from 'drizzle-orm';",
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { endpoint, publicAccess, query, s, type QueryLoadContext, type Reader } from '@kovojs/server';",
+      "import { endpoint, publicAccess, query, s, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     ].join('\n'),
     'sqlite runtime secret provenance query imports',
   );
@@ -2532,13 +2511,23 @@ export function addSqliteRuntimeSecretProvenanceProof(root: string): void {
     [
       'type AppQueryLoadContext = QueryLoadContext<AppQueryRequest, AppDb>;',
       '',
+      'type SqliteSecretRow = Record<string, JsonValue> & {',
+      '  company?: string;',
+      '  exposed?: string;',
+      '  id: string;',
+      '  label?: string;',
+      '  leaked?: string;',
+      '  total?: number;',
+      '};',
+      '',
       'interface SqliteSecretRows {',
-      '  items: { company?: string; exposed?: string; id: string; label?: string; leaked?: string; total?: number }[];',
+      '  readonly [key: string]: JsonValue;',
+      '  items: SqliteSecretRow[];',
       '}',
       '',
-      'interface RawSqliteSecretRows {',
+      'type RawSqliteSecretRows = Partial<Record<string, JsonValue>> & {',
       '  rows?: SqliteSecretRows["items"];',
-      '}',
+      '};',
       '',
       'const sqliteSecretRowSchema = s.object({',
       '  company: s.string().optional(),',
@@ -3005,7 +2994,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { and, eq } from 'drizzle-orm';",
       "import { sqliteTable, text } from 'drizzle-orm/sqlite-core';",
-      "import { domain, endpoint, mutation, publicAccess, s, serverValue, write } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, s, serverValue } from '@kovojs/server';",
       '',
       "import type { AppRequest } from './auth.js';",
       "import { readonlyAppDb } from './db.js';",
@@ -3014,6 +3003,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       "const publicProof = publicAccess('public phase 5.1 write boundary proof');",
       "const phase5WriteProof = domain('phase5-write-boundary-proof');",
       'const proofInput = s.object({ marker: s.string() });',
+      'function write<Definition>(definition: Definition): Definition { return definition; }',
       "const sqliteMaster = sqliteTable('sqlite_master', {",
       "  name: text('name'),",
       "  type: text('type'),",
@@ -3300,10 +3290,10 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
   let auth = readFileSync(authPath, 'utf8');
   auth = replaceRequired(
     auth,
-    "import { publicAccess, s, session, type CsrfValidationOptions } from '@kovojs/server';",
+    "import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';",
     [
       "import { eq } from 'drizzle-orm';",
-      "import { publicAccess, s, session, type CsrfValidationOptions } from '@kovojs/server';",
+      "import { publicAccess, s, session, type CsrfOptions } from '@kovojs/server';",
     ].join('\n'),
     'phase 5.1 authorization auth eq import',
   );
@@ -3361,7 +3351,7 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { eq } from 'drizzle-orm';",
       "import { alias } from 'drizzle-orm/sqlite-core';",
-      "import { domain, endpoint, mutation, publicAccess, query, s, type QueryLoadContext } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, query, s, type JsonValue, type QueryLoadContext } from '@kovojs/server';",
       '',
       "import { appAuthed, type AppRequest } from './auth.js';",
       "import type { AppDb } from './db.js';",
@@ -3377,6 +3367,7 @@ export function addParanoidPhase5AuthorizationProof(root: string): void {
       '});',
       '',
       'interface AuthzRow {',
+      '  readonly [key: string]: JsonValue;',
       '  id: string;',
       '  label: string;',
       '}',
@@ -3685,7 +3676,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { eq } from 'drizzle-orm';",
       "import { alias, pgTable, text } from 'drizzle-orm/pg-core';",
-      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, write, type QueryLoadContext, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, type JsonValue, type QueryLoadContext, type TaskSchedulingRequest } from '@kovojs/server';",
       '',
       "import { appAuthed, type AppRequest } from './auth.js';",
       "import type { AppDb } from './db.js';",
@@ -3698,13 +3689,14 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "const eventDomain = domain('phase5-pg-event');",
       'const proofInput = s.object({ marker: s.string() });',
       'const rowSchema = s.object({ items: s.array(s.object({ id: s.string(), label: s.string() })) });',
+      'function write<Definition>(definition: Definition): Definition { return definition; }',
       "const phase5PgOrderView = pgTable('phase5_pg_order_view', {",
       "  id: text('id').primaryKey(),",
       "  userId: text('user_id').notNull(),",
       "  label: text('label').notNull(),",
       '});',
       '',
-      'interface AuthzRow { id: string; label: string }',
+      'interface AuthzRow { readonly [key: string]: JsonValue; id: string; label: string }',
       'type AuthzDb = AppDb | NonNullable<QueryLoadContext<AppRequest, AppDb>["db"]>;',
       '',
       'function requireDb(context?: QueryLoadContext<AppRequest, AppDb>): AuthzDb {',

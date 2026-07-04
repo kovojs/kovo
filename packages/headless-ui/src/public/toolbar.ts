@@ -15,5 +15,4 @@ export type {
   ToolbarButtonAttributeOptions,
   ToolbarMoveResult,
   ToolbarPrimitiveAttributes,
-  ToolbarKeyboardEvent,
 } from '../primitives/toolbar.js';

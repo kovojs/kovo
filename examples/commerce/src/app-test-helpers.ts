@@ -1,5 +1,4 @@
 import { enhancedMutationHeaders, headerValues, setCookieValues } from '@kovojs/test/headers';
-import { type StructuralMorphNode } from '@kovojs/browser/client';
 import { csrfToken, readonlyDb } from '@kovojs/server';
 import { htmlFormFacts, htmlFormFieldsByName } from '@kovojs/test/html-fragment';
 import { eq } from 'drizzle-orm';
@@ -26,6 +25,14 @@ export type OrderRow = {
   total: number;
   userId: string;
 };
+export interface CommerceStructuralNode {
+  browserState?: { readonly focused?: boolean; readonly open?: boolean; readonly value?: string };
+  children?: readonly CommerceStructuralNode[];
+  key?: string;
+  props?: Readonly<Record<string, string>>;
+  text?: string;
+  type: string;
+}
 
 /** Replace the entire product catalog with `rows` (clears the p1/p2/p3 seed). */
 export async function resetProducts(db: CommerceDb, rows: readonly ProductRow[]): Promise<void> {
@@ -149,8 +156,8 @@ export function mutationSetCookieHeaders(result: {
 export function keyedListNode(
   type: string,
   keys: readonly string[],
-  stateByKey: Record<string, StructuralMorphNode['browserState']> = {},
-): StructuralMorphNode {
+  stateByKey: Record<string, CommerceStructuralNode['browserState']> = {},
+): CommerceStructuralNode {
   return {
     children: keys.map((key) => ({
       ...(stateByKey[key] ? { browserState: stateByKey[key] } : {}),

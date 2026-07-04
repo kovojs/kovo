@@ -1,8 +1,9 @@
 import { kovo, sql } from '@kovojs/drizzle';
-import { drainCrossOwnerReadAuditFacts } from '@kovojs/server';
 import { createPostgresTestRuntime } from '@kovojs/server/testing';
 import { pgTable, text } from 'drizzle-orm/pg-core';
 import { describe, expect, it } from 'vitest';
+
+import { drainCrossOwnerReadAuditFacts } from './managed-db.js';
 
 const notes = pgTable(
   'kovo_testing_notes',

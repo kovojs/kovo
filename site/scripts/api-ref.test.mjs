@@ -84,6 +84,7 @@ describe('api-ref generator', () => {
   let corePage;
   let drizzlePage;
   let headlessUiPage;
+  let uiPage;
 
   beforeAll(async () => {
     outDir = await mkdtemp(path.join(tmpdir(), 'kovo-api-ref-'));
@@ -91,6 +92,7 @@ describe('api-ref generator', () => {
     corePage = await readFile(path.join(outDir, 'core.md'), 'utf8');
     drizzlePage = await readFile(path.join(outDir, 'drizzle.md'), 'utf8');
     headlessUiPage = await readFile(path.join(outDir, 'headless-ui.md'), 'utf8');
+    uiPage = await readFile(path.join(outDir, 'ui.md'), 'utf8');
   }, 60_000);
 
   afterAll(async () => {
@@ -247,6 +249,45 @@ describe('api-ref generator', () => {
     expect(headlessUiPage).not.toContain('```ts\n```ts');
   });
 
+  it('omits generated transition machinery and UI style tables from public docs', () => {
+    expect(headlessUiPage).toContain('#### `accordionTriggerAttributes`');
+    expect(headlessUiPage).not.toContain('#### `accordionTriggerClick`');
+    expect(headlessUiPage).not.toContain('#### `AccordionTriggerEvent`');
+    expect(uiPage).toContain('#### `Button`');
+    expect(uiPage).not.toMatch(/^#### `.*Styles`/m);
+  });
+
+  it('renders concrete Select examples instead of cast placeholders', () => {
+    expect(headlessUiPage).toContain('const value: SelectState = {');
+    expect(headlessUiPage).not.toContain('const value: SelectState = {} as SelectState;');
+    expect(uiPage).toContain('const state: SelectStateProps = {');
+    expect(uiPage).not.toContain('const state: SelectStateProps = {};');
+  });
+
+  it('does not render mechanical cast-placeholder examples for public headless/ui refs', () => {
+    expect(headlessUiPage).not.toMatch(/\{\} as [A-Z][A-Za-z0-9_$]*/);
+    expect(headlessUiPage).not.toMatch(/\{\} as Parameters<typeof [A-Za-z0-9_$]+>\[\d+\]/);
+    expect(uiPage).not.toMatch(/\{\} as [A-Z][A-Za-z0-9_$]*/);
+    expect(uiPage).not.toMatch(/\{\} as Parameters<typeof [A-Za-z0-9_$]+>\[\d+\]/);
+  });
+
+  it('documents every public @kovojs/drizzle export including runtime metadata helpers', () => {
+    const drizzle = result.packages.find((pkg) => pkg.name === '@kovojs/drizzle');
+    expect(drizzle.exports).toBe(38);
+    expect(drizzle.documented).toBe(38);
+    expect(drizzlePage).toContain('runtime database metadata extraction');
+    for (const name of [
+      'extractKovoRuntimeDbMetadata',
+      'KovoRuntimeDbMetadata',
+      'KovoRuntimeDbTable',
+      'KovoRuntimeAuthorizationClassification',
+    ]) {
+      expect(drizzlePage, `missing Drizzle runtime metadata export "${name}"`).toContain(
+        `#### \`${name}\``,
+      );
+    }
+  });
+
   it('emits a per-package sidebar manifest grouped by subpath, with anchors and source links', async () => {
     const manifest = JSON.parse(await readFile(path.join(outDir, 'core.sidebar.json'), 'utf8'));
     expect(manifest.package).toBe('@kovojs/core');
@@ -307,14 +348,14 @@ describe('api-ref generator', () => {
     // Remove), so those packages' documented floors drop by one.
     const expected = {
       '@kovojs/core': 68,
-      '@kovojs/drizzle': 4,
+      '@kovojs/drizzle': 38,
       '@kovojs/headless-ui': 103,
       '@kovojs/icons': 1,
-      '@kovojs/browser': 90,
-      '@kovojs/server': 160,
+      '@kovojs/browser': 39,
+      '@kovojs/server': 150,
       '@kovojs/style': 34,
       '@kovojs/better-auth': 13,
-      '@kovojs/cli': 12,
+      '@kovojs/cli': 11,
       '@kovojs/test': 26,
       '@kovojs/ui': 2,
     };

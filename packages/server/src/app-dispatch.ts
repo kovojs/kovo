@@ -1,5 +1,5 @@
 import { renderVersionedClientModuleResponse } from './client-modules.js';
-import { validateCsrfToken, type CsrfValidationOptions } from './csrf.js';
+import { validateCsrfToken, type CsrfOptions } from './csrf.js';
 import { runEndpoint, runEndpointAuth } from './endpoint.js';
 import {
   renderQueryRegistryEndpointResponse,
@@ -171,7 +171,7 @@ function isWebhookEndpoint(
 async function validateEndpointCsrf(
   endpoint: KovoApp['endpoints'][number],
   request: Request,
-  csrf: CsrfValidationOptions<any> | undefined,
+  csrf: CsrfOptions<any> | undefined,
 ): Promise<Response | undefined> {
   if (endpoint.csrf?.exempt) return undefined;
   if (!requiresCsrf(request.method)) return undefined;

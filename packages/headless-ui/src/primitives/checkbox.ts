@@ -16,7 +16,7 @@ import {
  * ```ts
  * import type { CheckboxCheckedState } from '@kovojs/headless-ui/checkbox';
  *
- * const value: CheckboxCheckedState = {} as CheckboxCheckedState;
+ * declare const value: CheckboxCheckedState;
  * ```
  */
 export type CheckboxCheckedState = boolean | 'indeterminate';
@@ -30,7 +30,7 @@ export type CheckboxCheckedState = boolean | 'indeterminate';
  * ```ts
  * import type { CheckboxChangeReason } from '@kovojs/headless-ui/checkbox';
  *
- * const value: CheckboxChangeReason = {} as CheckboxChangeReason;
+ * declare const value: CheckboxChangeReason;
  * ```
  */
 export type CheckboxChangeReason = 'programmatic' | 'trigger-click';
@@ -44,7 +44,7 @@ export type CheckboxChangeReason = 'programmatic' | 'trigger-click';
  * ```ts
  * import type { CheckboxChangeDetail } from '@kovojs/headless-ui/checkbox';
  *
- * const value: CheckboxChangeDetail = {} as CheckboxChangeDetail;
+ * declare const value: CheckboxChangeDetail;
  * ```
  */
 export type CheckboxChangeDetail = PrimitiveChangeDetail<
@@ -61,7 +61,7 @@ export type CheckboxChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { CheckboxState } from '@kovojs/headless-ui/checkbox';
  *
- * const value: CheckboxState = {} as CheckboxState;
+ * declare const value: CheckboxState;
  * ```
  */
 export interface CheckboxState {
@@ -81,7 +81,7 @@ export interface CheckboxState {
  * ```ts
  * import type { CheckboxChangeOptions } from '@kovojs/headless-ui/checkbox';
  *
- * const value: CheckboxChangeOptions = {} as CheckboxChangeOptions;
+ * declare const value: CheckboxChangeOptions;
  * ```
  */
 export interface CheckboxChangeOptions {
@@ -97,7 +97,7 @@ export interface CheckboxChangeOptions {
  * ```ts
  * import type { CheckboxChangeResult } from '@kovojs/headless-ui/checkbox';
  *
- * const value: CheckboxChangeResult = {} as CheckboxChangeResult;
+ * declare const value: CheckboxChangeResult;
  * ```
  */
 export interface CheckboxChangeResult {
@@ -115,7 +115,7 @@ export interface CheckboxChangeResult {
  * ```ts
  * import type { CheckboxPrimitiveAttributes } from '@kovojs/headless-ui/checkbox';
  *
- * const value: CheckboxPrimitiveAttributes = {} as CheckboxPrimitiveAttributes;
+ * declare const value: CheckboxPrimitiveAttributes;
  * ```
  */
 export type CheckboxPrimitiveAttributes = PrimitiveDataAttributes &
@@ -130,7 +130,7 @@ export type CheckboxPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { CheckboxTriggerEvent } from '@kovojs/headless-ui/checkbox';
  *
- * const value: CheckboxTriggerEvent = {} as CheckboxTriggerEvent;
+ * declare const value: CheckboxTriggerEvent;
  * ```
  */
 export type CheckboxTriggerEvent = Event;
@@ -144,7 +144,7 @@ export type CheckboxTriggerEvent = Event;
  * ```ts
  * import type { CheckboxNativeInput } from '@kovojs/headless-ui/checkbox';
  *
- * const value: CheckboxNativeInput = {} as CheckboxNativeInput;
+ * declare const value: CheckboxNativeInput;
  * ```
  */
 export interface CheckboxNativeInput {
@@ -162,7 +162,7 @@ export interface CheckboxNativeInput {
  * ```ts
  * import { checkboxRootAttributes } from '@kovojs/headless-ui/checkbox';
  *
- * const input = {} as Parameters<typeof checkboxRootAttributes>[0];
+ * declare const input: Parameters<typeof checkboxRootAttributes>[0];
  * const result = checkboxRootAttributes(input);
  * ```
  */
@@ -190,8 +190,8 @@ export function checkboxRootAttributes(state: CheckboxState): CheckboxPrimitiveA
  * ```ts
  * import { applyCheckboxIndeterminate } from '@kovojs/headless-ui/checkbox';
  *
- * const input = {} as Parameters<typeof applyCheckboxIndeterminate>[0];
- * const state = {} as Parameters<typeof applyCheckboxIndeterminate>[1];
+ * declare const input: Parameters<typeof applyCheckboxIndeterminate>[0];
+ * declare const state: Parameters<typeof applyCheckboxIndeterminate>[1];
  * const result = applyCheckboxIndeterminate(input, state);
  * ```
  */
@@ -211,10 +211,10 @@ export function applyCheckboxIndeterminate(
  * ```ts
  * import { setCheckboxChecked } from '@kovojs/headless-ui/checkbox';
  *
- * const input = {} as Parameters<typeof setCheckboxChecked>[0];
- * const state = {} as Parameters<typeof setCheckboxChecked>[1];
- * const options = {} as Parameters<typeof setCheckboxChecked>[2];
- * const detail = {} as Parameters<typeof setCheckboxChecked>[3];
+ * declare const input: Parameters<typeof setCheckboxChecked>[0];
+ * declare const state: Parameters<typeof setCheckboxChecked>[1];
+ * declare const options: Parameters<typeof setCheckboxChecked>[2];
+ * declare const detail: Parameters<typeof setCheckboxChecked>[3];
  * const result = setCheckboxChecked(input, state, options, detail);
  * ```
  *
@@ -247,9 +247,9 @@ export function setCheckboxChecked(
  * ```ts
  * import { toggleCheckbox } from '@kovojs/headless-ui/checkbox';
  *
- * const input = {} as Parameters<typeof toggleCheckbox>[0];
- * const state = {} as Parameters<typeof toggleCheckbox>[1];
- * const options = {} as Parameters<typeof toggleCheckbox>[2];
+ * declare const input: Parameters<typeof toggleCheckbox>[0];
+ * declare const state: Parameters<typeof toggleCheckbox>[1];
+ * declare const options: Parameters<typeof toggleCheckbox>[2];
  * const result = toggleCheckbox(input, state, options);
  * ```
  *
@@ -270,9 +270,9 @@ export function toggleCheckbox(
  * ```ts
  * import { checkboxTriggerClick } from '@kovojs/headless-ui/checkbox';
  *
- * const input = {} as Parameters<typeof checkboxTriggerClick>[0];
- * const state = {} as Parameters<typeof checkboxTriggerClick>[1];
- * const options = {} as Parameters<typeof checkboxTriggerClick>[2];
+ * declare const input: Parameters<typeof checkboxTriggerClick>[0];
+ * declare const state: Parameters<typeof checkboxTriggerClick>[1];
+ * declare const options: Parameters<typeof checkboxTriggerClick>[2];
  * const result = checkboxTriggerClick(input, state, options);
  * ```
  *

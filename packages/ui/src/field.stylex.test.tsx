@@ -7,14 +7,13 @@ import {
   Field,
   FieldControl,
   FieldDescription,
-  FieldError,
+  FieldErrorMessage,
   FieldLabel,
   FieldSelect,
   FieldSelectOption,
   FieldTextarea,
   Fieldset,
   FieldsetLegend,
-  fieldStyles,
 } from './field.js';
 
 describe('@kovojs/ui Field StyleX styles', () => {
@@ -25,7 +24,6 @@ describe('@kovojs/ui Field StyleX styles', () => {
     };
 
     expect({
-      classes: [style.attrs(fieldStyles.root).class ?? ''] as const,
       control: FieldControl.definition.render({
         ...state,
         autoComplete: 'email',
@@ -42,14 +40,14 @@ describe('@kovojs/ui Field StyleX styles', () => {
         type: 'email',
         value: 'ada@example.com',
       }),
-      controlClasses: [style.attrs(fieldStyles.control).class ?? ''] as const,
       description: FieldDescription.definition.render({
         children: 'Used for notifications.',
         id: 'email-description',
       }),
-      descriptionClasses: [style.attrs(fieldStyles.description).class ?? ''] as const,
-      error: FieldError.definition.render({ children: 'Email required.', id: 'email-error' }),
-      errorClasses: [style.attrs(fieldStyles.error).class ?? ''] as const,
+      error: FieldErrorMessage.definition.render({
+        children: 'Email required.',
+        id: 'email-error',
+      }),
       fieldset: Fieldset.definition.render({
         children: FieldsetLegend.definition.render({ children: 'Plan', id: 'plan-legend' }),
         descriptionId: 'plan-description',
@@ -59,15 +57,12 @@ describe('@kovojs/ui Field StyleX styles', () => {
         invalid: true,
         name: 'plan-options',
       }),
-      fieldsetClasses: [style.attrs(fieldStyles.fieldset).class ?? ''] as const,
-      fieldsetLegendClasses: [style.attrs(fieldStyles.fieldsetLegend).class ?? ''] as const,
       label: FieldLabel.definition.render({
         ...state,
         children: 'Email',
         controlId: 'email',
         id: 'email-label',
       }),
-      labelClasses: [style.attrs(fieldStyles.label).class ?? ''] as const,
       root: Field.definition.render({
         ...state,
         children: 'email field',
@@ -84,14 +79,12 @@ describe('@kovojs/ui Field StyleX styles', () => {
         required: true,
         value: 'team',
       }),
-      selectClasses: [style.attrs(fieldStyles.select).class ?? ''] as const,
       selectOption: FieldSelectOption.definition.render({
         children: 'Enterprise',
         disabled: true,
         selected: true,
         value: 'enterprise',
       }),
-      selectOptionClasses: [style.attrs(fieldStyles.selectOption).class ?? ''] as const,
       textarea: FieldTextarea.definition.render({
         autoComplete: 'off',
         descriptionId: 'bio-description',
@@ -102,7 +95,6 @@ describe('@kovojs/ui Field StyleX styles', () => {
         placeholder: 'Short bio',
         rows: 4,
       }),
-      textareaClasses: [style.attrs(fieldStyles.textarea).class ?? ''] as const,
     }).toMatchSnapshot();
   });
 
@@ -126,7 +118,7 @@ describe('@kovojs/ui Field StyleX styles', () => {
         children: 'Custom description',
         styles: { description: overrides.description },
       }),
-      error: FieldError.definition.render({
+      error: FieldErrorMessage.definition.render({
         children: 'Custom error',
         styles: { error: overrides.error },
       }),
@@ -151,24 +143,6 @@ describe('@kovojs/ui Field StyleX styles', () => {
         styles: { selectOption: overrides.selectOption },
       }),
       textarea: FieldTextarea.definition.render({ styles: { textarea: overrides.textarea } }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      keys: Object.keys(fieldStyles),
-      markers: {
-        control: fieldStyles.control.$$css,
-        description: fieldStyles.description.$$css,
-        error: fieldStyles.error.$$css,
-        fieldset: fieldStyles.fieldset.$$css,
-        fieldsetLegend: fieldStyles.fieldsetLegend.$$css,
-        label: fieldStyles.label.$$css,
-        root: fieldStyles.root.$$css,
-        select: fieldStyles.select.$$css,
-        selectOption: fieldStyles.selectOption.$$css,
-        textarea: fieldStyles.textarea.$$css,
-      },
     }).toMatchSnapshot();
   });
 });

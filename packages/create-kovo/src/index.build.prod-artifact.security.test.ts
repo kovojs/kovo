@@ -985,8 +985,8 @@ function addQueryWireProof(root: string): void {
   const queriesPath = join(root, 'src/queries.ts');
   const queries = replaceRequired(
     readFileSync(queriesPath, 'utf8'),
-    "import { query, type QueryLoadContext, type Reader } from '@kovojs/server';",
-    "import { publicAccess, query, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
+    "import { publicAccess, query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';",
     '/_q wire proof query import',
   );
   writeFileSync(

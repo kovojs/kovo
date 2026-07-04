@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
@@ -29,7 +29,7 @@ export interface ProgressStyleOverrides {
  * const props: ProgressProps = { children: 'Content' };
  */
 export interface ProgressProps {
-  children?: string;
+  children?: ComponentChild;
   max?: number;
   style?: style.StyleInput;
   styles?: ProgressStyleOverrides;
@@ -44,15 +44,7 @@ const indeterminateSlide = style.keyframes({
   '0%': { transform: 'translateX(-100%)' },
   '100%': { transform: 'translateX(250%)' },
 });
-
-/**
- * Style definitions used by the progress components.
- *
- * @example
- * import { progressStyles } from "@kovojs/ui/progress";
- * const styles = progressStyles;
- */
-export const progressStyles = style.create({
+const progressStyles = style.create({
   // Custom indicator filled by value ratio (set inline). In the indeterminate
   // state a partial-width bar slides across the track.
   indicator: {

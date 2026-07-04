@@ -33,7 +33,7 @@ export interface SoRequest {
   } | null;
 }
 
-export interface QuestionListItem {
+export type QuestionListItem = {
   authorId: string;
   authorName: string;
   body: string;
@@ -43,13 +43,13 @@ export interface QuestionListItem {
   score: number;
   answerCount: number;
   title: string;
-}
+};
 
-export interface QuestionListResult {
+export type QuestionListResult = {
   items: QuestionListItem[];
-}
+};
 
-export interface QuestionDetailResult {
+export type QuestionDetailResult = {
   id: string;
   title: string;
   body: string;
@@ -59,28 +59,28 @@ export interface QuestionDetailResult {
   authorName?: string;
   tags?: string;
   createdAt?: string;
-}
+};
 
-export interface AnswerListItem {
+export type AnswerListItem = {
   id: string;
   questionId: string;
   body: string;
   score: number;
-}
+};
 
-export interface AnswerListResult {
+export type AnswerListResult = {
   items: AnswerListItem[];
-}
+};
 
-export interface QuestionAnswerDetail extends AnswerListItem {
+export type QuestionAnswerDetail = AnswerListItem & {
   accepted: boolean;
   authorId: string;
   authorName?: string;
   createdAt?: string;
-}
+};
 
 export type QuestionAnswersResult = QuestionAnswerDetail[];
 
-export interface QuestionScoreResult {
+export type QuestionScoreResult = {
   score: number;
-}
+};

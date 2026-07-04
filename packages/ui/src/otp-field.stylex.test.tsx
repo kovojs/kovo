@@ -2,13 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import * as style from '@kovojs/style';
 
-import {
-  OtpField,
-  OtpFieldGroup,
-  OtpFieldHiddenInput,
-  OtpFieldInput,
-  otpFieldStyles,
-} from './otp-field.js';
+import { OtpField, OtpFieldGroup, OtpFieldHiddenInput, OtpFieldInput } from './otp-field.js';
 
 describe('@kovojs/ui OtpField StyleX styles', () => {
   it('matches semantic OTP field markup with StyleX output', () => {
@@ -26,7 +20,6 @@ describe('@kovojs/ui OtpField StyleX styles', () => {
     };
 
     expect({
-      classes: [style.attrs(otpFieldStyles.root).class ?? ''] as const,
       completeDisabled: OtpField.definition.render({
         disabled: true,
         length: 4,
@@ -44,10 +37,7 @@ describe('@kovojs/ui OtpField StyleX styles', () => {
         slotIndex: 0,
       }),
       group: OtpFieldGroup.definition.render({ children: 'slots' }),
-      groupClasses: [style.attrs(otpFieldStyles.group).class ?? ''] as const,
       hidden: OtpFieldHiddenInput.definition.render({ ...state, id: 'otp-code' }),
-      hiddenInputClasses: [style.attrs(otpFieldStyles.hiddenInput).class ?? ''] as const,
-      inputClasses: [style.attrs(otpFieldStyles.input).class ?? ''] as const,
       root: OtpField.definition.render({
         ...state,
         children: 'otp controls',
@@ -90,18 +80,6 @@ describe('@kovojs/ui OtpField StyleX styles', () => {
         children: 'Custom OTP',
         styles: { root: overrides.root },
       }),
-    }).toMatchSnapshot();
-  });
-
-  it('exports StyleX style groups', () => {
-    expect({
-      keys: Object.keys(otpFieldStyles),
-      markers: {
-        group: otpFieldStyles.group.$$css,
-        hiddenInput: otpFieldStyles.hiddenInput.$$css,
-        input: otpFieldStyles.input.$$css,
-        root: otpFieldStyles.root.$$css,
-      },
     }).toMatchSnapshot();
   });
 });

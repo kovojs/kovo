@@ -1,9 +1,13 @@
 import {
+  addDatabaseEgressEndpoints,
+  databaseEgressEndpointsFromUrls,
+  removeDatabaseEgressEndpoints,
   isNetConnectFloorInstalled,
   installNetConnectFloor,
   netConnectFloorTamperStatus,
   resolveEgressPolicy,
   type EgressOptions,
+  type EgressPolicy,
 } from './egress.js';
 import {
   installUndiciFloor,
@@ -44,6 +48,8 @@ import {
  */
 
 let bootResult: EgressFloorInstall | undefined;
+let bootPolicy: EgressPolicy | undefined;
+const registeredDatabaseEndpointRefs = new Map<string, number>();
 
 interface EgressFloorInstallOptions {
   /**
@@ -99,7 +105,10 @@ export function installEgressFloorSync(
   // Resolve + validate synchronously: a bad config (metadata in allowInternal) throws now and
   // refuses boot. Layer (b) is also installed synchronously so raw node:http is floored before
   // the undici import resolves.
-  const policy = resolveEgressPolicy(options, warn, installOptions);
+  const policy = resolveEgressPolicy(options, warn, {
+    ...installOptions,
+    databaseEndpoints: [...registeredDatabaseEndpointRefs.keys()],
+  });
   const uninstallNet = installNetConnectFloor(policy, options?.hardening ?? 'off', warn);
   const uninstallUndici = installUndiciFloor(policy);
 
@@ -109,10 +118,14 @@ export function installEgressFloorSync(
     uninstall() {
       uninstallUndici();
       uninstallNet();
-      if (bootResult === result) bootResult = undefined;
+      if (bootResult === result) {
+        bootResult = undefined;
+        bootPolicy = undefined;
+      }
     },
   };
   bootResult = result;
+  bootPolicy = policy;
 
   // LOUD self-probe (SPEC §6.6): if EITHER layer is missing after install, say so
   // unmissably. A missing floor is a security regression, not a silent fallback.
@@ -181,4 +194,44 @@ export function selfProbe(
 /** The active egress floor install for this process, if any. */
 export function activeEgressFloor(): EgressFloorInstall | undefined {
   return bootResult;
+}
+
+/**
+ * Register a framework-owned Postgres runtime URL with the process-local egress floor.
+ *
+ * Runtime database connections are still only exempt by exact `host:port`; cloud metadata and
+ * unrelated private-network targets remain blocked by `evaluateEgress()` before this exemption
+ * is considered (SPEC §6.6, §10.3 DEC-C).
+ *
+ * @internal
+ */
+export function registerEgressDatabaseUrl(databaseUrl: string | undefined): () => void {
+  const endpoints = databaseEgressEndpointsFromUrls([databaseUrl]);
+  if (endpoints.length === 0) return () => {};
+
+  for (const endpoint of endpoints) {
+    const next = (registeredDatabaseEndpointRefs.get(endpoint) ?? 0) + 1;
+    registeredDatabaseEndpointRefs.set(endpoint, next);
+  }
+  if (bootPolicy !== undefined) addDatabaseEgressEndpoints(bootPolicy, endpoints);
+
+  let active = true;
+  return () => {
+    if (!active) return;
+    active = false;
+    const removable: string[] = [];
+    for (const endpoint of endpoints) {
+      const next = (registeredDatabaseEndpointRefs.get(endpoint) ?? 0) - 1;
+      if (next > 0) {
+        registeredDatabaseEndpointRefs.set(endpoint, next);
+        continue;
+      }
+      registeredDatabaseEndpointRefs.delete(endpoint);
+      const envDatabaseEndpoints = databaseEgressEndpointsFromUrls([process.env.KOVO_DATABASE_URL]);
+      if (!envDatabaseEndpoints.includes(endpoint)) {
+        removable.push(endpoint);
+      }
+    }
+    if (bootPolicy !== undefined) removeDatabaseEgressEndpoints(bootPolicy, removable);
+  };
 }

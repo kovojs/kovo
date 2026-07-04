@@ -22,7 +22,7 @@ import {
  * ```ts
  * import type { CheckboxGroupItem } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupItem = {} as CheckboxGroupItem;
+ * declare const value: CheckboxGroupItem;
  * ```
  */
 export interface CheckboxGroupItem {
@@ -39,7 +39,7 @@ export interface CheckboxGroupItem {
  * ```ts
  * import type { CheckboxGroupState } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupState = {} as CheckboxGroupState;
+ * declare const value: CheckboxGroupState;
  * ```
  */
 export interface CheckboxGroupState {
@@ -65,7 +65,7 @@ export interface CheckboxGroupState {
  * ```ts
  * import type { CheckboxGroupRootAttributeOptions } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupRootAttributeOptions = {} as CheckboxGroupRootAttributeOptions;
+ * declare const value: CheckboxGroupRootAttributeOptions;
  * ```
  */
 export interface CheckboxGroupRootAttributeOptions extends CheckboxGroupState {
@@ -84,7 +84,7 @@ export interface CheckboxGroupRootAttributeOptions extends CheckboxGroupState {
  * ```ts
  * import type { CheckboxGroupItemAttributeOptions } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupItemAttributeOptions = {} as CheckboxGroupItemAttributeOptions;
+ * declare const value: CheckboxGroupItemAttributeOptions;
  * ```
  */
 export interface CheckboxGroupItemAttributeOptions extends CheckboxGroupState {
@@ -102,7 +102,7 @@ export interface CheckboxGroupItemAttributeOptions extends CheckboxGroupState {
  * ```ts
  * import type { CheckboxGroupControlAttributeOptions } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupControlAttributeOptions = {} as CheckboxGroupControlAttributeOptions;
+ * declare const value: CheckboxGroupControlAttributeOptions;
  * ```
  */
 export interface CheckboxGroupControlAttributeOptions extends CheckboxGroupItemAttributeOptions {
@@ -118,7 +118,7 @@ export interface CheckboxGroupControlAttributeOptions extends CheckboxGroupItemA
  * ```ts
  * import type { CheckboxGroupLabelAttributeOptions } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupLabelAttributeOptions = {} as CheckboxGroupLabelAttributeOptions;
+ * declare const value: CheckboxGroupLabelAttributeOptions;
  * ```
  */
 export interface CheckboxGroupLabelAttributeOptions extends CheckboxGroupItemAttributeOptions {
@@ -134,7 +134,7 @@ export interface CheckboxGroupLabelAttributeOptions extends CheckboxGroupItemAtt
  * ```ts
  * import type { CheckboxGroupChangeReason } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupChangeReason = {} as CheckboxGroupChangeReason;
+ * declare const value: CheckboxGroupChangeReason;
  * ```
  */
 export type CheckboxGroupChangeReason = 'item-click' | 'programmatic';
@@ -148,7 +148,7 @@ export type CheckboxGroupChangeReason = 'item-click' | 'programmatic';
  * ```ts
  * import type { CheckboxGroupChangeDetail } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupChangeDetail = {} as CheckboxGroupChangeDetail;
+ * declare const value: CheckboxGroupChangeDetail;
  * ```
  */
 export type CheckboxGroupChangeDetail = PrimitiveChangeDetail<
@@ -165,7 +165,7 @@ export type CheckboxGroupChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { CheckboxGroupChangeOptions } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupChangeOptions = {} as CheckboxGroupChangeOptions;
+ * declare const value: CheckboxGroupChangeOptions;
  * ```
  */
 export interface CheckboxGroupChangeOptions {
@@ -181,7 +181,7 @@ export interface CheckboxGroupChangeOptions {
  * ```ts
  * import type { CheckboxGroupChangeResult } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupChangeResult = {} as CheckboxGroupChangeResult;
+ * declare const value: CheckboxGroupChangeResult;
  * ```
  */
 export interface CheckboxGroupChangeResult {
@@ -199,7 +199,7 @@ export interface CheckboxGroupChangeResult {
  * ```ts
  * import type { CheckboxGroupMoveResult } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupMoveResult = {} as CheckboxGroupMoveResult;
+ * declare const value: CheckboxGroupMoveResult;
  * ```
  */
 export interface CheckboxGroupMoveResult {
@@ -216,7 +216,7 @@ export interface CheckboxGroupMoveResult {
  * ```ts
  * import type { CheckboxGroupPrimitiveAttributes } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupPrimitiveAttributes = {} as CheckboxGroupPrimitiveAttributes;
+ * declare const value: CheckboxGroupPrimitiveAttributes;
  * ```
  */
 export type CheckboxGroupPrimitiveAttributes = PrimitiveDataAttributes &
@@ -231,7 +231,7 @@ export type CheckboxGroupPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { CheckboxGroupItemEvent } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupItemEvent = {} as CheckboxGroupItemEvent;
+ * declare const value: CheckboxGroupItemEvent;
  * ```
  */
 export type CheckboxGroupItemEvent = Event & {
@@ -247,7 +247,7 @@ export type CheckboxGroupItemEvent = Event & {
  * ```ts
  * import type { CheckboxGroupKeyboardEvent } from '@kovojs/headless-ui/checkbox-group';
  *
- * const value: CheckboxGroupKeyboardEvent = {} as CheckboxGroupKeyboardEvent;
+ * declare const value: CheckboxGroupKeyboardEvent;
  * ```
  */
 export type CheckboxGroupKeyboardEvent = Event & { readonly key: string };
@@ -261,7 +261,7 @@ export type CheckboxGroupKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import { checkboxGroupItemChecked } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof checkboxGroupItemChecked>[0];
+ * declare const input: Parameters<typeof checkboxGroupItemChecked>[0];
  * const result = checkboxGroupItemChecked(input);
  * ```
  */
@@ -278,7 +278,7 @@ export function checkboxGroupItemChecked(options: CheckboxGroupItemAttributeOpti
  * ```ts
  * import { checkboxGroupRovingIndex } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof checkboxGroupRovingIndex>[0];
+ * declare const input: Parameters<typeof checkboxGroupRovingIndex>[0];
  * const result = checkboxGroupRovingIndex(input);
  * ```
  *
@@ -317,7 +317,7 @@ export function checkboxGroupRovingIndex(state: CheckboxGroupState): number {
  * ```ts
  * import { checkboxGroupRootAttributes } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof checkboxGroupRootAttributes>[0];
+ * declare const input: Parameters<typeof checkboxGroupRootAttributes>[0];
  * const result = checkboxGroupRootAttributes(input);
  * ```
  */
@@ -347,7 +347,7 @@ export function checkboxGroupRootAttributes(
  * ```ts
  * import { checkboxGroupItemAttributes } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof checkboxGroupItemAttributes>[0];
+ * declare const input: Parameters<typeof checkboxGroupItemAttributes>[0];
  * const result = checkboxGroupItemAttributes(input);
  * ```
  */
@@ -371,7 +371,7 @@ export function checkboxGroupItemAttributes(
  * ```ts
  * import { checkboxGroupControlAttributes } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof checkboxGroupControlAttributes>[0];
+ * declare const input: Parameters<typeof checkboxGroupControlAttributes>[0];
  * const result = checkboxGroupControlAttributes(input);
  * ```
  */
@@ -407,7 +407,7 @@ export function checkboxGroupControlAttributes(
  * ```ts
  * import { checkboxGroupLabelAttributes } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof checkboxGroupLabelAttributes>[0];
+ * declare const input: Parameters<typeof checkboxGroupLabelAttributes>[0];
  * const result = checkboxGroupLabelAttributes(input);
  * ```
  */
@@ -430,10 +430,10 @@ export function checkboxGroupLabelAttributes(
  * ```ts
  * import { setCheckboxGroupValue } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof setCheckboxGroupValue>[0];
- * const state = {} as Parameters<typeof setCheckboxGroupValue>[1];
- * const options = {} as Parameters<typeof setCheckboxGroupValue>[2];
- * const detail = {} as Parameters<typeof setCheckboxGroupValue>[3];
+ * declare const input: Parameters<typeof setCheckboxGroupValue>[0];
+ * declare const state: Parameters<typeof setCheckboxGroupValue>[1];
+ * declare const options: Parameters<typeof setCheckboxGroupValue>[2];
+ * declare const detail: Parameters<typeof setCheckboxGroupValue>[3];
  * const result = setCheckboxGroupValue(input, state, options, detail);
  * ```
  *
@@ -477,9 +477,9 @@ export function setCheckboxGroupValue(
  * ```ts
  * import { toggleCheckboxGroupItem } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof toggleCheckboxGroupItem>[0];
- * const state = {} as Parameters<typeof toggleCheckboxGroupItem>[1];
- * const options = {} as Parameters<typeof toggleCheckboxGroupItem>[2];
+ * declare const input: Parameters<typeof toggleCheckboxGroupItem>[0];
+ * declare const state: Parameters<typeof toggleCheckboxGroupItem>[1];
+ * declare const options: Parameters<typeof toggleCheckboxGroupItem>[2];
  * const result = toggleCheckboxGroupItem(input, state, options);
  * ```
  *
@@ -506,8 +506,8 @@ export function toggleCheckboxGroupItem(
  * ```ts
  * import { checkboxGroupMoveFocus } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof checkboxGroupMoveFocus>[0];
- * const state = {} as Parameters<typeof checkboxGroupMoveFocus>[1];
+ * declare const input: Parameters<typeof checkboxGroupMoveFocus>[0];
+ * declare const state: Parameters<typeof checkboxGroupMoveFocus>[1];
  * const result = checkboxGroupMoveFocus(input, state);
  * ```
  *
@@ -542,9 +542,9 @@ export function checkboxGroupMoveFocus(
  * ```ts
  * import { checkboxGroupItemClick } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof checkboxGroupItemClick>[0];
- * const state = {} as Parameters<typeof checkboxGroupItemClick>[1];
- * const options = {} as Parameters<typeof checkboxGroupItemClick>[2];
+ * declare const input: Parameters<typeof checkboxGroupItemClick>[0];
+ * declare const state: Parameters<typeof checkboxGroupItemClick>[1];
+ * declare const options: Parameters<typeof checkboxGroupItemClick>[2];
  * const result = checkboxGroupItemClick(input, state, options);
  * ```
  *
@@ -579,8 +579,8 @@ export function checkboxGroupItemClick(
  * ```ts
  * import { checkboxGroupKeyDown } from '@kovojs/headless-ui/checkbox-group';
  *
- * const input = {} as Parameters<typeof checkboxGroupKeyDown>[0];
- * const state = {} as Parameters<typeof checkboxGroupKeyDown>[1];
+ * declare const input: Parameters<typeof checkboxGroupKeyDown>[0];
+ * declare const state: Parameters<typeof checkboxGroupKeyDown>[1];
  * const result = checkboxGroupKeyDown(input, state);
  * ```
  *
