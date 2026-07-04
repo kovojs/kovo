@@ -187,6 +187,7 @@ interface ResolvedPostgresRuntimeConfig {
   databaseUrl?: string;
   driver: KovoPostgresResolvedRuntimeDriver;
   postureCheckOnBoot: boolean;
+  postureCheckOptOut?: PostgresPostureCheckOptOut;
   principalFromRequest: (request: unknown) => string | undefined;
   provisionOnBoot: boolean;
   publicRelations: ReadonlyMap<string, KovoPostgresPublicRelationDeclaration>;
@@ -195,6 +196,25 @@ interface ResolvedPostgresRuntimeConfig {
   seedSql: readonly string[];
   writerRole: string;
 }
+
+interface PostgresRuntimeConfigInput extends KovoPostgresAppRuntimeOptions {
+  /** Internal framework override for CLI/check/provision paths. Public apps use `postureCheck`. */
+  postureCheckOnBoot?: boolean;
+}
+
+interface PostgresPostureCheckOptOut {
+  justification: string;
+  site?: string;
+}
+
+/** Internal audit fact for `kovo explain --capabilities` posture-check opt-outs. */
+export interface PostgresPostureCheckOptOutFact {
+  readonly driver: KovoPostgresResolvedRuntimeDriver;
+  readonly justification: string;
+  readonly site?: string;
+}
+
+const postgresPostureCheckOptOutFacts: PostgresPostureCheckOptOutFact[] = [];
 
 interface CreatedRuntimeClient {
   close(): Promise<void>;
@@ -244,8 +264,14 @@ export interface KovoPostgresAppRuntimeOptions {
   /**
    * Check schema/RLS/grant posture during app boot. Defaults to true for external Postgres and
    * false for PGlite because the default PGlite path provisions in-process first.
+   *
+   * Disabling the boot check is an audited capability escape: use
+   * `postureCheck: { onBoot: false, justification: '...' }`, which is recorded for
+   * `kovo explain --capabilities`. Bare booleans are intentionally not accepted.
    */
-  postureCheckOnBoot?: boolean;
+  postureCheck?:
+    | { readonly onBoot?: true }
+    | { readonly justification: string; readonly onBoot: false; readonly site?: string };
   principalFromRequest?: (request: unknown) => string | undefined;
   readerRole?: string;
   /**
@@ -572,6 +598,11 @@ export async function checkPostgresAppDbPosture(
   }
 }
 
+/** Drain audited Postgres boot-posture-check opt-outs for explain/capability ledgers. */
+export function drainPostgresPostureCheckOptOutFacts(): readonly PostgresPostureCheckOptOutFact[] {
+  return postgresPostureCheckOptOutFacts.splice(0, postgresPostureCheckOptOutFacts.length);
+}
+
 async function initializeRuntimeDb(
   client: RuntimeSqlClient,
   input: {
@@ -602,6 +633,11 @@ async function initializeRuntimeDb(
         ].join('\n'),
       );
     }
+  } else if (input.config.postureCheckOptOut !== undefined) {
+    postgresPostureCheckOptOutFacts.push({
+      driver: input.config.driver,
+      ...input.config.postureCheckOptOut,
+    });
   }
 }
 
@@ -1408,7 +1444,7 @@ class NodePostgresTransactionClient implements RuntimeSqlClient {
 }
 
 function resolvePostgresRuntimeConfig(
-  options: KovoPostgresAppRuntimeOptions,
+  options: PostgresRuntimeConfigInput,
 ): ResolvedPostgresRuntimeConfig {
   const driver = resolveDriver(options);
   const databaseUrl = options.databaseUrl ?? process.env.KOVO_DATABASE_URL;
@@ -1417,6 +1453,10 @@ function resolvePostgresRuntimeConfig(
   const envWriterRole = nonEmptyEnv('KOVO_DB_WRITER_ROLE');
   const crossOwnerReadTables = normalizeStringSet(options.crossOwnerReadTables);
   const publicRelations = normalizePublicRelationDeclarations(options.publicRelations);
+  const postureCheck = resolvePostgresPostureCheck(
+    options,
+    driver === 'node-postgres' && options.provisionOnBoot !== true,
+  );
   const config: ResolvedPostgresRuntimeConfig = {
     adminRole: options.adminRole ?? envAdminRole ?? DEFAULT_ADMIN_ROLE,
     createAdminRole:
@@ -1427,9 +1467,8 @@ function resolvePostgresRuntimeConfig(
     crossOwnerReadTables,
     dataDir: options.dataDir ?? process.env.KOVO_DATA_DIR ?? DEFAULT_DATA_DIR,
     driver,
-    postureCheckOnBoot:
-      options.postureCheckOnBoot ??
-      (driver === 'node-postgres' && options.provisionOnBoot !== true),
+    postureCheckOnBoot: postureCheck.onBoot,
+    ...(postureCheck.optOut === undefined ? {} : { postureCheckOptOut: postureCheck.optOut }),
     principalFromRequest: options.principalFromRequest ?? principalFromRequest,
     provisionOnBoot: options.provisionOnBoot ?? driver === 'pglite',
     publicRelations,
@@ -1440,6 +1479,47 @@ function resolvePostgresRuntimeConfig(
   };
   if (databaseUrl !== undefined) return { ...config, databaseUrl };
   return config;
+}
+
+function resolvePostgresPostureCheck(
+  options: PostgresRuntimeConfigInput,
+  defaultOnBoot: boolean,
+): { onBoot: boolean; optOut?: PostgresPostureCheckOptOut } {
+  if (options.postureCheckOnBoot !== undefined) {
+    return { onBoot: options.postureCheckOnBoot };
+  }
+
+  const postureCheck = options.postureCheck;
+  if (postureCheck === undefined) return { onBoot: defaultOnBoot };
+  if (!isRecord(postureCheck)) {
+    throw new Error(
+      'KV433: postureCheck must be { onBoot: true } or { onBoot: false, justification } (SPEC §10.3).',
+    );
+  }
+
+  if (postureCheck.onBoot === undefined || postureCheck.onBoot === true) {
+    return { onBoot: true };
+  }
+  if (postureCheck.onBoot !== false) {
+    throw new Error(
+      'KV433: postureCheck.onBoot must be true or false; disabling requires a justification (SPEC §10.3).',
+    );
+  }
+
+  const justification = postureCheck.justification;
+  if (typeof justification !== 'string' || justification.trim() === '') {
+    throw new Error(
+      'KV433: postureCheck: { onBoot: false } requires a non-empty justification for kovo explain --capabilities (SPEC §10.3).',
+    );
+  }
+  const site = postureCheck.site;
+  return {
+    onBoot: false,
+    optOut: {
+      justification: justification.trim(),
+      ...(typeof site === 'string' && site.trim() !== '' ? { site: site.trim() } : {}),
+    },
+  };
 }
 
 function nonEmptyEnv(name: string): string | undefined {

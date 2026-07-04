@@ -40,6 +40,7 @@ import * as fileApi from '../file.js';
 import * as keyringApi from '../keyring.js';
 import * as managedDbApi from '../managed-db.js';
 import * as passwordApi from '../password.js';
+import * as postgresRuntimeApi from '../postgres-runtime.js';
 import * as componentRenderApi from '../component-render.js';
 import * as cspApi from '../csp.js';
 import * as deferredStreamApi from '../deferred-stream.js';
@@ -254,6 +255,10 @@ type RootDeclaredSecretReadCapability = import('@kovojs/server').DeclaredSecretR
 type RemovedRootPostgresRlsSilentDenyDiagnostic =
   // @ts-expect-error SPEC §10.3: Postgres runtime diagnostic facts are internal adapter plumbing.
   import('@kovojs/server').PostgresRlsSilentDenyDiagnostic;
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedRootPostgresPostureCheckOptOutFact =
+  // @ts-expect-error SPEC §10.3: Postgres runtime opt-out facts are internal audit plumbing.
+  import('@kovojs/server').PostgresPostureCheckOptOutFact;
 // eslint-disable-next-line no-unused-vars -- compile-time internal-boundary assertion only.
 type InternalCapabilityClaims = import('@kovojs/server/internal/capabilities').CapabilityClaims;
 // eslint-disable-next-line no-unused-vars -- compile-time public-boundary assertion only.
@@ -682,6 +687,7 @@ describe('server app-shell public API barrels', () => {
     expect(publicValues).not.toHaveProperty('kovoReadonlyDbHandle');
     expect(publicValues).not.toHaveProperty('drainCrossOwnerReadAuditFacts');
     expect(publicValues).not.toHaveProperty('drainPostgresRlsSilentDenyDiagnostics');
+    expect(publicValues).not.toHaveProperty('drainPostgresPostureCheckOptOutFacts');
     expect(publicValues).not.toHaveProperty('drainPublicReadAuditFacts');
     expect(publicValues).not.toHaveProperty('createSecretBoxingReadDb');
     expect(publicApi.declareSecretReadCapability).toBe(
@@ -716,6 +722,7 @@ describe('server app-shell public API barrels', () => {
     expect(dataApi.createSqliteAppRuntimeDb).toBe(sqliteRuntimeApi.createSqliteAppRuntimeDb);
     expect(dataApi).not.toHaveProperty('drainCrossOwnerReadAuditFacts');
     expect(dataApi).not.toHaveProperty('drainPostgresRlsSilentDenyDiagnostics');
+    expect(dataApi).not.toHaveProperty('drainPostgresPostureCheckOptOutFacts');
     expect(dataApi).not.toHaveProperty('drainPublicReadAuditFacts');
     expect(dataApi).not.toHaveProperty('drainUnsafeRegexFacts');
     expect(dataApi).not.toHaveProperty('drainUnverifiedMimeFacts');
@@ -770,6 +777,9 @@ describe('server app-shell public API barrels', () => {
     );
     expect(packageInternalAuditFactsApi.drainCapabilityMintFacts).toBe(
       capabilityRouteApi.drainCapabilityMintFacts,
+    );
+    expect(packageInternalAuditFactsApi.drainPostgresPostureCheckOptOutFacts).toBe(
+      postgresRuntimeApi.drainPostgresPostureCheckOptOutFacts,
     );
     expect(packageInternalAuditFactsApi).toEqual(internalAuditFactsApi);
     expect(packageInternalEgressApi.installEgressFloor).toBe(egressBootstrapApi.installEgressFloor);

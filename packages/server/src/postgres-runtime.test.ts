@@ -21,7 +21,9 @@ import {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
   declarePublicRelation,
+  drainPostgresPostureCheckOptOutFacts,
   migratePostgresAppDb,
+  type KovoPostgresAppRuntimeOptions,
   type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
@@ -84,6 +86,10 @@ const serialNotes = pgTable(
 );
 
 const schema = { labels, notes };
+// eslint-disable-next-line no-unused-vars -- compile-time removal assertion only.
+type RemovedPostureCheckOnBootOption =
+  // @ts-expect-error SPEC §10.3: disabling boot posture checks requires postureCheck.justification.
+  KovoPostgresAppRuntimeOptions['postureCheckOnBoot'];
 const seedSql = [
   'INSERT INTO kovo_runtime_notes (id, "ownerId", "secretNote", title) VALUES ' +
     "('n1', 'u1', 's1', 'One'), ('n2', 'u2', 's2', 'Two')",
@@ -652,6 +658,47 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('requires a justification when disabling boot posture checks and records an audit fact', async () => {
+    drainPostgresPostureCheckOptOutFacts();
+    const rejectedDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-posture-reject-'));
+    roots.push(rejectedDir);
+    expect(() =>
+      createPostgresAppRuntimeDb({
+        dataDir: rejectedDir,
+        driver: 'pglite',
+        postureCheck: { justification: ' ', onBoot: false },
+        schema,
+      }),
+    ).toThrow(/postureCheck[\s\S]*justification/);
+
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-posture-optout-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheck: {
+        justification: 'migration smoke test owns the posture check in this process',
+        onBoot: false,
+        site: 'postgres-runtime.test.ts',
+      },
+      provisionOnBoot: false,
+      schema,
+    });
+
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+    expect(drainPostgresPostureCheckOptOutFacts()).toEqual([
+      {
+        driver: 'pglite',
+        justification: 'migration smoke test owns the posture check in this process',
+        site: 'postgres-runtime.test.ts',
+      },
+    ]);
+  });
+
   it('reports a missing provisioned posture without running DDL during check', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-empty-'));
     roots.push(dataDir);
@@ -683,7 +730,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const drifted = createPostgresAppRuntimeDb({
       dataDir,
       driver: 'pglite',
-      postureCheckOnBoot: true,
+      postureCheck: { onBoot: true },
       provisionOnBoot: false,
       schema,
     });
@@ -717,7 +764,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const drifted = createPostgresAppRuntimeDb({
       dataDir,
       driver: 'pglite',
-      postureCheckOnBoot: true,
+      postureCheck: { onBoot: true },
       provisionOnBoot: false,
       schema,
     });
@@ -842,7 +889,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const reprovisioned = createPostgresAppRuntimeDb({
       dataDir,
       driver: 'pglite',
-      postureCheckOnBoot: true,
+      postureCheck: { onBoot: true },
       provisionOnBoot: true,
       schema,
     });
@@ -881,7 +928,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const drifted = createPostgresAppRuntimeDb({
       dataDir,
       driver: 'pglite',
-      postureCheckOnBoot: true,
+      postureCheck: { onBoot: true },
       provisionOnBoot: false,
       schema,
     });
@@ -971,7 +1018,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const drifted = createPostgresAppRuntimeDb({
       dataDir,
       driver: 'pglite',
-      postureCheckOnBoot: true,
+      postureCheck: { onBoot: true },
       provisionOnBoot: false,
       schema,
     });
