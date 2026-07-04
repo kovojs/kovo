@@ -22,7 +22,7 @@ import {
  * ```ts
  * import type { TabsActivationMode } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsActivationMode = {} as TabsActivationMode;
+ * declare const value: TabsActivationMode;
  * ```
  */
 export type TabsActivationMode = 'automatic' | 'manual';
@@ -36,7 +36,7 @@ export type TabsActivationMode = 'automatic' | 'manual';
  * ```ts
  * import type { TabsItem } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsItem = {} as TabsItem;
+ * declare const value: TabsItem;
  * ```
  */
 export interface TabsItem {
@@ -53,7 +53,7 @@ export interface TabsItem {
  * ```ts
  * import type { TabsState } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsState = {} as TabsState;
+ * declare const value: TabsState;
  * ```
  */
 export interface TabsState {
@@ -76,7 +76,7 @@ export interface TabsState {
  * ```ts
  * import type { TabsRootAttributeOptions } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsRootAttributeOptions = {} as TabsRootAttributeOptions;
+ * declare const value: TabsRootAttributeOptions;
  * ```
  */
 export interface TabsRootAttributeOptions extends TabsState {
@@ -92,7 +92,7 @@ export interface TabsRootAttributeOptions extends TabsState {
  * ```ts
  * import type { TabsListAttributeOptions } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsListAttributeOptions = {} as TabsListAttributeOptions;
+ * declare const value: TabsListAttributeOptions;
  * ```
  */
 export interface TabsListAttributeOptions extends TabsState {
@@ -111,7 +111,7 @@ export interface TabsListAttributeOptions extends TabsState {
  * ```ts
  * import type { TabsTriggerAttributeOptions } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsTriggerAttributeOptions = {} as TabsTriggerAttributeOptions;
+ * declare const value: TabsTriggerAttributeOptions;
  * ```
  */
 export interface TabsTriggerAttributeOptions extends TabsState {
@@ -130,7 +130,7 @@ export interface TabsTriggerAttributeOptions extends TabsState {
  * ```ts
  * import type { TabsPanelAttributeOptions } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsPanelAttributeOptions = {} as TabsPanelAttributeOptions;
+ * declare const value: TabsPanelAttributeOptions;
  * ```
  */
 export interface TabsPanelAttributeOptions extends TabsState {
@@ -149,7 +149,7 @@ export interface TabsPanelAttributeOptions extends TabsState {
  * ```ts
  * import type { TabsChangeReason } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsChangeReason = {} as TabsChangeReason;
+ * declare const value: TabsChangeReason;
  * ```
  */
 export type TabsChangeReason = 'keyboard' | 'programmatic' | 'trigger-click';
@@ -163,7 +163,7 @@ export type TabsChangeReason = 'keyboard' | 'programmatic' | 'trigger-click';
  * ```ts
  * import type { TabsChangeDetail } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsChangeDetail = {} as TabsChangeDetail;
+ * declare const value: TabsChangeDetail;
  * ```
  */
 export type TabsChangeDetail = PrimitiveChangeDetail<TabsChangeReason, string | undefined>;
@@ -177,7 +177,7 @@ export type TabsChangeDetail = PrimitiveChangeDetail<TabsChangeReason, string | 
  * ```ts
  * import type { TabsChangeOptions } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsChangeOptions = {} as TabsChangeOptions;
+ * declare const value: TabsChangeOptions;
  * ```
  */
 export interface TabsChangeOptions {
@@ -193,7 +193,7 @@ export interface TabsChangeOptions {
  * ```ts
  * import type { TabsChangeResult } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsChangeResult = {} as TabsChangeResult;
+ * declare const value: TabsChangeResult;
  * ```
  */
 export interface TabsChangeResult {
@@ -211,7 +211,7 @@ export interface TabsChangeResult {
  * ```ts
  * import type { TabsMoveResult } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsMoveResult = {} as TabsMoveResult;
+ * declare const value: TabsMoveResult;
  * ```
  */
 export interface TabsMoveResult {
@@ -228,7 +228,7 @@ export interface TabsMoveResult {
  * ```ts
  * import type { TabsKeyboardResult } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsKeyboardResult = {} as TabsKeyboardResult;
+ * declare const value: TabsKeyboardResult;
  * ```
  */
 export interface TabsKeyboardResult extends TabsMoveResult {
@@ -246,7 +246,7 @@ export interface TabsKeyboardResult extends TabsMoveResult {
  * ```ts
  * import type { TabsPrimitiveAttributes } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsPrimitiveAttributes = {} as TabsPrimitiveAttributes;
+ * declare const value: TabsPrimitiveAttributes;
  * ```
  */
 export type TabsPrimitiveAttributes = PrimitiveDataAttributes &
@@ -261,7 +261,7 @@ export type TabsPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { TabsKeyboardEvent } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsKeyboardEvent = {} as TabsKeyboardEvent;
+ * declare const value: TabsKeyboardEvent;
  * ```
  */
 export type TabsKeyboardEvent = Event & { readonly key: string };
@@ -275,7 +275,7 @@ export type TabsKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import type { TabsTriggerEvent } from '@kovojs/headless-ui/tabs';
  *
- * const value: TabsTriggerEvent = {} as TabsTriggerEvent;
+ * declare const value: TabsTriggerEvent;
  * ```
  */
 export type TabsTriggerEvent = Event;
@@ -289,7 +289,7 @@ export type TabsTriggerEvent = Event;
  * ```ts
  * import { tabsItemSelected } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof tabsItemSelected>[0];
+ * declare const input: Parameters<typeof tabsItemSelected>[0];
  * const result = tabsItemSelected(input);
  * ```
  */
@@ -306,7 +306,7 @@ export function tabsItemSelected(options: TabsTriggerAttributeOptions): boolean 
  * ```ts
  * import { tabsRovingIndex } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof tabsRovingIndex>[0];
+ * declare const input: Parameters<typeof tabsRovingIndex>[0];
  * const result = tabsRovingIndex(input);
  * ```
  *
@@ -341,7 +341,7 @@ export function tabsRovingIndex(state: TabsState): number {
  * ```ts
  * import { tabsRootAttributes } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof tabsRootAttributes>[0];
+ * declare const input: Parameters<typeof tabsRootAttributes>[0];
  * const result = tabsRootAttributes(input);
  * ```
  */
@@ -365,7 +365,7 @@ export function tabsRootAttributes(
  * ```ts
  * import { tabsListAttributes } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof tabsListAttributes>[0];
+ * declare const input: Parameters<typeof tabsListAttributes>[0];
  * const result = tabsListAttributes(input);
  * ```
  */
@@ -397,7 +397,7 @@ export function tabsListAttributes(
  * ```ts
  * import { tabsTriggerAttributes } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof tabsTriggerAttributes>[0];
+ * declare const input: Parameters<typeof tabsTriggerAttributes>[0];
  * const result = tabsTriggerAttributes(input);
  * ```
  */
@@ -431,7 +431,7 @@ export function tabsTriggerAttributes(
  * ```ts
  * import { tabsPanelAttributes } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof tabsPanelAttributes>[0];
+ * declare const input: Parameters<typeof tabsPanelAttributes>[0];
  * const result = tabsPanelAttributes(input);
  * ```
  */
@@ -457,10 +457,10 @@ export function tabsPanelAttributes(options: TabsPanelAttributeOptions): TabsPri
  * ```ts
  * import { setTabsValue } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof setTabsValue>[0];
- * const state = {} as Parameters<typeof setTabsValue>[1];
- * const options = {} as Parameters<typeof setTabsValue>[2];
- * const detail = {} as Parameters<typeof setTabsValue>[3];
+ * declare const input: Parameters<typeof setTabsValue>[0];
+ * declare const state: Parameters<typeof setTabsValue>[1];
+ * declare const options: Parameters<typeof setTabsValue>[2];
+ * declare const detail: Parameters<typeof setTabsValue>[3];
  * const result = setTabsValue(input, state, options, detail);
  * ```
  *
@@ -493,8 +493,8 @@ export function setTabsValue(
  * ```ts
  * import { tabsMoveFocus } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof tabsMoveFocus>[0];
- * const state = {} as Parameters<typeof tabsMoveFocus>[1];
+ * declare const input: Parameters<typeof tabsMoveFocus>[0];
+ * declare const state: Parameters<typeof tabsMoveFocus>[1];
  * const result = tabsMoveFocus(input, state);
  * ```
  *
@@ -526,9 +526,9 @@ export function tabsMoveFocus(state: TabsState, intent: NavigationIntent): TabsM
  * ```ts
  * import { tabsTriggerClick } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof tabsTriggerClick>[0];
- * const state = {} as Parameters<typeof tabsTriggerClick>[1];
- * const options = {} as Parameters<typeof tabsTriggerClick>[2];
+ * declare const input: Parameters<typeof tabsTriggerClick>[0];
+ * declare const state: Parameters<typeof tabsTriggerClick>[1];
+ * declare const options: Parameters<typeof tabsTriggerClick>[2];
  * const result = tabsTriggerClick(input, state, options);
  * ```
  *
@@ -560,9 +560,9 @@ export function tabsTriggerClick(
  * ```ts
  * import { tabsKeyDown } from '@kovojs/headless-ui/tabs';
  *
- * const input = {} as Parameters<typeof tabsKeyDown>[0];
- * const state = {} as Parameters<typeof tabsKeyDown>[1];
- * const options = {} as Parameters<typeof tabsKeyDown>[2];
+ * declare const input: Parameters<typeof tabsKeyDown>[0];
+ * declare const state: Parameters<typeof tabsKeyDown>[1];
+ * declare const options: Parameters<typeof tabsKeyDown>[2];
  * const result = tabsKeyDown(input, state, options);
  * ```
  *

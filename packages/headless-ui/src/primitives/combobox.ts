@@ -23,7 +23,7 @@ import { activeDescendantId, describedByIds } from '../lib/active-descendant.js'
  * ```ts
  * import type { ComboboxItem } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxItem = {} as ComboboxItem;
+ * declare const value: ComboboxItem;
  * ```
  *
  *
@@ -45,7 +45,7 @@ export interface ComboboxItem {
  * ```ts
  * import type { ComboboxState } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxState = {} as ComboboxState;
+ * declare const value: ComboboxState;
  * ```
  */
 export interface ComboboxState {
@@ -71,7 +71,7 @@ export interface ComboboxState {
  * ```ts
  * import type { ComboboxRootAttributeOptions } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxRootAttributeOptions = {} as ComboboxRootAttributeOptions;
+ * declare const value: ComboboxRootAttributeOptions;
  * ```
  */
 export interface ComboboxRootAttributeOptions extends ComboboxState {
@@ -87,7 +87,7 @@ export interface ComboboxRootAttributeOptions extends ComboboxState {
  * ```ts
  * import type { ComboboxInputAttributeOptions } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxInputAttributeOptions = {} as ComboboxInputAttributeOptions;
+ * declare const value: ComboboxInputAttributeOptions;
  * ```
  */
 export interface ComboboxInputAttributeOptions extends ComboboxState {
@@ -106,7 +106,7 @@ export interface ComboboxInputAttributeOptions extends ComboboxState {
  * ```ts
  * import type { ComboboxListboxAttributeOptions } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxListboxAttributeOptions = {} as ComboboxListboxAttributeOptions;
+ * declare const value: ComboboxListboxAttributeOptions;
  * ```
  */
 export interface ComboboxListboxAttributeOptions extends ComboboxState {
@@ -123,7 +123,7 @@ export interface ComboboxListboxAttributeOptions extends ComboboxState {
  * ```ts
  * import type { ComboboxOptionAttributeOptions } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxOptionAttributeOptions = {} as ComboboxOptionAttributeOptions;
+ * declare const value: ComboboxOptionAttributeOptions;
  * ```
  */
 export interface ComboboxOptionAttributeOptions extends ComboboxState {
@@ -142,7 +142,7 @@ export interface ComboboxOptionAttributeOptions extends ComboboxState {
  * ```ts
  * import type { ComboboxValueAttributeOptions } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxValueAttributeOptions = {} as ComboboxValueAttributeOptions;
+ * declare const value: ComboboxValueAttributeOptions;
  * ```
  */
 export interface ComboboxValueAttributeOptions extends ComboboxState {
@@ -158,7 +158,7 @@ export interface ComboboxValueAttributeOptions extends ComboboxState {
  * ```ts
  * import type { ComboboxValueChangeReason } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxValueChangeReason = {} as ComboboxValueChangeReason;
+ * declare const value: ComboboxValueChangeReason;
  * ```
  */
 export type ComboboxValueChangeReason = 'input' | 'option-select' | 'programmatic' | 'typeahead';
@@ -172,7 +172,7 @@ export type ComboboxValueChangeReason = 'input' | 'option-select' | 'programmati
  * ```ts
  * import type { ComboboxOpenChangeReason } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxOpenChangeReason = {} as ComboboxOpenChangeReason;
+ * declare const value: ComboboxOpenChangeReason;
  * ```
  */
 export type ComboboxOpenChangeReason =
@@ -192,7 +192,7 @@ export type ComboboxOpenChangeReason =
  * ```ts
  * import type { ComboboxValueChangeDetail } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxValueChangeDetail = {} as ComboboxValueChangeDetail;
+ * declare const value: ComboboxValueChangeDetail;
  * ```
  */
 export type ComboboxValueChangeDetail = PrimitiveChangeDetail<
@@ -209,7 +209,7 @@ export type ComboboxValueChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { ComboboxOpenChangeDetail } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxOpenChangeDetail = {} as ComboboxOpenChangeDetail;
+ * declare const value: ComboboxOpenChangeDetail;
  * ```
  */
 export type ComboboxOpenChangeDetail = PrimitiveChangeDetail<ComboboxOpenChangeReason, boolean>;
@@ -223,7 +223,7 @@ export type ComboboxOpenChangeDetail = PrimitiveChangeDetail<ComboboxOpenChangeR
  * ```ts
  * import type { ComboboxChangeOptions } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxChangeOptions = {} as ComboboxChangeOptions;
+ * declare const value: ComboboxChangeOptions;
  * ```
  */
 export interface ComboboxChangeOptions {
@@ -240,7 +240,7 @@ export interface ComboboxChangeOptions {
  * ```ts
  * import type { ComboboxValueChangeResult } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxValueChangeResult = {} as ComboboxValueChangeResult;
+ * declare const value: ComboboxValueChangeResult;
  * ```
  */
 export interface ComboboxValueChangeResult {
@@ -258,7 +258,7 @@ export interface ComboboxValueChangeResult {
  * ```ts
  * import type { ComboboxOpenChangeResult } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxOpenChangeResult = {} as ComboboxOpenChangeResult;
+ * declare const value: ComboboxOpenChangeResult;
  * ```
  */
 export interface ComboboxOpenChangeResult {
@@ -276,7 +276,7 @@ export interface ComboboxOpenChangeResult {
  * ```ts
  * import type { ComboboxMoveResult } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxMoveResult = {} as ComboboxMoveResult;
+ * declare const value: ComboboxMoveResult;
  * ```
  */
 export interface ComboboxMoveResult {
@@ -293,7 +293,7 @@ export interface ComboboxMoveResult {
  * ```ts
  * import type { ComboboxOptionSelectResult } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxOptionSelectResult = {} as ComboboxOptionSelectResult;
+ * declare const value: ComboboxOptionSelectResult;
  * ```
  */
 export interface ComboboxOptionSelectResult {
@@ -310,7 +310,7 @@ export interface ComboboxOptionSelectResult {
  * ```ts
  * import type { ComboboxTypeaheadOptions } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxTypeaheadOptions = {} as ComboboxTypeaheadOptions;
+ * declare const value: ComboboxTypeaheadOptions;
  * ```
  */
 export interface ComboboxTypeaheadOptions {
@@ -330,7 +330,7 @@ export interface ComboboxTypeaheadOptions {
  * ```ts
  * import type { ComboboxTypeaheadResult } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxTypeaheadResult = {} as ComboboxTypeaheadResult;
+ * declare const value: ComboboxTypeaheadResult;
  * ```
  */
 export interface ComboboxTypeaheadResult {
@@ -348,7 +348,7 @@ export interface ComboboxTypeaheadResult {
  * ```ts
  * import type { ComboboxPrimitiveAttributes } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxPrimitiveAttributes = {} as ComboboxPrimitiveAttributes;
+ * declare const value: ComboboxPrimitiveAttributes;
  * ```
  */
 export type ComboboxPrimitiveAttributes = PrimitiveDataAttributes &
@@ -363,7 +363,7 @@ export type ComboboxPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { ComboboxInputEvent } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxInputEvent = {} as ComboboxInputEvent;
+ * declare const value: ComboboxInputEvent;
  * ```
  */
 export type ComboboxInputEvent = Event & {
@@ -380,7 +380,7 @@ export type ComboboxInputEvent = Event & {
  * ```ts
  * import type { ComboboxOptionEvent } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxOptionEvent = {} as ComboboxOptionEvent;
+ * declare const value: ComboboxOptionEvent;
  * ```
  */
 export type ComboboxOptionEvent = Event;
@@ -394,7 +394,7 @@ export type ComboboxOptionEvent = Event;
  * ```ts
  * import type { ComboboxKeyboardEvent } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxKeyboardEvent = {} as ComboboxKeyboardEvent;
+ * declare const value: ComboboxKeyboardEvent;
  * ```
  */
 export type ComboboxKeyboardEvent = Event & { readonly key: string };
@@ -408,7 +408,7 @@ export type ComboboxKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import type { ComboboxKeyboardResult } from '@kovojs/headless-ui/combobox';
  *
- * const value: ComboboxKeyboardResult = {} as ComboboxKeyboardResult;
+ * declare const value: ComboboxKeyboardResult;
  * ```
  */
 export type ComboboxKeyboardResult =
@@ -425,7 +425,7 @@ export type ComboboxKeyboardResult =
  * ```ts
  * import { comboboxOptionSelected } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxOptionSelected>[0];
+ * declare const input: Parameters<typeof comboboxOptionSelected>[0];
  * const result = comboboxOptionSelected(input);
  * ```
  */
@@ -442,7 +442,7 @@ export function comboboxOptionSelected(options: ComboboxOptionAttributeOptions):
  * ```ts
  * import { comboboxOptionHighlighted } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxOptionHighlighted>[0];
+ * declare const input: Parameters<typeof comboboxOptionHighlighted>[0];
  * const result = comboboxOptionHighlighted(input);
  * ```
  */
@@ -459,7 +459,7 @@ export function comboboxOptionHighlighted(options: ComboboxOptionAttributeOption
  * ```ts
  * import { comboboxValueText } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxValueText>[0];
+ * declare const input: Parameters<typeof comboboxValueText>[0];
  * const result = comboboxValueText(input);
  * ```
  */
@@ -479,7 +479,7 @@ export function comboboxValueText(state: ComboboxState): string {
  * ```ts
  * import { comboboxFilteredItems } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxFilteredItems>[0];
+ * declare const input: Parameters<typeof comboboxFilteredItems>[0];
  * const result = comboboxFilteredItems(input);
  * ```
  */
@@ -502,7 +502,7 @@ export function comboboxFilteredItems(state: ComboboxState): readonly ComboboxIt
  * ```ts
  * import { comboboxRootAttributes } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxRootAttributes>[0];
+ * declare const input: Parameters<typeof comboboxRootAttributes>[0];
  * const result = comboboxRootAttributes(input);
  * ```
  */
@@ -526,7 +526,7 @@ export function comboboxRootAttributes(
  * ```ts
  * import { comboboxInputAttributes } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxInputAttributes>[0];
+ * declare const input: Parameters<typeof comboboxInputAttributes>[0];
  * const result = comboboxInputAttributes(input);
  * ```
  */
@@ -573,7 +573,7 @@ export function comboboxInputAttributes(
  * ```ts
  * import { comboboxListboxAttributes } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxListboxAttributes>[0];
+ * declare const input: Parameters<typeof comboboxListboxAttributes>[0];
  * const result = comboboxListboxAttributes(input);
  * ```
  */
@@ -598,7 +598,7 @@ export function comboboxListboxAttributes(
  * ```ts
  * import { comboboxOptionAttributes } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxOptionAttributes>[0];
+ * declare const input: Parameters<typeof comboboxOptionAttributes>[0];
  * const result = comboboxOptionAttributes(input);
  * ```
  */
@@ -634,7 +634,7 @@ export function comboboxOptionAttributes(
  * ```ts
  * import { comboboxValueAttributes } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxValueAttributes>[0];
+ * declare const input: Parameters<typeof comboboxValueAttributes>[0];
  * const result = comboboxValueAttributes(input);
  * ```
  */
@@ -656,10 +656,10 @@ export function comboboxValueAttributes(
  * ```ts
  * import { setComboboxValue } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof setComboboxValue>[0];
- * const state = {} as Parameters<typeof setComboboxValue>[1];
- * const options = {} as Parameters<typeof setComboboxValue>[2];
- * const detail = {} as Parameters<typeof setComboboxValue>[3];
+ * declare const input: Parameters<typeof setComboboxValue>[0];
+ * declare const state: Parameters<typeof setComboboxValue>[1];
+ * declare const options: Parameters<typeof setComboboxValue>[2];
+ * declare const detail: Parameters<typeof setComboboxValue>[3];
  * const result = setComboboxValue(input, state, options, detail);
  * ```
  *
@@ -692,10 +692,10 @@ export function setComboboxValue(
  * ```ts
  * import { setComboboxOpen } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof setComboboxOpen>[0];
- * const state = {} as Parameters<typeof setComboboxOpen>[1];
- * const options = {} as Parameters<typeof setComboboxOpen>[2];
- * const detail = {} as Parameters<typeof setComboboxOpen>[3];
+ * declare const input: Parameters<typeof setComboboxOpen>[0];
+ * declare const state: Parameters<typeof setComboboxOpen>[1];
+ * declare const options: Parameters<typeof setComboboxOpen>[2];
+ * declare const detail: Parameters<typeof setComboboxOpen>[3];
  * const result = setComboboxOpen(input, state, options, detail);
  * ```
  *
@@ -721,9 +721,9 @@ export function setComboboxOpen(
  * ```ts
  * import { selectComboboxOption } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof selectComboboxOption>[0];
- * const state = {} as Parameters<typeof selectComboboxOption>[1];
- * const options = {} as Parameters<typeof selectComboboxOption>[2];
+ * declare const input: Parameters<typeof selectComboboxOption>[0];
+ * declare const state: Parameters<typeof selectComboboxOption>[1];
+ * declare const options: Parameters<typeof selectComboboxOption>[2];
  * const result = selectComboboxOption(input, state, options);
  * ```
  *
@@ -766,9 +766,9 @@ export function selectComboboxOption(
  * ```ts
  * import { comboboxTypeahead } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxTypeahead>[0];
- * const state = {} as Parameters<typeof comboboxTypeahead>[1];
- * const options = {} as Parameters<typeof comboboxTypeahead>[2];
+ * declare const input: Parameters<typeof comboboxTypeahead>[0];
+ * declare const state: Parameters<typeof comboboxTypeahead>[1];
+ * declare const options: Parameters<typeof comboboxTypeahead>[2];
  * const result = comboboxTypeahead(input, state, options);
  * ```
  *
@@ -799,9 +799,9 @@ export function comboboxTypeahead(
  * ```ts
  * import { comboboxMove } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxMove>[0];
- * const state = {} as Parameters<typeof comboboxMove>[1];
- * const options = {} as Parameters<typeof comboboxMove>[2];
+ * declare const input: Parameters<typeof comboboxMove>[0];
+ * declare const state: Parameters<typeof comboboxMove>[1];
+ * declare const options: Parameters<typeof comboboxMove>[2];
  * const result = comboboxMove(input, state, options);
  * ```
  *
@@ -827,9 +827,9 @@ export function comboboxMove(
  * ```ts
  * import { comboboxInput } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxInput>[0];
- * const state = {} as Parameters<typeof comboboxInput>[1];
- * const options = {} as Parameters<typeof comboboxInput>[2];
+ * declare const input: Parameters<typeof comboboxInput>[0];
+ * declare const state: Parameters<typeof comboboxInput>[1];
+ * declare const options: Parameters<typeof comboboxInput>[2];
  * const result = comboboxInput(input, state, options);
  * ```
  *
@@ -866,9 +866,9 @@ export function comboboxInput(
  * ```ts
  * import { comboboxOptionClick } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxOptionClick>[0];
- * const state = {} as Parameters<typeof comboboxOptionClick>[1];
- * const options = {} as Parameters<typeof comboboxOptionClick>[2];
+ * declare const input: Parameters<typeof comboboxOptionClick>[0];
+ * declare const state: Parameters<typeof comboboxOptionClick>[1];
+ * declare const options: Parameters<typeof comboboxOptionClick>[2];
  * const result = comboboxOptionClick(input, state, options);
  * ```
  *
@@ -900,9 +900,9 @@ export function comboboxOptionClick(
  * ```ts
  * import { comboboxKeyDown } from '@kovojs/headless-ui/combobox';
  *
- * const input = {} as Parameters<typeof comboboxKeyDown>[0];
- * const state = {} as Parameters<typeof comboboxKeyDown>[1];
- * const options = {} as Parameters<typeof comboboxKeyDown>[2];
+ * declare const input: Parameters<typeof comboboxKeyDown>[0];
+ * declare const state: Parameters<typeof comboboxKeyDown>[1];
+ * declare const options: Parameters<typeof comboboxKeyDown>[2];
  * const result = comboboxKeyDown(input, state, options);
  * ```
  *

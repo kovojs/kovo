@@ -16,7 +16,7 @@ import {
  * ```ts
  * import type { ScrollAreaOrientation } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaOrientation = {} as ScrollAreaOrientation;
+ * declare const value: ScrollAreaOrientation;
  * ```
  */
 export type ScrollAreaOrientation = 'horizontal' | 'vertical';
@@ -30,7 +30,7 @@ export type ScrollAreaOrientation = 'horizontal' | 'vertical';
  * ```ts
  * import type { ScrollAreaScrollPosition } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaScrollPosition = {} as ScrollAreaScrollPosition;
+ * declare const value: ScrollAreaScrollPosition;
  * ```
  */
 export type ScrollAreaScrollPosition = 'end' | 'middle' | 'none' | 'start';
@@ -44,7 +44,7 @@ export type ScrollAreaScrollPosition = 'end' | 'middle' | 'none' | 'start';
  * ```ts
  * import type { ScrollAreaScrollbars } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaScrollbars = {} as ScrollAreaScrollbars;
+ * declare const value: ScrollAreaScrollbars;
  * ```
  */
 export type ScrollAreaScrollbars = 'both' | 'horizontal' | 'none' | 'vertical';
@@ -58,7 +58,7 @@ export type ScrollAreaScrollbars = 'both' | 'horizontal' | 'none' | 'vertical';
  * ```ts
  * import type { ScrollAreaVisibilityState } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaVisibilityState = {} as ScrollAreaVisibilityState;
+ * declare const value: ScrollAreaVisibilityState;
  * ```
  */
 export type ScrollAreaVisibilityState = 'hidden' | 'visible';
@@ -72,7 +72,7 @@ export type ScrollAreaVisibilityState = 'hidden' | 'visible';
  * ```ts
  * import type { ScrollAreaState } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaState = {} as ScrollAreaState;
+ * declare const value: ScrollAreaState;
  * ```
  */
 export interface ScrollAreaState {
@@ -94,7 +94,7 @@ export interface ScrollAreaState {
  * ```ts
  * import type { ScrollAreaRootAttributeOptions } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaRootAttributeOptions = {} as ScrollAreaRootAttributeOptions;
+ * declare const value: ScrollAreaRootAttributeOptions;
  * ```
  */
 export interface ScrollAreaRootAttributeOptions extends ScrollAreaState {
@@ -110,7 +110,7 @@ export interface ScrollAreaRootAttributeOptions extends ScrollAreaState {
  * ```ts
  * import type { ScrollAreaViewportAttributeOptions } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaViewportAttributeOptions = {} as ScrollAreaViewportAttributeOptions;
+ * declare const value: ScrollAreaViewportAttributeOptions;
  * ```
  */
 export interface ScrollAreaViewportAttributeOptions extends ScrollAreaState {
@@ -131,7 +131,7 @@ export interface ScrollAreaViewportAttributeOptions extends ScrollAreaState {
  * ```ts
  * import type { ScrollAreaScrollbarAttributeOptions } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaScrollbarAttributeOptions = {} as ScrollAreaScrollbarAttributeOptions;
+ * declare const value: ScrollAreaScrollbarAttributeOptions;
  * ```
  */
 export interface ScrollAreaScrollbarAttributeOptions extends ScrollAreaState {
@@ -151,7 +151,7 @@ export interface ScrollAreaScrollbarAttributeOptions extends ScrollAreaState {
  * ```ts
  * import type { ScrollAreaThumbAttributeOptions } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaThumbAttributeOptions = {} as ScrollAreaThumbAttributeOptions;
+ * declare const value: ScrollAreaThumbAttributeOptions;
  * ```
  */
 export interface ScrollAreaThumbAttributeOptions extends ScrollAreaScrollbarAttributeOptions {}
@@ -165,7 +165,7 @@ export interface ScrollAreaThumbAttributeOptions extends ScrollAreaScrollbarAttr
  * ```ts
  * import type { ScrollAreaCornerAttributeOptions } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaCornerAttributeOptions = {} as ScrollAreaCornerAttributeOptions;
+ * declare const value: ScrollAreaCornerAttributeOptions;
  * ```
  */
 export interface ScrollAreaCornerAttributeOptions extends ScrollAreaState {
@@ -183,7 +183,7 @@ export interface ScrollAreaCornerAttributeOptions extends ScrollAreaState {
  * ```ts
  * import type { ScrollAreaPrimitiveAttributes } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaPrimitiveAttributes = {} as ScrollAreaPrimitiveAttributes;
+ * declare const value: ScrollAreaPrimitiveAttributes;
  * ```
  */
 export type ScrollAreaPrimitiveAttributes = PrimitiveDataAttributes &
@@ -198,7 +198,7 @@ export type ScrollAreaPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { ScrollAreaViewportTarget } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaViewportTarget = {} as ScrollAreaViewportTarget;
+ * declare const value: ScrollAreaViewportTarget;
  * ```
  */
 export interface ScrollAreaViewportTarget {
@@ -219,7 +219,7 @@ export interface ScrollAreaViewportTarget {
  * ```ts
  * import type { ScrollAreaPointerTarget } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaPointerTarget = {} as ScrollAreaPointerTarget;
+ * declare const value: ScrollAreaPointerTarget;
  * ```
  */
 export interface ScrollAreaPointerTarget {
@@ -243,7 +243,7 @@ export interface ScrollAreaPointerTarget {
  * ```ts
  * import type { ScrollAreaThumbGeometryOptions } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaThumbGeometryOptions = {} as ScrollAreaThumbGeometryOptions;
+ * declare const value: ScrollAreaThumbGeometryOptions;
  * ```
  */
 export interface ScrollAreaThumbGeometryOptions extends ScrollAreaState {
@@ -259,7 +259,7 @@ export interface ScrollAreaThumbGeometryOptions extends ScrollAreaState {
  * ```ts
  * import type { ScrollAreaViewportComputedState } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaViewportComputedState = {} as ScrollAreaViewportComputedState;
+ * declare const value: ScrollAreaViewportComputedState;
  * ```
  */
 export interface ScrollAreaViewportComputedState {
@@ -285,7 +285,7 @@ export interface ScrollAreaViewportComputedState {
  * ```ts
  * import type { ScrollAreaViewportScrollResult } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaViewportScrollResult = {} as ScrollAreaViewportScrollResult;
+ * declare const value: ScrollAreaViewportScrollResult;
  * ```
  */
 export type ScrollAreaViewportScrollResult = ScrollAreaViewportComputedState;
@@ -299,7 +299,7 @@ export type ScrollAreaViewportScrollResult = ScrollAreaViewportComputedState;
  * ```ts
  * import type { ScrollAreaThumbGeometry } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaThumbGeometry = {} as ScrollAreaThumbGeometry;
+ * declare const value: ScrollAreaThumbGeometry;
  * ```
  */
 export interface ScrollAreaThumbGeometry {
@@ -318,7 +318,7 @@ export interface ScrollAreaThumbGeometry {
  * ```ts
  * import type { ScrollAreaThumbDragStart } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaThumbDragStart = {} as ScrollAreaThumbDragStart;
+ * declare const value: ScrollAreaThumbDragStart;
  * ```
  */
 export interface ScrollAreaThumbDragStart {
@@ -337,7 +337,7 @@ export interface ScrollAreaThumbDragStart {
  * ```ts
  * import type { ScrollAreaThumbDragOptions } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaThumbDragOptions = {} as ScrollAreaThumbDragOptions;
+ * declare const value: ScrollAreaThumbDragOptions;
  * ```
  */
 export interface ScrollAreaThumbDragOptions extends ScrollAreaState {
@@ -357,7 +357,7 @@ export interface ScrollAreaThumbDragOptions extends ScrollAreaState {
  * ```ts
  * import type { ScrollAreaViewportScrollEvent } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaViewportScrollEvent = {} as ScrollAreaViewportScrollEvent;
+ * declare const value: ScrollAreaViewportScrollEvent;
  * ```
  */
 export type ScrollAreaViewportScrollEvent = Event & {
@@ -374,7 +374,7 @@ export type ScrollAreaViewportScrollEvent = Event & {
  * ```ts
  * import type { ScrollAreaPointerEvent } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaPointerEvent = {} as ScrollAreaPointerEvent;
+ * declare const value: ScrollAreaPointerEvent;
  * ```
  */
 export type ScrollAreaPointerEvent = Event & {
@@ -395,7 +395,7 @@ export type ScrollAreaPointerEvent = Event & {
  * ```ts
  * import { scrollAreaRootAttributes } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaRootAttributes>[0];
+ * declare const input: Parameters<typeof scrollAreaRootAttributes>[0];
  * const result = scrollAreaRootAttributes(input);
  * ```
  */
@@ -420,7 +420,7 @@ export function scrollAreaRootAttributes(
  * ```ts
  * import { scrollAreaViewportAttributes } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaViewportAttributes>[0];
+ * declare const input: Parameters<typeof scrollAreaViewportAttributes>[0];
  * const result = scrollAreaViewportAttributes(input);
  * ```
  */
@@ -451,7 +451,7 @@ export function scrollAreaViewportAttributes(
  * ```ts
  * import { scrollAreaScrollbarAttributes } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaScrollbarAttributes>[0];
+ * declare const input: Parameters<typeof scrollAreaScrollbarAttributes>[0];
  * const result = scrollAreaScrollbarAttributes(input);
  * ```
  */
@@ -480,7 +480,7 @@ export function scrollAreaScrollbarAttributes(
  * ```ts
  * import { scrollAreaThumbAttributes } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaThumbAttributes>[0];
+ * declare const input: Parameters<typeof scrollAreaThumbAttributes>[0];
  * const result = scrollAreaThumbAttributes(input);
  * ```
  */
@@ -509,7 +509,7 @@ export function scrollAreaThumbAttributes(
  * ```ts
  * import { scrollAreaCornerAttributes } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaCornerAttributes>[0];
+ * declare const input: Parameters<typeof scrollAreaCornerAttributes>[0];
  * const result = scrollAreaCornerAttributes(input);
  * ```
  */
@@ -535,7 +535,7 @@ export function scrollAreaCornerAttributes(
  * ```ts
  * import { scrollAreaScrollbarState } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaScrollbarState>[0];
+ * declare const input: Parameters<typeof scrollAreaScrollbarState>[0];
  * const result = scrollAreaScrollbarState(input);
  * ```
  */
@@ -559,7 +559,7 @@ export function scrollAreaScrollbarState(
  * ```ts
  * import { scrollAreaCornerState } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaCornerState>[0];
+ * declare const input: Parameters<typeof scrollAreaCornerState>[0];
  * const result = scrollAreaCornerState(input);
  * ```
  */
@@ -581,8 +581,8 @@ export function scrollAreaCornerState(
  * ```ts
  * import { scrollAreaViewportState } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaViewportState>[0];
- * const state = {} as Parameters<typeof scrollAreaViewportState>[1];
+ * declare const input: Parameters<typeof scrollAreaViewportState>[0];
+ * declare const state: Parameters<typeof scrollAreaViewportState>[1];
  * const result = scrollAreaViewportState(input, state);
  * ```
  */
@@ -637,8 +637,8 @@ export function scrollAreaViewportState(
  * ```ts
  * import { scrollAreaThumbGeometry } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaThumbGeometry>[0];
- * const state = {} as Parameters<typeof scrollAreaThumbGeometry>[1];
+ * declare const input: Parameters<typeof scrollAreaThumbGeometry>[0];
+ * declare const state: Parameters<typeof scrollAreaThumbGeometry>[1];
  * const result = scrollAreaThumbGeometry(input, state);
  * ```
  */
@@ -674,8 +674,8 @@ export function scrollAreaThumbGeometry(
  * ```ts
  * import { scrollAreaViewportScroll } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaViewportScroll>[0];
- * const state = {} as Parameters<typeof scrollAreaViewportScroll>[1];
+ * declare const input: Parameters<typeof scrollAreaViewportScroll>[0];
+ * declare const state: Parameters<typeof scrollAreaViewportScroll>[1];
  * const result = scrollAreaViewportScroll(input, state);
  * ```
  *
@@ -706,7 +706,7 @@ export function scrollAreaViewportScroll(
  * ```ts
  * import type { ScrollAreaScrollToTrigger } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaScrollToTrigger = {} as ScrollAreaScrollToTrigger;
+ * declare const value: ScrollAreaScrollToTrigger;
  * ```
  */
 export interface ScrollAreaScrollToTrigger {
@@ -725,7 +725,7 @@ export interface ScrollAreaScrollToTrigger {
  * ```ts
  * import type { ScrollAreaScrollToViewport } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaScrollToViewport = {} as ScrollAreaScrollToViewport;
+ * declare const value: ScrollAreaScrollToViewport;
  * ```
  */
 export interface ScrollAreaScrollToViewport {
@@ -742,7 +742,7 @@ export interface ScrollAreaScrollToViewport {
  * ```ts
  * import type { ScrollAreaScrollToEvent } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaScrollToEvent = {} as ScrollAreaScrollToEvent;
+ * declare const value: ScrollAreaScrollToEvent;
  * ```
  */
 export type ScrollAreaScrollToEvent = Event & {
@@ -759,7 +759,7 @@ export type ScrollAreaScrollToEvent = Event & {
  * ```ts
  * import type { ScrollAreaScrollToResult } from '@kovojs/headless-ui/scroll-area';
  *
- * const value: ScrollAreaScrollToResult = {} as ScrollAreaScrollToResult;
+ * declare const value: ScrollAreaScrollToResult;
  * ```
  */
 export interface ScrollAreaScrollToResult {
@@ -774,8 +774,8 @@ export interface ScrollAreaScrollToResult {
  * ```ts
  * import { scrollAreaScrollTo } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaScrollTo>[0];
- * const state = {} as Parameters<typeof scrollAreaScrollTo>[1];
+ * declare const input: Parameters<typeof scrollAreaScrollTo>[0];
+ * declare const state: Parameters<typeof scrollAreaScrollTo>[1];
  * const result = scrollAreaScrollTo(input, state);
  * ```
  *
@@ -819,9 +819,9 @@ export function scrollAreaScrollTo(
  * ```ts
  * import { scrollAreaTrackPointerDown } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaTrackPointerDown>[0];
- * const state = {} as Parameters<typeof scrollAreaTrackPointerDown>[1];
- * const options = {} as Parameters<typeof scrollAreaTrackPointerDown>[2];
+ * declare const input: Parameters<typeof scrollAreaTrackPointerDown>[0];
+ * declare const state: Parameters<typeof scrollAreaTrackPointerDown>[1];
+ * declare const options: Parameters<typeof scrollAreaTrackPointerDown>[2];
  * const result = scrollAreaTrackPointerDown(input, state, options);
  * ```
  *
@@ -874,9 +874,9 @@ export function scrollAreaTrackPointerDown(
  * ```ts
  * import { scrollAreaThumbDragStart } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaThumbDragStart>[0];
- * const state = {} as Parameters<typeof scrollAreaThumbDragStart>[1];
- * const options = {} as Parameters<typeof scrollAreaThumbDragStart>[2];
+ * declare const input: Parameters<typeof scrollAreaThumbDragStart>[0];
+ * declare const state: Parameters<typeof scrollAreaThumbDragStart>[1];
+ * declare const options: Parameters<typeof scrollAreaThumbDragStart>[2];
  * const result = scrollAreaThumbDragStart(input, state, options);
  * ```
  *
@@ -922,9 +922,9 @@ export function scrollAreaThumbDragStart(
  * ```ts
  * import { scrollAreaThumbDrag } from '@kovojs/headless-ui/scroll-area';
  *
- * const input = {} as Parameters<typeof scrollAreaThumbDrag>[0];
- * const state = {} as Parameters<typeof scrollAreaThumbDrag>[1];
- * const options = {} as Parameters<typeof scrollAreaThumbDrag>[2];
+ * declare const input: Parameters<typeof scrollAreaThumbDrag>[0];
+ * declare const state: Parameters<typeof scrollAreaThumbDrag>[1];
+ * declare const options: Parameters<typeof scrollAreaThumbDrag>[2];
  * const result = scrollAreaThumbDrag(input, state, options);
  * ```
  *

@@ -19,7 +19,7 @@ import { runDialogInvokerCommand, type DialogInvokerEvent } from '../lib/dialog-
  * ```ts
  * import type { DialogChangeReason } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogChangeReason = {} as DialogChangeReason;
+ * declare const value: DialogChangeReason;
  * ```
  */
 export type DialogChangeReason =
@@ -38,7 +38,7 @@ export type DialogChangeReason =
  * ```ts
  * import type { DialogChangeDetail } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogChangeDetail = {} as DialogChangeDetail;
+ * declare const value: DialogChangeDetail;
  * ```
  */
 export type DialogChangeDetail = PrimitiveChangeDetail<DialogChangeReason, boolean>;
@@ -52,7 +52,7 @@ export type DialogChangeDetail = PrimitiveChangeDetail<DialogChangeReason, boole
  * ```ts
  * import type { DialogState } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogState = {} as DialogState;
+ * declare const value: DialogState;
  * ```
  */
 export interface DialogState {
@@ -69,7 +69,7 @@ export interface DialogState {
  * ```ts
  * import type { DialogAttributeOptions } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogAttributeOptions = {} as DialogAttributeOptions;
+ * declare const value: DialogAttributeOptions;
  * ```
  */
 export interface DialogAttributeOptions extends DialogState {
@@ -88,7 +88,7 @@ export interface DialogAttributeOptions extends DialogState {
  * ```ts
  * import type { DialogChangeOptions } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogChangeOptions = {} as DialogChangeOptions;
+ * declare const value: DialogChangeOptions;
  * ```
  */
 export interface DialogChangeOptions {
@@ -104,7 +104,7 @@ export interface DialogChangeOptions {
  * ```ts
  * import type { DialogChangeResult } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogChangeResult = {} as DialogChangeResult;
+ * declare const value: DialogChangeResult;
  * ```
  */
 export interface DialogChangeResult {
@@ -122,7 +122,7 @@ export interface DialogChangeResult {
  * ```ts
  * import type { DialogPrimitiveAttributes } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogPrimitiveAttributes = {} as DialogPrimitiveAttributes;
+ * declare const value: DialogPrimitiveAttributes;
  * ```
  */
 export type DialogPrimitiveAttributes = PrimitiveDataAttributes &
@@ -137,7 +137,7 @@ export type DialogPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { DialogTriggerEvent } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogTriggerEvent = {} as DialogTriggerEvent;
+ * declare const value: DialogTriggerEvent;
  * ```
  */
 export type DialogTriggerEvent = Event & DialogInvokerEvent;
@@ -151,7 +151,7 @@ export type DialogTriggerEvent = Event & DialogInvokerEvent;
  * ```ts
  * import type { DialogCloseEvent } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogCloseEvent = {} as DialogCloseEvent;
+ * declare const value: DialogCloseEvent;
  * ```
  */
 export type DialogCloseEvent = Event & DialogInvokerEvent;
@@ -165,7 +165,7 @@ export type DialogCloseEvent = Event & DialogInvokerEvent;
  * ```ts
  * import type { DialogCancelEvent } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogCancelEvent = {} as DialogCancelEvent;
+ * declare const value: DialogCancelEvent;
  * ```
  */
 export type DialogCancelEvent = Event;
@@ -179,7 +179,7 @@ export type DialogCancelEvent = Event;
  * ```ts
  * import type { DialogBeforeToggleEvent } from '@kovojs/headless-ui/dialog';
  *
- * const value: DialogBeforeToggleEvent = {} as DialogBeforeToggleEvent;
+ * declare const value: DialogBeforeToggleEvent;
  * ```
  */
 export type DialogBeforeToggleEvent = Event &
@@ -196,7 +196,7 @@ export type DialogBeforeToggleEvent = Event &
  * ```ts
  * import { dialogRootAttributes } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof dialogRootAttributes>[0];
+ * declare const input: Parameters<typeof dialogRootAttributes>[0];
  * const result = dialogRootAttributes(input);
  * ```
  */
@@ -217,7 +217,7 @@ export function dialogRootAttributes(state: DialogState): DialogPrimitiveAttribu
  * ```ts
  * import { dialogTriggerAttributes } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof dialogTriggerAttributes>[0];
+ * declare const input: Parameters<typeof dialogTriggerAttributes>[0];
  * const result = dialogTriggerAttributes(input);
  * ```
  */
@@ -253,7 +253,7 @@ export function dialogTriggerAttributes(
  * ```ts
  * import { dialogContentAttributes } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof dialogContentAttributes>[0];
+ * declare const input: Parameters<typeof dialogContentAttributes>[0];
  * const result = dialogContentAttributes(input);
  * ```
  */
@@ -285,7 +285,7 @@ export function dialogContentAttributes(
  * ```ts
  * import { dialogCloseAttributes } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof dialogCloseAttributes>[0];
+ * declare const input: Parameters<typeof dialogCloseAttributes>[0];
  * const result = dialogCloseAttributes(input);
  * ```
  */
@@ -314,10 +314,10 @@ export function dialogCloseAttributes(options: DialogAttributeOptions): DialogPr
  * ```ts
  * import { setDialogOpen } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof setDialogOpen>[0];
- * const state = {} as Parameters<typeof setDialogOpen>[1];
- * const options = {} as Parameters<typeof setDialogOpen>[2];
- * const detail = {} as Parameters<typeof setDialogOpen>[3];
+ * declare const input: Parameters<typeof setDialogOpen>[0];
+ * declare const state: Parameters<typeof setDialogOpen>[1];
+ * declare const options: Parameters<typeof setDialogOpen>[2];
+ * declare const detail: Parameters<typeof setDialogOpen>[3];
  * const result = setDialogOpen(input, state, options, detail);
  * ```
  *
@@ -341,9 +341,9 @@ export function setDialogOpen(
  * ```ts
  * import { toggleDialog } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof toggleDialog>[0];
- * const state = {} as Parameters<typeof toggleDialog>[1];
- * const options = {} as Parameters<typeof toggleDialog>[2];
+ * declare const input: Parameters<typeof toggleDialog>[0];
+ * declare const state: Parameters<typeof toggleDialog>[1];
+ * declare const options: Parameters<typeof toggleDialog>[2];
  * const result = toggleDialog(input, state, options);
  * ```
  *
@@ -364,9 +364,9 @@ export function toggleDialog(
  * ```ts
  * import { dialogTriggerClick } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof dialogTriggerClick>[0];
- * const state = {} as Parameters<typeof dialogTriggerClick>[1];
- * const options = {} as Parameters<typeof dialogTriggerClick>[2];
+ * declare const input: Parameters<typeof dialogTriggerClick>[0];
+ * declare const state: Parameters<typeof dialogTriggerClick>[1];
+ * declare const options: Parameters<typeof dialogTriggerClick>[2];
  * const result = dialogTriggerClick(input, state, options);
  * ```
  *
@@ -399,9 +399,9 @@ export function dialogTriggerClick(
  * ```ts
  * import { dialogCloseClick } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof dialogCloseClick>[0];
- * const state = {} as Parameters<typeof dialogCloseClick>[1];
- * const options = {} as Parameters<typeof dialogCloseClick>[2];
+ * declare const input: Parameters<typeof dialogCloseClick>[0];
+ * declare const state: Parameters<typeof dialogCloseClick>[1];
+ * declare const options: Parameters<typeof dialogCloseClick>[2];
  * const result = dialogCloseClick(input, state, options);
  * ```
  *
@@ -434,9 +434,9 @@ export function dialogCloseClick(
  * ```ts
  * import { dialogCancel } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof dialogCancel>[0];
- * const state = {} as Parameters<typeof dialogCancel>[1];
- * const options = {} as Parameters<typeof dialogCancel>[2];
+ * declare const input: Parameters<typeof dialogCancel>[0];
+ * declare const state: Parameters<typeof dialogCancel>[1];
+ * declare const options: Parameters<typeof dialogCancel>[2];
  * const result = dialogCancel(input, state, options);
  * ```
  *
@@ -468,9 +468,9 @@ export function dialogCancel(
  * ```ts
  * import { dialogBeforeToggle } from '@kovojs/headless-ui/dialog';
  *
- * const input = {} as Parameters<typeof dialogBeforeToggle>[0];
- * const state = {} as Parameters<typeof dialogBeforeToggle>[1];
- * const options = {} as Parameters<typeof dialogBeforeToggle>[2];
+ * declare const input: Parameters<typeof dialogBeforeToggle>[0];
+ * declare const state: Parameters<typeof dialogBeforeToggle>[1];
+ * declare const options: Parameters<typeof dialogBeforeToggle>[2];
  * const result = dialogBeforeToggle(input, state, options);
  * ```
  *

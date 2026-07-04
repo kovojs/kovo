@@ -27,7 +27,7 @@ import {
  * ```ts
  * import type { NavigationMenuItem } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuItem = {} as NavigationMenuItem;
+ * declare const value: NavigationMenuItem;
  * ```
  *
  *
@@ -49,7 +49,7 @@ export interface NavigationMenuItem {
  * ```ts
  * import type { NavigationMenuState } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuState = {} as NavigationMenuState;
+ * declare const value: NavigationMenuState;
  * ```
  */
 export interface NavigationMenuState {
@@ -71,7 +71,7 @@ export interface NavigationMenuState {
  * ```ts
  * import type { NavigationMenuRootAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuRootAttributeOptions = {} as NavigationMenuRootAttributeOptions;
+ * declare const value: NavigationMenuRootAttributeOptions;
  * ```
  */
 export interface NavigationMenuRootAttributeOptions extends NavigationMenuState {
@@ -90,7 +90,7 @@ export interface NavigationMenuRootAttributeOptions extends NavigationMenuState 
  * ```ts
  * import type { NavigationMenuListAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuListAttributeOptions = {} as NavigationMenuListAttributeOptions;
+ * declare const value: NavigationMenuListAttributeOptions;
  * ```
  */
 export interface NavigationMenuListAttributeOptions extends NavigationMenuState {
@@ -107,7 +107,7 @@ export interface NavigationMenuListAttributeOptions extends NavigationMenuState 
  * ```ts
  * import type { NavigationMenuItemAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuItemAttributeOptions = {} as NavigationMenuItemAttributeOptions;
+ * declare const value: NavigationMenuItemAttributeOptions;
  * ```
  */
 export interface NavigationMenuItemAttributeOptions extends NavigationMenuState {
@@ -125,7 +125,7 @@ export interface NavigationMenuItemAttributeOptions extends NavigationMenuState 
  * ```ts
  * import type { NavigationMenuTriggerAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuTriggerAttributeOptions = {} as NavigationMenuTriggerAttributeOptions;
+ * declare const value: NavigationMenuTriggerAttributeOptions;
  * ```
  */
 export interface NavigationMenuTriggerAttributeOptions extends NavigationMenuState {
@@ -145,7 +145,7 @@ export interface NavigationMenuTriggerAttributeOptions extends NavigationMenuSta
  * ```ts
  * import type { NavigationMenuContentAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuContentAttributeOptions = {} as NavigationMenuContentAttributeOptions;
+ * declare const value: NavigationMenuContentAttributeOptions;
  * ```
  */
 export interface NavigationMenuContentAttributeOptions extends NavigationMenuState {
@@ -163,7 +163,7 @@ export interface NavigationMenuContentAttributeOptions extends NavigationMenuSta
  * ```ts
  * import type { NavigationMenuLinkAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuLinkAttributeOptions = {} as NavigationMenuLinkAttributeOptions;
+ * declare const value: NavigationMenuLinkAttributeOptions;
  * ```
  */
 export interface NavigationMenuLinkAttributeOptions extends NavigationMenuState {
@@ -183,7 +183,7 @@ export interface NavigationMenuLinkAttributeOptions extends NavigationMenuState 
  * ```ts
  * import type { NavigationMenuViewportAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuViewportAttributeOptions = {} as NavigationMenuViewportAttributeOptions;
+ * declare const value: NavigationMenuViewportAttributeOptions;
  * ```
  */
 export interface NavigationMenuViewportAttributeOptions extends NavigationMenuState {
@@ -199,7 +199,7 @@ export interface NavigationMenuViewportAttributeOptions extends NavigationMenuSt
  * ```ts
  * import type { NavigationMenuIndicatorAttributeOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuIndicatorAttributeOptions = {} as NavigationMenuIndicatorAttributeOptions;
+ * declare const value: NavigationMenuIndicatorAttributeOptions;
  * ```
  */
 export interface NavigationMenuIndicatorAttributeOptions extends NavigationMenuState {
@@ -215,7 +215,7 @@ export interface NavigationMenuIndicatorAttributeOptions extends NavigationMenuS
  * ```ts
  * import type { NavigationMenuOpenChangeReason } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuOpenChangeReason = {} as NavigationMenuOpenChangeReason;
+ * declare const value: NavigationMenuOpenChangeReason;
  * ```
  */
 export type NavigationMenuOpenChangeReason =
@@ -236,7 +236,7 @@ export type NavigationMenuOpenChangeReason =
  * ```ts
  * import type { NavigationMenuSelectReason } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuSelectReason = {} as NavigationMenuSelectReason;
+ * declare const value: NavigationMenuSelectReason;
  * ```
  */
 export type NavigationMenuSelectReason = 'link-click' | 'programmatic';
@@ -250,7 +250,7 @@ export type NavigationMenuSelectReason = 'link-click' | 'programmatic';
  * ```ts
  * import type { NavigationMenuOpenChangeDetail } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuOpenChangeDetail = {} as NavigationMenuOpenChangeDetail;
+ * declare const value: NavigationMenuOpenChangeDetail;
  * ```
  */
 export type NavigationMenuOpenChangeDetail = PrimitiveChangeDetail<
@@ -267,7 +267,7 @@ export type NavigationMenuOpenChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { NavigationMenuSelectDetail } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuSelectDetail = {} as NavigationMenuSelectDetail;
+ * declare const value: NavigationMenuSelectDetail;
  * ```
  */
 export type NavigationMenuSelectDetail = PrimitiveChangeDetail<NavigationMenuSelectReason, string>;
@@ -281,7 +281,7 @@ export type NavigationMenuSelectDetail = PrimitiveChangeDetail<NavigationMenuSel
  * ```ts
  * import type { NavigationMenuChangeOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuChangeOptions = {} as NavigationMenuChangeOptions;
+ * declare const value: NavigationMenuChangeOptions;
  * ```
  */
 export interface NavigationMenuChangeOptions {
@@ -298,7 +298,7 @@ export interface NavigationMenuChangeOptions {
  * ```ts
  * import type { NavigationMenuOpenChangeResult } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuOpenChangeResult = {} as NavigationMenuOpenChangeResult;
+ * declare const value: NavigationMenuOpenChangeResult;
  * ```
  */
 export interface NavigationMenuOpenChangeResult {
@@ -316,7 +316,7 @@ export interface NavigationMenuOpenChangeResult {
  * ```ts
  * import type { NavigationMenuSelectResult } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuSelectResult = {} as NavigationMenuSelectResult;
+ * declare const value: NavigationMenuSelectResult;
  * ```
  */
 export interface NavigationMenuSelectResult {
@@ -335,7 +335,7 @@ export interface NavigationMenuSelectResult {
  * ```ts
  * import type { NavigationMenuMoveOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuMoveOptions = {} as NavigationMenuMoveOptions;
+ * declare const value: NavigationMenuMoveOptions;
  * ```
  */
 export interface NavigationMenuMoveOptions {
@@ -351,7 +351,7 @@ export interface NavigationMenuMoveOptions {
  * ```ts
  * import type { NavigationMenuMoveResult } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuMoveResult = {} as NavigationMenuMoveResult;
+ * declare const value: NavigationMenuMoveResult;
  * ```
  */
 export interface NavigationMenuMoveResult {
@@ -368,7 +368,7 @@ export interface NavigationMenuMoveResult {
  * ```ts
  * import type { NavigationMenuTypeaheadOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuTypeaheadOptions = {} as NavigationMenuTypeaheadOptions;
+ * declare const value: NavigationMenuTypeaheadOptions;
  * ```
  */
 export interface NavigationMenuTypeaheadOptions extends NavigationMenuMoveOptions {
@@ -387,7 +387,7 @@ export interface NavigationMenuTypeaheadOptions extends NavigationMenuMoveOption
  * ```ts
  * import type { NavigationMenuTypeaheadResult } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuTypeaheadResult = {} as NavigationMenuTypeaheadResult;
+ * declare const value: NavigationMenuTypeaheadResult;
  * ```
  */
 export interface NavigationMenuTypeaheadResult extends NavigationMenuMoveResult {
@@ -403,7 +403,7 @@ export interface NavigationMenuTypeaheadResult extends NavigationMenuMoveResult 
  * ```ts
  * import type { NavigationMenuPrimitiveAttributes } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuPrimitiveAttributes = {} as NavigationMenuPrimitiveAttributes;
+ * declare const value: NavigationMenuPrimitiveAttributes;
  * ```
  */
 export type NavigationMenuPrimitiveAttributes = PrimitiveDataAttributes &
@@ -418,7 +418,7 @@ export type NavigationMenuPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { NavigationMenuTriggerEvent } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuTriggerEvent = {} as NavigationMenuTriggerEvent;
+ * declare const value: NavigationMenuTriggerEvent;
  * ```
  */
 export type NavigationMenuTriggerEvent = Event;
@@ -432,7 +432,7 @@ export type NavigationMenuTriggerEvent = Event;
  * ```ts
  * import type { NavigationMenuLinkEvent } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuLinkEvent = {} as NavigationMenuLinkEvent;
+ * declare const value: NavigationMenuLinkEvent;
  * ```
  */
 export type NavigationMenuLinkEvent = Event;
@@ -446,7 +446,7 @@ export type NavigationMenuLinkEvent = Event;
  * ```ts
  * import type { NavigationMenuKeyboardEvent } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuKeyboardEvent = {} as NavigationMenuKeyboardEvent;
+ * declare const value: NavigationMenuKeyboardEvent;
  * ```
  */
 export type NavigationMenuKeyboardEvent = Event & { readonly key: string };
@@ -460,7 +460,7 @@ export type NavigationMenuKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import type { NavigationMenuFocusEvent } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuFocusEvent = {} as NavigationMenuFocusEvent;
+ * declare const value: NavigationMenuFocusEvent;
  * ```
  */
 export type NavigationMenuFocusEvent = Event & {
@@ -485,7 +485,7 @@ export type NavigationMenuFocusEvent = Event & {
  * ```ts
  * import type { NavigationMenuFocusOptions } from '@kovojs/headless-ui/navigation-menu';
  *
- * const value: NavigationMenuFocusOptions = {} as NavigationMenuFocusOptions;
+ * declare const value: NavigationMenuFocusOptions;
  * ```
  */
 export interface NavigationMenuFocusOptions {
@@ -504,7 +504,7 @@ export interface NavigationMenuFocusOptions {
  * ```ts
  * import { navigationMenuRootAttributes } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuRootAttributes>[0];
+ * declare const input: Parameters<typeof navigationMenuRootAttributes>[0];
  * const result = navigationMenuRootAttributes(input);
  * ```
  */
@@ -536,7 +536,7 @@ export function navigationMenuRootAttributes(
  * ```ts
  * import { navigationMenuListAttributes } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuListAttributes>[0];
+ * declare const input: Parameters<typeof navigationMenuListAttributes>[0];
  * const result = navigationMenuListAttributes(input);
  * ```
  */
@@ -560,7 +560,7 @@ export function navigationMenuListAttributes(
  * ```ts
  * import { navigationMenuItemAttributes } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuItemAttributes>[0];
+ * declare const input: Parameters<typeof navigationMenuItemAttributes>[0];
  * const result = navigationMenuItemAttributes(input);
  * ```
  */
@@ -585,7 +585,7 @@ export function navigationMenuItemAttributes(
  * ```ts
  * import { navigationMenuTriggerAttributes } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuTriggerAttributes>[0];
+ * declare const input: Parameters<typeof navigationMenuTriggerAttributes>[0];
  * const result = navigationMenuTriggerAttributes(input);
  * ```
  */
@@ -621,7 +621,7 @@ export function navigationMenuTriggerAttributes(
  * ```ts
  * import { navigationMenuContentAttributes } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuContentAttributes>[0];
+ * declare const input: Parameters<typeof navigationMenuContentAttributes>[0];
  * const result = navigationMenuContentAttributes(input);
  * ```
  */
@@ -651,7 +651,7 @@ export function navigationMenuContentAttributes(
  * ```ts
  * import { navigationMenuLinkAttributes } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuLinkAttributes>[0];
+ * declare const input: Parameters<typeof navigationMenuLinkAttributes>[0];
  * const result = navigationMenuLinkAttributes(input);
  * ```
  */
@@ -684,7 +684,7 @@ export function navigationMenuLinkAttributes(
  * ```ts
  * import { navigationMenuViewportAttributes } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuViewportAttributes>[0];
+ * declare const input: Parameters<typeof navigationMenuViewportAttributes>[0];
  * const result = navigationMenuViewportAttributes(input);
  * ```
  */
@@ -709,7 +709,7 @@ export function navigationMenuViewportAttributes(
  * ```ts
  * import { navigationMenuIndicatorAttributes } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuIndicatorAttributes>[0];
+ * declare const input: Parameters<typeof navigationMenuIndicatorAttributes>[0];
  * const result = navigationMenuIndicatorAttributes(input);
  * ```
  */
@@ -734,7 +734,7 @@ export function navigationMenuIndicatorAttributes(
  * ```ts
  * import { navigationMenuItemHighlighted } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuItemHighlighted>[0];
+ * declare const input: Parameters<typeof navigationMenuItemHighlighted>[0];
  * const result = navigationMenuItemHighlighted(input);
  * ```
  */
@@ -753,7 +753,7 @@ export function navigationMenuItemHighlighted(
  * ```ts
  * import { navigationMenuItemOpen } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuItemOpen>[0];
+ * declare const input: Parameters<typeof navigationMenuItemOpen>[0];
  * const result = navigationMenuItemOpen(input);
  * ```
  */
@@ -770,10 +770,10 @@ export function navigationMenuItemOpen(options: NavigationMenuItemAttributeOptio
  * ```ts
  * import { setNavigationMenuOpenValue } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof setNavigationMenuOpenValue>[0];
- * const state = {} as Parameters<typeof setNavigationMenuOpenValue>[1];
- * const options = {} as Parameters<typeof setNavigationMenuOpenValue>[2];
- * const detail = {} as Parameters<typeof setNavigationMenuOpenValue>[3];
+ * declare const input: Parameters<typeof setNavigationMenuOpenValue>[0];
+ * declare const state: Parameters<typeof setNavigationMenuOpenValue>[1];
+ * declare const options: Parameters<typeof setNavigationMenuOpenValue>[2];
+ * declare const detail: Parameters<typeof setNavigationMenuOpenValue>[3];
  * const result = setNavigationMenuOpenValue(input, state, options, detail);
  * ```
  *
@@ -810,10 +810,10 @@ export function setNavigationMenuOpenValue(
  * ```ts
  * import { toggleNavigationMenuOpenValue } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof toggleNavigationMenuOpenValue>[0];
- * const state = {} as Parameters<typeof toggleNavigationMenuOpenValue>[1];
- * const options = {} as Parameters<typeof toggleNavigationMenuOpenValue>[2];
- * const detail = {} as Parameters<typeof toggleNavigationMenuOpenValue>[3];
+ * declare const input: Parameters<typeof toggleNavigationMenuOpenValue>[0];
+ * declare const state: Parameters<typeof toggleNavigationMenuOpenValue>[1];
+ * declare const options: Parameters<typeof toggleNavigationMenuOpenValue>[2];
+ * declare const detail: Parameters<typeof toggleNavigationMenuOpenValue>[3];
  * const result = toggleNavigationMenuOpenValue(input, state, options, detail);
  * ```
  *
@@ -842,10 +842,10 @@ export function toggleNavigationMenuOpenValue(
  * ```ts
  * import { selectNavigationMenuLink } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof selectNavigationMenuLink>[0];
- * const state = {} as Parameters<typeof selectNavigationMenuLink>[1];
- * const options = {} as Parameters<typeof selectNavigationMenuLink>[2];
- * const detail = {} as Parameters<typeof selectNavigationMenuLink>[3];
+ * declare const input: Parameters<typeof selectNavigationMenuLink>[0];
+ * declare const state: Parameters<typeof selectNavigationMenuLink>[1];
+ * declare const options: Parameters<typeof selectNavigationMenuLink>[2];
+ * declare const detail: Parameters<typeof selectNavigationMenuLink>[3];
  * const result = selectNavigationMenuLink(input, state, options, detail);
  * ```
  *
@@ -892,9 +892,9 @@ export function selectNavigationMenuLink(
  * ```ts
  * import { navigationMenuMove } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuMove>[0];
- * const state = {} as Parameters<typeof navigationMenuMove>[1];
- * const options = {} as Parameters<typeof navigationMenuMove>[2];
+ * declare const input: Parameters<typeof navigationMenuMove>[0];
+ * declare const state: Parameters<typeof navigationMenuMove>[1];
+ * declare const options: Parameters<typeof navigationMenuMove>[2];
  * const result = navigationMenuMove(input, state, options);
  * ```
  *
@@ -937,9 +937,9 @@ export function navigationMenuMove(
  * ```ts
  * import { navigationMenuTypeahead } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuTypeahead>[0];
- * const state = {} as Parameters<typeof navigationMenuTypeahead>[1];
- * const options = {} as Parameters<typeof navigationMenuTypeahead>[2];
+ * declare const input: Parameters<typeof navigationMenuTypeahead>[0];
+ * declare const state: Parameters<typeof navigationMenuTypeahead>[1];
+ * declare const options: Parameters<typeof navigationMenuTypeahead>[2];
  * const result = navigationMenuTypeahead(input, state, options);
  * ```
  *
@@ -992,9 +992,9 @@ export function navigationMenuTypeahead(
  * ```ts
  * import { navigationMenuTriggerClick } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuTriggerClick>[0];
- * const state = {} as Parameters<typeof navigationMenuTriggerClick>[1];
- * const options = {} as Parameters<typeof navigationMenuTriggerClick>[2];
+ * declare const input: Parameters<typeof navigationMenuTriggerClick>[0];
+ * declare const state: Parameters<typeof navigationMenuTriggerClick>[1];
+ * declare const options: Parameters<typeof navigationMenuTriggerClick>[2];
  * const result = navigationMenuTriggerClick(input, state, options);
  * ```
  *
@@ -1026,9 +1026,9 @@ export function navigationMenuTriggerClick(
  * ```ts
  * import { navigationMenuTriggerPointerEnter } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuTriggerPointerEnter>[0];
- * const state = {} as Parameters<typeof navigationMenuTriggerPointerEnter>[1];
- * const options = {} as Parameters<typeof navigationMenuTriggerPointerEnter>[2];
+ * declare const input: Parameters<typeof navigationMenuTriggerPointerEnter>[0];
+ * declare const state: Parameters<typeof navigationMenuTriggerPointerEnter>[1];
+ * declare const options: Parameters<typeof navigationMenuTriggerPointerEnter>[2];
  * const result = navigationMenuTriggerPointerEnter(input, state, options);
  * ```
  *
@@ -1056,9 +1056,9 @@ export function navigationMenuTriggerPointerEnter(
  * ```ts
  * import { navigationMenuTriggerFocus } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuTriggerFocus>[0];
- * const state = {} as Parameters<typeof navigationMenuTriggerFocus>[1];
- * const options = {} as Parameters<typeof navigationMenuTriggerFocus>[2];
+ * declare const input: Parameters<typeof navigationMenuTriggerFocus>[0];
+ * declare const state: Parameters<typeof navigationMenuTriggerFocus>[1];
+ * declare const options: Parameters<typeof navigationMenuTriggerFocus>[2];
  * const result = navigationMenuTriggerFocus(input, state, options);
  * ```
  *
@@ -1086,9 +1086,9 @@ export function navigationMenuTriggerFocus(
  * ```ts
  * import { navigationMenuLinkClick } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuLinkClick>[0];
- * const state = {} as Parameters<typeof navigationMenuLinkClick>[1];
- * const options = {} as Parameters<typeof navigationMenuLinkClick>[2];
+ * declare const input: Parameters<typeof navigationMenuLinkClick>[0];
+ * declare const state: Parameters<typeof navigationMenuLinkClick>[1];
+ * declare const options: Parameters<typeof navigationMenuLinkClick>[2];
  * const result = navigationMenuLinkClick(input, state, options);
  * ```
  *
@@ -1120,9 +1120,9 @@ export function navigationMenuLinkClick(
  * ```ts
  * import { navigationMenuKeyDown } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuKeyDown>[0];
- * const state = {} as Parameters<typeof navigationMenuKeyDown>[1];
- * const options = {} as Parameters<typeof navigationMenuKeyDown>[2];
+ * declare const input: Parameters<typeof navigationMenuKeyDown>[0];
+ * declare const state: Parameters<typeof navigationMenuKeyDown>[1];
+ * declare const options: Parameters<typeof navigationMenuKeyDown>[2];
  * const result = navigationMenuKeyDown(input, state, options);
  * ```
  *
@@ -1172,9 +1172,9 @@ export function navigationMenuKeyDown(
  * ```ts
  * import { navigationMenuFocusElement } from '@kovojs/headless-ui/navigation-menu';
  *
- * const input = {} as Parameters<typeof navigationMenuFocusElement>[0];
- * const state = {} as Parameters<typeof navigationMenuFocusElement>[1];
- * const options = {} as Parameters<typeof navigationMenuFocusElement>[2];
+ * declare const input: Parameters<typeof navigationMenuFocusElement>[0];
+ * declare const state: Parameters<typeof navigationMenuFocusElement>[1];
+ * declare const options: Parameters<typeof navigationMenuFocusElement>[2];
  * const result = navigationMenuFocusElement(input, state, options);
  * ```
  */

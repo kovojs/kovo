@@ -15,7 +15,7 @@ import {
  * ```ts
  * import type { NumberFieldValue } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldValue = {} as NumberFieldValue;
+ * declare const value: NumberFieldValue;
  * ```
  */
 export type NumberFieldValue = number | undefined;
@@ -29,7 +29,7 @@ export type NumberFieldValue = number | undefined;
  * ```ts
  * import type { NumberFieldState } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldState = {} as NumberFieldState;
+ * declare const value: NumberFieldState;
  * ```
  */
 export interface NumberFieldState {
@@ -54,7 +54,7 @@ export interface NumberFieldState {
  * ```ts
  * import type { NumberFieldRootAttributeOptions } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldRootAttributeOptions = {} as NumberFieldRootAttributeOptions;
+ * declare const value: NumberFieldRootAttributeOptions;
  * ```
  */
 export interface NumberFieldRootAttributeOptions extends NumberFieldState {
@@ -70,7 +70,7 @@ export interface NumberFieldRootAttributeOptions extends NumberFieldState {
  * ```ts
  * import type { NumberFieldInputAttributeOptions } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldInputAttributeOptions = {} as NumberFieldInputAttributeOptions;
+ * declare const value: NumberFieldInputAttributeOptions;
  * ```
  */
 export interface NumberFieldInputAttributeOptions extends NumberFieldState {
@@ -91,7 +91,7 @@ export interface NumberFieldInputAttributeOptions extends NumberFieldState {
  * ```ts
  * import type { NumberFieldButtonAttributeOptions } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldButtonAttributeOptions = {} as NumberFieldButtonAttributeOptions;
+ * declare const value: NumberFieldButtonAttributeOptions;
  * ```
  */
 export interface NumberFieldButtonAttributeOptions extends NumberFieldState {
@@ -109,7 +109,7 @@ export interface NumberFieldButtonAttributeOptions extends NumberFieldState {
  * ```ts
  * import type { NumberFieldChangeReason } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldChangeReason = {} as NumberFieldChangeReason;
+ * declare const value: NumberFieldChangeReason;
  * ```
  */
 export type NumberFieldChangeReason = 'decrement' | 'increment' | 'input' | 'programmatic';
@@ -123,7 +123,7 @@ export type NumberFieldChangeReason = 'decrement' | 'increment' | 'input' | 'pro
  * ```ts
  * import type { NumberFieldChangeDetail } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldChangeDetail = {} as NumberFieldChangeDetail;
+ * declare const value: NumberFieldChangeDetail;
  * ```
  */
 export type NumberFieldChangeDetail = PrimitiveChangeDetail<
@@ -140,7 +140,7 @@ export type NumberFieldChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { NumberFieldChangeOptions } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldChangeOptions = {} as NumberFieldChangeOptions;
+ * declare const value: NumberFieldChangeOptions;
  * ```
  */
 export interface NumberFieldChangeOptions {
@@ -156,7 +156,7 @@ export interface NumberFieldChangeOptions {
  * ```ts
  * import type { NumberFieldChangeResult } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldChangeResult = {} as NumberFieldChangeResult;
+ * declare const value: NumberFieldChangeResult;
  * ```
  */
 export interface NumberFieldChangeResult {
@@ -174,7 +174,7 @@ export interface NumberFieldChangeResult {
  * ```ts
  * import type { NumberFieldPrimitiveAttributes } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldPrimitiveAttributes = {} as NumberFieldPrimitiveAttributes;
+ * declare const value: NumberFieldPrimitiveAttributes;
  * ```
  */
 export type NumberFieldPrimitiveAttributes = PrimitiveDataAttributes &
@@ -189,7 +189,7 @@ export type NumberFieldPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { NumberFieldButtonEvent } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldButtonEvent = {} as NumberFieldButtonEvent;
+ * declare const value: NumberFieldButtonEvent;
  * ```
  */
 export type NumberFieldButtonEvent = Event;
@@ -203,7 +203,7 @@ export type NumberFieldButtonEvent = Event;
  * ```ts
  * import type { NumberFieldInputEvent } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldInputEvent = {} as NumberFieldInputEvent;
+ * declare const value: NumberFieldInputEvent;
  * ```
  */
 export type NumberFieldInputEvent = Event & {
@@ -220,7 +220,7 @@ export type NumberFieldInputEvent = Event & {
  * ```ts
  * import type { NumberFieldKeyboardEvent } from '@kovojs/headless-ui/number-field';
  *
- * const value: NumberFieldKeyboardEvent = {} as NumberFieldKeyboardEvent;
+ * declare const value: NumberFieldKeyboardEvent;
  * ```
  */
 export type NumberFieldKeyboardEvent = Event & {
@@ -240,7 +240,7 @@ export type NumberFieldKeyboardEvent = Event & {
  * ```ts
  * import { numberFieldRootAttributes } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof numberFieldRootAttributes>[0];
+ * declare const input: Parameters<typeof numberFieldRootAttributes>[0];
  * const result = numberFieldRootAttributes(input);
  * ```
  */
@@ -262,7 +262,7 @@ export function numberFieldRootAttributes(
  * ```ts
  * import { numberFieldInputAttributes } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof numberFieldInputAttributes>[0];
+ * declare const input: Parameters<typeof numberFieldInputAttributes>[0];
  * const result = numberFieldInputAttributes(input);
  * ```
  */
@@ -301,7 +301,7 @@ export function numberFieldInputAttributes(
  * ```ts
  * import { numberFieldIncrementAttributes } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof numberFieldIncrementAttributes>[0];
+ * declare const input: Parameters<typeof numberFieldIncrementAttributes>[0];
  * const result = numberFieldIncrementAttributes(input);
  * ```
  */
@@ -320,7 +320,7 @@ export function numberFieldIncrementAttributes(
  * ```ts
  * import { numberFieldDecrementAttributes } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof numberFieldDecrementAttributes>[0];
+ * declare const input: Parameters<typeof numberFieldDecrementAttributes>[0];
  * const result = numberFieldDecrementAttributes(input);
  * ```
  */
@@ -339,10 +339,10 @@ export function numberFieldDecrementAttributes(
  * ```ts
  * import { setNumberFieldValue } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof setNumberFieldValue>[0];
- * const state = {} as Parameters<typeof setNumberFieldValue>[1];
- * const options = {} as Parameters<typeof setNumberFieldValue>[2];
- * const detail = {} as Parameters<typeof setNumberFieldValue>[3];
+ * declare const input: Parameters<typeof setNumberFieldValue>[0];
+ * declare const state: Parameters<typeof setNumberFieldValue>[1];
+ * declare const options: Parameters<typeof setNumberFieldValue>[2];
+ * declare const detail: Parameters<typeof setNumberFieldValue>[3];
  * const result = setNumberFieldValue(input, state, options, detail);
  * ```
  *
@@ -378,8 +378,8 @@ export function setNumberFieldValue(
  * ```ts
  * import { incrementNumberFieldValue } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof incrementNumberFieldValue>[0];
- * const state = {} as Parameters<typeof incrementNumberFieldValue>[1];
+ * declare const input: Parameters<typeof incrementNumberFieldValue>[0];
+ * declare const state: Parameters<typeof incrementNumberFieldValue>[1];
  * const result = incrementNumberFieldValue(input, state);
  * ```
  *
@@ -401,8 +401,8 @@ export function incrementNumberFieldValue(
  * ```ts
  * import { decrementNumberFieldValue } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof decrementNumberFieldValue>[0];
- * const state = {} as Parameters<typeof decrementNumberFieldValue>[1];
+ * declare const input: Parameters<typeof decrementNumberFieldValue>[0];
+ * declare const state: Parameters<typeof decrementNumberFieldValue>[1];
  * const result = decrementNumberFieldValue(input, state);
  * ```
  *
@@ -424,7 +424,7 @@ export function decrementNumberFieldValue(
  * ```ts
  * import { numberFieldValueFromString } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof numberFieldValueFromString>[0];
+ * declare const input: Parameters<typeof numberFieldValueFromString>[0];
  * const result = numberFieldValueFromString(input);
  * ```
  */
@@ -443,9 +443,9 @@ export function numberFieldValueFromString(value: string): NumberFieldValue {
  * ```ts
  * import { numberFieldInput } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof numberFieldInput>[0];
- * const state = {} as Parameters<typeof numberFieldInput>[1];
- * const options = {} as Parameters<typeof numberFieldInput>[2];
+ * declare const input: Parameters<typeof numberFieldInput>[0];
+ * declare const state: Parameters<typeof numberFieldInput>[1];
+ * declare const options: Parameters<typeof numberFieldInput>[2];
  * const result = numberFieldInput(input, state, options);
  * ```
  *
@@ -486,9 +486,9 @@ export function numberFieldInput(
  * ```ts
  * import { numberFieldIncrementClick } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof numberFieldIncrementClick>[0];
- * const state = {} as Parameters<typeof numberFieldIncrementClick>[1];
- * const options = {} as Parameters<typeof numberFieldIncrementClick>[2];
+ * declare const input: Parameters<typeof numberFieldIncrementClick>[0];
+ * declare const state: Parameters<typeof numberFieldIncrementClick>[1];
+ * declare const options: Parameters<typeof numberFieldIncrementClick>[2];
  * const result = numberFieldIncrementClick(input, state, options);
  * ```
  *
@@ -520,9 +520,9 @@ export function numberFieldIncrementClick(
  * ```ts
  * import { numberFieldDecrementClick } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof numberFieldDecrementClick>[0];
- * const state = {} as Parameters<typeof numberFieldDecrementClick>[1];
- * const options = {} as Parameters<typeof numberFieldDecrementClick>[2];
+ * declare const input: Parameters<typeof numberFieldDecrementClick>[0];
+ * declare const state: Parameters<typeof numberFieldDecrementClick>[1];
+ * declare const options: Parameters<typeof numberFieldDecrementClick>[2];
  * const result = numberFieldDecrementClick(input, state, options);
  * ```
  *
@@ -554,9 +554,9 @@ export function numberFieldDecrementClick(
  * ```ts
  * import { numberFieldKeyDown } from '@kovojs/headless-ui/number-field';
  *
- * const input = {} as Parameters<typeof numberFieldKeyDown>[0];
- * const state = {} as Parameters<typeof numberFieldKeyDown>[1];
- * const options = {} as Parameters<typeof numberFieldKeyDown>[2];
+ * declare const input: Parameters<typeof numberFieldKeyDown>[0];
+ * declare const state: Parameters<typeof numberFieldKeyDown>[1];
+ * declare const options: Parameters<typeof numberFieldKeyDown>[2];
  * const result = numberFieldKeyDown(input, state, options);
  * ```
  *

@@ -19,6 +19,9 @@ describe('create-kovo reference generator', () => {
       );
 
       expect(page).toContain(CREATE_KOVO_USAGE);
+      expect(page).toContain('create-kovo my-app --dialect sqlite --experimental-sqlite');
+      expect(page).toContain('SQLite scaffolds are explicit opt-in');
+      expect(page).toContain('KOVO_EXPERIMENTAL_SQLITE=1');
       for (const option of CREATE_KOVO_REFERENCE.options) {
         expect(page).toContain(`\`${option.flag}\``);
         expect(page).toContain(option.docsDescription ?? option.description);

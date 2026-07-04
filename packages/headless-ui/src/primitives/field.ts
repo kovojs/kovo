@@ -9,7 +9,7 @@ import { dataDisabled, mergeDataAttributes, type PrimitiveDataAttributes } from 
  * ```ts
  * import type { FieldAttributeOptions } from '@kovojs/headless-ui/field';
  *
- * const value: FieldAttributeOptions = {} as FieldAttributeOptions;
+ * declare const value: FieldAttributeOptions;
  * ```
  */
 export interface FieldAttributeOptions {
@@ -28,7 +28,7 @@ export interface FieldAttributeOptions {
  * ```ts
  * import type { FieldControlAttributeOptions } from '@kovojs/headless-ui/field';
  *
- * const value: FieldControlAttributeOptions = {} as FieldControlAttributeOptions;
+ * declare const value: FieldControlAttributeOptions;
  * ```
  */
 export interface FieldControlAttributeOptions extends FieldAttributeOptions {
@@ -52,7 +52,7 @@ export interface FieldControlAttributeOptions extends FieldAttributeOptions {
  * ```ts
  * import type { FieldLabelAttributeOptions } from '@kovojs/headless-ui/field';
  *
- * const value: FieldLabelAttributeOptions = {} as FieldLabelAttributeOptions;
+ * declare const value: FieldLabelAttributeOptions;
  * ```
  */
 export interface FieldLabelAttributeOptions extends FieldAttributeOptions {
@@ -68,7 +68,7 @@ export interface FieldLabelAttributeOptions extends FieldAttributeOptions {
  * ```ts
  * import type { FieldMessageAttributeOptions } from '@kovojs/headless-ui/field';
  *
- * const value: FieldMessageAttributeOptions = {} as FieldMessageAttributeOptions;
+ * declare const value: FieldMessageAttributeOptions;
  * ```
  */
 export interface FieldMessageAttributeOptions extends FieldAttributeOptions {
@@ -84,7 +84,7 @@ export interface FieldMessageAttributeOptions extends FieldAttributeOptions {
  * ```ts
  * import type { FieldsetAttributeOptions } from '@kovojs/headless-ui/field';
  *
- * const value: FieldsetAttributeOptions = {} as FieldsetAttributeOptions;
+ * declare const value: FieldsetAttributeOptions;
  * ```
  */
 export interface FieldsetAttributeOptions extends FieldAttributeOptions {
@@ -103,7 +103,7 @@ export interface FieldsetAttributeOptions extends FieldAttributeOptions {
  * ```ts
  * import type { FieldPrimitiveAttributes } from '@kovojs/headless-ui/field';
  *
- * const value: FieldPrimitiveAttributes = {} as FieldPrimitiveAttributes;
+ * declare const value: FieldPrimitiveAttributes;
  * ```
  */
 export type FieldPrimitiveAttributes = PrimitiveDataAttributes &
@@ -118,7 +118,7 @@ export type FieldPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import { fieldRootAttributes } from '@kovojs/headless-ui/field';
  *
- * const input = {} as Parameters<typeof fieldRootAttributes>[0];
+ * declare const input: Parameters<typeof fieldRootAttributes>[0];
  * const result = fieldRootAttributes(input);
  * ```
  */
@@ -138,7 +138,7 @@ export function fieldRootAttributes(options: FieldAttributeOptions = {}): FieldP
  * ```ts
  * import { fieldLabelAttributes } from '@kovojs/headless-ui/field';
  *
- * const input = {} as Parameters<typeof fieldLabelAttributes>[0];
+ * declare const input: Parameters<typeof fieldLabelAttributes>[0];
  * const result = fieldLabelAttributes(input);
  * ```
  */
@@ -161,7 +161,7 @@ export function fieldLabelAttributes(
  * ```ts
  * import { fieldControlAttributes } from '@kovojs/headless-ui/field';
  *
- * const input = {} as Parameters<typeof fieldControlAttributes>[0];
+ * declare const input: Parameters<typeof fieldControlAttributes>[0];
  * const result = fieldControlAttributes(input);
  * ```
  */
@@ -198,7 +198,7 @@ export function fieldControlAttributes(
  * ```ts
  * import { fieldDescriptionAttributes } from '@kovojs/headless-ui/field';
  *
- * const input = {} as Parameters<typeof fieldDescriptionAttributes>[0];
+ * declare const input: Parameters<typeof fieldDescriptionAttributes>[0];
  * const result = fieldDescriptionAttributes(input);
  * ```
  */
@@ -221,7 +221,7 @@ export function fieldDescriptionAttributes(
  * ```ts
  * import { fieldErrorAttributes } from '@kovojs/headless-ui/field';
  *
- * const input = {} as Parameters<typeof fieldErrorAttributes>[0];
+ * declare const input: Parameters<typeof fieldErrorAttributes>[0];
  * const result = fieldErrorAttributes(input);
  * ```
  */
@@ -245,7 +245,7 @@ export function fieldErrorAttributes(
  * ```ts
  * import { fieldsetRootAttributes } from '@kovojs/headless-ui/field';
  *
- * const input = {} as Parameters<typeof fieldsetRootAttributes>[0];
+ * declare const input: Parameters<typeof fieldsetRootAttributes>[0];
  * const result = fieldsetRootAttributes(input);
  * ```
  */
@@ -274,7 +274,7 @@ export function fieldsetRootAttributes(
  * ```ts
  * import { fieldsetLegendAttributes } from '@kovojs/headless-ui/field';
  *
- * const input = {} as Parameters<typeof fieldsetLegendAttributes>[0];
+ * declare const input: Parameters<typeof fieldsetLegendAttributes>[0];
  * const result = fieldsetLegendAttributes(input);
  * ```
  */

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   COMMANDS_MANIFEST,
+  formatNoArgsCommandList,
   formatNoArgsMessage,
 } from '../../packages/cli/src/commands-manifest.ts';
 
@@ -72,6 +73,7 @@ describe('cli-ref generator', () => {
     expect(page).toContain('title: "@kovojs/cli"');
     expect(page).toContain('## Commands');
     expect(page).toContain(formatNoArgsMessage().trimEnd());
+    expect(page).toContain(`kovo: ${formatNoArgsCommandList()}`);
     for (const name of commandNames) {
       expect(page).toContain(`### kovo ${name}`);
     }

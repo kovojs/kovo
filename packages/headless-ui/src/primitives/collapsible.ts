@@ -17,7 +17,7 @@ import {
  * ```ts
  * import type { CollapsibleChangeReason } from '@kovojs/headless-ui/collapsible';
  *
- * const value: CollapsibleChangeReason = {} as CollapsibleChangeReason;
+ * declare const value: CollapsibleChangeReason;
  * ```
  */
 export type CollapsibleChangeReason = 'programmatic' | 'trigger-click';
@@ -31,7 +31,7 @@ export type CollapsibleChangeReason = 'programmatic' | 'trigger-click';
  * ```ts
  * import type { CollapsibleChangeDetail } from '@kovojs/headless-ui/collapsible';
  *
- * const value: CollapsibleChangeDetail = {} as CollapsibleChangeDetail;
+ * declare const value: CollapsibleChangeDetail;
  * ```
  */
 export type CollapsibleChangeDetail = PrimitiveChangeDetail<CollapsibleChangeReason, boolean>;
@@ -45,7 +45,7 @@ export type CollapsibleChangeDetail = PrimitiveChangeDetail<CollapsibleChangeRea
  * ```ts
  * import type { CollapsibleState } from '@kovojs/headless-ui/collapsible';
  *
- * const value: CollapsibleState = {} as CollapsibleState;
+ * declare const value: CollapsibleState;
  * ```
  */
 export interface CollapsibleState {
@@ -62,7 +62,7 @@ export interface CollapsibleState {
  * ```ts
  * import type { CollapsibleAttributeOptions } from '@kovojs/headless-ui/collapsible';
  *
- * const value: CollapsibleAttributeOptions = {} as CollapsibleAttributeOptions;
+ * declare const value: CollapsibleAttributeOptions;
  * ```
  */
 export interface CollapsibleAttributeOptions extends CollapsibleState {
@@ -78,7 +78,7 @@ export interface CollapsibleAttributeOptions extends CollapsibleState {
  * ```ts
  * import type { CollapsibleChangeOptions } from '@kovojs/headless-ui/collapsible';
  *
- * const value: CollapsibleChangeOptions = {} as CollapsibleChangeOptions;
+ * declare const value: CollapsibleChangeOptions;
  * ```
  */
 export interface CollapsibleChangeOptions {
@@ -94,7 +94,7 @@ export interface CollapsibleChangeOptions {
  * ```ts
  * import type { CollapsibleChangeResult } from '@kovojs/headless-ui/collapsible';
  *
- * const value: CollapsibleChangeResult = {} as CollapsibleChangeResult;
+ * declare const value: CollapsibleChangeResult;
  * ```
  */
 export interface CollapsibleChangeResult {
@@ -112,7 +112,7 @@ export interface CollapsibleChangeResult {
  * ```ts
  * import type { CollapsiblePrimitiveAttributes } from '@kovojs/headless-ui/collapsible';
  *
- * const value: CollapsiblePrimitiveAttributes = {} as CollapsiblePrimitiveAttributes;
+ * declare const value: CollapsiblePrimitiveAttributes;
  * ```
  */
 export type CollapsiblePrimitiveAttributes = PrimitiveDataAttributes &
@@ -127,7 +127,7 @@ export type CollapsiblePrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { CollapsibleTriggerEvent } from '@kovojs/headless-ui/collapsible';
  *
- * const value: CollapsibleTriggerEvent = {} as CollapsibleTriggerEvent;
+ * declare const value: CollapsibleTriggerEvent;
  * ```
  */
 export type CollapsibleTriggerEvent = Event;
@@ -141,7 +141,7 @@ export type CollapsibleTriggerEvent = Event;
  * ```ts
  * import { collapsibleRootAttributes } from '@kovojs/headless-ui/collapsible';
  *
- * const input = {} as Parameters<typeof collapsibleRootAttributes>[0];
+ * declare const input: Parameters<typeof collapsibleRootAttributes>[0];
  * const result = collapsibleRootAttributes(input);
  * ```
  */
@@ -163,7 +163,7 @@ export function collapsibleRootAttributes(state: CollapsibleState): CollapsibleP
  * ```ts
  * import { collapsibleTriggerAttributes } from '@kovojs/headless-ui/collapsible';
  *
- * const input = {} as Parameters<typeof collapsibleTriggerAttributes>[0];
+ * declare const input: Parameters<typeof collapsibleTriggerAttributes>[0];
  * const result = collapsibleTriggerAttributes(input);
  * ```
  */
@@ -186,7 +186,7 @@ export function collapsibleTriggerAttributes(
  * ```ts
  * import { collapsibleContentAttributes } from '@kovojs/headless-ui/collapsible';
  *
- * const input = {} as Parameters<typeof collapsibleContentAttributes>[0];
+ * declare const input: Parameters<typeof collapsibleContentAttributes>[0];
  * const result = collapsibleContentAttributes(input);
  * ```
  */
@@ -208,10 +208,10 @@ export function collapsibleContentAttributes(
  * ```ts
  * import { setCollapsibleOpen } from '@kovojs/headless-ui/collapsible';
  *
- * const input = {} as Parameters<typeof setCollapsibleOpen>[0];
- * const state = {} as Parameters<typeof setCollapsibleOpen>[1];
- * const options = {} as Parameters<typeof setCollapsibleOpen>[2];
- * const detail = {} as Parameters<typeof setCollapsibleOpen>[3];
+ * declare const input: Parameters<typeof setCollapsibleOpen>[0];
+ * declare const state: Parameters<typeof setCollapsibleOpen>[1];
+ * declare const options: Parameters<typeof setCollapsibleOpen>[2];
+ * declare const detail: Parameters<typeof setCollapsibleOpen>[3];
  * const result = setCollapsibleOpen(input, state, options, detail);
  * ```
  *
@@ -235,9 +235,9 @@ export function setCollapsibleOpen(
  * ```ts
  * import { toggleCollapsible } from '@kovojs/headless-ui/collapsible';
  *
- * const input = {} as Parameters<typeof toggleCollapsible>[0];
- * const state = {} as Parameters<typeof toggleCollapsible>[1];
- * const options = {} as Parameters<typeof toggleCollapsible>[2];
+ * declare const input: Parameters<typeof toggleCollapsible>[0];
+ * declare const state: Parameters<typeof toggleCollapsible>[1];
+ * declare const options: Parameters<typeof toggleCollapsible>[2];
  * const result = toggleCollapsible(input, state, options);
  * ```
  *
@@ -258,9 +258,9 @@ export function toggleCollapsible(
  * ```ts
  * import { collapsibleTriggerClick } from '@kovojs/headless-ui/collapsible';
  *
- * const input = {} as Parameters<typeof collapsibleTriggerClick>[0];
- * const state = {} as Parameters<typeof collapsibleTriggerClick>[1];
- * const options = {} as Parameters<typeof collapsibleTriggerClick>[2];
+ * declare const input: Parameters<typeof collapsibleTriggerClick>[0];
+ * declare const state: Parameters<typeof collapsibleTriggerClick>[1];
+ * declare const options: Parameters<typeof collapsibleTriggerClick>[2];
  * const result = collapsibleTriggerClick(input, state, options);
  * ```
  *

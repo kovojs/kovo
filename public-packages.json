@@ -1985,7 +1985,7 @@
       "apiRef": {
         "order": 5,
         "slug": "drizzle",
-        "description": "Drizzle adapter: table annotations, touch-graph extraction from queries, and invalidation registry derivation."
+        "description": "Drizzle adapter: table annotations, runtime database metadata extraction, managed SQL helpers, and invalidation registry derivation."
       }
     },
     {

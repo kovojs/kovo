@@ -18,7 +18,7 @@ import {
  * ```ts
  * import type { ToolbarOrientation } from '@kovojs/headless-ui/toolbar';
  *
- * const value: ToolbarOrientation = {} as ToolbarOrientation;
+ * declare const value: ToolbarOrientation;
  * ```
  *
  *
@@ -35,7 +35,7 @@ export type ToolbarOrientation = 'horizontal' | 'vertical';
  * ```ts
  * import type { ToolbarItem } from '@kovojs/headless-ui/toolbar';
  *
- * const value: ToolbarItem = {} as ToolbarItem;
+ * declare const value: ToolbarItem;
  * ```
  */
 export interface ToolbarItem {
@@ -52,7 +52,7 @@ export interface ToolbarItem {
  * ```ts
  * import type { ToolbarState } from '@kovojs/headless-ui/toolbar';
  *
- * const value: ToolbarState = {} as ToolbarState;
+ * declare const value: ToolbarState;
  * ```
  */
 export interface ToolbarState {
@@ -73,7 +73,7 @@ export interface ToolbarState {
  * ```ts
  * import type { ToolbarRootAttributeOptions } from '@kovojs/headless-ui/toolbar';
  *
- * const value: ToolbarRootAttributeOptions = {} as ToolbarRootAttributeOptions;
+ * declare const value: ToolbarRootAttributeOptions;
  * ```
  */
 export interface ToolbarRootAttributeOptions extends ToolbarState {
@@ -92,7 +92,7 @@ export interface ToolbarRootAttributeOptions extends ToolbarState {
  * ```ts
  * import type { ToolbarItemAttributeOptions } from '@kovojs/headless-ui/toolbar';
  *
- * const value: ToolbarItemAttributeOptions = {} as ToolbarItemAttributeOptions;
+ * declare const value: ToolbarItemAttributeOptions;
  * ```
  */
 export interface ToolbarItemAttributeOptions extends ToolbarState {
@@ -110,7 +110,7 @@ export interface ToolbarItemAttributeOptions extends ToolbarState {
  * ```ts
  * import type { ToolbarButtonAttributeOptions } from '@kovojs/headless-ui/toolbar';
  *
- * const value: ToolbarButtonAttributeOptions = {} as ToolbarButtonAttributeOptions;
+ * declare const value: ToolbarButtonAttributeOptions;
  * ```
  */
 export interface ToolbarButtonAttributeOptions extends ToolbarItemAttributeOptions {
@@ -126,7 +126,7 @@ export interface ToolbarButtonAttributeOptions extends ToolbarItemAttributeOptio
  * ```ts
  * import type { ToolbarMoveResult } from '@kovojs/headless-ui/toolbar';
  *
- * const value: ToolbarMoveResult = {} as ToolbarMoveResult;
+ * declare const value: ToolbarMoveResult;
  * ```
  */
 export interface ToolbarMoveResult {
@@ -143,7 +143,7 @@ export interface ToolbarMoveResult {
  * ```ts
  * import type { ToolbarPrimitiveAttributes } from '@kovojs/headless-ui/toolbar';
  *
- * const value: ToolbarPrimitiveAttributes = {} as ToolbarPrimitiveAttributes;
+ * declare const value: ToolbarPrimitiveAttributes;
  * ```
  */
 export type ToolbarPrimitiveAttributes = PrimitiveDataAttributes &
@@ -158,7 +158,7 @@ export type ToolbarPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { ToolbarKeyboardEvent } from '@kovojs/headless-ui/toolbar';
  *
- * const value: ToolbarKeyboardEvent = {} as ToolbarKeyboardEvent;
+ * declare const value: ToolbarKeyboardEvent;
  * ```
  */
 export type ToolbarKeyboardEvent = Event & { readonly key: string };
@@ -172,7 +172,7 @@ export type ToolbarKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import { toolbarRovingIndex } from '@kovojs/headless-ui/toolbar';
  *
- * const input = {} as Parameters<typeof toolbarRovingIndex>[0];
+ * declare const input: Parameters<typeof toolbarRovingIndex>[0];
  * const result = toolbarRovingIndex(input);
  * ```
  */
@@ -202,7 +202,7 @@ export function toolbarRovingIndex(state: ToolbarState): number {
  * ```ts
  * import { toolbarRootAttributes } from '@kovojs/headless-ui/toolbar';
  *
- * const input = {} as Parameters<typeof toolbarRootAttributes>[0];
+ * declare const input: Parameters<typeof toolbarRootAttributes>[0];
  * const result = toolbarRootAttributes(input);
  * ```
  */
@@ -232,7 +232,7 @@ export function toolbarRootAttributes(
  * ```ts
  * import { toolbarItemAttributes } from '@kovojs/headless-ui/toolbar';
  *
- * const input = {} as Parameters<typeof toolbarItemAttributes>[0];
+ * declare const input: Parameters<typeof toolbarItemAttributes>[0];
  * const result = toolbarItemAttributes(input);
  * ```
  */
@@ -256,7 +256,7 @@ export function toolbarItemAttributes(
  * ```ts
  * import { toolbarButtonAttributes } from '@kovojs/headless-ui/toolbar';
  *
- * const input = {} as Parameters<typeof toolbarButtonAttributes>[0];
+ * declare const input: Parameters<typeof toolbarButtonAttributes>[0];
  * const result = toolbarButtonAttributes(input);
  * ```
  */
@@ -287,8 +287,8 @@ export function toolbarButtonAttributes(
  * ```ts
  * import { toolbarMoveFocus } from '@kovojs/headless-ui/toolbar';
  *
- * const input = {} as Parameters<typeof toolbarMoveFocus>[0];
- * const state = {} as Parameters<typeof toolbarMoveFocus>[1];
+ * declare const input: Parameters<typeof toolbarMoveFocus>[0];
+ * declare const state: Parameters<typeof toolbarMoveFocus>[1];
  * const result = toolbarMoveFocus(input, state);
  * ```
  *
@@ -320,8 +320,8 @@ export function toolbarMoveFocus(state: ToolbarState, intent: NavigationIntent):
  * ```ts
  * import { toolbarKeyDown } from '@kovojs/headless-ui/toolbar';
  *
- * const input = {} as Parameters<typeof toolbarKeyDown>[0];
- * const state = {} as Parameters<typeof toolbarKeyDown>[1];
+ * declare const input: Parameters<typeof toolbarKeyDown>[0];
+ * declare const state: Parameters<typeof toolbarKeyDown>[1];
  * const result = toolbarKeyDown(input, state);
  * ```
  *

@@ -24,7 +24,7 @@ import {
  * ```ts
  * import type { DropdownMenuItem } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuItem = {} as DropdownMenuItem;
+ * declare const value: DropdownMenuItem;
  * ```
  *
  *
@@ -45,7 +45,7 @@ export interface DropdownMenuItem {
  * ```ts
  * import type { DropdownMenuState } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuState = {} as DropdownMenuState;
+ * declare const value: DropdownMenuState;
  * ```
  */
 export interface DropdownMenuState {
@@ -64,7 +64,7 @@ export interface DropdownMenuState {
  * ```ts
  * import type { DropdownMenuRootAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuRootAttributeOptions = {} as DropdownMenuRootAttributeOptions;
+ * declare const value: DropdownMenuRootAttributeOptions;
  * ```
  */
 export interface DropdownMenuRootAttributeOptions extends DropdownMenuState {
@@ -80,7 +80,7 @@ export interface DropdownMenuRootAttributeOptions extends DropdownMenuState {
  * ```ts
  * import type { DropdownMenuTriggerAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuTriggerAttributeOptions = {} as DropdownMenuTriggerAttributeOptions;
+ * declare const value: DropdownMenuTriggerAttributeOptions;
  * ```
  */
 export interface DropdownMenuTriggerAttributeOptions extends DropdownMenuState {
@@ -98,7 +98,7 @@ export interface DropdownMenuTriggerAttributeOptions extends DropdownMenuState {
  * ```ts
  * import type { DropdownMenuContentAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuContentAttributeOptions = {} as DropdownMenuContentAttributeOptions;
+ * declare const value: DropdownMenuContentAttributeOptions;
  * ```
  */
 export interface DropdownMenuContentAttributeOptions extends DropdownMenuState {
@@ -115,7 +115,7 @@ export interface DropdownMenuContentAttributeOptions extends DropdownMenuState {
  * ```ts
  * import type { DropdownMenuItemAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuItemAttributeOptions = {} as DropdownMenuItemAttributeOptions;
+ * declare const value: DropdownMenuItemAttributeOptions;
  * ```
  */
 export interface DropdownMenuItemAttributeOptions extends DropdownMenuState {
@@ -134,7 +134,7 @@ export interface DropdownMenuItemAttributeOptions extends DropdownMenuState {
  * ```ts
  * import type { DropdownMenuGroupAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuGroupAttributeOptions = {} as DropdownMenuGroupAttributeOptions;
+ * declare const value: DropdownMenuGroupAttributeOptions;
  * ```
  */
 export interface DropdownMenuGroupAttributeOptions extends DropdownMenuState {
@@ -151,7 +151,7 @@ export interface DropdownMenuGroupAttributeOptions extends DropdownMenuState {
  * ```ts
  * import type { DropdownMenuSeparatorAttributeOptions } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuSeparatorAttributeOptions = {} as DropdownMenuSeparatorAttributeOptions;
+ * declare const value: DropdownMenuSeparatorAttributeOptions;
  * ```
  */
 export interface DropdownMenuSeparatorAttributeOptions {
@@ -167,7 +167,7 @@ export interface DropdownMenuSeparatorAttributeOptions {
  * ```ts
  * import type { DropdownMenuOpenChangeReason } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuOpenChangeReason = {} as DropdownMenuOpenChangeReason;
+ * declare const value: DropdownMenuOpenChangeReason;
  * ```
  */
 export type DropdownMenuOpenChangeReason =
@@ -186,7 +186,7 @@ export type DropdownMenuOpenChangeReason =
  * ```ts
  * import type { DropdownMenuSelectReason } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuSelectReason = {} as DropdownMenuSelectReason;
+ * declare const value: DropdownMenuSelectReason;
  * ```
  */
 export type DropdownMenuSelectReason = 'item-click' | 'item-keyboard' | 'programmatic';
@@ -200,7 +200,7 @@ export type DropdownMenuSelectReason = 'item-click' | 'item-keyboard' | 'program
  * ```ts
  * import type { DropdownMenuOpenChangeDetail } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuOpenChangeDetail = {} as DropdownMenuOpenChangeDetail;
+ * declare const value: DropdownMenuOpenChangeDetail;
  * ```
  */
 export type DropdownMenuOpenChangeDetail = PrimitiveChangeDetail<
@@ -217,7 +217,7 @@ export type DropdownMenuOpenChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { DropdownMenuSelectDetail } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuSelectDetail = {} as DropdownMenuSelectDetail;
+ * declare const value: DropdownMenuSelectDetail;
  * ```
  */
 export type DropdownMenuSelectDetail = PrimitiveChangeDetail<DropdownMenuSelectReason, string>;
@@ -231,7 +231,7 @@ export type DropdownMenuSelectDetail = PrimitiveChangeDetail<DropdownMenuSelectR
  * ```ts
  * import type { DropdownMenuChangeOptions } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuChangeOptions = {} as DropdownMenuChangeOptions;
+ * declare const value: DropdownMenuChangeOptions;
  * ```
  */
 export interface DropdownMenuChangeOptions {
@@ -248,7 +248,7 @@ export interface DropdownMenuChangeOptions {
  * ```ts
  * import type { DropdownMenuOpenChangeResult } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuOpenChangeResult = {} as DropdownMenuOpenChangeResult;
+ * declare const value: DropdownMenuOpenChangeResult;
  * ```
  */
 export interface DropdownMenuOpenChangeResult {
@@ -266,7 +266,7 @@ export interface DropdownMenuOpenChangeResult {
  * ```ts
  * import type { DropdownMenuSelectResult } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuSelectResult = {} as DropdownMenuSelectResult;
+ * declare const value: DropdownMenuSelectResult;
  * ```
  */
 export interface DropdownMenuSelectResult {
@@ -285,7 +285,7 @@ export interface DropdownMenuSelectResult {
  * ```ts
  * import type { DropdownMenuMoveResult } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuMoveResult = {} as DropdownMenuMoveResult;
+ * declare const value: DropdownMenuMoveResult;
  * ```
  */
 export interface DropdownMenuMoveResult {
@@ -302,7 +302,7 @@ export interface DropdownMenuMoveResult {
  * ```ts
  * import type { DropdownMenuTypeaheadOptions } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuTypeaheadOptions = {} as DropdownMenuTypeaheadOptions;
+ * declare const value: DropdownMenuTypeaheadOptions;
  * ```
  */
 export interface DropdownMenuTypeaheadOptions {
@@ -322,7 +322,7 @@ export interface DropdownMenuTypeaheadOptions {
  * ```ts
  * import type { DropdownMenuTypeaheadResult } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuTypeaheadResult = {} as DropdownMenuTypeaheadResult;
+ * declare const value: DropdownMenuTypeaheadResult;
  * ```
  */
 export interface DropdownMenuTypeaheadResult extends DropdownMenuMoveResult {
@@ -338,7 +338,7 @@ export interface DropdownMenuTypeaheadResult extends DropdownMenuMoveResult {
  * ```ts
  * import type { DropdownMenuPrimitiveAttributes } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuPrimitiveAttributes = {} as DropdownMenuPrimitiveAttributes;
+ * declare const value: DropdownMenuPrimitiveAttributes;
  * ```
  */
 export type DropdownMenuPrimitiveAttributes = PrimitiveDataAttributes &
@@ -353,7 +353,7 @@ export type DropdownMenuPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { DropdownMenuTriggerEvent } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuTriggerEvent = {} as DropdownMenuTriggerEvent;
+ * declare const value: DropdownMenuTriggerEvent;
  * ```
  */
 export type DropdownMenuTriggerEvent = Event;
@@ -367,7 +367,7 @@ export type DropdownMenuTriggerEvent = Event;
  * ```ts
  * import type { DropdownMenuItemEvent } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuItemEvent = {} as DropdownMenuItemEvent;
+ * declare const value: DropdownMenuItemEvent;
  * ```
  */
 export type DropdownMenuItemEvent = Event;
@@ -381,7 +381,7 @@ export type DropdownMenuItemEvent = Event;
  * ```ts
  * import type { DropdownMenuKeyboardEvent } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuKeyboardEvent = {} as DropdownMenuKeyboardEvent;
+ * declare const value: DropdownMenuKeyboardEvent;
  * ```
  */
 export type DropdownMenuKeyboardEvent = Event & { readonly key: string };
@@ -395,7 +395,7 @@ export type DropdownMenuKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import type { DropdownMenuFocusEvent } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuFocusEvent = {} as DropdownMenuFocusEvent;
+ * declare const value: DropdownMenuFocusEvent;
  * ```
  */
 export type DropdownMenuFocusEvent = Event & {
@@ -420,7 +420,7 @@ export type DropdownMenuFocusEvent = Event & {
  * ```ts
  * import type { DropdownMenuFocusOptions } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const value: DropdownMenuFocusOptions = {} as DropdownMenuFocusOptions;
+ * declare const value: DropdownMenuFocusOptions;
  * ```
  */
 export interface DropdownMenuFocusOptions {
@@ -437,7 +437,7 @@ export interface DropdownMenuFocusOptions {
  * ```ts
  * import { dropdownMenuRootAttributes } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuRootAttributes>[0];
+ * declare const input: Parameters<typeof dropdownMenuRootAttributes>[0];
  * const result = dropdownMenuRootAttributes(input);
  * ```
  */
@@ -461,7 +461,7 @@ export function dropdownMenuRootAttributes(
  * ```ts
  * import { dropdownMenuTriggerAttributes } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuTriggerAttributes>[0];
+ * declare const input: Parameters<typeof dropdownMenuTriggerAttributes>[0];
  * const result = dropdownMenuTriggerAttributes(input);
  * ```
  */
@@ -495,7 +495,7 @@ export function dropdownMenuTriggerAttributes(
  * ```ts
  * import { dropdownMenuContentAttributes } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuContentAttributes>[0];
+ * declare const input: Parameters<typeof dropdownMenuContentAttributes>[0];
  * const result = dropdownMenuContentAttributes(input);
  * ```
  */
@@ -523,7 +523,7 @@ export function dropdownMenuContentAttributes(
  * ```ts
  * import { dropdownMenuItemAttributes } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuItemAttributes>[0];
+ * declare const input: Parameters<typeof dropdownMenuItemAttributes>[0];
  * const result = dropdownMenuItemAttributes(input);
  * ```
  */
@@ -555,7 +555,7 @@ export function dropdownMenuItemAttributes(
  * ```ts
  * import { dropdownMenuGroupAttributes } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuGroupAttributes>[0];
+ * declare const input: Parameters<typeof dropdownMenuGroupAttributes>[0];
  * const result = dropdownMenuGroupAttributes(input);
  * ```
  */
@@ -579,7 +579,7 @@ export function dropdownMenuGroupAttributes(
  * ```ts
  * import { dropdownMenuSeparatorAttributes } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuSeparatorAttributes>[0];
+ * declare const input: Parameters<typeof dropdownMenuSeparatorAttributes>[0];
  * const result = dropdownMenuSeparatorAttributes(input);
  * ```
  */
@@ -601,7 +601,7 @@ export function dropdownMenuSeparatorAttributes(
  * ```ts
  * import { dropdownMenuItemHighlighted } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuItemHighlighted>[0];
+ * declare const input: Parameters<typeof dropdownMenuItemHighlighted>[0];
  * const result = dropdownMenuItemHighlighted(input);
  * ```
  */
@@ -618,10 +618,10 @@ export function dropdownMenuItemHighlighted(options: DropdownMenuItemAttributeOp
  * ```ts
  * import { setDropdownMenuOpen } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof setDropdownMenuOpen>[0];
- * const state = {} as Parameters<typeof setDropdownMenuOpen>[1];
- * const options = {} as Parameters<typeof setDropdownMenuOpen>[2];
- * const detail = {} as Parameters<typeof setDropdownMenuOpen>[3];
+ * declare const input: Parameters<typeof setDropdownMenuOpen>[0];
+ * declare const state: Parameters<typeof setDropdownMenuOpen>[1];
+ * declare const options: Parameters<typeof setDropdownMenuOpen>[2];
+ * declare const detail: Parameters<typeof setDropdownMenuOpen>[3];
  * const result = setDropdownMenuOpen(input, state, options, detail);
  * ```
  *
@@ -647,9 +647,9 @@ export function setDropdownMenuOpen(
  * ```ts
  * import { toggleDropdownMenu } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof toggleDropdownMenu>[0];
- * const state = {} as Parameters<typeof toggleDropdownMenu>[1];
- * const options = {} as Parameters<typeof toggleDropdownMenu>[2];
+ * declare const input: Parameters<typeof toggleDropdownMenu>[0];
+ * declare const state: Parameters<typeof toggleDropdownMenu>[1];
+ * declare const options: Parameters<typeof toggleDropdownMenu>[2];
  * const result = toggleDropdownMenu(input, state, options);
  * ```
  *
@@ -674,10 +674,10 @@ export function toggleDropdownMenu(
  * ```ts
  * import { selectDropdownMenuItem } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof selectDropdownMenuItem>[0];
- * const state = {} as Parameters<typeof selectDropdownMenuItem>[1];
- * const options = {} as Parameters<typeof selectDropdownMenuItem>[2];
- * const detail = {} as Parameters<typeof selectDropdownMenuItem>[3];
+ * declare const input: Parameters<typeof selectDropdownMenuItem>[0];
+ * declare const state: Parameters<typeof selectDropdownMenuItem>[1];
+ * declare const options: Parameters<typeof selectDropdownMenuItem>[2];
+ * declare const detail: Parameters<typeof selectDropdownMenuItem>[3];
  * const result = selectDropdownMenuItem(input, state, options, detail);
  * ```
  *
@@ -734,9 +734,9 @@ export function selectDropdownMenuItem(
  * ```ts
  * import { dropdownMenuMove } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuMove>[0];
- * const state = {} as Parameters<typeof dropdownMenuMove>[1];
- * const options = {} as Parameters<typeof dropdownMenuMove>[2];
+ * declare const input: Parameters<typeof dropdownMenuMove>[0];
+ * declare const state: Parameters<typeof dropdownMenuMove>[1];
+ * declare const options: Parameters<typeof dropdownMenuMove>[2];
  * const result = dropdownMenuMove(input, state, options);
  * ```
  *
@@ -764,9 +764,9 @@ export function dropdownMenuMove(
  * ```ts
  * import { dropdownMenuTypeahead } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuTypeahead>[0];
- * const state = {} as Parameters<typeof dropdownMenuTypeahead>[1];
- * const options = {} as Parameters<typeof dropdownMenuTypeahead>[2];
+ * declare const input: Parameters<typeof dropdownMenuTypeahead>[0];
+ * declare const state: Parameters<typeof dropdownMenuTypeahead>[1];
+ * declare const options: Parameters<typeof dropdownMenuTypeahead>[2];
  * const result = dropdownMenuTypeahead(input, state, options);
  * ```
  *
@@ -800,9 +800,9 @@ export function dropdownMenuTypeahead(
  * ```ts
  * import { dropdownMenuTriggerClick } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuTriggerClick>[0];
- * const state = {} as Parameters<typeof dropdownMenuTriggerClick>[1];
- * const options = {} as Parameters<typeof dropdownMenuTriggerClick>[2];
+ * declare const input: Parameters<typeof dropdownMenuTriggerClick>[0];
+ * declare const state: Parameters<typeof dropdownMenuTriggerClick>[1];
+ * declare const options: Parameters<typeof dropdownMenuTriggerClick>[2];
  * const result = dropdownMenuTriggerClick(input, state, options);
  * ```
  *
@@ -834,9 +834,9 @@ export function dropdownMenuTriggerClick(
  * ```ts
  * import { dropdownMenuTriggerKeyDown } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuTriggerKeyDown>[0];
- * const state = {} as Parameters<typeof dropdownMenuTriggerKeyDown>[1];
- * const options = {} as Parameters<typeof dropdownMenuTriggerKeyDown>[2];
+ * declare const input: Parameters<typeof dropdownMenuTriggerKeyDown>[0];
+ * declare const state: Parameters<typeof dropdownMenuTriggerKeyDown>[1];
+ * declare const options: Parameters<typeof dropdownMenuTriggerKeyDown>[2];
  * const result = dropdownMenuTriggerKeyDown(input, state, options);
  * ```
  *
@@ -867,9 +867,9 @@ export function dropdownMenuTriggerKeyDown(
  * ```ts
  * import { dropdownMenuItemClick } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuItemClick>[0];
- * const state = {} as Parameters<typeof dropdownMenuItemClick>[1];
- * const options = {} as Parameters<typeof dropdownMenuItemClick>[2];
+ * declare const input: Parameters<typeof dropdownMenuItemClick>[0];
+ * declare const state: Parameters<typeof dropdownMenuItemClick>[1];
+ * declare const options: Parameters<typeof dropdownMenuItemClick>[2];
  * const result = dropdownMenuItemClick(input, state, options);
  * ```
  *
@@ -901,9 +901,9 @@ export function dropdownMenuItemClick(
  * ```ts
  * import { dropdownMenuItemKeyDown } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuItemKeyDown>[0];
- * const state = {} as Parameters<typeof dropdownMenuItemKeyDown>[1];
- * const options = {} as Parameters<typeof dropdownMenuItemKeyDown>[2];
+ * declare const input: Parameters<typeof dropdownMenuItemKeyDown>[0];
+ * declare const state: Parameters<typeof dropdownMenuItemKeyDown>[1];
+ * declare const options: Parameters<typeof dropdownMenuItemKeyDown>[2];
  * const result = dropdownMenuItemKeyDown(input, state, options);
  * ```
  *
@@ -934,9 +934,9 @@ export function dropdownMenuItemKeyDown(
  * ```ts
  * import { dropdownMenuKeyDown } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuKeyDown>[0];
- * const state = {} as Parameters<typeof dropdownMenuKeyDown>[1];
- * const options = {} as Parameters<typeof dropdownMenuKeyDown>[2];
+ * declare const input: Parameters<typeof dropdownMenuKeyDown>[0];
+ * declare const state: Parameters<typeof dropdownMenuKeyDown>[1];
+ * declare const options: Parameters<typeof dropdownMenuKeyDown>[2];
  * const result = dropdownMenuKeyDown(input, state, options);
  * ```
  *
@@ -977,9 +977,9 @@ export function dropdownMenuKeyDown(
  * ```ts
  * import { dropdownMenuFocusElement } from '@kovojs/headless-ui/dropdown-menu';
  *
- * const input = {} as Parameters<typeof dropdownMenuFocusElement>[0];
- * const state = {} as Parameters<typeof dropdownMenuFocusElement>[1];
- * const options = {} as Parameters<typeof dropdownMenuFocusElement>[2];
+ * declare const input: Parameters<typeof dropdownMenuFocusElement>[0];
+ * declare const state: Parameters<typeof dropdownMenuFocusElement>[1];
+ * declare const options: Parameters<typeof dropdownMenuFocusElement>[2];
  * const result = dropdownMenuFocusElement(input, state, options);
  * ```
  */

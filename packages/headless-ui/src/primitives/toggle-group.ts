@@ -22,7 +22,7 @@ import {
  * ```ts
  * import type { ToggleGroupType } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupType = {} as ToggleGroupType;
+ * declare const value: ToggleGroupType;
  * ```
  *
  *
@@ -38,7 +38,7 @@ export type ToggleGroupType = 'multiple' | 'single';
  * ```ts
  * import type { ToggleGroupValue } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupValue = {} as ToggleGroupValue;
+ * declare const value: ToggleGroupValue;
  * ```
  */
 export type ToggleGroupValue = readonly string[] | string | undefined;
@@ -52,7 +52,7 @@ export type ToggleGroupValue = readonly string[] | string | undefined;
  * ```ts
  * import type { ToggleGroupItem } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupItem = {} as ToggleGroupItem;
+ * declare const value: ToggleGroupItem;
  * ```
  */
 export interface ToggleGroupItem {
@@ -69,7 +69,7 @@ export interface ToggleGroupItem {
  * ```ts
  * import type { ToggleGroupState } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupState = {} as ToggleGroupState;
+ * declare const value: ToggleGroupState;
  * ```
  */
 export interface ToggleGroupState {
@@ -93,7 +93,7 @@ export interface ToggleGroupState {
  * ```ts
  * import type { ToggleGroupRootAttributeOptions } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupRootAttributeOptions = {} as ToggleGroupRootAttributeOptions;
+ * declare const value: ToggleGroupRootAttributeOptions;
  * ```
  */
 export interface ToggleGroupRootAttributeOptions extends ToggleGroupState {
@@ -111,7 +111,7 @@ export interface ToggleGroupRootAttributeOptions extends ToggleGroupState {
  * ```ts
  * import type { ToggleGroupItemAttributeOptions } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupItemAttributeOptions = {} as ToggleGroupItemAttributeOptions;
+ * declare const value: ToggleGroupItemAttributeOptions;
  * ```
  */
 export interface ToggleGroupItemAttributeOptions extends ToggleGroupState {
@@ -129,7 +129,7 @@ export interface ToggleGroupItemAttributeOptions extends ToggleGroupState {
  * ```ts
  * import type { ToggleGroupChangeReason } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupChangeReason = {} as ToggleGroupChangeReason;
+ * declare const value: ToggleGroupChangeReason;
  * ```
  */
 export type ToggleGroupChangeReason = 'item-click' | 'programmatic';
@@ -143,7 +143,7 @@ export type ToggleGroupChangeReason = 'item-click' | 'programmatic';
  * ```ts
  * import type { ToggleGroupChangeDetail } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupChangeDetail = {} as ToggleGroupChangeDetail;
+ * declare const value: ToggleGroupChangeDetail;
  * ```
  */
 export type ToggleGroupChangeDetail = PrimitiveChangeDetail<
@@ -160,7 +160,7 @@ export type ToggleGroupChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { ToggleGroupChangeOptions } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupChangeOptions = {} as ToggleGroupChangeOptions;
+ * declare const value: ToggleGroupChangeOptions;
  * ```
  */
 export interface ToggleGroupChangeOptions {
@@ -176,7 +176,7 @@ export interface ToggleGroupChangeOptions {
  * ```ts
  * import type { ToggleGroupChangeResult } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupChangeResult = {} as ToggleGroupChangeResult;
+ * declare const value: ToggleGroupChangeResult;
  * ```
  */
 export interface ToggleGroupChangeResult {
@@ -194,7 +194,7 @@ export interface ToggleGroupChangeResult {
  * ```ts
  * import type { ToggleGroupMoveResult } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupMoveResult = {} as ToggleGroupMoveResult;
+ * declare const value: ToggleGroupMoveResult;
  * ```
  */
 export interface ToggleGroupMoveResult {
@@ -211,7 +211,7 @@ export interface ToggleGroupMoveResult {
  * ```ts
  * import type { ToggleGroupPrimitiveAttributes } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupPrimitiveAttributes = {} as ToggleGroupPrimitiveAttributes;
+ * declare const value: ToggleGroupPrimitiveAttributes;
  * ```
  */
 export type ToggleGroupPrimitiveAttributes = PrimitiveDataAttributes &
@@ -226,7 +226,7 @@ export type ToggleGroupPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { ToggleGroupItemEvent } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupItemEvent = {} as ToggleGroupItemEvent;
+ * declare const value: ToggleGroupItemEvent;
  * ```
  */
 export type ToggleGroupItemEvent = Event;
@@ -240,7 +240,7 @@ export type ToggleGroupItemEvent = Event;
  * ```ts
  * import type { ToggleGroupKeyboardEvent } from '@kovojs/headless-ui/toggle-group';
  *
- * const value: ToggleGroupKeyboardEvent = {} as ToggleGroupKeyboardEvent;
+ * declare const value: ToggleGroupKeyboardEvent;
  * ```
  */
 export type ToggleGroupKeyboardEvent = Event & { readonly key: string };
@@ -254,7 +254,7 @@ export type ToggleGroupKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import { toggleGroupItemPressed } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof toggleGroupItemPressed>[0];
+ * declare const input: Parameters<typeof toggleGroupItemPressed>[0];
  * const result = toggleGroupItemPressed(input);
  * ```
  */
@@ -275,7 +275,7 @@ export function toggleGroupItemPressed(options: ToggleGroupItemAttributeOptions)
  * ```ts
  * import { toggleGroupRovingIndex } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof toggleGroupRovingIndex>[0];
+ * declare const input: Parameters<typeof toggleGroupRovingIndex>[0];
  * const result = toggleGroupRovingIndex(input);
  * ```
  *
@@ -316,7 +316,7 @@ export function toggleGroupRovingIndex(state: ToggleGroupState): number {
  * ```ts
  * import { toggleGroupRootAttributes } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof toggleGroupRootAttributes>[0];
+ * declare const input: Parameters<typeof toggleGroupRootAttributes>[0];
  * const result = toggleGroupRootAttributes(input);
  * ```
  */
@@ -342,7 +342,7 @@ export function toggleGroupRootAttributes(
  * ```ts
  * import { toggleGroupItemAttributes } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof toggleGroupItemAttributes>[0];
+ * declare const input: Parameters<typeof toggleGroupItemAttributes>[0];
  * const result = toggleGroupItemAttributes(input);
  * ```
  */
@@ -366,7 +366,7 @@ export function toggleGroupItemAttributes(
  * ```ts
  * import { toggleGroupButtonAttributes } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof toggleGroupButtonAttributes>[0];
+ * declare const input: Parameters<typeof toggleGroupButtonAttributes>[0];
  * const result = toggleGroupButtonAttributes(input);
  * ```
  */
@@ -396,10 +396,10 @@ export function toggleGroupButtonAttributes(
  * ```ts
  * import { setToggleGroupValue } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof setToggleGroupValue>[0];
- * const state = {} as Parameters<typeof setToggleGroupValue>[1];
- * const options = {} as Parameters<typeof setToggleGroupValue>[2];
- * const detail = {} as Parameters<typeof setToggleGroupValue>[3];
+ * declare const input: Parameters<typeof setToggleGroupValue>[0];
+ * declare const state: Parameters<typeof setToggleGroupValue>[1];
+ * declare const options: Parameters<typeof setToggleGroupValue>[2];
+ * declare const detail: Parameters<typeof setToggleGroupValue>[3];
  * const result = setToggleGroupValue(input, state, options, detail);
  * ```
  *
@@ -443,9 +443,9 @@ export function setToggleGroupValue(
  * ```ts
  * import { toggleGroupItemValue } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof toggleGroupItemValue>[0];
- * const state = {} as Parameters<typeof toggleGroupItemValue>[1];
- * const options = {} as Parameters<typeof toggleGroupItemValue>[2];
+ * declare const input: Parameters<typeof toggleGroupItemValue>[0];
+ * declare const state: Parameters<typeof toggleGroupItemValue>[1];
+ * declare const options: Parameters<typeof toggleGroupItemValue>[2];
  * const result = toggleGroupItemValue(input, state, options);
  * ```
  *
@@ -472,8 +472,8 @@ export function toggleGroupItemValue(
  * ```ts
  * import { toggleGroupMoveFocus } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof toggleGroupMoveFocus>[0];
- * const state = {} as Parameters<typeof toggleGroupMoveFocus>[1];
+ * declare const input: Parameters<typeof toggleGroupMoveFocus>[0];
+ * declare const state: Parameters<typeof toggleGroupMoveFocus>[1];
  * const result = toggleGroupMoveFocus(input, state);
  * ```
  *
@@ -508,9 +508,9 @@ export function toggleGroupMoveFocus(
  * ```ts
  * import { toggleGroupItemClick } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof toggleGroupItemClick>[0];
- * const state = {} as Parameters<typeof toggleGroupItemClick>[1];
- * const options = {} as Parameters<typeof toggleGroupItemClick>[2];
+ * declare const input: Parameters<typeof toggleGroupItemClick>[0];
+ * declare const state: Parameters<typeof toggleGroupItemClick>[1];
+ * declare const options: Parameters<typeof toggleGroupItemClick>[2];
  * const result = toggleGroupItemClick(input, state, options);
  * ```
  *
@@ -542,8 +542,8 @@ export function toggleGroupItemClick(
  * ```ts
  * import { toggleGroupKeyDown } from '@kovojs/headless-ui/toggle-group';
  *
- * const input = {} as Parameters<typeof toggleGroupKeyDown>[0];
- * const state = {} as Parameters<typeof toggleGroupKeyDown>[1];
+ * declare const input: Parameters<typeof toggleGroupKeyDown>[0];
+ * declare const state: Parameters<typeof toggleGroupKeyDown>[1];
  * const result = toggleGroupKeyDown(input, state);
  * ```
  *

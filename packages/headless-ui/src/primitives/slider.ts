@@ -16,7 +16,7 @@ import {
  * ```ts
  * import type { SliderOrientation } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderOrientation = {} as SliderOrientation;
+ * declare const value: SliderOrientation;
  * ```
  */
 export type SliderOrientation = 'horizontal' | 'vertical';
@@ -30,7 +30,7 @@ export type SliderOrientation = 'horizontal' | 'vertical';
  * ```ts
  * import type { SliderState } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderState = {} as SliderState;
+ * declare const value: SliderState;
  * ```
  */
 export interface SliderState {
@@ -55,7 +55,7 @@ export interface SliderState {
  * ```ts
  * import type { SliderRootAttributeOptions } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderRootAttributeOptions = {} as SliderRootAttributeOptions;
+ * declare const value: SliderRootAttributeOptions;
  * ```
  */
 export interface SliderRootAttributeOptions extends SliderState {
@@ -71,7 +71,7 @@ export interface SliderRootAttributeOptions extends SliderState {
  * ```ts
  * import type { SliderInputAttributeOptions } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderInputAttributeOptions = {} as SliderInputAttributeOptions;
+ * declare const value: SliderInputAttributeOptions;
  * ```
  */
 export interface SliderInputAttributeOptions extends SliderState {
@@ -93,7 +93,7 @@ export interface SliderInputAttributeOptions extends SliderState {
  * ```ts
  * import type { SliderHiddenInputAttributeOptions } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderHiddenInputAttributeOptions = {} as SliderHiddenInputAttributeOptions;
+ * declare const value: SliderHiddenInputAttributeOptions;
  * ```
  */
 export interface SliderHiddenInputAttributeOptions extends SliderState {
@@ -109,7 +109,7 @@ export interface SliderHiddenInputAttributeOptions extends SliderState {
  * ```ts
  * import type { SliderPartAttributeOptions } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderPartAttributeOptions = {} as SliderPartAttributeOptions;
+ * declare const value: SliderPartAttributeOptions;
  * ```
  */
 export interface SliderPartAttributeOptions extends SliderState {
@@ -125,7 +125,7 @@ export interface SliderPartAttributeOptions extends SliderState {
  * ```ts
  * import type { SliderThumbAttributeOptions } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderThumbAttributeOptions = {} as SliderThumbAttributeOptions;
+ * declare const value: SliderThumbAttributeOptions;
  * ```
  */
 export interface SliderThumbAttributeOptions extends SliderPartAttributeOptions {
@@ -145,7 +145,7 @@ export interface SliderThumbAttributeOptions extends SliderPartAttributeOptions 
  * ```ts
  * import type { SliderChangeReason } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderChangeReason = {} as SliderChangeReason;
+ * declare const value: SliderChangeReason;
  * ```
  */
 export type SliderChangeReason = 'input' | 'keyboard' | 'pointer' | 'programmatic';
@@ -159,7 +159,7 @@ export type SliderChangeReason = 'input' | 'keyboard' | 'pointer' | 'programmati
  * ```ts
  * import type { SliderChangeDetail } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderChangeDetail = {} as SliderChangeDetail;
+ * declare const value: SliderChangeDetail;
  * ```
  */
 export type SliderChangeDetail = PrimitiveChangeDetail<SliderChangeReason, number>;
@@ -173,7 +173,7 @@ export type SliderChangeDetail = PrimitiveChangeDetail<SliderChangeReason, numbe
  * ```ts
  * import type { SliderChangeOptions } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderChangeOptions = {} as SliderChangeOptions;
+ * declare const value: SliderChangeOptions;
  * ```
  */
 export interface SliderChangeOptions {
@@ -189,7 +189,7 @@ export interface SliderChangeOptions {
  * ```ts
  * import type { SliderChangeResult } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderChangeResult = {} as SliderChangeResult;
+ * declare const value: SliderChangeResult;
  * ```
  */
 export interface SliderChangeResult {
@@ -207,7 +207,7 @@ export interface SliderChangeResult {
  * ```ts
  * import type { SliderComputedState } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderComputedState = {} as SliderComputedState;
+ * declare const value: SliderComputedState;
  * ```
  */
 export interface SliderComputedState {
@@ -228,7 +228,7 @@ export interface SliderComputedState {
  * ```ts
  * import type { SliderPrimitiveAttributes } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderPrimitiveAttributes = {} as SliderPrimitiveAttributes;
+ * declare const value: SliderPrimitiveAttributes;
  * ```
  */
 export type SliderPrimitiveAttributes = PrimitiveDataAttributes &
@@ -243,7 +243,7 @@ export type SliderPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { SliderInputEvent } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderInputEvent = {} as SliderInputEvent;
+ * declare const value: SliderInputEvent;
  * ```
  */
 export type SliderInputEvent = Event & {
@@ -260,7 +260,7 @@ export type SliderInputEvent = Event & {
  * ```ts
  * import type { SliderKeyboardEvent } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderKeyboardEvent = {} as SliderKeyboardEvent;
+ * declare const value: SliderKeyboardEvent;
  * ```
  */
 export type SliderKeyboardEvent = Event & {
@@ -277,7 +277,7 @@ export type SliderKeyboardEvent = Event & {
  * ```ts
  * import type { SliderPointerTarget } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderPointerTarget = {} as SliderPointerTarget;
+ * declare const value: SliderPointerTarget;
  * ```
  */
 export interface SliderPointerTarget {
@@ -301,7 +301,7 @@ export interface SliderPointerTarget {
  * ```ts
  * import type { SliderPointerEvent } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderPointerEvent = {} as SliderPointerEvent;
+ * declare const value: SliderPointerEvent;
  * ```
  */
 export type SliderPointerEvent = Event & {
@@ -322,7 +322,7 @@ export type SliderPointerEvent = Event & {
  * ```ts
  * import type { SliderPointerDragStart } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderPointerDragStart = {} as SliderPointerDragStart;
+ * declare const value: SliderPointerDragStart;
  * ```
  */
 export interface SliderPointerDragStart {
@@ -339,7 +339,7 @@ export interface SliderPointerDragStart {
  * ```ts
  * import type { SliderPointerDragOptions } from '@kovojs/headless-ui/slider';
  *
- * const value: SliderPointerDragOptions = {} as SliderPointerDragOptions;
+ * declare const value: SliderPointerDragOptions;
  * ```
  */
 export interface SliderPointerDragOptions extends SliderChangeOptions {
@@ -356,7 +356,7 @@ export interface SliderPointerDragOptions extends SliderChangeOptions {
  * ```ts
  * import { sliderValueState } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderValueState>[0];
+ * declare const input: Parameters<typeof sliderValueState>[0];
  * const result = sliderValueState(input);
  * ```
  */
@@ -385,7 +385,7 @@ export function sliderValueState(options: SliderState = {}): SliderComputedState
  * ```ts
  * import { sliderRootAttributes } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderRootAttributes>[0];
+ * declare const input: Parameters<typeof sliderRootAttributes>[0];
  * const result = sliderRootAttributes(input);
  * ```
  */
@@ -407,7 +407,7 @@ export function sliderRootAttributes(
  * ```ts
  * import { sliderInputAttributes } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderInputAttributes>[0];
+ * declare const input: Parameters<typeof sliderInputAttributes>[0];
  * const result = sliderInputAttributes(input);
  * ```
  */
@@ -451,7 +451,7 @@ export function sliderInputAttributes(
  * ```ts
  * import { sliderHiddenInputAttributes } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderHiddenInputAttributes>[0];
+ * declare const input: Parameters<typeof sliderHiddenInputAttributes>[0];
  * const result = sliderHiddenInputAttributes(input);
  * ```
  */
@@ -478,7 +478,7 @@ export function sliderHiddenInputAttributes(
  * ```ts
  * import { sliderTrackAttributes } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderTrackAttributes>[0];
+ * declare const input: Parameters<typeof sliderTrackAttributes>[0];
  * const result = sliderTrackAttributes(input);
  * ```
  */
@@ -497,7 +497,7 @@ export function sliderTrackAttributes(
  * ```ts
  * import { sliderRangeAttributes } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderRangeAttributes>[0];
+ * declare const input: Parameters<typeof sliderRangeAttributes>[0];
  * const result = sliderRangeAttributes(input);
  * ```
  */
@@ -516,7 +516,7 @@ export function sliderRangeAttributes(
  * ```ts
  * import { sliderThumbAttributes } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderThumbAttributes>[0];
+ * declare const input: Parameters<typeof sliderThumbAttributes>[0];
  * const result = sliderThumbAttributes(input);
  * ```
  */
@@ -555,8 +555,8 @@ export function sliderThumbAttributes(
  * ```ts
  * import { sliderValueFromString } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderValueFromString>[0];
- * const state = {} as Parameters<typeof sliderValueFromString>[1];
+ * declare const input: Parameters<typeof sliderValueFromString>[0];
+ * declare const state: Parameters<typeof sliderValueFromString>[1];
  * const result = sliderValueFromString(input, state);
  * ```
  */
@@ -575,10 +575,10 @@ export function sliderValueFromString(value: string, state: SliderState = {}): n
  * ```ts
  * import { setSliderValue } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof setSliderValue>[0];
- * const state = {} as Parameters<typeof setSliderValue>[1];
- * const options = {} as Parameters<typeof setSliderValue>[2];
- * const detail = {} as Parameters<typeof setSliderValue>[3];
+ * declare const input: Parameters<typeof setSliderValue>[0];
+ * declare const state: Parameters<typeof setSliderValue>[1];
+ * declare const options: Parameters<typeof setSliderValue>[2];
+ * declare const detail: Parameters<typeof setSliderValue>[3];
  * const result = setSliderValue(input, state, options, detail);
  * ```
  *
@@ -612,9 +612,9 @@ export function setSliderValue(
  * ```ts
  * import { sliderInput } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderInput>[0];
- * const state = {} as Parameters<typeof sliderInput>[1];
- * const options = {} as Parameters<typeof sliderInput>[2];
+ * declare const input: Parameters<typeof sliderInput>[0];
+ * declare const state: Parameters<typeof sliderInput>[1];
+ * declare const options: Parameters<typeof sliderInput>[2];
  * const result = sliderInput(input, state, options);
  * ```
  *
@@ -662,9 +662,9 @@ export function sliderInput(
  * ```ts
  * import { sliderKeyDown } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderKeyDown>[0];
- * const state = {} as Parameters<typeof sliderKeyDown>[1];
- * const options = {} as Parameters<typeof sliderKeyDown>[2];
+ * declare const input: Parameters<typeof sliderKeyDown>[0];
+ * declare const state: Parameters<typeof sliderKeyDown>[1];
+ * declare const options: Parameters<typeof sliderKeyDown>[2];
  * const result = sliderKeyDown(input, state, options);
  * ```
  *
@@ -721,9 +721,9 @@ export function sliderKeyDown(
  * ```ts
  * import { sliderTrackPointerDown } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderTrackPointerDown>[0];
- * const state = {} as Parameters<typeof sliderTrackPointerDown>[1];
- * const options = {} as Parameters<typeof sliderTrackPointerDown>[2];
+ * declare const input: Parameters<typeof sliderTrackPointerDown>[0];
+ * declare const state: Parameters<typeof sliderTrackPointerDown>[1];
+ * declare const options: Parameters<typeof sliderTrackPointerDown>[2];
  * const result = sliderTrackPointerDown(input, state, options);
  * ```
  *
@@ -754,8 +754,8 @@ export function sliderTrackPointerDown(
  * ```ts
  * import { sliderThumbDragStart } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderThumbDragStart>[0];
- * const state = {} as Parameters<typeof sliderThumbDragStart>[1];
+ * declare const input: Parameters<typeof sliderThumbDragStart>[0];
+ * declare const state: Parameters<typeof sliderThumbDragStart>[1];
  * const result = sliderThumbDragStart(input, state);
  * ```
  *
@@ -789,9 +789,9 @@ export function sliderThumbDragStart(
  * ```ts
  * import { sliderThumbDrag } from '@kovojs/headless-ui/slider';
  *
- * const input = {} as Parameters<typeof sliderThumbDrag>[0];
- * const state = {} as Parameters<typeof sliderThumbDrag>[1];
- * const options = {} as Parameters<typeof sliderThumbDrag>[2];
+ * declare const input: Parameters<typeof sliderThumbDrag>[0];
+ * declare const state: Parameters<typeof sliderThumbDrag>[1];
+ * declare const options: Parameters<typeof sliderThumbDrag>[2];
  * const result = sliderThumbDrag(input, state, options);
  * ```
  *

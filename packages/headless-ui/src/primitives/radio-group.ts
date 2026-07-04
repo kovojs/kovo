@@ -22,7 +22,7 @@ import {
  * ```ts
  * import type { RadioGroupItem } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupItem = {} as RadioGroupItem;
+ * declare const value: RadioGroupItem;
  * ```
  */
 export interface RadioGroupItem {
@@ -39,7 +39,7 @@ export interface RadioGroupItem {
  * ```ts
  * import type { RadioGroupState } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupState = {} as RadioGroupState;
+ * declare const value: RadioGroupState;
  * ```
  */
 export interface RadioGroupState {
@@ -64,7 +64,7 @@ export interface RadioGroupState {
  * ```ts
  * import type { RadioGroupRootAttributeOptions } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupRootAttributeOptions = {} as RadioGroupRootAttributeOptions;
+ * declare const value: RadioGroupRootAttributeOptions;
  * ```
  */
 export interface RadioGroupRootAttributeOptions extends RadioGroupState {
@@ -83,7 +83,7 @@ export interface RadioGroupRootAttributeOptions extends RadioGroupState {
  * ```ts
  * import type { RadioGroupItemAttributeOptions } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupItemAttributeOptions = {} as RadioGroupItemAttributeOptions;
+ * declare const value: RadioGroupItemAttributeOptions;
  * ```
  */
 export interface RadioGroupItemAttributeOptions extends RadioGroupState {
@@ -101,7 +101,7 @@ export interface RadioGroupItemAttributeOptions extends RadioGroupState {
  * ```ts
  * import type { RadioGroupRadioAttributeOptions } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupRadioAttributeOptions = {} as RadioGroupRadioAttributeOptions;
+ * declare const value: RadioGroupRadioAttributeOptions;
  * ```
  */
 export interface RadioGroupRadioAttributeOptions extends RadioGroupItemAttributeOptions {
@@ -117,7 +117,7 @@ export interface RadioGroupRadioAttributeOptions extends RadioGroupItemAttribute
  * ```ts
  * import type { RadioGroupLabelAttributeOptions } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupLabelAttributeOptions = {} as RadioGroupLabelAttributeOptions;
+ * declare const value: RadioGroupLabelAttributeOptions;
  * ```
  */
 export interface RadioGroupLabelAttributeOptions extends RadioGroupItemAttributeOptions {
@@ -133,7 +133,7 @@ export interface RadioGroupLabelAttributeOptions extends RadioGroupItemAttribute
  * ```ts
  * import type { RadioGroupChangeReason } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupChangeReason = {} as RadioGroupChangeReason;
+ * declare const value: RadioGroupChangeReason;
  * ```
  */
 export type RadioGroupChangeReason = 'item-click' | 'keyboard' | 'programmatic';
@@ -147,7 +147,7 @@ export type RadioGroupChangeReason = 'item-click' | 'keyboard' | 'programmatic';
  * ```ts
  * import type { RadioGroupChangeDetail } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupChangeDetail = {} as RadioGroupChangeDetail;
+ * declare const value: RadioGroupChangeDetail;
  * ```
  */
 export type RadioGroupChangeDetail = PrimitiveChangeDetail<
@@ -164,7 +164,7 @@ export type RadioGroupChangeDetail = PrimitiveChangeDetail<
  * ```ts
  * import type { RadioGroupChangeOptions } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupChangeOptions = {} as RadioGroupChangeOptions;
+ * declare const value: RadioGroupChangeOptions;
  * ```
  */
 export interface RadioGroupChangeOptions {
@@ -180,7 +180,7 @@ export interface RadioGroupChangeOptions {
  * ```ts
  * import type { RadioGroupChangeResult } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupChangeResult = {} as RadioGroupChangeResult;
+ * declare const value: RadioGroupChangeResult;
  * ```
  */
 export interface RadioGroupChangeResult {
@@ -198,7 +198,7 @@ export interface RadioGroupChangeResult {
  * ```ts
  * import type { RadioGroupMoveResult } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupMoveResult = {} as RadioGroupMoveResult;
+ * declare const value: RadioGroupMoveResult;
  * ```
  */
 export interface RadioGroupMoveResult {
@@ -215,7 +215,7 @@ export interface RadioGroupMoveResult {
  * ```ts
  * import type { RadioGroupPrimitiveAttributes } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupPrimitiveAttributes = {} as RadioGroupPrimitiveAttributes;
+ * declare const value: RadioGroupPrimitiveAttributes;
  * ```
  */
 export type RadioGroupPrimitiveAttributes = PrimitiveDataAttributes &
@@ -230,7 +230,7 @@ export type RadioGroupPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { RadioGroupItemEvent } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupItemEvent = {} as RadioGroupItemEvent;
+ * declare const value: RadioGroupItemEvent;
  * ```
  */
 export type RadioGroupItemEvent = Event;
@@ -244,7 +244,7 @@ export type RadioGroupItemEvent = Event;
  * ```ts
  * import type { RadioGroupKeyboardEvent } from '@kovojs/headless-ui/radio-group';
  *
- * const value: RadioGroupKeyboardEvent = {} as RadioGroupKeyboardEvent;
+ * declare const value: RadioGroupKeyboardEvent;
  * ```
  */
 export type RadioGroupKeyboardEvent = Event & { readonly key: string };
@@ -258,7 +258,7 @@ export type RadioGroupKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import { radioGroupItemChecked } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof radioGroupItemChecked>[0];
+ * declare const input: Parameters<typeof radioGroupItemChecked>[0];
  * const result = radioGroupItemChecked(input);
  * ```
  */
@@ -275,7 +275,7 @@ export function radioGroupItemChecked(options: RadioGroupItemAttributeOptions): 
  * ```ts
  * import { radioGroupRovingIndex } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof radioGroupRovingIndex>[0];
+ * declare const input: Parameters<typeof radioGroupRovingIndex>[0];
  * const result = radioGroupRovingIndex(input);
  * ```
  *
@@ -307,7 +307,7 @@ export function radioGroupRovingIndex(state: RadioGroupState): number {
  * ```ts
  * import { radioGroupRootAttributes } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof radioGroupRootAttributes>[0];
+ * declare const input: Parameters<typeof radioGroupRootAttributes>[0];
  * const result = radioGroupRootAttributes(input);
  * ```
  */
@@ -337,7 +337,7 @@ export function radioGroupRootAttributes(
  * ```ts
  * import { radioGroupItemAttributes } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof radioGroupItemAttributes>[0];
+ * declare const input: Parameters<typeof radioGroupItemAttributes>[0];
  * const result = radioGroupItemAttributes(input);
  * ```
  */
@@ -361,7 +361,7 @@ export function radioGroupItemAttributes(
  * ```ts
  * import { radioGroupRadioAttributes } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof radioGroupRadioAttributes>[0];
+ * declare const input: Parameters<typeof radioGroupRadioAttributes>[0];
  * const result = radioGroupRadioAttributes(input);
  * ```
  */
@@ -397,7 +397,7 @@ export function radioGroupRadioAttributes(
  * ```ts
  * import { radioGroupLabelAttributes } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof radioGroupLabelAttributes>[0];
+ * declare const input: Parameters<typeof radioGroupLabelAttributes>[0];
  * const result = radioGroupLabelAttributes(input);
  * ```
  */
@@ -420,10 +420,10 @@ export function radioGroupLabelAttributes(
  * ```ts
  * import { setRadioGroupValue } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof setRadioGroupValue>[0];
- * const state = {} as Parameters<typeof setRadioGroupValue>[1];
- * const options = {} as Parameters<typeof setRadioGroupValue>[2];
- * const detail = {} as Parameters<typeof setRadioGroupValue>[3];
+ * declare const input: Parameters<typeof setRadioGroupValue>[0];
+ * declare const state: Parameters<typeof setRadioGroupValue>[1];
+ * declare const options: Parameters<typeof setRadioGroupValue>[2];
+ * declare const detail: Parameters<typeof setRadioGroupValue>[3];
  * const result = setRadioGroupValue(input, state, options, detail);
  * ```
  *
@@ -456,8 +456,8 @@ export function setRadioGroupValue(
  * ```ts
  * import { radioGroupMoveValue } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof radioGroupMoveValue>[0];
- * const state = {} as Parameters<typeof radioGroupMoveValue>[1];
+ * declare const input: Parameters<typeof radioGroupMoveValue>[0];
+ * declare const state: Parameters<typeof radioGroupMoveValue>[1];
  * const result = radioGroupMoveValue(input, state);
  * ```
  */
@@ -490,9 +490,9 @@ export function radioGroupMoveValue(
  * ```ts
  * import { radioGroupItemClick } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof radioGroupItemClick>[0];
- * const state = {} as Parameters<typeof radioGroupItemClick>[1];
- * const options = {} as Parameters<typeof radioGroupItemClick>[2];
+ * declare const input: Parameters<typeof radioGroupItemClick>[0];
+ * declare const state: Parameters<typeof radioGroupItemClick>[1];
+ * declare const options: Parameters<typeof radioGroupItemClick>[2];
  * const result = radioGroupItemClick(input, state, options);
  * ```
  *
@@ -524,9 +524,9 @@ export function radioGroupItemClick(
  * ```ts
  * import { radioGroupKeyDown } from '@kovojs/headless-ui/radio-group';
  *
- * const input = {} as Parameters<typeof radioGroupKeyDown>[0];
- * const state = {} as Parameters<typeof radioGroupKeyDown>[1];
- * const options = {} as Parameters<typeof radioGroupKeyDown>[2];
+ * declare const input: Parameters<typeof radioGroupKeyDown>[0];
+ * declare const state: Parameters<typeof radioGroupKeyDown>[1];
+ * declare const options: Parameters<typeof radioGroupKeyDown>[2];
  * const result = radioGroupKeyDown(input, state, options);
  * ```
  *

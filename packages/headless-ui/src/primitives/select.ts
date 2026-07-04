@@ -201,7 +201,7 @@ export interface SelectValueAttributeOptions extends SelectState {
  * ```ts
  * import type { SelectChangeReason } from '@kovojs/headless-ui/select';
  *
- * const value: SelectChangeReason = {} as SelectChangeReason;
+ * declare const value: SelectChangeReason;
  * ```
  */
 export type SelectChangeReason = 'item-select' | 'programmatic' | 'trigger-change';
@@ -215,7 +215,7 @@ export type SelectChangeReason = 'item-select' | 'programmatic' | 'trigger-chang
  * ```ts
  * import type { SelectOpenChangeReason } from '@kovojs/headless-ui/select';
  *
- * const value: SelectOpenChangeReason = {} as SelectOpenChangeReason;
+ * declare const value: SelectOpenChangeReason;
  * ```
  */
 export type SelectOpenChangeReason =
@@ -235,7 +235,7 @@ export type SelectOpenChangeReason =
  * ```ts
  * import type { SelectChangeDetail } from '@kovojs/headless-ui/select';
  *
- * const value: SelectChangeDetail = {} as SelectChangeDetail;
+ * declare const value: SelectChangeDetail;
  * ```
  */
 export type SelectChangeDetail = PrimitiveChangeDetail<SelectChangeReason, string | undefined>;
@@ -249,7 +249,7 @@ export type SelectChangeDetail = PrimitiveChangeDetail<SelectChangeReason, strin
  * ```ts
  * import type { SelectOpenChangeDetail } from '@kovojs/headless-ui/select';
  *
- * const value: SelectOpenChangeDetail = {} as SelectOpenChangeDetail;
+ * declare const value: SelectOpenChangeDetail;
  * ```
  */
 export type SelectOpenChangeDetail = PrimitiveChangeDetail<SelectOpenChangeReason, boolean>;
@@ -263,7 +263,7 @@ export type SelectOpenChangeDetail = PrimitiveChangeDetail<SelectOpenChangeReaso
  * ```ts
  * import type { SelectChangeOptions } from '@kovojs/headless-ui/select';
  *
- * const value: SelectChangeOptions = {} as SelectChangeOptions;
+ * declare const value: SelectChangeOptions;
  * ```
  */
 export interface SelectChangeOptions {
@@ -280,7 +280,7 @@ export interface SelectChangeOptions {
  * ```ts
  * import type { SelectKeyDownOptions } from '@kovojs/headless-ui/select';
  *
- * const value: SelectKeyDownOptions = {} as SelectKeyDownOptions;
+ * declare const value: SelectKeyDownOptions;
  * ```
  */
 export interface SelectKeyDownOptions extends SelectChangeOptions {
@@ -296,7 +296,7 @@ export interface SelectKeyDownOptions extends SelectChangeOptions {
  * ```ts
  * import type { SelectChangeResult } from '@kovojs/headless-ui/select';
  *
- * const value: SelectChangeResult = {} as SelectChangeResult;
+ * declare const value: SelectChangeResult;
  * ```
  */
 export interface SelectChangeResult {
@@ -314,7 +314,7 @@ export interface SelectChangeResult {
  * ```ts
  * import type { SelectOpenChangeResult } from '@kovojs/headless-ui/select';
  *
- * const value: SelectOpenChangeResult = {} as SelectOpenChangeResult;
+ * declare const value: SelectOpenChangeResult;
  * ```
  */
 export interface SelectOpenChangeResult {
@@ -332,7 +332,7 @@ export interface SelectOpenChangeResult {
  * ```ts
  * import type { SelectMoveResult } from '@kovojs/headless-ui/select';
  *
- * const value: SelectMoveResult = {} as SelectMoveResult;
+ * declare const value: SelectMoveResult;
  * ```
  */
 export interface SelectMoveResult {
@@ -349,7 +349,7 @@ export interface SelectMoveResult {
  * ```ts
  * import type { SelectOptionSelectResult } from '@kovojs/headless-ui/select';
  *
- * const value: SelectOptionSelectResult = {} as SelectOptionSelectResult;
+ * declare const value: SelectOptionSelectResult;
  * ```
  */
 export interface SelectOptionSelectResult {
@@ -366,7 +366,7 @@ export interface SelectOptionSelectResult {
  * ```ts
  * import type { SelectTypeaheadOptions } from '@kovojs/headless-ui/select';
  *
- * const value: SelectTypeaheadOptions = {} as SelectTypeaheadOptions;
+ * declare const value: SelectTypeaheadOptions;
  * ```
  */
 export interface SelectTypeaheadOptions {
@@ -386,7 +386,7 @@ export interface SelectTypeaheadOptions {
  * ```ts
  * import type { SelectTypeaheadResult } from '@kovojs/headless-ui/select';
  *
- * const value: SelectTypeaheadResult = {} as SelectTypeaheadResult;
+ * declare const value: SelectTypeaheadResult;
  * ```
  */
 export interface SelectTypeaheadResult {
@@ -404,7 +404,7 @@ export interface SelectTypeaheadResult {
  * ```ts
  * import type { SelectPrimitiveAttributes } from '@kovojs/headless-ui/select';
  *
- * const value: SelectPrimitiveAttributes = {} as SelectPrimitiveAttributes;
+ * declare const value: SelectPrimitiveAttributes;
  * ```
  */
 export type SelectPrimitiveAttributes = PrimitiveDataAttributes &
@@ -419,7 +419,7 @@ export type SelectPrimitiveAttributes = PrimitiveDataAttributes &
  * ```ts
  * import type { SelectTriggerEvent } from '@kovojs/headless-ui/select';
  *
- * const value: SelectTriggerEvent = {} as SelectTriggerEvent;
+ * declare const value: SelectTriggerEvent;
  * ```
  */
 export type SelectTriggerEvent = Event & {
@@ -435,7 +435,7 @@ export type SelectTriggerEvent = Event & {
  * ```ts
  * import type { SelectKeyboardEvent } from '@kovojs/headless-ui/select';
  *
- * const value: SelectKeyboardEvent = {} as SelectKeyboardEvent;
+ * declare const value: SelectKeyboardEvent;
  * ```
  */
 export type SelectKeyboardEvent = Event & { readonly key: string };
@@ -449,7 +449,7 @@ export type SelectKeyboardEvent = Event & { readonly key: string };
  * ```ts
  * import type { SelectItemEvent } from '@kovojs/headless-ui/select';
  *
- * const value: SelectItemEvent = {} as SelectItemEvent;
+ * declare const value: SelectItemEvent;
  * ```
  */
 export type SelectItemEvent = Event;
@@ -463,7 +463,7 @@ export type SelectItemEvent = Event;
  * ```ts
  * import type { SelectKeyboardResult } from '@kovojs/headless-ui/select';
  *
- * const value: SelectKeyboardResult = {} as SelectKeyboardResult;
+ * declare const value: SelectKeyboardResult;
  * ```
  */
 export type SelectKeyboardResult =
@@ -481,7 +481,7 @@ export type SelectKeyboardResult =
  * ```ts
  * import { selectItemSelected } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectItemSelected>[0];
+ * declare const input: Parameters<typeof selectItemSelected>[0];
  * const result = selectItemSelected(input);
  * ```
  */
@@ -498,7 +498,7 @@ export function selectItemSelected(options: SelectItemAttributeOptions): boolean
  * ```ts
  * import { selectValueText } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectValueText>[0];
+ * declare const input: Parameters<typeof selectValueText>[0];
  * const result = selectValueText(input);
  * ```
  *
@@ -519,7 +519,7 @@ export function selectValueText(state: SelectState): string {
  * ```ts
  * import { selectRootAttributes } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectRootAttributes>[0];
+ * declare const input: Parameters<typeof selectRootAttributes>[0];
  * const result = selectRootAttributes(input);
  * ```
  */
@@ -543,7 +543,7 @@ export function selectRootAttributes(
  * ```ts
  * import { selectTriggerAttributes } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectTriggerAttributes>[0];
+ * declare const input: Parameters<typeof selectTriggerAttributes>[0];
  * const result = selectTriggerAttributes(input);
  * ```
  */
@@ -586,7 +586,7 @@ export function selectTriggerAttributes(
  * ```ts
  * import { selectHiddenInputAttributes } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectHiddenInputAttributes>[0];
+ * declare const input: Parameters<typeof selectHiddenInputAttributes>[0];
  * const result = selectHiddenInputAttributes(input);
  * ```
  */
@@ -613,7 +613,7 @@ export function selectHiddenInputAttributes(
  * ```ts
  * import { selectContentAttributes } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectContentAttributes>[0];
+ * declare const input: Parameters<typeof selectContentAttributes>[0];
  * const result = selectContentAttributes(input);
  * ```
  */
@@ -638,7 +638,7 @@ export function selectContentAttributes(
  * ```ts
  * import { selectItemAttributes } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectItemAttributes>[0];
+ * declare const input: Parameters<typeof selectItemAttributes>[0];
  * const result = selectItemAttributes(input);
  * ```
  */
@@ -673,7 +673,7 @@ export function selectItemAttributes(
  * ```ts
  * import { selectValueAttributes } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectValueAttributes>[0];
+ * declare const input: Parameters<typeof selectValueAttributes>[0];
  * const result = selectValueAttributes(input);
  * ```
  */
@@ -695,10 +695,10 @@ export function selectValueAttributes(
  * ```ts
  * import { setSelectValue } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof setSelectValue>[0];
- * const state = {} as Parameters<typeof setSelectValue>[1];
- * const options = {} as Parameters<typeof setSelectValue>[2];
- * const detail = {} as Parameters<typeof setSelectValue>[3];
+ * declare const input: Parameters<typeof setSelectValue>[0];
+ * declare const state: Parameters<typeof setSelectValue>[1];
+ * declare const options: Parameters<typeof setSelectValue>[2];
+ * declare const detail: Parameters<typeof setSelectValue>[3];
  * const result = setSelectValue(input, state, options, detail);
  * ```
  *
@@ -731,10 +731,10 @@ export function setSelectValue(
  * ```ts
  * import { setSelectOpen } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof setSelectOpen>[0];
- * const state = {} as Parameters<typeof setSelectOpen>[1];
- * const options = {} as Parameters<typeof setSelectOpen>[2];
- * const detail = {} as Parameters<typeof setSelectOpen>[3];
+ * declare const input: Parameters<typeof setSelectOpen>[0];
+ * declare const state: Parameters<typeof setSelectOpen>[1];
+ * declare const options: Parameters<typeof setSelectOpen>[2];
+ * declare const detail: Parameters<typeof setSelectOpen>[3];
  * const result = setSelectOpen(input, state, options, detail);
  * ```
  *
@@ -760,9 +760,9 @@ export function setSelectOpen(
  * ```ts
  * import { selectOption } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectOption>[0];
- * const state = {} as Parameters<typeof selectOption>[1];
- * const options = {} as Parameters<typeof selectOption>[2];
+ * declare const input: Parameters<typeof selectOption>[0];
+ * declare const state: Parameters<typeof selectOption>[1];
+ * declare const options: Parameters<typeof selectOption>[2];
  * const result = selectOption(input, state, options);
  * ```
  *
@@ -808,9 +808,9 @@ export function selectOption(
  * ```ts
  * import { selectMove } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectMove>[0];
- * const state = {} as Parameters<typeof selectMove>[1];
- * const options = {} as Parameters<typeof selectMove>[2];
+ * declare const input: Parameters<typeof selectMove>[0];
+ * declare const state: Parameters<typeof selectMove>[1];
+ * declare const options: Parameters<typeof selectMove>[2];
  * const result = selectMove(input, state, options);
  * ```
  *
@@ -838,9 +838,9 @@ export function selectMove(
  * ```ts
  * import { selectTypeahead } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectTypeahead>[0];
- * const state = {} as Parameters<typeof selectTypeahead>[1];
- * const options = {} as Parameters<typeof selectTypeahead>[2];
+ * declare const input: Parameters<typeof selectTypeahead>[0];
+ * declare const state: Parameters<typeof selectTypeahead>[1];
+ * declare const options: Parameters<typeof selectTypeahead>[2];
  * const result = selectTypeahead(input, state, options);
  * ```
  *
@@ -869,9 +869,9 @@ export function selectTypeahead(
  * ```ts
  * import { selectTriggerChange } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectTriggerChange>[0];
- * const state = {} as Parameters<typeof selectTriggerChange>[1];
- * const options = {} as Parameters<typeof selectTriggerChange>[2];
+ * declare const input: Parameters<typeof selectTriggerChange>[0];
+ * declare const state: Parameters<typeof selectTriggerChange>[1];
+ * declare const options: Parameters<typeof selectTriggerChange>[2];
  * const result = selectTriggerChange(input, state, options);
  * ```
  *
@@ -904,9 +904,9 @@ export function selectTriggerChange(
  * ```ts
  * import { selectTriggerClick } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectTriggerClick>[0];
- * const state = {} as Parameters<typeof selectTriggerClick>[1];
- * const options = {} as Parameters<typeof selectTriggerClick>[2];
+ * declare const input: Parameters<typeof selectTriggerClick>[0];
+ * declare const state: Parameters<typeof selectTriggerClick>[1];
+ * declare const options: Parameters<typeof selectTriggerClick>[2];
  * const result = selectTriggerClick(input, state, options);
  * ```
  *
@@ -935,9 +935,9 @@ export function selectTriggerClick(
  * ```ts
  * import { selectItemClick } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectItemClick>[0];
- * const state = {} as Parameters<typeof selectItemClick>[1];
- * const options = {} as Parameters<typeof selectItemClick>[2];
+ * declare const input: Parameters<typeof selectItemClick>[0];
+ * declare const state: Parameters<typeof selectItemClick>[1];
+ * declare const options: Parameters<typeof selectItemClick>[2];
  * const result = selectItemClick(input, state, options);
  * ```
  *
@@ -969,9 +969,9 @@ export function selectItemClick(
  * ```ts
  * import { selectKeyDown } from '@kovojs/headless-ui/select';
  *
- * const input = {} as Parameters<typeof selectKeyDown>[0];
- * const state = {} as Parameters<typeof selectKeyDown>[1];
- * const options = {} as Parameters<typeof selectKeyDown>[2];
+ * declare const input: Parameters<typeof selectKeyDown>[0];
+ * declare const state: Parameters<typeof selectKeyDown>[1];
+ * declare const options: Parameters<typeof selectKeyDown>[2];
  * const result = selectKeyDown(input, state, options);
  * ```
  *
