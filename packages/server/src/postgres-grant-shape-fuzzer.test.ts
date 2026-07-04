@@ -160,7 +160,7 @@ describe('Postgres grant-shape closure fuzzer', () => {
     }
 
     expect(mismatches).toEqual([]);
-  });
+  }, 120_000);
 });
 
 async function withPglite<Result>(

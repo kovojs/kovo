@@ -120,7 +120,7 @@ steps:
 
         for _ in $$(seq 1 120); do
           if docker exec "$$CID" node -e "$$node_check" / 'text/html'; then
-            docker exec "$$CID" node -e "$$node_check" /assets/styles.css 'text/css' 'kv-chrome-'
+            docker exec "$$CID" node -e "$$node_check" /assets/styles.css 'text/css' 'kv-style-'
             exit 0
           fi
           sleep 1
