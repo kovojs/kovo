@@ -617,13 +617,17 @@ async function provisionRuntimeDb(
     schemaTables: readonly PgTable[];
   },
 ): Promise<{ applied: readonly string[]; skipped: readonly string[] }> {
-  const migrationReport = await applyPostgresMigrations(client, input.migrations);
-  if (!input.applySchemaDdl) await assertPostgresSchemaTablesExist(client, input.schemaTables);
+  let migrationReport: { applied: readonly string[]; skipped: readonly string[] } = {
+    applied: [],
+    skipped: [],
+  };
   await client.transaction(async (tx) => {
     if (input.config.createAdminRole) await ensurePostgresRole(tx, input.config.adminRole);
     if (input.config.createReaderRole) await ensurePostgresRole(tx, input.config.readerRole);
     if (input.config.createWriterRole) await ensurePostgresRole(tx, input.config.writerRole);
     if (input.applySchemaDdl) await tx.exec(input.schemaDdl);
+    migrationReport = await applyPostgresMigrations(tx, input.migrations);
+    if (!input.applySchemaDdl) await assertPostgresSchemaTablesExist(tx, input.schemaTables);
     await tx.exec(
       'REVOKE EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) FROM PUBLIC',
     );
@@ -1806,7 +1810,7 @@ async function ensurePostgresRole(client: RuntimeTransactionClient, role: string
 }
 
 async function assertPostgresSchemaTablesExist(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   tables: readonly PgTable[],
 ): Promise<void> {
   const missing = await missingPostgresSchemaTables(client, tables);
@@ -1863,6 +1867,11 @@ async function grantPostgresRuntimeLoginRole(
   }
   await client.exec(
     `GRANT SELECT ON TABLE ${quoteIdent(SCHEMA_STATE_TABLE)} TO ${quoteIdent(runtimeLoginRole)}`,
+  );
+  await client.exec(
+    `GRANT EXECUTE ON FUNCTION pg_catalog.set_config(text,text,boolean) TO ${quoteIdent(
+      runtimeLoginRole,
+    )}`,
   );
 }
 
@@ -1934,7 +1943,7 @@ function currentNodeEnv(): string | undefined {
 }
 
 async function applyPostgresMigrations(
-  client: RuntimeSqlClient,
+  client: RuntimeTransactionClient,
   migrations: readonly KovoPostgresMigration[],
 ): Promise<{ applied: readonly string[]; skipped: readonly string[] }> {
   const normalized = normalizePostgresMigrations(migrations);
@@ -1967,13 +1976,11 @@ async function applyPostgresMigrations(
       continue;
     }
 
-    await client.transaction(async (tx) => {
-      await tx.exec(migration.sql);
-      await tx.query(`INSERT INTO ${quoteIdent(MIGRATIONS_TABLE)} (id, checksum) VALUES ($1, $2)`, [
-        migration.id,
-        migration.checksum,
-      ]);
-    });
+    await client.exec(migration.sql);
+    await client.query(
+      `INSERT INTO ${quoteIdent(MIGRATIONS_TABLE)} (id, checksum) VALUES ($1, $2)`,
+      [migration.id, migration.checksum],
+    );
     applied.push(migration.id);
   }
 
@@ -2017,6 +2024,19 @@ async function applyPostgresDefaultDenyPrivileges(
   const schemas = new Set<string>();
   for (const table of tables) schemas.add(tableSchemaName(getTableConfig(table)));
   for (const schema of schemas) {
+    await client.exec(
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA ${quoteIdent(schema)} REVOKE ALL ON TABLES FROM PUBLIC`,
+    );
+    await client.exec(
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA ${quoteIdent(
+        schema,
+      )} REVOKE ALL ON SEQUENCES FROM PUBLIC`,
+    );
+    await client.exec(
+      `ALTER DEFAULT PRIVILEGES IN SCHEMA ${quoteIdent(
+        schema,
+      )} REVOKE EXECUTE ON FUNCTIONS FROM PUBLIC`,
+    );
     await client.exec(
       `REVOKE ALL ON ALL TABLES IN SCHEMA ${quoteIdent(schema)} FROM ${quoteIdent(
         config.readerRole,

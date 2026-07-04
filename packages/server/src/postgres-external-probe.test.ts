@@ -10,6 +10,7 @@ import { pgTable, text } from 'drizzle-orm/pg-core';
 import { Pool, type PoolClient, type QueryConfig, type QueryResultRow } from 'pg';
 import { afterAll, describe, expect, it } from 'vitest';
 
+import { actAsNonRequestPrincipal } from './auth-principal.js';
 import { guards } from './guards.js';
 import {
   createPostgresReadonlyClient,
@@ -84,6 +85,14 @@ const addSummaryMigration = {
 };
 
 const probeRun = `kovo_ext_${process.pid}_${Date.now()}`;
+
+function actAsProbePrincipal(principal: string) {
+  return actAsNonRequestPrincipal(principal, {
+    ingress: 'task',
+    operation: 'write',
+    surface: 'postgres-external-probe.test.ts',
+  });
+}
 
 describeIfPostgres('external Postgres runtime/provisioning probes', () => {
   const roots: string[] = [];
@@ -281,8 +290,8 @@ async function expectOwnerIsolation(
   });
   try {
     await runtime.ready;
-    const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
-    const u2Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u2' } });
+    const u1Db = runtime.db({ principalPosture: actAsProbePrincipal('u1') });
+    const u2Db = runtime.db({ principalPosture: actAsProbePrincipal('u2') });
 
     await u1Db
       .insert(probeNotes)
@@ -363,7 +372,7 @@ async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: strin
   });
   try {
     await runtime.ready;
-    const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+    const u1Db = runtime.db({ principalPosture: actAsProbePrincipal('u1') });
     await expect(
       u1Db
         .select({ id: probeNotesV2.id, summary: probeNotesV2.summary, title: probeNotesV2.title })

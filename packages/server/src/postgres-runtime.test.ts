@@ -21,6 +21,7 @@ import {
   checkPostgresAppDbPosture,
   createPostgresAppRuntimeDb,
   declarePublicRelation,
+  migratePostgresAppDb,
   type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
 import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
@@ -88,6 +89,10 @@ const seedSql = [
     "('n1', 'u1', 's1', 'One'), ('n2', 'u2', 's2', 'Two')",
   "INSERT INTO kovo_runtime_labels (id, label) VALUES ('l1', 'Inbox')",
 ];
+const runtimeSchemaMigrationSql = [
+  'CREATE TABLE kovo_runtime_notes (id text PRIMARY KEY, "ownerId" text NOT NULL, "secretNote" text NOT NULL, title text NOT NULL)',
+  'CREATE TABLE kovo_runtime_labels (id text PRIMARY KEY, label text NOT NULL)',
+].join('; ');
 
 function actAsRuntimePrincipal(principal: string) {
   return actAsNonRequestPrincipal(principal, {
@@ -471,6 +476,150 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
     expect(report.ok).toBe(true);
     expect(report.issues).toEqual([]);
+  });
+
+  it('creates app roles before applying migrations that reference them', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-migration-roles-'));
+    roots.push(dataDir);
+
+    const report = await migratePostgresAppDb({
+      dataDir,
+      driver: 'pglite',
+      migrations: [
+        {
+          id: '001_create_schema_after_roles',
+          sql: [
+            runtimeSchemaMigrationSql,
+            'GRANT SELECT ON TABLE kovo_runtime_notes TO kovo_reader',
+          ].join('; '),
+        },
+      ],
+      schema,
+    });
+
+    expect(report.applied).toEqual(['001_create_schema_after_roles']);
+    expect(report.posture.ok).toBe(true);
+    expect(report.posture.issues).toEqual([]);
+  });
+
+  it('rolls back migration SQL and bookkeeping when provision reassertion fails', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-migration-rollback-'));
+    roots.push(dataDir);
+
+    await expect(
+      migratePostgresAppDb({
+        dataDir,
+        driver: 'pglite',
+        migrations: [
+          {
+            id: '001_broken_schema',
+            sql: 'CREATE TABLE kovo_runtime_notes (id text PRIMARY KEY, "ownerId" text NOT NULL, "secretNote" text NOT NULL, title text NOT NULL)',
+          },
+        ],
+        schema,
+      }),
+    ).rejects.toThrow();
+
+    const leakedObjects = await queryPglite<{ relname: string }>(
+      dataDir,
+      [
+        'SELECT relname FROM pg_class',
+        "WHERE relname IN ('kovo_runtime_notes', 'kovo_migrations')",
+        'ORDER BY relname',
+      ].join(' '),
+    );
+    expect(leakedObjects.rows).toEqual([]);
+  });
+
+  it('grants set_config only to the least-privilege runtime login role', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-set-config-grant-'));
+    roots.push(dataDir);
+
+    const report = await migratePostgresAppDb({
+      dataDir,
+      driver: 'pglite',
+      migrations: [
+        {
+          id: '001_runtime_login_schema',
+          sql: ['CREATE ROLE kovo_runtime_login LOGIN', runtimeSchemaMigrationSql].join('; '),
+        },
+      ],
+      runtimeDatabaseUrl: 'postgres://kovo_runtime_login@127.0.0.1/kovo',
+      schema,
+    });
+    expect(report.posture.ok).toBe(true);
+
+    const privileges = await queryPglite<{
+      public_can_execute: boolean;
+      reader_can_execute: boolean;
+      runtime_can_execute: boolean;
+    }>(
+      dataDir,
+      [
+        'SELECT',
+        "has_function_privilege('kovo_runtime_login', 'pg_catalog.set_config(text,text,boolean)', 'EXECUTE') AS runtime_can_execute,",
+        "has_function_privilege('kovo_reader', 'pg_catalog.set_config(text,text,boolean)', 'EXECUTE') AS reader_can_execute,",
+        'EXISTS (',
+        '  SELECT 1 FROM pg_proc p',
+        '  JOIN pg_namespace n ON n.oid = p.pronamespace',
+        '  JOIN aclexplode(p.proacl) acl ON true',
+        "  WHERE n.nspname = 'pg_catalog'",
+        "  AND p.proname = 'set_config'",
+        "  AND pg_get_function_identity_arguments(p.oid) = 'text, text, boolean'",
+        "  AND acl.grantee = 0 AND acl.privilege_type = 'EXECUTE'",
+        ') AS public_can_execute',
+      ].join(' '),
+    );
+    expect(privileges.rows[0]).toEqual({
+      public_can_execute: false,
+      reader_can_execute: false,
+      runtime_can_execute: true,
+    });
+  });
+
+  it('revokes app-schema table and sequence default privileges from PUBLIC during provision', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-default-privs-'));
+    roots.push(dataDir);
+
+    const report = await migratePostgresAppDb({
+      dataDir,
+      driver: 'pglite',
+      migrations: [
+        {
+          id: '001_schema_after_public_defaults',
+          sql: [
+            'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO PUBLIC',
+            'ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE ON SEQUENCES TO PUBLIC',
+            runtimeSchemaMigrationSql,
+          ].join('; '),
+        },
+      ],
+      schema,
+    });
+    expect(report.posture.ok).toBe(true);
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE TABLE kovo_runtime_future_default_privs (id text PRIMARY KEY)',
+        'CREATE SEQUENCE kovo_runtime_future_default_privs_seq',
+      ].join('; '),
+    );
+    const privileges = await queryPglite<{
+      can_read_table: boolean;
+      can_use_sequence: boolean;
+    }>(
+      dataDir,
+      [
+        'SELECT',
+        "has_table_privilege('kovo_reader', 'kovo_runtime_future_default_privs', 'SELECT') AS can_read_table,",
+        "has_sequence_privilege('kovo_reader', 'kovo_runtime_future_default_privs_seq', 'USAGE') AS can_use_sequence",
+      ].join(' '),
+    );
+    expect(privileges.rows[0]).toEqual({
+      can_read_table: false,
+      can_use_sequence: false,
+    });
   });
 
   it('rejects unbranded system posture instead of granting ambient system authority', async () => {
