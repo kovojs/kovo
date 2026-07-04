@@ -109,10 +109,12 @@ export function siteSharedAppShellDevPlugin(): SiteDevPlugin {
         }
       });
 
-      const serverModule = await server.ssrLoadModule('@kovojs/server');
+      const serverModule = await server.ssrLoadModule('@kovojs/server/internal/app-shell-vite');
       const createDevIntegration = serverModule.createKovoAppShellViteDevIntegration;
       if (typeof createDevIntegration !== 'function') {
-        throw new Error('@kovojs/server must export createKovoAppShellViteDevIntegration.');
+        throw new Error(
+          '@kovojs/server/internal/app-shell-vite must export createKovoAppShellViteDevIntegration.',
+        );
       }
 
       const integration = createDevIntegration({

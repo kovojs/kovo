@@ -15,14 +15,19 @@
     "./testing": "./src/testing.ts",
     "./vite": "./src/vite.ts",
     "./internal/app-shell-vite": "./src/internal/app-shell-vite.ts",
+    "./internal/audit-facts": "./src/internal/audit-facts.ts",
     "./internal/build": "./src/internal/build.ts",
     "./internal/build-context": "./src/internal/build-context.ts",
+    "./internal/capabilities": "./src/internal/capabilities.ts",
     "./internal/client-modules": "./src/internal/client-modules.ts",
+    "./internal/csp": "./src/internal/csp.ts",
     "./internal/csrf": "./src/internal/csrf.ts",
     "./internal/data-plane-static-analysis": "./src/internal/data-plane-static-analysis.ts",
+    "./internal/egress": "./src/internal/egress.ts",
     "./internal/escape": "./src/internal/escape.ts",
     "./internal/execution": "./src/internal/execution.ts",
     "./internal/html": "./src/internal/html.ts",
+    "./internal/managed-db": "./src/internal/managed-db.ts",
     "./internal/runtime-registry-wire": "./src/internal/runtime-registry-wire.ts",
     "./internal/route": "./src/internal/route.ts",
     "./internal/static-export": "./src/internal/static-export.ts",
@@ -52,6 +57,10 @@
         "types": "./dist/internal/app-shell-vite.d.mts",
         "default": "./dist/internal/app-shell-vite.mjs"
       },
+      "./internal/audit-facts": {
+        "types": "./dist/internal/audit-facts.d.mts",
+        "default": "./dist/internal/audit-facts.mjs"
+      },
       "./internal/build": {
         "types": "./dist/internal/build.d.mts",
         "default": "./dist/internal/build.mjs"
@@ -60,9 +69,17 @@
         "types": "./dist/internal/build-context.d.mts",
         "default": "./dist/internal/build-context.mjs"
       },
+      "./internal/capabilities": {
+        "types": "./dist/internal/capabilities.d.mts",
+        "default": "./dist/internal/capabilities.mjs"
+      },
       "./internal/client-modules": {
         "types": "./dist/internal/client-modules.d.mts",
         "default": "./dist/internal/client-modules.mjs"
+      },
+      "./internal/csp": {
+        "types": "./dist/internal/csp.d.mts",
+        "default": "./dist/internal/csp.mjs"
       },
       "./internal/csrf": {
         "types": "./dist/internal/csrf.d.mts",
@@ -71,6 +88,10 @@
       "./internal/data-plane-static-analysis": {
         "types": "./dist/internal/data-plane-static-analysis.d.mts",
         "default": "./dist/internal/data-plane-static-analysis.mjs"
+      },
+      "./internal/egress": {
+        "types": "./dist/internal/egress.d.mts",
+        "default": "./dist/internal/egress.mjs"
       },
       "./internal/escape": {
         "types": "./dist/internal/escape.d.mts",
@@ -83,6 +104,10 @@
       "./internal/html": {
         "types": "./dist/internal/html.d.mts",
         "default": "./dist/internal/html.mjs"
+      },
+      "./internal/managed-db": {
+        "types": "./dist/internal/managed-db.d.mts",
+        "default": "./dist/internal/managed-db.mjs"
       },
       "./internal/runtime-registry-wire": {
         "types": "./dist/internal/runtime-registry-wire.d.mts",
@@ -111,7 +136,7 @@
     }
   },
   "scripts": {
-    "build:dist": "vp pack src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/build.ts src/internal/build-context.ts src/internal/client-modules.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/runtime-registry-wire.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/testing.ts src/vite.ts --dts",
+    "build:dist": "vp pack src/build.ts src/index.ts src/internal/app-shell-vite.ts src/internal/audit-facts.ts src/internal/build.ts src/internal/build-context.ts src/internal/capabilities.ts src/internal/client-modules.ts src/internal/csp.ts src/internal/csrf.ts src/internal/data-plane-static-analysis.ts src/internal/egress.ts src/internal/escape.ts src/internal/execution.ts src/internal/html.ts src/internal/managed-db.ts src/internal/runtime-registry-wire.ts src/internal/route.ts src/internal/static-export.ts src/internal/wire.ts src/jsx-runtime.ts src/testing.ts src/vite.ts --dts",
     "prepack": "pnpm run build:dist"
   },
   "dependencies": {
