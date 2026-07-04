@@ -220,17 +220,39 @@ export async function ensureDurableTaskSchema(executor: DurableTaskSqlExecutor):
   }
 }
 
-export async function grantDurableTaskWriterRole(executor: DurableTaskSqlExecutor): Promise<void> {
-  const writerRole = (process.env.KOVO_DB_WRITER_ROLE ?? 'kovo_writer').trim();
+const DURABLE_TASK_WRITER_TABLES = ['_kovo_jobs', '_kovo_task_cron_occurrences'] as const;
+
+export async function grantDurableTaskWriterRole(
+  executor: DurableTaskSqlExecutor,
+  role = process.env.KOVO_DB_WRITER_ROLE ?? 'kovo_writer',
+): Promise<void> {
+  const writerRole = role.trim();
   if (writerRole === '') return;
+  for (const table of DURABLE_TASK_WRITER_TABLES) {
+    try {
+      await executor.execute({
+        text: `grant select, insert, update, delete on ${quoteIdent(table)} to ${quoteIdent(writerRole)}`,
+        values: [],
+      });
+    } catch {
+      // Non-Postgres adapters or externally managed role setups may not expose the default writer
+      // role. The queue schema itself remains the authoritative startup check.
+    }
+  }
+}
+
+export async function assertDurableTaskStoreReady(
+  executor: DurableTaskSqlExecutor,
+  cause: unknown,
+): Promise<void> {
   try {
+    await executor.execute({ text: 'select id from _kovo_jobs where false', values: [] });
     await executor.execute({
-      text: `grant select, insert, update, delete on _kovo_jobs to ${quoteIdent(writerRole)}`,
+      text: 'select cron_name from _kovo_task_cron_occurrences where false',
       values: [],
     });
   } catch {
-    // Non-Postgres adapters or externally managed role setups may not expose the default writer
-    // role. The queue schema itself remains the authoritative startup check.
+    throw cause;
   }
 }
 

@@ -20,6 +20,7 @@ import {
   createPostgresAppRuntimeDb,
   type KovoPostgresRuntimeDb,
 } from './postgres-runtime.js';
+import { PostgresDurableTaskQueue, createDurableTaskSqlExecutor } from './task-queue.js';
 
 const notes = pgTable(
   'kovo_runtime_notes',
@@ -356,6 +357,43 @@ describe('createPostgresAppRuntimeDb', () => {
         { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'System touched' },
       ]);
       await expect(runtime.db({}).select().from(notes)).resolves.toEqual([]);
+    } finally {
+      await runtime.close();
+    }
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(true);
+    expect(report.issues).toEqual([]);
+  });
+
+  it('provisions framework task store tables for least-privilege writer handles', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-task-store-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+
+    try {
+      await runtime.ready;
+      const executor = createDurableTaskSqlExecutor(runtime.db({}));
+      const queue = new PostgresDurableTaskQueue(executor);
+
+      await expect(
+        queue.enqueue({
+          args: { proof: true },
+          task: 'runtime/task-store-proof',
+        }),
+      ).resolves.toMatchObject({ task: 'runtime/task-store-proof' });
+      await expect(
+        executor.execute({
+          text: [
+            'insert into _kovo_task_cron_occurrences (cron_name, occurrence_ts, job_id)',
+            'values ($1, $2, null)',
+            'returning cron_name',
+          ].join(' '),
+          values: ['runtime/task-store-proof', new Date('2026-07-03T00:00:00.000Z')],
+        }),
+      ).resolves.toMatchObject({
+        rows: [{ cron_name: 'runtime/task-store-proof' }],
+      });
     } finally {
       await runtime.close();
     }

@@ -93,6 +93,44 @@ describe('durable task runtime (SPEC §9.6)', () => {
     ).toBe(true);
   });
 
+  it('starts from a pre-provisioned task store when the runtime handle cannot run DDL', async () => {
+    const statements: DurableTaskSqlStatement[] = [];
+    const db = {
+      async query(text: string, values: readonly unknown[]) {
+        statements.push({ text, values });
+        if (text.startsWith('create table') || text.startsWith('create index')) {
+          throw new Error('permission denied for schema public');
+        }
+        if (text === 'select id from _kovo_jobs where false') return { rows: [] };
+        if (text === 'select cron_name from _kovo_task_cron_occurrences where false') {
+          return { rows: [] };
+        }
+        if (text === 'select now() as now') {
+          return { rows: [{ now: '2026-06-30T10:00:00.000Z' }] };
+        }
+        return { rowCount: 0, rows: [] };
+      },
+    };
+    const noop = task('startup/preprovisioned-store', {
+      input: s.object({}),
+      run() {},
+    });
+    const app = createApp({
+      db: () => db,
+      tasks: [noop],
+    });
+
+    await createAppTaskRuntime(app)?.ensureStarted(new Request('http://localhost/request'));
+
+    expect(statements.map((statement) => statement.text)).toEqual(
+      expect.arrayContaining([
+        expect.stringContaining('create table if not exists _kovo_jobs'),
+        'select id from _kovo_jobs where false',
+        'select cron_name from _kovo_task_cron_occurrences where false',
+      ]),
+    );
+  });
+
   it('reports task failures through the app onError hook', async () => {
     vi.useFakeTimers();
     try {

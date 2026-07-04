@@ -103,7 +103,9 @@ by construction because it reads the engine's real grant graph, not the framewor
 
 ## 7. Latest verification
 
-- [x] `pnpm exec vitest --run packages/server/src/postgres-runtime.test.ts packages/server/src/postgres-external-probe.test.ts packages/drizzle/src/sql-safety-static.test.ts packages/core/src/internal/security-markers.test.ts packages/cli/src/index.kovo-db.test.ts packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.runtime.test.ts --config ./vite.config.ts` — 7 files / 104 tests passed.
+- [x] `pnpm run check` — static-safety/check gate passed after the durable-task internal store repair.
+- [x] `pnpm exec vitest --run packages/server/src/task-runtime.test.ts packages/server/src/postgres-runtime.test.ts --config ./vite.config.ts` — 2 files / 28 tests passed, including pre-provisioned task-store startup and least-privilege writer access.
+- [x] `pnpm exec vitest --run packages/create-kovo/src/index.build.prod-artifact.durable-tasks.lifecycle.test.ts packages/create-kovo/src/index.build.prod-artifact.durable-tasks.retries.test.ts --config ./vite.config.ts` — production starter durable-task lifecycle/retry artifacts passed.
 
 ## 8. Resolved design forks (recorded for provenance)
 
