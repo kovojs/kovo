@@ -500,16 +500,21 @@ conservative half-step left as the end state.
 
 ### Phase 1 — standalone bug fixes (independent, land first)
 
-- [ ] **Fix `@kovojs/better-auth#role`**: delegate the body to `guards.role` (keep the typed
+- [x] **Fix `@kovojs/better-auth#role`**: delegate the body to `guards.role` (keep the typed
       role-name overload), so proven-principal checks, `markPassedRoleGuard`, and guard audit facts
       come along. Add a regression test asserting `db.crossOwnerRead(..., { role })` succeeds
       behind the better-auth guard (`packages/better-auth/src/guards.ts:53-65`,
       `packages/server/src/guards.ts:550-560`, `postgres-runtime.ts:983`).
-- [ ] **Export `now` next to `tempId`** so derive-codegen's emitted
+  - Evidence: `packages/server/src/better-auth-role-guard.test.ts` plus
+    `pnpm exec vitest --run packages/browser/src/index-exports.test.ts packages/drizzle/src/derive-codegen.test.ts packages/server/src/better-auth-role-guard.test.ts packages/server/src/wire-html.test.ts packages/server/src/mutation-delta.test.ts packages/browser/src/wire-parser.test.ts --config ./vite.config.ts`
+    (78 tests) after merging `agent/api-audit-phase1-20260703-2259`.
+- [x] **Export `now` next to `tempId`** so derive-codegen's emitted
       `import { now, tempId } from '@kovojs/browser'` resolves (`browser/src/index.ts:4`,
       `optimism.ts:553`, `drizzle/src/derive-codegen.ts:52-58`). Add a test that renders a derived
       transform exercising **every** placeholder and typechecks/executes the emitted module — the
       drift-proof is the real fix.
+  - Evidence: `packages/drizzle/src/derive-codegen.test.ts` typechecks/executes the emitted
+    `now`+`tempId` module; covered by the 78-test focused command above.
 - [ ] **Resolve the `clocks` core↔compiler contradiction**: add `clocks` to
       `COMPONENT_DEFINITION_KEYS` + a SPEC section, or delete the compiler path
       (`compiler/src/validate/temporal.ts`) and the islands.md section — one owner, not two truths.
@@ -526,8 +531,18 @@ conservative half-step left as the end state.
 
 ### Phase 3 — surface removals and ABI reclassification
 
-- [ ] Land the remaining **Definitely Remove** items (createElement, MutationResponseHeaders,
-      Deferred\*Chunk family, meta(), GuardFailure, EndpointReason `purpose`, runKovoCommand).
+- [ ] Land the remaining **Definitely Remove** items.
+  - [ ] `createElement`
+  - [ ] `MutationResponseHeaders`
+  - [ ] `Deferred*Chunk` family
+  - [ ] `meta()`
+  - [ ] `GuardFailure`
+  - [ ] EndpointReason `purpose`
+  - [x] `runKovoCommand` removed from the `@kovojs/cli` root; it remains available only on the
+        internal command dispatcher subpath.
+    - Evidence: `packages/cli/src/api.ts`, `site/scripts/api-ref.test.mjs`,
+      `pnpm run check:api-surface`, and
+      `pnpm exec vitest --run site/scripts/api-ref.test.mjs packages/cli/src/index.kovo-check.test.ts --config ./vite.config.ts`.
 - [ ] **Reclassify compiled-ABI types**: headless-ui transition machinery → `./generated` (one
       generator change in `packages/ui/scripts/primitive-component-manifest.mjs`); drop the 44
       `@kovojs/ui` `*Styles` exports from versioned modules (keep module-local for copy-in);
@@ -630,8 +645,11 @@ labelledBy>` (broken composition the old signature hid), components.md Button
 
 ### Side investigations (parallel, unowned by a phase)
 
-- [ ] **Wire `settles` emission gap**: client parses it (`browser/src/wire-parser.ts:150`); no
+- [x] **Wire `settles` emission gap**: client parses it (`browser/src/wire-parser.ts:150`); no
       server emission found — implementation gap or dead doc.
+  - Evidence: `packages/server/src/wire-html.ts`, `packages/server/src/mutation/targets.ts`, and
+    `packages/server/src/mutation/wire-response.ts` emit the triggering `Kovo-Idem`; verified by
+    `pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-delta.test.ts packages/browser/src/wire-parser.test.ts --config ./vite.config.ts`.
 - [ ] **Commerce KV330 alias question**: `const db = request.db; db.insert(...)` — analyzer
       evasion or unflagged reference-app violation; either outcome is a real issue.
 
