@@ -46,26 +46,28 @@ import { hmacSignature } from '@kovojs/core';
 import { domain, s, webhook } from '@kovojs/server';
 
 const order = domain('order');
+declare const providerWebhookReplayStore: any;
+declare const applyOrderEvent: any;
 
-export const stripeWebhook = webhook('/hooks/stripe', {
+export const orderWebhook = webhook('/hooks/order-provider', {
   verify: hmacSignature({
     encoding: 'hex',
-    header: 'stripe-signature',
+    header: 'x-provider-signature',
     payload: (request) => request.payload,
-    secret: process.env.STRIPE_WEBHOOK_SECRET!,
-    tolerance: { seconds: 5 * 60 },
+    secret: process.env.PROVIDER_WEBHOOK_SECRET!,
+    tolerance: { header: 'x-provider-timestamp', seconds: 5 * 60 },
   }),
   input: s.object({
     id: s.string(),
     type: s.string(),
   }),
   idempotency: (event) => event.id,
-  replayStore: stripeWebhookReplayStore,
+  replayStore: providerWebhookReplayStore,
   writes: [order],
   async handler(event, context) {
     await context
-      .declareSystemWrite('Stripe webhook applies provider-confirmed order events')
-      .runMutation(applyStripeOrderEvent, event);
+      .declareSystemWrite('Provider webhook applies provider-confirmed order events')
+      .runMutation(applyOrderEvent, event);
 
     context.recordChange(order, { keys: [event.id] });
   },
@@ -73,10 +75,10 @@ export const stripeWebhook = webhook('/hooks/stripe', {
 ```
 
 The path is explicit because it is the provider-facing address. The webhook registry identity is
-derived from `stripeWebhook` and its module path, so replay and audit names follow the source instead
+derived from `orderWebhook` and its module path, so replay and audit names follow the source instead
 of duplicating a string.
 
-Replace `applyStripeOrderEvent` with your app mutation or write helper. A webhook that can write
+Replace `applyOrderEvent` with your app mutation or write helper. A webhook that can write
 Kovo-owned data must declare both `idempotency` and `replayStore`, then choose an explicit
 `actAs(...)` or `declareSystemWrite(...)` posture before composing through mutations or managed DB
 work.
@@ -87,9 +89,9 @@ change record, and return the provider-appropriate 2xx. A redelivered event id r
 response and does not re-execute the handler. The `writes` list is the static audit fact; the
 `recordChange()` calls are the runtime key-level records.
 
-The verifier kit includes generic HMAC and Standard Webhooks helpers. Provider-specific recipes can
-live in app/example code on top of those helpers; the audit prints the resolved verifier scheme or a
-named custom/none justification.
+The verifier kit includes generic HMAC and Standard Webhooks helpers. Provider-specific recipes,
+including Stripe's exact signature format, can live in app/example code on top of those helpers; the
+audit prints the resolved verifier scheme or a named custom/none justification.
 
 ## Typed response headers and cookies
 

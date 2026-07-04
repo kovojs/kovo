@@ -21,7 +21,7 @@ export const addToCart = mutation({
   access: publicAccess('demo cart is intentionally public'),
   csrf: cartCsrf,
   input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
-  async handler(input, request) {
+  async handler(input, request: { db: any }) {
     await request.db.insert(cartItems).values(input);
     return { ok: true };
   },
@@ -67,7 +67,7 @@ export const addToCart = mutation({
   errors: {
     OUT_OF_STOCK: s.object({ available: s.number().int().min(0) }),
   },
-  async handler(input, request, context) {
+  async handler(input, request: { db: any }, context) {
     const [row] = await request.db
       .select({ stock: products.stock })
       .from(products)
@@ -98,7 +98,7 @@ export const mergeCart = mutation({
     tables: ['cart_items'],
     touches: [cart],
   },
-  async handler(input, request) {
+  async handler(input, request: { db: any }) {
     await request.db.execute(sql`/* opaque merge for ${input.cartId} */`);
     return { ok: true };
   },

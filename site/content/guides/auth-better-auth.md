@@ -38,7 +38,7 @@ The smallest Kovo-facing piece is the session adapter:
 import { betterAuthSession } from '@kovojs/better-auth';
 
 export const appSessionProvider = commerceSession.provider(
-  betterAuthSession(auth, ({ session, user }) => ({
+  betterAuthSession(auth, ({ session, user }: { session: any; user: any }) => ({
     id: session.id,
     user: { id: user.id, email: user.email, name: user.name },
   })),
@@ -81,7 +81,7 @@ export const appCsrf = {
 } satisfies CsrfOptions<AppRequest>;
 
 export const appSessionProvider = appSession.provider(
-  betterAuthSession(auth, ({ session: authSession, user }) => ({
+  betterAuthSession(auth, ({ session: authSession, user }: { session: any; user: any }) => ({
     id: authSession.id,
     user: { id: user.id, email: user.email, name: user.name },
   })),

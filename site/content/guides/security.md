@@ -149,8 +149,10 @@ Then scope every read and write of that table to the session, not to client inpu
 // CORRECT: the user id comes from req.session, traceable by the predicate extractor
 export const orderHistoryQuery = query({
   guard: authed(),
-  load: (_args, context) =>
-    context.db.select().from(orders).where(eq(orders.userId, context.request.session.user.id)),
+  load: (_args, context: { db?: any; request: CommerceRequest }) => {
+    const userId = context?.request.session.user.id;
+    return context?.db?.select().from(orders).where(eq(orders.userId, userId)) ?? [];
+  },
   reads: [order],
 });
 ```
@@ -290,9 +292,7 @@ machine auth rather than relying on default reachability.
 
 Review capability-style powers through the concrete surfaces that create them today:
 `--revealed` for audit-grade `trustedReveal(...)`, `--trust` for trusted sink escapes,
-`--endpoints` for signed download endpoints, and `--sources-sinks` for the raw capability APIs. Do
-not treat `--capabilities` as a shipped capability-URL proof yet; its coverage is still tightening in
-technical preview.
+`--endpoints` for signed download endpoints, and `--sources-sinks` for the raw capability APIs.
 
 ## Read across owners in an admin tool
 
@@ -303,15 +303,19 @@ table into the Postgres runtime and keep the read behind `guards.role('admin')`:
 import { sql } from '@kovojs/drizzle';
 import { guards, query } from '@kovojs/server';
 
-export const adminOrders = query({
+type AdminOrderRow = { id: string; total: number };
+
+const adminOrdersDefinition = {
   guard: guards.role('admin'),
-  load: (_args, { db }) =>
-    db.crossOwnerRead(sql`SELECT id, total FROM ${orders}`, {
+  load: (_args, context?: { db?: any }): AdminOrderRow[] =>
+    context?.db?.crossOwnerRead(sql`SELECT id, total FROM ${orders}`, {
       reads: ['orders'],
       reason: 'admin order export',
       role: 'admin',
-    }),
-});
+    }) ?? [],
+};
+
+export const adminOrders = query(adminOrdersDefinition);
 ```
 
 `crossOwnerRead` is the capability name. The `role: 'admin'` declaration is the runtime role posture
@@ -345,8 +349,12 @@ Project only the fields the UI needs:
 ```ts
 export const supportUser = query({
   guard: guards.role('support'),
-  load: (db, args) =>
-    db.select({ id: users.id, email: users.email }).from(users).where(eq(users.id, args.userId)),
+  args: s.object({ userId: s.string() }),
+  load: (args, context: { db?: any }) =>
+    context?.db
+      ?.select({ id: users.id, email: users.email })
+      .from(users)
+      .where(eq(users.id, args.userId)) ?? [],
   reads: [user],
 });
 ```
@@ -427,7 +435,7 @@ export const downloads = createStorageDownloadEndpoint({
 
 export const invoiceRoute = route('/account/invoice', {
   guard: guards.authed(),
-  page: async ({ signUrl }, req) => {
+  page: async ({ signUrl }, req: { session: { user: { id?: string } } }) => {
     const signed = await signUrl!({
       key: `invoices/${req.session.user.id}/latest.pdf`,
       scope: 'invoice-download',

@@ -169,8 +169,8 @@ grep '^invalidated-by: .*cart/add' .kovo/cart.query.txt
 kovo explain mutation cart/add --optimistic graph.json | grep '^OPTIMISTIC-SUMMARY .*UNHANDLED=0'
 ```
 
-If the rule should live in CI, put the script version in your app, for example
-`scripts/graph-assertions.mjs`:
+If the rule should live in CI, put the script version in your app. This is app-owned code, not a
+file `create-kovo` generates:
 
 ```ts
 import assert from 'node:assert/strict';
@@ -184,9 +184,10 @@ assert.match(cartAdd, /^updates: cart->component:CartBadge,page:\/cart/m);
 assert.match(cartAdd, /^OPTIMISTIC-SUMMARY .*UNHANDLED=0$/m);
 ```
 
-Run that script next to `kovo check` in your app's CI. A graph assertion differs in kind from a
-rendering test: it states intent ("cart consumers are exactly these") and holds as the app grows — a
-new component that reads cart data either joins the consumer set correctly or turns CI red.
+Run that script next to `kovo check` only after you add it to your app. A graph assertion differs in
+kind from a rendering test: it states intent ("cart consumers are exactly these") and holds as the
+app grows — a new component that reads cart data either joins the consumer set correctly or turns CI
+red.
 
 ## The security review modes
 
@@ -231,8 +232,7 @@ can't land quietly.
 - `--sources-sinks` emits the source/sink inventory used by the security gates.
 
 Capability-style review currently happens through the concrete shipped surfaces: `--revealed`,
-`--trust`, `--endpoints`, and `--sources-sinks`. Do not use `--capabilities` as a blocking
-capability-URL proof in technical preview.
+`--trust`, `--endpoints`, and `--sources-sinks`.
 
 ## Debug from the Network panel
 
