@@ -103,12 +103,14 @@ That is a cookie-sink error. `Set-Cookie` must use the typed cookie builder, whi
 percent-encodes values, and serializes attributes structurally.
 
 ```ts
-return new Response(bytes, {
-  headers: {
-    'Cache-Control': 'private, no-store',
-    'Content-Type': 'application/pdf',
-  },
-});
+export function pdfResponse(bytes: BodyInit) {
+  return new Response(bytes, {
+    headers: {
+      'Cache-Control': 'private, no-store',
+      'Content-Type': 'application/pdf',
+    },
+  });
+}
 ```
 
 ## Send CSRF tokens to raw endpoints

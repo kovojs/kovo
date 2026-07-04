@@ -234,9 +234,3 @@ function loginLocation(next: string): string {
   url.searchParams.set('next', next.startsWith('/') && !next.startsWith('//') ? next : '/');
   return `${url.pathname}${url.search}${url.hash}`;
 }
-
-function mergeResponseHeaders(
-  ...sources: readonly (ResponseHeaders | undefined)[]
-): ResponseHeaders {
-  return mergeResponseHeaders(...sources);
-}

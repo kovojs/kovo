@@ -485,12 +485,6 @@ function loginLocation(next: string): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-function mergeResponseHeaders(
-  ...sources: readonly (ResponseHeaders | undefined)[]
-): ResponseHeaders {
-  return mergeResponseHeaders(...sources);
-}
-
 function mutationWireChangeRecords(
   changes: readonly ChangeRecord[],
 ): Pick<ChangeRecord, 'domain' | 'keys'>[] {

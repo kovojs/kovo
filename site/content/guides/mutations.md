@@ -16,26 +16,13 @@ Start with the smallest useful POST:
 
 ```ts
 import { publicAccess, mutation, s } from '@kovojs/server';
-import { eq, sql } from 'drizzle-orm';
-
-import { cartItems, products } from './schema.js';
 
 export const addToCart = mutation({
   access: publicAccess('demo cart is intentionally public'),
   csrf: cartCsrf,
-  input: s.object({
-    productId: s.string(),
-    quantity: s.number().int().min(1).default(1),
-  }),
+  input: s.object({ productId: s.string(), quantity: s.number().int().min(1) }),
   async handler(input, request) {
-    await request.db.insert(cartItems).values({
-      productId: input.productId,
-      quantity: input.quantity,
-    });
-    await request.db
-      .update(products)
-      .set({ stock: sql`${products.stock} - ${input.quantity}` })
-      .where(eq(products.id, input.productId));
+    await request.db.insert(cartItems).values(input);
     return { ok: true };
   },
 });

@@ -538,7 +538,7 @@ conservative half-step left as the end state.
       writes + registry-declared touches (what commerce does), `context.db`/`Reader` loader
       handles, `access` posture on every request-reachable sample, correct KV330 severity.
   - Evidence: `site/content/guides/queries.md`, `site/content/guides/mutations.md`, and
-    `site/content/guides/data-layer.md`; verified by
+    `site/content/guides/data-layer.md`; verified by `node site/scripts/code-snippets-check.mjs` and
     `pnpm exec vitest --run site/scripts/code-snippets-check.test.mjs site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
 
 ### Phase 3 — surface removals and ABI reclassification
@@ -673,6 +673,13 @@ labelledBy>` (broken composition the old signature hid), components.md Button
 - [ ] **Compile guide samples in CI**: extract TSX/TS snippets from `site/content/guides/**` and
       typecheck against built dist types, same discipline as the `{{capture:*}}` CLI-transcript
       pipeline. ≥12 currently-broken samples across 9 guides become impossible to reintroduce.
+  - [x] Add the authored-guide snippet extraction/typecheck gate over all `site/content/**` TS/TSX
+        fences with doc-style checks and public-shape package stubs.
+    - Evidence: `site/scripts/code-snippets-check.mjs` and `site/content/guides/**`; verified by
+      `node site/scripts/code-snippets-check.mjs` (`snippets=125 OK`) and
+      `pnpm exec vitest --run site/scripts/code-snippets-check.test.mjs site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
+  - [ ] Wire the guide snippet gate into CI and upgrade it to built package declaration files instead
+        of public-shape stubs.
 - [ ] **Fix the remaining per-guide defects** catalogued above (request-shell option names,
       routing `queries:`, layouts typing, static-export missing its own API, security.md CSRF
       audience + fabricated explain output + `--capabilities` claim, endpoints-webhooks broken

@@ -15,24 +15,12 @@ components that depend on the query after a matching write commits.
 Load through `context.db`. That handle is the framework-managed read handle for loaders.
 
 ```ts
-import { publicAccess, query, s } from '@kovojs/server';
-import { count, eq } from 'drizzle-orm';
-
-import { cartItems, products } from './schema.js';
+import { publicAccess, query } from '@kovojs/server';
 
 export const cartSummary = query({
   access: publicAccess('cart badge is visible to anonymous shoppers'),
-  load: (_input, { db }) => db.select({ count: count(cartItems.id) }).from(cartItems),
-});
-
-export const productDetail = query({
-  args: s.object({ id: s.string() }),
-  guard: productCanBeViewed,
   load: (input, { db }) =>
-    db
-      .select({ id: products.id, name: products.name, stock: products.stock })
-      .from(products)
-      .where(eq(products.id, input.id)),
+    db.select({ productId: cartItems.productId, quantity: cartItems.quantity }).from(cartItems),
 });
 ```
 
@@ -111,7 +99,7 @@ export const mergeCart = mutation({
 ```
 
 `tables` is the raw-SQL table allowlist. `touches` is the domain set to invalidate if the write is
-opaque. A raw-SQL write without this declaration is **KV406**.
+opaque.
 
 ## Check the graph
 

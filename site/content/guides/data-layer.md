@@ -17,26 +17,12 @@ Put the domain facts next to the table definition:
 
 ```ts
 import { kovo } from '@kovojs/drizzle';
-import { integer, pgTable, text } from 'drizzle-orm/pg-core';
+import { pgTable, text } from 'drizzle-orm/pg-core';
 
 export const products = pgTable(
   'products',
-  {
-    id: text('id').primaryKey(),
-    name: text('name').notNull(),
-    stock: integer('stock').notNull(),
-  },
+  { id: text('id').primaryKey(), name: text('name').notNull() },
   kovo({ domain: 'product', key: (t) => t.id }),
-);
-
-export const cartItems = pgTable(
-  'cart_items',
-  {
-    id: text('id').primaryKey(),
-    productId: text('product_id').notNull(),
-    quantity: integer('quantity').notNull(),
-  },
-  kovo({ domain: 'cart' }),
 );
 ```
 
@@ -66,7 +52,7 @@ export const productDetail = query({
 ```
 
 The loader's `FROM` and `JOIN` clauses are the read declaration. A raw projection needs a declared
-output schema and `reads` set; otherwise it is **KV410**.
+output schema and `reads` set.
 
 ## Write with analyzable Drizzle calls
 
@@ -114,8 +100,7 @@ export const mergeCart = mutation({
 });
 ```
 
-`tables` lists the physical tables the raw SQL may mutate. `touches` lists the domains to rerun. A
-statically unresolved write without the declaration is **KV406**.
+`tables` lists the physical tables the raw SQL may mutate. `touches` lists the domains to rerun.
 
 ## Keep request surfaces explicit
 

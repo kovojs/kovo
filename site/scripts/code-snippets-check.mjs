@@ -468,6 +468,7 @@ declare global {
   var appSignIn: any;
   var appSignOut: any;
   var applyAddToCartEffect: any;
+  var applyStripeOrderEvent: any;
   var assert: any;
   var auth: any;
   var authed: <Request = any>() => any;
@@ -484,6 +485,8 @@ declare global {
   var cartItems: any;
   var cartPage: any;
   var cartQuery: any;
+  var cartCsrf: any;
+  var cartSummary: any;
   var checkoutGuard: any;
   var commerceBetterAuth: any;
   var commerceCartRoute: any;
@@ -545,7 +548,9 @@ declare global {
   var invoicesBucket: any;
   var item: any;
   var kovo: any;
-  var layout: any;
+  var layout: <Request = any, Params = any, Page = any, Regions = any>(
+    ...args: any[]
+  ) => any;
   var loadCart: any;
   var loadContact: any;
   var loadDeal: any;
@@ -569,6 +574,7 @@ declare global {
   var pool: any;
   var postQuery: any;
   var priceParam: any;
+  var productCanBeViewed: any;
   var product: any;
   var productQuery: any;
   var productGrid: any;
@@ -576,6 +582,7 @@ declare global {
   var productId: any;
   var products: any;
   var pgTable: any;
+  var publicAccess: any;
   var query: any;
   var queries: any;
   var queryClient: any;
@@ -608,6 +615,7 @@ declare global {
   var sql: any;
   var sum: any;
   var stripe: any;
+  var stripeWebhookReplayStore: any;
   var table: any;
   var text: any;
   var themeScript: any;
@@ -714,7 +722,9 @@ export type ComponentRegistryEntry = any;
 export type ComponentRegistryInput = any;
 export type ComponentTextNode = any;
 export type IconProps = any;
+export type RoutePageResult = any;
 export type SelectTriggerAttributeOptions = any;
+export type StaticExportOptions = any;
 export type StyleInput = any;
 export type CsrfValidationOptions<Request = any> = any;
 
@@ -742,6 +752,7 @@ export const defineTheme: any;
 export const dialogContentAttributes: any;
 export const domain: any;
 export const endpoint: any;
+export const exportStaticApp: any;
 export const form: any;
 export const guards: {
   all: any;
@@ -752,7 +763,9 @@ export const guards: {
 };
 export const hmacSignature: any;
 export const installKovoLoader: any;
-export const layout: any;
+export const layout: <Request = any, Params = any, Page = any, Regions = any>(
+  ...args: any[]
+) => any;
 export const metaFromQuery: any;
 export const mintCsrfField: any;
 export const mintCsrfToken: any;
@@ -761,6 +774,7 @@ export const notFound: any;
 export const parseComponentXml: any;
 export const queue: any;
 export const query: any;
+export const publicAccess: any;
 export const tag: any;
 export const redirect: any;
 export const renderRegistry: any;
@@ -778,6 +792,7 @@ export const tokens: any;
 export const trustedHtml: any;
 export const trustedReveal: any;
 export const trustedUrl: any;
+export const verifiedAccess: any;
 export const webhook: any;
 export const write: any;
 `;
@@ -794,7 +809,9 @@ export type ComponentRegistryEntry = any;
 export type ComponentRegistryInput = any;
 export type ComponentTextNode = any;
 export type IconProps = any;
+export type RoutePageResult = any;
 export type SelectTriggerAttributeOptions = any;
+export type StaticExportOptions = any;
 export type StyleInput = any;
 
 export class ComponentXmlError extends Error {}
@@ -821,10 +838,13 @@ export const defineTheme = anyFn;
 export const dialogContentAttributes = anyFn;
 export const domain = anyFn;
 export const endpoint = anyFn;
+export const exportStaticApp = anyFn;
 export const form = anyFn;
 export const hmacSignature = anyFn;
 export const installKovoLoader = anyFn;
-export const layout = anyFn;
+export const layout = anyFn as <Request = any, Params = any, Page = any, Regions = any>(
+  ...args: any[]
+) => any;
 export const metaFromQuery = anyFn;
 export const mintCsrfField = anyFn;
 export const mintCsrfToken = anyFn;
@@ -833,6 +853,7 @@ export const notFound = anyFn;
 export const parseComponentXml = anyFn;
 export const queue = anyFn;
 export const query = anyFn;
+export const publicAccess = anyFn;
 export const redirect = anyFn;
 export const renderRegistry = anyFn;
 export const renderTree = anyFn;
@@ -847,6 +868,7 @@ export const toNodeHandler = anyFn;
 export const trustedHtml = anyFn;
 export const trustedReveal = anyFn;
 export const trustedUrl = anyFn;
+export const verifiedAccess = anyFn;
 export const webhook = anyFn;
 export const write = anyFn;
 export const tokens = new Proxy({}, { get: () => 'var(--kovo-snippet-token)' }) as any;
