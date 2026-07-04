@@ -206,6 +206,8 @@ type EgressHardeningMode = NonNullable<EgressOptions['hardening']>;
 interface ResolveEgressPolicyOptions {
   /** Internal boot posture for omitted `createApp({ egress })` in development. */
   allowPrivateNetwork?: boolean;
+  /** Already-normalized framework-owned DB endpoints registered before this floor install. */
+  databaseEndpoints?: readonly string[];
   /**
    * Runtime database URLs whose exact host:port should be reachable even when the
    * production/private-network floor is otherwise empty. Defaults to `KOVO_DATABASE_URL`.
@@ -275,6 +277,9 @@ export function resolveEgressPolicy(
   for (const endpoint of resolveDatabaseEgressEndpoints(policyOptions.databaseUrls)) {
     allowDatabaseEndpoints.add(endpoint);
   }
+  for (const endpoint of policyOptions.databaseEndpoints ?? []) {
+    allowDatabaseEndpoints.add(endpoint);
+  }
   return {
     allowInternal,
     allowDatabaseEndpoints,
@@ -282,6 +287,31 @@ export function resolveEgressPolicy(
     allowInternalCidrs,
     allowPrivateNetwork: policyOptions.allowPrivateNetwork === true,
   };
+}
+
+/** @internal Normalize Postgres URLs into exact DB host:port egress exemptions. */
+export function databaseEgressEndpointsFromUrls(
+  databaseUrls: readonly (string | undefined)[],
+): readonly string[] {
+  return resolveDatabaseEgressEndpoints(databaseUrls);
+}
+
+/** @internal Mutate the active egress floor with framework-owned DB endpoints. */
+export function addDatabaseEgressEndpoints(
+  policy: EgressPolicy,
+  endpoints: Iterable<string>,
+): void {
+  const mutable = policy.allowDatabaseEndpoints as Set<string>;
+  for (const endpoint of endpoints) mutable.add(endpoint);
+}
+
+/** @internal Remove framework-owned DB endpoints that are no longer registered. */
+export function removeDatabaseEgressEndpoints(
+  policy: EgressPolicy,
+  endpoints: Iterable<string>,
+): void {
+  const mutable = policy.allowDatabaseEndpoints as Set<string>;
+  for (const endpoint of endpoints) mutable.delete(endpoint);
 }
 
 function resolveDatabaseEgressEndpoints(

@@ -9,10 +9,11 @@ import { drizzle as drizzlePglite, type PgliteDatabase } from 'drizzle-orm/pglit
 import { Pool, type PoolClient, type PoolConfig, type QueryConfig, type QueryResultRow } from 'pg';
 
 import {
-  assertNonRequestPrincipalPosture,
   declareSystemPrincipal,
+  principalFromNonRequestPrincipalPosture,
   type NonRequestPrincipalPosture,
 } from './auth-principal.js';
+import { registerEgressDatabaseUrl } from './egress-bootstrap.js';
 import {
   createAuthorizationCensusDb,
   createDeclaredWriteDb,
@@ -1228,10 +1229,17 @@ function createRuntimeClient(config: ResolvedPostgresRuntimeConfig): CreatedRunt
     };
   }
 
+  const unregisterDatabaseEgressUrl = registerEgressDatabaseUrl(config.databaseUrl);
   const pool = new Pool({ connectionString: config.databaseUrl } satisfies PoolConfig);
   const transactionalClient = new NodePostgresRuntimeClient(pool);
   return {
-    close: () => transactionalClient.close(),
+    close: async () => {
+      try {
+        await transactionalClient.close();
+      } finally {
+        unregisterDatabaseEgressUrl();
+      }
+    },
     drizzleInternalDb: (capability) => {
       assertInternalPostgresRuntimeDbCapability(capability);
       return drizzleNodePg({ client: pool, relations });
@@ -2648,9 +2656,13 @@ function postgresRequestScope(
   config: ResolvedPostgresRuntimeConfig,
 ): PostgresRequestScope {
   const posture = nonRequestPrincipalPostureObject(request);
-  if (posture !== undefined && posture.kind === 'system') {
-    assertNonRequestPrincipalPosture(posture);
-    return { roleSetting: 'system' };
+  if (posture !== undefined) {
+    const nonRequestPrincipal = principalFromNonRequestPrincipalPosture(posture);
+    if (posture.kind === 'system') return { roleSetting: 'system' };
+    if (nonRequestPrincipal === undefined) {
+      throw new Error('Framework-minted actAs(id) posture did not provide a principal.');
+    }
+    return { principal: nonRequestPrincipal };
   }
   const principal = config.principalFromRequest(request);
   return principal === undefined ? {} : { principal };
@@ -2659,16 +2671,7 @@ function postgresRequestScope(
 function nonRequestPrincipalPostureFromRequest(request: unknown): string | undefined {
   const posture = nonRequestPrincipalPostureObject(request);
   if (posture === undefined) return undefined;
-  if (posture.kind === 'system') {
-    assertNonRequestPrincipalPosture(posture);
-    return undefined;
-  }
-  const principal = (posture as { principal?: unknown }).principal;
-  return posture.kind === 'act-as' &&
-    typeof principal === 'string' &&
-    principal.trim() === principal
-    ? principal
-    : undefined;
+  return principalFromNonRequestPrincipalPosture(posture);
 }
 
 function nonRequestPrincipalPostureObject(

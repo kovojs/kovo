@@ -15,7 +15,7 @@ import {
   type KovoReadonlyDbCapable,
   type Reader,
 } from './managed-db.js';
-import { declareSystemPrincipal } from './auth-principal.js';
+import { actAsNonRequestPrincipal, declareSystemPrincipal } from './auth-principal.js';
 import { guards } from './guards.js';
 import {
   checkPostgresAppDbPosture,
@@ -88,6 +88,14 @@ const seedSql = [
     "('n1', 'u1', 's1', 'One'), ('n2', 'u2', 's2', 'Two')",
   "INSERT INTO kovo_runtime_labels (id, label) VALUES ('l1', 'Inbox')",
 ];
+
+function actAsRuntimePrincipal(principal: string) {
+  return actAsNonRequestPrincipal(principal, {
+    ingress: 'task',
+    operation: 'write',
+    surface: 'postgres-runtime-test',
+  });
+}
 
 const teamMemberships = pgTable(
   'kovo_runtime_team_memberships',
@@ -187,8 +195,8 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
-      const u2Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u2' } });
+      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
+      const u2Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u2') });
 
       await expect(u1Db.select().from(notes)).resolves.toEqual([
         { id: 'n1', ownerId: 'u1', secretNote: 's1', title: 'One' },
@@ -289,7 +297,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
     try {
       await runtime.ready;
-      const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
       await expect(u1Db.select().from(shadowNotes)).rejects.toThrow();
     } finally {
       await runtime.close();
@@ -302,7 +310,7 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     try {
       await declaredRuntime.ready;
-      const u1Db = declaredRuntime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      const u1Db = declaredRuntime.db({ principalPosture: actAsRuntimePrincipal('u1') });
       await expect(u1Db.select().from(shadowNotes)).resolves.toEqual([
         { id: 's1', ownerId: 'u1', title: 'Shadow' },
       ]);
@@ -336,7 +344,7 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const writer = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      const writer = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
       const readDb = (writer as unknown as KovoReadonlyDbCapable<Reader<KovoPostgresRuntimeDb>>)[
         kovoReadonlyDbHandle
       ]();
@@ -369,7 +377,7 @@ describe('createPostgresAppRuntimeDb', () => {
     try {
       await runtime.ready;
       drainPostgresRlsSilentDenyDiagnostics();
-      const writer = runtime.db({ principalPosture: { kind: 'act-as', principal: 'missing' } });
+      const writer = runtime.db({ principalPosture: actAsRuntimePrincipal('missing') });
       const readDb = (writer as unknown as KovoReadonlyDbCapable<Reader<KovoPostgresRuntimeDb>>)[
         kovoReadonlyDbHandle
       ]();
@@ -398,7 +406,7 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
       const systemDb = runtime.db({
         principalPosture: declareSystemPrincipal('repair owner index in runtime test', {
           ingress: 'task',
@@ -475,6 +483,21 @@ describe('createPostgresAppRuntimeDb', () => {
       expect(() =>
         runtime.db({ principalPosture: { kind: 'system', reason: 'plain object' } }),
       ).toThrow(/framework-minted actAs\(id\) or declareSystemRead\/Write\(reason\)/);
+    } finally {
+      await runtime.close();
+    }
+  });
+
+  it('rejects unbranded act-as posture instead of setting kovo.principal', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-act-as-unbranded-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+
+    try {
+      await runtime.ready;
+      expect(() => runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } })).toThrow(
+        /framework-minted actAs\(id\) or declareSystemRead\/Write\(reason\)/,
+      );
     } finally {
       await runtime.close();
     }
@@ -853,7 +876,7 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     try {
       await runtime.ready;
-      const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
+      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
       await expect(
         u1Db.insert(serialNotes).values({ ownerId: 'u1', title: 'Two' }).returning(),
       ).resolves.toEqual([expect.objectContaining({ ownerId: 'u1', title: 'Two' })]);
@@ -1061,8 +1084,8 @@ describe('createPostgresAppRuntimeDb', () => {
 
     try {
       await runtime.ready;
-      const u1Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u1' } });
-      const u2Db = runtime.db({ principalPosture: { kind: 'act-as', principal: 'u2' } });
+      const u1Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u1') });
+      const u2Db = runtime.db({ principalPosture: actAsRuntimePrincipal('u2') });
 
       await expect(u1Db.select().from(teamDocuments)).resolves.toEqual([
         { id: 'd1', teamId: 'team-a', title: 'Alpha' },
