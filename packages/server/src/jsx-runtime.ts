@@ -42,6 +42,7 @@ import { recordQueryRuntimeWarnings, runQuery, type QueryDefinition } from './qu
 import { renderServerRenderable } from './renderable.js';
 import { stampKovoComponentRoot } from './component-root-stamps.js';
 import { isDocumentConfig, isStructuredDocumentNode } from './document-structured.js';
+import { revealUntrustedRequestValue } from './untrusted-request-body.js';
 
 // Server-side JSX runtime. Components author JSX sugar (SPEC.md section 4.1)
 // and render to light-DOM HTML strings (SPEC.md section 3 pipeline, section
@@ -545,11 +546,11 @@ function formKeyValue(props: JsxProps, jsxKey?: unknown): string | undefined {
 
 function submittedFormKey(input: unknown): string | undefined {
   if (input instanceof FormData) {
-    const value = input.get(kovoFormKeyFieldName);
+    const value = revealSubmittedFormValue(input.get(kovoFormKeyFieldName));
     return typeof value === 'string' ? value : undefined;
   }
   if (isRecord(input)) {
-    const value = input[kovoFormKeyFieldName];
+    const value = revealSubmittedFormValue(input[kovoFormKeyFieldName]);
     return typeof value === 'string' ? value : undefined;
   }
   return undefined;
@@ -558,12 +559,16 @@ function submittedFormKey(input: unknown): string | undefined {
 function submittedInputContainsValue(input: unknown, value: string): boolean {
   if (input instanceof FormData) {
     for (const submitted of input.values()) {
-      if (submitted === value) return true;
+      if (revealSubmittedFormValue(submitted) === value) return true;
     }
     return false;
   }
   if (!isRecord(input)) return false;
-  return Object.values(input).some((submitted) => submitted === value);
+  return Object.values(input).some((submitted) => revealSubmittedFormValue(submitted) === value);
+}
+
+function revealSubmittedFormValue(value: unknown): unknown {
+  return revealUntrustedRequestValue(value, 'validated mutation form failure input');
 }
 
 function renderJsxContent(props: JsxProps): JsxChild {
