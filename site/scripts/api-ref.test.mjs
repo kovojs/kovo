@@ -314,7 +314,7 @@ describe('api-ref generator', () => {
       '@kovojs/server': 160,
       '@kovojs/style': 34,
       '@kovojs/better-auth': 13,
-      '@kovojs/cli': 12,
+      '@kovojs/cli': 11,
       '@kovojs/test': 26,
       '@kovojs/ui': 2,
     };
