@@ -111,7 +111,7 @@ describe('kovo db', () => {
     expect(check.stdout).toBe('');
     expect(check.stderr).toContain('kovo-db/v1\nACTION check\nDRIVER pglite\n');
     expect(check.stderr).toContain('STATUS failed\n');
-    expect(check.stderr).toContain('ISSUE code=KV433_SCHEMA_FINGERPRINT');
+    expect(check.stderr).toContain('ISSUE code=KV433_SCHEMA_TABLE');
   });
 
   it('applies reviewed SQL migrations before reasserting Postgres posture', async () => {

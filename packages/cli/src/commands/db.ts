@@ -473,7 +473,6 @@ function dbCommandResult(action: KovoDbAction, report: DbRunReport): CliCommandR
         dbOutputVersion,
         `ACTION ${action}`,
         `DRIVER ${posture.driver}`,
-        `FINGERPRINT ${posture.fingerprint}`,
         `STATUS ${posture.ok ? 'ok' : 'failed'}`,
         ...migrationLines,
         ...posture.issues.map(
