@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   alertDialogActionAttributes,
   alertDialogCancelAttributes,
@@ -55,7 +55,7 @@ export interface AlertDialogStateProps {
  * const props: AlertDialogProps = { children: 'Content' };
  */
 export interface AlertDialogProps extends AlertDialogStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: AlertDialogStyleOverrides;
 }
@@ -68,7 +68,7 @@ export interface AlertDialogProps extends AlertDialogStateProps {
  * const props: AlertDialogTriggerProps = { children: 'Content' };
  */
 export interface AlertDialogTriggerProps extends AlertDialogStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   styles?: AlertDialogStyleOverrides;
@@ -82,7 +82,7 @@ export interface AlertDialogTriggerProps extends AlertDialogStateProps {
  * const props: AlertDialogContentProps = { children: 'Content' };
  */
 export interface AlertDialogContentProps extends AlertDialogStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   descriptionId?: string;
   styles?: AlertDialogStyleOverrides;
@@ -98,7 +98,7 @@ export interface AlertDialogContentProps extends AlertDialogStateProps {
  */
 export interface AlertDialogCancelProps extends AlertDialogStateProps {
   autoFocus?: boolean;
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   styles?: AlertDialogStyleOverrides;
@@ -112,7 +112,7 @@ export interface AlertDialogCancelProps extends AlertDialogStateProps {
  * const props: AlertDialogActionProps = { children: 'Content' };
  */
 export interface AlertDialogActionProps extends AlertDialogStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   intent?: AlertDialogActionIntent;
@@ -127,7 +127,7 @@ export interface AlertDialogActionProps extends AlertDialogStateProps {
  * const props: AlertDialogPartProps = { children: 'Content' };
  */
 export interface AlertDialogPartProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: AlertDialogStyleOverrides;
 }

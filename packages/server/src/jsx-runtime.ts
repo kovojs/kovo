@@ -1,6 +1,7 @@
 import type {
   Component,
   ComponentDefinitionInput,
+  ComponentProps,
   ComponentRenderSlots,
   ErrorBoundaryProps,
   FieldErrorProps,
@@ -108,6 +109,8 @@ type MaybePromise<Value> = Promise<Value> | Value;
 export type JsxComponent<Props extends object = Record<string, never>> = (props: Props) => any;
 
 type KovoJsxComponent = Component<ComponentDefinitionInput>;
+type KovoJsxComponentProps<Type> =
+  Type extends Component<infer Definition> ? ComponentProps<Definition> : never;
 
 type MutationFormHelperKind = 'field' | 'form';
 
@@ -874,6 +877,10 @@ export declare namespace JSX {
   // intrinsic attributes through the call-site prop types below.
   type Element = any;
   type ElementType = JsxComponent<any> | KovoJsxComponent | keyof IntrinsicElements;
+  type LibraryManagedAttributes<ComponentType, Props> =
+    ComponentType extends Component<ComponentDefinitionInput>
+      ? KovoJsxComponentProps<ComponentType>
+      : Props;
   interface ElementChildrenAttribute {
     children: {};
   }

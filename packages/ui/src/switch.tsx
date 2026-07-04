@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import { switchRootAttributes } from '@kovojs/headless-ui/switch';
 import * as style from '@kovojs/style';
 
@@ -31,7 +31,7 @@ export interface SwitchStyleOverrides {
 export interface SwitchProps {
   describedBy?: string;
   checked?: boolean;
-  children?: string;
+  children?: ComponentChild;
   disabled?: boolean;
   form?: string;
   id?: string;

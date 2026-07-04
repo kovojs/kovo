@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   comboboxInputAttributes,
   comboboxListboxAttributes,
@@ -59,7 +59,7 @@ export interface ComboboxStateProps {
  * const props: ComboboxProps = { children: 'Content' };
  */
 export interface ComboboxProps extends ComboboxStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: ComboboxStyleOverrides;
 }
@@ -87,7 +87,7 @@ export interface ComboboxInputProps extends ComboboxStateProps {
  * const props: ComboboxListboxProps = { children: 'Content' };
  */
 export interface ComboboxListboxProps extends ComboboxStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: ComboboxStyleOverrides;
@@ -101,7 +101,7 @@ export interface ComboboxListboxProps extends ComboboxStateProps {
  * const props: ComboboxOptionProps = { itemValue: 'item', children: 'Content' };
  */
 export interface ComboboxOptionProps extends ComboboxStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemLabel?: string;

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { bindingProps, passThroughProps } from './pass-through.js';
@@ -28,7 +28,7 @@ export interface MeterStyleOverrides {
  * const props: MeterProps = { children: 'Content' };
  */
 export interface MeterProps {
-  children?: string;
+  children?: ComponentChild;
   high?: number;
   low?: number;
   max?: number;

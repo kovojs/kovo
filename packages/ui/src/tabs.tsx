@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   tabsListAttributes,
   tabsPanelAttributes,
@@ -55,7 +55,7 @@ export interface TabsStateProps {
  * const props: TabsProps = { children: 'Content' };
  */
 export interface TabsProps extends TabsStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: TabsStyleOverrides;
 }
@@ -68,7 +68,7 @@ export interface TabsProps extends TabsStateProps {
  * const props: TabsListProps = { children: 'Content' };
  */
 export interface TabsListProps extends TabsStateProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   id?: string;
   label?: string;
@@ -84,7 +84,7 @@ export interface TabsListProps extends TabsStateProps {
  * const props: TabsTriggerProps = { itemValue: 'item', children: 'Content' };
  */
 export interface TabsTriggerProps extends TabsStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
@@ -100,7 +100,7 @@ export interface TabsTriggerProps extends TabsStateProps {
  * const props: TabsPanelProps = { itemValue: 'item', children: 'Content' };
  */
 export interface TabsPanelProps extends TabsStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;

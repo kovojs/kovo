@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   otpFieldHiddenInputAttributes,
   otpFieldInputAttributes,
@@ -53,7 +53,7 @@ export interface OtpFieldStateProps {
  * const props: OtpFieldProps = { children: 'Content' };
  */
 export interface OtpFieldProps extends OtpFieldStateProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   errorId?: string;
   id?: string;
@@ -62,7 +62,7 @@ export interface OtpFieldProps extends OtpFieldStateProps {
 }
 
 interface OtpFieldGroupProps {
-  children?: string;
+  children?: ComponentChild;
   styles?: OtpFieldStyleOverrides;
 }
 

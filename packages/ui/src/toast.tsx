@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   toastActionAttributes,
   toastCloseAttributes,
@@ -52,7 +52,7 @@ export interface ToastStyleOverrides {
  * const props: ToastViewportProps = { children: 'Content' };
  */
 export interface ToastViewportProps {
-  children?: string;
+  children?: ComponentChild;
   disabled?: boolean;
   id?: string;
   label?: string;
@@ -68,7 +68,7 @@ export interface ToastViewportProps {
  * const props: ToastProps = { id: 'id', children: 'Content' };
  */
 export interface ToastProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   disabled?: boolean;
   id: string;
@@ -87,7 +87,7 @@ export interface ToastProps {
  * const props: ToastPartProps = { children: 'Content' };
  */
 export interface ToastPartProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: ToastStyleOverrides;
 }
@@ -101,7 +101,7 @@ export interface ToastPartProps {
  */
 export interface ToastActionProps {
   actionValue?: string;
-  children?: string;
+  children?: ComponentChild;
   disabled?: boolean;
   dismissOnAction?: boolean;
   id: string;

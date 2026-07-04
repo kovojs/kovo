@@ -1,4 +1,5 @@
 /** @jsxImportSource @kovojs/server */
+import type { ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { CURRENT_USER, displayName, reputationOf } from '../directory.js';
@@ -696,7 +697,7 @@ export function SoShell({
   children,
 }: {
   active?: NavSection;
-  children?: unknown;
+  children?: ComponentChild;
 }): string {
   return (
     <div style={chromeStyles.appRoot}>

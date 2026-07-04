@@ -145,7 +145,7 @@ function renderBoundaryFallback(fallback: ComponentRenderResult): string {
 }
 
 function componentLiveTargetQueryBindings<Request>(
-  component: Component<ComponentDefinitionInput>,
+  component: Component<any>,
 ): ComponentLiveTargetQueryBinding<Request>[] {
   if (!isRecord(component.definition.queries)) return [];
 
@@ -234,7 +234,7 @@ async function componentLiveTargetRenderOptions<
 }
 
 function componentLiveTargetDefaultSlots<Request>(
-  component: Component<ComponentDefinitionInput>,
+  component: Component<any>,
   context: LiveTargetRenderContext<Request>,
 ): ComponentRenderSlots {
   const forms = isRecord(component.definition.mutations)

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   tooltipContentAttributes,
   tooltipRootAttributes,
@@ -44,7 +44,7 @@ export interface TooltipStateProps {
  * const props: TooltipProps = { children: 'Content' };
  */
 export interface TooltipProps extends TooltipStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: TooltipStyleOverrides;
 }
@@ -57,7 +57,7 @@ export interface TooltipProps extends TooltipStateProps {
  * const props: TooltipTriggerProps = { children: 'Content' };
  */
 export interface TooltipTriggerProps extends TooltipStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   styles?: TooltipStyleOverrides;
@@ -71,7 +71,7 @@ export interface TooltipTriggerProps extends TooltipStateProps {
  * const props: TooltipContentProps = { children: 'Content' };
  */
 export interface TooltipContentProps extends TooltipStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   styles?: TooltipStyleOverrides;
 }

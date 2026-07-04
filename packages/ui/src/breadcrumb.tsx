@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import { separatorRootAttributes } from '@kovojs/headless-ui/separator';
 import * as style from '@kovojs/style';
 
@@ -32,7 +32,7 @@ export interface BreadcrumbStyleOverrides {
  * const props: BreadcrumbProps = { children: 'Content' };
  */
 export interface BreadcrumbProps {
-  children?: string;
+  children?: ComponentChild;
   label?: string;
   styles?: BreadcrumbStyleOverrides;
 }
@@ -45,7 +45,7 @@ export interface BreadcrumbProps {
  * const props: BreadcrumbPartProps = { children: 'Content' };
  */
 export interface BreadcrumbPartProps {
-  children?: string;
+  children?: ComponentChild;
   styles?: BreadcrumbStyleOverrides;
 }
 

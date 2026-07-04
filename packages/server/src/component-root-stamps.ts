@@ -1,11 +1,11 @@
-import type { Component, ComponentDefinitionInput } from '@kovojs/core';
+import type { Component } from '@kovojs/core';
 
 import type { CsrfValidationOptions } from './csrf.js';
 import { escapeAttribute } from './html.js';
 import { createLiveTargetAttestation } from './mutation-wire.js';
 import type { QueryDefinition } from './query.js';
 
-type StampComponent = Component<ComponentDefinitionInput>;
+type StampComponent = Component<any>;
 
 /**
  * @internal Compiler-emitted/generated ABI for SPEC §4.1/§4.8 source-derived component identity.

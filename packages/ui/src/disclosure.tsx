@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   disclosureContentAttributes,
   disclosureRootAttributes,
@@ -44,7 +44,7 @@ export interface DisclosureStyleOverrides {
  * const props: DisclosureProps = { children: 'Content' };
  */
 export interface DisclosureProps extends DisclosureStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: DisclosureStyleOverrides;
 }
@@ -57,7 +57,7 @@ export interface DisclosureProps extends DisclosureStateProps {
  * const props: DisclosureTriggerProps = { children: 'Content' };
  */
 export interface DisclosureTriggerProps extends DisclosureStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   id?: string;
   styles?: DisclosureStyleOverrides;
@@ -71,7 +71,7 @@ export interface DisclosureTriggerProps extends DisclosureStateProps {
  * const props: DisclosureContentProps = { children: 'Content' };
  */
 export interface DisclosureContentProps extends DisclosureStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId?: string;
   styles?: DisclosureStyleOverrides;
 }

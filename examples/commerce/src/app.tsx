@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { ErrorBoundary } from '@kovojs/core';
+import { ErrorBoundary, type ComponentChild } from '@kovojs/core';
 import {
   createApp,
   createRequestHandler,
@@ -74,7 +74,7 @@ export const commerceStylesheets = [
   }),
 ] as const;
 
-function CommerceCartShell({ children }: { children?: unknown }): string {
+function CommerceCartShell({ children }: { children?: ComponentChild }): string {
   return (
     <div style={commerceAppStyles.appRoot} data-commerce-shell="cart">
       <main style={commerceAppStyles.cartShell}>{children}</main>

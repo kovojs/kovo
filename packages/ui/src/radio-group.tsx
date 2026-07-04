@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   radioGroupItemAttributes,
   radioGroupLabelAttributes,
@@ -59,7 +59,7 @@ export interface RadioGroupStateProps {
  * const props: RadioGroupProps = { children: 'Content' };
  */
 export interface RadioGroupProps extends RadioGroupStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: RadioGroupStyleOverrides;
@@ -73,7 +73,7 @@ export interface RadioGroupProps extends RadioGroupStateProps {
  * const props: RadioGroupItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface RadioGroupItemProps extends RadioGroupStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
@@ -102,7 +102,7 @@ export interface RadioGroupRadioProps extends RadioGroupStateProps {
  * const props: RadioGroupLabelProps = { itemValue: 'item', children: 'Content' };
  */
 export interface RadioGroupLabelProps extends RadioGroupStateProps {
-  children?: string;
+  children?: ComponentChild;
   controlId?: string;
   id?: string;
   itemDisabled?: boolean;

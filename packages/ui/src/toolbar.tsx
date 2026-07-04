@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   toolbarButtonAttributes,
   toolbarItemAttributes,
@@ -51,7 +51,7 @@ export interface ToolbarStateProps {
  * const props: ToolbarProps = { children: 'Content' };
  */
 export interface ToolbarProps extends ToolbarStateProps {
-  children?: string;
+  children?: ComponentChild;
   descriptionId?: string;
   id?: string;
   label?: string;
@@ -67,7 +67,7 @@ export interface ToolbarProps extends ToolbarStateProps {
  * const props: ToolbarItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface ToolbarItemProps extends ToolbarStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;

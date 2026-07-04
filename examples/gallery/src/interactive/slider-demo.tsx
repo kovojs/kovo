@@ -7,6 +7,7 @@ import {
   sliderThumbDragStart as _sliderThumbDragStart,
   sliderTrackPointerDown as _sliderTrackPointerDown,
 } from '../primitive-actions.js';
+import * as style from '@kovojs/style';
 import { Slider, SliderInput, SliderRange, SliderThumb, SliderTrack } from '@kovojs/ui/slider';
 
 export interface GallerySliderDemoState {
@@ -15,6 +16,12 @@ export interface GallerySliderDemoState {
   dragValueStart: number;
   value: number;
 }
+
+const sliderDemoStyles = style.create({
+  input: {
+    pointerEvents: 'none',
+  },
+});
 
 // SPEC.md section 5.2: this interactive docs example stays TSX-authored; the
 // generated artifacts prove the gallery path is compiled through Kovo.
@@ -54,7 +61,7 @@ export const GallerySliderDemo = component({
           <SliderInput
             {...sliderState}
             id="gallery-slider-input"
-            styles={{ input: { pointerEvents: 'none' } }}
+            styles={{ input: sliderDemoStyles.input }}
             value={state.value}
             onInput={() => {
               const result = _sliderInput(Object(event), {

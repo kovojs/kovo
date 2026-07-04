@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component, type ComponentRenderResult } from '@kovojs/core';
+import { component, type ComponentChild, type ComponentRenderResult } from '@kovojs/core';
 import {
   dialogCloseAttributes,
   dialogContentAttributes,
@@ -48,7 +48,7 @@ export interface SheetStyleOverrides {
  * const props: SheetProps = { contentId: 'content-id', title: 'Title', children: 'Content' };
  */
 export interface SheetProps {
-  children?: string;
+  children?: ComponentChild;
   closeLabel?: string;
   contentId: string;
   description?: string;
@@ -81,7 +81,7 @@ export interface SheetStateProps {
  * const props: SheetRootProps = { children: 'Content' };
  */
 export interface SheetRootProps extends SheetStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
 }
 
@@ -93,7 +93,7 @@ export interface SheetRootProps extends SheetStateProps {
  * const props: SheetTriggerProps = { contentId: 'content-id', children: 'Content' };
  */
 export interface SheetTriggerProps extends SheetStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId: string;
   id?: string;
 }
@@ -106,7 +106,7 @@ export interface SheetTriggerProps extends SheetStateProps {
  * const props: SheetContentProps = { contentId: 'content-id', titleId: 'title-id', children: 'Content' };
  */
 export interface SheetContentProps extends SheetStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId: string;
   descriptionId?: string;
   side?: SheetSide;
@@ -121,7 +121,7 @@ export interface SheetContentProps extends SheetStateProps {
  * const props: SheetPartProps = { children: 'Content' };
  */
 export interface SheetPartProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   styles?: SheetStyleOverrides;
 }
@@ -134,7 +134,7 @@ export interface SheetPartProps {
  * const props: SheetCloseProps = { contentId: 'content-id', children: 'Content' };
  */
 export interface SheetCloseProps extends SheetStateProps {
-  children?: string;
+  children?: ComponentChild;
   contentId: string;
   id?: string;
 }

@@ -1,5 +1,5 @@
 /** @jsxImportSource @kovojs/server */
-import { component } from '@kovojs/core';
+import { component, type ComponentChild } from '@kovojs/core';
 import {
   checkboxGroupControlAttributes,
   checkboxGroupItemAttributes,
@@ -59,7 +59,7 @@ export interface CheckboxGroupStateProps {
  * const props: CheckboxGroupProps = { children: 'Content' };
  */
 export interface CheckboxGroupProps extends CheckboxGroupStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   labelledBy?: string;
   styles?: CheckboxGroupStyleOverrides;
@@ -73,7 +73,7 @@ export interface CheckboxGroupProps extends CheckboxGroupStateProps {
  * const props: CheckboxGroupItemProps = { itemValue: 'item', children: 'Content' };
  */
 export interface CheckboxGroupItemProps extends CheckboxGroupStateProps {
-  children?: string;
+  children?: ComponentChild;
   id?: string;
   itemDisabled?: boolean;
   itemValue: string;
@@ -102,7 +102,7 @@ export interface CheckboxGroupControlProps extends CheckboxGroupStateProps {
  * const props: CheckboxGroupLabelProps = { itemValue: 'item', children: 'Content' };
  */
 export interface CheckboxGroupLabelProps extends CheckboxGroupStateProps {
-  children?: string;
+  children?: ComponentChild;
   controlId?: string;
   id?: string;
   itemDisabled?: boolean;

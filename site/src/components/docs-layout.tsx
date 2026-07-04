@@ -1,5 +1,6 @@
 /** @jsxImportSource @kovojs/server */
 import { trustedHtml } from '@kovojs/browser';
+import type { ComponentChild } from '@kovojs/core';
 import * as style from '@kovojs/style';
 
 import { SECTION_INTROS } from '../content.js';
@@ -223,7 +224,7 @@ export function DocsRouteLayoutShell({
   children,
   regions,
 }: {
-  children?: unknown;
+  children?: ComponentChild;
   regions?: Readonly<Record<string, unknown>>;
 }): string {
   const hasDocsRegions = regions?.page !== undefined || regions?.sidebar !== undefined;
