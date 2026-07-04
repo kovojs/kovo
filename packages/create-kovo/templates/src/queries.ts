@@ -1,10 +1,11 @@
-import { query, type QueryLoadContext, type Reader } from '@kovojs/server';
+import { query, type JsonValue, type QueryLoadContext, type Reader } from '@kovojs/server';
 
 import { appAuthed } from './auth.js';
 import type { AppDb } from './db.js';
 import { contacts } from './schema.js';
 
 export interface ContactRow {
+  readonly [key: string]: JsonValue;
   id: string;
   name: string;
   email: string;
@@ -12,6 +13,7 @@ export interface ContactRow {
 }
 
 export interface ContactListResult {
+  readonly [key: string]: JsonValue;
   items: ContactRow[];
 }
 
@@ -35,7 +37,7 @@ export const contactsQuery = query({
   guard: appAuthed,
   async load(_input: unknown, context?: AppQueryLoadContext): Promise<ContactListResult> {
     const db = requireDb(context);
-    const items = await db
+    const rows = await db
       .select({
         id: contacts.id,
         name: contacts.name,
@@ -44,6 +46,12 @@ export const contactsQuery = query({
       })
       .from(contacts)
       .orderBy(contacts.id);
+    const items: ContactRow[] = rows.map((row) => ({
+      company: row.company,
+      email: row.email,
+      id: row.id,
+      name: row.name,
+    }));
     return { items };
   },
 });

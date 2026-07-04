@@ -675,7 +675,7 @@ hatch survives this phase.
       `SelectTrigger`, not `Select`).
   - Evidence: `packages/ui/src/**/*.tsx` use `ComponentChild`; `rg -n "children\\?: (string|unknown)" packages/ui/src -S`
     returned no matches; verified by `packages/ui/src/index.markup.test.tsx`.
-- [ ] **Sweep all call sites the checking breaks**: `packages/ui` internal composition, `site/`,
+- [x] **Sweep all call sites the checking breaks**: `packages/ui` internal composition, `site/`,
       `examples/*` (commerce, gallery, crm, stackoverflow, devtool, reference), `create-kovo`
       templates, tutorial steps. Every break is a latent bug being surfaced — fix the call site,
       don't loosen the type.
@@ -684,6 +684,10 @@ hatch survives this phase.
       and `examples/gallery/src/interactive/*.tsx`; verified by
       `pnpm exec tsc -p examples/gallery/tsconfig.json --noEmit --pretty false` and
       `pnpm exec vitest --run examples/gallery/src/interactive-gallery.compile.test.ts packages/icons/src/icons.test.ts site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
+  - Evidence: `site/scripts/code-snippets-check.mjs`,
+    `packages/create-kovo/templates/src/queries.ts`, and the example app `tsconfig.json` files;
+    verified by `pnpm run check:docs-snippets:dist`, `vp run typecheck-examples`, and
+    `pnpm exec vitest --run packages/create-kovo/src/index.build.scaffold.typecheck.test.ts --config ./vite.config.ts`.
 - [x] **Icons**: verify the 1,740 generated icon components type-check under the new signature and
       **benchmark `tsc`** before/after across the monorepo and a scaffolded app; if inference cost
       is material, precompute each icon's call signature in the generator output instead of
@@ -716,7 +720,7 @@ labelledBy>` (broken composition the old signature hid), components.md Button
 
 ### Phase 5 — docs truth and drift-proofing (after Phase 4, so the gate has teeth)
 
-- [ ] **Compile guide samples in CI**: extract TSX/TS snippets from `site/content/guides/**` and
+- [x] **Compile guide samples in CI**: extract TSX/TS snippets from `site/content/guides/**` and
       typecheck against built dist types, same discipline as the `{{capture:*}}` CLI-transcript
       pipeline. ≥12 currently-broken samples across 9 guides become impossible to reintroduce.
   - [x] Add the authored-guide snippet extraction/typecheck gate over all `site/content/**` TS/TSX
@@ -727,18 +731,25 @@ labelledBy>` (broken composition the old signature hid), components.md Button
   - [x] Wire the public-shape guide snippet gate into CI.
     - Evidence: `.github/workflows/ci.yml` runs `vp exec pnpm run check:docs-snippets`; verified by
       `pnpm run check:docs-snippets`.
-  - [ ] Make `check:docs-snippets:dist` blocking after the remaining guide/API mismatches are closed.
-- [ ] **Fix the remaining per-guide defects** catalogued above (request-shell option names,
+  - [x] Make `check:docs-snippets:dist` blocking after the remaining guide/API mismatches are closed.
+    - Evidence: `.github/workflows/ci.yml` runs `vp exec pnpm run check:docs-snippets:dist`;
+      verified by `pnpm run check:docs-snippets:dist`.
+- [x] **Fix the remaining per-guide defects** catalogued above (request-shell option names,
       routing `queries:`, layouts typing, static-export missing its own API, security.md CSRF
       audience + fabricated explain output + `--capabilities` claim, endpoints-webhooks broken
       flagship example, wire-protocol `settles`, streaming/islands issues, devtool guide
       public/private status).
-- [ ] **Stop describing a starter that doesn't exist**: align `create-kovo` templates or the
+  - Evidence: `site/content/guides/{auth-better-auth,data-layer,deployment,endpoints-webhooks,islands,kovo-explain,layouts,mutations,queries,render-tree,request-shell,routing,security,static-export,streaming,testing,wire-protocol,dataflow-devtool}.md`;
+    verified by `pnpm run check:docs-snippets` and `pnpm run check:docs-snippets:dist`.
+- [x] **Stop describing a starter that doesn't exist**: align `create-kovo` templates or the
       guides for graph-assertions, CI script list, Dockerfile entrypoint, `client.ts` — one truth.
   - [x] Remove the documented graph-assertions starter script and stale Docker entrypoint claims from
         the affected guides.
     - Evidence: `site/content/guides/deployment.md` and `site/content/guides/kovo-explain.md`;
       verified by `pnpm run check:docs-snippets`.
+  - Evidence: `site/content/guides/{auth-better-auth,deployment,kovo-explain,streaming,testing}.md`
+    align starter scripts, production entrypoint, graph assertions, and client-loader ownership with
+    `packages/create-kovo/templates/package*.json`; verified by `pnpm run check:docs-snippets:dist`.
 - [x] **Regenerate stale generated docs** (route() JSDoc example, drizzle 30/38, create-kovo
       `--experimental-sqlite`, cli no-args list, `ExplainKind` prose) and replace the mechanical
       `{} as SelectState` placeholder examples in headless-ui/ui JSDoc with real ones.

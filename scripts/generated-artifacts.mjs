@@ -105,6 +105,17 @@ export const generatedArtifactInventory = Object.freeze([
     spec: 'SPEC.md §5.2 rules 7-8',
   },
   {
+    id: 'gallery-primitive-actions-generated-source',
+    categories: Object.freeze([
+      GENERATED_ARTIFACT_CATEGORIES.frameworkGeneratedSource,
+      GENERATED_ARTIFACT_CATEGORIES.mustMatchGenerator,
+    ]),
+    generatorId: GENERATED_ARTIFACT_GENERATORS.uiRegistry,
+    generatorCheckCommand: Object.freeze(['node', 'packages/ui/scripts/build-registry.mjs']),
+    pathPatterns: Object.freeze([/^examples\/gallery\/src\/primitive-actions\.generated\.ts$/]),
+    spec: 'SPEC.md §5.2 rules 7-8',
+  },
+  {
     id: 'ui-generated-registry',
     categories: Object.freeze([
       GENERATED_ARTIFACT_CATEGORIES.generatedPackageMetadata,
