@@ -117,7 +117,7 @@ export const SECURITY_CODE_REGISTRY = {
     code: 'KV414',
     enforcement: 'runtime-choke',
     property:
-      'Authorization: Postgres owner-table access is scoped at the engine choke by a least-privilege runtime role plus role/RLS/current-principal enforcement, with closure-audited reachable objects; SQLite is experimental/non-guaranteeing and cannot claim this authorization property.',
+      'Authorization: Postgres owner-table access is scoped at the engine choke by unassumeable privilege roles, a confined statement surface for per-request principal GUCs on scrubbed connections, RLS, and side-effect-inclusive closure-audited reachable objects; SQLite is experimental/non-guaranteeing and cannot claim this authorization property.',
     propertyDependsOn: 'request-state',
   },
   KV415: {
