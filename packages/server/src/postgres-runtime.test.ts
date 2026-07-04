@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   drainCrossOwnerReadAuditFacts,
+  drainPostgresRlsSilentDenyDiagnostics,
   kovoReadonlyDbHandle,
   type KovoReadonlyDbCapable,
   type Reader,
@@ -188,6 +189,23 @@ describe('createPostgresAppRuntimeDb', () => {
     expect(report.issues).toEqual([]);
   });
 
+  it('refuses production boot on in-process PGlite', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-prod-pglite-'));
+    roots.push(dataDir);
+    const previousNodeEnv = process.env.NODE_ENV;
+    process.env.NODE_ENV = 'production';
+    try {
+      expect(() =>
+        createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema }),
+      ).toThrow(
+        /KV433: production requires a least-privilege external Postgres via KOVO_DATABASE_URL; PGlite is dev\/test-only and runs in-process as superuser \(SPEC §10\.3\)\./,
+      );
+    } finally {
+      if (previousNodeEnv === undefined) delete process.env.NODE_ENV;
+      else process.env.NODE_ENV = previousNodeEnv;
+    }
+  });
+
   it('grants protected tables only with FORCE RLS and live Kovo policies', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-grant-policy-'));
     roots.push(dataDir);
@@ -329,6 +347,36 @@ describe('createPostgresAppRuntimeDb', () => {
     }
   });
 
+  it('wires dev RLS empty-read diagnostics through the runtime readonly boundary', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-rls-diagnostic-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+
+    try {
+      await runtime.ready;
+      drainPostgresRlsSilentDenyDiagnostics();
+      const writer = runtime.db({ principalPosture: { kind: 'act-as', principal: 'missing' } });
+      const readDb = (writer as unknown as KovoReadonlyDbCapable<Reader<KovoPostgresRuntimeDb>>)[
+        kovoReadonlyDbHandle
+      ]();
+
+      await expect(
+        readDb.select({ id: notes.id, title: notes.title }).from(notes),
+      ).resolves.toEqual([]);
+      expect(drainPostgresRlsSilentDenyDiagnostics()).toEqual([
+        {
+          filteredRows: 2,
+          kind: 'owner-scope-filtered',
+          message: 'kovo_owner_scope filtered 2 rows for principal missing.',
+          principal: 'missing',
+          table: 'kovo_runtime_notes',
+        },
+      ]);
+    } finally {
+      await runtime.close();
+    }
+  });
+
   it('uses an audited system posture for cross-owner owner-table work without bypassing RLS', async () => {
     const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-system-'));
     roots.push(dataDir);
@@ -425,7 +473,7 @@ describe('createPostgresAppRuntimeDb', () => {
     const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
 
     expect(report.ok).toBe(false);
-    expect(report.issues.map((issue) => issue.code)).toContain('KV433_SCHEMA_FINGERPRINT');
+    expect(report.issues.map((issue) => issue.code)).toContain('KV433_SCHEMA_TABLE');
   });
 
   it('refuses boot when a granted definer view can reach an owner table', async () => {
@@ -460,6 +508,69 @@ describe('createPostgresAppRuntimeDb', () => {
     } finally {
       await drifted.close();
     }
+  });
+
+  it('refuses boot when a materialized view is reachable by an app role', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-materialized-view-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE MATERIALIZED VIEW kovo_runtime_notes_mv AS SELECT id, "ownerId", "secretNote" FROM kovo_runtime_notes',
+        'GRANT SELECT ON TABLE kovo_runtime_notes_mv TO kovo_reader',
+      ].join('; '),
+    );
+
+    const drifted = createPostgresAppRuntimeDb({
+      dataDir,
+      driver: 'pglite',
+      postureCheckOnBoot: true,
+      provisionOnBoot: false,
+      schema,
+    });
+    try {
+      await expect(drifted.ready).rejects.toThrow(
+        /materialized views cannot enforce row-level security/,
+      );
+    } finally {
+      await drifted.close();
+    }
+  });
+
+  it('refuses boot when PUBLIC grants make an unprotected table reachable', async () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'kovo-postgres-runtime-public-grant-'));
+    roots.push(dataDir);
+    const runtime = createPostgresAppRuntimeDb({ dataDir, driver: 'pglite', schema, seedSql });
+    try {
+      await runtime.ready;
+    } finally {
+      await runtime.close();
+    }
+
+    await execPglite(
+      dataDir,
+      [
+        'CREATE TABLE kovo_runtime_public_leak (id text PRIMARY KEY, secret text NOT NULL)',
+        "INSERT INTO kovo_runtime_public_leak (id, secret) VALUES ('leak', 'PUBLIC-SECRET')",
+        'GRANT SELECT ON TABLE kovo_runtime_public_leak TO PUBLIC',
+      ].join('; '),
+    );
+
+    const report = await checkPostgresAppDbPosture({ dataDir, driver: 'pglite', schema });
+    expect(report.ok).toBe(false);
+    expect(report.issues).toContainEqual(
+      expect.objectContaining({
+        code: 'KV433_REACHABLE_TABLE',
+        detail: expect.stringContaining('kovo_runtime_public_leak'),
+      }),
+    );
   });
 
   it('forces app-schema views over protected tables to security_invoker during provision', async () => {
@@ -548,7 +659,7 @@ describe('createPostgresAppRuntimeDb', () => {
     await execPglite(
       dataDir,
       [
-        "CREATE FUNCTION kovo_runtime_leak() RETURNS text LANGUAGE SQL AS $$ SELECT 'leak' $$",
+        "CREATE FUNCTION kovo_runtime_leak() RETURNS text LANGUAGE SQL SECURITY DEFINER AS $$ SELECT 'leak' $$",
         'GRANT EXECUTE ON FUNCTION kovo_runtime_leak() TO kovo_reader',
       ].join('; '),
     );
@@ -562,7 +673,7 @@ describe('createPostgresAppRuntimeDb', () => {
     });
     try {
       await expect(drifted.ready).rejects.toThrow(
-        /kovo_runtime_leak is executable by .*routine reachability has no vetted Kovo allowlist/,
+        /kovo_runtime_leak is a SECURITY DEFINER routine executable by .*routine reachability has no vetted Kovo allowlist/,
       );
     } finally {
       await drifted.close();

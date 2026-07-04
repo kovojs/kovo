@@ -127,6 +127,7 @@ export interface PostgresReadonlyClientOptions {
   quoteIdentifier?: (value: string) => string;
   readerRole?: string | false;
   roleSetting?: string;
+  rlsDiagnostics?: PostgresRlsSilentDenyDiagnosticsOptions;
 }
 
 /** Options for a Postgres/PGlite request-scoped transaction client. */
@@ -389,6 +390,7 @@ export const createPostgresReadonlyClient = securityClassifier(
       scopedOptions.quoteIdentifier = options.quoteIdentifier;
     if (options.readerRole !== undefined) scopedOptions.role = options.readerRole;
     if (options.roleSetting !== undefined) scopedOptions.roleSetting = options.roleSetting;
+    if (options.rlsDiagnostics !== undefined) scopedOptions.rlsDiagnostics = options.rlsDiagnostics;
     return createPostgresScopedClient(client, scopedOptions);
   },
 );
@@ -1024,11 +1026,50 @@ function scopedPostgresQuery(
   return postgresTransaction(client, async (tx) => {
     await runPostgresTransactionControl(tx, options);
     const queryMethod = tx.query.bind(tx);
-    return queryMethod(query, params, queryOptions) as Promise<unknown>;
+    try {
+      return (await queryMethod(query, params, queryOptions)) as unknown;
+    } catch (error) {
+      throw translatedPostgresWriteDenial(error, query);
+    }
   }).then(async (result) => {
     await maybeReportPostgresRlsSilentDeny(options, query, result);
     return result;
   });
+}
+
+function translatedPostgresWriteDenial(error: unknown, query: unknown): unknown {
+  if (!postgresQueryLooksLikeWrite(query)) return error;
+  const message = error instanceof Error ? error.message : String(error);
+  const permissionDenied = /\bpermission denied for table ["']?([^"'\s]+)["']?/iu.exec(message);
+  if (permissionDenied) {
+    return new Error(
+      `KV433: Postgres denied write access to table ${permissionDenied[1]}; the table is not granted to the request writer role or is outside Kovo's writable authorization posture (SPEC §10.3).`,
+    );
+  }
+  const rlsDenied =
+    /\bnew row violates row-level security policy for table ["']?([^"']+)["']?/iu.exec(message) ??
+    /\bviolates row-level security policy for table ["']?([^"']+)["']?/iu.exec(message);
+  if (rlsDenied) {
+    return new Error(
+      `KV433: Postgres RLS rejected a write to table ${rlsDenied[1]}; the new row is not owned by the current principal or fails the table's Kovo WITH CHECK policy (SPEC §10.3).`,
+    );
+  }
+  return error;
+}
+
+function postgresQueryLooksLikeWrite(query: unknown): boolean {
+  const text = postgresQueryText(query);
+  return text !== undefined && /^\s*(insert|update|delete|merge)\b/iu.test(text);
+}
+
+function postgresQueryText(query: unknown): string | undefined {
+  if (typeof query === 'string') return query;
+  if (!isRecord(query)) return undefined;
+  return typeof query.sql === 'string'
+    ? query.sql
+    : typeof query.text === 'string'
+      ? query.text
+      : undefined;
 }
 
 function scopedPostgresExec(options: PostgresScopedClientOptions, query: string): Promise<unknown> {

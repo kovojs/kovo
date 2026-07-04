@@ -153,6 +153,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       crossOwnerReadTables: ['kovo_ext_probe_notes'],
       databaseUrl: defaultAdminUrl,
       migrations: [createNotesMigration],
+      runtimeDatabaseUrl: defaultRuntimeUrl,
       schema,
     });
     expect(defaultMigrationReport.applied).toEqual(['001-create-probe-notes.sql']);
@@ -163,23 +164,15 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     const defaultReport = await provisionPostgresAppDb({
       crossOwnerReadTables: ['kovo_ext_probe_notes'],
       databaseUrl: defaultAdminUrl,
+      runtimeDatabaseUrl: defaultRuntimeUrl,
       schema,
     });
     expect(defaultReport.ok).toBe(true);
     expect(defaultReport.issues).toEqual([]);
+    await expectRuntimeLoginRoleUsable(defaultRuntimeUrl, 'kovo_reader', 'kovo_writer');
 
     await withPool(cluster.url(defaultDb, 'postgres'), async (superPool) => {
-      await superPool.query(`GRANT kovo_reader TO ${quoteIdent(defaultRuntime)}`);
-      await superPool.query(`GRANT kovo_writer TO ${quoteIdent(defaultRuntime)}`);
-      await superPool.query(
-        `GRANT SELECT ON TABLE kovo_schema_state TO ${quoteIdent(defaultRuntime)}`,
-      );
       await superPool.query(`GRANT kovo_admin TO ${quoteIdent(adminMemberRuntime)}`);
-      await superPool.query(`GRANT kovo_reader TO ${quoteIdent(adminMemberRuntime)}`);
-      await superPool.query(`GRANT kovo_writer TO ${quoteIdent(adminMemberRuntime)}`);
-      await superPool.query(
-        `GRANT SELECT ON TABLE kovo_schema_state TO ${quoteIdent(adminMemberRuntime)}`,
-      );
     });
     await expectLeastPrivilegeRuntimeFailure(cluster.url(defaultDb, 'postgres'));
     await expectLeastPrivilegeRuntimeFailure(cluster.url(defaultDb, adminMemberRuntime));
@@ -198,6 +191,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       crossOwnerReadTables: ['kovo_ext_probe_notes'],
       databaseUrl: defaultAdminUrl,
       migrations: [createNotesMigration],
+      runtimeDatabaseUrl: defaultRuntimeUrl,
       schema,
     });
     expect(defaultMigrationReportAgain.applied).toEqual([]);
@@ -217,6 +211,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     const defaultReportAgain = await provisionPostgresAppDb({
       crossOwnerReadTables: ['kovo_ext_probe_notes'],
       databaseUrl: defaultAdminUrl,
+      runtimeDatabaseUrl: defaultRuntimeUrl,
       schema,
     });
     expect(defaultReportAgain.ok).toBe(true);
@@ -237,16 +232,11 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
       const adoptedReport = await provisionPostgresAppDb({
         databaseUrl: cluster.url(adoptedDb, adoptedAdmin),
         migrations: [createNotesMigration],
+        runtimeDatabaseUrl: cluster.url(adoptedDb, adoptedRuntime),
         schema,
       });
       expect(adoptedReport.ok).toBe(true);
       expect(adoptedReport.issues).toEqual([]);
-
-      await withPool(cluster.url(adoptedDb, 'postgres'), async (superPool) => {
-        await superPool.query(
-          `GRANT SELECT ON TABLE kovo_schema_state TO ${quoteIdent(adoptedRuntime)}`,
-        );
-      });
       await expectOwnerIsolation(cluster.url(adoptedDb, adoptedRuntime), {
         readerRole: adoptedReader,
         writerRole: adoptedWriter,
@@ -266,7 +256,7 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     });
     expect(staleReport.ok).toBe(false);
     expect(staleReport.issues.map((issue) => issue.code)).toEqual(
-      expect.arrayContaining(['KV433_SCHEMA_FINGERPRINT', 'KV433_FORCE_RLS', 'KV433_OWNER_POLICY']),
+      expect.arrayContaining(['KV433_FORCE_RLS', 'KV433_OWNER_POLICY']),
     );
     const staleRuntime = createPostgresAppRuntimeDb({
       databaseUrl: cluster.url(staleDb, staleRuntimeRole),
@@ -358,6 +348,7 @@ async function expectSchemaEvolutionWithData(adminUrl: string, runtimeUrl: strin
     crossOwnerReadTables: ['kovo_ext_probe_notes'],
     databaseUrl: adminUrl,
     migrations: [createNotesMigration, addSummaryMigration],
+    runtimeDatabaseUrl: runtimeUrl,
     schema: evolvedSchema,
   });
   expect(evolved.applied).toEqual(['002-add-note-summary.sql']);
@@ -499,6 +490,32 @@ async function expectPermissionDenied(databaseUrl: string, statement: string): P
     await expect(pool.query(statement)).rejects.toMatchObject({
       code: expect.stringMatching(/^(42501|0LP01)$/),
     });
+  });
+}
+
+async function expectRuntimeLoginRoleUsable(
+  databaseUrl: string,
+  readerRole: string,
+  writerRole: string,
+): Promise<void> {
+  await withPool(databaseUrl, async (pool) => {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      await expect(client.query('SELECT key FROM kovo_schema_state')).resolves.toMatchObject({
+        rows: [],
+      });
+      await client.query(`SET LOCAL ROLE ${quoteIdent(readerRole)}`);
+      await client.query('RESET ROLE');
+      await client.query(`SET LOCAL ROLE ${quoteIdent(writerRole)}`);
+      await client.query('RESET ROLE');
+      await client.query('COMMIT');
+    } catch (error) {
+      await client.query('ROLLBACK').catch(() => undefined);
+      throw error;
+    } finally {
+      client.release();
+    }
   });
 }
 
