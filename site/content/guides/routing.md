@@ -230,9 +230,11 @@ routes with params, guards, route validation, and the audits applied. See
 refines `req.session` identically — so `req.session.user` is non-null inside the page under `authed`:
 
 ```tsx
+import { guards, route, s } from '@kovojs/server';
+
 export const productRoute = route('/products/:id', {
   params: s.object({ id: s.string() }),
-  guard: authed(),
+  guard: guards.authed(),
   page({ params }, req: { session: { user: { id: string } } }) {
     // req.session.user is non-null here, refined by the guard
     return <ProductPage id={params.id} owner={req.session.user.id} />;
@@ -240,18 +242,18 @@ export const productRoute = route('/products/:id', {
 });
 ```
 
-The reference app guards routes with the same combinators it uses on mutations — `authed<Req>()` for
-"signed in" and `role<Req>('admin')` for authorization:
+The reference app guards routes with the same combinators it uses on mutations — `guards.authed()`
+for "signed in" and `guards.role('admin')` for authorization:
 
 ```tsx
 export const accountRoute = route('/account', {
-  guard: authed<ReferenceRequest>(),
+  guard: guards.authed(),
   page(_in, req) {
     /* req.session.user typed */
   },
 });
 export const adminRoute = route('/admin', {
-  guard: role<ReferenceRequest>('admin'),
+  guard: guards.role('admin'),
   page(_in, req) {
     /* … */
   },
@@ -323,7 +325,7 @@ credentialed prerender is safe:
 
 ```tsx
 export const accountOverviewRoute = route('/account', {
-  guard: authed(),
+  guard: guards.authed(),
   prefetch: 'moderate',
   prefetchJustification: 'Read-only account chrome; no analytics or write effects during render.',
   page: AccountOverviewPage,
@@ -334,9 +336,11 @@ Without that justification, `vp check` reports KV419.
 
 </details>
 
-All three count against the inline loader's 8KB gzip budget and must not break bfcache (no `unload`
-handlers). Navigation partials are not a v1 protocol: enhanced navigation uses the full target
-document as its oracle, and app TSX never authors navigation segment stamps or persistence policy.
+Only bootstrap code that ships in the always-loaded inline path counts against the 10,500-byte gzip
+budget; the deferred runtime implementation of navigation is intentionally outside that cap. None of
+it may break bfcache (no `unload` handlers). Navigation partials are not a v1 protocol: enhanced
+navigation uses the full target document as its oracle, and app TSX never authors navigation segment
+stamps or persistence policy.
 
 ## Next
 

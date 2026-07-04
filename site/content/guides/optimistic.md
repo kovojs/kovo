@@ -42,12 +42,13 @@ Three things to notice:
 - **`'await-fragment'` is a real answer.** It says "considered; the 1-RTT latency is fine here" — the
   product grid re-renders from the server fragment instead of being predicted. A deliberate deferral
   and a forgotten transform are different states, and only the second one is a diagnostic.
-- **`queue: true`** gives this mutation its own FIFO queue. Submissions sharing a queue run strictly
-  in submit order — each waits for the previous to settle before its transform and request fire — so
-  two quick "add" clicks can't land out of order or race to a wrong predicted count. Use
-  `queue('checkout')` when several mutations intentionally share one conceptual queue.
+- **`queue: true`** gives this mutation its own FIFO queue. Submissions sharing a queue still apply
+  their optimistic transforms immediately, in submit order; only the network request waits behind the
+  queue head. Two quick "add" clicks therefore show both predicted increments right away while the
+  requests settle in order. Use `queue('checkout')` when several mutations intentionally share one
+  conceptual queue.
 
-Transforms receive a cloned draft of the query's inferred result, so mutate the draft and return
+Transforms receive a draft of the query's inferred result, so mutate the draft and return
 nothing. A column rename breaks the transform in the editor instead of in production.
 
 The standalone `OptimisticFor<typeof form>` shape still exists as an escape hatch for rare cases
@@ -91,8 +92,9 @@ declared update status too.
 
 When the user submits, the loader runs a fixed sequence:
 
-1. **Snapshot** the affected query values with `structuredClone` — safe because query data is
-   `JsonValue` by construction.
+1. **Snapshot** the affected query values under structural sharing. The runtime copies only the
+   touched paths (copy-on-write) and keeps untouched subtrees by reference; `JsonValue` makes the
+   values safe to snapshot and restore, but the contract is not an unconditional deep clone.
 2. **Apply transforms** to the shared query values and run their update plans. Every dependent island
    updates at once.
 3. **Stamp pending state.** Affected islands get `kovo-pending` and `aria-busy="true"` automatically,
@@ -134,7 +136,7 @@ dies with the document, so stale optimism can't outlive its mutation.
 A transform is a pure draft mutation, so you can unit-test it by cloning before apply:
 
 ```ts
-const draft = structuredClone({ count: 1 });
+const draft = { count: 1 };
 addToCart.optimistic.cart(draft, { productId: 'p1', quantity: 2 });
 expect(draft).toEqual({ count: 3 });
 ```
@@ -213,7 +215,9 @@ Declare the deferral and move on. The check is satisfied either way.
 <details>
 <summary>Spec & diagnostics</summary>
 
-Optimism keyed to queries, the runtime protocol, rebase, and navigation reconciliation: SPEC §10.4.
+Optimism keyed to queries, the runtime protocol, immediate optimistic application with serialized
+requests for queued mutations, bounded structural-sharing snapshots, rebase, and navigation
+reconciliation: SPEC §10.4.
 Derived transforms and explicit punts: SPEC §10.5. The coverage check at both altitudes: SPEC §10.6;
 the emitted invalidation sets it reads: SPEC §6.1. A missing optimistic transform is **KV310**;
 anything other than `hand-written`/`await-fragment` is the same code. Every query-dependent DOM

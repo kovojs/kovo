@@ -51,6 +51,7 @@ and sends query values, fragments, or both:
 ```http
 HTTP/1.1 200 OK
 Content-Type: text/vnd.kovo.fragment+html; charset=utf-8
+Kovo-Build: mutation-response-test-build
 Kovo-Changes: [{"domain":"cart","keys":["cart"]}]
 Kovo-Idem: cart-submit-01
 ```
@@ -127,13 +128,21 @@ Development responses favor full values because they are easiest to read. Produc
 smaller frame when the compiler and runtime can prove it is equivalent. There is no per-call-site
 knob; prod picks full or delta per response.
 
-Delta frames are scoped by the committed change record, not by a server-side memory of the client:
+Delta frames are scoped by the committed change record, not by a server-side memory of the client.
+This is the real envelope shape from the committed wire tests:
 
 ```html
-<kovo-query name="cart" delta>
-  {"items":{"upsert":[{"id":"p1","qty":3}],"removedKeys":["p2"]}}
+<kovo-query name="cart" key="cart:c1" version="7" settles="idem_update_p0" delta>
+  {"set":{"count":3},"lists":{"items":{"key":"productId","upsert":[{"productId":"p0","qty":2}]}}}
 </kovo-query>
 ```
+
+The attributes matter when you are reading a trace:
+
+- `key` names the concrete query instance.
+- `version` is the query value version when the response carries one.
+- `settles` names the optimistic tokens this truth chunk commits.
+- `Kovo-Build` on the HTTP response carries the render-plan/build token used for skew checks.
 
 The client treats arriving server truth as authoritative for the committed mutation response. It
 drops the matching optimistic prediction before re-applying any still-pending predictions, so
@@ -145,8 +154,9 @@ Deep-merge semantics are fixed:
 - Non-keyed scalar fields present in the delta replace the base field.
 - Non-keyed object fields present in the delta replace the whole object subtree.
 - Keyed collections merge by `kovo-key`: touched rows are upserted by identity, and rows are
-  deleted only when their key appears in the removed-key list.
-- The removed-key list is the only deletion primitive. There is no field tombstone vocabulary.
+  deleted only when their key appears in `lists.<path>.remove`.
+- `set` replaces top-level non-collection fields, `lists` carries keyed collection edits, and there
+  is no field tombstone vocabulary.
 
 A collection is delta-eligible only when its `kovo-key` maps to domains and explicit keys in the
 change record. Otherwise the response ships the whole value or a full fragment.

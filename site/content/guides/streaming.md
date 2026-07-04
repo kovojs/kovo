@@ -29,6 +29,7 @@ import { Defer } from '@kovojs/server';
 
 <Defer
   target="product-grid"
+  priority="after-paint"
   fallback={<section aria-busy="true">Loading products...</section>}
   render={() => <ProductGrid />}
 />;
@@ -86,6 +87,17 @@ wire placeholder and the later fragment:
 The vocabulary is the mutation response's — `<kovo-query>` then `<kovo-fragment>` — arriving during first
 render instead of after a POST. It reads top to bottom in view-source, like everything else on the
 wire.
+
+## Pick a priority
+
+`priority` controls whether a region renders in the shell or streams later:
+
+- `critical` is the default. It renders inline with the shell, so it does **not** defer.
+- `after-paint` streams after the shell has painted.
+- `visible` waits until the region scrolls into view, then streams through the shared
+  IntersectionObserver-gated path.
+
+If the smallest example is meant to defer, say `priority="after-paint"` explicitly.
 
 ## Replace the fallback
 

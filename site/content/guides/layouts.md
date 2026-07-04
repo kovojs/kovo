@@ -142,8 +142,24 @@ Use the layouts mode when a route's chrome gets hard to reason about:
 kovo explain page /account/settings --layouts graph.json
 ```
 
-The output lists the resolved layout chain, guards, queries, boundaries, stylesheets, and the route
-leaf. That makes changes to shared chrome reviewable in CI instead of discovered by clicking around.
+The output is narrower than that today: it prints the resolved layout chain, each layout's queries,
+the navigation segments, and the route leaf. For example:
+
+```txt
+kovo-explain/v1
+PAGE /admin
+prefetch: false
+modulepreloads: -
+stylesheets: -
+queries: -
+layouts: AppLayout
+layout: AppLayout queries=viewer
+navigation-segments: layout:AppLayout,page:/admin
+segment: layout id=layout:AppLayout name=AppLayout queries=viewer components=-
+segment: page id=page:/admin name=page queries=- components=-
+```
+
+That still makes shared chrome reviewable in CI instead of discovered by clicking around.
 
 ## Next
 
