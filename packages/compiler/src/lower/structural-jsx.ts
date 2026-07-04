@@ -47,6 +47,7 @@ import {
   type SourceReplacement,
 } from '../shared.js';
 import type { CompileComponentOptions, StateDeriveFact, ViewTransitionStamp } from '../types.js';
+import { executableJavaScriptExpression } from '../javascript-expression.js';
 
 const RUNTIME_GENERATED_IMPORT = '@kovojs/browser/generated';
 import {
@@ -377,10 +378,11 @@ function lowerAttributeDerive(
   nameCounts: Map<string, number>,
   forceQueryBinding = false,
 ): void {
-  const expression =
+  const expression = executableJavaScriptExpression(
     candidate.source === 'state'
       ? deriveExpression(candidate.attribute, candidate.expression)
-      : candidate.expression.trim();
+      : candidate.expression.trim(),
+  );
   const deriveInputs = candidate.inputs ?? [candidate.query];
   const deriveParams = candidate.params ?? [deriveParam(candidate)];
 
@@ -669,7 +671,7 @@ function lowerPrimitiveComputedAttribute(
   element: JsxIrElement,
   componentName: string,
   attrName: string,
-  expression: string,
+  rawExpression: string,
   root: string,
   options: StructuralJsxLoweringOptions,
   deriveExports: string[],
@@ -678,6 +680,7 @@ function lowerPrimitiveComputedAttribute(
   nameCounts: Map<string, number>,
 ): void {
   const baseName = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attrName)}_derive`;
+  const expression = executableJavaScriptExpression(rawExpression);
   const isState = root === 'state';
   const source = isState ? 'client-state' : 'client-query';
   const outputContext = outputWriteFact({
@@ -694,7 +697,7 @@ function lowerPrimitiveComputedAttribute(
     stampPrefix: root,
     deriveExports,
     inputs: JSON.stringify([root]),
-    params: `${root}: any`,
+    params: root,
     expression,
     stateDerive: isState
       ? (exportName) => ({
@@ -885,10 +888,11 @@ function lowerPrimitiveIndeterminateProp(
   // Boolean-presence form ("" present / null absent) matching the other primitive
   // derives; the loader coerces it to the boolean `.indeterminate` property.
   const expression = `((${statePath}) === "indeterminate" ? "" : null)`;
+  const executableExpression = executableJavaScriptExpression(expression);
   const isState = root === 'state';
   const outputContext = outputWriteFact({
     context: outputContextForAttribute('indeterminate'),
-    expression,
+    expression: executableExpression,
     sink: 'indeterminate',
     source: isState ? 'client-state' : 'client-query',
     writer: 'primitive reactive live-property derive',
@@ -900,12 +904,12 @@ function lowerPrimitiveIndeterminateProp(
     stampPrefix: root,
     deriveExports,
     inputs: JSON.stringify([root]),
-    params: `${root}: any`,
-    expression,
+    params: root,
+    expression: executableExpression,
     stateDerive: isState
       ? (exportName) => ({
           attr: 'indeterminate',
-          expression,
+          expression: executableExpression,
           exportName,
           input: 'state',
           name: exportName,
@@ -944,7 +948,7 @@ function lowerPrimitiveReactiveAttribute(
   nameCounts: Map<string, number>,
 ): void {
   const baseName = `${sanitizeIdentifier(componentName)}$${sanitizeIdentifier(element.tag)}_${sanitizeIdentifier(attrName)}_derive`;
-  const expression = primitiveReactiveExpression(condition, attr);
+  const expression = executableJavaScriptExpression(primitiveReactiveExpression(condition, attr));
   const isState = root === 'state';
   const source = isState ? 'client-state' : 'client-query';
   const outputContext = outputWriteFact({
@@ -964,7 +968,7 @@ function lowerPrimitiveReactiveAttribute(
     stampPrefix: root,
     deriveExports,
     inputs: JSON.stringify([root]),
-    params: `${root}: any`,
+    params: root,
     expression,
     stateDerive: isState
       ? (exportName) => ({
@@ -1636,14 +1640,14 @@ function recordStateDerive(
   outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
 ): { exportName: string; stampName: string } {
-  const expression = derive.expression.trim();
+  const expression = executableJavaScriptExpression(derive.expression);
   return emitDerive({
     baseName: derive.baseName,
     nameCounts,
     stampPrefix: 'state',
     deriveExports,
     inputs: '["state"]',
-    params: 'state: any',
+    params: 'state',
     expression,
     stateDerive: (exportName) => ({
       expression,
@@ -1680,7 +1684,7 @@ function recordQueryTextDerive(
   outputContexts: GeneratedOutputWriteFact[],
   nameCounts: Map<string, number>,
 ): { exportName: string; stampName: string } {
-  const expression = derive.expression.trim();
+  const expression = executableJavaScriptExpression(derive.expression);
   return emitDerive({
     baseName: derive.baseName,
     nameCounts,
@@ -1720,7 +1724,7 @@ interface EmitDeriveOptions {
   deriveExports: string[];
   /** Already-formatted `inputs` string, e.g. `JSON.stringify([root])` or `["state"]`. */
   inputs: string;
-  /** Already-formatted `params` string, e.g. `state: any` or `deriveParams.join(', ')`. */
+  /** Already-formatted executable JS `params` string, e.g. `state` or `deriveParams.join(', ')`. */
   params: string;
   expression: string;
   /**
@@ -1984,7 +1988,7 @@ function cssPropertyName(name: string): string {
 }
 
 function deriveParam(candidate: InlineAttributeDerive): string {
-  return candidate.source === 'state' ? 'state: any' : candidate.query;
+  return candidate.source === 'state' ? 'state' : candidate.query;
 }
 
 function deriveExpression(attribute: JsxAttributeModel, expression: string): string {

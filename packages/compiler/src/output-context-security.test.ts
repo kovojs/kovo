@@ -186,8 +186,8 @@ export const SliderDemo = component({
       export function renderSource() {
         return \`import { derive, kovoStyleProperty } from '@kovojs/browser/generated';
 
-      export const SliderDemo$span_style_derive = derive(["state"], (state: any) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
-      export const SliderDemo$span_style_derive_2 = derive(["state"], (state: any) => [kovoStyleProperty("left", \\\`\\\${state.value}%\\\`), kovoStyleProperty("top", '50%'), kovoStyleProperty("transform", 'translate(-50%, -50%)')].filter(Boolean).join('; '));
+      export const SliderDemo$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
+      export const SliderDemo$span_style_derive_2 = derive(["state"], (state) => [kovoStyleProperty("left", \\\`\\\${state.value}%\\\`), kovoStyleProperty("top", '50%'), kovoStyleProperty("transform", 'translate(-50%, -50%)')].filter(Boolean).join('; '));
 
 
       export const SliderDemo = component({

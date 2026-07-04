@@ -202,7 +202,7 @@ export const ImportOrder = component({
       import { derive, kovoStyleProperty } from '@kovojs/browser/generated';
 
       export const ImportOrder$img_style_derive = derive(["product"], (product) => kovoStyleProperty("view-transition-name", product.slug));
-      export const ImportOrder$span_style_derive = derive(["state"], (state: any) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
+      export const ImportOrder$span_style_derive = derive(["state"], (state) => [kovoStyleProperty("width", \\\`\\\${state.value}%\\\`)].filter(Boolean).join('; '));
 
       export const ImportOrder = component({
         queries: { product: productQuery },
