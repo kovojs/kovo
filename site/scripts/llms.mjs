@@ -10,6 +10,8 @@
  *                    page concatenated into one agent-ingestible markdown file,
  *                    each preceded by `# <title>` and its canonical URL, plus
  *                    the normative spec corpus (SPEC.md + spec/*.md).
+ *   llms-*.txt     — context-budget tiers, built from the same section/page data
+ *                    and stamped with the same caller-provided version line.
  *
  * One source feeds both files and the human pages (plan "one source feeds
  * both"). Output is deterministic: no timestamps, no absolute paths.
@@ -25,25 +27,43 @@ function sectionsWithPages(sections) {
   return sections.filter((section) => section.pages.length > 0);
 }
 
+function versionLines(version) {
+  return version ? ['', `Version: ${version}`] : [];
+}
+
+function tierLines(tiers, origin) {
+  if (!tiers?.length) return [];
+  return [
+    'Context-sized tiers:',
+    ...tiers.map((tier) => `- [${tier.title}](${origin}${tier.path}) — ${tier.bytes} bytes`),
+    '',
+  ];
+}
+
 /**
  * llms.txt index. `sections` are the loaded content sections (each with
  * `title` and `pages` carrying `title`/`description`/`mirror`). `origin` is the
  * site origin so links are absolute; `specMirror` is the raw spec URL path.
  *
  * @param {ReadonlyArray<{ title: string; pages: ReadonlyArray<{ title: string; description?: string; mirror: string }> }>} sections
- * @param {{ origin: string; specMirror?: string }} [options]
+ * @param {{ origin: string; specMirror?: string; tiers?: ReadonlyArray<{ title: string; path: string; bytes: number }>; version?: string }} [options]
  */
-export function buildLlmsIndex(sections, { origin, specMirror = '/spec.md' } = {}) {
+export function buildLlmsIndex(
+  sections,
+  { origin, specMirror = '/spec.md', tiers = [], version } = {},
+) {
   return [
     `# ${PROJECT_NAME}`,
     '',
     ...TAGLINE,
+    ...versionLines(version),
     '',
     'Every documentation page is available as raw markdown at the URLs below.',
     `The condensed app-local agent rules source is at ${origin}/kovo-rules.md`,
     `The full corpus for ingestion is at ${origin}/llms-full.txt`,
     `The normative specification is at ${origin}${specMirror}`,
     '',
+    ...tierLines(tiers, origin),
     ...sectionsWithPages(sections).flatMap((section) => [
       `## ${section.title}`,
       '',
@@ -67,11 +87,12 @@ export function buildLlmsIndex(sections, { origin, specMirror = '/spec.md' } = {
  * normative spec corpus appended at the end. `origin` makes the per-page URLs
  * absolute.
  */
-export function buildLlmsFull(sections, { origin, renderBody, spec } = {}) {
+export function buildLlmsFull(sections, { origin, renderBody, spec, version } = {}) {
   const parts = [
     `# ${PROJECT_NAME} — full documentation`,
     '',
     ...TAGLINE,
+    ...versionLines(version),
     '',
     `This file concatenates every documentation page for agent ingestion. Each page is preceded by its title and canonical URL. The normative specification follows the docs. Source: ${origin}/`,
     '',
@@ -103,6 +124,41 @@ export function buildLlmsFull(sections, { origin, renderBody, spec } = {}) {
       spec.body.trim(),
       '',
     );
+  }
+
+  return `${parts
+    .join('\n')
+    .replace(/\n{4,}/g, '\n\n\n')
+    .trimEnd()}\n`;
+}
+
+/**
+ * Context-sized llms tier. The caller chooses the included section keys; this
+ * function only renders the page corpus and keeps the output deterministic.
+ */
+export function buildLlmsTier(sections, { origin, renderBody, title, version } = {}) {
+  const parts = [
+    `# ${PROJECT_NAME} — ${title}`,
+    '',
+    ...TAGLINE,
+    ...versionLines(version),
+    '',
+    `This context-sized corpus includes selected Kovo documentation pages. Source: ${origin}/`,
+    '',
+  ];
+
+  for (const section of sectionsWithPages(sections)) {
+    parts.push('---', '', `## ${section.title}`, '');
+    for (const page of section.pages) {
+      parts.push(
+        `# ${page.title}`,
+        '',
+        `URL: ${origin}${page.url}`,
+        page.description ? `\n${page.description}\n` : '',
+        renderBody(page).trim(),
+        '',
+      );
+    }
   }
 
   return `${parts

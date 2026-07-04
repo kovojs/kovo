@@ -351,6 +351,7 @@ export async function exportSiteStaticApp({
     ]);
     auxModule = loadedAuxModule;
     examplesModule = loadedExamplesModule;
+    await auxModule.stageMarkdownMirrorPublicAssets(cssDistDir);
     const exportResult = await runExportCommandStructured({
       appModulePath: '/src/app.tsx',
       distDir: cssDistDir,
