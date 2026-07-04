@@ -102,6 +102,19 @@ const inspectCustom = Symbol.for('nodejs.util.inspect.custom');
 /** Default poison output for {@link redacted} when no mask is supplied. */
 const REDACTED_MASK = '[redacted]';
 
+type NodeBuiltinLoader = (
+  id: string,
+) => { markAsUncloneable?: (value: object) => void } | undefined;
+
+const maybeMarkAsUncloneable = (() => {
+  const loader = (
+    globalThis as typeof globalThis & {
+      process?: { getBuiltinModule?: NodeBuiltinLoader };
+    }
+  ).process?.getBuiltinModule;
+  return loader?.('node:worker_threads')?.markAsUncloneable;
+})();
+
 type PoisonKind = 'secret' | 'redacted' | 'untrusted';
 
 /**
@@ -111,7 +124,11 @@ type PoisonKind = 'secret' | 'redacted' | 'untrusted';
  * value carries the kind so the guards can distinguish a secret from a redacted box.
  */
 class KovoPoisonBox<T> {
-  /** True private field: invisible to enumeration, JSON, `util.inspect`, and structuredClone. */
+  /**
+   * True private field: invisible to enumeration, JSON, and `util.inspect`.
+   * On Node runtimes with `markAsUncloneable()`, the box also fails closed at
+   * `structuredClone()` instead of laundering to `{}` (SPEC §6.6).
+   */
   readonly #value: T;
   readonly #poison: string;
   readonly #kind: PoisonKind;
@@ -120,6 +137,7 @@ class KovoPoisonBox<T> {
     this.#value = value;
     this.#poison = poison;
     this.#kind = kind;
+    maybeMarkAsUncloneable?.(this);
     // Non-enumerable brand (value = kind) so the marker never appears in
     // spreads/Object.keys, while remaining detectable by the guards in-module.
     Object.defineProperty(this, secretBoxBrand, { value: kind, enumerable: false });
