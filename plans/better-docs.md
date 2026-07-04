@@ -197,7 +197,7 @@ UNHANDLED=0` omits the `derived=` and `PUNTED=` fields the CLI always emits
     test that diffs the docs blocks against fresh output) so they cannot drift again. The
     kovo-explain review also found the "generated from the commerce app's committed graph" claim
     is currently hand-maintained fiction — this makes it true.
-- [ ] **Fix spec-contradicting claims** (each: what the page says → what is normatively true →
+- [x] **Fix spec-contradicting claims** (each: what the page says → what is normatively true →
       the replacement passage):
   - `compiler-internals.md:72-76` + frontmatter description ("how to eject a component"): says
     any component's emitted files can be checked in, the `.tsx` deleted, "nothing else in the
@@ -266,6 +266,10 @@ test:browser` is already correct), and repoint the closer at a real self-serve a
     guards, queries, boundaries, stylesheets, and the route leaf." The actual page branch prints
     the chain, per-layout queries, and the leaf — no guards, no boundaries. Trim the claim to
     the real output (paste it), or extend the CLI first and keep the prose.
+  - Evidence: fixed the cited guide/rule files plus stale `getting-started/mental-model.md`
+    loader/ejection wording; `rg -n "8KB|8 KB|structuredClone|removedKeys|db\\.sql|guard: authed\\(|you can eject|nothing else in the toolchain knows|emitted form.*authorable" site/content rules`
+    returns no stale matches; `pnpm run check:docs-snippets`; `pnpm --filter @kovojs/site run build`;
+    `pnpm --filter @kovojs/site run check:links`.
 
 ## P1 — Systemic quality passes across existing guides
 

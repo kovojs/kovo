@@ -110,9 +110,9 @@ Everything else in Kovo is a consequence of four choices.
 ### Components compile; they don't hydrate
 
 Other frameworks ship a runtime that re-runs your components in the browser to "hydrate" the HTML.
-Kovo doesn't. The HTML already carries everything it needs as attributes, and an 8KB loader handles
-events globally. Until you interact with something, zero component JavaScript loads. The handler for
-a button is right there in the markup:
+Kovo doesn't. The HTML already carries everything it needs as attributes, and a small inline
+bootstrap captures first interaction, then loads the deferred runtime module. Until you interact with
+something, zero component JavaScript loads. The handler for a button is right there in the markup:
 
 ```html
 <button on:click="/c/cart.js#Cart$remove">×</button>
@@ -170,10 +170,10 @@ cart.tsx          ──►     cart.server.js        ──►     Self-describ
                           (named handler exports)       • kovo-deps="cart" stamps
 ```
 
-The emitted code is plain and readable, and compiling it again is a no-op — you can eject any
-component and keep going. How that lowering works, with real captured output, is in the
-[Compiler internals guide](/guides/compiler-internals/) when you're curious; you don't need it to
-build.
+The emitted code is plain and readable, and compiling compiler-owned output again is a no-op. Treat
+that output as an inspectable artifact, not a file you check in instead of TSX. How that lowering
+works, with real captured output, is in the [Compiler internals guide](/guides/compiler-internals/)
+when you're curious; you don't need it to build.
 
 ## Next steps
 
