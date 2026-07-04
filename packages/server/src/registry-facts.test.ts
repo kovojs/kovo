@@ -43,6 +43,34 @@ describe('runtimeRegistryFacts', () => {
     ]);
   });
 
+  it('merges same-load query facts when generated live targets carry a read superset', () => {
+    const declared = domain('registry-facts-declared-read');
+    const generated = domain('registry-facts-generated-read');
+    const scoreQuery = query('registryFactsScore', {
+      load: () => ({ score: 1 }),
+      reads: [declared],
+    });
+
+    const facts = runtimeRegistryFacts({
+      liveTargetRenderers: [
+        {
+          component: 'components/registry-facts/score-card',
+          queryDefinitions: [{ ...scoreQuery, reads: [declared, generated] }],
+          queries: ['registryFactsScore'],
+          render: () => '<score-card></score-card>',
+        },
+      ],
+      mutations: [],
+      queries: [scoreQuery],
+    });
+
+    expect(facts.queries).toHaveLength(1);
+    expect(facts.queries[0]?.reads?.map((read) => read.key).sort()).toEqual([
+      'registry-facts-declared-read',
+      'registry-facts-generated-read',
+    ]);
+  });
+
   it('rejects conflicting duplicate app query keys but preserves mutation query instances', () => {
     const product = domain('registry-facts-product');
     const productP1 = query('registryFactsProduct', {

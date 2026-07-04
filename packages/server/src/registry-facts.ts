@@ -133,6 +133,11 @@ function normalizeRuntimeQueries<Request>(
         originalObjects.add(queryDefinition);
         continue;
       }
+      const merged = mergeRuntimeQueryFacts(existing, normalized);
+      if (merged !== undefined) {
+        queries.set(identity, merged);
+        continue;
+      }
       if (
         existing === normalized ||
         existing === queryDefinition ||
@@ -152,6 +157,26 @@ function normalizeRuntimeQueries<Request>(
   }
 
   return [...queries.values()];
+}
+
+function mergeRuntimeQueryFacts<Request>(
+  left: QueryDefinition<string, unknown, unknown, Request>,
+  right: QueryDefinition<string, unknown, unknown, Request>,
+): QueryDefinition<string, unknown, unknown, Request> | undefined {
+  if (left.key !== right.key || left.load !== right.load || left.instanceKey !== right.instanceKey) {
+    return undefined;
+  }
+
+  const reads = new Map<string, NonNullable<typeof left.reads>[number]>();
+  for (const read of left.reads ?? []) reads.set(read.key, read);
+  let added = false;
+  for (const read of right.reads ?? []) {
+    if (reads.has(read.key)) continue;
+    reads.set(read.key, read);
+    added = true;
+  }
+
+  return added ? { ...left, reads: [...reads.values()] } : left;
 }
 
 function runtimeQueryIdentity(
