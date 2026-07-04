@@ -151,6 +151,14 @@ describe('page hints', () => {
             '  --nested: color-mix(in srgb, var(--base) 80%, black);',
             '  --unused: red;',
             '}',
+            '@media (prefers-color-scheme: dark) {',
+            '  :root:not([data-theme="light"]) {',
+            '    --used: var(--base);',
+            '    --base: #151515;',
+            '    --nested: color-mix(in srgb, var(--base) 65%, white);',
+            '    --unused: purple;',
+            '  }',
+            '}',
             ':root[data-theme="dark"] {',
             '  --used: var(--base);',
             '  --base: #111;',
@@ -166,6 +174,14 @@ describe('page hints', () => {
         '  --used: var(--base);',
         '  --base: #fff;',
         '  --nested: color-mix(in srgb, var(--base) 80%, black);',
+        '}',
+        '',
+        '@media (prefers-color-scheme: dark) {',
+        '  :root:not([data-theme="light"]) {',
+        '    --used: var(--base);',
+        '    --base: #151515;',
+        '    --nested: color-mix(in srgb, var(--base) 65%, white);',
+        '  }',
         '}',
         '',
         ':root[data-theme="dark"] {',
@@ -194,7 +210,7 @@ describe('page hints', () => {
         theme: '@media (min-width: 40rem) { :root { --used: teal; --unused: red; } }',
       }).criticalCss,
     ).toBe(
-      '@media (min-width: 40rem) { :root { --used: teal; --unused: red; } }\n.shell{color:var(--used)}',
+      '@media (min-width: 40rem) {\n  :root {\n    --used: teal;\n  }\n}\n.shell{color:var(--used)}',
     );
   });
 
