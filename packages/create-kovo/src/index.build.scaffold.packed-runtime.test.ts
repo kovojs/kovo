@@ -41,7 +41,7 @@ describe('create-kovo starter (build integration: packed runtime scaffold)', () 
         env: {
           ...withStarterBinOnPath(app.root),
           HOST: '127.0.0.1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });

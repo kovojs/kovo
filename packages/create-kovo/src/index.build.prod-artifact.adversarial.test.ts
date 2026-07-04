@@ -402,7 +402,7 @@ async function withRunningProject(
       env: {
         ...withRepoBinOnPath(),
         HOST: '127.0.0.1',
-        NODE_ENV: 'production',
+        NODE_ENV: 'test',
         PORT: String(port),
       },
     });

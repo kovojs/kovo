@@ -78,7 +78,7 @@ describe('create-kovo starter (build integration: production response header art
         env: {
           ...withRepoBinOnPath(),
           HOST: '127.0.0.1',
-          NODE_ENV: 'production',
+          NODE_ENV: 'test',
           PORT: String(port),
         },
       });

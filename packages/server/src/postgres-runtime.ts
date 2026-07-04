@@ -41,6 +41,26 @@ const DEFAULT_WRITER_ROLE = 'kovo_writer';
 const MIGRATIONS_TABLE = 'kovo_migrations';
 const SCHEMA_STATE_TABLE = 'kovo_schema_state';
 const FRAMEWORK_INTERNAL_REACHABLE_TABLES = new Set(['_kovo_jobs', '_kovo_task_cron_occurrences']);
+const POSTGRES_REACHABLE_RELATIONS_SQL = [
+  'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
+  'existing_roles AS (',
+  '  SELECT DISTINCT r.oid, r.rolname',
+  '  FROM pg_roles r',
+  '  JOIN app_roles a ON a.role_name = r.rolname',
+  ')',
+  'SELECT n.nspname AS schema_name, c.relname AS table_name, c.relkind,',
+  'c.relrowsecurity, c.relforcerowsecurity, c.reloptions,',
+  'r.rolname AS role_name,',
+  "has_table_privilege(r.oid, c.oid, 'SELECT') AS can_select,",
+  "has_table_privilege(r.oid, c.oid, 'INSERT') AS can_insert,",
+  "has_table_privilege(r.oid, c.oid, 'UPDATE') AS can_update,",
+  "has_table_privilege(r.oid, c.oid, 'DELETE') AS can_delete",
+  'FROM pg_class c',
+  'JOIN pg_namespace n ON n.oid = c.relnamespace',
+  'JOIN existing_roles r ON true',
+  "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
+  'ORDER BY n.nspname, c.relname, r.rolname',
+].join(' ');
 const PRODUCTION_PGLITE_ERROR =
   'production requires a least-privilege external Postgres via KOVO_DATABASE_URL; PGlite is dev/test-only and runs in-process as superuser';
 const RUNTIME_LEAST_PRIVILEGE_ERROR = 'runtime must be a least-privilege login role';
@@ -780,26 +800,7 @@ async function auditPostgresReachableClosure(
   const publicRelations = input.config.publicRelations;
   const reachableRows = await safeQuery<PostgresReachableRelationRow>(
     client,
-    [
-      'WITH app_roles(role_name) AS (VALUES ($1), ($2), ($3)),',
-      'existing_roles AS (',
-      '  SELECT DISTINCT r.oid, r.rolname',
-      '  FROM pg_roles r',
-      '  JOIN app_roles a ON a.role_name = r.rolname',
-      ')',
-      'SELECT n.nspname AS schema_name, c.relname AS table_name, c.relkind,',
-      'c.relrowsecurity, c.relforcerowsecurity, c.reloptions,',
-      'r.rolname AS role_name,',
-      "has_table_privilege(r.oid, c.oid, 'SELECT') AS can_select,",
-      "has_table_privilege(r.oid, c.oid, 'INSERT') AS can_insert,",
-      "has_table_privilege(r.oid, c.oid, 'UPDATE') AS can_update,",
-      "has_table_privilege(r.oid, c.oid, 'DELETE') AS can_delete",
-      'FROM pg_class c',
-      'JOIN pg_namespace n ON n.oid = c.relnamespace',
-      'JOIN existing_roles r ON true',
-      "WHERE n.nspname NOT IN ('pg_catalog', 'information_schema')",
-      'ORDER BY n.nspname, c.relname, r.rolname',
-    ].join(' '),
+    POSTGRES_REACHABLE_RELATIONS_SQL,
     [input.config.readerRole, input.config.writerRole, input.config.adminRole],
   );
   if (reachableRows === undefined) {
@@ -1734,7 +1735,9 @@ function assertProductionRuntimeDriver(config: ResolvedPostgresRuntimeConfig): v
 }
 
 function currentNodeEnv(): string | undefined {
-  return process.env['NODE_ENV'];
+  const env = (globalThis as { process?: { env?: Record<string, string | undefined> } }).process
+    ?.env;
+  return env?.['NODE_ENV'];
 }
 
 async function applyPostgresMigrations(

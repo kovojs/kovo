@@ -482,8 +482,7 @@ export const SECURITY_BUILD_PROOFS = [
     ],
     requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    testName:
-      'runs the Phase 5 Postgres/PGlite paranoid dogfood harness from the production artifact',
+    testName: 'runs the Phase 5 Postgres paranoid dogfood harness from the production artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
@@ -499,8 +498,7 @@ export const SECURITY_BUILD_PROOFS = [
     ],
     requiredProofFileNeedles: ["KOVO_PARANOID: '1'"],
     sourceFile: 'packages/create-kovo/src/index.build.prod-artifact.paranoid-runtime.test.ts',
-    testName:
-      'runs the Phase 5 Postgres/PGlite paranoid dogfood harness from the production artifact',
+    testName: 'runs the Phase 5 Postgres paranoid dogfood harness from the production artifact',
   },
   {
     buildInvocation: 'starter-build-production-artifact',
