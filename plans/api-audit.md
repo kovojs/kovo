@@ -682,8 +682,13 @@ labelledBy>` (broken composition the old signature hid), components.md Button
   - Evidence: `packages/server/src/wire-html.ts`, `packages/server/src/mutation/targets.ts`, and
     `packages/server/src/mutation/wire-response.ts` emit the triggering `Kovo-Idem`; verified by
     `pnpm exec vitest --run packages/server/src/wire-html.test.ts packages/server/src/mutation-delta.test.ts packages/browser/src/wire-parser.test.ts --config ./vite.config.ts`.
-- [ ] **Commerce KV330 alias question**: `const db = request.db; db.insert(...)` — analyzer
+- [x] **Commerce KV330 alias question**: `const db = request.db; db.insert(...)` — analyzer
       evasion or unflagged reference-app violation; either outcome is a real issue.
+  - Evidence: `packages/compiler/src/direct-db.test.ts` proves the compiler catches the commerce
+    alias path as KV330; `examples/commerce/src/domain.ts` moves the writes out of the handler.
+    Verified by
+    `pnpm exec vitest --run packages/compiler/src/direct-db.test.ts examples/commerce/src/app.add-to-cart.test.ts examples/commerce/src/app.queries.test.ts examples/commerce/src/app.test.ts --config ./vite.config.ts`
+    and `pnpm --filter @kovojs/example-commerce run build:demo`.
 
 ## Gaps And Follow-Up
 
