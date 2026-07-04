@@ -178,7 +178,10 @@ describeIfPostgres('external Postgres runtime/provisioning probes', () => {
     });
     expect(defaultReport.ok).toBe(true);
     expect(defaultReport.issues).toEqual([]);
-    await expectRuntimeLoginRoleUsable(defaultRuntimeUrl, 'kovo_reader', 'kovo_writer');
+    await expectRuntimeIdentityClosure(defaultRuntimeUrl, {
+      allowedRoles: ['kovo_reader', 'kovo_writer'],
+      deniedRoles: ['kovo_admin', 'postgres'],
+    });
 
     await withPool(cluster.url(defaultDb, 'postgres'), async (superPool) => {
       await superPool.query(`GRANT kovo_admin TO ${quoteIdent(adminMemberRuntime)}`);
@@ -538,27 +541,49 @@ async function expectPermissionDenied(databaseUrl: string, statement: string): P
   });
 }
 
-async function expectRuntimeLoginRoleUsable(
+async function expectRuntimeIdentityClosure(
   databaseUrl: string,
-  readerRole: string,
-  writerRole: string,
+  options: { allowedRoles: readonly string[]; deniedRoles: readonly string[] },
 ): Promise<void> {
   await withPool(databaseUrl, async (pool) => {
     const client = await pool.connect();
     try {
-      await client.query('BEGIN');
+      const identity = await client.query<{
+        current_role: string;
+        current_user: string;
+        rolbypassrls: boolean;
+        rolsuper: boolean;
+      }>(
+        [
+          'SELECT current_user, current_role, r.rolsuper, r.rolbypassrls',
+          'FROM pg_roles r WHERE r.rolname = current_user',
+        ].join(' '),
+      );
+      expect(identity.rows[0]).toEqual({
+        current_role: databaseUser(databaseUrl),
+        current_user: databaseUser(databaseUrl),
+        rolbypassrls: false,
+        rolsuper: false,
+      });
       await expect(client.query('SELECT key FROM kovo_schema_state')).resolves.toMatchObject({
         rows: [],
       });
-      await client.query(`SET LOCAL ROLE ${quoteIdent(readerRole)}`);
-      await client.query('RESET ROLE');
-      await client.query(`SET LOCAL ROLE ${quoteIdent(writerRole)}`);
-      await client.query('RESET ROLE');
-      await client.query('COMMIT');
-    } catch (error) {
-      await client.query('ROLLBACK').catch(() => undefined);
-      throw error;
+
+      for (const role of options.allowedRoles) {
+        await client.query('RESET ROLE');
+        await client.query(`SET ROLE ${quoteIdent(role)}`);
+        const scoped = await client.query<{ current_role: string }>('SELECT current_role');
+        expect(scoped.rows[0]?.current_role).toBe(role);
+      }
+
+      for (const role of options.deniedRoles) {
+        await client.query('RESET ROLE');
+        await expect(client.query(`SET ROLE ${quoteIdent(role)}`)).rejects.toMatchObject({
+          code: '42501',
+        });
+      }
     } finally {
+      await client.query('RESET ROLE').catch(() => undefined);
       client.release();
     }
   });
