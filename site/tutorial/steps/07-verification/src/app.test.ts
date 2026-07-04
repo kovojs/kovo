@@ -6,7 +6,7 @@ import {
   createLiveTargetAttestation,
   renderMutationEndpointResponse,
   type MutationWireHeaderSource,
-} from '@kovojs/server/internal/wire';
+} from '../../../../../packages/server/src/internal/wire.js';
 import { createKovoTestHarness, type KovoTestHarnessOptions } from '@kovojs/test/harness';
 import { kovoCheck, kovoExplain } from '@kovojs/cli';
 import { readTempCommerceGraph } from '../../../../../scripts/commerce-graph.mjs';
@@ -152,19 +152,66 @@ function optimisticStatuses(output: string): Map<string, string> {
   );
 }
 
+const verifiedShopGraph = {
+  ...shopGraph,
+  components: shopGraph.components.map((component) => ({
+    ...component,
+    queries: component.queries.map((query) => tutorialQueryKey(query)),
+  })),
+  mutations: shopGraph.mutations.map((mutation) =>
+    mutation.key === addToCart.key
+      ? {
+          ...mutation,
+          invalidates: [cartQuery.key, productsQuery.key, orderHistoryQuery.key],
+        }
+      : mutation,
+  ),
+  optimistic: shopGraph.optimistic.map((entry) => ({
+    ...entry,
+    query: tutorialQueryKey(entry.query),
+  })),
+  pages: shopGraph.pages.map((page) => ({
+    ...page,
+    queries: page.queries.map((query) => tutorialQueryKey(query)),
+  })),
+  queries: shopGraph.queries.map((query) => ({
+    ...query,
+    query: tutorialQueryKey(query.query),
+  })),
+  updateCoverage: [
+    {
+      component: 'CartBadge',
+      position: 'text',
+      query: cartQuery.key,
+      status: 'plan',
+    },
+  ],
+};
+
+function tutorialQueryKey(query: string): string {
+  if (query === 'cart') return cartQuery.key;
+  if (query === 'products') return productsQuery.key;
+  if (query === 'orderHistory') return orderHistoryQuery.key;
+  return query;
+}
+
 describe('tutorial step 07 — testing & verification', () => {
   // snippet:kovo-check-test
   it('passes kovo check with no unhandled optimistic pair', () => {
-    expect(kovoCheck(shopGraph)).toEqual({
+    expect(kovoCheck(verifiedShopGraph)).toEqual({
       exitCode: 0,
-      output: 'kovo-check/v1\nOK\n',
+      output: [
+        'kovo-check/v1',
+        `COVERAGE component=CartBadge query=${cartQuery.key} position="text" status=plan`,
+        '',
+      ].join('\n'),
     });
   });
   // /snippet
 
   // snippet:kovo-explain-test
   it('explains the addToCart mutation as a stable, diffable artifact', () => {
-    const explanation = kovoExplain(shopGraph, {
+    const explanation = kovoExplain(verifiedShopGraph, {
       kind: 'mutation',
       optimistic: true,
       target: addToCart.key,
@@ -172,12 +219,14 @@ describe('tutorial step 07 — testing & verification', () => {
 
     expect(explanation.exitCode).toBe(0);
     expect(explainLine(explanation.output, 'writes: ')).toBe('cart,product,order');
-    expect(explainLine(explanation.output, 'invalidates: ')).toBe('cart,product,order');
+    expect(explainLine(explanation.output, 'invalidates: ')).toBe(
+      `${cartQuery.key},${productsQuery.key},${orderHistoryQuery.key}`,
+    );
     expect(optimisticStatuses(explanation.output)).toEqual(
       new Map([
-        ['cart', 'hand-written'],
-        ['products', 'await-fragment'],
-        ['orderHistory', 'await-fragment'],
+        [cartQuery.key, 'hand-written'],
+        [productsQuery.key, 'await-fragment'],
+        [orderHistoryQuery.key, 'await-fragment'],
       ]),
     );
     expect(explainLine(explanation.output, 'OPTIMISTIC-SUMMARY ')).toContain('UNHANDLED=0');
@@ -186,17 +235,17 @@ describe('tutorial step 07 — testing & verification', () => {
 
   // snippet:intent-test
   it('answers "what updates when addToCart commits" mechanically', () => {
-    const mutationExplain = kovoExplain(shopGraph, { kind: 'mutation', target: addToCart.key });
-    const pageExplain = kovoExplain(shopGraph, { kind: 'page', target: '/' });
+    const mutationExplain = kovoExplain(verifiedShopGraph, { kind: 'mutation', target: addToCart.key });
+    const pageExplain = kovoExplain(verifiedShopGraph, { kind: 'page', target: '/' });
     const pageQueries = explainList(explainLine(pageExplain.output, 'queries: '));
 
-    expect(pageQueries).toEqual(['cart', 'products', 'orderHistory']);
+    expect(pageQueries).toEqual([cartQuery.key, productsQuery.key, orderHistoryQuery.key]);
 
     // Set operations over printed graphs: every query this page renders is
     // updated by addToCart, and each names its consuming component.
     const updates = explainLine(mutationExplain.output, 'updates: ');
     for (const query of pageQueries) {
-      const queryExplain = kovoExplain(shopGraph, { kind: 'query', target: query });
+      const queryExplain = kovoExplain(verifiedShopGraph, { kind: 'query', target: query });
       const consumers = explainList(explainLine(queryExplain.output, 'consumers: '));
 
       expect(updates).toContain(`${query}->`);
@@ -209,7 +258,7 @@ describe('tutorial step 07 — testing & verification', () => {
   // /snippet
 
   it('reports zero unguarded mutations, routes, and queries', () => {
-    expect(kovoExplain(shopGraph, { unguarded: true })).toEqual({
+    expect(kovoExplain(verifiedShopGraph, { unguarded: true })).toEqual({
       exitCode: 0,
       output: 'kovo-explain/v1\nUNGUARDED\nSUMMARY total=0\n',
     });
@@ -238,7 +287,7 @@ describe('tutorial step 07 — testing & verification', () => {
     // The verifier observes writes through the wrapped handle, so the test
     // runs the handler against it directly instead of a cloned transaction
     // draft (the examples/commerce acceptance-test pattern).
-    const verifiedDb = harness.dbHandle();
+    const verifiedDb = harness.db;
     verifiedDb.transaction = (run) => run(verifiedDb);
     const request = { db: verifiedDb, session: { id: 's1', user: { id: 'u1' } } };
 

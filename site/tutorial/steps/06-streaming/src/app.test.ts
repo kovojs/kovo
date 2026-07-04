@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { csrfToken } from '@kovojs/server';
-import { renderDeferredStream } from '@kovojs/server/internal/html';
+import { renderDeferredStream } from '../../../../../packages/server/src/internal/html.js';
 import {
   renderMutationEndpointResponse,
   type MutationWireHeaderSource,
-} from '@kovojs/server/internal/wire';
+} from '../../../../../packages/server/src/internal/wire.js';
 
 import {
   addToCart,
