@@ -475,7 +475,7 @@ export function addStarterMutationDbScopeProof(root: string): void {
     join(root, 'src/starter-mutation-db-scope-proof.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { domain, endpoint, mutation, publicAccess, s, serverValue, write } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, s, serverValue } from '@kovojs/server';",
       "import { eq } from 'drizzle-orm';",
       '',
       "import type { AppRequest } from './auth.js';",
@@ -485,6 +485,7 @@ export function addStarterMutationDbScopeProof(root: string): void {
       "const publicProof = publicAccess('public starter mutation DB scope proof');",
       "const starterDbScopeProof = domain('starter-db-scope-proof');",
       'const proofInput = s.object({ marker: s.string() });',
+      'function write<Definition>(definition: Definition): Definition { return definition; }',
       '',
       'const starterAuthUserTableWrite = write({',
       "  key: 'starter-db-scope/auth-user-table-write-run',",
@@ -798,7 +799,7 @@ export function addRuntimeMutationSafetyProofs(
     join(root, 'src/runtime-safety-proofs.ts'),
     [
       "import { sql, trustedSql } from '@kovojs/drizzle';",
-      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, s, serverValue, webhook, write, type MutationContext } from '@kovojs/server';",
+      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, s, serverValue, webhook, type MutationContext } from '@kovojs/server';",
       '',
       "import { readonlyAppDb } from './db.js';",
       [
@@ -813,6 +814,7 @@ export function addRuntimeMutationSafetyProofs(
       'const runtimeTableDriftError = s.object({ message: s.string() });',
       "const publicProof = publicAccess('public production mutation safety regression proof');",
       "const txProof = domain('tx_proof');",
+      'function write<Definition>(definition: Definition): Definition { return definition; }',
       ...(includeWebhookTransactionProof || includeWebhookTxEscapeAttempt
         ? [
             'const webhookReplayStore = createMemoryWebhookReplayStore();',
@@ -3005,7 +3007,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { and, eq } from 'drizzle-orm';",
       "import { sqliteTable, text } from 'drizzle-orm/sqlite-core';",
-      "import { domain, endpoint, mutation, publicAccess, s, serverValue, write } from '@kovojs/server';",
+      "import { domain, endpoint, mutation, publicAccess, s, serverValue } from '@kovojs/server';",
       '',
       "import type { AppRequest } from './auth.js';",
       "import { readonlyAppDb } from './db.js';",
@@ -3014,6 +3016,7 @@ export function addParanoidPhase5WriteBoundaryProof(root: string): void {
       "const publicProof = publicAccess('public phase 5.1 write boundary proof');",
       "const phase5WriteProof = domain('phase5-write-boundary-proof');",
       'const proofInput = s.object({ marker: s.string() });',
+      'function write<Definition>(definition: Definition): Definition { return definition; }',
       "const sqliteMaster = sqliteTable('sqlite_master', {",
       "  name: text('name'),",
       "  type: text('type'),",
@@ -3685,7 +3688,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "import { sql, trustedSql } from '@kovojs/drizzle';",
       "import { eq } from 'drizzle-orm';",
       "import { alias, pgTable, text } from 'drizzle-orm/pg-core';",
-      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, write, type QueryLoadContext, type TaskSchedulingRequest } from '@kovojs/server';",
+      "import { createMemoryWebhookReplayStore, domain, endpoint, mutation, publicAccess, query, s, serverValue, task, webhook, type QueryLoadContext, type TaskSchedulingRequest } from '@kovojs/server';",
       '',
       "import { appAuthed, type AppRequest } from './auth.js';",
       "import type { AppDb } from './db.js';",
@@ -3698,6 +3701,7 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
       "const eventDomain = domain('phase5-pg-event');",
       'const proofInput = s.object({ marker: s.string() });',
       'const rowSchema = s.object({ items: s.array(s.object({ id: s.string(), label: s.string() })) });',
+      'function write<Definition>(definition: Definition): Definition { return definition; }',
       "const phase5PgOrderView = pgTable('phase5_pg_order_view', {",
       "  id: text('id').primaryKey(),",
       "  userId: text('user_id').notNull(),",

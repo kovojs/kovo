@@ -310,10 +310,8 @@ export {
   // distinct from the IDEMPOTENCY_CONFLICT 409 produced by the replay path.
   StaleVersionError,
   stream,
-  tag,
   task,
   unsafeRegex,
-  write,
 } from './api/data.js';
 export type {
   BlessedFormatName,
@@ -397,7 +395,6 @@ export type {
   StoredFileSchemaOptions,
   StoredFileUpload,
   StringSchema,
-  Tag,
   Writer,
   TaskCronCatchUp,
   TaskDefinition,
@@ -420,7 +417,6 @@ export type {
   UnverifiedMimeFact,
   ValidationFailurePayload,
   ValidationIssue,
-  WriteDefinition,
 } from './api/data.js';
 export {
   cspSha256,

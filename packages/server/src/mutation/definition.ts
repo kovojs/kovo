@@ -129,16 +129,8 @@ export interface WriteDefinition<
  *
  * @param definition - The write's `key`, `touches` domains, and `run` body.
  * @returns The same `WriteDefinition`, typed.
- * @example
- * import { domain, write } from '@kovojs/server';
- *
- * const cart = domain('cart');
- *
- * export const addItem = write({
- *   key: 'cart/add-item',
- *   touches: [cart],
- *   run: (productId: string, quantity: number) => ({ productId, quantity }),
- * });
+ * @internal Framework-internal placeholder for the SPEC §10.3 domain-write target. It is not
+ * re-exported from the app-facing `@kovojs/server` root until enforcement ships with the API.
  */
 export function write<
   const Key extends string,

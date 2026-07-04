@@ -41,10 +41,8 @@ export type Tag<Key extends string = string> = Domain<Key>;
  *
  * @param key - Optional explicit stable name for shared external vocabulary.
  * @returns A `Tag` keyed by `key`.
- * @example
- * import { tag } from '@kovojs/server';
- *
- * export const cartItem = tag();
+ * @internal Framework-internal placeholder for source-derived tag identities. It is not
+ * re-exported from the app-facing `@kovojs/server` root.
  */
 export function tag(): Tag<string>;
 export function tag<const Key extends string>(key: Key): Tag<Key>;
