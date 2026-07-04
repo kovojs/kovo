@@ -16,6 +16,18 @@ const HARNESS_IMPORTS = new Set([
 ]);
 
 const ALLOWED_INTERNAL_IMPORTS: Record<string, Record<string, string>> = {
+  'tests/integration/fixtures/bfcache-hygiene/client.ts': {
+    '@kovojs/browser/generated':
+      'bfcache fixture exercises generated visible-return query refetch hooks, not app-authored public client APIs.',
+  },
+  'tests/integration/fixtures/browser-engine-degradation-matrix/client.ts': {
+    '@kovojs/browser/generated':
+      'Engine matrix fixture exercises generated query refetch hooks across browser engines, not app-authored public client APIs.',
+  },
+  'tests/integration/fixtures/query-refetch/client.ts': {
+    '@kovojs/browser/generated':
+      'Query refetch fixture exercises generated loader hooks intentionally hidden from the app-facing client entrypoint.',
+  },
   'tests/integration/specs/diagnostic-dev-document.spec.ts': {
     '@kovojs/server/internal/app-shell-vite':
       'Dev diagnostic surfacing test drives the Vite app-shell middleware ABI directly.',
