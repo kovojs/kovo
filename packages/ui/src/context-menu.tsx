@@ -130,15 +130,7 @@ export interface ContextMenuSeparatorProps {
   id?: string;
   styles?: ContextMenuStyleOverrides;
 }
-
-/**
- * Style definitions used by the context menu components.
- *
- * @example
- * import { contextMenuStyles } from "@kovojs/ui/context-menu";
- * const styles = contextMenuStyles;
- */
-export const contextMenuStyles = style.create({
+const contextMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

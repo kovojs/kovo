@@ -6,12 +6,7 @@ export {
   collapsibleContentAttributes,
 } from '../primitives/collapsible.js';
 export type {
-  CollapsibleChangeReason,
-  CollapsibleChangeDetail,
   CollapsibleState,
   CollapsibleAttributeOptions,
-  CollapsibleChangeOptions,
-  CollapsibleChangeResult,
   CollapsiblePrimitiveAttributes,
-  CollapsibleTriggerEvent,
 } from '../primitives/collapsible.js';

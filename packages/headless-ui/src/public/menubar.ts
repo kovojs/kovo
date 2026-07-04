@@ -8,7 +8,6 @@ export {
   menubarSeparatorAttributes,
   menubarItemHighlighted,
   menubarItemOpen,
-  menubarFocusElement,
 } from '../primitives/menubar.js';
 export type {
   MenubarItem,
@@ -18,20 +17,10 @@ export type {
   MenubarSubmenuAttributeOptions,
   MenubarGroupAttributeOptions,
   MenubarSeparatorAttributeOptions,
-  MenubarOpenChangeReason,
-  MenubarSelectReason,
-  MenubarOpenChangeDetail,
-  MenubarSelectDetail,
-  MenubarChangeOptions,
-  MenubarOpenChangeResult,
-  MenubarSelectResult,
   MenubarMoveOptions,
   MenubarMoveResult,
   MenubarTypeaheadOptions,
   MenubarTypeaheadResult,
   MenubarPrimitiveAttributes,
-  MenubarItemEvent,
-  MenubarKeyboardEvent,
-  MenubarFocusEvent,
   MenubarFocusOptions,
 } from '../primitives/menubar.js';

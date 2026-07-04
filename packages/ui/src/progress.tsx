@@ -44,15 +44,7 @@ const indeterminateSlide = style.keyframes({
   '0%': { transform: 'translateX(-100%)' },
   '100%': { transform: 'translateX(250%)' },
 });
-
-/**
- * Style definitions used by the progress components.
- *
- * @example
- * import { progressStyles } from "@kovojs/ui/progress";
- * const styles = progressStyles;
- */
-export const progressStyles = style.create({
+const progressStyles = style.create({
   // Custom indicator filled by value ratio (set inline). In the indeterminate
   // state a partial-width bar slides across the track.
   indicator: {

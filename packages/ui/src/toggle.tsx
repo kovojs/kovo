@@ -85,15 +85,7 @@ const variants = style.create({
     },
   },
 });
-
-/**
- * Style definitions used by the toggle components.
- *
- * @example
- * import { toggleStyles } from "@kovojs/ui/toggle";
- * const styles = toggleStyles;
- */
-export const toggleStyles = {
+const toggleStyles = {
   base,
   variants,
 } as const;

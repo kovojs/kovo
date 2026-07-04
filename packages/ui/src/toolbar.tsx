@@ -84,15 +84,7 @@ export interface ToolbarItemProps extends ToolbarStateProps {
 export interface ToolbarButtonProps extends ToolbarItemProps {
   pressed?: boolean;
 }
-
-/**
- * Style definitions used by the toolbar components.
- *
- * @example
- * import { toolbarStyles } from "@kovojs/ui/toolbar";
- * const styles = toolbarStyles;
- */
-export const toolbarStyles = style.create({
+const toolbarStyles = style.create({
   button: {
     alignItems: 'center',
     borderRadius: uiTheme.radius.sm,

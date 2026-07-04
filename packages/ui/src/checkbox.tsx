@@ -40,15 +40,7 @@ export interface CheckboxProps {
   styles?: CheckboxStyleOverrides;
   value?: string;
 }
-
-/**
- * Style definitions used by the checkbox components.
- *
- * @example
- * import { checkboxStyles } from "@kovojs/ui/checkbox";
- * const styles = checkboxStyles;
- */
-export const checkboxStyles = style.create({
+const checkboxStyles = style.create({
   // Custom square. Carries data-state to paint the fill + check/dash glyph.
   box: {
     alignItems: 'center',

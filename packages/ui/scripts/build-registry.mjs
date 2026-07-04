@@ -872,7 +872,10 @@ function publicPrimitiveExportsFromSource(fileName, subpath, source) {
 
   const publicNames = new Set(
     [...declarations.values()]
-      .filter((declaration) => declaration.isPublic)
+      .filter(
+        (declaration) =>
+          declaration.isPublic && !isTransitionMachineOnlyDeclaration(declaration.name),
+      )
       .map((declaration) => declaration.name),
   );
   let changed = true;
@@ -880,6 +883,7 @@ function publicPrimitiveExportsFromSource(fileName, subpath, source) {
     changed = false;
     for (const declaration of declarations.values()) {
       if (publicNames.has(declaration.name) || declaration.isImplementationOnly) continue;
+      if (isTransitionMachineOnlyDeclaration(declaration.name)) continue;
       if (!isTypeDeclarationKind(declaration.kind)) continue;
       if (!publicSignatureReferences(publicNames, declaration.name, declarations)) continue;
       publicNames.add(declaration.name);
@@ -899,6 +903,31 @@ function publicPrimitiveExportsFromSource(fileName, subpath, source) {
   }
 
   return { types, values };
+}
+
+function isTransitionMachineOnlyDeclaration(name) {
+  if (name === 'ToastChangeReason') {
+    return false;
+  }
+  if (/^Toast(?:Show|Dismiss)?Event/.test(name) || /^toast(?:Show|Dismiss)?Event/.test(name)) {
+    return false;
+  }
+  return new RegExp(
+    [
+      'Change(?:Reason|Detail|Options|Result)',
+      'OpenChange(?:Reason|Detail|Result)',
+      'ValueChange(?:Reason|Detail|Result)',
+      'InputChange(?:Reason|Detail|Result)',
+      'Select(?:Reason|Detail|Result)',
+      'KeyboardResult',
+      'OptionSelectResult',
+      'SelectResult',
+      'PointerDragOptions',
+      'KeyDownOptions',
+      'FocusElement',
+      'Event',
+    ].join('|') + '$',
+  ).test(name);
 }
 
 function primitiveExportDeclarations(fileName, subpath, source) {

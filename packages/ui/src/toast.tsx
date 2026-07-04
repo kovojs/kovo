@@ -118,15 +118,7 @@ export interface ToastActionProps {
  * const props: ToastCloseProps = { id: 'id' };
  */
 export type ToastCloseProps = ToastActionProps;
-
-/**
- * Style definitions used by the toast components.
- *
- * @example
- * import { toastStyles } from "@kovojs/ui/toast";
- * const styles = toastStyles;
- */
-export const toastStyles = style.create({
+const toastStyles = style.create({
   action: {
     alignItems: 'center',
     appearance: 'none',

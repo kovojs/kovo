@@ -131,15 +131,7 @@ export interface AlertDialogPartProps {
   id?: string;
   styles?: AlertDialogStyleOverrides;
 }
-
-/**
- * Style definitions used by the alert dialog components.
- *
- * @example
- * import { alertDialogStyles } from "@kovojs/ui/alert-dialog";
- * const styles = alertDialogStyles;
- */
-export const alertDialogStyles = style.create({
+const alertDialogStyles = style.create({
   action: {
     alignItems: 'center',
     backgroundColor: uiTheme.color.backgroundInverse,

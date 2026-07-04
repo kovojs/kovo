@@ -109,15 +109,7 @@ export interface CheckboxGroupLabelProps extends CheckboxGroupStateProps {
   itemValue: string;
   styles?: CheckboxGroupStyleOverrides;
 }
-
-/**
- * Style definitions used by the checkbox group components.
- *
- * @example
- * import { checkboxGroupStyles } from "@kovojs/ui/checkbox-group";
- * const styles = checkboxGroupStyles;
- */
-export const checkboxGroupStyles = style.create({
+const checkboxGroupStyles = style.create({
   // Custom square matching the standalone Checkbox box. Carries data-state to
   // paint the teal fill + check/dash glyph (mirrors checkbox.tsx `box`). Kept
   // under the `control` key so the public control class export is unchanged.

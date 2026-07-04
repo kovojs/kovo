@@ -37,15 +37,7 @@ const orientations = style.create({
     width: 1,
   },
 });
-
-/**
- * Style definitions used by the separator components.
- *
- * @example
- * import { separatorStyles } from "@kovojs/ui/separator";
- * const styles = separatorStyles;
- */
-export const separatorStyles = {
+const separatorStyles = {
   base,
   orientations,
 } as const;

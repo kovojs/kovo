@@ -77,15 +77,7 @@ export interface HoverCardContentProps extends HoverCardStateProps {
   contentId?: string;
   styles?: HoverCardStyleOverrides;
 }
-
-/**
- * Style definitions used by the hover card components.
- *
- * @example
- * import { hoverCardStyles } from "@kovojs/ui/hover-card";
- * const styles = hoverCardStyles;
- */
-export const hoverCardStyles = style.create({
+const hoverCardStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

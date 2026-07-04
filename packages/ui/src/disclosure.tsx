@@ -75,15 +75,7 @@ export interface DisclosureContentProps extends DisclosureStateProps {
   contentId?: string;
   styles?: DisclosureStyleOverrides;
 }
-
-/**
- * Style definitions used by the disclosure components.
- *
- * @example
- * import { disclosureStyles } from "@kovojs/ui/disclosure";
- * const styles = disclosureStyles;
- */
-export const disclosureStyles = style.create({
+const disclosureStyles = style.create({
   // Grid wrapper animates open/close via grid-template-rows 0fr<->1fr. The author
   // `display:grid` overrides the UA `[hidden]{display:none}` so the panel can
   // transition while `hidden` stays true (correct a11y + gallery contract).

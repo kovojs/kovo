@@ -32,12 +32,5 @@ export type {
   ToastPartAttributeOptions,
   ToastActionAttributeOptions,
   ToastChangeValue,
-  ToastChangeDetail,
-  ToastChangeOptions,
-  ToastChangeResult,
   ToastPrimitiveAttributes,
-  ToastButtonEvent,
-  ToastAnimationEvent,
-  ToastKeyboardEvent,
-  ToastViewportKeyboardEvent,
 } from '../primitives/toast.js';

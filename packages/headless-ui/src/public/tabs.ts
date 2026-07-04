@@ -15,13 +15,6 @@ export type {
   TabsListAttributeOptions,
   TabsTriggerAttributeOptions,
   TabsPanelAttributeOptions,
-  TabsChangeReason,
-  TabsChangeDetail,
-  TabsChangeOptions,
-  TabsChangeResult,
   TabsMoveResult,
-  TabsKeyboardResult,
   TabsPrimitiveAttributes,
-  TabsKeyboardEvent,
-  TabsTriggerEvent,
 } from '../primitives/tabs.js';

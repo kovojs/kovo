@@ -6,14 +6,7 @@ export {
   popoverContentAttributes,
 } from '../primitives/popover.js';
 export type {
-  PopoverChangeReason,
-  PopoverChangeDetail,
   PopoverState,
   PopoverAttributeOptions,
-  PopoverChangeOptions,
-  PopoverChangeResult,
   PopoverPrimitiveAttributes,
-  PopoverTriggerEvent,
-  PopoverEscapeEvent,
-  PopoverBeforeToggleEvent,
 } from '../primitives/popover.js';

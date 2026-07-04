@@ -128,15 +128,7 @@ export interface DropdownMenuSeparatorProps {
   id?: string;
   styles?: DropdownMenuStyleOverrides;
 }
-
-/**
- * Style definitions used by the dropdown menu components.
- *
- * @example
- * import { dropdownMenuStyles } from "@kovojs/ui/dropdown-menu";
- * const styles = dropdownMenuStyles;
- */
-export const dropdownMenuStyles = style.create({
+const dropdownMenuStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

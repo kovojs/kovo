@@ -74,15 +74,7 @@ const variants = style.create({
     borderLeftColor: uiTheme.color.warning.border,
   },
 });
-
-/**
- * Style definitions used by the alert components.
- *
- * @example
- * import { alertStyles } from "@kovojs/ui/alert";
- * const styles = alertStyles;
- */
-export const alertStyles = {
+const alertStyles = {
   base,
   variants,
 } as const;

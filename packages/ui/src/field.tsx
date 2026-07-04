@@ -233,15 +233,7 @@ const nativeControlStyle = {
     boxShadow: '0 0 0 3px color-mix(in srgb, var(--kovo-theme-sys-color-error) 30%, transparent)',
   },
 } as const;
-
-/**
- * Style definitions used by the field components.
- *
- * @example
- * import { fieldStyles } from "@kovojs/ui/field";
- * const styles = fieldStyles;
- */
-export const fieldStyles = style.create({
+const fieldStyles = style.create({
   control: {
     ...nativeControlStyle,
     height: 36,

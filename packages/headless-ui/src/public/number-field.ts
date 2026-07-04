@@ -13,12 +13,5 @@ export type {
   NumberFieldRootAttributeOptions,
   NumberFieldInputAttributeOptions,
   NumberFieldButtonAttributeOptions,
-  NumberFieldChangeReason,
-  NumberFieldChangeDetail,
-  NumberFieldChangeOptions,
-  NumberFieldChangeResult,
   NumberFieldPrimitiveAttributes,
-  NumberFieldButtonEvent,
-  NumberFieldInputEvent,
-  NumberFieldKeyboardEvent,
 } from '../primitives/number-field.js';

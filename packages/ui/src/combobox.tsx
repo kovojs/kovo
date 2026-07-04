@@ -120,15 +120,7 @@ export interface ComboboxValueProps extends ComboboxStateProps {
   id?: string;
   styles?: ComboboxStyleOverrides;
 }
-
-/**
- * Style definitions used by the combobox components.
- *
- * @example
- * import { comboboxStyles } from "@kovojs/ui/combobox";
- * const styles = comboboxStyles;
- */
-export const comboboxStyles = style.create({
+const comboboxStyles = style.create({
   input: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

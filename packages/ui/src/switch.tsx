@@ -41,15 +41,7 @@ export interface SwitchProps {
   styles?: SwitchStyleOverrides;
   value?: string;
 }
-
-/**
- * Style definitions used by the switch components.
- *
- * @example
- * import { switchStyles } from "@kovojs/ui/switch";
- * const styles = switchStyles;
- */
-export const switchStyles = style.create({
+const switchStyles = style.create({
   // Native checkbox kept for a11y/form state; visually hidden but still the
   // click/focus target (stretched over the track via absolute positioning).
   input: {

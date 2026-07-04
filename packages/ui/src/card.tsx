@@ -15,15 +15,7 @@ export interface CardProps {
   children?: ComponentChild;
   style?: style.StyleInput;
 }
-
-/**
- * Style definitions used by the card components.
- *
- * @example
- * import { cardStyles } from "@kovojs/ui/card";
- * const styles = cardStyles;
- */
-export const cardStyles = style.create({
+const cardStyles = style.create({
   root: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,

@@ -92,15 +92,7 @@ export interface OtpFieldInputProps extends OtpFieldStateProps {
   slotIndex: number;
   styles?: OtpFieldStyleOverrides;
 }
-
-/**
- * Style definitions used by the otp field components.
- *
- * @example
- * import { otpFieldStyles } from "@kovojs/ui/otp-field";
- * const styles = otpFieldStyles;
- */
-export const otpFieldStyles = style.create({
+const otpFieldStyles = style.create({
   group: {
     alignItems: 'center',
     display: 'flex',

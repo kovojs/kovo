@@ -8,19 +8,10 @@ export {
   alertDialogActionAttributes,
 } from '../primitives/alert-dialog.js';
 export type {
-  AlertDialogChangeReason,
-  AlertDialogChangeDetail,
   AlertDialogActionIntent,
   AlertDialogState,
   AlertDialogAttributeOptions,
   AlertDialogActionAttributeOptions,
   AlertDialogCancelAttributeOptions,
-  AlertDialogChangeOptions,
-  AlertDialogChangeResult,
   AlertDialogPrimitiveAttributes,
-  AlertDialogTriggerEvent,
-  AlertDialogActionEvent,
-  AlertDialogCancelButtonEvent,
-  AlertDialogCancelEvent,
-  AlertDialogBeforeToggleEvent,
 } from '../primitives/alert-dialog.js';

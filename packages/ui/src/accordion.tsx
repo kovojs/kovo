@@ -107,15 +107,7 @@ export interface AccordionContentProps extends AccordionItemProps {
   contentId?: string;
   triggerId?: string;
 }
-
-/**
- * Style definitions used by the accordion components.
- *
- * @example
- * import { accordionStyles } from "@kovojs/ui/accordion";
- * const styles = accordionStyles;
- */
-export const accordionStyles = style.create({
+const accordionStyles = style.create({
   // Outer grid wrapper animates open/close via grid-template-rows 0fr<->1fr
   // (SPEC complaint #9: panel should smoothly animate height). The inner
   // `contentInner` owns padding/min-height:0; this div carries no padding so the

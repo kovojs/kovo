@@ -118,15 +118,7 @@ function isTableRenderedHtml(value: unknown): value is TableRenderedHtml {
 function escapeAttribute(value: string): string {
   return escapeHtml(value).replaceAll('"', '&quot;');
 }
-
-/**
- * Style definitions used by the table components.
- *
- * @example
- * import { tableStyles } from "@kovojs/ui/table";
- * const styles = tableStyles;
- */
-export const tableStyles = style.create({
+const tableStyles = style.create({
   body: {
     '[&_tr:last-child]': {
       borderBottomWidth: 0,

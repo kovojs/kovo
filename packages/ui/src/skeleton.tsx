@@ -22,15 +22,7 @@ const pulse = style.keyframes({
   '0%, 100%': { opacity: 1 },
   '50%': { opacity: 0.5 },
 });
-
-/**
- * Style definitions used by the skeleton components.
- *
- * @example
- * import { skeletonStyles } from "@kovojs/ui/skeleton";
- * const styles = skeletonStyles;
- */
-export const skeletonStyles = style.create({
+const skeletonStyles = style.create({
   root: {
     // `border` (outlineVariant) is the M3 divider tone — distinctly darker than
     // the card surface, so placeholders are clearly visible. The old

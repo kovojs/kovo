@@ -109,15 +109,7 @@ export interface RadioGroupLabelProps extends RadioGroupStateProps {
   itemValue: string;
   styles?: RadioGroupStyleOverrides;
 }
-
-/**
- * Style definitions used by the radio group components.
- *
- * @example
- * import { radioGroupStyles } from "@kovojs/ui/radio-group";
- * const styles = radioGroupStyles;
- */
-export const radioGroupStyles = style.create({
+const radioGroupStyles = style.create({
   item: {
     alignItems: 'center',
     columnGap: 8,

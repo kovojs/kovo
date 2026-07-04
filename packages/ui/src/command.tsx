@@ -186,15 +186,7 @@ export interface CommandValueProps extends CommandStateProps {
   id?: string;
   styles?: CommandStyleOverrides;
 }
-
-/**
- * Style definitions used by the command components.
- *
- * @example
- * import { commandStyles } from "@kovojs/ui/command";
- * const styles = commandStyles;
- */
-export const commandStyles = style.create({
+const commandStyles = style.create({
   close: {
     alignItems: 'center',
     appearance: 'none',

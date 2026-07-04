@@ -75,15 +75,7 @@ export interface CollapsibleContentProps extends CollapsibleStateProps {
   contentId?: string;
   styles?: CollapsibleStyleOverrides;
 }
-
-/**
- * Style definitions used by the collapsible components.
- *
- * @example
- * import { collapsibleStyles } from "@kovojs/ui/collapsible";
- * const styles = collapsibleStyles;
- */
-export const collapsibleStyles = style.create({
+const collapsibleStyles = style.create({
   // Grid wrapper animates open/close via grid-template-rows 0fr<->1fr. The author
   // `display:grid` overrides both the UA `details:not([open]) > *{display:none}`
   // rule and the closed state, so the panel smoothly expands/collapses instead of

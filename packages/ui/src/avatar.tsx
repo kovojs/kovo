@@ -80,15 +80,7 @@ export interface AvatarFallbackProps extends AvatarStateProps {
   delayMs?: number;
   styles?: AvatarStyleOverrides;
 }
-
-/**
- * Style definitions used by the avatar components.
- *
- * @example
- * import { avatarStyles } from "@kovojs/ui/avatar";
- * const styles = avatarStyles;
- */
-export const avatarStyles = style.create({
+const avatarStyles = style.create({
   // The fallback fills the relative root (inset:0) so the initials sit centered
   // behind/over the image rather than stacking next to it in static flow.
   // Once the image reports `loaded` the fallback is removed so the photo shows.

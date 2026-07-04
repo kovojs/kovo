@@ -75,15 +75,7 @@ export interface PopoverContentProps extends PopoverStateProps {
   contentId?: string;
   styles?: PopoverStyleOverrides;
 }
-
-/**
- * Style definitions used by the popover components.
- *
- * @example
- * import { popoverStyles } from "@kovojs/ui/popover";
- * const styles = popoverStyles;
- */
-export const popoverStyles = style.create({
+const popoverStyles = style.create({
   content: {
     backgroundColor: uiTheme.color.background,
     borderColor: uiTheme.color.border,
