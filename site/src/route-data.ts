@@ -24,6 +24,7 @@ export interface DocsRoutePageData {
   eyebrow?: string | undefined;
   groups: NavGroup[];
   headings?: Heading[] | undefined;
+  markdownMirror?: string | undefined;
   next?: NavLink | undefined;
   prev?: NavLink | undefined;
 }

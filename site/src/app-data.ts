@@ -7,6 +7,7 @@ import { link, routePath } from './route-kit.js';
 export interface SiteRoutePage {
   body: DocsRoutePageData;
   meta: { description: string; title: string };
+  markdownMirror?: string;
   modulepreloads?: readonly string[];
   routePath: string;
   url: string;
@@ -69,7 +70,10 @@ export async function buildSiteRouteData({
         galleryPage.url,
         { activePath: galleryPage.activePath, content: galleryPage.content, groups },
         galleryPage.meta,
-        galleryPage.modulepreloads ? { modulepreloads: galleryPage.modulepreloads } : {},
+        {
+          ...(galleryPage.markdownMirror ? { markdownMirror: galleryPage.markdownMirror } : {}),
+          ...(galleryPage.modulepreloads ? { modulepreloads: galleryPage.modulepreloads } : {}),
+        },
       ),
     );
   }
@@ -80,6 +84,7 @@ export async function buildSiteRouteData({
         examplePage.url,
         { activePath: examplePage.activePath, content: examplePage.content, groups },
         examplePage.meta,
+        examplePage.markdownMirror ? { markdownMirror: examplePage.markdownMirror } : {},
       ),
     );
   }
@@ -94,6 +99,7 @@ export async function buildSiteRouteData({
           kind: 'spec',
         },
         groups,
+        markdownMirror: '/spec.md',
       },
       {
         description: 'Kovo — Product Requirements & Technical Specification (normative).',
@@ -164,6 +170,7 @@ function markdownPage(
       eyebrow: section.title,
       groups,
       headings: page.headings,
+      markdownMirror: page.mirror,
       next: link(next),
       prev: link(prev),
     },
@@ -178,10 +185,11 @@ function docsPage(
   url: string,
   body: DocsRoutePageData,
   meta: SiteRoutePage['meta'],
-  extra: Pick<SiteRoutePage, 'modulepreloads'> = {},
+  extra: Pick<SiteRoutePage, 'markdownMirror' | 'modulepreloads'> = {},
 ): SiteRoutePage {
+  const pageBody = extra.markdownMirror ? { ...body, markdownMirror: extra.markdownMirror } : body;
   return {
-    body,
+    body: pageBody,
     meta,
     ...extra,
     routePath: routePath(url),

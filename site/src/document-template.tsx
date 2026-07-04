@@ -133,6 +133,29 @@ const searchDialogClass = style.attrs(searchStyles.dialog).class ?? '';
 const searchInputClass = style.attrs(searchStyles.input).class ?? '';
 const searchResultsClass = style.attrs(searchStyles.results).class ?? '';
 
+export function MarkdownAlternateLink({ href }: { href: string }): unknown {
+  return `<link rel="alternate" type="text/markdown" href="${escapeHtmlAttribute(
+    assertMarkdownMirrorHref(href),
+  )}">`;
+}
+
+export function injectMarkdownAlternateLink(html: string, href: string): string {
+  if (html.includes('rel="alternate"') && html.includes('type="text/markdown"')) return html;
+  const linkHtml = MarkdownAlternateLink({ href });
+  return html.replace('</head>', `${linkHtml}</head>`);
+}
+
+function assertMarkdownMirrorHref(href: string): string {
+  if (!href.startsWith('/') || !href.endsWith('.md')) {
+    throw new Error(`markdown mirror href must be an absolute .md path: ${href}`);
+  }
+  return href;
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
+}
+
 const SEARCH_DEFAULT_RESULTS = [
   ['start', 'Quickstart', 'Getting Started', '/getting-started/quickstart/'],
   ['guide', 'Tutorial', 'Build the app', '/tutorial/'],

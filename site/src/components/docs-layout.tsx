@@ -53,6 +53,20 @@ const docsLayoutStyles = style.create({
     marginBottom: '0.9rem',
     textTransform: 'uppercase',
   },
+  markdownLink: {
+    color: 'var(--dim)',
+    display: 'inline-block',
+    fontFamily: 'var(--font-mono)',
+    fontSize: '0.68rem',
+    letterSpacing: '0.12em',
+    margin: '0 0 1rem',
+    textDecorationColor: 'var(--edge)',
+    textTransform: 'uppercase',
+    ':hover': {
+      color: 'var(--teal)',
+      textDecorationColor: 'var(--teal)',
+    },
+  },
   prose: {
     color: 'var(--ink)',
     fontSize: '1rem',
@@ -263,7 +277,17 @@ export function DocsHeaderRegion({
 /** TSX route page region for docs-chrome pages. Markdown/API prose remains the
  * single route-boundary HTML input; all surrounding route composition is authored TSX. */
 export function DocsPageRegion({ page }: { page: DocsRoutePageData }): string {
-  const { activePath, apiSidebar, content, eyebrow, groups, headings = [], next, prev } = page;
+  const {
+    activePath,
+    apiSidebar,
+    content,
+    eyebrow,
+    groups,
+    headings = [],
+    markdownMirror,
+    next,
+    prev,
+  } = page;
   // Show only the sidebar family for this page: the learning path (Getting
   // Started + Tutorial + Guides) together, or Components/Examples/reference
   // together — so the rail stays scoped to what the reader is browsing.
@@ -283,6 +307,13 @@ export function DocsPageRegion({ page }: { page: DocsRoutePageData }): string {
           <div style={docsLayoutStyles.mobileBody}>{mobileSidebar}</div>
         </details>
         {eyebrow ? <p style={docsLayoutStyles.pageEyebrow}>{eyebrow}</p> : ''}
+        {markdownMirror ? (
+          <a href={markdownMirror} type="text/markdown" style={docsLayoutStyles.markdownLink}>
+            View as Markdown
+          </a>
+        ) : (
+          ''
+        )}
         <DocsRouteContentView content={content} />
         {prev || next ? PrevNext.definition.render({ prev, next }) : ''}
       </main>

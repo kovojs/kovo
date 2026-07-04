@@ -51,6 +51,7 @@ export interface GalleryDeps {
 export interface GalleryRoutePageData {
   activePath: string;
   content: DocsRouteContent;
+  markdownMirror?: string;
   meta: { description: string; title: string };
   modulepreloads?: readonly string[];
   url: string;
@@ -650,6 +651,7 @@ export async function buildGalleryRoutePages({
         description: `${galleryRoute.title} component gallery fixture.`,
         title: `${galleryRoute.title} · Gallery · Kovo`,
       },
+      markdownMirror: `/components/${galleryRoute.component}.md`,
       ...(interactive ? { modulepreloads: interactive.modulepreloads } : {}),
       url,
     });

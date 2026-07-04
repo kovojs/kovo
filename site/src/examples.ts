@@ -171,6 +171,7 @@ const copyHref = `${clientHrefs.code}#copy`;
 export interface ExampleRoutePageData {
   activePath: string;
   content: DocsRouteContent;
+  markdownMirror?: string;
   meta: { description: string; title: string };
   url: string;
 }
@@ -237,6 +238,7 @@ export async function buildExampleRoutePages(): Promise<ExampleRoutePageData[]> 
         description: example.blurb,
         title: `${example.title} · Examples · Kovo`,
       },
+      markdownMirror: `/examples/${example.name}.md`,
       url: pagePath,
     });
   }
