@@ -257,6 +257,13 @@ describe('api-ref generator', () => {
     expect(uiPage).not.toMatch(/^#### `.*Styles`/m);
   });
 
+  it('renders concrete Select examples instead of cast placeholders', () => {
+    expect(headlessUiPage).toContain("const value: SelectState = {");
+    expect(headlessUiPage).not.toContain('const value: SelectState = {} as SelectState;');
+    expect(uiPage).toContain("const state: SelectStateProps = {");
+    expect(uiPage).not.toContain('const state: SelectStateProps = {};');
+  });
+
   it('emits a per-package sidebar manifest grouped by subpath, with anchors and source links', async () => {
     const manifest = JSON.parse(await readFile(path.join(outDir, 'core.sidebar.json'), 'utf8'));
     expect(manifest.package).toBe('@kovojs/core');

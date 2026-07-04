@@ -37,7 +37,11 @@ export interface SelectStyleOverrides {
  *
  * @example
  * import type { SelectStateProps } from "@kovojs/ui/select";
- * const state: SelectStateProps = {};
+ * const state: SelectStateProps = {
+ *   items: [{ label: 'Standard', value: 'standard' }],
+ *   name: 'shippingSpeed',
+ *   value: 'standard',
+ * };
  */
 export interface SelectStateProps {
   disabled?: boolean;
@@ -58,7 +62,11 @@ export interface SelectStateProps {
  *
  * @example
  * import type { SelectProps } from "@kovojs/ui/select";
- * const props: SelectProps = { children: 'Content' };
+ * const props: SelectProps = {
+ *   children: 'Shipping speed',
+ *   items: [{ label: 'Standard', value: 'standard' }],
+ *   value: 'standard',
+ * };
  */
 export interface SelectProps extends SelectStateProps {
   children?: ComponentChild;
@@ -71,7 +79,12 @@ export interface SelectProps extends SelectStateProps {
  *
  * @example
  * import type { SelectTriggerProps } from "@kovojs/ui/select";
- * const props: SelectTriggerProps = { children: 'Content' };
+ * const props: SelectTriggerProps = {
+ *   children: 'Standard',
+ *   id: 'shipping-speed-trigger',
+ *   labelledBy: 'shipping-speed-label',
+ *   value: 'standard',
+ * };
  */
 export interface SelectTriggerProps extends SelectStateProps {
   'aria-activedescendant'?: string | undefined;
@@ -88,7 +101,11 @@ export interface SelectTriggerProps extends SelectStateProps {
  *
  * @example
  * import type { SelectHiddenInputProps } from "@kovojs/ui/select";
- * const props: SelectHiddenInputProps = {};
+ * const props: SelectHiddenInputProps = {
+ *   id: 'shipping-speed-input',
+ *   name: 'shippingSpeed',
+ *   value: 'standard',
+ * };
  */
 export interface SelectHiddenInputProps extends SelectStateProps {
   id?: string;
@@ -100,7 +117,12 @@ export interface SelectHiddenInputProps extends SelectStateProps {
  *
  * @example
  * import type { SelectContentProps } from "@kovojs/ui/select";
- * const props: SelectContentProps = { children: 'Content' };
+ * const props: SelectContentProps = {
+ *   children: 'Shipping options',
+ *   id: 'shipping-speed-listbox',
+ *   labelledBy: 'shipping-speed-label',
+ *   open: true,
+ * };
  */
 export interface SelectContentProps extends SelectStateProps {
   children?: ComponentChild;
@@ -115,7 +137,12 @@ export interface SelectContentProps extends SelectStateProps {
  *
  * @example
  * import type { SelectItemProps } from "@kovojs/ui/select";
- * const props: SelectItemProps = { itemValue: 'item', children: 'Content' };
+ * const props: SelectItemProps = {
+ *   children: 'Standard',
+ *   itemLabel: 'Standard',
+ *   itemValue: 'standard',
+ *   value: 'standard',
+ * };
  */
 export interface SelectItemProps extends SelectStateProps {
   children?: ComponentChild;
@@ -131,7 +158,11 @@ export interface SelectItemProps extends SelectStateProps {
  *
  * @example
  * import type { SelectValueProps } from "@kovojs/ui/select";
- * const props: SelectValueProps = { children: 'Content' };
+ * const props: SelectValueProps = {
+ *   children: 'Standard',
+ *   placeholder: 'Choose a speed',
+ *   value: 'standard',
+ * };
  */
 export interface SelectValueProps extends SelectStateProps {
   children?: ComponentChild;

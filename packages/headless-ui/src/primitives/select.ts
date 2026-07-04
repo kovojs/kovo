@@ -22,7 +22,7 @@ import {
  * ```ts
  * import type { SelectItem } from '@kovojs/headless-ui/select';
  *
- * const value: SelectItem = {} as SelectItem;
+ * const value: SelectItem = { label: 'Standard', value: 'standard' };
  * ```
  *
  *
@@ -44,7 +44,13 @@ export interface SelectItem {
  * ```ts
  * import type { SelectState } from '@kovojs/headless-ui/select';
  *
- * const value: SelectState = {} as SelectState;
+ * const value: SelectState = {
+ *   items: [{ label: 'Standard', value: 'standard' }],
+ *   listboxId: 'shipping-speed-listbox',
+ *   name: 'shippingSpeed',
+ *   open: true,
+ *   value: 'standard',
+ * };
  * ```
  */
 export interface SelectState {
@@ -70,7 +76,11 @@ export interface SelectState {
  * ```ts
  * import type { SelectRootAttributeOptions } from '@kovojs/headless-ui/select';
  *
- * const value: SelectRootAttributeOptions = {} as SelectRootAttributeOptions;
+ * const value: SelectRootAttributeOptions = {
+ *   id: 'shipping-speed',
+ *   items: [{ label: 'Standard', value: 'standard' }],
+ *   value: 'standard',
+ * };
  * ```
  */
 export interface SelectRootAttributeOptions extends SelectState {
@@ -86,7 +96,12 @@ export interface SelectRootAttributeOptions extends SelectState {
  * ```ts
  * import type { SelectTriggerAttributeOptions } from '@kovojs/headless-ui/select';
  *
- * const value: SelectTriggerAttributeOptions = {} as SelectTriggerAttributeOptions;
+ * const value: SelectTriggerAttributeOptions = {
+ *   id: 'shipping-speed-trigger',
+ *   items: [{ label: 'Standard', value: 'standard' }],
+ *   labelledBy: 'shipping-speed-label',
+ *   value: 'standard',
+ * };
  * ```
  */
 export interface SelectTriggerAttributeOptions extends SelectState {
@@ -105,7 +120,11 @@ export interface SelectTriggerAttributeOptions extends SelectState {
  * ```ts
  * import type { SelectHiddenInputAttributeOptions } from '@kovojs/headless-ui/select';
  *
- * const value: SelectHiddenInputAttributeOptions = {} as SelectHiddenInputAttributeOptions;
+ * const value: SelectHiddenInputAttributeOptions = {
+ *   name: 'shippingSpeed',
+ *   required: true,
+ *   value: 'standard',
+ * };
  * ```
  */
 export interface SelectHiddenInputAttributeOptions extends SelectState {}
@@ -119,7 +138,11 @@ export interface SelectHiddenInputAttributeOptions extends SelectState {}
  * ```ts
  * import type { SelectContentAttributeOptions } from '@kovojs/headless-ui/select';
  *
- * const value: SelectContentAttributeOptions = {} as SelectContentAttributeOptions;
+ * const value: SelectContentAttributeOptions = {
+ *   id: 'shipping-speed-listbox',
+ *   labelledBy: 'shipping-speed-label',
+ *   open: true,
+ * };
  * ```
  */
 export interface SelectContentAttributeOptions extends SelectState {
@@ -136,7 +159,11 @@ export interface SelectContentAttributeOptions extends SelectState {
  * ```ts
  * import type { SelectItemAttributeOptions } from '@kovojs/headless-ui/select';
  *
- * const value: SelectItemAttributeOptions = {} as SelectItemAttributeOptions;
+ * const value: SelectItemAttributeOptions = {
+ *   itemLabel: 'Standard',
+ *   itemValue: 'standard',
+ *   value: 'standard',
+ * };
  * ```
  */
 export interface SelectItemAttributeOptions extends SelectState {
@@ -155,7 +182,10 @@ export interface SelectItemAttributeOptions extends SelectState {
  * ```ts
  * import type { SelectValueAttributeOptions } from '@kovojs/headless-ui/select';
  *
- * const value: SelectValueAttributeOptions = {} as SelectValueAttributeOptions;
+ * const value: SelectValueAttributeOptions = {
+ *   placeholder: 'Choose a speed',
+ *   value: 'standard',
+ * };
  * ```
  */
 export interface SelectValueAttributeOptions extends SelectState {
