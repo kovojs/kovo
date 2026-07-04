@@ -25,7 +25,7 @@ test('keeps parameterized query instances distinct on the wire and applies only 
     page.getByRole('button', { name: 'Restock Pen' }).click(),
   ]);
   const body = await response.text();
-  expect(body).toContain('<kovo-query name="product" key="product:p1">');
+  expect(body).toMatch(/<kovo-query name="product" key="product:p1"[^>]*>/u);
   expect(body).not.toContain('key="product:p2"');
   expect(body).not.toContain('<kovo-fragment target="product-p1">');
   expect(body).not.toContain('<kovo-fragment target="product-p2">');

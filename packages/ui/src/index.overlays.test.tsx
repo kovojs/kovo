@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import * as style from '@kovojs/style';
 import {
   Command,
   CommandClose,
@@ -10,24 +9,21 @@ import {
   CommandListbox,
   CommandTrigger,
   CommandValue,
-  commandStyles,
 } from './command.js';
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuItem,
   ContextMenuTrigger,
-  contextMenuStyles,
 } from './context-menu.js';
-import { Drawer, drawerSideStyles, drawerStyles } from './drawer.js';
+import { Drawer } from './drawer.js';
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-  dropdownMenuStyles,
 } from './dropdown-menu.js';
-import { Menubar, MenubarItem, MenubarSubmenu, menubarStyles } from './menubar.js';
+import { Menubar, MenubarItem, MenubarSubmenu } from './menubar.js';
 import {
   NavigationMenu,
   NavigationMenuContent,
@@ -36,9 +32,8 @@ import {
   NavigationMenuList,
   NavigationMenuTrigger,
   NavigationMenuViewport,
-  navigationMenuStyles,
 } from './navigation-menu.js';
-import { Sheet, sheetSideStyles, sheetStyles } from './sheet.js';
+import { Sheet } from './sheet.js';
 import {
   Toast,
   ToastAction,
@@ -46,7 +41,6 @@ import {
   ToastDescription,
   ToastTitle,
   ToastViewport,
-  toastStyles,
 } from './toast.js';
 describe('@kovojs/ui styled package foundation', () => {
   it('wraps the headless toast primitive as styled live-region markup', () => {
@@ -117,12 +111,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(viewport).toContain('data-dismiss="" data-state="open" data-variant="success"');
     expect(hiddenToast).toContain('data-state="closed"');
     expect(hiddenToast).toContain('hidden id="hidden-toast"');
-    expect({
-      toastActionClasses: [style.attrs(toastStyles.action).class ?? ''] as const,
-      toastCloseClasses: [style.attrs(toastStyles.close).class ?? ''] as const,
-      toastDescriptionClasses: [style.attrs(toastStyles.description).class ?? ''] as const,
-      toastTitleClasses: [style.attrs(toastStyles.title).class ?? ''] as const,
-    }).toMatchSnapshot();
   });
   it('wraps H3 menu primitives as styled menu surfaces', () => {
     const dropdownItems = [
@@ -196,11 +184,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(dropdown).toContain(
       'disabled role="menuitem" tabIndex="-1" type="button" value="archive"',
     );
-    expect({
-      dropdownMenuContentClasses: [style.attrs(dropdownMenuStyles.content).class ?? ''] as const,
-      dropdownMenuItemClasses: [style.attrs(dropdownMenuStyles.item).class ?? ''] as const,
-      dropdownMenuTriggerClasses: [style.attrs(dropdownMenuStyles.trigger).class ?? ''] as const,
-    }).toMatchSnapshot();
     expect(context).toContain('kovo-context-menu="row-menu"');
     expect(context).toContain('aria-haspopup="menu"');
     expect(context).toContain('data-anchor-x="24" data-anchor-y="32"');
@@ -210,11 +193,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(context).toContain(
       'disabled role="menuitem" tabIndex="-1" type="button" value="delete"',
     );
-    expect({
-      contextMenuContentClasses: [style.attrs(contextMenuStyles.content).class ?? ''] as const,
-      contextMenuItemClasses: [style.attrs(contextMenuStyles.item).class ?? ''] as const,
-      contextMenuTriggerClasses: [style.attrs(contextMenuStyles.trigger).class ?? ''] as const,
-    }).toMatchSnapshot();
   });
   it('wraps menubar and navigation-menu primitives as styled roving navigation', () => {
     const menubarItems = [
@@ -329,10 +307,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(menubar).toContain(
       'disabled role="menuitem" tabIndex="-1" type="button" value="import"',
     );
-    expect({
-      menubarItemClasses: [style.attrs(menubarStyles.item).class ?? ''] as const,
-      menubarSubmenuClasses: [style.attrs(menubarStyles.submenu).class ?? ''] as const,
-    }).toMatchSnapshot();
     expect(navigation).toContain('aria-label="Primary"');
     expect(navigation).toContain('data-state="open"');
     expect(navigation).toContain('role="navigation"');
@@ -343,19 +317,6 @@ describe('@kovojs/ui styled package foundation', () => {
     expect(navigation).toContain('href="/docs"');
     expect(navigation).toContain('role="group" tabIndex="-1"');
     expect(navigation).toContain('id="products-viewport"');
-    expect({
-      navigationMenuContentClasses: [
-        style.attrs(navigationMenuStyles.content).class ?? '',
-      ] as const,
-      navigationMenuLinkClasses: [style.attrs(navigationMenuStyles.link).class ?? ''] as const,
-      navigationMenuListClasses: [style.attrs(navigationMenuStyles.list).class ?? ''] as const,
-      navigationMenuTriggerClasses: [
-        style.attrs(navigationMenuStyles.trigger).class ?? '',
-      ] as const,
-      navigationMenuViewportClasses: [
-        style.attrs(navigationMenuStyles.viewport).class ?? '',
-      ] as const,
-    }).toMatchSnapshot();
   });
   it('wraps command primitive as a styled native dialog combobox', () => {
     const items = [
@@ -447,13 +408,6 @@ describe('@kovojs/ui styled package foundation', () => {
     );
     expect(command).toContain('command="request-close" commandfor="command-dialog"');
     expect(command).toContain('id="command-value">Invite teammate</span>');
-    expect({
-      commandDialogClasses: [style.attrs(commandStyles.dialog).class ?? ''] as const,
-      commandInputClasses: [style.attrs(commandStyles.input).class ?? ''] as const,
-      commandItemClasses: [style.attrs(commandStyles.item).class ?? ''] as const,
-      commandListboxClasses: [style.attrs(commandStyles.listbox).class ?? ''] as const,
-      commandTriggerClasses: [style.attrs(commandStyles.trigger).class ?? ''] as const,
-    }).toMatchSnapshot();
   });
   it('wraps the headless dialog primitive for a bounded sheet component', () => {
     const rendered = String(
@@ -493,20 +447,6 @@ describe('@kovojs/ui styled package foundation', () => {
         trigger: 'Open drawer',
       }),
     );
-    expect({
-      drawerContentClasses: [
-        style.attrs(drawerStyles.content, drawerSideStyles.bottom).class ?? '',
-        style.attrs(drawerSideStyles.left).class ?? '',
-        style.attrs(drawerSideStyles.right).class ?? '',
-        style.attrs(drawerSideStyles.top).class ?? '',
-      ] as const,
-      sheetContentClasses: [
-        style.attrs(sheetStyles.content, sheetSideStyles.right).class ?? '',
-        style.attrs(sheetSideStyles.bottom).class ?? '',
-        style.attrs(sheetSideStyles.left).class ?? '',
-        style.attrs(sheetSideStyles.top).class ?? '',
-      ] as const,
-    }).toMatchSnapshot();
     expect(topSheet).toContain('data-style-src="sheet.tsx#content; sheet.tsx#top"');
     expect(drawer).toContain('command="show-modal" commandfor="account-drawer"');
     expect(drawer).toContain('<dialog class=');

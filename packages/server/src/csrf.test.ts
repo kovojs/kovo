@@ -70,7 +70,15 @@ describe('csrf helpers', () => {
     const previous = 'previous-secret-at-least-32-characters-long';
     const currentToken = csrfToken(request, { ...csrf, secret: current });
     const previousToken = csrfToken(request, { ...csrf, secret: previous });
-    const rotated = { ...csrf, secret: { current, previous } };
+    const rotated = {
+      ...csrf,
+      secret: {
+        keys: [
+          { id: 'new', secret: current, state: 'active' as const },
+          { id: 'old', secret: previous, state: 'previous' as const },
+        ],
+      },
+    };
 
     const rotatedToken = csrfToken(request, rotated);
     expect(rotatedToken).not.toBe(currentToken);
@@ -83,7 +91,16 @@ describe('csrf helpers', () => {
     expect(
       validateCsrfToken({ 'csrf<input>': previousToken }, request, {
         ...csrf,
-        secret: { current, previous: 'older-secret-at-least-32-characters-long' },
+        secret: {
+          keys: [
+            { id: 'new', secret: current, state: 'active' as const },
+            {
+              id: 'older',
+              secret: 'older-secret-at-least-32-characters-long',
+              state: 'previous' as const,
+            },
+          ],
+        },
       }),
     ).toBe(false);
   });

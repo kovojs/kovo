@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createQueryStore, installKovoLoader, type MutationBroadcast } from './client.js';
+import { createQueryStore, installKovoLoader, type MutationBroadcast } from './generated.js';
 import {
   FakeBroadcastChannel,
   FakeElement,

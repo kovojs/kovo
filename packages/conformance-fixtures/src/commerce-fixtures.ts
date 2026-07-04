@@ -256,7 +256,7 @@ export async function commerceMutationQueryAcceptanceFact<Db, Graph extends Kovo
       },
     },
   });
-  const verifiedDb = harness.dbHandle() as Db & {
+  const verifiedDb = harness.db as Db & {
     transaction?: (run: (db: unknown) => unknown) => unknown;
   };
   verifiedDb.transaction = (run) => run(verifiedDb);
