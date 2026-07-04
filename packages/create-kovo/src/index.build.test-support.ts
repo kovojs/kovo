@@ -4027,6 +4027,93 @@ export function addPostgresParanoidPhase5DogfoodProof(root: string): void {
   writeFileSync(appPath, app, 'utf8');
 }
 
+export function addPostgresParanoidFollowup8Shapes(root: string): void {
+  const schemaPath = join(root, 'src/schema.ts');
+  let schema = readFileSync(schemaPath, 'utf8');
+  schema = replaceRequired(
+    schema,
+    "/** Tables Better Auth's Drizzle adapter binds to (see `src/auth.ts`). */",
+    [
+      'export const phase5PgReferenceMemberships = pgTable(',
+      "  'phase5_pg_reference_memberships',",
+      '  {',
+      "    id: text('id').primaryKey(),",
+      "    teamId: text('team_id').notNull(),",
+      "    userId: text('user_id').notNull(),",
+      "    label: text('label').notNull(),",
+      '  },',
+      '  kovo({',
+      "    domain: 'phase5-pg-reference-membership',",
+      "    key: 'id',",
+      '    reference: true,',
+      '  }),',
+      ');',
+      '',
+      "/** Tables Better Auth's Drizzle adapter binds to (see `src/auth.ts`). */",
+    ].join('\n'),
+    'phase 5 postgres followup 8 schema tables',
+  );
+  writeFileSync(schemaPath, schema, 'utf8');
+
+  const runtimeDbPath = join(root, 'src/_kovo/app-runtime-db.ts');
+  let runtimeDb = readFileSync(runtimeDbPath, 'utf8');
+  runtimeDb = replaceRequired(
+    runtimeDb,
+    '  "GRANT SELECT ON phase5_pg_order_view TO kovo_reader;",',
+    [
+      '  "GRANT SELECT ON phase5_pg_order_view TO kovo_reader;",',
+      '  "INSERT INTO phase5_pg_reference_memberships (id, team_id, user_id, label) VALUES (\'phase5-pg-membership-demo\', \'team-demo\', \'demo-user\', \'owner-membership\'), (\'phase5-pg-membership-other\', \'team-other\', \'other-user\', \'cross-tenant-membership\') ON CONFLICT (id) DO NOTHING;",',
+    ].join('\n'),
+    'phase 5 postgres followup 8 seed registration',
+  );
+  writeFileSync(runtimeDbPath, runtimeDb, 'utf8');
+
+  const proofPath = join(root, 'src/paranoid-phase5-postgres-proof.ts');
+  let proof = readFileSync(proofPath, 'utf8');
+  proof = replaceRequired(
+    proof,
+    "import { phase5PgEvents, phase5PgItems, phase5PgOrders, verification } from './schema.js';",
+    "import { phase5PgEvents, phase5PgItems, phase5PgOrders, phase5PgReferenceMemberships, verification } from './schema.js';",
+    'phase 5 postgres followup 8 proof import',
+  );
+  proof = replaceRequired(
+    proof,
+    'const webhookReplayStore = createMemoryWebhookReplayStore();',
+    [
+      "export const phase5PgReferenceMembershipEndpoint = endpoint('/api/phase5-pg-reference-memberships', {",
+      '  access: publicProof, auth: { justification: "public phase 5 postgres reference-membership proof", kind: "none" }, csrf: false, csrfJustification: "read-only phase 5 postgres reference-membership proof", db: true,',
+      '  async handler(_request, context) {',
+      '    const scoped = await context.actAs("demo-user");',
+      '    const rows = (await (scoped.db.read as any).select({',
+      '      id: phase5PgReferenceMemberships.id,',
+      '      label: phase5PgReferenceMemberships.label,',
+      '      teamId: phase5PgReferenceMemberships.teamId,',
+      '      userId: phase5PgReferenceMemberships.userId,',
+      '    }).from(phase5PgReferenceMemberships)) as { id: string; label: string; teamId: string; userId: string }[];',
+      '    rows.sort((left, right) => left.id.localeCompare(right.id));',
+      '    return Response.json({ rows }, { headers: { "Cache-Control": "no-store" } });',
+      '  },',
+      "  method: 'GET', reason: 'phase 5 postgres reference-membership proof', response: { appOwnedSafety: true, body: 'json', cache: 'no-store' },",
+      '});',
+      '',
+      'const webhookReplayStore = createMemoryWebhookReplayStore();',
+    ].join('\n'),
+    'phase 5 postgres followup 8 endpoint insertion',
+  );
+  writeFileSync(proofPath, proof, 'utf8');
+
+  const appPath = join(root, 'src/app.tsx');
+  let app = readFileSync(appPath, 'utf8');
+  app = replaceRequired(
+    app,
+    "import { phase5PgAliasQuery, phase5PgBuilderQuery, phase5PgCrossOwnerOrderWriteProof, phase5PgDbQueryQuery, phase5PgEndpoint, phase5PgOwnerViaQuery, phase5PgOwnOrderWriteProof, phase5PgRawQuery, phase5PgReadTask, phase5PgScheduleTask, phase5PgStatusEndpoint, phase5PgSubqueryQuery, phase5PgUnionQuery, phase5PgViewQuery, phase5PgWebhook, phase5PgWriteBoundaryEndpoint } from './paranoid-phase5-postgres-proof.js';",
+    "import { phase5PgAliasQuery, phase5PgBuilderQuery, phase5PgCrossOwnerOrderWriteProof, phase5PgDbQueryQuery, phase5PgEndpoint, phase5PgOwnerViaQuery, phase5PgOwnOrderWriteProof, phase5PgRawQuery, phase5PgReadTask, phase5PgReferenceMembershipEndpoint, phase5PgScheduleTask, phase5PgStatusEndpoint, phase5PgSubqueryQuery, phase5PgUnionQuery, phase5PgViewQuery, phase5PgWebhook, phase5PgWriteBoundaryEndpoint } from './paranoid-phase5-postgres-proof.js';",
+    'phase 5 postgres followup 8 app import',
+  );
+  app = appendArrayEntry(app, 'endpoints', 'phase5PgReferenceMembershipEndpoint');
+  writeFileSync(appPath, app, 'utf8');
+}
+
 export async function signInDemoUser(
   root: string,
   origin: string,
