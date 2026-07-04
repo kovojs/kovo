@@ -577,8 +577,13 @@ conservative half-step left as the end state.
     - Evidence: `packages/drizzle/src/derive-codegen.ts` and
       `packages/drizzle/src/derive-codegen.test.ts`; verified by the same browser/drizzle focused
       command above.
-- [ ] **Barrel hygiene on the `@kovojs/server` root**: move plumbing families (drain-facts,
+- [x] **Barrel hygiene on the `@kovojs/server` root**: move plumbing families (drain-facts,
       capability primitives, CSP renderers, vite-dev, adapter hooks) behind internal subpaths.
+  - Evidence: `packages/server/src/index.ts`, `packages/server/src/internal/{audit-facts,capabilities,csp,egress,managed-db}.ts`,
+    `packages/server/src/sqlite-runtime.ts`, and `packages/create-kovo/templates/src/_kovo/app-runtime-db.sqlite.ts`;
+    verified by `pnpm run check:api-surface`, `pnpm run check:publish`,
+    `pnpm exec vitest --run packages/server/src/api/app.test.ts site/scripts/api-ref.test.mjs scripts/public-packages.test.mjs scripts/api-surface-gate.test.mjs --config ./vite.config.ts`,
+    and `pnpm exec vitest --run packages/create-kovo/src/index.test.ts packages/create-kovo/src/index.build.scaffold.typecheck.test.ts packages/create-kovo/src/index.build.scaffold.sqlite.test.ts --config ./vite.config.ts`.
 - [ ] **Kill duplicate vocabulary in one pass** (tag/domain done in Phase 2; GuardFailure,
       MutationResponseHeaders, CsrfValidationOptions alias, purpose/reason, core-vs-server
       `query`/`route`, FieldError ×2, Stylesheet/stylesheet, dual-homed browser exports).
