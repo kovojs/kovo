@@ -678,8 +678,10 @@ labelledBy>` (broken composition the old signature hid), components.md Button
     - Evidence: `site/scripts/code-snippets-check.mjs` and `site/content/guides/**`; verified by
       `node site/scripts/code-snippets-check.mjs` (`snippets=125 OK`) and
       `pnpm exec vitest --run site/scripts/code-snippets-check.test.mjs site/scripts/api-ref.test.mjs --config ./vite.config.ts`.
-  - [ ] Wire the guide snippet gate into CI and upgrade it to built package declaration files instead
-        of public-shape stubs.
+  - [x] Wire the public-shape guide snippet gate into CI.
+    - Evidence: `.github/workflows/ci.yml` runs `vp exec pnpm run check:docs-snippets`; verified by
+      `pnpm run check:docs-snippets`.
+  - [ ] Make `check:docs-snippets:dist` blocking after the remaining guide/API mismatches are closed.
 - [ ] **Fix the remaining per-guide defects** catalogued above (request-shell option names,
       routing `queries:`, layouts typing, static-export missing its own API, security.md CSRF
       audience + fabricated explain output + `--capabilities` claim, endpoints-webhooks broken
@@ -687,6 +689,10 @@ labelledBy>` (broken composition the old signature hid), components.md Button
       public/private status).
 - [ ] **Stop describing a starter that doesn't exist**: align `create-kovo` templates or the
       guides for graph-assertions, CI script list, Dockerfile entrypoint, `client.ts` — one truth.
+  - [x] Remove the documented graph-assertions starter script and stale Docker entrypoint claims from
+        the affected guides.
+    - Evidence: `site/content/guides/deployment.md` and `site/content/guides/kovo-explain.md`;
+      verified by `pnpm run check:docs-snippets`.
 - [ ] **Regenerate stale generated docs** (route() JSDoc example, drizzle 30/38, create-kovo
       `--experimental-sqlite`, cli no-args list, `ExplainKind` prose) and replace the mechanical
       `{} as SelectState` placeholder examples in headless-ui/ui JSDoc with real ones.
