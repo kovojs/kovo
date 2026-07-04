@@ -290,10 +290,9 @@ machine auth rather than relying on default reachability.
 
 Review capability-style powers through the concrete surfaces that create them today:
 `--revealed` for audit-grade `trustedReveal(...)`, `--trust` for trusted sink escapes,
-`--endpoints` for signed download endpoints, and `--sources-sinks` for the raw capability APIs. A
-dedicated `--capabilities` mode exists for held dangerous powers, but capability URL mint coverage is
-still tightening. Do not treat a clean `--capabilities` table as proof that no signed URL can be
-created.
+`--endpoints` for signed download endpoints, and `--sources-sinks` for the raw capability APIs. Do
+not treat `--capabilities` as a shipped capability-URL proof yet; its coverage is still tightening in
+technical preview.
 
 ## Read across owners in an admin tool
 

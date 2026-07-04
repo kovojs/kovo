@@ -203,7 +203,7 @@ const renderOnce = <Value,>(value: Value) => value;
 
 export const PublishedAt = component({
   queries: { post: postQuery },
-  render: ({ post, now }) => (
+  render: ({ post }) => (
     <time dateTime={post.publishedAt}>{renderOnce(formatDate(post.publishedAt))}</time>
   ),
 });
@@ -320,7 +320,7 @@ state is **KV301**; unserializable closure capture is **KV201**;
 hand-written stamp disagreement is **KV222**, redundant stamp is **KV223**; `on:load` without
 justification is **KV211**; an uncovered query/state-dependent position is **KV311**. Time-dependent
 rendered positions and derives require
-declared `clocks`, query `.refresh({ every | at | until })`, or `renderOnce`: SPEC §4.8 and §4.9;
+query `.refresh({ every | at | until })`, or an app-local `renderOnce` helper: SPEC §4.8 and §4.9;
 missing cadence is **KV312**, and raw clock reads in derives are **KV315**.
 
 </details>
