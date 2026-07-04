@@ -4,6 +4,9 @@ import type { FragmentTargetRoot } from './fragment-targets.js';
 import type { EnhancedMutationFetch } from './mutation-fetch.js';
 import { definedProps } from './defined-props.js';
 
+const browserKovoRootBrand: unique symbol = Symbol('kovo.browser-root');
+type BrowserKovoRuntimeRoot = BrowserKovoRoot & MorphRoot & TargetCollectorRoot;
+
 /**
  * The browser root that `installKovoLoader` (and `applyKovoDeferredStreamResponse`)
  * operate on: the live-DOM fragment-target lookup and target collector the runtime
@@ -13,7 +16,9 @@ import { definedProps } from './defined-props.js';
  * app entry hands it to the loader's `enhancedMutations.root` without naming the
  * low-level morph/target types.
  */
-export interface BrowserKovoRoot {}
+export interface BrowserKovoRoot {
+  readonly [browserKovoRootBrand]: true;
+}
 
 /**
  * Options for {@link createBrowserKovoRoot}.
@@ -83,12 +88,14 @@ export function createBrowserKovoRoot(options: CreateBrowserKovoRootOptions = {}
   const runtimeRoot = documentRoot as FragmentTargetRoot & TargetCollectorRoot;
   const morphRoot = new DomMorphRoot(runtimeRoot);
 
-  return {
+  const root: BrowserKovoRuntimeRoot = {
+    [browserKovoRootBrand]: true,
     findFragmentTarget(target) {
       return morphRoot.findFragmentTarget(target);
     },
     querySelectorAll(selector) {
       return runtimeRoot.querySelectorAll(selector);
     },
-  } as BrowserKovoRoot;
+  };
+  return root;
 }

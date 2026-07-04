@@ -143,7 +143,7 @@ export const defaultDelegatedEvents = [
  * @returns A `KovoLoader` handle.
  */
 export function installKovoLoader(options: KovoLoaderOptions): KovoLoader {
-  return installGeneratedKovoLoader(options as KovoGeneratedLoaderOptions);
+  return installGeneratedKovoLoader(toGeneratedLoaderOptions(options));
 }
 
 /**
@@ -260,6 +260,28 @@ export function installGeneratedKovoLoader(
     // K4 / SPEC §4.7: expose so deferred-stream apply calls can pass the scope
     // and abort island signals when a morph removes an island's fragment target.
     islandSignalScope,
+  };
+}
+
+function toGeneratedLoaderOptions(options: KovoLoaderOptions): KovoGeneratedLoaderOptions {
+  const enhancedMutations =
+    options.enhancedMutations === undefined
+      ? undefined
+      : {
+          ...options.enhancedMutations,
+          root: options.enhancedMutations.root as KovoGeneratedEnhancedMutationOptions['root'],
+        };
+
+  return {
+    importModule: options.importModule as ImportHandlerModule,
+    root: options.root as LoaderRoot,
+    ...definedProps({
+      allowedClientModuleUrls: options.allowedClientModuleUrls,
+      enhancedMutations,
+      events: options.events,
+      onError: options.onError as KovoGeneratedLoaderOptions['onError'],
+      queryStore: options.queryStore,
+    }),
   };
 }
 
