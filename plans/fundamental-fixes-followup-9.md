@@ -90,8 +90,9 @@ replace necessary-condition proxies with the engine's FINEST-granularity effecti
 
 ### DEC-E — Secret box channel consistency (fixes P6)
 
-- [ ] **E1 — `structuredClone` of a value containing a `Secret` box throws `KV435` (make the box non-structured-cloneable or add a clone trap), for parity with `JSON.stringify`/template-literal/`Response`/header coercion.** (Not a leak today — it strips to `{}` — but an inconsistent channel.)
+- [x] **E1 — `structuredClone` of a value containing a `Secret` box throws `KV435` (make the box non-structured-cloneable or add a clone trap), for parity with `JSON.stringify`/template-literal/`Response`/header coercion.** (Not a leak today — it strips to `{}` — but an inconsistent channel.)
   - Acceptance: a test cloning a boxed secret throws `KV435` alongside the other coercion-channel tests.
+  - Evidence: `pnpm exec vitest --run packages/core/src/secret.test.ts packages/server/src/secret-read-boundary.test.ts packages/server/src/response-posture.test.ts --config ./vite.config.ts` passed after `packages/core/src/secret.test.ts` asserted direct, nested object, array, `Map`, and `Set` `structuredClone(...)` failures contain `KV435`.
 
 ### DEC-F — Prove the audit by fuzzing the grant-shape space (closes O4; HIGHEST priority)
 
