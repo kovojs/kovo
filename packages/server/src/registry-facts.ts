@@ -163,7 +163,11 @@ function mergeRuntimeQueryFacts<Request>(
   left: QueryDefinition<string, unknown, unknown, Request>,
   right: QueryDefinition<string, unknown, unknown, Request>,
 ): QueryDefinition<string, unknown, unknown, Request> | undefined {
-  if (left.key !== right.key || left.load !== right.load || left.instanceKey !== right.instanceKey) {
+  if (
+    left.key !== right.key ||
+    left.load !== right.load ||
+    left.instanceKey !== right.instanceKey
+  ) {
     return undefined;
   }
 

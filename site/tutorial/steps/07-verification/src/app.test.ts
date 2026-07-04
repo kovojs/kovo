@@ -235,7 +235,10 @@ describe('tutorial step 07 — testing & verification', () => {
 
   // snippet:intent-test
   it('answers "what updates when addToCart commits" mechanically', () => {
-    const mutationExplain = kovoExplain(verifiedShopGraph, { kind: 'mutation', target: addToCart.key });
+    const mutationExplain = kovoExplain(verifiedShopGraph, {
+      kind: 'mutation',
+      target: addToCart.key,
+    });
     const pageExplain = kovoExplain(verifiedShopGraph, { kind: 'page', target: '/' });
     const pageQueries = explainList(explainLine(pageExplain.output, 'queries: '));
 
