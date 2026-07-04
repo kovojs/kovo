@@ -805,6 +805,7 @@ export default defaultExport;
 `;
 
 const KOVO_DTS = String.raw`
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'outline';
 export type ComponentElementNode = any;
 export type ComponentNode = any;
 export type ComponentRegistry = any;
@@ -829,6 +830,10 @@ export const InlineScript: any;
 export const Link: any;
 export const Search: any;
 export const Select: any;
+export const SelectContent: any;
+export const SelectItem: any;
+export const SelectTrigger: any;
+export const SelectValue: any;
 export const cloudflare: any;
 export const trustedAssign: any;
 export const component: any;
@@ -896,6 +901,7 @@ type AnyFn = (...args: any[]) => any;
 
 const anyFn = ((..._args: any[]) => ({})) as AnyFn;
 
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'destructive' | 'outline';
 export type ComponentElementNode = any;
 export type ComponentNode = any;
 export type ComponentRegistry = any;
@@ -919,6 +925,10 @@ export const InlineScript = anyFn;
 export const Link = anyFn;
 export const Search = anyFn;
 export const Select = anyFn;
+export const SelectContent = anyFn;
+export const SelectItem = anyFn;
+export const SelectTrigger = anyFn;
+export const SelectValue = anyFn;
 export const cloudflare = anyFn;
 export const trustedAssign = anyFn;
 export const create = anyFn;
